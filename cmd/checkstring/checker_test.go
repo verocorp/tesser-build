@@ -47,7 +47,7 @@ func TestCustomerID_Equality(t *testing.T) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir)
+	violations, _, err := CheckPackageDir(dir)
 	require.NoError(t, err)
 	assert.Empty(t, violations)
 }
@@ -65,7 +65,7 @@ func TestCustomerID_String(t *testing.T) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir)
+	violations, _, err := CheckPackageDir(dir)
 	require.NoError(t, err)
 	assert.Empty(t, violations)
 }
@@ -83,7 +83,7 @@ func TestCustomerID_NewCustomerID(t *testing.T) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir)
+	violations, _, err := CheckPackageDir(dir)
 	require.NoError(t, err)
 	require.Len(t, violations, 1)
 	assert.Equal(t, "TestCustomerID_NewCustomerID", violations[0].FuncName)
@@ -107,7 +107,7 @@ func TestBar(t *testing.T) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir)
+	violations, _, err := CheckPackageDir(dir)
 	require.NoError(t, err)
 	require.Len(t, violations, 2)
 
@@ -137,7 +137,7 @@ func TestFoo_NewFoo(t *testing.T) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir)
+	violations, _, err := CheckPackageDir(dir)
 	require.NoError(t, err)
 	require.Len(t, violations, 1)
 	assert.Equal(t, "TestFoo_NewFoo", violations[0].FuncName)
@@ -158,7 +158,7 @@ func TestFoo(t *testing.T) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir)
+	violations, _, err := CheckPackageDir(dir)
 	require.NoError(t, err)
 	require.Len(t, violations, 2)
 	// Both should report the same enclosing function.
@@ -180,7 +180,7 @@ func TestFoo(t *testing.T) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir)
+	violations, _, err := CheckPackageDir(dir)
 	require.NoError(t, err)
 	require.Len(t, violations, 1)
 	assert.Equal(t, "TestFoo", violations[0].FuncName)
@@ -194,7 +194,7 @@ type Foo struct{}
 `,
 	})
 
-	violations, err := CheckPackageDir(dir)
+	violations, _, err := CheckPackageDir(dir)
 	require.NoError(t, err)
 	assert.Empty(t, violations)
 }
@@ -212,9 +212,72 @@ func TestFoo(t *testing.T) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir)
+	violations, _, err := CheckPackageDir(dir)
 	require.NoError(t, err)
 	assert.Empty(t, violations)
+}
+
+func TestCheckPackageDir_ScannedCount(t *testing.T) {
+	t.Run("counts every test file scanned", func(t *testing.T) {
+		dir := writeTestPackage(t, map[string]string{
+			"foo_test.go": `package testpkg
+
+import "testing"
+
+func TestFoo(t *testing.T) {}
+`,
+			"bar_test.go": `package testpkg
+
+import "testing"
+
+func TestBar(t *testing.T) {}
+`,
+			// Non-test file should not be counted.
+			"types.go": `package testpkg
+
+type Thing struct{}
+`,
+		})
+
+		_, scanned, err := CheckPackageDir(dir)
+		require.NoError(t, err)
+		assert.Equal(t, 2, scanned, "only the two *_test.go files are scanned")
+	})
+
+	t.Run("count is zero when directory has no test files", func(t *testing.T) {
+		dir := writeTestPackage(t, map[string]string{
+			"types.go": `package testpkg
+
+type Thing struct{}
+`,
+		})
+
+		_, scanned, err := CheckPackageDir(dir)
+		require.NoError(t, err)
+		assert.Equal(t, 0, scanned)
+	})
+
+	t.Run("files with violations still count as scanned", func(t *testing.T) {
+		dir := writeTestPackage(t, map[string]string{
+			"foo_test.go": `package testpkg
+
+import "testing"
+
+type Thing struct{}
+func (t Thing) String() string { return "" }
+
+func TestSomething(t *testing.T) {
+	x := Thing{}
+	_ = x.String()
+}
+`,
+		})
+
+		violations, scanned, err := CheckPackageDir(dir)
+		require.NoError(t, err)
+		assert.Equal(t, 1, scanned)
+		assert.NotEmpty(t, violations, "the file has a violation but is still counted as scanned")
+	})
 }
 
 // --- helpers ---

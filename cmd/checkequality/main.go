@@ -26,6 +26,7 @@ func main() {
 	}
 
 	var allViolations []Violation
+	totalMatched := 0
 
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -44,11 +45,12 @@ func main() {
 			return nil
 		}
 
-		violations, checkErr := CheckPackageDir(path, excluded)
+		violations, matched, checkErr := CheckPackageDir(path, excluded)
 		if checkErr != nil {
 			return checkErr
 		}
 		allViolations = append(allViolations, violations...)
+		totalMatched += matched
 		return nil
 	})
 	if err != nil {
@@ -61,10 +63,16 @@ func main() {
 	}
 
 	if len(allViolations) == 0 {
-		fmt.Println("PASS: All VOs have Test*_Equality coverage.")
+		if totalMatched == 0 {
+			fmt.Println("PASS: No VOs found.")
+		} else {
+			fmt.Printf("PASS: All %d VO(s) have Test*_Equality coverage.\n", totalMatched)
+		}
 		return
 	}
-	fmt.Printf("\nFAIL: %d VO(s) missing Test*_Equality coverage.\n", len(allViolations))
+	passed := totalMatched - len(allViolations)
+	fmt.Printf("\nFAIL: %d of %d VO(s) missing Test*_Equality coverage (%d passed).\n",
+		len(allViolations), totalMatched, passed)
 	os.Exit(1)
 }
 

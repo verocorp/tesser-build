@@ -26,6 +26,7 @@ func main() {
 	}
 
 	var allViolations []Violation
+	totalMatched := 0
 
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -44,11 +45,12 @@ func main() {
 			return nil
 		}
 
-		violations, checkErr := CheckPackageDir(path, excluded)
+		violations, matched, checkErr := CheckPackageDir(path, excluded)
 		if checkErr != nil {
 			return checkErr
 		}
 		allViolations = append(allViolations, violations...)
+		totalMatched += matched
 		return nil
 	})
 	if err != nil {
@@ -61,10 +63,16 @@ func main() {
 	}
 
 	if len(allViolations) == 0 {
-		fmt.Println("PASS: All VO constructors have MustNew* counterparts.")
+		if totalMatched == 0 {
+			fmt.Println("PASS: No VO constructors found.")
+		} else {
+			fmt.Printf("PASS: All %d VO constructor(s) have MustNew* counterparts.\n", totalMatched)
+		}
 		return
 	}
-	fmt.Printf("\nFAIL: %d VO constructor(s) missing MustNew* counterpart.\n", len(allViolations))
+	passed := totalMatched - len(allViolations)
+	fmt.Printf("\nFAIL: %d of %d VO constructor(s) missing MustNew* counterpart (%d passed).\n",
+		len(allViolations), totalMatched, passed)
 	os.Exit(1)
 }
 

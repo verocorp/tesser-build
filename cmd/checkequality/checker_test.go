@@ -157,7 +157,7 @@ func TestCustomerID_Equality(t *testing.T) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir, map[string]bool{})
+	violations, _, err := CheckPackageDir(dir, map[string]bool{})
 	require.NoError(t, err)
 	assert.Empty(t, violations)
 }
@@ -182,7 +182,7 @@ func TestCustomerID_NewCustomerID(t *testing.T) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir, map[string]bool{})
+	violations, _, err := CheckPackageDir(dir, map[string]bool{})
 	require.NoError(t, err)
 	require.Len(t, violations, 1)
 	assert.Equal(t, "CustomerID", violations[0].TypeName)
@@ -209,7 +209,7 @@ func TestAmount_Equality(t *testing.T) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir, map[string]bool{})
+	violations, _, err := CheckPackageDir(dir, map[string]bool{})
 	require.NoError(t, err)
 	assert.Empty(t, violations)
 }
@@ -227,7 +227,7 @@ func NewCollect(spec CollectSpec) (Operation, error) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir, map[string]bool{})
+	violations, _, err := CheckPackageDir(dir, map[string]bool{})
 	require.NoError(t, err)
 	assert.Empty(t, violations)
 }
@@ -245,7 +245,7 @@ func NewLedger(spec string) (Ledger, error) {
 	})
 
 	excluded := map[string]bool{"Ledger": true}
-	violations, err := CheckPackageDir(dir, excluded)
+	violations, _, err := CheckPackageDir(dir, excluded)
 	require.NoError(t, err)
 	assert.Empty(t, violations)
 }
@@ -262,7 +262,7 @@ func NewTestHelper(s string) (TestHelper, error) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir, map[string]bool{})
+	violations, _, err := CheckPackageDir(dir, map[string]bool{})
 	require.NoError(t, err)
 	assert.Empty(t, violations)
 }
@@ -285,7 +285,7 @@ func TestFoo_Other(t *testing.T) {}
 `,
 	})
 
-	violations, err := CheckPackageDir(dir, map[string]bool{})
+	violations, _, err := CheckPackageDir(dir, map[string]bool{})
 	require.NoError(t, err)
 	require.Len(t, violations, 2)
 
@@ -315,7 +315,7 @@ func TestGood_Equality(t *testing.T) {}
 `,
 	})
 
-	violations, err := CheckPackageDir(dir, map[string]bool{})
+	violations, _, err := CheckPackageDir(dir, map[string]bool{})
 	require.NoError(t, err)
 	require.Len(t, violations, 1)
 	assert.Equal(t, "Bad", violations[0].TypeName)
@@ -341,7 +341,7 @@ func TestID_Equality(t *testing.T) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir, map[string]bool{})
+	violations, _, err := CheckPackageDir(dir, map[string]bool{})
 	require.NoError(t, err)
 	assert.Empty(t, violations)
 }
@@ -358,7 +358,7 @@ func NewID(value string) (ID, error) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir, map[string]bool{})
+	violations, _, err := CheckPackageDir(dir, map[string]bool{})
 	require.NoError(t, err)
 	require.Len(t, violations, 1)
 	assert.Equal(t, "ID", violations[0].TypeName)
@@ -376,7 +376,7 @@ func NewFilter[D any](s string) (Filter[D], error) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir, map[string]bool{})
+	violations, _, err := CheckPackageDir(dir, map[string]bool{})
 	require.NoError(t, err)
 	require.Len(t, violations, 1)
 	assert.Equal(t, "Filter", violations[0].TypeName)
@@ -403,9 +403,77 @@ func TestFilter_Equality(t *testing.T) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir, map[string]bool{})
+	violations, _, err := CheckPackageDir(dir, map[string]bool{})
 	require.NoError(t, err)
 	assert.Empty(t, violations)
+}
+
+func TestCheckPackageDir_MatchedCount(t *testing.T) {
+	t.Run("counts every VO matched, including those missing Test*_Equality", func(t *testing.T) {
+		dir := writeTestPackage(t, map[string]string{
+			"types.go": `package testpkg
+
+type CustomerID struct{ value string }
+type AccountID struct{ value string }
+type Amount struct{ value string }
+
+func NewCustomerID(value string) (CustomerID, error) { return CustomerID{value: value}, nil }
+func NewAccountID(value string) (AccountID, error) { return AccountID{value: value}, nil }
+func NewAmount(value string) (Amount, error) { return Amount{value: value}, nil }
+`,
+			"types_test.go": `package testpkg
+
+import "testing"
+
+func TestCustomerID_Equality(t *testing.T) {}
+func TestAccountID_Equality(t *testing.T) {}
+`,
+		})
+
+		violations, matched, err := CheckPackageDir(dir, map[string]bool{})
+		require.NoError(t, err)
+		assert.Equal(t, 3, matched, "all three VOs should be counted")
+		assert.Len(t, violations, 1, "only Amount is missing Test*_Equality")
+	})
+
+	t.Run("count is zero when no VO constructors are found", func(t *testing.T) {
+		dir := writeTestPackage(t, map[string]string{
+			"types.go": `package testpkg
+
+type Operation struct{}
+
+// Non-matching: factory (return type name differs from suffix).
+func NewCollect() Operation { return Operation{} }
+`,
+		})
+
+		_, matched, err := CheckPackageDir(dir, map[string]bool{})
+		require.NoError(t, err)
+		assert.Equal(t, 0, matched)
+	})
+
+	t.Run("excluded types are not counted", func(t *testing.T) {
+		dir := writeTestPackage(t, map[string]string{
+			"types.go": `package testpkg
+
+type Ledger struct{}
+type CustomerID struct{ value string }
+
+func NewLedger(spec string) (Ledger, error) { return Ledger{}, nil }
+func NewCustomerID(value string) (CustomerID, error) { return CustomerID{value: value}, nil }
+`,
+			"types_test.go": `package testpkg
+
+import "testing"
+
+func TestCustomerID_Equality(t *testing.T) {}
+`,
+		})
+
+		_, matched, err := CheckPackageDir(dir, map[string]bool{"Ledger": true})
+		require.NoError(t, err)
+		assert.Equal(t, 1, matched, "Ledger is excluded; only CustomerID counts")
+	})
 }
 
 // --- helpers ---
