@@ -1,0 +1,29 @@
+name: Run go-ddd checks
+description: Run DDD convention checks (MustNew pairing, equality test coverage, String usage) against the caller's repo
+inputs:
+  mustnew-exclude:
+    description: Comma-separated type names exempt from the MustNew* requirement (typically aggregates and entities)
+    required: false
+    default: ""
+  equality-exclude:
+    description: Comma-separated type names exempt from the Test*_Equality requirement
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Check MustNew* pairing
+      shell: bash
+      working-directory: ${{ github.action_path }}/../..
+      run: go run ./cmd/checkmustnew --exclude="${{ inputs.mustnew-exclude }}" "$GITHUB_WORKSPACE"
+
+    - name: Check equality test coverage
+      shell: bash
+      working-directory: ${{ github.action_path }}/../..
+      run: go run ./cmd/checkequality --exclude="${{ inputs.equality-exclude }}" "$GITHUB_WORKSPACE"
+
+    - name: Check String usage in tests
+      shell: bash
+      working-directory: ${{ github.action_path }}/../..
+      run: go run ./cmd/checkstring "$GITHUB_WORKSPACE"
