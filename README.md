@@ -21,7 +21,7 @@ Standalone Go programs that walk a directory and report violations. Each exits 0
 Runs all three checkers against the caller's repo. Used from consumer workflows:
 
 ```yaml
-- uses: chrisconley/go-ddd/actions/run-ddd-checks@v1
+- uses: verocorp/go-ddd/actions/run-ddd-checks@v1
   with:
     mustnew-exclude: "Ledger,Transaction,Transfer"
     equality-exclude: "Ledger,Transaction,Transfer,BudgetRule"
@@ -40,8 +40,8 @@ This toolkit encodes three rules from a broader DDD approach for Go:
 ## Consumers
 
 - [verocorp/certus](https://github.com/verocorp/certus) — reference implementation
-- [chrisconley/metron](https://github.com/chrisconley/metron)
-- [chrisconley/quanta](https://github.com/chrisconley/quanta)
+- [verocorp/metron](https://github.com/verocorp/metron)
+- [verocorp/quanta](https://github.com/verocorp/quanta)
 
 ## Status
 
