@@ -24,8 +24,9 @@ func (v Violation) String() string {
 }
 
 // CheckPackageDir scans test files in dir for .String() calls outside
-// Test*_String accessor contract tests.
-func CheckPackageDir(dir string) ([]Violation, error) {
+// Test*_String accessor contract tests. Returns the violations and the
+// number of test files scanned.
+func CheckPackageDir(dir string) ([]Violation, int, error) {
 	fset := token.NewFileSet()
 
 	// Parse test files only.
@@ -33,18 +34,20 @@ func CheckPackageDir(dir string) ([]Violation, error) {
 		return strings.HasSuffix(fi.Name(), "_test.go")
 	}, 0)
 	if err != nil {
-		return nil, fmt.Errorf("parsing tests in %s: %w", dir, err)
+		return nil, 0, fmt.Errorf("parsing tests in %s: %w", dir, err)
 	}
 
 	var violations []Violation
+	scanned := 0
 
 	for _, pkg := range pkgs {
 		for filename, file := range pkg.Files {
+			scanned++
 			violations = append(violations, checkFile(fset, filename, file)...)
 		}
 	}
 
-	return violations, nil
+	return violations, scanned, nil
 }
 
 // checkFile scans a single AST file for .String() calls outside allowed functions.

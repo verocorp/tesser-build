@@ -24,8 +24,9 @@ func (v Violation) String() string {
 }
 
 // CheckPackageDir scans a single package directory for VO constructors
-// missing Test*_Equality counterparts in test files.
-func CheckPackageDir(dir string, excluded map[string]bool) ([]Violation, error) {
+// missing Test*_Equality counterparts in test files. Returns the violations
+// and the total number of VOs matched (including those that became violations).
+func CheckPackageDir(dir string, excluded map[string]bool) ([]Violation, int, error) {
 	fset := token.NewFileSet()
 
 	// Parse source files (non-test).
@@ -33,7 +34,7 @@ func CheckPackageDir(dir string, excluded map[string]bool) ([]Violation, error) 
 		return !strings.HasSuffix(fi.Name(), "_test.go")
 	}, 0)
 	if err != nil {
-		return nil, fmt.Errorf("parsing source in %s: %w", dir, err)
+		return nil, 0, fmt.Errorf("parsing source in %s: %w", dir, err)
 	}
 
 	// Parse test files.
@@ -41,7 +42,7 @@ func CheckPackageDir(dir string, excluded map[string]bool) ([]Violation, error) 
 		return strings.HasSuffix(fi.Name(), "_test.go")
 	}, 0)
 	if err != nil {
-		return nil, fmt.Errorf("parsing tests in %s: %w", dir, err)
+		return nil, 0, fmt.Errorf("parsing tests in %s: %w", dir, err)
 	}
 
 	// Collect all Test*_Equality function names from test files.
@@ -64,6 +65,7 @@ func CheckPackageDir(dir string, excluded map[string]bool) ([]Violation, error) 
 	}
 
 	var violations []Violation
+	matched := 0
 
 	for _, pkg := range srcPkgs {
 		for filename, file := range pkg.Files {
@@ -78,6 +80,8 @@ func CheckPackageDir(dir string, excluded map[string]bool) ([]Violation, error) 
 					continue
 				}
 
+				matched++
+
 				if !equalityTests[typeName] {
 					pos := fset.Position(fn.Pos())
 					violations = append(violations, Violation{
@@ -91,7 +95,7 @@ func CheckPackageDir(dir string, excluded map[string]bool) ([]Violation, error) 
 		}
 	}
 
-	return violations, nil
+	return violations, matched, nil
 }
 
 // matchVOConstructor checks whether fn is a VO constructor.

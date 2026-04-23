@@ -47,7 +47,7 @@ func TestCustomerID_Equality(t *testing.T) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir)
+	violations, _, err := CheckPackageDir(dir)
 	require.NoError(t, err)
 	assert.Empty(t, violations)
 }
@@ -65,7 +65,7 @@ func TestCustomerID_String(t *testing.T) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir)
+	violations, _, err := CheckPackageDir(dir)
 	require.NoError(t, err)
 	assert.Empty(t, violations)
 }
@@ -83,7 +83,7 @@ func TestCustomerID_NewCustomerID(t *testing.T) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir)
+	violations, _, err := CheckPackageDir(dir)
 	require.NoError(t, err)
 	require.Len(t, violations, 1)
 	assert.Equal(t, "TestCustomerID_NewCustomerID", violations[0].FuncName)
@@ -107,7 +107,7 @@ func TestBar(t *testing.T) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir)
+	violations, _, err := CheckPackageDir(dir)
 	require.NoError(t, err)
 	require.Len(t, violations, 2)
 
@@ -137,7 +137,7 @@ func TestFoo_NewFoo(t *testing.T) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir)
+	violations, _, err := CheckPackageDir(dir)
 	require.NoError(t, err)
 	require.Len(t, violations, 1)
 	assert.Equal(t, "TestFoo_NewFoo", violations[0].FuncName)
@@ -158,7 +158,7 @@ func TestFoo(t *testing.T) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir)
+	violations, _, err := CheckPackageDir(dir)
 	require.NoError(t, err)
 	require.Len(t, violations, 2)
 	// Both should report the same enclosing function.
@@ -180,7 +180,7 @@ func TestFoo(t *testing.T) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir)
+	violations, _, err := CheckPackageDir(dir)
 	require.NoError(t, err)
 	require.Len(t, violations, 1)
 	assert.Equal(t, "TestFoo", violations[0].FuncName)
@@ -194,7 +194,7 @@ type Foo struct{}
 `,
 	})
 
-	violations, err := CheckPackageDir(dir)
+	violations, _, err := CheckPackageDir(dir)
 	require.NoError(t, err)
 	assert.Empty(t, violations)
 }
@@ -212,7 +212,7 @@ func TestFoo(t *testing.T) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir)
+	violations, _, err := CheckPackageDir(dir)
 	require.NoError(t, err)
 	assert.Empty(t, violations)
 }

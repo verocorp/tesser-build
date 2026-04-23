@@ -24,17 +24,19 @@ func (v Violation) String() string {
 }
 
 // CheckPackageDir scans a single package directory for VO constructors
-// missing MustNew* counterparts.
-func CheckPackageDir(dir string, excluded map[string]bool) ([]Violation, error) {
+// missing MustNew* counterparts. Returns the violations and the total
+// number of VO constructors matched (including those that became violations).
+func CheckPackageDir(dir string, excluded map[string]bool) ([]Violation, int, error) {
 	fset := token.NewFileSet()
 	pkgs, err := parser.ParseDir(fset, dir, func(fi os.FileInfo) bool {
 		return !strings.HasSuffix(fi.Name(), "_test.go")
 	}, 0)
 	if err != nil {
-		return nil, fmt.Errorf("parsing %s: %w", dir, err)
+		return nil, 0, fmt.Errorf("parsing %s: %w", dir, err)
 	}
 
 	var violations []Violation
+	matched := 0
 
 	for _, pkg := range pkgs {
 		// Collect all MustNew* function names in the package.
@@ -53,6 +55,8 @@ func CheckPackageDir(dir string, excluded map[string]bool) ([]Violation, error) 
 					continue
 				}
 
+				matched++
+
 				mustName := "MustNew" + typeName
 				if !mustNews[mustName] {
 					pos := fset.Position(fn.Pos())
@@ -67,7 +71,7 @@ func CheckPackageDir(dir string, excluded map[string]bool) ([]Violation, error) 
 		}
 	}
 
-	return violations, nil
+	return violations, matched, nil
 }
 
 // matchVOConstructor checks whether fn is a VO constructor that needs a

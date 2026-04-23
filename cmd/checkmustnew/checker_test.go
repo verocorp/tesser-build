@@ -177,7 +177,7 @@ func MustNewCustomerID(value string) CustomerID {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir, map[string]bool{})
+	violations, _, err := CheckPackageDir(dir, map[string]bool{})
 	require.NoError(t, err)
 	assert.Empty(t, violations)
 }
@@ -194,7 +194,7 @@ func NewCustomerID(value string) (CustomerID, error) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir, map[string]bool{})
+	violations, _, err := CheckPackageDir(dir, map[string]bool{})
 	require.NoError(t, err)
 	require.Len(t, violations, 1)
 	assert.Equal(t, "CustomerID", violations[0].TypeName)
@@ -221,7 +221,7 @@ func MustNewAmount(value string) Amount {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir, map[string]bool{})
+	violations, _, err := CheckPackageDir(dir, map[string]bool{})
 	require.NoError(t, err)
 	assert.Empty(t, violations)
 }
@@ -239,7 +239,7 @@ func NewCollect(spec CollectSpec) (Operation, error) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir, map[string]bool{})
+	violations, _, err := CheckPackageDir(dir, map[string]bool{})
 	require.NoError(t, err)
 	assert.Empty(t, violations)
 }
@@ -257,7 +257,7 @@ func NewLedger(spec string) (Ledger, error) {
 	})
 
 	excluded := map[string]bool{"Ledger": true}
-	violations, err := CheckPackageDir(dir, excluded)
+	violations, _, err := CheckPackageDir(dir, excluded)
 	require.NoError(t, err)
 	assert.Empty(t, violations)
 }
@@ -274,7 +274,7 @@ func NewTestHelper(s string) (TestHelper, error) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir, map[string]bool{})
+	violations, _, err := CheckPackageDir(dir, map[string]bool{})
 	require.NoError(t, err)
 	assert.Empty(t, violations)
 }
@@ -291,7 +291,7 @@ func NewBar(s string) (Bar, error) { return Bar{}, nil }
 `,
 	})
 
-	violations, err := CheckPackageDir(dir, map[string]bool{})
+	violations, _, err := CheckPackageDir(dir, map[string]bool{})
 	require.NoError(t, err)
 	require.Len(t, violations, 2)
 
@@ -315,7 +315,7 @@ func NewTimestamp(s string) DeprecatedTimestamp {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir, map[string]bool{})
+	violations, _, err := CheckPackageDir(dir, map[string]bool{})
 	require.NoError(t, err)
 	assert.Empty(t, violations)
 }
@@ -334,7 +334,7 @@ func NewBad(s string) (Bad, error) { return Bad{}, nil }
 `,
 	})
 
-	violations, err := CheckPackageDir(dir, map[string]bool{})
+	violations, _, err := CheckPackageDir(dir, map[string]bool{})
 	require.NoError(t, err)
 	require.Len(t, violations, 1)
 	assert.Equal(t, "Bad", violations[0].TypeName)
@@ -352,7 +352,7 @@ func NewFilter[D any](s string) (Filter[D], error) {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir, map[string]bool{})
+	violations, _, err := CheckPackageDir(dir, map[string]bool{})
 	require.NoError(t, err)
 	require.Len(t, violations, 1)
 	assert.Equal(t, "Filter", violations[0].TypeName)
@@ -377,7 +377,7 @@ func MustNewFilter[D any](s string) Filter[D] {
 `,
 	})
 
-	violations, err := CheckPackageDir(dir, map[string]bool{})
+	violations, _, err := CheckPackageDir(dir, map[string]bool{})
 	require.NoError(t, err)
 	assert.Empty(t, violations)
 }

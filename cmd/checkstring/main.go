@@ -13,6 +13,7 @@ func main() {
 	}
 
 	var allViolations []Violation
+	totalScanned := 0
 
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -33,11 +34,12 @@ func main() {
 			return nil
 		}
 
-		violations, checkErr := CheckPackageDir(path)
+		violations, scanned, checkErr := CheckPackageDir(path)
 		if checkErr != nil {
 			return checkErr
 		}
 		allViolations = append(allViolations, violations...)
+		totalScanned += scanned
 		return nil
 	})
 	if err != nil {
@@ -50,10 +52,15 @@ func main() {
 	}
 
 	if len(allViolations) == 0 {
-		fmt.Println("PASS: No .String() calls outside Test*_String accessor tests.")
-	} else {
-		fmt.Printf("\nFAIL: %d .String() call(s) outside accessor tests.\n", len(allViolations))
-		fmt.Println("Use VO-level comparison, typed assertions, string literals, or fmt-verb formatting instead. See llm-tools/domain-objects.md step 9.")
-		os.Exit(1)
+		if totalScanned == 0 {
+			fmt.Println("PASS: No test files found to scan.")
+		} else {
+			fmt.Printf("PASS: No .String() calls outside Test*_String accessor tests (%d test file(s) scanned).\n", totalScanned)
+		}
+		return
 	}
+	fmt.Printf("\nFAIL: %d .String() call(s) outside accessor tests (%d test file(s) scanned).\n",
+		len(allViolations), totalScanned)
+	fmt.Println("Use VO-level comparison, typed assertions, string literals, or fmt-verb formatting instead.")
+	os.Exit(1)
 }
