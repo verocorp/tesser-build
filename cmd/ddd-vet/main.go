@@ -13,8 +13,7 @@ import (
 
 	"golang.org/x/tools/go/analysis/multichecker"
 
-	"github.com/chrisconley/go-ddd/passes/mustnew"
-	"github.com/chrisconley/go-ddd/passes/vofields"
+	"github.com/chrisconley/go-ddd/internal/analyzers"
 )
 
 func main() {
@@ -23,8 +22,5 @@ func main() {
 	if maybeGenExcludes(os.Args) {
 		return
 	}
-	multichecker.Main(
-		mustnew.Analyzer,
-		vofields.Analyzer,
-	)
+	multichecker.Main(analyzers.All...)
 }
