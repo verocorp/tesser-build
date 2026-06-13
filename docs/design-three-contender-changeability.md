@@ -1,7 +1,9 @@
 # Design: the three-contender changeability metric
 
-**Status:** design — not yet built. Defines the metric *before* it is measured, so
-the result can falsify the thesis rather than confirm a foregone conclusion.
+**Status:** design — Layer 1 BUILT (`rationale/inconsistent/` + arm-2 tests +
+`coverage.md` consistency dimension, all green). Defines the metric *before* it
+is measured, so the result can falsify the thesis rather than confirm a foregone
+conclusion. Layer 3 (CI leak-rate) remains parked, gated on skills.
 **Date:** 2026-06-13
 **Origin:** 2026-06-13 Claude Code session in `go-ddd`, building on the landed
 `rationale/` layer (`a0dd0ec`) and the silent-site-cost metric
@@ -76,9 +78,14 @@ of the checker rationale) collapses. We report that honestly if it happens.
 
 | Arm | What it is |
 |---|---|
-| 1 — primitives | the concept is a bare `string`/`float64`/`map`, as today's `rationale/primitive/` |
-| 2 — inconsistent VOs | the concept is "wrapped," but each concept is wrapped a *different non-conforming way* (see modeling rules below) |
-| 3 — consistent VOs | the concept is a conforming VO: private field, single validating constructor, value equality, no representation leak — today's `rationale/valueobject/` |
+| 1 — primitives | the concept is a bare `string`/`float64`/`map`, as `rationale/primitive/` |
+| 2 — inconsistent VOs | a **mixture of bare primitives and non-conforming value objects** — some concepts left primitive, some wrapped, the wrapped ones wrapped different ways (see modeling rules below). `rationale/inconsistent/` |
+| 3 — consistent VOs | the concept is a conforming VO: private field, single validating constructor, value equality, no representation leak — `rationale/valueobject/` |
+
+Arm 2 is a *mixture*, not "different kinds of VO." The realistic failure isn't
+that everyone built a slightly different VO — it's that "use VOs" gets applied
+unevenly: some concepts stay primitive, some get wrapped, and no two wrapped the
+same way. Partial adoption is the headline shape.
 
 ### Change operations (reuse the landed taxonomy)
 
@@ -86,6 +93,14 @@ Per the six-operation / three-tier taxonomy already established: at minimum run
 **retype the representation** (string→int), **rename the type**, **add a
 validation invariant**, and **change an allowed value/meaning**. Count silent
 sites for each operation, each arm.
+
+Note on the validation operation: the landed `rationale/` only demonstrated the
+*no-validation* case (a bad value flows through unchecked). The realistic and
+more expensive case is **validation that exists but is scattered** across every
+construction site, so changing the rule is an N-site edit and a missed site is
+silent. Arm 2's `Altitude` builders demonstrate exactly this — the compiler can't
+tell you a duplicated validation site is stale. (Construction logic leaking into
+enclosing code is a *changeability* cost, not only a safety one.)
 
 ---
 
@@ -161,11 +176,18 @@ leak-plug mapping, and documenting the adoption ladder.
 
 ---
 
-## Open questions for Chris
+## Decisions (resolved)
 
-1. **Arm-2 breadth:** model *all six* non-conforming shapes (one concept each), or
-   the 2–3 highest-signal ones for a tighter fixture? More shapes = stronger claim,
-   bigger fixture.
-2. **Package name:** `rationale/inconsistent/` vs `rationale/looseobject/` vs other.
-3. **Layer-3 framing now:** document the leak-rate metric as a stated *future*
-   metric in this round's write-up, or leave it entirely until skills land?
+1. **Arm-2 breadth:** built the **3 highest-signal** shapes — partial adoption,
+   scattered validation, equality-via-`String()`. They demo cleanly in Go and each
+   maps to a real anchor and a checker (or roadmap row). The remaining shapes
+   (naming drift, must-helper reimplementation) stay catalogued in the arm-2 table
+   above but aren't given executable demos this round (they don't reduce to a Go
+   compile/behavior check). Revisit if the claim needs more breadth.
+2. **Package name:** `rationale/inconsistent/` — plainest read against `primitive/`
+   and `valueobject/`.
+3. **Layer-3 framing:** documented as a stated *future* metric (leak rate past
+   docs + skills) in `coverage.md` and here; not measured until skills land.
+
+Bonus: building exhibit 3 closed the standing `checkstring` ⚠️ "demo TODO" —
+`coverage.md` now has an executable demo for every checker.
