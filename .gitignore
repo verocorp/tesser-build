@@ -1,0 +1,3 @@
+# gbrain machine-local artifacts (worktree pin + indexed-source data)
+.gbrain-source
+.sources/
