@@ -22,7 +22,7 @@ import (
 
 	"golang.org/x/tools/go/analysis"
 
-	"github.com/chrisconley/go-ddd/passes/internal/voscan"
+	"github.com/chrisconley/go-ddd/internal/voscan"
 )
 
 var exclude string
@@ -39,7 +39,7 @@ func init() {
 }
 
 func run(pass *analysis.Pass) (any, error) {
-	excluded := voscan.ParseExcludes(exclude)
+	excluded := voscan.CombinedExcludes(pass, exclude)
 
 	// Types that already have an error-returning constructor. Exclusion is not
 	// applied here — we want the true set of constructed types, and apply

@@ -11,7 +11,7 @@ import (
 
 	"golang.org/x/tools/go/analysis"
 
-	"github.com/chrisconley/go-ddd/passes/internal/voscan"
+	"github.com/chrisconley/go-ddd/internal/voscan"
 )
 
 var exclude string
@@ -28,7 +28,7 @@ func init() {
 }
 
 func run(pass *analysis.Pass) (any, error) {
-	excluded := voscan.ParseExcludes(exclude)
+	excluded := voscan.CombinedExcludes(pass, exclude)
 	for name := range voscan.VOTypeNames(pass.Files, excluded) {
 		obj := pass.Pkg.Scope().Lookup(name)
 		if obj == nil {

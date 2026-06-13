@@ -9,6 +9,8 @@
 package main
 
 import (
+	"os"
+
 	"golang.org/x/tools/go/analysis/multichecker"
 
 	"github.com/chrisconley/go-ddd/passes/mustnew"
@@ -16,6 +18,11 @@ import (
 )
 
 func main() {
+	// The starter-config generator is a separate mode, outside the
+	// go/analysis multichecker.
+	if maybeGenExcludes(os.Args) {
+		return
+	}
 	multichecker.Main(
 		mustnew.Analyzer,
 		vofields.Analyzer,
