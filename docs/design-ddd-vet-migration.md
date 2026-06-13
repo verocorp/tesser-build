@@ -1,7 +1,9 @@
 # Design: migrate the checkers to go/analysis + add the rubric checkers
 
-**Status:** design — approved to build. Supersedes the standalone `cmd/check*`
-directory-walkers. Builds on the spike (`ebca404`) that proved the port.
+**Status:** Add phase BUILT and green (8 analyzers + generator + meta-test, all
+tests/vet/gofmt clean). Migrate + Remove not started — paused for eng review (see
+Build notes). Supersedes the standalone `cmd/check*` directory-walkers. Builds on
+the spike (`ebca404`) that proved the port.
 **Date:** 2026-06-13
 **Origin:** 2026-06-13 go-ddd session, after the spike validated one ported and
 one new analyzer on `go/analysis`.
@@ -39,8 +41,10 @@ no coverage is lost.
   (nosetters          #5)     DEFERRED — debatable rule, no clean default-off in multichecker
 ```
 
-All composed in `cmd/ddd-vet` via `multichecker`. Shared value-object
-identification + signal helpers live in `passes/internal/voscan`.
+All composed in `cmd/ddd-vet` via `multichecker`, enrolled through the single
+`internal/analyzers.All` registry. Shared value-object identification + signal
+helpers live in `internal/voscan` and `internal/genexclude` (module-root
+`internal/`, not `passes/internal/` — see Build notes #2).
 
 Per-analyzer notes:
 - **voconstructor (#2):** every value object has a `NewX(...) (X, error)`. The
@@ -184,6 +188,54 @@ untested.
   erodes trust — tune signals against certus's real aggregates before shipping.
 - **Build-required targets:** if a consumer repo doesn't compile in CI, `go vet`
   fails for the wrong reason. Acceptable for real modules; document it.
+
+## Build notes & open questions for eng review (Add phase complete)
+
+The Add phase is built and green (`go test ./...`, `go vet ./...`, `gofmt -l .`).
+All 8 analyzers compose in `ddd-vet`; an end-to-end `go vet -vettool` run flags
+incomplete VOs and skips `.go-ddd.yaml`-excluded entities. Findings that surfaced
+during the build — the spike's two analyzers were intra-file and never hit these:
+
+1. **equalitytest is a source↔test correlation, which `go/analysis` splits by
+   package variant.** Empirically (verified with a real `go vet` run): cmd/go
+   vets the *test-augmented* variant of a package (production files + its
+   **in-package** `_test.go`) in one pass, so an in-package `Test*_Equality` is
+   seen alongside the constructor and the check is correct. But an **external**
+   test package (`package foo_test`) is vetted as its own unit *without* the
+   constructors, so an externally-tested VO is a **false positive**. This is a
+   real behavior change from the directory-walker (which read the whole dir).
+   **Open question:** do certus/metron/quanta put `Test*_Equality` in-package or
+   in `_test` packages? Decide/tune before Migrate. (`stringequality` has no such
+   problem — its violations live in the test files themselves.)
+   - Consequence: equalitytest can't use `analysistest` (which checks *every*
+     variant as a root, including the plain non-test variant that can't see test
+     files, so it would flag a covered VO that `go vet` never flags). It uses a
+     small `go vet`-faithful harness instead. The meta-test therefore checks for
+     "_test.go + testdata/", not specifically an `analysistest` package.
+
+2. **Shared helpers are in module-root `internal/`, not `passes/internal/`** (as
+   the table above originally said). The Go internal-package rule makes
+   `passes/internal/*` importable only under `passes/`, and `cmd/ddd-vet` is not;
+   the generator forced the move. Functionally identical, still non-public.
+
+3. **voconstructor's heuristic** (exported struct, ≥1 field, all-unexported, no
+   `NewX(X,error)`) has a real false-positive surface: deliberate zero-value
+   types that share the shape. They go on the exclude list. Tune against certus's
+   real types before relying on it in CI.
+
+4. **`-gen-excludes` never clobbers an existing `.go-ddd.yaml`** (it is
+   human-curated; overwriting could drop a hand-added exclusion). First run
+   writes it; thereafter it prints to stdout to diff in.
+
+5. **Config caching caveat.** Analyzers read `.go-ddd.yaml` from disk, which
+   `go/analysis` does not track as an action input. A config edit may not
+   invalidate the build cache; a `go clean -cache` or vettool rebuild forces it.
+   Relevant to how the Action invokes `ddd-vet` (Migrate phase).
+
+6. **stringer / primitiveaccessor / comparability check the VALUE method set**
+   deliberately — a value object is used by value, so a pointer-receiver
+   `String`/`Equal` does not satisfy the rule (and is flagged). Confirm this
+   strictness is what we want.
 
 ## Out of scope
 
