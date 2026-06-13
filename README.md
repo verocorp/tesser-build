@@ -15,6 +15,16 @@ maps each rule to its demo and its checker, with a meta-test that forbids silent
 gaps. [`docs/case-study.md`](docs/case-study.md) carries the magnitude measured on
 a real ~1,100-commit codebase.
 
+The fixture runs **three contenders** over the same domain — bare primitives
+([`rationale/primitive/`](rationale/primitive/)), a realistic *mixture* of
+primitives and inconsistently-built value objects
+([`rationale/inconsistent/`](rationale/inconsistent/)), and consistent value
+objects ([`rationale/valueobject/`](rationale/valueobject/)). The arm-2 tests
+prove the point that justifies the checkers: a value object adopted
+*inconsistently* reopens the same silent sites a bare primitive does. The
+dividend is bought by the **standard**, not by the pattern. See
+[`docs/design-three-contender-changeability.md`](docs/design-three-contender-changeability.md).
+
 ## What's here
 
 ### `cmd/` — DDD convention checkers
