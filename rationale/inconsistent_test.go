@@ -83,6 +83,76 @@ func TestEqualityByString_InconsistentIsWrong(t *testing.T) {
 	}
 }
 
+// --- Non-conformance 4: must-helper reimplementation -----------------------
+
+// Three hand-rolled "must"-style Altitude helpers, three behaviors on the same
+// bad input. Without a single canonical MustNew, every author invents their own
+// and they don't agree on what "must" means. The consistent VO provides ONE
+// MustNewAltitude, so there's nothing to reinvent — the point of checkmustnew.
+func TestMustReimplementation_HandRolledHelpersDiverge(t *testing.T) {
+	if !panics(func() { inconsistent.MustAltitude(-100) }) {
+		t.Fatal("expected MustAltitude to panic on a negative altitude")
+	}
+	if inconsistent.ForceAltitude(-100) != -100 {
+		t.Fatal("expected ForceAltitude to silently admit the bad value")
+	}
+	if inconsistent.AltitudeOrZero(-100) != 0 {
+		t.Fatal("expected AltitudeOrZero to silently clamp to zero")
+	}
+	// Three readings of "must": panic, admit, clamp. The consistent VO supplies
+	// one canonical helper with one behavior:
+	if got := valueobject.MustNewAltitude(100).Meters(); got != 100 {
+		t.Fatalf("MustNewAltitude(100) = %v, want 100", got)
+	}
+}
+
+// --- Non-conformance 5: naming drift ---------------------------------------
+
+// Same category of value, two separator conventions: PhaseTouchdown drifted to
+// an underscore while its siblings use hyphens. A checker enforcing one
+// convention would flag it; bare string constants let it drift silently.
+func TestNamingDrift_InconsistentMixesConventions(t *testing.T) {
+	hyphen, underscore := 0, 0
+	for _, p := range inconsistent.AllPhases {
+		if strings.Contains(p, "-") {
+			hyphen++
+		}
+		if strings.Contains(p, "_") {
+			underscore++
+		}
+	}
+	if hyphen == 0 || underscore == 0 {
+		t.Fatalf("setup error: expected a mix of conventions, got hyphen=%d underscore=%d", hyphen, underscore)
+	}
+	// Two conventions for one category of value — the drift a single typed
+	// phase, normalized at construction, would have made impossible.
+}
+
+// The drift bites: a format-wide rename that assumes the common convention
+// silently leaves the outlier behind.
+func TestNamingDrift_FormatChangeMissesTheOutlier(t *testing.T) {
+	renamed := map[string]string{}
+	for _, p := range inconsistent.AllPhases {
+		renamed[p] = strings.ReplaceAll(p, "-", " ") // a rename that assumes hyphens
+	}
+	if renamed[inconsistent.PhaseTouchdown] != "touch_down" {
+		t.Fatal("setup error: expected touch_down to be untouched by a hyphen-only rename")
+	}
+	// touch_down survived unchanged — the underscore drift made the rename
+	// silently miss it. Exactly the bare-string meaning-change silent site.
+}
+
+// panics reports whether f panicked.
+func panics(f func()) (p bool) {
+	defer func() {
+		if recover() != nil {
+			p = true
+		}
+	}()
+	f()
+	return
+}
+
 // countMarker counts occurrences of a marker comment across a package's .go
 // source. Tests run with CWD at the rationale/ package dir, so pkgDir is a
 // direct subdirectory (e.g. "inconsistent", "valueobject").

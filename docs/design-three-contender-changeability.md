@@ -178,12 +178,14 @@ leak-plug mapping, and documenting the adoption ladder.
 
 ## Decisions (resolved)
 
-1. **Arm-2 breadth:** built the **3 highest-signal** shapes — partial adoption,
-   scattered validation, equality-via-`String()`. They demo cleanly in Go and each
-   maps to a real anchor and a checker (or roadmap row). The remaining shapes
-   (naming drift, must-helper reimplementation) stay catalogued in the arm-2 table
-   above but aren't given executable demos this round (they don't reduce to a Go
-   compile/behavior check). Revisit if the claim needs more breadth.
+1. **Arm-2 breadth:** **5 of the 6** shapes now have executable demos —
+   partial adoption, scattered validation, equality-via-`String()` (compile/behavior
+   demos), plus must-helper reimplementation (behavioral divergence) and naming
+   drift (value-scan + silent-miss demos). The last shape, **leaking representation**
+   (`type X string` with an exported underlying that callers convert around, so a
+   retype stays expensive), is still catalogued-only — it's the fiddliest to show in
+   Go because a named type already gives compile distinctness; the leak is via
+   conversions. Revisit if the claim needs it.
 2. **Package name:** `rationale/inconsistent/` — plainest read against `primitive/`
    and `valueobject/`.
 3. **Layer-3 framing:** documented as a stated *future* metric (leak rate past

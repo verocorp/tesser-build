@@ -21,6 +21,15 @@ evidence lives in the originating private repo.
   sites the rename missed — and one stale literal survived for **months** as an
   invalid value that errors at runtime. That is the silent surface shipping a bug.
 
+- **Inconsistent adoption costs like no adoption (the third contender):** a
+  concept whose value object *already existed* was still read as a **bare string
+  in one slot across 43 call sites**. The value object bought nothing for those
+  43 sites — a change to the concept stayed silent there, exactly as if no value
+  object existed. This is the real-world magnitude behind `rationale/inconsistent/`:
+  half-adopted value objects sit on the bare-primitive end of this table, not the
+  typed end. The dividend is bought by adopting the concept *everywhere and the
+  same way*, not by the type existing somewhere.
+
 **The metric:** changeability cost is dominated by **silent sites** — edits the
 compiler can't flag, that a human must find by hand and can miss. A value object
 drives silent sites to **zero** by making every change either a compile error or

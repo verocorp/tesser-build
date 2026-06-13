@@ -49,3 +49,15 @@ func NewAltitude(meters float64) (Altitude, error) {
 }
 
 func (a Altitude) Meters() float64 { return a.meters }
+
+// MustNewAltitude is the single canonical panic-on-error helper. Tests and
+// known-valid literals use it. Because exactly ONE is provided, no author has to
+// hand-roll their own — compare ../inconsistent, where three divergent "must"
+// helpers appeared because none was supplied. checkmustnew mandates this pairing.
+func MustNewAltitude(meters float64) Altitude {
+	a, err := NewAltitude(meters)
+	if err != nil {
+		panic(err)
+	}
+	return a
+}
