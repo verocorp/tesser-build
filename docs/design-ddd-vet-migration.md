@@ -1,11 +1,14 @@
 # Design: migrate the checkers to go/analysis + add the rubric checkers
 
 **Status:** Add phase BUILT and green (7 analyzers + generator + meta-test, all
-tests/vet/gofmt clean). Migrate step 4 (the Action) BUILT: `run-ddd-checks` now
-builds `ddd-vet` and runs it as a `go vet` tool, file-only config, forced cold
-cache, compile-required documented (Decisions 7–9). Remove (steps 5–6) not
-started. Supersedes the standalone `cmd/check*` directory-walkers. Builds on the
-spike (`ebca404`) that proved the port.
+tests/vet/gofmt clean). Migrate BUILT: (a) `run-ddd-checks` now builds `ddd-vet`
+and runs it as a `go vet` tool — file-only config, forced cold cache,
+compile-required documented (Decisions 7–9); (b) every reference to the old
+checkers repointed to the analyzers — README, CLAUDE.md, coverage.md +
+coverage_test.go (guard now keys off `analyzers.All`), design-three-contender — so
+the silent-gap guard stays live and Remove is a pure deletion. Remove (step 5,
+delete `cmd/check*`) not started. Supersedes the standalone `cmd/check*`
+directory-walkers. Builds on the spike (`ebca404`) that proved the port.
 **Date:** 2026-06-13
 **Origin:** 2026-06-13 go-ddd session, after the spike validated one ported and
 one new analyzer on `go/analysis`.
@@ -144,8 +147,24 @@ shared). The generator's identity/mutability detection is shared with the
 
   Remove ────────────────────────────────────────────────────────────────────
    5. Delete cmd/checkmustnew | checkequality | checkstring and their *_test.go
-      ONLY after their cases are ported and the Action is green on ddd-vet.
-   6. Update README + rationale/coverage.md to point at ddd-vet and the analyzers.
+      ONLY after their cases are ported and the Action is green on ddd-vet. Now a
+      PURE DELETION: the only at-deletion touch is the 3 `passes/*` provenance
+      comments ("port of cmd/checkmustnew") which become past-tense (or leave as
+      git lineage).
+   6. DONE during Migrate (moved earlier — see note below). README, CLAUDE.md,
+      rationale/coverage.md + coverage_test.go, and design-three-contender now
+      point at ddd-vet and the analyzers; the coverage guard keys off
+      analyzers.All so it stays live after step 5.
+
+  Note — the doc/guard repoint moved from Remove into Migrate. Leaving
+  coverage_test.go keyed to cmd/check* until Remove meant the silent-gap guard
+  would go INERT the moment those dirs were deleted (it iterates ../cmd/check*,
+  finds none, passes vacuously) — a silent gap in the silent-gap detector. So
+  "finish Migrating" now includes: guard keys off analyzers.All; coverage.md
+  tracks all 7 shipping analyzers (the 5 rubric analyzers without a rationale demo
+  are tracked as honest "demo pending" rows); the equality row is downgraded
+  (equalitytest parked → no analyzer locks the equality test; comparability covers
+  the structural == hazard). Remove is then a deletion that breaks nothing.
 ```
 
 **Consequence to accept:** the type-aware analyzers require the target package to

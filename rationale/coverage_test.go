@@ -6,13 +6,17 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/chrisconley/go-ddd/internal/analyzers"
 )
 
-// TestCoverageMatrix_NoSilentGaps keeps coverage.md honest: every checker in
-// ../cmd must appear in the matrix, and every Test* the matrix names must exist
-// in this package. It tolerates the ❌/⚠️ rows by design (the rationale is
-// broader than the enforcement); it forbids a SILENT gap — a checker missing
-// from the matrix, or a dangling test reference that rotted.
+// TestCoverageMatrix_NoSilentGaps keeps coverage.md honest: every analyzer
+// ddd-vet ships (internal/analyzers.All) must appear in the matrix, and every
+// Test* the matrix names must exist in this package. It tolerates the ❌/⚠️ rows
+// by design (the rationale is broader than the enforcement, and some analyzers
+// enforce a rubric rule whose demo is still pending); it forbids a SILENT gap —
+// a shipping analyzer missing from the matrix, or a dangling test reference that
+// rotted.
 func TestCoverageMatrix_NoSilentGaps(t *testing.T) {
 	matrix, err := os.ReadFile("coverage.md")
 	if err != nil {
@@ -20,16 +24,12 @@ func TestCoverageMatrix_NoSilentGaps(t *testing.T) {
 	}
 	content := string(matrix)
 
-	// 1. Every cmd/check* checker is named in the matrix.
-	entries, err := os.ReadDir("../cmd")
-	if err != nil {
-		t.Fatalf("read ../cmd: %v", err)
-	}
-	for _, e := range entries {
-		if e.IsDir() && strings.HasPrefix(e.Name(), "check") {
-			if !strings.Contains(content, e.Name()) {
-				t.Errorf("checker %q has no row in coverage.md (silent gap)", e.Name())
-			}
+	// 1. Every analyzer ddd-vet ships is named in the matrix. Keyed off the
+	// analyzers.All registry — not the cmd/check* dirs — so the guard stays live
+	// after the standalone walkers are removed.
+	for _, a := range analyzers.All {
+		if !strings.Contains(content, a.Name) {
+			t.Errorf("analyzer %q has no row in coverage.md (silent gap)", a.Name)
 		}
 	}
 

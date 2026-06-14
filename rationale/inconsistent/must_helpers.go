@@ -6,7 +6,7 @@ import "fmt"
 //
 // Anchor: nine ad-hoc `must*` helpers spawned across five test files, each
 // reimplementing the same panic-on-error construction independently (certus
-// e7a470c — the provenance for the checkmustnew rule). Without ONE provided
+// e7a470c — the provenance for the mustnew rule). Without ONE provided
 // `MustNew` helper, every author rolls their own — and they don't even agree on
 // what "must" means when the input is bad. The three below each claim to be the
 // construct-or-die helper for Altitude; they behave three different ways on the

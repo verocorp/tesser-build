@@ -10,7 +10,7 @@ import "fmt"
 // and its equality compares the DISPLAY form. Two values that are the SAME
 // physical temperature, built in different scales, render different strings and
 // compare unequal: the bare-float == bug (../primitive) wearing a value
-// object's clothes. This is exactly the pattern `checkstring` forbids.
+// object's clothes. This is exactly the pattern `stringequality` forbids.
 type Temp struct {
 	scale string // "C" or "K" — kept, not normalized away
 	value float64

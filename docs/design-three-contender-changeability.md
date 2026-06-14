@@ -116,16 +116,16 @@ already excavated:
 |---|---|---|---|
 | Named type with **exported / leaking representation** (`type X string`, callers do `string(x)` and `X("lit")`) | retype stays expensive when the rep leaks | **retype** is no longer 1-file: every conversion/literal site is silent | (roadmap: no checker yet) |
 | **No constructor / no validation** at the boundary | `BaseInput` "data carrier"; nil-check asymmetry (postmortem) | **add-validation** has no single home → scattered or missed | (roadmap: constructor-validation checker) |
-| **Equality done two ways** (`==` here, `.String()` compare there) | residual `.String()`-as-equality (test-vo-assertions audit) | **change-meaning / retype** silently breaks the `.String()`-compare sites | `checkstring` |
-| **Missing `MustNew`** → callers hand-roll construction | 9 ad-hoc `must*` helpers across 5 files (`e7a470c`) | construction path not single → change to construction is silent at each hand-roll | `checkmustnew` |
+| **Equality done two ways** (`==` here, `.String()` compare there) | residual `.String()`-as-equality (test-vo-assertions audit) | **change-meaning / retype** silently breaks the `.String()`-compare sites | `stringequality` |
+| **Missing `MustNew`** → callers hand-roll construction | 9 ad-hoc `must*` helpers across 5 files (`e7a470c`) | construction path not single → change to construction is silent at each hand-roll | `mustnew` |
 | **Partial adoption** (a slot stays raw while the VO exists) | `CreditAmount.CreditType() string` raw across **43 call sites** (`3c4de62`) | every raw slot is a silent site a VO-side change never reaches | (the bidirectional hunter, in certus) |
 | **Naming drift** (`revert_earn` underscore vs hyphen elsewhere) | operation-type literals (realized-harm report) | meaning/format change is silent across the drifted literals | (data-level; not a Go-type checker) |
 
 This table is the spine of the deliverable: it simultaneously (a) defines arm 2,
 (b) maps each leak to the silent-site class it reopens, and (c) gives
 `coverage.md` a new column — *which silent-site leak does this rule plug?* — that
-upgrades `checkmustnew`/`checkequality`/`checkstring` from "hygiene" to "each
-plugs a measured change-cost leak."
+upgrades the value-object analyzers (`mustnew`/`stringequality`, and the now-parked
+equality check) from "hygiene" to "each plugs a measured change-cost leak."
 
 ---
 
@@ -191,5 +191,8 @@ leak-plug mapping, and documenting the adoption ladder.
 3. **Layer-3 framing:** documented as a stated *future* metric (leak rate past
    docs + skills) in `coverage.md` and here; not measured until skills land.
 
-Bonus: building exhibit 3 closed the standing `checkstring` ⚠️ "demo TODO" —
-`coverage.md` now has an executable demo for every checker.
+Bonus: building exhibit 3 closed the standing `stringequality` ⚠️ "demo TODO" —
+`coverage.md` now has an executable demo for every rule that had a checker at the
+time. (The later `go/analysis` rubric analyzers — `vofields`, `voconstructor`,
+`stringer`, `primitiveaccessor`, `comparability` — outrun their demos; `coverage.md`
+tracks that gap openly.)

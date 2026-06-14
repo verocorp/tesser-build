@@ -1,30 +1,34 @@
 # go-ddd — agent guide
 
-This repo is a **DDD enforcement toolkit for Go**: AST checkers (`cmd/`), a
-composite GitHub Action (`actions/`), and an executable rationale layer
-(`rationale/`). If you are writing or changing domain objects here — or in a
-consumer repo (certus, metron, quanta) — follow the conventions below, because
-this repo is what enforces them in CI.
+This repo is a **DDD enforcement toolkit for Go**: the `go/analysis` analyzers in
+`cmd/ddd-vet` (composed from `internal/analyzers.All`), a composite GitHub Action
+(`actions/`), and an executable rationale layer (`rationale/`). If you are writing
+or changing domain objects here — or in a consumer repo (certus, metron, quanta) —
+follow the conventions below, because this repo is what enforces them in CI.
 
-## The conventions (what the checkers enforce)
+## The conventions (what the analyzers enforce)
 
 1. **Value objects get `MustNew*` helpers.** Every `NewX(...) (X, error)` VO
    constructor has a paired `MustNewX(...) X` that panics on error; tests use
-   `MustNewX` for inline construction. (`cmd/checkmustnew`.) Aggregates and
+   `MustNewX` for inline construction. (`mustnew` analyzer.) Aggregates and
    entities are *not* VOs — they carry real construction risk and get no `Must*`.
 2. **Every VO has explicit equality test coverage** — a `Test*_Equality` that
    locks equality semantics, so a later field/comparability change is caught.
-   (`cmd/checkequality`.)
+   This convention stands, but is *not* machine-enforced: the `Test*_Equality`
+   existence check (`equalitytest`) was parked. What ships instead is
+   `comparability`, which flags a VO that needs `Equal` because `==` is
+   unavailable (slice/map/func) or unsafe (pointer/interface field). See
+   `docs/design-ddd-vet-migration.md` "Parked".
 3. **`.String()` is for display, not equality.** Never compare `a.String() ==
    b.String()`. `.String()` belongs inside a `Test*_String` test.
-   (`cmd/checkstring`.)
+   (`stringequality` analyzer.)
 
 Build a VO the canonical way: private fields, a single validating constructor as
 the only construction path, value equality (not representation equality), and no
 representation leak. **Consistency is the point** — a value object built a
 different way each time buys nothing on the change-speed axis (see below).
 
-## Where the "why" lives — read before changing the checkers or conventions
+## Where the "why" lives — read before changing the analyzers or conventions
 
 - [`rationale/`](rationale/) — the executable case. Three contenders over one
   neutral domain (Mars Climate Orbiter navigation): `primitive/` (arm 1),

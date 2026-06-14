@@ -70,7 +70,7 @@ func TestScatteredValidation_RuleLivesInManyPlaces(t *testing.T) {
 	// inconsistentSites edits to change the rule, any one missable; consistent = 1.
 }
 
-// --- Non-conformance 3: equality via String() (what checkstring forbids) ---
+// --- Non-conformance 3: equality via String() (what stringequality forbids) ---
 
 // Same physical temperature in two scales, reported unequal because equality
 // compares the display form. The bare-float == bug in a value object's clothes;
@@ -88,7 +88,7 @@ func TestEqualityByString_InconsistentIsWrong(t *testing.T) {
 // Three hand-rolled "must"-style Altitude helpers, three behaviors on the same
 // bad input. Without a single canonical MustNew, every author invents their own
 // and they don't agree on what "must" means. The consistent VO provides ONE
-// MustNewAltitude, so there's nothing to reinvent — the point of checkmustnew.
+// MustNewAltitude, so there's nothing to reinvent — the point of the mustnew analyzer.
 func TestMustReimplementation_HandRolledHelpersDiverge(t *testing.T) {
 	if !panics(func() { inconsistent.MustAltitude(-100) }) {
 		t.Fatal("expected MustAltitude to panic on a negative altitude")

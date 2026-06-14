@@ -27,17 +27,29 @@ dividend is bought by the **standard**, not by the pattern. See
 
 ## What's here
 
-### `cmd/` — DDD convention checkers
+### `cmd/ddd-vet` — the DDD analyzers
 
-Standalone Go programs that walk a directory and report violations. Each exits 0 on PASS, 1 on FAIL.
+`ddd-vet` is a [`go/analysis`](https://pkg.go.dev/golang.org/x/tools/go/analysis)
+multichecker. Run it standalone (`ddd-vet ./...`) or as a `go vet` tool
+(`go vet -vettool=$(command -v ddd-vet) ./...`), which also lights the diagnostics
+up in editors through gopls. The analyzers (each independently adoptable — a menu,
+not all-or-nothing):
 
-| Checker | What it enforces |
+| Analyzer | What it enforces |
 |---|---|
-| `checkmustnew` | Every value-object constructor `NewX(...) (X, error)` has a paired `MustNewX(...) X` that panics on error. Tests use `MustNewX` for inline construction. |
-| `checkequality` | Every value-object type `X` has a `Test*_Equality` test function covering equality semantics. |
-| `checkstring` | `.String()` is only called inside `Test*_String` accessor tests — not as a shortcut for value comparison elsewhere. |
+| `mustnew` | Every value-object constructor `NewX(...) (X, error)` has a paired `MustNewX(...) X` that panics on error. |
+| `vofields` | A value object has no exported fields (representation stays encapsulated). |
+| `voconstructor` | A value object has a validating constructor `NewX(...) (X, error)` as the single construction path. |
+| `stringequality` | `.String()` is only called inside `Test*_String` accessor tests — not as a shortcut for value comparison elsewhere. |
+| `stringer` | A value object has a `String() string` display form. |
+| `primitiveaccessor` | A value object exposes no primitive accessors (`ToString` / `To<builtin>`). |
+| `comparability` | A value object defines `Equal` when `==` is unavailable (slice/map/func field) or unsafe (pointer/interface field). |
 
-`checkmustnew` and `checkequality` accept `--exclude=Type1,Type2` for types that aren't value objects (aggregates, entities, types with non-comparable fields). The list is per-consumer config — every repo has its own aggregates.
+Configuration is a single `.go-ddd.yaml` `exclude:` list at the consumer repo
+root, read by every analyzer — the aggregate/entity types that match the
+value-object heuristic but aren't value objects. Generate a starter with
+`ddd-vet -gen-excludes ./...`, then review and curate it. The list is per-consumer
+config — every repo has its own aggregates.
 
 ### `actions/run-ddd-checks` — composite GitHub Action
 
