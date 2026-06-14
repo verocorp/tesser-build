@@ -1,6 +1,6 @@
 # Design: migrate the checkers to go/analysis + add the rubric checkers
 
-**Status:** Add phase BUILT and green (8 analyzers + generator + meta-test, all
+**Status:** Add phase BUILT and green (7 analyzers + generator + meta-test, all
 tests/vet/gofmt clean). Migrate + Remove not started — paused for eng review (see
 Build notes). Supersedes the standalone `cmd/check*` directory-walkers. Builds on
 the spike (`ebca404`) that proved the port.
@@ -29,17 +29,24 @@ no coverage is lost.
 ```
   analyzer            rubric  kind     status     identifies VO via   needs type info
   ─────────────────────────────────────────────────────────────────────────────────
-  mustnew             #4      port     spike ✓    NewX(X,error)       no  (AST)
-  equalitytest        #8      port     to build   NewX(X,error)       no  (AST)
-  stringequality      #6use   port     to build   n/a (usage scan)    no  (AST)
-  vofields            #1      new      spike ✓    NewX(X,error)       yes (struct fields)
-  voconstructor       #2      new      to build   type decls          yes (find missing ctor)
-  stringer            #6      new      to build   NewX(X,error)       yes (Implements)
-  primitiveaccessor   #6a/6b  new      to build   NewX(X,error)       yes (method returns)
-  comparability       #7      new      to build   NewX(X,error)       yes (Comparable + methods)
+  mustnew             #4      port     BUILT ✓    NewX(X,error)       no  (AST)
+  stringequality      #6use   port     BUILT ✓    n/a (usage scan)    no  (AST)
+  vofields            #1      new      BUILT ✓    NewX(X,error)       yes (struct fields)
+  voconstructor       #2      new      BUILT ✓    type decls          yes (find missing ctor)
+  stringer            #6      new      BUILT ✓    NewX(X,error)       yes (Implements)
+  primitiveaccessor   #6a/6b  new      BUILT ✓    NewX(X,error)       yes (method returns)
+  comparability       #7      new      BUILT ✓    NewX(X,error)       yes (Comparable + ptr/iface + Equal)
   ─────────────────────────────────────────────────────────────────────────────────
+  (equalitytest       #8)     PARKED   — built (c571e38) then dropped; see Parked below
   (nosetters          #5)     DEFERRED — debatable rule, no clean default-off in multichecker
 ```
+
+7 analyzers ship. `comparability` (#7) was widened past the original "non-comparable
+→ needs Equal" rule to also flag a value object with a **pointer or interface
+field** anywhere in its field tree, because there `==` compiles but is
+identity-based (pointer) or can panic (interface) rather than a value comparison.
+That structural hazard is the highest-likelihood equality footgun, and it
+subsumes the reason `equalitytest` existed.
 
 All composed in `cmd/ddd-vet` via `multichecker`, enrolled through the single
 `internal/analyzers.All` registry. Shared value-object identification + signal
@@ -58,12 +65,16 @@ Per-analyzer notes:
 - **primitiveaccessor (#6a/6b):** no method named `ToString`, and no `To*` method
   whose return type is a Go builtin primitive. A `To*` returning another value
   object (e.g. `Feet.ToMeters()`) is fine and must NOT be flagged.
-- **comparability (#7):** scoped to the high-confidence half. If a value object is
-  not Go-comparable (slice/map/func field, or a `[0]func()` blocker), it must have
-  an `Equal(X) bool` method; flag non-comparable VOs that lack `Equal`. The
-  "comparable but should still use Equal" case is semantic and stays with
-  `equalitytest` (which checks the test exists). Highest-complexity analyzer; build
-  last.
+- **comparability (#7):** a value object needs `Equal(X) bool` whenever `==` is
+  unavailable or unsafe. Two structural triggers: (a) not Go-comparable
+  (slice/map/func field, or a `[0]func()` blocker — `types.Comparable` catches
+  these), so `==` is a compile error; (b) **comparable but unsafe** — a pointer
+  field (`==` compares identity, not value) or an interface field (`==` compares
+  the dynamic value and can panic), found by a recursive walk of the field tree.
+  Flag such VOs that lack `Equal`. A value object with only comparable scalar /
+  value-struct fields has a correct `==` and is left alone (requiring `Equal`
+  there is taste, not a structural hazard). The widened pointer/interface trigger
+  is what replaced `equalitytest` — see Parked.
 
 ---
 
@@ -108,10 +119,11 @@ shared). The generator's identity/mutability detection is shared with the
 ## Migration sequence (Add → Migrate → Remove)
 
 ```
-  Add ───────────────────────────────────────────────────────────────────────
-   1. Port equalitytest + stringequality; build voconstructor, stringer,
-      primitiveaccessor, comparability. Each with analysistest coverage that
-      matches or exceeds the original's cases (see Test parity below).
+  Add ─────────────────────────────────────────────────────────────────────── DONE
+   1. Port stringequality; build voconstructor, stringer, primitiveaccessor,
+      comparability (widened to pointer/interface). Each with analysistest
+      coverage that matches or exceeds the original's cases (see Test parity
+      below). equalitytest was built then parked (see Parked).
    2. Build the exclude generator (ddd-vet -gen-excludes) + the .go-ddd.yaml
       reader in voscan; wire all analyzers to read it.
    3. Register every analyzer in cmd/ddd-vet (multichecker).
@@ -147,11 +159,12 @@ matches or exceeds the standalone checker it replaces. The originals carry
 469–503 lines of table tests each; their cases must be reproduced, not
 approximated. Parity checklist to port:
 
-- **mustnew / equalitytest:** VO with counterpart (pass); VO missing it (flag);
-  excluded type (skip); factory `NewCollect -> Operation` (not matched, suffix !=
-  return type); generics `Foo[T]` and `Foo[T, U]`; non-`New` funcs ignored;
-  methods with receivers ignored; constructor in source vs test (equalitytest
-  reads the test file for `Test*_Equality`).
+- **mustnew:** VO with counterpart (pass); VO missing it (flag); excluded type
+  (skip). The shared VO-matcher parity — factory `NewCollect -> Operation` (not
+  matched, suffix != return type); generics `Foo[T]` and `Foo[T, U]`; non-`New`
+  funcs ignored; methods with receivers ignored; pointer/qualified/slice/map/
+  func/chan/interface return shapes — lives once in `internal/voscan` table
+  tests (`voscan_test.go`), shared by every analyzer.
 - **stringequality:** `.String()` inside `Test*_String` (allowed); `.String()`
   elsewhere in a test file (flag); package-level call; nested call; non-test files
   not scanned.
@@ -162,9 +175,14 @@ approximated. Parity checklist to port:
 - **generator:** entity classified by ID() method; by id field; aggregate by
   pointer-receiver mutator; a true VO NOT excluded; the emitted YAML parses back.
 
-A new meta-test (sibling of `rationale/coverage_test.go`) should fail if an
-analyzer ships without an `analysistest` package, so a checker can't land
-untested.
+A meta-test (`internal/analyzers`, sibling-in-spirit of
+`rationale/coverage_test.go`) enforces this two ways: every registered analyzer
+must have a `passes/<name>/` with a `_test.go` and a `testdata/` dir (no checker
+lands untested), and every `passes/<dir>` that defines an `Analyzer` must be in
+`analyzers.All` (no built-but-forgotten checker sits out of `ddd-vet`). All 7
+shipping analyzers use `analysistest`; the test checks for test coverage
+generally rather than `analysistest` specifically, which is what let the parked
+`equalitytest` use a `go vet`-faithful harness without tripping it.
 
 ---
 
@@ -179,11 +197,15 @@ untested.
 5. **Dropped earlier:** spec pattern (#3, an entity/aggregate concern, not a VO
    rule) and domain-methods-enforce-consistency (#9, a conformance property for
    tests, not a structural linter).
+6. **equalitytest (#8) dropped, comparability (#7) widened (eng review).** The
+   existence tripwire was traded for a structural check of the actual `==` hazard
+   (pointer/interface fields). 7 analyzers ship. See Parked + Risks.
 
 ## Risks
 
-- **comparability (#7)** is the highest-complexity analyzer; its semantic half
-  stays with the test-existence checker. Build it last, behind the others.
+- **comparability (#7)** is the highest-complexity analyzer (recursive field-tree
+  walk for pointer/interface hazards). It checks that `Equal` *exists*, not that
+  its logic is correct — equality-correctness is the parked gap (see Parked).
 - **Generator misclassification** is mitigated by review, but a noisy generator
   erodes trust — tune signals against certus's real aggregates before shipping.
 - **Build-required targets:** if a consumer repo doesn't compile in CI, `go vet`
@@ -192,26 +214,24 @@ untested.
 ## Build notes & open questions for eng review (Add phase complete)
 
 The Add phase is built and green (`go test ./...`, `go vet ./...`, `gofmt -l .`).
-All 8 analyzers compose in `ddd-vet`; an end-to-end `go vet -vettool` run flags
+All 7 analyzers compose in `ddd-vet`; an end-to-end `go vet -vettool` run flags
 incomplete VOs and skips `.go-ddd.yaml`-excluded entities. Findings that surfaced
 during the build — the spike's two analyzers were intra-file and never hit these:
 
-1. **equalitytest is a source↔test correlation, which `go/analysis` splits by
-   package variant.** Empirically (verified with a real `go vet` run): cmd/go
-   vets the *test-augmented* variant of a package (production files + its
-   **in-package** `_test.go`) in one pass, so an in-package `Test*_Equality` is
-   seen alongside the constructor and the check is correct. But an **external**
-   test package (`package foo_test`) is vetted as its own unit *without* the
-   constructors, so an externally-tested VO is a **false positive**. This is a
-   real behavior change from the directory-walker (which read the whole dir).
-   **Open question:** do certus/metron/quanta put `Test*_Equality` in-package or
-   in `_test` packages? Decide/tune before Migrate. (`stringequality` has no such
-   problem — its violations live in the test files themselves.)
-   - Consequence: equalitytest can't use `analysistest` (which checks *every*
-     variant as a root, including the plain non-test variant that can't see test
-     files, so it would flag a covered VO that `go vet` never flags). It uses a
-     small `go vet`-faithful harness instead. The meta-test therefore checks for
-     "_test.go + testdata/", not specifically an `analysistest` package.
+1. **equalitytest — RESOLVED by dropping it (eng review).** The finding was: it
+   is a source↔test correlation, which `go/analysis` splits by package variant.
+   Empirically (verified with a real `go vet` run): cmd/go vets the
+   *test-augmented* variant (production + **in-package** `_test.go`) in one pass,
+   so an in-package `Test*_Equality` correlates correctly, but an **external**
+   `package foo_test` is vetted without the constructors, so an externally-tested
+   VO false-positives. The eng review concluded the deeper problem is that
+   `equalitytest` only checks a *name exists* — a hollow `Test*_Equality{}` passes
+   it — so its value was mainly as an agent tripwire, while the real equality
+   hazard (a comparable struct whose `==` is identity/panic via a pointer or
+   interface field) went unguarded. Decision: **widen `comparability` to that
+   hazard and drop `equalitytest`**, which also makes the in-package/external
+   variant question moot. See Parked. (`stringequality` had no such problem — its
+   violations live in the test files themselves — and ships.)
 
 2. **Shared helpers are in module-root `internal/`, not `passes/internal/`** (as
    the table above originally said). The Go internal-package rule makes
@@ -236,6 +256,37 @@ during the build — the spike's two analyzers were intra-file and never hit the
    deliberately — a value object is used by value, so a pointer-receiver
    `String`/`Equal` does not satisfy the rule (and is flagged). Confirm this
    strictness is what we want.
+
+## Parked — equalitytest (#8) and the equality-correctness gap
+
+`equalitytest` was built (commit **c571e38**, full `go vet`-faithful harness +
+parity tests) and then removed from the set. It only verifies a function named
+`Test<Type>_Equality` *exists* — a hollow `func TestX_Equality(t *testing.T){}`
+passes it — so it is an agent/author tripwire ("did you think about equality?"),
+not a guarantee. Recover from git if we want it back.
+
+**Revisit if:** we want the agent-nudge value back AND have resolved the
+in-package/external variant question (codify in-package, or keep it as the
+`cmd/checkequality` directory-walker which has no variant problem).
+
+What the shipped set does and does NOT cover on equality, so the gap is explicit:
+
+```
+covered now:  comparability (#7) — Equal exists when == is impossible (slice/map/
+                func) or unsafe (pointer/interface)
+              stringequality (#6use) — no .String()-based equality in tests
+              vofields / primitiveaccessor / stringer — encapsulation preconditions
+NOT covered:  is the Test*_Equality / Equal logic actually CORRECT (hollow test,
+                skips a field, not symmetric) — needs a shared equality-laws
+                assert helper or mutation testing, not a linter
+              callers using == where Equal is required, and VO-with-Equal used as
+                a map key — would be a future `equaluse` usage-scan analyzer
+              float/NaN fields — left to the type's own test
+              VOs not identified (non-error constructor, factory-named, primitive
+                VOs) — escape VO identification entirely
+```
+
+These are follow-up scope, not blockers for Add→Migrate→Remove.
 
 ## Out of scope
 

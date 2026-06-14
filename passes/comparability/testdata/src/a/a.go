@@ -1,10 +1,41 @@
 package a
 
-// Comparable has only comparable fields, so == works. Whether it should still
-// expose Equal is equalitytest's concern, not this analyzer's. Not flagged.
+// Comparable has only comparable scalar fields, so == is a correct value
+// comparison. Requiring Equal here is a taste call, not a structural hazard, so
+// it is not flagged.
 type Comparable struct{ v string }
 
 func NewComparable(v string) (Comparable, error) { return Comparable{v: v}, nil }
+
+// PointerField is statically comparable (pointers compare), but == compares the
+// pointer's identity, not the pointee value. With no Equal it is flagged.
+type PointerField struct{ meta *int } // want `value object PointerField has a pointer field, so == compares identity, not value`
+
+func NewPointerField() (PointerField, error) { return PointerField{}, nil }
+
+// InterfaceField is statically comparable, but == on the interface compares the
+// dynamic value and can panic at runtime. With no Equal it is flagged.
+type InterfaceField struct{ v any } // want `value object InterfaceField has an interface field`
+
+func NewInterfaceField() (InterfaceField, error) { return InterfaceField{}, nil }
+
+// PointerWithEqual has a pointer field but defines Equal, so it is not flagged.
+type PointerWithEqual struct{ meta *int }
+
+func NewPointerWithEqual() (PointerWithEqual, error) { return PointerWithEqual{}, nil }
+func (p PointerWithEqual) Equal(other PointerWithEqual) bool {
+	if p.meta == nil || other.meta == nil {
+		return p.meta == other.meta
+	}
+	return *p.meta == *other.meta
+}
+
+// Nested holds a value-struct field that itself contains a pointer, so the
+// recursive walk finds the hazard. Flagged.
+type inner struct{ p *int }
+type Nested struct{ in inner } // want `value object Nested has a pointer field`
+
+func NewNested() (Nested, error) { return Nested{}, nil }
 
 // SliceVO has a slice field (not Go-comparable) but provides Equal. Not flagged.
 type SliceVO struct{ vs []string }

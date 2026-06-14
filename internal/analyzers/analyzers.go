@@ -8,7 +8,6 @@ import (
 	"golang.org/x/tools/go/analysis"
 
 	"github.com/chrisconley/go-ddd/passes/comparability"
-	"github.com/chrisconley/go-ddd/passes/equalitytest"
 	"github.com/chrisconley/go-ddd/passes/mustnew"
 	"github.com/chrisconley/go-ddd/passes/primitiveaccessor"
 	"github.com/chrisconley/go-ddd/passes/stringequality"
@@ -24,9 +23,14 @@ var All = []*analysis.Analyzer{
 	mustnew.Analyzer,           // #4  paired MustNewX
 	vofields.Analyzer,          // #1  no exported fields
 	voconstructor.Analyzer,     // #2  validating constructor exists
-	equalitytest.Analyzer,      // #8  Test*_Equality coverage
 	stringequality.Analyzer,    // #6use  no .String() equality in tests
 	stringer.Analyzer,          // #6  String() string
 	primitiveaccessor.Analyzer, // #6a/6b  no primitive accessors
-	comparability.Analyzer,     // #7  non-comparable VOs need Equal
+	comparability.Analyzer,     // #7  == unavailable/unsafe VOs need Equal
 }
+
+// equalitytest (#8, Test*_Equality existence) was built (commit c571e38) then
+// parked: it is only a name-existence tripwire, and porting it to go/analysis
+// hit the source<->test package-variant problem. comparability (#7, widened to
+// pointer/interface fields) covers the structural equality hazard instead. See
+// docs/design-ddd-vet-migration.md "Parked" for the revisit conditions.
