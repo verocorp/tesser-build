@@ -308,6 +308,24 @@ instead of each analyzer reading the file from disk. Analyzer flags ARE part of
 correctly and a clean run would no longer be needed. Revisit when the clean-run
 cost (cold cache every CI run) actually bites.
 
+**Parked: voconstructor adoption scoping (decision deferred).** Direction agreed:
+require a constructor for all VOs (it is the consistency/changeability principle,
+and "requires a constructor" means the construction path exists, NOT that it
+validates — a trivial `NewX(...) (X, error)` returning nil error is fine; the
+always-error signature is itself the consistency-for-changeability choice so
+adding validation later is zero call-site churn). The zero-value-useful idiom is
+not in tension here: it applies to mutable utility types, which are voconstructor
+false positives to exclude, not real VOs. What is NOT decided: how a large
+existing codebase opts in/out. When tackled, the recommendation is to resist a
+four-axis (package/dir/module/object) config matrix — it is accidental complexity
+and a silent-misconfig surface — and instead: (1) add a **default-off opt-in
+mode** (strangler-fig rollout; default-on floods a big codebase day one), (2) lean
+on per-package/dir scoping that is mostly free already (`go vet` package patterns
++ `FindConfig` walk-up), (3) keep the per-object `.go-ddd.yaml` exclude, (4) add
+an inline `//ddd:ignore` directive only if the file proves too coarse. Note the
+one-time migration cost on existing code is paid by humans+agents regardless;
+agents lower steady-state cost, not migration cost.
+
 ## Out of scope
 
 no-setters (#5), the leaking-representation rationale demo (still catalogued in
