@@ -1,29 +1,36 @@
 name: Run go-ddd checks
-description: Run DDD convention checks (MustNew pairing, equality test coverage, String usage) against the caller's repo
-inputs:
-  mustnew-exclude:
-    description: Comma-separated type names exempt from the MustNew* requirement (typically aggregates and entities)
-    required: false
-    default: ""
-  equality-exclude:
-    description: Comma-separated type names exempt from the Test*_Equality requirement
-    required: false
-    default: ""
+description: Run the go-ddd value-object convention analyzers (ddd-vet) against the caller's repo via `go vet`.
+
+# Configuration is file-only: a `.go-ddd.yaml` at the consumer repo root lists the
+# types every analyzer SKIPS (aggregates/entities that match the value-object
+# heuristic but are not value objects). Generate a starter with
+# `ddd-vet -gen-excludes ./...`. There are no Action inputs — one way to configure,
+# not two (design decision 7).
 
 runs:
   using: composite
   steps:
-    - name: Check MustNew* pairing
+    - name: Build ddd-vet
       shell: bash
+      # Build from the go-ddd checkout (this action lives at actions/run-ddd-checks/,
+      # so ../.. is the module root) so ddd-vet compiles against go-ddd's own deps.
       working-directory: ${{ github.action_path }}/../..
-      run: go run ./cmd/checkmustnew --exclude="${{ inputs.mustnew-exclude }}" "$GITHUB_WORKSPACE"
+      run: go build -o "${{ runner.temp }}/ddd-vet" ./cmd/ddd-vet
 
-    - name: Check equality test coverage
+    - name: Run ddd-vet
       shell: bash
-      working-directory: ${{ github.action_path }}/../..
-      run: go run ./cmd/checkequality --exclude="${{ inputs.equality-exclude }}" "$GITHUB_WORKSPACE"
-
-    - name: Check String usage in tests
-      shell: bash
-      working-directory: ${{ github.action_path }}/../..
-      run: go run ./cmd/checkstring "$GITHUB_WORKSPACE"
+      # Run inside the caller's repo as a go vet tool. NOTE (design decision 8):
+      # the analyzers are type-aware, so the caller's packages must COMPILE — an
+      # unrelated build error will red this check. This is accepted on purpose;
+      # see the README.
+      working-directory: ${{ github.workspace }}
+      env:
+        # Force a cold analysis cache (design decision 9). go/analysis does not
+        # track .go-ddd.yaml as an action input, so a warm cache could hand back
+        # stale results after an exclude-list edit with no code change. A scratch
+        # GOCACHE under runner.temp guarantees the edit always takes effect without
+        # touching the caller's persistent cache. Blunt fix; the principled version
+        # (Action passes excludes as analyzer flags, which ARE in the cache key) is
+        # parked in docs/design-ddd-vet-migration.md.
+        GOCACHE: ${{ runner.temp }}/ddd-vet-gocache
+      run: go vet -vettool="${{ runner.temp }}/ddd-vet" ./...

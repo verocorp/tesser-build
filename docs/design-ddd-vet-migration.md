@@ -1,9 +1,11 @@
 # Design: migrate the checkers to go/analysis + add the rubric checkers
 
 **Status:** Add phase BUILT and green (7 analyzers + generator + meta-test, all
-tests/vet/gofmt clean). Migrate + Remove not started — paused for eng review (see
-Build notes). Supersedes the standalone `cmd/check*` directory-walkers. Builds on
-the spike (`ebca404`) that proved the port.
+tests/vet/gofmt clean). Migrate step 4 (the Action) BUILT: `run-ddd-checks` now
+builds `ddd-vet` and runs it as a `go vet` tool, file-only config, forced cold
+cache, compile-required documented (Decisions 7–9). Remove (steps 5–6) not
+started. Supersedes the standalone `cmd/check*` directory-walkers. Builds on the
+spike (`ebca404`) that proved the port.
 **Date:** 2026-06-13
 **Origin:** 2026-06-13 go-ddd session, after the spike validated one ported and
 one new analyzer on `go/analysis`.
@@ -128,15 +130,17 @@ shared). The generator's identity/mutability detection is shared with the
       reader in voscan; wire all analyzers to read it.
    3. Register every analyzer in cmd/ddd-vet (multichecker).
 
-  Migrate ───────────────────────────────────────────────────────────────────
+  Migrate ─────────────────────────────────────────────────────────────── DONE
    4. actions/run-ddd-checks: build ddd-vet from go-ddd, then run it inside the
       consumer repo as a go vet tool:
-        go build -o $RUNNER/ddd-vet <action_path>/../../cmd/ddd-vet
-        cd $GITHUB_WORKSPACE && go vet -vettool=$RUNNER/ddd-vet ./...
-      Preserve the Action's input interface (mustnew-exclude / equality-exclude)
-      by mapping them onto the config/flags, OR move consumers to .go-ddd.yaml
-      and keep the inputs as overrides. Consumers (certus/metron/quanta) keep
-      working.
+        go build -o $RUNNER_TEMP/ddd-vet <action_path>/../../cmd/ddd-vet
+        cd $GITHUB_WORKSPACE && GOCACHE=$RUNNER_TEMP/ddd-vet-gocache \
+          go vet -vettool=$RUNNER_TEMP/ddd-vet ./...
+      DONE: dropped the mustnew-exclude / equality-exclude inputs (Decision 7,
+      file-only); scratch GOCACHE forces a cold cache so a .go-ddd.yaml edit always
+      takes effect (Decision 9); compile-required documented in the Action README
+      (Decision 8). Consumers (certus/metron/quanta) break until they move their
+      lists into .go-ddd.yaml — accepted.
 
   Remove ────────────────────────────────────────────────────────────────────
    5. Delete cmd/checkmustnew | checkequality | checkstring and their *_test.go

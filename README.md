@@ -41,14 +41,18 @@ Standalone Go programs that walk a directory and report violations. Each exits 0
 
 ### `actions/run-ddd-checks` — composite GitHub Action
 
-Runs all three checkers against the caller's repo. Used from consumer workflows:
+Runs the `ddd-vet` analyzers against the caller's repo via `go vet`. Used from
+consumer workflows:
 
 ```yaml
 - uses: verocorp/go-ddd/actions/run-ddd-checks@v1
-  with:
-    mustnew-exclude: "Ledger,Transaction,Transfer"
-    equality-exclude: "Ledger,Transaction,Transfer,BudgetRule"
 ```
+
+No inputs — configuration is file-only via a `.go-ddd.yaml` at the consumer repo
+root (one shared `exclude:` list, generated with `ddd-vet -gen-excludes` then
+human-curated). See [`actions/run-ddd-checks/README.md`](actions/run-ddd-checks/README.md)
+for the exclude format and the two consequences (packages must compile; the check
+runs with a cold cache so config edits always take effect).
 
 ## The conventions, briefly
 
