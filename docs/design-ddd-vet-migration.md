@@ -7,10 +7,13 @@ repointed to the analyzers — README, CLAUDE.md, coverage.md + coverage_test.go
 guard stays live and Remove is a pure deletion; (b) the composite-action wiring
 built at `372423b` is now SUPERSEDED by Decision 10 — the CI contract is the Go
 `tool` directive (`go tool ddd-vet ./...`), consumer owns CI, and
-`actions/run-ddd-checks/` is to be DELETED. Pending execution: delete the action,
-write tool-directive consumer docs, address the Codex follow-ups (config
-silent-fail, Go-version contract). Remove (step 5, delete `cmd/check*`) not
-started. Supersedes the standalone `cmd/check*`
+`actions/run-ddd-checks/` is to be DELETED. Decision 10 executed: action deleted,
+tool-directive consumer docs written, config silent-fail fixed. **Remove (step 5)
+DONE: `cmd/checkmustnew|checkequality|checkstring` deleted, the provenance
+references to them dropped from source comments, `go mod tidy` removed the
+now-unused `testify`.** Add → Migrate → Remove complete. Open: the remaining
+Codex follow-ups (Go-version contract note, monorepo `-config`, versioning) and
+the Step-0 deferrals (gclplugin, SARIF, released binary). Supersedes the standalone `cmd/check*`
 directory-walkers. Builds on the spike (`ebca404`) that proved the port.
 **Date:** 2026-06-13
 **Origin:** 2026-06-13 go-ddd session, after the spike validated one ported and
@@ -148,12 +151,14 @@ shared). The generator's identity/mutability detection is shared with the
       (Decision 8). Consumers (certus/metron/quanta) break until they move their
       lists into .go-ddd.yaml — accepted.
 
-  Remove ────────────────────────────────────────────────────────────────────
-   5. Delete cmd/checkmustnew | checkequality | checkstring and their *_test.go
-      ONLY after their cases are ported and the Action is green on ddd-vet. Now a
-      PURE DELETION: the only at-deletion touch is the 3 `passes/*` provenance
-      comments ("port of cmd/checkmustnew") which become past-tense (or leave as
-      git lineage).
+  Remove ──────────────────────────────────────────────────────────────── DONE
+   5. DONE. Deleted cmd/checkmustnew | checkequality | checkstring and their
+      *_test.go (cases already ported: shared matcher → internal/voscan, per-rule
+      → passes/*/testdata). It was a pure deletion: nothing imported them and the
+      coverage guard already keyed off analyzers.All. At-deletion touches: dropped
+      the "port of cmd/check*" provenance lines from the analyzer package comments
+      (they pointed at deleted code; lineage lives in git history), and
+      `go mod tidy` dropped testify (only the old checker tests used it).
    6. DONE during Migrate (moved earlier — see note below). README, CLAUDE.md,
       rationale/coverage.md + coverage_test.go, and design-three-contender now
       point at ddd-vet and the analyzers; the coverage guard keys off

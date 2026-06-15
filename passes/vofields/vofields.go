@@ -1,12 +1,10 @@
 // Package vofields enforces value-object requirement #1: a value object
 // encapsulates its representation, so it must not expose exported fields. (The
 // "public accessors" half of the rubric is intentionally not enforced — not
-// every private field warrants an accessor.) Value objects are identified the
-// same way as cmd/checkmustnew, via their NewX(...) (X, error) constructor.
+// every private field warrants an accessor.) Value objects are identified via
+// their NewX(...) (X, error) constructor.
 //
-// This analyzer uses type information (go/types) to inspect the struct's
-// fields — the kind of type-aware check the AST-only standalone checkers
-// could not do cleanly.
+// This analyzer uses type information (go/types) to inspect the struct's fields.
 package vofields
 
 import (

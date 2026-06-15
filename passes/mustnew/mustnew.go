@@ -1,8 +1,6 @@
-// Package mustnew is the go/analysis port of cmd/checkmustnew: every
-// value-object constructor NewX(...) (X, error) must have a paired MustNewX
-// that panics on error. As an analyzer it composes with go vet
-// (go vet -vettool=<binary>) and runs in editors via gopls, which the
-// standalone directory-walker could not.
+// Package mustnew enforces the MustNew rule: every value-object constructor
+// NewX(...) (X, error) must have a paired MustNewX that panics on error. It
+// composes with go vet (go vet -vettool=<binary>) and runs in editors via gopls.
 package mustnew
 
 import (

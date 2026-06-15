@@ -1,6 +1,6 @@
-// Package stringequality is the go/analysis port of cmd/checkstring: .String()
-// is for display, not equality, so a value object's .String() may only be
-// called inside its Test*_String accessor test. A .String() call anywhere else
+// Package stringequality enforces that .String() is for display, not equality:
+// a value object's .String() may only be called inside its Test*_String accessor
+// test. A .String() call anywhere else
 // in a test file is flagged — it usually means a test is comparing value
 // objects by their string form (a.String() == b.String()) instead of by value.
 //

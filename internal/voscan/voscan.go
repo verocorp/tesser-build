@@ -1,8 +1,8 @@
 // Package voscan holds the value-object identification shared by the
-// go/analysis-based DDD checkers. A value object is a type X with a free
+// go/analysis-based DDD analyzers. A value object is a type X with a free
 // constructor NewX(...) (X, error) whose suffix matches the return type name.
-// This mirrors the heuristic the standalone cmd/check* tools use, so the
-// analyzers agree with them on what counts as a value object.
+// Centralizing the heuristic here keeps every analyzer agreeing on what counts
+// as a value object.
 package voscan
 
 import (
