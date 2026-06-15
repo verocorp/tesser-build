@@ -31,7 +31,10 @@ func init() {
 }
 
 func run(pass *analysis.Pass) (any, error) {
-	excluded := voscan.CombinedExcludes(pass, exclude)
+	excluded, err := voscan.CombinedExcludes(pass, exclude)
+	if err != nil {
+		return nil, err
+	}
 	for name := range voscan.VOTypeNames(pass.Files, excluded) {
 		obj := pass.Pkg.Scope().Lookup(name)
 		if obj == nil {

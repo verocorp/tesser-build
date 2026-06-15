@@ -39,7 +39,10 @@ func init() {
 }
 
 func run(pass *analysis.Pass) (any, error) {
-	excluded := voscan.CombinedExcludes(pass, exclude)
+	excluded, err := voscan.CombinedExcludes(pass, exclude)
+	if err != nil {
+		return nil, err
+	}
 
 	// Types that already have an error-returning constructor. Exclusion is not
 	// applied here — we want the true set of constructed types, and apply

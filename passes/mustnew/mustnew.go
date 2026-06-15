@@ -28,7 +28,10 @@ func init() {
 }
 
 func run(pass *analysis.Pass) (any, error) {
-	excluded := voscan.CombinedExcludes(pass, exclude)
+	excluded, err := voscan.CombinedExcludes(pass, exclude)
+	if err != nil {
+		return nil, err
+	}
 
 	// Collect every MustNew* free function in the package.
 	mustNews := map[string]bool{}

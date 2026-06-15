@@ -51,20 +51,52 @@ value-object heuristic but aren't value objects. Generate a starter with
 `ddd-vet -gen-excludes ./...`, then review and curate it. The list is per-consumer
 config — every repo has its own aggregates.
 
-### `actions/run-ddd-checks` — composite GitHub Action
+### Using it in CI — the `go tool` directive
 
-Runs the `ddd-vet` analyzers against the caller's repo via `go vet`. Used from
-consumer workflows:
+go-ddd ships a tool, not a CI pipeline. You pin `ddd-vet` in your own module and
+run it in your own workflow — the same way you'd consume staticcheck or NilAway.
+There is no go-ddd-owned GitHub Action; CI wiring stays yours, so you keep control
+of your Go version, package scoping, and caching.
 
-```yaml
-- uses: verocorp/go-ddd/actions/run-ddd-checks@v1
+**1. Pin the tool** (records a `tool` directive in your `go.mod`; Renovate/
+Dependabot bump it like any dependency):
+
+```sh
+go get -tool github.com/chrisconley/go-ddd/cmd/ddd-vet@latest
 ```
 
-No inputs — configuration is file-only via a `.go-ddd.yaml` at the consumer repo
-root (one shared `exclude:` list, generated with `ddd-vet -gen-excludes` then
-human-curated). See [`actions/run-ddd-checks/README.md`](actions/run-ddd-checks/README.md)
-for the exclude format and the two consequences (packages must compile; the check
-runs with a cold cache so config edits always take effect).
+**2. Run it** as a step in your existing workflow:
+
+```sh
+go tool ddd-vet ./...        # exits non-zero on any violation
+```
+
+In GitHub Actions that's one line in *your* `test.yml`, not an owned action:
+
+```yaml
+- run: go tool ddd-vet ./...
+```
+
+**Config:** a single `.go-ddd.yaml` `exclude:` list at your repo root (generate a
+starter with `go tool ddd-vet -gen-excludes ./...`, then curate). The standalone
+run reads it fresh every time, so an exclude edit always takes effect.
+
+**Editors / large repos (secondary):** `ddd-vet` is also a `go vet` tool —
+`go vet -vettool=<path-to-ddd-vet> ./...`. That path is the more scalable one on
+large modules (per-package, file-based intermediates) and is what lights the
+diagnostics up in editors through gopls.
+
+**Know before you adopt:**
+- **Your packages must compile.** The analyzers are type-aware; an unrelated build
+  error also reds the check. (For a real module that already builds in CI, a
+  non-event.)
+- **Go version:** this module is `go 1.25`, and the `tool` directive itself needs
+  Go ≥ 1.24. Consumers on an older toolchain can't use the directive.
+- **`go.mod` footprint:** the directive pulls `golang.org/x/tools` + `gopkg.in/
+  yaml.v3` (and their transitive deps) into your `go.mod`/`go.sum` via MVS.
+- **A malformed `.go-ddd.yaml` fails the run loud** (a missing one is fine). It
+  never silently falls back to "no excludes" — that would silently change
+  enforcement.
 
 ## The conventions, briefly
 
