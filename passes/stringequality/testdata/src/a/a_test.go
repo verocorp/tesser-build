@@ -1,29 +1,47 @@
 package a
 
-import "testing"
+import (
+	"testing"
 
-// TestFoo_String is the accessor test — .String() is allowed here.
-func TestFoo_String(t *testing.T) {
+	"assert"
+	"require"
+)
+
+// A lone .String() is legitimate display use — not flagged anywhere.
+func TestFoo_Display(t *testing.T) {
 	f := Foo{v: "x"}
-	_ = f.String()
+	_ = f.String() // discarded race-exercise / display: allowed
+	t.Log(f.String())
 }
 
-// TestFoo_NewFoo is not an accessor test, so its .String() is flagged.
-func TestFoo_NewFoo(t *testing.T) {
+// .String() asserted against a string literal is a representation check, not a
+// value-object comparison — not flagged.
+func TestFoo_StringLiteral(t *testing.T) {
 	f := Foo{v: "x"}
-	_ = f.String() // want `TestFoo_NewFoo calls \.String\(\) outside a Test\*_String accessor test`
+	assert.Equal(t, "x", f.String())
 }
 
-// Two .String() calls in one function produce two diagnostics.
-func TestFoo_Pair(t *testing.T) {
+// Comparing two value objects by their string form via == / != is the hazard.
+func TestFoo_BinaryEquality(t *testing.T) {
 	a := Foo{v: "a"}
 	b := Foo{v: "b"}
-	_ = a.String() // want `TestFoo_Pair calls \.String\(\) outside`
-	_ = b.String() // want `TestFoo_Pair calls \.String\(\) outside`
+	_ = a.String() == b.String() // want `compare by value`
+	_ = a.String() != b.String() // want `compare by value`
 }
 
-// ToString is not String, so it is ignored.
+// The same hazard through a testify equality assertion (and its variants).
+func TestFoo_AssertEquality(t *testing.T) {
+	a := Foo{v: "a"}
+	b := Foo{v: "b"}
+	assert.Equal(t, a.String(), b.String())         // want `compare by value`
+	require.Equal(t, a.String(), b.String())        // want `compare by value`
+	assert.NotEqual(t, a.String(), b.String())      // want `compare by value`
+	assert.Equalf(t, a.String(), b.String(), "msg") // want `compare by value`
+}
+
+// ToString is not String, so it is ignored even in a comparison.
 func TestFoo_Other(t *testing.T) {
-	f := Foo{v: "x"}
-	_ = f.ToString()
+	a := Foo{v: "a"}
+	b := Foo{v: "b"}
+	_ = a.ToString() == b.ToString()
 }

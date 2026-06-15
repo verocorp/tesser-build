@@ -6,9 +6,12 @@ import (
 	"ext"
 )
 
-// An external test package (package ext_test) is still scanned: .String()
-// outside a Test*_String accessor test is flagged here too.
+// An external test package (package ext_test) is still scanned: comparing two
+// value objects by their .String() form is flagged here too. A lone display
+// .String() is not.
 func TestFoo(t *testing.T) {
-	f := ext.Foo{}
-	_ = f.String() // want `TestFoo calls \.String\(\) outside`
+	a := ext.Foo{}
+	b := ext.Foo{}
+	_ = a.String()               // display: allowed
+	_ = a.String() == b.String() // want `compare by value`
 }

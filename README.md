@@ -40,7 +40,7 @@ not all-or-nothing):
 | `mustnew` | Every value-object constructor `NewX(...) (X, error)` has a paired `MustNewX(...) X` that panics on error. |
 | `vofields` | A value object has no exported fields (representation stays encapsulated). |
 | `voconstructor` | A value object has a validating constructor `NewX(...) (X, error)` as the single construction path. |
-| `stringequality` | `.String()` is only called inside `Test*_String` accessor tests — not as a shortcut for value comparison elsewhere. |
+| `stringequality` | A test never compares two value objects by their `.String()` form (`a.String() == b.String()`, or `assert.Equal(a.String(), b.String())`) — compare by value, not by string. |
 | `stringer` | A value object has a `String() string` display form. |
 | `primitiveaccessor` | A value object exposes no primitive accessors (`ToString` / `To<builtin>`). |
 | `comparability` | A value object defines `Equal` when `==` is unavailable (slice/map/func field) or unsafe (pointer/interface field). |
@@ -106,7 +106,7 @@ This toolkit encodes three rules from a broader DDD approach for Go:
 
 2. **Every VO has explicit equality test coverage.** Equality is a load-bearing property of value objects; behavior changes (adding a field, changing comparability) should be caught by a `Test*_Equality` test that exists specifically to lock that behavior.
 
-3. **`.String()` is for display, not for equality.** If you find yourself comparing `a.String() == b.String()`, you're doing value-object equality the wrong way. `.String()` belongs inside a `Test*_String` test that exercises stringification.
+3. **`.String()` is for display, not for equality.** If you find yourself comparing `a.String() == b.String()` (or `assert.Equal(a.String(), b.String())`), you're doing value-object equality the wrong way — it silently mis-equates value objects that have more than one valid representation. The `stringequality` analyzer flags exactly that comparison; a lone `.String()` (display, a discarded call, a compare against a string literal) is left alone. Exercising stringification belongs in a `Test*_String` test.
 
 ## Consumers
 

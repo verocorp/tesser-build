@@ -11,9 +11,12 @@ built at `372423b` is now SUPERSEDED by Decision 10 — the CI contract is the G
 tool-directive consumer docs written, config silent-fail fixed. **Remove (step 5)
 DONE: `cmd/checkmustnew|checkequality|checkstring` deleted, the provenance
 references to them dropped from source comments, `go mod tidy` removed the
-now-unused `testify`.** Add → Migrate → Remove complete. Open: the remaining
-Codex follow-ups (Go-version contract note, monorepo `-config`, versioning) and
-the Step-0 deferrals (gclplugin, SARIF, released binary). Supersedes the standalone `cmd/check*`
+now-unused `testify`.** Add → Migrate → Remove complete. **First-consumer
+dogfood (quanta, 2026-06-15) done:** `stringequality` tightened to
+comparison-context (Decision 12) and an end-to-end test added
+(`cmd/ddd-vet/e2e_test.go`, Decision 13); quanta's tree left unchanged. Open: the
+remaining Codex follow-ups (Go-version contract note, monorepo `-config`,
+versioning) and the Step-0 deferrals (gclplugin, SARIF, released binary). Supersedes the standalone `cmd/check*`
 directory-walkers. Builds on the spike (`ebca404`) that proved the port.
 **Date:** 2026-06-13
 **Origin:** 2026-06-13 go-ddd session, after the spike validated one ported and
@@ -196,9 +199,12 @@ approximated. Parity checklist to port:
   funcs ignored; methods with receivers ignored; pointer/qualified/slice/map/
   func/chan/interface return shapes — lives once in `internal/voscan` table
   tests (`voscan_test.go`), shared by every analyzer.
-- **stringequality:** `.String()` inside `Test*_String` (allowed); `.String()`
-  elsewhere in a test file (flag); package-level call; nested call; non-test files
-  not scanned.
+- **stringequality:** both-sides-`.String()` comparison flagged via `==`/`!=` and
+  via `assert/require.Equal/NotEqual/Equalf`; lone display call, discarded
+  `_ = x.String()`, literal compare (`x.String() == "lit"`), stdlib `.String()`,
+  and `ToString()` all allowed; external (`package foo_test`) variant scanned;
+  non-test files not scanned. (Tightened from "any `.String()` outside
+  `Test*_String`" — see Decision 12.)
 - **voconstructor / stringer / primitiveaccessor / comparability:** positive +
   negative per rule; the `To*`-returns-VO exemption for primitiveaccessor; a
   non-comparable VO with and without `Equal` for comparability; exclude honored by
@@ -267,6 +273,44 @@ generally rather than `analysistest` specifically, which is what let the parked
    CI, vettool for large repos that feel the scalability cost and for editor
    integration. (Outside-voice correction: standalone trades incremental-analysis
    scalability for config freshness — it is not strictly "free.")
+12. **First-consumer dogfood + stringequality tightened to comparison-context
+    (quanta, 2026-06-15).** Ran the built `ddd-vet ./...` against quanta (a real,
+    VO-heavy library) before going further. Result: 5 of 7 analyzers clean on
+    conforming VOs, `gen-excludes` correctly emitted 0 excludes (quanta has no
+    entities), and `voconstructor` caught a real one — `Quantized` is a genuine VO
+    with no canonical `NewQuantized(...) (Quantized, error)` (construction routed
+    through `Measure.Quantize` + a `Deprecated*` multiplier; it is mid-migration).
+    **`stringequality` over-fired**, though: its broad "any `.String()` outside a
+    `Test*_String` test" rule flagged 5 sites that are not the
+    `a.String() == b.String()` hazard — discarded race-exercise calls
+    (`_ = shared.String()`), assertions against a string *literal*
+    (`assert.Equal(t, "NaN", x.String())`), and (latently) any stdlib `.String()`
+    (`strings.Builder`, `time.Time`) — quanta only escaped the last by not using
+    them in tests. **Decision: tighten the analyzer to fire only when a `.String()`
+    result is one side of a value comparison whose *other* side is also a
+    `.String()` call** — `==`/`!=`, or a testify `assert/require.Equal/NotEqual`
+    family call. This matches the documented intent (the hazard is comparing two
+    VOs by string) and removes the whole false-positive class, including the stdlib
+    one, with no exclude list. Cost: the analyzer no longer enforces "test
+    stringification only in `Test*_String`" — that drops to an unenforced
+    convention (like the parked `equalitytest`, Decision 6). Scope kept to
+    `_test.go` files (unchanged); extending the comparison check to production code
+    is a possible follow-up. After tightening, quanta shows exactly one finding
+    (the `Quantized` constructor) and quanta's tree is left unchanged (validate +
+    e2e only, no adoption commit).
+13. **End-to-end test added (`cmd/ddd-vet/e2e_test.go`, 2026-06-15).** The dogfood
+    surfaced that all prior coverage was per-analyzer `analysistest` (synthetic
+    testdata, no binary, no config file, no exit code) plus the meta-test — nothing
+    ran the real multichecker against a real module. The e2e builds the binary and
+    runs it against a self-contained consumer fixture (`testdata/consumer/`, a
+    nested module invisible to the parent's `./...`) that reproduces the quanta
+    findings: a `voconstructor` true positive (`Posted`, Quantized-shaped), a
+    genuine `stringequality` comparison, the three non-comparison `.String()`
+    shapes that must stay silent, a conforming control VO, and an excluded entity.
+    It asserts the finding count and key messages across three runs — config
+    present (entity excluded), config absent (entity now flagged, proving the
+    `.go-ddd.yaml` path is load-bearing), and malformed config (fails loud per the
+    Codex silent-gap fix).
 
 ## Follow-ups surfaced by the eng-review outside voice (Codex, 2026-06-15)
 
