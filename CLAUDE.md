@@ -19,9 +19,15 @@ follow the conventions below, because this repo is what enforces them in CI.
    `comparability`, which flags a VO that needs `Equal` because `==` is
    unavailable (slice/map/func) or unsafe (pointer/interface field). See
    `docs/design-ddd-vet-migration.md` "Parked".
-3. **`.String()` is for display, not equality.** Never compare `a.String() ==
-   b.String()`. `.String()` belongs inside a `Test*_String` test.
-   (`stringequality` analyzer.)
+3. **`.String()` is for display, not equality.** The `stringequality` analyzer
+   flags a test that compares two value objects by their string form —
+   `a.String() == b.String()` or `assert.Equal(a.String(), b.String())` — because
+   that silently mis-equates multi-representation VOs; compare by value
+   (`==`/`Equal`). It fires only on a comparison whose *both* sides are `.String()`
+   calls: a lone display call, a discarded `_ = x.String()`, a literal compare
+   (`x.String() == "USD 100"`), and a stdlib `.String()` are all left alone.
+   Testing stringification inside a `Test*_String` test stays the convention, but
+   (like rule 2) is not itself machine-enforced.
 
 Build a VO the canonical way: private fields, a single validating constructor as
 the only construction path, value equality (not representation equality), and no
