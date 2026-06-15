@@ -1,8 +1,8 @@
 # go-ddd — agent guide
 
 This repo is a **DDD enforcement toolkit for Go**: the `go/analysis` analyzers in
-`cmd/ddd-vet` (composed from `internal/analyzers.All`), a composite GitHub Action
-(`actions/`), and an executable rationale layer (`rationale/`). If you are writing
+`cmd/ddd-vet` (composed from `internal/analyzers.All`), a golangci-lint module
+plugin (`gclplugin/`), and an executable rationale layer (`rationale/`). If you are writing
 or changing domain objects here — or in a consumer repo (certus, metron, quanta) —
 follow the conventions below, because this repo is what enforces them in CI.
 
