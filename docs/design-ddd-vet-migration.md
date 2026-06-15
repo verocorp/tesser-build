@@ -14,7 +14,10 @@ references to them dropped from source comments, `go mod tidy` removed the
 now-unused `testify`.** Add → Migrate → Remove complete. **First-consumer
 dogfood (quanta, 2026-06-15) done:** `stringequality` tightened to
 comparison-context (Decision 12) and an end-to-end test added
-(`cmd/ddd-vet/e2e_test.go`, Decision 13); quanta's tree left unchanged. Open: the
+(`cmd/ddd-vet/e2e_test.go`, Decision 13); quanta's tree left unchanged. **Editor
+integration decided (Decision 14):** a run-on-save task
+(`examples/editor/tasks.json`) is the official path; the golangci-lint plugin is
+declined until a golangci-lint-shop consumer needs it. Open: the
 remaining Codex follow-ups (Go-version contract note, monorepo `-config`,
 versioning) and the Step-0 deferrals (gclplugin, SARIF, released binary). Supersedes the standalone `cmd/check*`
 directory-walkers. Builds on the spike (`ebca404`) that proved the port.
@@ -268,11 +271,14 @@ generally rather than `analysistest` specifically, which is what let the parked
 11. **Run mode: standalone `go tool ddd-vet ./...` is the documented default;
    `go vet -vettool` stays a supported secondary (eng review).** Standalone gives
    config freshness; `go vet -vettool` (unitchecker) is the more *scalable* path
-   (file-based intermediates, per-package parallelism, fact caching) and the one
-   that lights up gopls/editor diagnostics. Document both; recommend standalone for
-   CI, vettool for large repos that feel the scalability cost and for editor
-   integration. (Outside-voice correction: standalone trades incremental-analysis
-   scalability for config freshness — it is not strictly "free.")
+   (file-based intermediates, per-package parallelism, fact caching). Document
+   both; recommend standalone for CI, vettool for large repos that feel the
+   scalability cost. (Outside-voice correction: standalone trades
+   incremental-analysis scalability for config freshness — it is not strictly
+   "free.") **Note (corrected by Decision 14):** an earlier draft claimed vettool
+   "lights up gopls/editor diagnostics." That is wrong — gopls runs only the
+   analyzers compiled into it and cannot load a `vettool`/custom analyzer. Editor
+   integration is the run-on-save task, not vettool. See Decision 14.
 12. **First-consumer dogfood + stringequality tightened to comparison-context
     (quanta, 2026-06-15).** Ran the built `ddd-vet ./...` against quanta (a real,
     VO-heavy library) before going further. Result: 5 of 7 analyzers clean on
@@ -311,6 +317,32 @@ generally rather than `analysistest` specifically, which is what let the parked
     present (entity excluded), config absent (entity now flagged, proving the
     `.go-ddd.yaml` path is load-bearing), and malformed config (fails loud per the
     Codex silent-gap fix).
+14. **Editor integration = a run-on-save task; the golangci-lint plugin is
+    declined, not deferred (eng review, 2026-06-15).** Question raised: how to get
+    `ddd-vet` findings into Cursor/VS Code. gopls cannot help — it runs only the
+    analyzers compiled into it and has no hook to load a `vettool` or custom
+    `go/analysis` analyzer (a long-standing unimplemented gopls feature, not a
+    setting). Two real paths remained: (a) a VS Code **task + `problemMatcher`**
+    that runs `go tool ddd-vet` and parses its output into squiggles + the Problems
+    panel (on save via the *Trigger Task on Save* extension, or on demand), and (b)
+    a **golangci-lint module plugin** (`cmd/gclplugin`, the deferred Step-0 item) —
+    register `analyzers.All` via `register.Plugin`, ship a `.custom-gcl.yml`,
+    consumers `golangci-lint custom`-build a binary and PATH-shadow the stock one.
+    **The deciding fact (verified):** the golangci-lint editor integration fires on
+    *save* (`lintOnSave`), the same trigger as path (a) — gopls is the only
+    on-keystroke path and it's unavailable to us. So the plugin does **not** buy a
+    better trigger; it buys *unification* into a consumer's existing golangci-lint
+    pass, at the cost of every dev building and PATH-shadowing a custom binary.
+    That is only worth it for a consumer already standardized on golangci-lint in
+    editor + CI. **Decision: make the run-on-save task the official editor path**
+    (template at `examples/editor/tasks.json`, documented in the README), and
+    **decline the golangci-lint plugin** until a real golangci-lint-shop consumer
+    wants `ddd-vet` folded into their single lint pass — at which point the module
+    plugin is the right tool, built for that consumer (same reversibility logic as
+    Decision 10's GitHub Action). `.go-ddd.yaml` stays the single config source
+    under either path (the analyzers read it from the package dir regardless of
+    driver), so no second config surface is introduced. Also fixed here: the
+    incorrect "vettool lights up gopls" claim in Decision 11 and the README.
 
 ## Follow-ups surfaced by the eng-review outside voice (Codex, 2026-06-15)
 
@@ -337,10 +369,12 @@ Independent of the contract decision; fold fixes/docs in when the contract lands
   `/v2` in both the module path and the tool package path; document the
   `go tool github.com/chrisconley/go-ddd/cmd/ddd-vet` full-path fallback if the
   `ddd-vet` short name collides in a consumer.
-- **From Step 0 (deferred, not Codex):** a `golangci-lint` module-plugin wrapper
-  (`cmd/gclplugin`, insurance); SARIF output so findings surface as inline PR
-  annotations instead of raw log text (real DX gap); a pre-built binary on GitHub
-  Releases (build-time optimization, only if `go tool` build cost bites).
+- **From Step 0 (deferred, not Codex):** ~~a `golangci-lint` module-plugin wrapper
+  (`cmd/gclplugin`, insurance)~~ — **declined in Decision 14** (build it on demand
+  for a real golangci-lint-shop consumer, not speculatively); SARIF output so
+  findings surface as inline PR annotations instead of raw log text (real DX gap);
+  a pre-built binary on GitHub Releases (build-time optimization, only if `go tool`
+  build cost bites).
 
 ## Risks
 

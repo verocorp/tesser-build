@@ -31,9 +31,10 @@ dividend is bought by the **standard**, not by the pattern. See
 
 `ddd-vet` is a [`go/analysis`](https://pkg.go.dev/golang.org/x/tools/go/analysis)
 multichecker. Run it standalone (`ddd-vet ./...`) or as a `go vet` tool
-(`go vet -vettool=$(command -v ddd-vet) ./...`), which also lights the diagnostics
-up in editors through gopls. The analyzers (each independently adoptable — a menu,
-not all-or-nothing):
+(`go vet -vettool=$(command -v ddd-vet) ./...`). For editor diagnostics see
+[Editor integration](#editor-integration) below — gopls does *not* surface these
+analyzers (it only runs the analyzers compiled into it). The analyzers (each
+independently adoptable — a menu, not all-or-nothing):
 
 | Analyzer | What it enforces |
 |---|---|
@@ -81,10 +82,9 @@ In GitHub Actions that's one line in *your* `test.yml`, not an owned action:
 starter with `go tool ddd-vet -gen-excludes ./...`, then curate). The standalone
 run reads it fresh every time, so an exclude edit always takes effect.
 
-**Editors / large repos (secondary):** `ddd-vet` is also a `go vet` tool —
+**Large repos (secondary):** `ddd-vet` is also a `go vet` tool —
 `go vet -vettool=<path-to-ddd-vet> ./...`. That path is the more scalable one on
-large modules (per-package, file-based intermediates) and is what lights the
-diagnostics up in editors through gopls.
+large modules (per-package, file-based intermediates, fact caching).
 
 **Know before you adopt:**
 - **Your packages must compile.** The analyzers are type-aware; an unrelated build
@@ -97,6 +97,29 @@ diagnostics up in editors through gopls.
 - **A malformed `.go-ddd.yaml` fails the run loud** (a missing one is fine). It
   never silently falls back to "no excludes" — that would silently change
   enforcement.
+
+### Editor integration
+
+gopls only runs the analyzers compiled into it, so it cannot surface a custom
+`go/analysis` analyzer — there is no setting that points it at `ddd-vet`. The
+editor path is a VS Code / Cursor **task** whose output a `problemMatcher` turns
+into inline squiggles + Problems-panel entries. Copy
+[`examples/editor/tasks.json`](examples/editor/tasks.json) to your repo's
+`.vscode/tasks.json`:
+
+- **On demand:** Command Palette → *Tasks: Run Task* → `ddd-vet`.
+- **On every save:** add the
+  [Trigger Task on Save](https://marketplace.visualstudio.com/items?itemName=Gruntfuggly.triggertaskonsave)
+  extension and map the task to `**/*.go`. Findings then refresh on each save.
+
+This is deliberately *not* a golangci-lint plugin. The golangci-lint editor
+integration also runs only on save (gopls is the sole on-keystroke path, and it
+can't load custom analyzers), so the plugin would buy the same trigger at the
+cost of every developer building and PATH-shadowing a custom `golangci-lint`
+binary. The task gives the same on-save diagnostics with none of that. (If a
+consumer that already standardizes on golangci-lint wants `ddd-vet` folded into
+their single lint pass, a module plugin is the right tool — build it then, for
+that consumer. See `docs/design-ddd-vet-migration.md` Decision 14.)
 
 ## The conventions, briefly
 

@@ -1,0 +1,58 @@
+{
+  // Editor integration for ddd-vet. Copy this to your repo's
+  // .vscode/tasks.json.
+  //
+  // Why a task and not the language server: gopls only runs the analyzers
+  // compiled into it, so it cannot surface a custom go/analysis analyzer like
+  // ddd-vet. The editor path is therefore a task whose output is parsed by the
+  // problemMatcher below into squiggles + the Problems panel.
+  //
+  // Two ways to run it:
+  //   1. On demand   — Command Palette -> "Tasks: Run Task" -> "ddd-vet".
+  //   2. On every save — install "Trigger Task on Save"
+  //      (Gruntfuggly.triggertaskonsave) and add to .vscode/settings.json:
+  //          "triggerTaskOnSave.tasks": { "ddd-vet": ["**/*.go"] },
+  //          "triggerTaskOnSave.showStatusBarToggle": true
+  //      golangci-lint's editor integration also runs only on save, so this is
+  //      the same trigger with none of the custom-binary setup.
+  //
+  // Requires the tool pinned in your go.mod:
+  //   go get -tool github.com/chrisconley/go-ddd/cmd/ddd-vet@latest
+  // Not adopted yet (dogfooding from a sibling go-ddd checkout)? Use the
+  // from-source command variant noted below instead.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "ddd-vet",
+      "detail": "Run the DDD analyzers on this module",
+      "type": "shell",
+      "command": "go tool ddd-vet ./...",
+      // From-source variant (pre-adoption / dogfooding), go-ddd as a sibling dir:
+      //   "command": "go build -C ../go-ddd -o /tmp/ddd-vet ./cmd/ddd-vet && /tmp/ddd-vet ./...",
+      // Large repo? Scope to the saved file's package instead of ./... to keep
+      // each save fast (ddd-vet type-checks what you point it at).
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "test",
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": {
+        "owner": "ddd-vet",
+        "source": "ddd-vet",
+        // ddd-vet emits absolute file paths.
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^(.+?):(\\d+):(\\d+):\\s+(.+)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "message": 4
+        }
+      }
+    }
+  ]
+}
