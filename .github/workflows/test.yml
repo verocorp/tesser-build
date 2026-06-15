@@ -25,3 +25,22 @@ jobs:
         run: go vet ./...
       - name: go test
         run: go test ./...
+
+  plugin:
+    # Proves gclplugin/ actually bundles into a golangci-lint v2 custom binary
+    # and the dddvet linter runs end-to-end — the editor-integration path that
+    # `go test ./...` cannot exercise (no golangci-lint on PATH there, so the
+    # TestCustomGCL test skips in the job above and runs only here).
+    name: golangci-lint plugin bundling
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install golangci-lint v2
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+      - name: Put GOPATH/bin on PATH
+        run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Plugin bundling smoke test
+        run: go test ./gclplugin/ -run CustomGCL -v
