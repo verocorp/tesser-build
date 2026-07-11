@@ -1,6 +1,6 @@
 # go-ddd
 
-A DDD enforcement toolkit for Go: `go/analysis` analyzers, a golangci-lint plugin, and an executable rationale layer for repos following domain-driven design conventions.
+A DDD enforcement toolkit: `go/analysis` analyzers, a golangci-lint plugin, an executable rationale layer, an agent skill ([`skills/ddd/`](skills/ddd/)) that teaches coding agents the conventions (Go and Python), and human docs ([start here](docs/start-here.md), [FAQ](docs/faq.md)).
 
 ## Why: the rationale layer
 
@@ -133,6 +133,48 @@ ddd-vet* on demand, or add
 for on-save. Same on-save timing, no custom binary, but a third-party extension
 instead of the native pipeline. (Background on the trade: `docs/design-ddd-vet-migration.md`
 Decisions 14–15.)
+
+### `skills/ddd`: the agent skill
+
+The skills rung of the adoption ladder (docs → skills → CI): a copy-in skill
+directory that teaches coding agents to classify and build domain objects —
+value objects, entities, and aggregates — before CI ever sees the code.
+[`SKILL.md`](skills/ddd/SKILL.md) is a small router (progressive disclosure:
+agents read only the concept/language file a task routes to); construction
+mechanics ship for **Go** and **Python**. Humans: read
+[`docs/start-here.md`](docs/start-here.md) and [`docs/faq.md`](docs/faq.md)
+instead.
+
+**Install (copy-in — distribution AND activation, both required):**
+
+- **Claude Code:** copy the directory and add one routing line to your
+  repo's `CLAUDE.md`:
+
+  ```bash
+  cp -r skills/ddd /path/to/your-repo/.claude/skills/ddd
+  ```
+
+  ```markdown
+  <!-- CLAUDE.md -->
+  Creating or modifying domain types (new type, new field, constructor,
+  validation) → load the ddd skill first.
+  ```
+
+- **Codex:** Codex has no skill auto-loading, so the routing line does the
+  work. Copy the directory anywhere in the repo (e.g. `skills/ddd/`) and add
+  to `AGENTS.md`:
+
+  ```markdown
+  <!-- AGENTS.md -->
+  Creating or modifying domain types (new type, new field, constructor,
+  validation) → read skills/ddd/SKILL.md and follow its routing.
+  ```
+
+Without the routing line the skill is just files on disk — agents won't
+reliably load it. Hosts covered: Claude Code and Codex; anything else is
+untested. `SKILL.md` carries a `skill-version` line; when conventions are
+revised the version bumps and release notes name the changed sections —
+re-copy to pick them up.
 
 ## The conventions, briefly
 
