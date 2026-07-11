@@ -25,6 +25,12 @@ jobs:
         run: go vet ./...
       - name: go test
         run: go test ./...
+      - name: ddd-vet on examples/ddd (dogfood the consumer configuration)
+        # examples/ddd is the acceptance-gate output and the canonical worked
+        # example consumers imitate; running ddd-vet on it with its own
+        # .go-ddd.yaml exclude list exercises the exact consumer setup and
+        # keeps the example from silently drifting out of conformance.
+        run: go run ./cmd/ddd-vet ./examples/ddd/
 
   plugin:
     # Proves gclplugin/ actually bundles into a golangci-lint v2 custom binary
