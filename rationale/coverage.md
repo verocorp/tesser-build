@@ -81,6 +81,41 @@ the skills that say exactly how to build a VO). That is the deepest analyzer
 rationale; it is gated on the skills landing in this repo. See
 [`docs/design-three-contender-changeability.md`](../docs/design-three-contender-changeability.md).
 
+## Skill materializations — rule ↔ renderings (manual v1)
+
+The conventions are materialized in prose several times over: a concept file,
+two language mechanics files, an FAQ entry, and a resolver route in
+[`skills/ddd/`](../skills/ddd/) plus [`docs/faq.md`](../docs/faq.md). Separately
+authored renderings drift; this matrix is the map of which renderings carry
+each rule, so a rule change is a walk across its row in one commit (and a
+`skill-version` bump in `SKILL.md`). **v1 is maintained by hand.** The machine
+check — a `coverage_test.go`-style test asserting each named heading anchor
+exists in its file — lands with the entity/aggregate rationale phase. Semantic
+agreement between renderings is human review; the row tells the reviewer which
+pairs to diff. `—` is an honest gap, not an oversight: not every rule earns
+every rendering.
+
+| Rule | Concept file | go.md | python.md | FAQ | Resolver route (SKILL.md) |
+|---|---|---|---|---|---|
+| One validating constructor, single construction path | `value-objects.md#rules` | `go.md#value-objects` | `python.md#value-objects` | #5 | "writing or changing a constructor" |
+| VO immutability (no setters; behavior returns new values) | `value-objects.md#rules` | `go.md#value-objects` | `python.md#value-objects` | #3 | — |
+| Equality by value; never by string form | `value-objects.md#rules` | `go.md#value-objects` (equality paths) | `python.md#value-objects` (equality paths) | #8 | "comparing two domain objects in a test" |
+| `MustNew*` for VOs only (never entities/aggregates) | `value-objects.md#tests-you-must-write` | `go.md#value-objects` + `go.md#entities` (no-Must rule) | `python.md#value-objects` (no-twin note) | #9 | — |
+| Primitive fields: check-then-wrap (no VO theater) | `value-objects.md#is-this-what-im-building` | — | — | #4 | "adding a primitive-typed field" |
+| Entity identity explicit; equality is identity | `entities.md#rules` | `go.md#entities` | `python.md#entities` | #1 | "modeling a brand-new concept" |
+| Mutability is a domain decision (fact vs lifecycle) | `entities.md#decisions-you-must-make` | `go.md#entities` + `go.md#aggregates` | `python.md#entities` + `python.md#aggregates` | #3 | "needing mutation / a state transition" |
+| Aggregate = consistency boundary; invariant in the root's constructor | `aggregates.md#rules` | `go.md#aggregates` | `python.md#aggregates` | #2, #10 | "adding a rule that spans two or more owned objects" |
+| Defensive copies on collection accessors | `aggregates.md#rules` | `go.md#aggregates` | `python.md#aggregates` | — | "adding a collection field" |
+| Aggregates are never value-compared (non-comparability) | `aggregates.md#rules` | `go.md#aggregates` | `python.md#aggregates` | — | — |
+| Spec leaves are primitives; constructor is the boundary | `value-objects.md#decisions-you-must-make` | `go.md#the-spec-pattern` | `python.md#the-spec-pattern` | #6 | "writing or changing a constructor" |
+| Spec nesting mirrors composition (composition-frequency coupling) | — (mechanics-owned) | `go.md#the-spec-pattern` | `python.md#the-spec-pattern` | #7 | "writing or changing a constructor" |
+| Validation belongs to the value, not parents | `value-objects.md#rules` | `go.md#entities` (wrap, don't re-check) | `python.md#entities` | #5 | — |
+
+The heading anchors above are load-bearing: renaming a heading in a skill file
+is a breaking change to this matrix (and to the resolver's routes). Authoring
+rules for the skill files live in
+[`docs/skill-authoring.md`](../docs/skill-authoring.md).
+
 ## Run
 
 ```
