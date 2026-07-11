@@ -1,10 +1,21 @@
 # go-ddd — agent guide
 
-This repo is a **DDD enforcement toolkit for Go**: the `go/analysis` analyzers in
+This repo is a **DDD enforcement toolkit**: the `go/analysis` analyzers in
 `cmd/ddd-vet` (composed from `internal/analyzers.All`), a golangci-lint module
-plugin (`gclplugin/`), and an executable rationale layer (`rationale/`). If you are writing
-or changing domain objects here — or in a consumer repo (certus, metron, quanta) —
-follow the conventions below, because this repo is what enforces them in CI.
+plugin (`gclplugin/`), an executable rationale layer (`rationale/`), an agent
+skill (`skills/ddd/` — Go + Python construction guidance, copy-in distributed
+to consumers), and human docs (`docs/start-here.md`, `docs/faq.md`). If you are
+writing or changing domain objects here — or in a consumer repo (certus, metron,
+quanta, rhema) — follow the conventions below, because this repo is what
+enforces them in CI.
+
+**Creating or modifying domain types (new type, new field, constructor,
+validation) → read `skills/ddd/SKILL.md` and follow its routing.** This repo
+dogfoods its own skill; `examples/ddd/` is the acceptance-gate output and the
+canonical worked example (kept conformant by CI). When you change a convention,
+walk its row in `rationale/coverage.md`'s skill-materializations matrix and
+update every rendering in the same change (rules in `docs/skill-authoring.md`);
+bump `skill-version` in `skills/ddd/SKILL.md`.
 
 ## The conventions (what the analyzers enforce)
 
