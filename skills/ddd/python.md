@@ -1,8 +1,13 @@
-# Building domain objects in Python
+# Building domain code in Python
 
-Construction mechanics only — the concepts and the rules' whys live in
-`value-objects.md`, `entities.md`, `aggregates.md`. Section headings here are
-stable anchors; the resolver and the coverage matrix link to them.
+Construction mechanics only — the concepts and the rules' whys live in the
+concept files (`value-objects.md`, `entities.md`, `aggregates.md`,
+`application-services.md`, `repositories.md`, `domain-services.md`). This file
+covers the domain building blocks *and* the seams that serve them (application
+services, repositories) — not domain objects themselves, but their construction
+mechanics live here alongside the objects they orchestrate and persist. Section
+headings here are stable anchors; the resolver and the coverage matrix link to
+them.
 
 > **Maturity note:** this guidance is v1 best-effort — the Go doctrine has a
 > battle-tested reference implementation; the Python rendering does not yet.
@@ -192,6 +197,89 @@ class Operation:
 - **Fact aggregates:** state changes return new instances. **Lifecycle
   aggregates:** root-guarded transitions that re-establish the invariant
   before returning.
+
+## Application services
+
+Coordination only — no business logic. Four named steps
+(`application-services.md`): convert → delegate → persist → respond. The
+repository is injected as a `Protocol` (see `python.md#repositories`).
+
+```python
+class CreditService:
+    def __init__(self, repo: JournalRepository) -> None:  # injected, never built here
+        self._repo = repo
+
+    # Create use case: Delegate constructs a new aggregate.
+    def record_payment(self, req: RecordPaymentRequest) -> RecordPaymentResponse:
+        spec = to_payment_spec(req)                 # 1. Convert (DTO → spec)
+        payment = Payment.from_spec(spec)           # 2. Delegate (construct; raises on invalid)
+        self._repo.save_payment(payment)            # 3. Persist (whole aggregate)
+        return to_payment_response(payment)         # 4. Respond (domain → DTO)
+
+    # Change use case: Delegate LOADS an aggregate and calls its guarded transition.
+    def apply_refund(self, req: ApplyRefundRequest) -> ApplyRefundResponse:
+        payment = self._repo.load_payment(PaymentID(req.payment_id))  # 1+2a. convert + load
+        payment.refund(to_refund_spec(req))         # 2b. guarded transition (raises on illegal)
+        self._repo.save_payment(payment)            # 3. Persist
+        return to_refund_response(payment)          # 4. Respond
+```
+
+- **No `for` over domain objects, no arithmetic on domain quantities, no `if` on
+  domain state** in the method — the leakage checks
+  (`application-services.md#domain-logic-leakage-checks`). A comprehension
+  mapping `req.items → [Spec]` is pure conversion; put it in `to_payment_spec`.
+- **Return a DTO**, never the domain object.
+- **Transaction / session boundary is consumer-specific.** Where the unit of
+  work opens and commits — a SQLAlchemy `Session`, an async transaction, a
+  FastAPI dependency — is a decision for the consuming codebase, not this skill.
+  Wrap the use case in one unit of work; do **not** invent an ORM lifecycle
+  here. Record what your codebase actually does and feed the friction back
+  (this is v1 best-effort Python — see the maturity note at the top).
+
+## Repositories
+
+Interface as a `Protocol` (structural typing, like Go's implicit satisfaction);
+whole aggregate in, reconstructed aggregate out, no business logic
+(`repositories.md`).
+
+```python
+from typing import Protocol
+
+class OrderRepository(Protocol):          # defined with the service, not the DB
+    def save(self, order: Order) -> None: ...            # whole aggregate in
+    def load(self, id: OrderID) -> Order: ...            # reconstructed out
+    def find(self, q: OrderQuery) -> list[OrderSummary]: ...  # read projection
+
+@dataclass(frozen=True)
+class OrderQuery:                          # selection criteria — VOs, NOT a spec
+    customer: CustomerID
+    period: Period
+
+class InMemoryOrderRepo:                   # satisfies the Protocol structurally
+    def __init__(self) -> None:
+        self._rows: dict[str, OrderRecord] = {}
+
+    def save(self, order: Order) -> None:
+        self._rows[str(order.id)] = decompose(order)  # repo decomposes, not the caller
+
+    def load(self, id: OrderID) -> Order:
+        rec = self._rows.get(str(id))
+        if rec is None:
+            raise LookupError(f"order {id} not found")
+        return Order.from_spec(rec.to_spec())         # reconstruct THROUGH the constructor
+```
+
+- **`save` takes the root**; `decompose` (private) flattens it. The service
+  never extracts children to save them.
+- **`load` reconstructs via `from_spec`**, so invariants re-run — never build
+  the aggregate by assigning attributes.
+- **No domain math.** `find` may filter/order (persistence selection); summing
+  or rule-checking is a leak
+  (`application-services.md#domain-logic-leakage-checks`).
+- **Query fields are value objects.** (Persistence backends — SQLAlchemy,
+  async drivers — are consumer-specific; the `Protocol` is the stable contract,
+  the backing store is not this skill's decision. v1 best-effort — see the
+  maturity note at the top.)
 
 ## The Spec pattern
 

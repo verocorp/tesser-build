@@ -144,14 +144,62 @@ ballgame — a convention applied 90% of the time buys ~0% of the benefit.
 
 ## 12. Where do application services, repositories, and bounded contexts fit?
 
-Coming. This toolkit currently covers the three tactical building blocks
-(value objects, entities, aggregates). The service/repository/context layer
-is being ported through the same pipeline: concept doc → skill route → FAQ
-entries → (eventually) checks. Until then: keep domain logic out of services
-(a service that loops over domain objects computing things is hiding a
-missing domain method — see the skill's "missing type" signals), and let
-repositories speak specs and domain objects, not raw rows, at their
-boundaries.
+Application services and repositories are now covered (see #13–#16 and the
+skill's `application-services.md` / `repositories.md`). **Bounded contexts are
+still coming** — the toolkit doesn't yet help you draw context boundaries or map
+between them; model the pieces inside one context with the skill and flag the
+cross-context question for a human.
+
+## 13. Where does business logic go — the service, or the domain?
+
+The domain, always. An **application service coordinates a use case** and holds
+no business logic of its own: it runs four steps — **convert** the request to a
+domain input, **delegate** to the domain (construct a new aggregate, or load an
+existing one and call its guarded transition, or call a domain service),
+**persist** the whole aggregate through a repository, and **respond** by mapping
+the result to a DTO. Every rule, sum, and decision lives on a domain object the
+service calls.
+
+**Decide:** if a service method has a `for`-loop over domain objects, arithmetic
+on domain quantities, or an `if` on domain state, the logic is misplaced — move
+it onto the owning domain type (see #14). And never return a domain object from
+a service; return a DTO, or the domain leaks past its boundary.
+
+## 14. My service has a loop that sums/filters domain objects. Is that wrong?
+
+Usually yes — it's a **missing domain type**. A loop that computes a result over
+domain objects (sum, filter, group) is domain behavior wearing a service
+disguise; it belongs on a domain collection type's method, or on the aggregate
+that owns them. These are the **domain-logic leakage checks**: (1) a `for`-loop
+over domain objects, (2) string-munging a domain identifier, (3) arithmetic on
+domain quantities outside a conversion, (4) a conditional on domain state.
+
+**Rule:** a loop that maps DTOs→specs is pure conversion and is fine; a loop that
+*computes a domain result* is a missing method. Find the type that should own it.
+
+## 15. Can a handler/endpoint just do the work if it's simple?
+
+No — that's where the bleeding starts. A **handler parses and authenticates the
+request, then calls an application service.** It does no domain math and touches
+no repository. "It's just a small calculation" is how domain logic ends up
+duplicated across every endpoint, drifting out of sync.
+
+**Rule:** handler → application service → domain. If a handler is looping over
+domain objects or opening a DB call, push that down a layer.
+
+## 16. Why can't my repository just compute the total / filter the results?
+
+A repository is the **persistence boundary**: whole aggregate in (it decomposes
+it), reconstructed aggregate out (through the constructor). It may **filter,
+order, and reconstruct** as persistence mechanics, but it must not **compute
+domain results** — no summing, no invariant checks, no decisions on domain
+state. A read that returns child objects or a projection is a legitimate *read
+concern*, but it's read-only and still holds no domain logic.
+
+**Rule:** the service passes the whole aggregate (never extracted children); the
+repo speaks value objects and aggregates, not raw rows; a query object carries
+domain-typed selection criteria and is **not** a Spec (specs have primitive
+leaves and build objects; query objects select stored ones).
 
 ---
 

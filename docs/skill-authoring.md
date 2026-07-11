@@ -54,15 +54,25 @@ Route to the mechanics doc anchors (go.md#..., python.md#...).
 ### Mechanics-doc template
 
 ```
-# Building domain objects in <Language>
+# Building domain code in <Language>
 Scope line: construction mechanics only; concepts live in the concept docs.
+Covers the domain building blocks AND the seams that serve them (application
+services, repositories are not domain objects, but their mechanics live here).
 
 ## Value objects        ← one section per concept, same order everywhere
 ## Entities
 ## Aggregates
+## Application services  ← seam sections follow the object sections
+## Repositories
 ## The Spec pattern     ← cross-cutting construction pattern(s)
 ## Testing patterns
 ```
+
+The title is **"Building domain code"**, not "domain objects" — application
+services and repositories are not domain objects (they orchestrate and persist
+them), so a "domain objects" title is a category error once the seams land.
+Domain services, when deepened past their stub, get a `## Domain services`
+section between Aggregates and Application services.
 
 Each section is complete for its concept: full worked code, naming rules,
 error handling, test skeletons. Section headings are stable anchors — the

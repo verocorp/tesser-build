@@ -1,7 +1,7 @@
 ---
 name: ddd
-description: Domain-driven design entry point. Load whenever creating or modifying domain types — adding a field to a struct/class, creating a new type, modeling a new concept, writing a constructor, adding validation, comparing domain objects in tests, or deciding between a value object, entity, or aggregate. Routes the task to the right concept and construction guide.
-skill-version: 1
+description: Domain-driven design entry point. Load whenever creating or modifying domain types OR the code around them — adding a field to a struct/class, creating a new type, modeling a new concept, writing a constructor, adding validation, comparing domain objects in tests, deciding between a value object/entity/aggregate, AND whenever writing a handler/endpoint, a use-case or application/domain service, or persistence/repository code (where to put business logic, how to load or save an aggregate, keeping domain math out of controllers). Routes the task to the right concept and construction guide.
+skill-version: 2
 source: https://github.com/verocorp/go-ddd (skills/ddd/)
 ---
 
@@ -12,10 +12,19 @@ right concept and the right construction mechanics. **Read only what a route
 below points you to** — do not read all the files up front.
 
 Languages covered: **Go** (`go.md`) and **Python** (`python.md`).
-Concepts covered in v1: **value objects, entities, aggregates**. (Application
-services, domain services, repositories, and bounded contexts are coming;
-if your task needs one of those, model the domain objects it touches with
-this skill and note the gap rather than inventing a convention.)
+Concepts covered: **value objects, entities, aggregates** (the domain building
+blocks) and **application services, repositories** (the seams around them), plus
+a **domain-service stub** (`domain-services.md` — the rare no-single-owner case,
+deliberately shallow). Not yet covered: bounded contexts, the transport/HTTP
+layer beyond the one handler rule below, domain events. If your task needs one
+of those, model the pieces it touches with this skill and note the gap rather
+than inventing a convention.
+
+**The one handler rule (transport layer, until it gets its own guide):** a
+handler/endpoint parses and authenticates the request, then calls an application
+service. It does **no domain math and touches no repository** — if you're
+writing a `for`-loop over domain objects or a DB call in a handler, that logic
+belongs in the application service or the domain (see the placement guide below).
 
 ## The taxonomy in one pass
 
@@ -29,19 +38,36 @@ Identity and consistency scope distinguish them — **not** mutability.
 
 ## Mode 1 — Architect: "which building blocks does this feature need?"
 
-Work top-down through the feature's nouns and rules:
+Work top-down through the feature's nouns, rules, **and where each line of
+behavior goes** — most agent spaghetti is a placement failure (domain math in a
+handler, persistence in the domain, a fat service over an anemic domain), not a
+mis-picked noun.
 
 1. For each **noun** the feature introduces, run the taxonomy tests above,
    in order (value object → entity → aggregate). Most domain nouns are value
    objects; identity must be earned, not assumed.
-2. For each **rule** the feature introduces, place it: a rule about one
-   value → the value object's constructor; a rule about one tracked thing →
-   the entity; a rule spanning several owned objects → the aggregate root's
-   constructor (never in callers).
-3. If a noun's rules span objects that *aren't* owned by one root, that's a
-   boundary question — v1 of this skill can't settle it; flag it for a human
-   rather than forcing an aggregate.
-4. Then switch to Mode 2 for each piece.
+2. For each **rule**, place it by what it's about: one value → the value
+   object's constructor; one tracked thing → the entity; several owned objects
+   → the aggregate root (constructor / guarded transition), never in callers; a
+   genuine domain operation owned by **no single object** → a domain service
+   (rare — `domain-services.md`; check for a missing type first).
+3. For each **use case** the feature handles, you need an **application
+   service** to coordinate it (`application-services.md`): convert → delegate →
+   persist → respond, with **no business logic**. Its load/save goes through a
+   **repository** (`repositories.md`): whole aggregate in, reconstructed out.
+4. **Behavior placement — "where does this line go?"**
+   - parse/authenticate the request → **handler** (thin; the one handler rule)
+   - orchestrate the use case → **application service**
+   - a rule about one object, or a set it owns → that **object / aggregate root**
+   - an operation owned by no single object → **domain service** (rare)
+   - load or save an aggregate → **repository**
+   - computing a domain result (sum/decision) anywhere in a handler or service →
+     it's misplaced; move it onto a domain type
+     (`application-services.md#domain-logic-leakage-checks`)
+5. A rule spanning objects that *aren't* owned by one root is a **cross-aggregate
+   boundary** question — this skill still doesn't settle that; flag it for a
+   human rather than forcing a god-aggregate.
+6. Then switch to Mode 2 for each piece.
 
 ## Mode 2 — Implement: "construct this piece per convention"
 
@@ -56,6 +82,11 @@ Route on the task:
 | Writing or changing a constructor | Read your language file: `go.md#the-spec-pattern` / `python.md#the-spec-pattern` |
 | Needing mutation / a state transition | Read `entities.md#decisions-you-must-make` (fact vs lifecycle) before writing a setter |
 | Comparing two domain objects in a test | Read `value-objects.md#tests-you-must-write` — never compare via `.String()`/`str()` |
+| Writing a use-case / orchestration / a service method | Read `application-services.md` — the four-step shape (convert → delegate → persist → respond), no business logic |
+| Writing a handler / endpoint / controller | Read `application-services.md#is-this-what-im-building` — keep domain math and repositories out; call an application service |
+| Loading or saving an aggregate, or writing a repository | Read `repositories.md` — whole aggregate in, reconstructed out, no business logic; query object ≠ spec |
+| Business logic that "wants" to live in a service or handler | Read `application-services.md#domain-logic-leakage-checks` — move it onto the owning domain type |
+| Domain logic that fits no single object | Read `domain-services.md` — the rare case; confirm no missing type owns it first |
 | Unsure after the tests | Read `value-objects.md` first — it defines the default; identity is the exception |
 
 ## Non-negotiables (all concepts, all languages)

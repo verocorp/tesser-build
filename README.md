@@ -138,10 +138,11 @@ Decisions 14–15.)
 
 The skills rung of the adoption ladder (docs → skills → CI): a copy-in skill
 directory that teaches coding agents to classify and build domain objects —
-value objects, entities, and aggregates — before CI ever sees the code.
-[`SKILL.md`](skills/ddd/SKILL.md) is a small router (progressive disclosure:
-agents read only the concept/language file a task routes to); construction
-mechanics ship for **Go** and **Python**. Humans: read
+value objects, entities, aggregates — **and to place behavior correctly around
+them** (application services, repositories, a domain-service stub), before CI
+ever sees the code. [`SKILL.md`](skills/ddd/SKILL.md) is a small router
+(progressive disclosure: agents read only the concept/language file a task
+routes to); construction mechanics ship for **Go** and **Python**. Humans: read
 [`docs/start-here.md`](docs/start-here.md) and [`docs/faq.md`](docs/faq.md)
 instead.
 
@@ -156,8 +157,9 @@ instead.
 
   ```markdown
   <!-- CLAUDE.md -->
-  Creating or modifying domain types (new type, new field, constructor,
-  validation) → load the ddd skill first.
+  Creating or modifying domain types (new type, field, constructor, validation),
+  OR writing a handler/endpoint, a use-case / application or domain service, or
+  persistence / repository code → load the ddd skill first.
   ```
 
 - **Codex:** Codex has no skill auto-loading, so the routing line does the
@@ -166,8 +168,9 @@ instead.
 
   ```markdown
   <!-- AGENTS.md -->
-  Creating or modifying domain types (new type, new field, constructor,
-  validation) → read skills/ddd/SKILL.md and follow its routing.
+  Creating or modifying domain types (new type, field, constructor, validation),
+  OR writing a handler/endpoint, a use-case / application or domain service, or
+  persistence / repository code → read skills/ddd/SKILL.md and follow its routing.
   ```
 
 Without the routing line the skill is just files on disk — agents won't

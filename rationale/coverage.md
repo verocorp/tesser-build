@@ -88,12 +88,13 @@ two language mechanics files, an FAQ entry, and a resolver route in
 [`skills/ddd/`](../skills/ddd/) plus [`docs/faq.md`](../docs/faq.md). Separately
 authored renderings drift; this matrix is the map of which renderings carry
 each rule, so a rule change is a walk across its row in one commit (and a
-`skill-version` bump in `SKILL.md`). **v1 is maintained by hand.** The machine
-check — a `coverage_test.go`-style test asserting each named heading anchor
-exists in its file — lands with the entity/aggregate rationale phase. Semantic
-agreement between renderings is human review; the row tells the reviewer which
-pairs to diff. `—` is an honest gap, not an oversight: not every rule earns
-every rendering.
+`skill-version` bump in `SKILL.md`). The rows are maintained by hand, but the
+**structural** check is machine-enforced: [`coverage_test.go`](coverage_test.go)
+(`TestSkillMaterializationAnchors`) asserts every heading anchor named in this
+matrix exists in its file, so a renamed heading or a routeless concept file
+fails CI. It does **not** check semantic agreement between renderings — that
+stays human review, and the row tells the reviewer which pairs to diff. `—` is
+an honest gap, not an oversight: not every rule earns every rendering.
 
 | Rule | Concept file | go.md | python.md | FAQ | Resolver route (SKILL.md) |
 |---|---|---|---|---|---|
@@ -110,6 +111,13 @@ every rendering.
 | Spec leaves are primitives; constructor is the boundary | `value-objects.md#decisions-you-must-make` | `go.md#the-spec-pattern` | `python.md#the-spec-pattern` | #6 | "writing or changing a constructor" |
 | Spec nesting mirrors composition (composition-frequency coupling) | — (mechanics-owned) | `go.md#the-spec-pattern` | `python.md#the-spec-pattern` | #7 | "writing or changing a constructor" |
 | Validation belongs to the value, not parents | `value-objects.md#rules` | `go.md#entities` (wrap, don't re-check) | `python.md#entities` | #5 | — |
+| Application service = coordination, no business logic (4-step: convert→delegate→persist→respond) | `application-services.md#rules` | `go.md#application-services` | `python.md#application-services` | #13 | "writing a use-case / orchestration / a service method" |
+| Response is a DTO, not a domain object (no service-boundary leak) | `application-services.md#rules` | `go.md#application-services` | `python.md#application-services` | — | "writing a use-case / orchestration / a service method" |
+| Domain-logic leakage checks (canonical signal list) | `application-services.md#domain-logic-leakage-checks` | `go.md#application-services` | `python.md#application-services` | #14 | "business logic that wants to live in a service or handler" |
+| Handler is thin: parse/auth → call app service; no domain math/repo | `application-services.md#is-this-what-im-building` | — | — | #15 | "writing a handler / endpoint / controller" |
+| Repository = whole aggregate in, reconstructed out, no business logic | `repositories.md#rules` | `go.md#repositories` | `python.md#repositories` | #16 | "loading or saving an aggregate, or writing a repository" |
+| Repo draws persistence-vs-query line; query object ≠ spec | `repositories.md#rules` | `go.md#repositories` | `python.md#repositories` | — | "loading or saving an aggregate, or writing a repository" |
+| Domain service = rare no-single-owner case (stub; check for a missing type first) | `domain-services.md#is-this-what-im-building` | — (mechanics deferred) | — (mechanics deferred) | — | "domain logic that fits no single object" |
 
 The heading anchors above are load-bearing: renaming a heading in a skill file
 is a breaking change to this matrix (and to the resolver's routes). Authoring

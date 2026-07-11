@@ -1,8 +1,13 @@
-# Building domain objects in Go
+# Building domain code in Go
 
-Construction mechanics only — the concepts and the rules' whys live in
-`value-objects.md`, `entities.md`, `aggregates.md`. Section headings here are
-stable anchors; the resolver and the coverage matrix link to them.
+Construction mechanics only — the concepts and the rules' whys live in the
+concept files (`value-objects.md`, `entities.md`, `aggregates.md`,
+`application-services.md`, `repositories.md`, `domain-services.md`). This file
+covers the domain building blocks *and* the seams that serve them (application
+services, repositories) — application services and repositories are not domain
+objects, but their construction mechanics live here alongside the objects they
+orchestrate and persist. Section headings here are stable anchors; the resolver
+and the coverage matrix link to them.
 
 ## Value objects
 
@@ -210,6 +215,124 @@ func (o *Order) AddLineItem(item LineItem) error {
 	return nil
 }
 ```
+
+## Application services
+
+Coordination only — no business logic. The method reads as the four named steps
+(`application-services.md`): convert → delegate → persist → respond.
+
+```go
+type CreditService struct {
+	repo JournalRepository // injected — an interface, never constructed here
+}
+
+func NewCreditService(repo JournalRepository) *CreditService {
+	return &CreditService{repo: repo}
+}
+
+// Create use case: Delegate constructs a new aggregate.
+func (s *CreditService) RecordPayment(ctx context.Context, req RecordPaymentRequest) (RecordPaymentResponse, error) {
+	spec := toPaymentSpec(req)                    // 1. Convert (DTO → spec)
+
+	payment, err := accounting.NewPayment(spec)   // 2. Delegate (construct)
+	if err != nil {
+		return RecordPaymentResponse{}, fmt.Errorf("invalid payment: %w", err)
+	}
+
+	if err := s.repo.SavePayment(ctx, payment); err != nil { // 3. Persist (whole aggregate)
+		return RecordPaymentResponse{}, fmt.Errorf("persist payment %s: %w", req.ID, err)
+	}
+
+	return toPaymentResponse(payment), nil        // 4. Respond (domain → DTO)
+}
+
+// Change use case: Delegate LOADS an aggregate and calls its guarded transition.
+func (s *CreditService) ApplyRefund(ctx context.Context, req ApplyRefundRequest) (ApplyRefundResponse, error) {
+	id, err := accounting.NewPaymentID(req.PaymentID) // 1. Convert
+	if err != nil {
+		return ApplyRefundResponse{}, fmt.Errorf("invalid payment id: %w", err)
+	}
+
+	payment, err := s.repo.LoadPayment(ctx, id)   // 2a. load …
+	if err != nil {
+		return ApplyRefundResponse{}, fmt.Errorf("load payment %s: %w", req.PaymentID, err)
+	}
+	if err := payment.Refund(toRefundSpec(req)); err != nil { // 2b. … call the guarded transition
+		return ApplyRefundResponse{}, fmt.Errorf("refund rejected: %w", err)
+	}
+
+	if err := s.repo.SavePayment(ctx, payment); err != nil {  // 3. Persist
+		return ApplyRefundResponse{}, fmt.Errorf("persist refund: %w", err)
+	}
+	return toRefundResponse(payment), nil          // 4. Respond
+}
+```
+
+- **Each step is one call.** If a step needs more than a line or two, extract a
+  private `toXxxSpec`/`toXxxResponse` helper. The method body is a readable
+  sequence, not inline assembly.
+- **No `for` loops over domain objects, no arithmetic on domain quantities, no
+  `if` on domain state** in the method — those are the leakage checks
+  (`application-services.md#domain-logic-leakage-checks`). A `for` that maps
+  `req.Items → []Spec` is pure conversion and belongs in the `toXxxSpec` helper.
+- **The response is a DTO.** `toPaymentResponse` reads fields off the domain
+  object and returns a plain struct; the domain object itself never escapes.
+- **The repo takes the whole aggregate** (`s.repo.SavePayment(ctx, payment)`),
+  never extracted children — see `go.md#repositories`.
+
+## Repositories
+
+Interface in the caller's package; whole aggregate in, reconstructed aggregate
+out, no business logic (`repositories.md`). Go's structural typing means the
+implementation satisfies the interface implicitly.
+
+```go
+// Defined in the service package — the domain depends on this, not on a DB.
+type OrderRepository interface {
+	Save(ctx context.Context, order Order) error          // whole aggregate in
+	Load(ctx context.Context, id OrderID) (Order, error)  // reconstructed out
+	Find(ctx context.Context, q OrderQuery) ([]OrderSummary, error) // read projection
+}
+
+type OrderQuery struct { // selection criteria — value objects, NOT a spec
+	Customer CustomerID
+	Period   Period
+}
+
+// In-memory implementation (tests + early use); a DB-backed one satisfies the
+// same interface later.
+type InMemoryOrderRepo struct {
+	mu     sync.Mutex
+	orders map[string]OrderRecord // storage rows, not aggregates
+}
+
+func (r *InMemoryOrderRepo) Save(ctx context.Context, order Order) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.orders[order.ID().String()] = decompose(order) // repo decomposes — caller never does
+	return nil
+}
+
+func (r *InMemoryOrderRepo) Load(ctx context.Context, id OrderID) (Order, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	rec, ok := r.orders[id.String()]
+	if !ok {
+		return Order{}, fmt.Errorf("order %s not found", id)
+	}
+	return NewOrder(rec.ToSpec()) // reconstruct THROUGH the constructor — invariants re-run
+}
+```
+
+- **`Save` takes the root**, and `decompose` (private to the repo) flattens it
+  into storage. The service never calls `order.Items()` to save children.
+- **`Load` reconstructs via `NewOrder`**, never by assigning fields — so a
+  stored-but-invalid aggregate cannot come back to life.
+- **No domain math in here.** Filtering/ordering in `Find` is persistence
+  selection; summing amounts or checking a balance would be a leak
+  (`go.md#application-services` leakage checks).
+- **Query fields are value objects** (`CustomerID`, `Period`), so the boundary
+  can't be handed a raw unvalidated string.
 
 ## The Spec pattern
 

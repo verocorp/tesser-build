@@ -29,9 +29,13 @@ just written down.
 Identity and consistency scope are the axes — **not** mutability, and not
 importance. Most domain nouns are value objects; identity must be earned.
 
-More building blocks (application services, domain services, repositories,
-bounded contexts) are on the roadmap and will appear as new concept files in
-the skill and new entries in the FAQ.
+The **seams** around those blocks are now covered too — **application services**
+(coordinate a use case, hold no business logic) and **repositories** (the
+persistence boundary), plus a **domain-service stub** for the rare operation
+owned by no single object. Together they answer the placement question — where a
+line of behavior goes — which is where most spaghetti actually forms. Still on
+the roadmap: bounded contexts, the transport/HTTP layer beyond the one handler
+rule, and domain events.
 
 ## Where everything lives
 

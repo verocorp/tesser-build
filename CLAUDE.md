@@ -9,8 +9,10 @@ writing or changing domain objects here — or in a consumer repo (certus, metro
 quanta, rhema) — follow the conventions below, because this repo is what
 enforces them in CI.
 
-**Creating or modifying domain types (new type, new field, constructor,
-validation) → read `skills/ddd/SKILL.md` and follow its routing.** This repo
+**Creating or modifying domain types (new type, field, constructor, validation),
+OR writing a handler/endpoint, a use-case / application or domain service, or
+persistence / repository code → read `skills/ddd/SKILL.md` and follow its
+routing.** This repo
 dogfoods its own skill; `examples/ddd/` is the acceptance-gate output and the
 canonical worked example (kept conformant by CI). When you change a convention,
 walk its row in `rationale/coverage.md`'s skill-materializations matrix and

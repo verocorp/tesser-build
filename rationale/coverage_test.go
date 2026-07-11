@@ -49,3 +49,98 @@ func TestCoverageMatrix_NoSilentGaps(t *testing.T) {
 		}
 	}
 }
+
+// TestSkillMaterializationAnchors is the structural half of the skill-matrix
+// contract (design v2, H6): every `file.md#anchor` the skill-materializations
+// table names must resolve to a real heading in that file under skills/ddd/. It
+// catches a renamed heading, a mistyped anchor, or a routeless concept file —
+// the silent drift the manual matrix invites once the seam concepts expand it.
+// It does NOT check semantic agreement between renderings; that stays human
+// review. Pulled forward from the rationale phase because the v2 seam content
+// (application services, repositories) has no analyzer net of its own.
+func TestSkillMaterializationAnchors(t *testing.T) {
+	matrix, err := os.ReadFile("coverage.md")
+	if err != nil {
+		t.Fatalf("read coverage.md: %v", err)
+	}
+	content := string(matrix)
+
+	// Scope to the skill-materializations section so unrelated file#frag
+	// mentions elsewhere in the doc don't get treated as matrix anchors.
+	_, section, found := strings.Cut(content, "## Skill materializations")
+	if !found {
+		t.Fatal("coverage.md has no '## Skill materializations' section")
+	}
+	if before, _, ok := strings.Cut(section, "\n## "); ok {
+		section = before
+	}
+
+	skillDir := filepath.Join("..", "skills", "ddd")
+	anchorsByFile := map[string]map[string]bool{}
+	loadAnchors := func(file string) (map[string]bool, error) {
+		if a, ok := anchorsByFile[file]; ok {
+			return a, nil
+		}
+		b, err := os.ReadFile(filepath.Join(skillDir, file))
+		if err != nil {
+			return nil, err
+		}
+		set := map[string]bool{}
+		explicit := regexp.MustCompile(`\{#([a-z0-9-]+)\}`)
+		inFence := false
+		for line := range strings.SplitSeq(string(b), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "```") {
+				inFence = !inFence // ignore '#' comments inside code blocks
+				continue
+			}
+			if inFence || !regexp.MustCompile(`^#{1,6}\s`).MatchString(line) {
+				continue
+			}
+			text := strings.TrimLeft(line, "# ")
+			if m := explicit.FindStringSubmatch(text); m != nil {
+				set[m[1]] = true
+				text = explicit.ReplaceAllString(text, "")
+			}
+			set[slugifyHeading(text)] = true
+		}
+		anchorsByFile[file] = set
+		return set, nil
+	}
+
+	refRe := regexp.MustCompile(`([a-z0-9-]+\.md)#([a-z0-9-]+)`)
+	seen := map[string]bool{}
+	for _, m := range refRe.FindAllStringSubmatch(section, -1) {
+		ref, file, anchor := m[0], m[1], m[2]
+		if seen[ref] {
+			continue
+		}
+		seen[ref] = true
+		set, err := loadAnchors(file)
+		if err != nil {
+			t.Errorf("matrix references %s but skills/ddd/%s: %v", ref, file, err)
+			continue
+		}
+		if !set[anchor] {
+			t.Errorf("matrix references %s but no heading in skills/ddd/%s produces anchor #%s", ref, file, anchor)
+		}
+	}
+	if len(seen) == 0 {
+		t.Error("no file.md#anchor references found in the skill-materializations section")
+	}
+}
+
+// slugifyHeading approximates GitHub's heading-anchor algorithm: lowercase,
+// drop punctuation, keep word chars and hyphens, spaces become hyphens.
+func slugifyHeading(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '_', r == '-':
+			b.WriteRune(r)
+		case r == ' ':
+			b.WriteRune('-')
+		}
+	}
+	return b.String()
+}
