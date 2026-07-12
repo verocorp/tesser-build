@@ -9,10 +9,16 @@ mechanics live here alongside the objects they orchestrate and persist. Section
 headings here are stable anchors; the resolver and the coverage matrix link to
 them.
 
-> **Maturity note:** this guidance is v1 best-effort — the Go doctrine has a
-> battle-tested reference implementation; the Python rendering does not yet.
-> When it fights your codebase's reality, record the friction (it feeds the
-> next revision) rather than silently diverging.
+> **Verification status — unverified port.** Unlike the Go mechanics — each
+> backed by a gate-verified worked example (`examples/ddd`, `examples/lending`,
+> `examples/running`) — **no verified Python implementation backs this file:**
+> there is no Python example in the repo, so every pattern below is a faithful
+> *port* of the verified Go doctrine, not something proven to hold in Python
+> (dataclass mutability, `Protocol` runtime behavior, and mypy-strict quirks are
+> unexercised here). Treat it as a sketch: when it fights your codebase's reality,
+> record the friction rather than silently diverging. A verified Python rendering
+> — a Python example mirror + mypy-strict + a fresh-agent gate, matching the Go
+> rigor — is a scheduled next increment.
 
 ## Value objects
 
