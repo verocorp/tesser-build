@@ -137,9 +137,11 @@ canonicalized. When callers need different nil-handling, add a variant
   not attributes (see the Entities section, where every entity does exactly
   this). For a *value object* whose field would otherwise compare wrong (a
   case-insensitive code, say), prefer **normalizing on input** in
-  `__post_init__` so the default field-wise equality stays correct; reach for a
-  hand-written `__eq__`/`__hash__` (with `eq=False`) only when the original
-  representation must be preserved.
+  `__post_init__` so the default field-wise equality stays correct (this is what
+  the collection VO above does — it sorts its entries in `__post_init__`). Reach
+  for a hand-written `__eq__`/`__hash__` (with `eq=False`) only in the rare case
+  where the original representation must be preserved *and* compared by a
+  normalized form.
 
 ## Entities
 
