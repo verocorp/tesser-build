@@ -20,8 +20,10 @@ as their single entry point?* Yes → aggregate.
 
 **When adding a collection field to an entity, re-run this test.** The moment
 a rule spans the items ("the lines must sum to the total", "no two windows may
-overlap"), the parent has become an aggregate root and takes on the rules
-below. If no rule spans them, it's an entity holding a list — don't pay the
+overlap", "no two line items share a SKU"), the parent has become an aggregate
+root and takes on the rules below. A **uniqueness constraint** ("no two members
+share this value") is one such cross-object invariant — it lives on the root,
+and it does *not* make the constrained child an entity (`entities.md`). If no rule spans them, it's an entity holding a list — don't pay the
 aggregate tax.
 
 **Near-misses that are NOT aggregates:**

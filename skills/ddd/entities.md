@@ -22,6 +22,17 @@ object; **identity must be earned, not assumed**.
 - An **aggregate root** — every root is an entity, but if it also owns a
   cluster and enforces rules across it, read `aggregates.md` instead; the
   stricter rules apply.
+- A **value with a uniqueness constraint** — a field the domain requires to be
+  unique within a scope (a receipt number unique within a report, a coupon code
+  unique within a campaign). **Uniqueness is not identity.** It is a business
+  rule the owning **aggregate** enforces (`aggregates.md` — a cross-object
+  invariant: "no two members share this value"), implemented in the domain; it
+  does not, on its own, mean the system tracks *this specific one* through a
+  lifecycle. Run the identity test on the concept itself: no lifecycle and
+  interchangeable with an attribute-identical instance ⇒ **value object** whose
+  uniqueness the aggregate guards, even though it "has a unique field." (A unique
+  field *may* serve as an entity's natural-key ID — but only once the identity
+  test is independently met, never because it is unique.)
 
 ## Rules
 
