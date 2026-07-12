@@ -47,22 +47,27 @@ type MoneySpec struct {
 }
 
 type Money struct {
-	amount   decimal.Decimal
+	amount   *big.Rat
 	currency string
-	_        [0]func() // non-comparable: decimals have multiple representations
+	_        [0]func() // non-comparable: *big.Rat is a pointer, so == compares identity, and 1.5 == 1.50 only by value
 }
 
 func NewMoney(spec MoneySpec) (Money, error) {
 	if spec.Currency == "" {
 		return Money{}, fmt.Errorf("currency is required")
 	}
-	amount, err := decimal.NewFromString(spec.Amount)
-	if err != nil {
-		return Money{}, fmt.Errorf("invalid amount: %w", err)
+	amount, ok := new(big.Rat).SetString(spec.Amount)
+	if !ok {
+		return Money{}, fmt.Errorf("invalid amount: %q", spec.Amount)
 	}
 	return Money{amount: amount, currency: spec.Currency}, nil
 }
 ```
+
+The exact-decimal type here is `math/big.Rat` (standard library — this toolkit
+adds no dependencies); a third-party decimal such as `shopspring/decimal`
+follows the identical pattern — a pointer/multi-representation field, `==`
+blocked with `[0]func()`, value comparison through `Equal`.
 
 **Collection (wraps a map or slice):**
 
@@ -99,13 +104,14 @@ a constructor variant (`RequireLabels`) rather than pushing checks to parents.
 
 - **One representation per logical value** (string wrappers, comparable
   structs): `==` is correct. Nothing extra to build.
-- **Multiple representations per logical value** (anything wrapping a decimal
-  or measure — `1.5` vs `1.50`): `==` LIES. Block it with a `_ [0]func()`
-  field and provide `Equal`:
+- **Multiple representations per logical value** (anything wrapping a `big.Rat`,
+  a decimal, or a measure — `1.5` vs `1.50`), **or a pointer-backed field**
+  (`==` compares the pointer, not the value): `==` LIES. Block it with a
+  `_ [0]func()` field and provide `Equal`:
 
 ```go
 func (m Money) Equal(other Money) bool {
-	return m.currency == other.currency && m.amount.Equal(other.amount)
+	return m.currency == other.currency && m.amount.Cmp(other.amount) == 0
 }
 ```
 

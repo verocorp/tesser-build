@@ -118,8 +118,8 @@ an honest gap, not an oversight: not every rule earns every rendering.
 | Repository = whole aggregate in, reconstructed out, no business logic | `repositories.md#rules` | `go.md#repositories` | `python.md#repositories` | #16 | "loading or saving an aggregate, or writing a repository" |
 | Repo draws persistence-vs-query line; query object ≠ spec | `repositories.md#rules` | `go.md#repositories` | `python.md#repositories` | — | "loading or saving an aggregate, or writing a repository" |
 | Domain service = rare no-single-owner case (stub; check for a missing type first) | `domain-services.md#is-this-what-im-building` | — (mechanics deferred) | — (mechanics deferred) | — | "domain logic that fits no single object" |
-| Public interface = decoupling boundary; `Client` speaks DTOs, satisfied by embedding the service | `composition-root.md#the-public-interface` | `go.md#the-composition-root` | `python.md#the-composition-root` (deferred note) | #17 | "exposing a component/service behind a public interface" |
-| Composition root = single wiring site; returns/injects interfaces never domain objects, chooses the impl, injects the handler | `composition-root.md#the-composition-root` | `go.md#the-composition-root` | `python.md#the-composition-root` (deferred note) | #18 | "wiring the app / writing an entry point / a composition root" |
+| Public interface = decoupling boundary; `Client` speaks DTOs, satisfied by embedding the service | `composition-root.md#the-public-interface` | `go.md#the-composition-root` | `python.md#the-composition-root` | #17 | "exposing a component/service behind a public interface" |
+| Composition root = single wiring site; returns/injects interfaces never domain objects, chooses the impl, injects the handler | `composition-root.md#the-composition-root` | `go.md#the-composition-root` | `python.md#the-composition-root` | #18 | "wiring the app / writing an entry point / a composition root" |
 
 The heading anchors above are load-bearing: renaming a heading in a skill file
 is a breaking change to this matrix (and to the resolver's routes). Authoring

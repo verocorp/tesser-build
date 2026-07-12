@@ -9,16 +9,17 @@ mechanics live here alongside the objects they orchestrate and persist. Section
 headings here are stable anchors; the resolver and the coverage matrix link to
 them.
 
-> **Verification status — unverified port.** Unlike the Go mechanics — each
-> backed by a gate-verified worked example (`examples/ddd`, `examples/lending`,
-> `examples/running`) — **no verified Python implementation backs this file:**
-> there is no Python example in the repo, so every pattern below is a faithful
-> *port* of the verified Go doctrine, not something proven to hold in Python
-> (dataclass mutability, `Protocol` runtime behavior, and mypy-strict quirks are
-> unexercised here). Treat it as a sketch: when it fights your codebase's reality,
-> record the friction rather than silently diverging. A verified Python rendering
-> — a Python example mirror + mypy-strict + a fresh-agent gate, matching the Go
-> rigor — is a scheduled next increment.
+> **Verification status — verified.** Every pattern below is backed by a
+> runnable, type-checked worked example under `examples/python/`:
+> the **running arc** (`campaign` value objects and aggregate, `campaignapp`
+> service + repository, and the `linkcampaign`/`linkcampaignimpl`/`main`
+> composition root, wired into a live HTTP service) and the **`catalog`**
+> package (the compound value object `Money` backed by `decimal.Decimal`, and
+> the collection value object `Labels`). The whole tree passes `mypy --strict`
+> and `pytest` in CI — the same bar the Go mechanics meet. Where a Go/Python
+> difference is load-bearing — frozen-dataclass equality vs Go's `Equal`,
+> `Protocol` structural typing vs Go's struct embedding, the absence of
+> `context.Context` — it is called out inline.
 
 ## Value objects
 
@@ -87,15 +88,31 @@ in `__post_init__`** so direct construction can't skip them.
 ```python
 @dataclass(frozen=True)
 class Labels:
-    _values: tuple[tuple[str, str], ...]    # immutable storage
+    _values: tuple[tuple[str, str], ...] = ()   # immutable, hashable storage
+
+    def __post_init__(self) -> None:            # canonicalize on EVERY path
+        object.__setattr__(self, "_values", tuple(sorted(self._values)))
 
     @classmethod
-    def new(cls, values: dict[str, str] | None) -> "Labels":
-        return cls(tuple(sorted((values or {}).items())))
+    def new(cls, values: Mapping[str, str] | None = None) -> "Labels":
+        return cls(tuple((values or {}).items()))
 
-    def as_dict(self) -> dict[str, str]:    # copy out, never a reference
+    @classmethod
+    def require(cls, values: Mapping[str, str] | None = None) -> "Labels":
+        if not values:                          # variant for a mandatory set
+            raise ValueError("labels must not be empty")
+        return cls.new(values)
+
+    def as_dict(self) -> dict[str, str]:        # copy out, never a reference
         return dict(self._values)
 ```
+
+Go wraps a `map` and must add `Equal` (a map-backed struct is non-comparable);
+Python stores an immutable, **sorted** tuple instead, so the frozen dataclass's
+default equality is content-based *and* the value is hashable. Sorting in
+`__post_init__` (not just in `new`) means every construction path is
+canonicalized. When callers need different nil-handling, add a variant
+(`require`) rather than pushing checks to parents.
 
 **Rules of the section:**
 
@@ -115,9 +132,14 @@ class Labels:
   Decimal("1.50")` is numerically `True`, but the two hash the same only
   because Python normalizes numeric hashing — verify equality AND hashing in
   the equality test whenever a field type has multiple representations.
-- **Custom semantics needed** (a field compares by normalized form): set
-  `eq=False` and implement `__eq__`/`__hash__` together, explicitly. Never
-  define one without the other.
+- **Custom equality needed:** implement `__eq__` and `__hash__` **together**,
+  never one without the other. This is the entity case — comparison by identity,
+  not attributes (see the Entities section, where every entity does exactly
+  this). For a *value object* whose field would otherwise compare wrong (a
+  case-insensitive code, say), prefer **normalizing on input** in
+  `__post_init__` so the default field-wise equality stays correct; reach for a
+  hand-written `__eq__`/`__hash__` (with `eq=False`) only when the original
+  representation must be preserved.
 
 ## Entities
 
@@ -239,8 +261,9 @@ class CreditService:
   work opens and commits — a SQLAlchemy `Session`, an async transaction, a
   FastAPI dependency — is a decision for the consuming codebase, not this skill.
   Wrap the use case in one unit of work; do **not** invent an ORM lifecycle
-  here. Record what your codebase actually does and feed the friction back
-  (this is v1 best-effort Python — see the maturity note at the top).
+  here. Record what your codebase actually does and feed the friction back —
+  the transaction boundary is genuinely a consuming-codebase decision, not a gap
+  in this skill.
 
 ## Repositories
 
@@ -284,20 +307,120 @@ class InMemoryOrderRepo:                   # satisfies the Protocol structurally
   (`application-services.md#domain-logic-leakage-checks`).
 - **Query fields are value objects.** (Persistence backends — SQLAlchemy,
   async drivers — are consumer-specific; the `Protocol` is the stable contract,
-  the backing store is not this skill's decision. v1 best-effort — see the
-  maturity note at the top.)
+  the backing store is not this skill's decision. The worked example uses an
+  in-memory repository; a database-backed one satisfies the same `Protocol`.)
 
 ## The composition root
 
-**Not covered in this version** (see `composition-root.md` for the concepts).
-Unlike the Go mechanics above — which are backed by a verified worked example
-(`examples/running/`) — there is **no verified Python implementation of this
-wiring layer yet**, so this skill deliberately does not encode a Python how-to
-for it: a rendering is plausible, but this toolkit does not ship a convention it
-has not verified against real, running code. Until a verified Python example
-backs it, build the domain pieces the task touches with the sections above and
-wire them the simplest way that works, flagging the wiring layer as an open gap
-rather than inventing a convention here.
+The public interface + the wiring site (`composition-root.md`). The `Client`
+`Protocol` and its DTOs live in a public package; the application service
+**satisfies the Protocol structurally** (no inheritance, no adapter code); a
+hand-wired entry point chooses the concrete implementations and injects the
+`Client` into the handler.
+
+**The public package — a `Protocol` + DTOs, no implementation:**
+
+```python
+# orders/client.py — the public surface of the component
+# (get_order's DTOs elided).
+from dataclasses import dataclass
+from typing import Protocol
+
+
+@dataclass(frozen=True)
+class ItemInput:
+    sku: str
+    quantity: int
+
+
+@dataclass(frozen=True)
+class PlaceOrderRequest:
+    customer_id: str
+    items: tuple[ItemInput, ...]
+
+
+@dataclass(frozen=True)
+class PlaceOrderResponse:          # DTO — never a domain object
+    order_id: str
+    total: str
+
+
+class Client(Protocol):
+    def place_order(self, req: PlaceOrderRequest) -> PlaceOrderResponse: ...
+    def get_order(self, req: GetOrderRequest) -> GetOrderResponse: ...
+```
+
+**Satisfy it structurally — no forwarding code, no inheritance.** Because
+`Client` is a `Protocol`, any object whose methods match its names and
+signatures satisfies it. The application service already has exactly those
+methods, taking and returning the **public package's DTO types**
+(`python.md#application-services`), so it *is* a `Client` — Python's analog of
+Go's embed-to-satisfy:
+
+```python
+# ordersimpl/client.py
+from orders import Client
+from ordersapp import OrderService
+
+
+def new_client(svc: OrderService) -> Client:
+    return svc      # the service satisfies the Protocol structurally
+```
+
+The `-> Client` return annotation is the compile-time proof (mypy's analog of
+Go's `var _ orders.Client = (*client)(nil)`): if a service method's signature
+drifts from the Protocol, type checking stops here.
+
+**Reshape only when the surface must differ.** When you must rename a method,
+expose a subset, or compose several internal services into one contract (the
+decoupling boundary's real purpose), write an explicit class that holds the
+component(s) and delegates — the analog of Go's explicit reshape method:
+
+```python
+class _OrdersClient:                # explicit only to reshape
+    def __init__(self, svc: OrderService) -> None:
+        self._svc = svc
+
+    def place_order(self, req: PlaceOrderRequest) -> PlaceOrderResponse:
+        return self._svc.create_order(req)   # expose create_order as place_order
+    # ... the rest of the Client's methods ...
+
+
+def new_client(svc: OrderService) -> Client:
+    return _OrdersClient(svc)
+```
+
+**The composition root — one hand-wired entry point that chooses and wires:**
+
+```python
+# main.py — the only module that imports the concrete impl package.
+from http.server import ThreadingHTTPServer
+
+from ordersapp import OrderService
+from ordersimpl import PostgresOrderRepository, new_client
+from transport import make_handler
+
+
+def wire(addr: tuple[str, int]) -> ThreadingHTTPServer:
+    repo = PostgresOrderRepository(...)   # the impl choice lives here …
+    svc = OrderService(repo)              # … inject the repo into the service
+    client = new_client(svc)              # compose behind the public Client
+    handler = make_handler(client)        # construct the handler, INJECT the Client
+    return ThreadingHTTPServer(addr, handler)
+```
+
+- **`new_client` returns `Client`** (the Protocol), never the concrete service
+  or a domain type — the caller sees only the contract.
+- **The handler depends on the `Client` Protocol**, injected; it constructs
+  nothing. (Here the Client is captured by a handler-factory closure, since a
+  stdlib `BaseHTTPRequestHandler` is instantiated by the server, not by you.)
+- **Only the composition root imports `ordersimpl`.** Nothing else selects the
+  concrete implementation. That boundary is a *convention* here; a
+  package-private layout or an `__all__`/naming discipline is the Python analog
+  of Go's compiler-enforced `internal/` (`composition-root.md`).
+- **No `context.Context`.** A plain synchronous Python service has no such
+  idiom; thread a unit-of-work/session where your codebase already does (see the
+  application-services note above).
 
 ## The Spec pattern
 

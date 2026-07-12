@@ -239,7 +239,6 @@ correct, the same call in a handler is the leak.
 ## Now build it
 
 - Go: `go.md#the-composition-root`
-- Python: **not covered in this version.** The concepts port — a `typing.Protocol`
-  for the `Client`, hand-wired construction in a `main`/entry module — but this
-  cut ships Go-first, where the pattern is battle-tested. Python wiring is a
-  documented gap (`python.md#the-composition-root`), not a settled convention.
+- Python: `python.md#the-composition-root` — a `typing.Protocol` for the
+  `Client` (satisfied structurally, no adapter code), hand-wired construction in
+  a `main`/entry module, backed by the `examples/python/` worked example.
