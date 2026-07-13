@@ -15,6 +15,15 @@ with a specific question, needing the answer near the top and the depth below �
 not for how the source material happened to be organized. Do not copy source
 docs' structure; fill these templates from them.
 
+There is one **protocol doc** — `strategic-survey.md` (skill-version 5) — that fits
+neither template. It teaches an agent how to *read* an existing codebase (surface
+its contexts, language, and layers) rather than how to *build* a domain type, so it
+carries its own structure (survey loop → signals → output contract) instead. It
+still obeys the shared rules below (progressive disclosure, Evans/Vernon concept
+authority, genericized examples, no verbatim book passages) and is routed from
+`SKILL.md` like any other file. New protocol docs, if any, follow its lead: house
+voice and shared rules, purpose-fit structure.
+
 ### Concept-doc template
 
 ```

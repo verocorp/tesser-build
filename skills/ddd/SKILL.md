@@ -1,7 +1,7 @@
 ---
 name: ddd
-description: Domain-driven design entry point. Load whenever creating or modifying domain types OR the code around them — adding a field to a struct/class, creating a new type, modeling a new concept, writing a constructor, adding validation, comparing domain objects in tests, deciding between a value object/entity/aggregate, AND whenever writing a handler/endpoint, a use-case or application/domain service, or persistence/repository code (where to put business logic, how to load or save an aggregate, keeping domain math out of controllers), AND whenever wiring an application together — writing an entry point / `main` / composition root, or exposing a component behind a public interface (a `Client` + DTOs). Routes the task to the right concept and construction guide.
-skill-version: 4
+description: Domain-driven design entry point. Load whenever creating or modifying domain types OR the code around them — adding a field to a struct/class, creating a new type, modeling a new concept, writing a constructor, adding validation, comparing domain objects in tests, deciding between a value object/entity/aggregate, AND whenever writing a handler/endpoint, a use-case or application/domain service, or persistence/repository code (where to put business logic, how to load or save an aggregate, keeping domain math out of controllers), AND whenever wiring an application together — writing an entry point / `main` / composition root, or exposing a component behind a public interface (a `Client` + DTOs), AND whenever surveying or auditing an existing codebase to surface its bounded contexts, ubiquitous language, or hexagonal layers before changing it. Routes the task to the right concept and construction guide.
+skill-version: 5
 source: https://github.com/verocorp/go-ddd (skills/ddd/)
 ---
 
@@ -11,16 +11,27 @@ You are about to create or change a domain type. This skill routes you to the
 right concept and the right construction mechanics. **Read only what a route
 below points you to** — do not read all the files up front.
 
+**Before you build — are you surveying, not constructing?** If you have landed in a
+large or unfamiliar codebase and need to understand its **bounded contexts**,
+**ubiquitous language**, and **hexagonal layers** *before* deciding what to change,
+that is a **survey**, not construction — go to
+`strategic-survey.md#is-this-what-im-doing`, then come back here (Mode 1) once you
+know where you are. The rest of this file assumes you are building.
+
 Languages covered: **Go** (`go.md`) and **Python** (`python.md`).
 Concepts covered: **value objects, entities, aggregates** (the domain building
 blocks), **application services, repositories** (the seams around them), the
 **public interface + composition root** (how the app is wired together —
 `composition-root.md`), plus a **domain-service stub** (`domain-services.md` —
-the rare no-single-owner case, deliberately shallow). Not yet covered: bounded
-contexts, the transport/HTTP layer beyond the one handler rule below, domain
-events, the run/lifecycle layer beyond wiring (config, pools, shutdown, health,
-workers). If your task needs one of those, model the pieces it touches with this
-skill and note the gap rather than inventing a convention.
+the rare no-single-owner case, deliberately shallow), plus a **strategic survey**
+(`strategic-survey.md` — reading bounded contexts, ubiquitous language, and layers
+*out of* an existing codebase; diagnostic, not construction). Not yet covered:
+bounded contexts as a *construction* concept (how to draw and build a new one — the
+survey reads existing ones but does not yet teach building them), the transport/HTTP
+layer beyond the one handler rule below, domain events, the run/lifecycle layer
+beyond wiring (config, pools, shutdown, health, workers). If your task needs one of
+those, model the pieces it touches with this skill and note the gap rather than
+inventing a convention.
 
 **The one handler rule (transport layer, until it gets its own guide):** a
 handler/endpoint parses and authenticates the request, then calls an application

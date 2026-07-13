@@ -96,6 +96,14 @@ fails CI. It does **not** check semantic agreement between renderings — that
 stays human review, and the row tells the reviewer which pairs to diff. `—` is
 an honest gap, not an oversight: not every rule earns every rendering.
 
+The **strategic survey** (`strategic-survey.md`, skill-version 5) is deliberately
+absent from this table. It is a *diagnostic protocol* — how to read contexts,
+ubiquitous language, and layers out of an existing codebase — not a construction
+rule rendered across the mechanics files, so it has a resolver route in `SKILL.md`
+but no rule↔rendering row. It carries its own internal contract instead (anchor
+every finding to `file:line`; every finding triggers a named action; candidates,
+not verdicts).
+
 | Rule | Concept file | go.md | python.md | FAQ | Resolver route (SKILL.md) |
 |---|---|---|---|---|---|
 | One validating constructor, single construction path | `value-objects.md#rules` | `go.md#value-objects` | `python.md#value-objects` | #5 | "writing or changing a constructor" |
