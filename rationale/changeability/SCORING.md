@@ -33,6 +33,29 @@ The `O(n^2)` systemic figure (lifetime edit-cost under all-pairs coupling) is a
 *consequence*, not something this harness measures. Claim only the per-change
 fan-out; never report a measured `n^2`.
 
+## Declared changes for the public-interface anchor (C1 + C2)
+
+The anchor for the public-interface decision declares **two** changes, not one —
+because the adversary showed one is not enough (see `anchor/adversary_provenance.md`):
+
+- **C1 — backend migration** (`-tags swap`): swap backend A→B. A dependent that
+  reached through to a backend-specific type is forced to change; a dependent on
+  `orders.Client` is not. **Finding: C1 alone is tied by a lower-ceremony package
+  facade** — a facade survives a backend swap too. C1 does not, on its own,
+  justify the interface.
+- **C2 — substitution** (`-tags subst`): a dependent must be unit-testable against
+  a substitute (a fake, or a second impl). A dependent that *receives*
+  `orders.Client` swaps a fake in with **0 edits**; a facade dependent bound to a
+  global has **no seam**, so gaining substitutability is a forced edit (modelled by
+  a `subst`-tagged build that fails to compile — the `swap_bug.go` idiom on the
+  substitution axis). C2 is where the interface earns its place, and it scales:
+  N facade dependents each pay, N interface dependents pay 0.
+
+A decision may need more than one declared change to be honestly justified. Adding
+the change that discriminates (rather than softening the rule) is the standard
+resolution when the red-team ties on the first change — that is the red-team
+*improving the benchmark*, the intended outcome.
+
 ## The forced-edit metric (how the count is taken)
 
 For an arm at a given N, apply the arm's **declared change** C, then count the
