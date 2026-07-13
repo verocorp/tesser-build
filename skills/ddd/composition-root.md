@@ -23,6 +23,17 @@ you deliberately offer — **and nothing else**. Its purpose is to be a
 build the internals, so you can refactor the internals freely and the contract
 holds.
 
+**Why an interface and not just a facade?** A package of exported functions over a
+wired composition root — `func PlaceOrder(ctx, req) { return wire().PlaceOrder(ctx, req) }` —
+is a real, lower-ceremony alternative, and it decouples callers from the backend
+too: a backend swap does not touch them. What a facade gives up is
+**substitutability**. Bound to a global, it cannot take a fake in a test or a
+second implementation without editing the facade (or every caller). The `Client`
+earns its place exactly there — callers *receive* it, so a test passes a fake and
+a second implementation drops in at **zero** caller-side cost. Reach for the
+interface when you need substitution (isolated tests, multiple implementations);
+decoupling from a backend alone does not demand it.
+
 > **The name.** Here `Client` means the public **face of this component** — the
 > operations it offers a caller — not an outbound adapter to a remote service.
 > The skill uses `Client` because the vero prior art does; read it as "the
