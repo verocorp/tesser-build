@@ -1,15 +1,20 @@
-// The decision-3 changeability contrast on change D3b (outward-representation
-// migration). Per ../SCORING.md the proof is the DELTA between arms at matched N,
-// taken with PER-PACKAGE builds (a whole-module `go build ./...` stops early and
-// undercounts):
+// The decision-3 changeability contrast on an outward-representation migration
+// (-tags repv2, the public response DTO's BurnSeconds -> DurationMillis). Per
+// ../SCORING.md the proof is the DELTA between arms at matched N, taken with
+// PER-PACKAGE builds (a whole-module `go build ./...` stops early and undercounts):
 //
 //	at N = 8:   decoupled forced-edits = 0   |   coupled forced-edits = 8
 //	at N = 16:  decoupled forced-edits = 0   |   coupled forced-edits = 16
 //
-// The decoupled arm (holds the pure nav.Maneuver) flat at 0 across N is O(1); the
-// coupled arm (reaches through an emitting domain to a telemetry field) tracking N
-// is O(dependents). D3b is the spine; the direction guard D3a (direction_test.go)
-// is the primary discriminator, because decision 3's harm is dependency direction.
+// The decoupled arm (operates on the domain object's VALUE OBJECTS) flat at 0
+// across N is O(1); the coupled arm (reaches the DOMAIN-EMITTED DTO's raw field)
+// tracking N is O(dependents). The single correct mapping site is the application
+// service's Respond (package app), which a migration forces once — that O(1) is
+// what the domain-emitting violation trades for O(N).
+//
+// There is no import-cycle guard here: a dumb DTO imports nothing, so the domain
+// importing it would never be a cycle. The rule is a convention the compiler does
+// not enforce; the fan-out below is what justifies it.
 package nooutward_test
 
 import (
@@ -38,13 +43,13 @@ func armPkgs(t *testing.T, relDir string) []string {
 	return pkgs
 }
 
-// buildsClean reports whether `go build [-tags <tags>] pkg` succeeds — one
+// buildsClean reports whether `go build [-tags repv2] pkg` succeeds — one
 // per-package build, the unit SCORING.md counts.
-func buildsClean(t *testing.T, pkg string, tags string) bool {
+func buildsClean(t *testing.T, pkg string, migrated bool) bool {
 	t.Helper()
 	args := []string{"build"}
-	if tags != "" {
-		args = append(args, "-tags", tags)
+	if migrated {
+		args = append(args, "-tags", "repv2")
 	}
 	args = append(args, pkg)
 	out, err := exec.Command("go", args...).CombinedOutput()
@@ -55,12 +60,12 @@ func buildsClean(t *testing.T, pkg string, tags string) bool {
 }
 
 // forcedEdits counts, per package, how many of the first n dependents are FORCED
-// to change (fail to build) after the migration D3b — the forced-edit count at N=n.
+// to change (fail to build) after the migration — the forced-edit count at N=n.
 func forcedEdits(t *testing.T, pkgs []string, n int) int {
 	t.Helper()
 	forced := 0
 	for _, p := range pkgs[:n] {
-		if !buildsClean(t, p, "repv2") {
+		if !buildsClean(t, p, true /*migrated*/) {
 			forced++
 		}
 	}
@@ -72,7 +77,7 @@ func forcedEdits(t *testing.T, pkgs []string, n int) int {
 func assertBaseline(t *testing.T, pkgs []string, arm string) {
 	t.Helper()
 	for _, p := range pkgs {
-		if !buildsClean(t, p, "" /*pre-migration*/) {
+		if !buildsClean(t, p, false /*pre-migration*/) {
 			t.Fatalf("pre-migration baseline build failed for %s (%s arm)", p, arm)
 		}
 	}
@@ -91,10 +96,10 @@ func TestDecoupledArm_SurvivesRepMigration(t *testing.T) {
 	}
 }
 
-// The D3b contrast: at matched N the decoupled arm stays flat at 0 while the
-// coupled arm tracks N. The delta — not the coupled count in isolation — is the
+// The contrast: at matched N the decoupled arm stays flat at 0 while the coupled
+// arm tracks N. The delta — not the coupled count in isolation — is the
 // O(1)-vs-O(dependents) proof.
-func TestContrast_D3b_DecoupledFlat_CoupledTracksN(t *testing.T) {
+func TestContrast_DecoupledFlat_CoupledTracksN(t *testing.T) {
 	decoupled := armPkgs(t, "decoupled")
 	coupled := armPkgs(t, filepath.Join("coupled", "fanout"))
 	if len(decoupled) < 16 || len(coupled) < 16 {

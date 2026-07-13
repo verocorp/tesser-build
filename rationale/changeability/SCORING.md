@@ -58,37 +58,46 @@ resolution when the red-team ties on the first change — that is the red-team
 
 ## Declared changes for decision 3 — no outward representation (`nooutward/`)
 
-The decision: **a domain object emits no non-domain representation; the domain
-depends on no outward layer** (`skills/ddd/value-objects.md` "the representation
-never leaks"; the inward-dependency rule the composition-root doctrine assumes).
-The sanctioned exception is explicit: a serializer/projection that *maps* domain →
-DTO in the outward layer is fine — the rule is "no UNINTENDED representation leak,"
-not "never emit a DTO" [F5]. So the coupled arm is a domain that *itself* emits
-its outward form (a `Maneuver.Record()` returning a transport type), not a strawman.
+The decision: **a domain object emits no non-domain representation.** Turning a
+domain object into a DTO is the application service's **Respond** step
+(`skills/ddd/application-services.md`: "a domain object never leaves the service;
+returning one is a boundary leak — the service-layer twin of a value object leaking
+its representation"), never a method on the domain object. The correct layering,
+which the arms model faithfully:
 
-Per F11 the harm of this decision is **dependency direction, not fan-out**, so —
-inverting the anchor's C1/C2 emphasis — the **primary discriminator is a compile
-guard**, and the fan-out is the secondary spine (and, like the anchor's C1, it may
-be *tied* by a cheaper structure — an honest finding, not a failure):
+- **DTOs** are the public-interface currency — dumb bags of primitives (and nested
+  DTOs), **no methods and no constructors**, importing nothing (a leaf). Clients
+  send and receive them.
+- **Domain objects** expose **value objects, never primitives**, and import nothing
+  outward.
+- The **application service** is the only code that knows both: Convert (request DTO
+  → domain value objects), Delegate, Persist, Respond (domain object → response DTO).
+  The DTO↔domain mapping lives here — the sanctioned "serializer" [F5].
 
-- **D3a — direction guard (primary, compile-detected).** The outward layer
-  (`telemetry`) imports the domain (`nav`) to map it — the correct inward
-  direction. Any attempt to make the domain emit its own outward representation
-  (the domain importing `telemetry`) is therefore an **import cycle: it fails to
-  compile**. Modelled by a `-tags leak` file in `nav` that adds the outward import;
-  `go build -tags leak ./nav` must fail. This is the decision-3 analog of the
-  anchor's `subst_bug.go` — a structural property the language enforces at N=1,
-  not a fan-out count. It is what makes the rule *specific* to dependency
-  direction rather than generic decoupling.
-- **D3b — outward-representation migration (spine, `-tags repv2`).** The outward
-  telemetry format reshapes (a field `BurnSeconds` → `DurationMillis`). A dependent
-  that holds the **pure domain object** (`nav.Maneuver`) is untouched; a dependent
-  that reached through an **emitting domain** (`emit.Maneuver.Record().BurnSeconds`)
-  is forced to change. Contrast at matched N: decoupled 0 vs coupled N at N=8/16.
-  If the red-team reaches 0 forced-edits under D3b with less ceremony (e.g. a
-  shared-leaf DTO both sides import, dodging the cycle), that ties the *spine* —
-  and D3a is then where the direction rule earns its place, exactly as C2 was for
-  the interface.
+The sanctioned exception stays explicit: a mapper in the application/outward layer
+is fine; the rule is "no UNINTENDED representation leak," not "never emit a DTO." So
+the coupled arm is a domain object that *itself* emits its DTO (a
+`Maneuver.ToResponse()` returning `pub.ManeuverResponse`), not a strawman.
+
+The single declared change:
+
+- **D3 — outward-representation migration (`-tags repv2`).** The public response
+  DTO reshapes (`BurnSeconds` → `DurationMillis`). A dependent that operates on the
+  **domain object's value objects** (`domain.Maneuver.Burn()`) is untouched; a
+  dependent that reached through a **domain that emits its DTO**
+  (`emit.Maneuver.ToResponse().BurnSeconds`) is forced. Contrast at matched N:
+  decoupled 0 vs coupled N at N=8/16. The single correct mapping site is the
+  application service's Respond (package `app`), which the migration forces **once**
+  — that O(1) is what the domain-emitting violation trades for O(N).
+
+**There is deliberately NO compile guard for this decision** (this supersedes an
+earlier "D3a import-cycle" framing that a first adversary pass correctly defeated).
+A properly dumb DTO imports *nothing*, so a domain importing it is **never an import
+cycle** — the earlier cycle only appeared because that fixture wrongly put the
+domain→DTO mapper inside a package that imported the domain. The no-outward-
+representation rule is a **convention the compiler does not enforce**; the D3
+fan-out above is what justifies it. (Enforcement, if wanted, is a lint/analyzer —
+consistent with why `ddd-vet` exists — not the type system.)
 
 ## The forced-edit metric (how the count is taken)
 
@@ -165,6 +174,18 @@ comparison is not a pure integer forced-edit count, so it is defined here up fro
   scoring is *forced-edits under C + ceremony*, never "does a dependent name a
   concrete type." [F10]
 - **The decoupled (ours) arm** is scored by the same rule as the red-team.
+- **Type shapes are fixed by the real architecture (all arms, red-team included).**
+  A **DTO** is a dumb bag of primitives (and nested DTOs): **no methods, no
+  constructors** on the type. A **domain object** exposes **value objects, never
+  primitives**. This is not an escape-hatch ban but a *realism* constraint grounded
+  in the reference code (certus: 0 spec/DTO constructors, 0 accessor methods on
+  specs or request/response DTOs; the types that carry methods are domain objects
+  built from specs). It applies to every arm because a red-team that puts a stable
+  accessor **method** on a DTO, or reads a **primitive** straight off a domain
+  object, is measuring an architecture the toolkit does not permit — and that
+  illegal shape was exactly how a first decision-3 adversary pass manufactured a
+  false tie (a `Record.BurnMillis()` shim on a DTO). Curating this is part of the
+  human realism role. [added after F12; grounds the DTO/VO boundary]
 
 ## The finding → action decision rule (predeclared)
 
