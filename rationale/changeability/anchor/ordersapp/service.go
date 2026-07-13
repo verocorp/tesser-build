@@ -15,7 +15,10 @@ func New(repo Repository) orders.Client { return &service{repo: repo} }
 
 func (s *service) PlaceOrder(ctx context.Context, req orders.PlaceOrderRequest) (orders.PlaceOrderResponse, error) {
 	total := int64(len(req.SKUs)) * 100
-	o := NewOrder("ord-"+req.CustomerID, total)
+	o, err := NewOrder(OrderSpec{ID: "ord-" + req.CustomerID, Total: total})
+	if err != nil {
+		return orders.PlaceOrderResponse{}, err
+	}
 	if err := s.repo.Save(ctx, o); err != nil {
 		return orders.PlaceOrderResponse{}, err
 	}
