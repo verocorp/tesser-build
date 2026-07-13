@@ -18,11 +18,13 @@ and judgment.
 | Concept | One-question test | Section |
 |---|---|---|
 | **Subdomain** | Is this a distinct area of the *business* — its own purpose, its own importance? | [#subdomains](#subdomains) |
-| **Bounded context** | Is this a boundary in the *code* within which one model and one language hold, and outside which the same word may mean something else? | [#bounded-contexts](#bounded-contexts) |
+| **Bounded context** | Is this a boundary — of model, team, codebase, or schema — within which one model and one language hold, and outside which the same word may mean something else? | [#bounded-contexts](#bounded-contexts) |
 | **Ubiquitous language** | Is this the agreed vocabulary — one term, one meaning — spoken inside one context? | [#ubiquitous-language](#ubiquitous-language) |
 
 **Problem space vs solution space.** A subdomain is the *business's* shape; a bounded
-context is *your model's* shape; the ideal is one subdomain → one bounded context.
+context is *your model's* shape. Prefer aligning them one-to-one where it keeps the
+model coherent — but this is a heuristic, not a law: a core concern can span several
+contexts, and one problem area can hold more than one context (Evans; Fowler).
 Ubiquitous language is the medium that makes a context a context — the boundary is
 the definition, and the definition is carried in the language.
 
@@ -49,7 +51,7 @@ modeling investment:
 |---|---|---|
 | **Core** | The thing that makes the business win. Your competitive edge. | **High** — rich domain model (careful VOs, entities, aggregates, invariants). This is where the tactical skill earns its keep. |
 | **Supporting** | Necessary, but not a differentiator. Specific to you, but not special. | **Medium** — model it well enough; do not gold-plate. |
-| **Generic** | A commodity every business needs (auth, tax, notifications). | **Low** — buy, adopt, or thinly wrap. Do not build it lovingly. |
+| **Generic** | A commodity every business needs (auth, tax, notifications). | **Low** — prefer to buy, adopt, or reuse; build only thinly, and only where nothing off-the-shelf fits. |
 
 ### Rules
 
@@ -57,8 +59,10 @@ modeling investment:
    the full tactical treatment; a Generic one gets a thin adapter.
 2. **Core is small and precious.** If everything looks Core, the classification is
    wrong — most of any system is Supporting or Generic.
-3. **Generic is a buy, not a build.** Writing your own auth/billing-rails/tax engine
-   is spending your scarcest effort where it buys no advantage.
+3. **Generic: prefer buy over build.** Evans gives a generic subdomain low priority
+   and says reach for an off-the-shelf or published solution first; hand-rolling your
+   own auth/tax/billing-rails spends your scarcest effort where it buys no advantage.
+   Build it yourself only when nothing off-the-shelf fits.
 
 ### Common mistakes
 
@@ -78,6 +82,11 @@ commitment to Sales, an invoice trigger to Billing, and a pick list to Fulfillme
 Force all three into one `Order` and you get a god object that serves none of them;
 give each context its own `Order` — only the fields and behavior that context needs —
 and each model stays coherent.
+
+Evans draws the boundary around more than code — team organization, the way an
+application is used, the codebase, and the database schema all mark it. The
+`internal/` + public `Client` structure below is *this skill's Go enforcement* of a
+context boundary, not the DDD definition of one.
 
 ### Is this what I'm modeling?
 
@@ -131,12 +140,18 @@ it). Either way, the rule is the same: cross the boundary only through the `Clie
 
 ### How contexts relate — integration patterns
 
-When one context consumes another, the relationship is one of these (Evans/Vernon).
-Name it explicitly; the name is a design decision about coupling:
+When one context consumes another, name the relationship explicitly — it is a design
+decision about coupling. These are the four **consumption** patterns you meet most
+often; Evans's full Context Map also has the *symmetric/collaborative* patterns —
+**Shared Kernel**, **Partnership**, **Customer/Supplier** — and names **Big Ball of
+Mud** for a context with no coherent model. Those are not covered here; reach for the
+DDD Reference when a relationship isn't one of these four:
 
-- **Open Host + Published Language** — the upstream offers a stable, documented
-  interface any consumer can use; its DTOs *are* the published language. Best when the
-  upstream model is stable and serves many consumers.
+- **Open Host Service + Published Language** — two combinable patterns: the *Open Host
+  Service* is the stable, documented service protocol the upstream offers any consumer;
+  the *Published Language* is the documented interchange schema they exchange in (the
+  `Client`'s DTOs can *serve as* it once documented as a stable contract). Best when the
+  upstream is stable and serves many consumers.
 - **Conformist** — the downstream adopts the upstream's model as-is, no translation.
   Cheap, but the downstream breaks when the upstream changes. Acceptable when the
   upstream is stable and semantically aligned.
@@ -224,9 +239,11 @@ language.
 3. **One concept, one term.** Do not let `Customer` / `Account` / `Party` /
    `Client` all name the same thing in one context; synonym sprawl is drift. Pick the
    word the business uses and hold it.
-4. **A term that forks meaning is a context boundary.** When the same word genuinely
-   needs to mean two different things, that is the signal to split contexts, each with
-   its own precise definition — not to overload one type.
+4. **A term that forks meaning is a strong split signal — after you rule out drift.**
+   First test whether the language can be *clarified* within one model; often the fork
+   is just inconsistency to reconcile, not a boundary. If the same word genuinely must
+   mean two different things, that is the signal to split contexts, each with its own
+   precise definition — not to overload one type.
 
 ### How the machine sees it
 
