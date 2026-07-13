@@ -126,6 +126,33 @@ is a breaking change to this matrix (and to the resolver's routes). Authoring
 rules for the skill files live in
 [`docs/skill-authoring.md`](../docs/skill-authoring.md).
 
+## Changeability arms — executable proof per decision
+
+A separate dimension from the VO win tables above: each **skill decision** is put
+under an executable contender-arm benchmark that proves it earns its place on the
+**changeability** axis (how the cost of a representative change scales with the
+number of dependents N), or surfaces what to change. The arms are scored by a
+predeclared contract, `changeability/SCORING.md`, committed before any arm; an
+outside model (Codex) authors the coupled + red-team arms, committed with their
+provenance. This matrix row is the anti-silent-gap net for that dimension:
+`coverage_test.go` also globs `changeability/anchor/*_test.go`, so a named arm
+test that is renamed or deleted fails the guard.
+
+| Decision (skills/ddd) | Change(s) | Arms | Result | Committed tests (`changeability/anchor/`) |
+|---|---|---|---|---|
+| **Public interface** (`composition-root.md`) | C1 backend migration (`-tags swap`); C2 substitution (`-tags subst`) | decoupled (depends on `Client`); coupled fan-out + 3 realistic patterns; Codex red-team `portless` (facade); a fake for substitution | **C1 is TIED** by the lower-ceremony facade (a facade decouples from a backend too) — decoupled 0 vs coupled N at N=8/16. **C2 the interface WINS** — it substitutes a fake at 0 edits; the facade cannot (no seam). | `TestDecoupledArm_SurvivesBackendSwap`, `TestContrast_C1_DecoupledFlat_CoupledTracksN`, `TestInterfaceDependent_SubstitutesForFree`, `TestFacadeDependent_CannotSubstituteWithoutEdit` |
+
+**Finding folded to doctrine.** C1 alone under-justifies the interface, so
+`composition-root.md` now teaches that the interface earns its place via
+*substitutability*, not backend-swap-survival ("Why an interface and not just a
+facade?"). Provenance: `changeability/anchor/adversary_provenance.md`. Real-code
+corroboration (the direction holds outside the fixture):
+`changeability/anchor/CORROBORATION.md`.
+
+Decisions 1 (app-service SRP), 3 (no outward representation), 4 (repo speaks
+domain objects) are pending — each needs its **discriminating** change (the
+facade lesson: not every change discriminates the rule you defend).
+
 ## Run
 
 ```
