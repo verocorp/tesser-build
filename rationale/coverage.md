@@ -96,13 +96,11 @@ fails CI. It does **not** check semantic agreement between renderings — that
 stays human review, and the row tells the reviewer which pairs to diff. `—` is
 an honest gap, not an oversight: not every rule earns every rendering.
 
-The **strategic survey** (`strategic-survey.md`, skill-version 5) is deliberately
-absent from this table. It is a *diagnostic protocol* — how to read contexts,
-ubiquitous language, and layers out of an existing codebase — not a construction
-rule rendered across the mechanics files, so it has a resolver route in `SKILL.md`
-but no rule↔rendering row. It carries its own internal contract instead (anchor
-every finding to `file:line`; every finding triggers a named action; candidates,
-not verdicts).
+The **strategic-design** rows below carry `—` in the `go.md`/`python.md`/FAQ
+columns on purpose: subdomains, bounded contexts, and ubiquitous language are
+problem-and-solution-space *reasoning*, not a type you construct, so they have a
+concept-file rendering and a resolver route but no language mechanics to
+materialize. That is the honest-gap `—`, not an omission.
 
 | Rule | Concept file | go.md | python.md | FAQ | Resolver route (SKILL.md) |
 |---|---|---|---|---|---|
@@ -128,6 +126,9 @@ not verdicts).
 | Domain service = rare no-single-owner case (stub; check for a missing type first) | `domain-services.md#is-this-what-im-building` | — (mechanics deferred) | — (mechanics deferred) | — | "domain logic that fits no single object" |
 | Public interface = decoupling boundary; `Client` speaks DTOs, satisfied by embedding the service | `composition-root.md#the-public-interface` | `go.md#the-composition-root` | `python.md#the-composition-root` | #17 | "exposing a component/service behind a public interface" |
 | Composition root = single wiring site; returns/injects interfaces never domain objects, chooses the impl, injects the handler | `composition-root.md#the-composition-root` | `go.md#the-composition-root` | `python.md#the-composition-root` | #18 | "wiring the app / writing an entry point / a composition root" |
+| Subdomain = problem-space area classified Core/Supporting/Generic; the tier sets modeling investment | `strategic-design.md#subdomains` | — | — | — | "classifying a subdomain" |
+| Bounded context = one model + one language boundary; contexts talk through the `Client`+DTOs, never each other's internals | `strategic-design.md#bounded-contexts` | — | — | — | "deciding where a context boundary goes" |
+| Ubiquitous language = one term one meaning per context; the code speaks the domain's words | `strategic-design.md#ubiquitous-language` | — | — | — | "naming the domain language" |
 
 The heading anchors above are load-bearing: renaming a heading in a skill file
 is a breaking change to this matrix (and to the resolver's routes). Authoring

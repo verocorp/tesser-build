@@ -7,22 +7,22 @@ future author must not silently break.
 
 ## The two templates
 
-Every **concept doc** (`value-objects.md`, `entities.md`, `aggregates.md`, and
-future ones: application services, repositories, bounded contexts, ...) follows
-one structure; every **mechanics doc** (`go.md`, `python.md`) follows another.
+Every **concept doc** (`value-objects.md`, `entities.md`, `aggregates.md`,
+`application-services.md`, `repositories.md`, `composition-root.md`, and the grouped
+`strategic-design.md`) follows one structure; every **mechanics doc** (`go.md`,
+`python.md`) follows another.
 The structures are designed for how an agent consumes them mid-task — routed in
 with a specific question, needing the answer near the top and the depth below —
 not for how the source material happened to be organized. Do not copy source
 docs' structure; fill these templates from them.
 
-There is one **protocol doc** — `strategic-survey.md` (skill-version 5) — that fits
-neither template. It teaches an agent how to *read* an existing codebase (surface
-its contexts, language, and layers) rather than how to *build* a domain type, so it
-carries its own structure (survey loop → signals → output contract) instead. It
-still obeys the shared rules below (progressive disclosure, Evans/Vernon concept
-authority, genericized examples, no verbatim book passages) and is routed from
-`SKILL.md` like any other file. New protocol docs, if any, follow its lead: house
-voice and shared rules, purpose-fit structure.
+One concept doc groups three concepts: `strategic-design.md` (skill-version 6) covers
+subdomains, bounded contexts, and ubiquitous language as three sections — each
+following the concept-doc shape (is-this / rules / decisions / common mistakes) under
+a shared strategic-taxonomy table. They are grouped, not split into three files,
+because the trio is interlocked (a bounded context is defined by its ubiquitous
+language; a subdomain maps to a context) and none carries language mechanics. It
+obeys the shared rules below; there are no `go.md`/`python.md` sections for it.
 
 ### Concept-doc template
 
