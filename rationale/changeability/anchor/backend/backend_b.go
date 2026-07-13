@@ -31,5 +31,5 @@ func (r *repoB) Save(_ context.Context, o ordersapp.Order) error {
 
 func (r *repoB) Get(_ context.Context, id string) (ordersapp.Order, error) {
 	row := r.rows[id]
-	return ordersapp.NewOrder(row.ID, row.Amount), nil
+	return ordersapp.NewOrder(ordersapp.OrderSpec{ID: row.ID, Total: row.Amount})
 }

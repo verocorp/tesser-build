@@ -34,7 +34,7 @@ func (r *repoA) Save(_ context.Context, o ordersapp.Order) error {
 
 func (r *repoA) Get(_ context.Context, id string) (ordersapp.Order, error) {
 	row := r.rows[id]
-	return ordersapp.NewOrder(row.PK, row.Cents), nil
+	return ordersapp.NewOrder(ordersapp.OrderSpec{ID: row.PK, Total: row.Cents})
 }
 
 // FetchRawA exposes the backend-A row directly. It is the leak the coupled arm
