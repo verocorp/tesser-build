@@ -135,23 +135,27 @@ number of dependents N), or surfaces what to change. The arms are scored by a
 predeclared contract, `changeability/SCORING.md`, committed before any arm; an
 outside model (Codex) authors the coupled + red-team arms, committed with their
 provenance. This matrix row is the anti-silent-gap net for that dimension:
-`coverage_test.go` also globs `changeability/anchor/*_test.go`, so a named arm
-test that is renamed or deleted fails the guard.
+`coverage_test.go` also globs `changeability/anchor/*_test.go` and
+`changeability/nooutward/*_test.go`, so a named arm test that is renamed or deleted
+fails the guard.
 
-| Decision (skills/ddd) | Change(s) | Arms | Result | Committed tests (`changeability/anchor/`) |
+| Decision (skills/ddd) | Change(s) | Arms | Result | Committed tests |
 |---|---|---|---|---|
-| **Public interface** (`composition-root.md`) | C1 backend migration (`-tags swap`); C2 substitution (`-tags subst`) | decoupled (depends on `Client`); coupled fan-out + 3 realistic patterns; Codex red-team `portless` (facade); a fake for substitution | **C1 is TIED** by the lower-ceremony facade (a facade decouples from a backend too) — decoupled 0 vs coupled N at N=8/16. **C2 the interface WINS** — it substitutes a fake at 0 edits; the facade cannot (no seam). | `TestDecoupledArm_SurvivesBackendSwap`, `TestContrast_C1_DecoupledFlat_CoupledTracksN`, `TestInterfaceDependent_SubstitutesForFree`, `TestFacadeDependent_CannotSubstituteWithoutEdit` |
+| **Public interface** (`composition-root.md`) | C1 backend migration (`-tags swap`); C2 substitution (`-tags subst`) | decoupled (depends on `Client`); coupled fan-out + 3 realistic patterns; Codex red-team `portless` (facade); a fake for substitution | **C1 is TIED** by the lower-ceremony facade (a facade decouples from a backend too) — decoupled 0 vs coupled N at N=8/16. **C2 the interface WINS** — it substitutes a fake at 0 edits; the facade cannot (no seam). | `anchor/`: `TestDecoupledArm_SurvivesBackendSwap`, `TestContrast_C1_DecoupledFlat_CoupledTracksN`, `TestInterfaceDependent_SubstitutesForFree`, `TestFacadeDependent_CannotSubstituteWithoutEdit` |
+| **No outward representation** (`application-services.md` Respond) | D3 outward-representation migration (`-tags repv2`: response DTO field reshaped) | decoupled (operate on `domain.Maneuver` value objects); coupled fan-out + 2 realistic patterns (`webhookpayload`, `burnsort`); Codex red-team `burnquery` (query facade) | **Decision 3 WINS** — a domain that emits its own DTO fans a wire reshape out to N; the decoupled arm is 0, coupled N at N=8/16. The red-team facade is the *sanctioned* mapper (0 edits) — it does not justify a domain emitting a DTO; it only ties on read-ceremony. **No compile guard** (a dumb DTO imports nothing → no cycle); the fan-out is the proof. | `nooutward/`: `TestDecoupledArm_SurvivesRepMigration`, `TestContrast_DecoupledFlat_CoupledTracksN` |
 
-**Finding folded to doctrine.** C1 alone under-justifies the interface, so
-`composition-root.md` now teaches that the interface earns its place via
-*substitutability*, not backend-swap-survival ("Why an interface and not just a
-facade?"). Provenance: `changeability/anchor/adversary_provenance.md`. Real-code
-corroboration (the direction holds outside the fixture):
-`changeability/anchor/CORROBORATION.md`.
+**Findings folded to doctrine.** (1) C1 alone under-justifies the interface, so
+`composition-root.md` teaches the interface earns its place via *substitutability*,
+not backend-swap-survival ("Why an interface and not just a facade?"). (2) For
+decision 3, `application-services.md` folds the alternatives the *anatomy-of-a-
+perfect-technical-answer* way: the domain never emits its DTO, and for reads a
+query/projection facade beats exposing the domain VO graph — with the axis each
+wins/loses. Provenance: `changeability/{anchor,nooutward}/adversary_provenance.md`.
+Real-code corroboration for the interface: `changeability/anchor/CORROBORATION.md`.
 
-Decisions 1 (app-service SRP), 3 (no outward representation), 4 (repo speaks
-domain objects) are pending — each needs its **discriminating** change (the
-facade lesson: not every change discriminates the rule you defend).
+Decisions 1 (app-service SRP) and 4 (repo speaks domain objects) are pending — each
+needs its **discriminating** change (the facade/DTO lesson: not every change
+discriminates the rule you defend).
 
 ## Run
 
