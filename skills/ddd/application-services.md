@@ -93,6 +93,34 @@ Construction mechanics: `go.md#application-services` /
    consistency *rules* still live in each aggregate — the service does not
    reconcile them by hand.
 
+## Where the response mapping lives — and the alternatives {#where-the-response-mapping-lives}
+
+Respond is the *service's* job for a reason. The tempting shortcut is to put it on
+the domain object — `func (m Maneuver) ToResponse() ManeuverResponse` — so any caller
+can get the DTO straight off the aggregate. **Don't.** A domain object that emits its
+own outward representation drags the wire shape into the domain: every read-side
+dependent that reaches `m.ToResponse().SomeField` is bound to the wire format, so an
+outward-format change (a renamed or retyped response field) fans out to *N* of them
+instead of the one Respond site. (Measured: `rationale/changeability/nooutward` — the
+domain-emitting arm pays N; the service-Respond arm pays 1.)
+
+There is more than one *correct* way to get a value to a caller; pick by where the
+caller starts:
+
+- **Already holding the aggregate** (domain-side code, another domain method): read
+  its **value objects** — `m.Burn()`, never a DTO. Right when you have the object and
+  want domain behavior; routing through the service would be needless ceremony.
+- **Starting from an id / a read endpoint** (wants a scalar or a projection, not the
+  whole aggregate): a **query method on the application service** — or a thin
+  projection over its `Client` — that returns just what the read needs. Lower ceremony
+  than making the caller load the aggregate and walk its value-object graph; this is
+  the CQRS read side (`repositories.md`), and it keeps mapping inside the service.
+
+What does **not** work is the domain emitting the DTO to save one of the above: it
+reads as a convenience and buys the N-way coupling. Both good patterns are the same
+sanctioned mapper (Respond) reached from the two directions a caller actually arrives
+from — the domain object's representation still never lives on the domain object.
+
 ## How the machine sees it
 
 **No analyzer backs this in v2.** Unlike value objects, entities, and
