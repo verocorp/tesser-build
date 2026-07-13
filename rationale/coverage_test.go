@@ -40,7 +40,9 @@ func TestCoverageMatrix_NoSilentGaps(t *testing.T) {
 	// Also the changeability arms' tests (a separate matrix dimension): the
 	// coverage.md "Changeability arms" row names them, so they must resolve here.
 	anchorTests, _ := filepath.Glob(filepath.Join("changeability", "anchor", "*_test.go"))
-	for _, f := range append(testFiles, anchorTests...) {
+	nooutwardTests, _ := filepath.Glob(filepath.Join("changeability", "nooutward", "*_test.go"))
+	armTests := append(anchorTests, nooutwardTests...)
+	for _, f := range append(testFiles, armTests...) {
 		b, _ := os.ReadFile(f)
 		src.Write(b)
 	}
