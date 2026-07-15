@@ -24,8 +24,8 @@ class Money:
     equality test locks that in (verifying both ``==`` and ``hash``).
     """
 
-    amount: Decimal
-    currency: str
+    _amount: Decimal
+    _currency: str
 
     @classmethod
     def from_spec(cls, spec: MoneySpec) -> "Money":
@@ -33,21 +33,22 @@ class Money:
             amount = Decimal(spec.amount)  # conversion only — no rules here
         except InvalidOperation as e:
             raise ValueError(f"invalid amount: {spec.amount!r}") from e
-        return cls(amount=amount, currency=spec.currency)
+        return cls(_amount=amount, _currency=spec.currency)
 
     def __post_init__(self) -> None:
         # The rules live here, so they run on every construction path.
-        if not self.currency:
+        if not self._currency:
             raise ValueError("currency is required")
-        if self.amount < 0:
-            raise ValueError(f"amount must not be negative: {self.amount}")
+        if self._amount < 0:
+            raise ValueError(f"amount must not be negative: {self._amount}")
 
     def add(self, other: "Money") -> "Money":
         """Domain behavior: same-currency sum, returning a new value."""
-        if self.currency != other.currency:
-            raise ValueError(f"cannot add {self.currency} and {other.currency}")
-        return Money(self.amount + other.amount, self.currency)
+        if self._currency != other._currency:
+            raise ValueError(f"cannot add {self._currency} and {other._currency}")
+        return Money(self._amount + other._amount, self._currency)
 
     def __str__(self) -> str:
-        # Display only — never an equality path.
-        return f"{self.amount:.2f} {self.currency}"
+        # Display only — never an equality path. The Decimal amount leaves the
+        # domain only here (formatted) — never via a raw accessor.
+        return f"{self._amount:.2f} {self._currency}"
