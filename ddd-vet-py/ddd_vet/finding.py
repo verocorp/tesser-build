@@ -58,6 +58,12 @@ CHECKS: tuple[CheckMeta, ...] = (
         "no-string-equality",
         "compare value objects by value, not by str() representation",
     ),
+    CheckMeta(
+        "DDD010",
+        "no-primitive-exposure",
+        "a value object must not expose a public primitive field — hide the "
+        "representation (the spec/VO discriminator; specs expose, VOs don't)",
+    ),
 )
 
 

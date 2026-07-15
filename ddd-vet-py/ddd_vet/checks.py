@@ -9,7 +9,10 @@ entity vs aggregate), which v1 does not need.
 
 import ast
 
+from ddd_vet.astutil import _annotation_base, _dataclass_frozen, _is_str_call
+from ddd_vet.classify import classify_trees
 from ddd_vet.finding import Finding
+from ddd_vet.typed_checks import check_typed
 
 # Annotation base names that make a frozen dataclass unhashable at runtime
 # (``__hash__`` raises when the instance is used as a set element / dict key).
@@ -34,62 +37,6 @@ _MUTABLE_COLLECTIONS: frozenset[str] = frozenset(
 )
 
 _SUPPRESS_MARKER = "# ddd:ignore"
-
-
-def _name_of(node: ast.expr) -> str | None:
-    """The bare name of a ``Name``/``Attribute`` decorator target."""
-    if isinstance(node, ast.Name):
-        return node.id
-    if isinstance(node, ast.Attribute):
-        return node.attr
-    return None
-
-
-def _is_true(node: ast.expr) -> bool:
-    return isinstance(node, ast.Constant) and node.value is True
-
-
-def _dataclass_frozen(decorators: list[ast.expr]) -> tuple[bool, bool, ast.expr | None]:
-    """(is_dataclass, is_frozen, decorator_node) for a class's decorator list.
-
-    The decorator node is where DDD001 points and where a ``# ddd:ignore`` is
-    expected — it's the ``@dataclass`` line the user would change to add
-    ``frozen=True``, not the ``class`` line the ClassDef reports.
-    """
-    for dec in decorators:
-        target = dec.func if isinstance(dec, ast.Call) else dec
-        if _name_of(target) != "dataclass":
-            continue
-        frozen = False
-        if isinstance(dec, ast.Call):
-            for kw in dec.keywords:
-                if kw.arg == "frozen" and _is_true(kw.value):
-                    frozen = True
-        return True, frozen, dec
-    return False, False, None
-
-
-def _annotation_base(ann: ast.expr) -> str | None:
-    """Base name of an annotation: ``list[X]``/``List[X]``/``list`` -> ``list``."""
-    if isinstance(ann, ast.Name):
-        return ann.id
-    if isinstance(ann, ast.Subscript):
-        return _annotation_base(ann.value)
-    if isinstance(ann, ast.Attribute):
-        return ann.attr
-    return None
-
-
-def _is_str_call(node: ast.expr) -> bool:
-    """``str(x)`` or ``x.__str__()`` — a stringification, not a value."""
-    if not isinstance(node, ast.Call):
-        return False
-    func = node.func
-    if isinstance(func, ast.Name) and func.id == "str" and len(node.args) == 1:
-        return True
-    if isinstance(func, ast.Attribute) and func.attr == "__str__":
-        return True
-    return False
 
 
 class _Checker(ast.NodeVisitor):
@@ -202,8 +149,18 @@ class _Checker(ast.NodeVisitor):
 
 
 def check_source(path: str, source: str, is_test: bool) -> list[Finding]:
-    """Parse ``source`` and return every finding, sorted by location."""
+    """Parse ``source`` and return every finding, sorted by location.
+
+    Runs the syntactic per-file checks (DDD001-004) and the classification-aware
+    checks (DDD010+). The latter classify this single source into the stereotype
+    registry — enough for per-class rules like VO exposure; whole-tree runs
+    (``run_paths``) resolve cross-file embedding for the same registry.
+    """
     tree = ast.parse(source, filename=path)
     checker = _Checker(path, source, is_test)
     checker.visit(tree)
-    return sorted(checker.findings, key=lambda f: (f.line, f.col, f.code))
+    findings = list(checker.findings)
+    if not is_test:
+        registry = classify_trees({path: tree})
+        findings.extend(check_typed(registry, path, tree, source))
+    return sorted(findings, key=lambda f: (f.line, f.col, f.code))

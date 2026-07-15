@@ -20,7 +20,7 @@ import os
 from dataclasses import dataclass
 from enum import Enum
 
-from ddd_vet.checks import _annotation_base, _dataclass_frozen
+from ddd_vet.astutil import _annotation_base, _dataclass_frozen
 
 # Annotation bases that denote a *collection of* their element type. Owning a
 # collection of domain objects is the structural signal of an aggregate role.
@@ -169,9 +169,11 @@ def _scan_class(node: ast.ClassDef, module: str) -> _Scan:
 def _local_stereotype(scan: _Scan) -> Stereotype:
     """Axis 1 — kind of identity, from local signals only."""
     if scan.frozen_dataclass:
-        # value family: a VO validates and/or hides its representation and has
-        # behavior; a spec is an inert public-primitive carrier (no method).
-        if scan.has_method or scan.has_underscore_field:
+        # value family: a VO *validates* (__post_init__) and/or *hides* its
+        # representation (an underscore-private field). A record / spec / DTO
+        # does neither — it is an inert public-field carrier, even if it has a
+        # formatting method (a bare method is not enough to make it a VO).
+        if scan.has_post_init or scan.has_underscore_field:
             return Stereotype.VALUE_OBJECT
         return Stereotype.SPEC
     if not scan.any_dataclass and (scan.has_eq_method or scan.has_eq_none):
@@ -180,15 +182,14 @@ def _local_stereotype(scan: _Scan) -> Stereotype:
     return Stereotype.OTHER
 
 
-def classify_sources(sources: dict[str, str]) -> dict[str, ClassInfo]:
-    """Classify every top-level class across ``{module: source}``.
+def classify_trees(trees: dict[str, ast.Module]) -> dict[str, ClassInfo]:
+    """Classify every top-level class across pre-parsed ``{module: tree}``.
 
     Returns a registry keyed by simple class name.
     """
     scans: dict[str, _Scan] = {}
     stereos: dict[str, Stereotype] = {}
-    for module, src in sources.items():
-        tree = ast.parse(src, filename=module)
+    for module, tree in trees.items():
         for stmt in tree.body:
             if isinstance(stmt, ast.ClassDef):
                 scan = _scan_class(stmt, module)
@@ -223,6 +224,11 @@ def classify_sources(sources: dict[str, str]) -> dict[str, ClassInfo]:
             collection_element_names=scan.collection_element_names,
         )
     return registry
+
+
+def classify_sources(sources: dict[str, str]) -> dict[str, ClassInfo]:
+    """Parse ``{module: source}`` and classify every top-level class."""
+    return classify_trees({m: ast.parse(s, filename=m) for m, s in sources.items()})
 
 
 def classify_paths(paths: list[str]) -> dict[str, ClassInfo]:
