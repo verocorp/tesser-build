@@ -13,14 +13,14 @@ class Slug:
     one representation.
     """
 
-    value: str
+    _value: str
 
     def __post_init__(self) -> None:
-        if not _SLUG_PATTERN.match(self.value):
+        if not _SLUG_PATTERN.match(self._value):
             raise ValueError(
-                f"invalid slug {self.value!r}: must be 4-20 characters of "
+                f"invalid slug {self._value!r}: must be 4-20 characters of "
                 "lowercase letters, digits, and hyphens"
             )
 
     def __str__(self) -> str:
-        return self.value
+        return self._value

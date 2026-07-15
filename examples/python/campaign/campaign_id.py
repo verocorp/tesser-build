@@ -13,11 +13,11 @@ class CampaignID:
     tests, construct directly with known-valid literals.
     """
 
-    value: str
+    _value: str
 
     def __post_init__(self) -> None:
-        if not self.value:
+        if not self._value:
             raise ValueError("campaign id must not be empty")
 
     def __str__(self) -> str:
-        return self.value
+        return self._value
