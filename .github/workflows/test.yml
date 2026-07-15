@@ -76,3 +76,28 @@ jobs:
         run: |
           MYPYPATH=. mypy --strict .
           pytest -q
+
+  ddd-vet-py:
+    # The Python analog of ddd-vet: gates ddd-vet-py at the same bar as the Go
+    # analyzers (mypy --strict + pytest). Its pytest suite includes the
+    # acceptance gate that the analyzer is clean on examples/python — the Python
+    # counterpart of "ddd-vet on examples/ddd" in the go job above.
+    name: ddd-vet-py (mypy --strict + pytest + examples/python gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dev tooling
+        run: pip install -r ddd-vet-py/requirements-dev.txt
+      - name: ddd-vet-py — mypy --strict + pytest
+        working-directory: ddd-vet-py
+        run: |
+          mypy
+          pytest -q
+      - name: ddd-vet-py on examples/python (explicit CLI gate)
+        run: python -m ddd_vet examples/python
+        working-directory: .
+        env:
+          PYTHONPATH: ddd-vet-py

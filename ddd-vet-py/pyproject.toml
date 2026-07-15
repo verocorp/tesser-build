@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ddd-vet-py"
+version = "0.1.0"
+description = "Zero-dependency stdlib-ast DDD conformance analyzer for Python domain code"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+ddd-vet = "ddd_vet.cli:main"
+
+[tool.setuptools]
+packages = ["ddd_vet"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.mypy]
+strict = true
+files = ["ddd_vet", "tests"]

@@ -1,0 +1,71 @@
+"""Per-check good/bad behavior, the test-scoping exemption, and suppression."""
+
+from pathlib import Path
+
+import pytest
+
+from ddd_vet.checks import check_source
+from ddd_vet.finding import CHECKS
+from ddd_vet.run import run_source
+
+_TESTDATA = Path(__file__).resolve().parents[1] / "testdata"
+
+
+def _fixture(code: str, kind: str) -> tuple[str, str]:
+    path = _TESTDATA / code.lower() / f"{kind}.py"
+    return str(path), path.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("meta", CHECKS, ids=lambda m: m.code)
+def test_bad_fixture_trips_only_its_own_code(meta: object) -> None:
+    code = meta.code  # type: ignore[attr-defined]
+    path, source = _fixture(code, "bad")
+    findings = check_source(path, source, is_test=False)
+    produced = {f.code for f in findings}
+    assert produced == {code}, f"{code} bad.py produced {produced}, expected {{{code}}}"
+
+
+@pytest.mark.parametrize("meta", CHECKS, ids=lambda m: m.code)
+def test_good_fixture_is_clean(meta: object) -> None:
+    code = meta.code  # type: ignore[attr-defined]
+    path, source = _fixture(code, "good")
+    findings = check_source(path, source, is_test=False)
+    assert findings == [], f"{code} good.py should be clean, got {[f.render() for f in findings]}"
+
+
+def test_structural_checks_are_exempt_in_test_code() -> None:
+    # DDD001-003 do not fire in test files; DDD004 (a test anti-pattern) does.
+    for code in ("DDD001", "DDD002", "DDD003"):
+        path, source = _fixture(code, "bad")
+        assert check_source(path, source, is_test=True) == []
+    path, source = _fixture("DDD004", "bad")
+    produced = {f.code for f in check_source(path, source, is_test=True)}
+    assert "DDD004" in produced
+
+
+def test_inline_suppression() -> None:
+    source = (
+        "from dataclasses import dataclass\n"
+        "\n"
+        "@dataclass  # ddd:ignore\n"
+        "class Mutable:\n"
+        "    x: int\n"
+    )
+    assert check_source("m.py", source, is_test=False) == []
+
+
+def test_string_equality_fires_regardless_of_test_scope() -> None:
+    src = "def f(a: object, b: object) -> None:\n    assert str(a) == str(b)\n"
+    assert {f.code for f in run_source("anywhere.py", src)} == {"DDD004"}
+
+
+def test_setattr_delattr_both_flagged_outside_post_init() -> None:
+    src = (
+        "from dataclasses import dataclass\n"
+        "@dataclass(frozen=True)\n"
+        "class S:\n"
+        "    v: str\n"
+        "    def clear(self) -> None:\n"
+        "        object.__delattr__(self, 'v')\n"
+    )
+    assert {f.code for f in check_source("s.py", src, is_test=False)} == {"DDD003"}

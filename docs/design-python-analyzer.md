@@ -115,6 +115,18 @@ residuals are **out of v1**.
 _(Dropped: Go-checker-failure triage — the toolkit tree is green and the failures
 were already fixed in this repo; there was no consumer-repo item to chase.)_
 
+## Status
+
+**P0 v1 shipped.** `ddd-vet-py/` — a zero-dependency stdlib-`ast` analyzer with
+the four checks (DDD001 frozen-dataclass, DDD002 hashable-fields, DDD003
+no-setattr-bypass, DDD004 no-string-equality), good/bad testdata fixtures, a
+meta-test (registry ↔ fixtures, no unregistered code, clean on `examples/python`,
+self-dogfood), a `coverage.md` Python-enforcement section, and a CI job
+(`ddd-vet-py`: mypy --strict + pytest + the explicit `examples/python` CLI gate).
+mypy --strict and pytest are clean; the analyzer passes clean on `examples/python`
+and on its own source. P1 (mypy-plugin spike) and P2 (decisions 1 & 4 as
+second-wave checks) are unstarted.
+
 ## The assignment
 
 Start P0 step 1: pin the four-check set against `skills/ddd/python.md` and note

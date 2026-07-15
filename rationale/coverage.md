@@ -173,3 +173,27 @@ go test ./rationale/...                 # the wins + the matrix meta-test
 go test -bench=. -benchmem ./rationale/ # the adversarial cost (collection-VO defensive-copy tax)
 ./rationale/measure-ablation.sh ...     # measure changeability on your own repo
 ```
+
+## Python enforcement (ddd-vet-py)
+
+The Go analyzers above are `go/analysis`; they do not run on Python. The Python
+analog is [`ddd-vet-py`](../ddd-vet-py/) — a zero-dependency stdlib-`ast` tool
+that enforces the *syntactically decidable* subset on the frozen-dataclass
+substrate `skills/ddd/python.md` teaches. Roughly half the Go ruleset dissolves
+(`mustnew` — Python constructors raise; `primitiveaccessor` — dataclass fields
+are public by idiom) and the rest reframe to the dataclass grain. Its own
+meta-test (`ddd-vet-py/tests/test_meta.py`) is the Python analog of this matrix's
+silent-gap guard: it fails if a registered check has no good/bad fixture, if an
+unregistered code is emitted, or if the analyzer is not clean on the canonical
+`examples/python` tree. Full rationale + the deferred (mypy-plugin) residuals:
+[`docs/design-python-analyzer.md`](../docs/design-python-analyzer.md).
+
+| Go analyzer | Python check | python.md rule | Fixture (`ddd-vet-py/testdata/`) |
+|---|---|---|---|
+| `vofields` | `DDD001` frozen-dataclass | "`frozen=True` always" | `ddd001/{good,bad}.py` |
+| `comparability` | `DDD002` hashable-fields | collection VO backs itself with a sorted tuple | `ddd002/{good,bad}.py` |
+| `voconstructor` | `DDD003` no-setattr-bypass | "no setters, no mutation" (canonicalize only in `__post_init__`) | `ddd003/{good,bad}.py` |
+| `stringequality` | `DDD004` no-string-equality | "Never `str(a) == str(b)`" | `ddd004/{good,bad}.py` |
+| `mustnew` | — dissolved | "No `Must*` twin is needed" | — |
+| `primitiveaccessor` | — dropped | dataclass fields are public by idiom | — |
+| (type-aware residual) | — deferred (P1) | primitive-obsession field resolution; identity-`__eq__` field | — |
