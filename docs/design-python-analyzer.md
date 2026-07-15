@@ -88,17 +88,20 @@ residuals are **out of v1**.
 - **P0 — `ddd-vet-py` v1, now.** The one workstream that serves pilot and is the
   stated goal. Step 1 (pin the check-set against `python.md`) absorbs most of the
   Python-side skill-reconciliation worry.
-- **P1 — mypy-plugin decision, after pilot has real domain code.** The syntactic
-  v1 checks approximate the primitive-obsession field rule ("VO fields are value
-  objects, not raw primitives") by reading annotation *text* — spoofable by
-  aliases / `NewType` / imported names. A mypy plugin resolves it honestly, and
-  reaches the two comparability residuals AST can't (a field whose class lacks
-  `__eq__` and compares by identity; a hash hazard from a non-literal unhashable
-  field type). Cost: mypy's plugin API is unstable + thinly documented and pins a
-  version range. So **decide mypy-plugin vs drop based on whether those hazards
-  actually leak in real pilot code**, not speculatively. Freebie (not the plugin):
-  `NewType`/`Annotated` VOs make plain mypy catch unit-swap bugs for free.
-  Optional flake8 adapter for editor-inline here too.
+- **P1 — mypy-plugin, decided by a parallel spike run *during* P0.** Not gated on
+  pilot having real code — Chris spikes the mypy-plugin approach in parallel with
+  the P0 build so a decision is ready by the time P0 ships. What the plugin buys:
+  the syntactic v1 checks approximate the primitive-obsession field rule ("VO
+  fields are value objects, not raw primitives") by reading annotation *text* —
+  spoofable by aliases / `NewType` / imported names. A mypy plugin resolves it
+  honestly, and reaches the two comparability residuals AST can't (a field whose
+  class lacks `__eq__` and compares by identity; a hash hazard from a non-literal
+  unhashable field type). Cost: mypy's plugin API is unstable + thinly documented
+  and pins a version range — which is exactly what the spike measures. Freebie
+  (not the plugin): `NewType`/`Annotated` VOs make plain mypy catch unit-swap bugs
+  for free. Optional flake8 adapter for editor-inline here too.
+- **P1↔P2 order is contingent, not fixed.** Which of the mypy-plugin work and the
+  decisions-1&4 checks goes first depends on what the parallel mypy spike finds.
 - **P2 — decisions 1 & 4 as a second wave of checks (NOT pilot-gated).** These
   have enforceable surfaces writable now, right after the v1 ports ship:
   decision 4 (repo speaks domain objects) → flag a repository method signature
