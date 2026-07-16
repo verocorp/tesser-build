@@ -76,6 +76,12 @@ CHECKS: tuple[CheckMeta, ...] = (
         "an aggregate/entity must reference another aggregate root by its ID "
         "value object, not hold the root object across the boundary",
     ),
+    CheckMeta(
+        "DDD013",
+        "construct-through-spec",
+        "a structured domain object (entity/aggregate) constructs through its "
+        "spec — __init__(self, spec); no separate from_spec factory",
+    ),
 )
 
 

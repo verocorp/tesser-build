@@ -13,6 +13,10 @@ key on what a class *is* (``classify.ClassInfo``):
   aggregate root by its ID value object, never by holding the root object across
   the boundary. Needs the whole-tree registry (``run_paths``) to know a held
   field's type is itself a root.
+* **DDD013** (identity objects) — construct through the spec: ``__init__(self,
+  spec)`` is the single construction path; no separate ``from_spec`` factory and
+  no value-taking constructor. Value objects are exempt (compound-VO
+  construction is a separate, unsettled question).
 """
 
 import ast
@@ -67,6 +71,7 @@ def check_typed(
         elif info.stereotype is Stereotype.IDENTITY_OBJECT:
             findings.extend(_check_collection_leak(stmt, path, suppressed))
             findings.extend(_check_root_by_object(stmt, registry, path, suppressed))
+            findings.extend(_check_construction(stmt, path, suppressed))
     return findings
 
 
@@ -162,6 +167,46 @@ def _check_root_by_object(
                 f"reference it by its ID value object instead (e.g. {name}ID) — "
                 "aggregates cross each other's boundaries by identity, not by "
                 "holding the object",
+            )
+        )
+    return findings
+
+
+def _check_construction(
+    node: ast.ClassDef,
+    path: str,
+    suppressed: "_Suppressed",
+) -> list[Finding]:
+    """DDD013 — a structured domain object constructs through its spec.
+
+    The single construction path is ``__init__(self, spec)``: the constructor
+    takes the primitive-leaf spec and builds the value objects. There is no
+    separate ``from_spec`` factory — that second constructor is ungrounded (Go
+    exposes one factory taking the spec, the value-taking construction kept
+    unexported). Value objects are exempt (they are not identity objects): the
+    compound-VO construction mechanism is a separate, unsettled question.
+
+    Scoped to the ``from_spec`` factory — the exact accreted second constructor.
+    The stricter positive rule ("the constructor must *take* the spec, not the
+    already-built value objects") is a deliberately deferred extension: it would
+    fire broadly on any entity not yet migrated to spec-construction, which is a
+    larger, noisier mandate than flagging the redundant factory.
+    """
+    findings: list[Finding] = []
+    for member in node.body:
+        if not (isinstance(member, ast.FunctionDef) and member.name == "from_spec"):
+            continue
+        if suppressed(member.lineno):
+            continue
+        findings.append(
+            Finding(
+                path,
+                member.lineno,
+                member.col_offset + 1,
+                "DDD013",
+                f"{node.name!r} defines a from_spec factory; a structured domain "
+                "object constructs through its constructor instead — "
+                f"__init__(self, spec: {node.name}Spec) is the single path",
             )
         )
     return findings

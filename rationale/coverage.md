@@ -202,5 +202,6 @@ classifier design
 | `primitiveaccessor` | `DDD010` no-primitive-exposure | a value object hides its primitive (the spec/VO discriminator), keyed on the identity-taxonomy classifier | `ddd010/{good,bad}.py` |
 | `aggregatefield` (defensive-copy) | `DDD011` no-collection-leak | an aggregate/entity accessor returns a defensive copy, never the backing mutable collection, keyed on the classifier | `ddd011/{good,bad}.py` |
 | `aggregateref` (boundary) | `DDD012` reference-roots-by-id | an aggregate references another root by its ID value object, never by holding the root object; keyed on the whole-tree registry (a root is a reference-identity entity that embeds ≥1 entity — `is_aggregate_root`) | `ddd012/{good,bad}.py` |
+| (construction) | `DDD013` construct-through-spec | a structured domain object (entity/aggregate) constructs through `__init__(self, spec)`; no separate `from_spec` factory (the value-taking-ctor half is a deferred extension) | `ddd013/{good,bad}.py` |
 | `mustnew` | — dissolved | "No `Must*` twin is needed" | — |
 | (type-aware residual) | — deferred (P1) | primitive-obsession field resolution; identity-`__eq__` field | — |
