@@ -54,7 +54,7 @@ class InMemoryCampaignRepository:
         rec = self._campaigns.get(str(id))
         if rec is None:
             raise LookupError(f"campaign {id} not found")
-        return Campaign.from_spec(rec.to_spec())
+        return Campaign(rec.to_spec())
 
 
 def _decompose(c: Campaign) -> _CampaignRecord:

@@ -27,6 +27,14 @@ class Money:
     _amount: Decimal
     _currency: str
 
+    # REVISIT (compound-VO construction): unlike the entities — which now take
+    # their spec directly in __init__ as the single construction path — Money is
+    # a frozen dataclass whose auto-generated __init__ takes the already-parsed
+    # fields, so construction from primitives still goes through this from_spec
+    # factory (the analog of Go's NewMoney(spec)). Whether compound value
+    # objects should instead take the spec in a custom __init__ (dropping the
+    # dataclass auto-init) is an open design question — the pattern here is not
+    # settled. See the analyzer-plan memory. Labels is in the same bucket.
     @classmethod
     def from_spec(cls, spec: MoneySpec) -> "Money":
         try:

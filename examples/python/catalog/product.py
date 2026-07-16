@@ -24,22 +24,19 @@ class Product:
     are defined together, by SKU.
     """
 
-    def __init__(self, sku: SKU, price: Money, labels: Labels) -> None:
-        self._sku = sku
-        self._price = price
-        self._labels = labels
-
-    @classmethod
-    def from_spec(cls, spec: ProductSpec) -> "Product":
+    def __init__(self, spec: ProductSpec) -> None:
+        """Construct from the spec — the single construction path. Each child
+        value object validates itself; the constructor adds error context and
+        enforces any invariants that span the fields."""
         try:
-            sku = SKU(spec.sku)
+            self._sku = SKU(spec.sku)
         except ValueError as e:
             raise ValueError(f"invalid sku: {e}") from e
         try:
-            price = Money.from_spec(spec.price)
+            self._price = Money.from_spec(spec.price)
         except ValueError as e:
             raise ValueError(f"invalid price: {e}") from e
-        return cls(sku, price, Labels.new(spec.labels))
+        self._labels = Labels.new(spec.labels)
 
     @property
     def sku(self) -> SKU:

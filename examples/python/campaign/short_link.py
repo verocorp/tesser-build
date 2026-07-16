@@ -1,3 +1,4 @@
+import copy
 from dataclasses import dataclass
 
 from campaign.slug import Slug
@@ -32,24 +33,19 @@ class ShortLink:
     slug), so ``__eq__`` and ``__hash__`` are defined together.
     """
 
-    def __init__(self, slug: Slug, target_url: TargetURL, active: bool) -> None:
-        self._slug = slug
-        self._target_url = target_url
-        self._active = active
-
-    @classmethod
-    def from_spec(cls, spec: ShortLinkSpec) -> "ShortLink":
-        """Build each child value object via its own constructor, adding error
-        context; re-validate nothing."""
+    def __init__(self, spec: ShortLinkSpec) -> None:
+        """Construct from the spec — the single construction path. Each child
+        value object validates itself; the constructor only adds error context.
+        """
         try:
-            slug = Slug(spec.slug)
+            self._slug = Slug(spec.slug)
         except ValueError as e:
             raise ValueError(f"invalid slug: {e}") from e
         try:
-            target_url = TargetURL(spec.target_url)
+            self._target_url = TargetURL(spec.target_url)
         except ValueError as e:
             raise ValueError(f"invalid target url: {e}") from e
-        return cls(slug, target_url, spec.active)
+        self._active = spec.active
 
     @property
     def slug(self) -> Slug:
@@ -75,8 +71,9 @@ class ShortLink:
         ShortLink is mutable, so returning the real object would let a caller
         deactivate it directly and bypass the root; a caller may only mutate a
         copy. slug and target_url are immutable value objects, so a shallow copy
-        is genuinely independent."""
-        return ShortLink(self._slug, self._target_url, self._active)
+        is genuinely independent — and it sidesteps re-validating already-valid
+        children through the spec constructor."""
+        return copy.copy(self)
 
     def __eq__(self, other: object) -> bool:
         # Identity, not attributes: two short links are the same iff same slug.

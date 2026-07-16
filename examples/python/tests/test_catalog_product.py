@@ -12,7 +12,7 @@ def _spec() -> ProductSpec:
 
 
 def test_construction() -> None:
-    p = Product.from_spec(_spec())
+    p = Product(_spec())
     assert p.sku == SKU("TSHIRT-BLK-M")
     assert str(p.price) == "19.99 USD"
     assert p.labels.get("color") == "black"
@@ -27,13 +27,13 @@ def test_rejects_invalid_child() -> None:
         labels={},
     )
     with pytest.raises(ValueError, match="invalid price"):
-        Product.from_spec(spec)
+        Product(spec)
 
 
 def test_equality_is_identity() -> None:
-    a = Product.from_spec(_spec())
+    a = Product(_spec())
     # Same SKU, different price/labels -> still the same product.
-    b = Product.from_spec(
+    b = Product(
         ProductSpec(
             sku="TSHIRT-BLK-M",
             price=MoneySpec(amount="29.99", currency="USD"),
@@ -43,7 +43,7 @@ def test_equality_is_identity() -> None:
     assert a == b
     assert hash(a) == hash(b)
     # Different SKU -> different product.
-    c = Product.from_spec(
+    c = Product(
         ProductSpec(sku="TSHIRT-WHT-L", price=MoneySpec(amount="19.99", currency="USD"), labels={})
     )
     assert a != c

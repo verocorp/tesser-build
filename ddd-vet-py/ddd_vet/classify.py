@@ -20,7 +20,7 @@ import os
 from dataclasses import dataclass
 from enum import Enum
 
-from ddd_vet.astutil import _annotation_base, _dataclass_frozen
+from ddd_vet.astutil import _annotation_base, _dataclass_frozen, _name_of
 
 # Annotation bases that denote a *collection of* their element type. Owning a
 # collection of domain objects is the structural signal of an aggregate role.
@@ -79,6 +79,12 @@ class ClassInfo:
         return self.stereotype is Stereotype.IDENTITY_OBJECT and self.embeds_entity
 
 
+def _is_property(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """True if ``fn`` is decorated ``@property`` — a read-only accessor whose
+    return type names a field's type."""
+    return any(_name_of(dec) == "property" for dec in fn.decorator_list)
+
+
 def _all_names(node: ast.expr) -> frozenset[str]:
     """Every ``Name``/``Attribute`` identifier anywhere in an annotation."""
     names: set[str] = set()
@@ -129,14 +135,23 @@ def _scan_class(node: ast.ClassDef, module: str) -> _Scan:
         if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
             methods.add(stmt.name)
             if stmt.name == "__init__":
-                # A plain-class entity/aggregate declares its composition through
-                # __init__ parameter annotations, not class-level fields.
+                # A plain-class entity/aggregate takes its spec here; the spec's
+                # own type is not composition, but reading the params is harmless
+                # (a spec is not an entity, so it never reads as embedded).
                 params = [*stmt.args.posonlyargs, *stmt.args.args, *stmt.args.kwonlyargs]
                 for arg in params:
                     if arg.arg == "self" or arg.annotation is None:
                         continue
                     field_types |= _all_names(arg.annotation)
                     collection_elems |= _collection_element_names(arg.annotation)
+            elif _is_property(stmt) and stmt.returns is not None:
+                # A plain-class entity declares its composition through its
+                # read-only ``@property`` accessors: the return type of each is a
+                # field's type (``links -> tuple[ShortLink, ...]`` embeds
+                # ShortLink). This is the reliable signal now that construction
+                # takes the spec, not the already-built value objects.
+                field_types |= _all_names(stmt.returns)
+                collection_elems |= _collection_element_names(stmt.returns)
         elif isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
             fname = stmt.target.id
             if fname.startswith("_"):

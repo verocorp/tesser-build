@@ -34,20 +34,12 @@ class Campaign:
     invariants after every change.
     """
 
-    def __init__(self, id: CampaignID, name: CampaignName, links: list[ShortLink]) -> None:
-        # The cross-object invariants are enforced here, so an invalid Campaign
-        # is unrepresentable regardless of the construction path.
-        admitted: list[ShortLink] = []
-        for link in links:
-            admitted = _append_short_link(admitted, link)
-        self._id = id
-        self._name = name
-        self._links = admitted  # own your copy
-
-    @classmethod
-    def from_spec(cls, spec: CampaignSpec) -> "Campaign":
-        """Validate and construct a Campaign, including its initial — possibly
-        empty — set of short links."""
+    def __init__(self, spec: CampaignSpec) -> None:
+        """Validate and construct a Campaign from its spec — the single
+        construction path — including its initial (possibly empty) set of short
+        links. The cross-object invariants are enforced here, so an invalid
+        Campaign is unrepresentable.
+        """
         try:
             id = CampaignID(spec.id)
         except ValueError as e:
@@ -57,13 +49,16 @@ class Campaign:
         except ValueError as e:
             raise ValueError(f"invalid campaign name: {e}") from e
 
-        links: list[ShortLink] = []
+        admitted: list[ShortLink] = []
         for i, link_spec in enumerate(spec.links):
             try:
-                links.append(ShortLink.from_spec(link_spec))
+                link = ShortLink(link_spec)
             except ValueError as e:
                 raise ValueError(f"invalid short link at index {i}: {e}") from e
-        return cls(id, name, links)
+            admitted = _append_short_link(admitted, link)  # enforce invariants
+        self._id = id
+        self._name = name
+        self._links = admitted  # own your copy
 
     @property
     def id(self) -> CampaignID:
@@ -87,7 +82,7 @@ class Campaign:
         campaign" use case: re-establishes both cross-object invariants (unique
         slug, at-most-max links) before the new link is admitted."""
         spec = ShortLinkSpec(slug=spec.slug, target_url=spec.target_url, active=True)
-        link = ShortLink.from_spec(spec)
+        link = ShortLink(spec)
         self._links = _append_short_link(self._links, link)
 
     def deactivate_short_link(self, slug: Slug) -> None:

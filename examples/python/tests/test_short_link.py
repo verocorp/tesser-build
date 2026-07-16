@@ -9,28 +9,28 @@ def _spec(slug: str = "spring-sale", active: bool = True) -> ShortLinkSpec:
 
 
 class TestShortLink:
-    def test_from_spec_builds_children(self) -> None:
-        link = ShortLink.from_spec(_spec())
+    def test_constructor_builds_children(self) -> None:
+        link = ShortLink(_spec())
         assert link.slug == Slug("spring-sale")
         assert str(link.target_url) == "https://a.example"
         assert link.active is True
 
-    def test_from_spec_wraps_child_error(self) -> None:
+    def test_constructor_wraps_child_error(self) -> None:
         with pytest.raises(ValueError, match="invalid slug"):
-            ShortLink.from_spec(_spec(slug="X"))
+            ShortLink(_spec(slug="X"))
 
     def test_equality_is_identity_by_slug(self) -> None:
         # Same slug -> same link, even if other attributes differ; different
         # slug -> different link.
-        a = ShortLink.from_spec(_spec(slug="spring-sale", active=True))
-        b = ShortLink.from_spec(_spec(slug="spring-sale", active=False))
-        c = ShortLink.from_spec(_spec(slug="autumn-sale"))
+        a = ShortLink(_spec(slug="spring-sale", active=True))
+        b = ShortLink(_spec(slug="spring-sale", active=False))
+        c = ShortLink(_spec(slug="autumn-sale"))
         assert a == b
         assert hash(a) == hash(b)
         assert a != c
 
     def test_deactivate_is_guarded(self) -> None:
-        link = ShortLink.from_spec(_spec())
+        link = ShortLink(_spec())
         link.deactivate()
         assert link.active is False
         # A link can only be deactivated once.
