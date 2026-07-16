@@ -70,6 +70,12 @@ CHECKS: tuple[CheckMeta, ...] = (
         "an aggregate/entity accessor must not return its backing mutable "
         "collection directly — return a defensive copy",
     ),
+    CheckMeta(
+        "DDD012",
+        "reference-roots-by-id",
+        "an aggregate/entity must reference another aggregate root by its ID "
+        "value object, not hold the root object across the boundary",
+    ),
 )
 
 

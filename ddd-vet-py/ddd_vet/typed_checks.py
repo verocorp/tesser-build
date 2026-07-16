@@ -9,6 +9,10 @@ key on what a class *is* (``classify.ClassInfo``):
 * **DDD011** (identity objects) — the aggregate/entity defensive-copy rule: an
   accessor must not hand back its backing mutable collection; return a copy so a
   caller cannot mutate the aggregate's internals behind the root's back.
+* **DDD012** (identity objects) — the aggregate boundary rule: reference another
+  aggregate root by its ID value object, never by holding the root object across
+  the boundary. Needs the whole-tree registry (``run_paths``) to know a held
+  field's type is itself a root.
 """
 
 import ast
@@ -62,6 +66,7 @@ def check_typed(
             findings.extend(_check_vo_exposure(stmt, path, suppressed))
         elif info.stereotype is Stereotype.IDENTITY_OBJECT:
             findings.extend(_check_collection_leak(stmt, path, suppressed))
+            findings.extend(_check_root_by_object(stmt, registry, path, suppressed))
     return findings
 
 
@@ -121,6 +126,88 @@ def _check_collection_leak(
             )
         )
     return findings
+
+
+def _check_root_by_object(
+    node: ast.ClassDef,
+    registry: dict[str, ClassInfo],
+    path: str,
+    suppressed: "_Suppressed",
+) -> list[Finding]:
+    """DDD011's boundary sibling, DDD012 — an aggregate/entity must reference
+    another aggregate root by its ID, not hold the root object across the
+    boundary.
+
+    A root that owns a collection (``owns_collection``) is structurally definite
+    regardless of who holds it — that is the reliable "this is a root" signal
+    (``is_member`` cannot be used: the moment you wrongly hold a root, it looks
+    like your own member). Holding a member entity (a non-owning identity object
+    composed below you) is legitimate and not flagged; holding another root is.
+    """
+    findings: list[Finding] = []
+    for name, lineno, col in _held_type_refs(node):
+        held = registry.get(name)
+        if (
+            held is None
+            or held.stereotype is not Stereotype.IDENTITY_OBJECT
+            or not held.owns_collection
+            or name == node.name
+        ):
+            continue
+        if suppressed(lineno):
+            continue
+        findings.append(
+            Finding(
+                path,
+                lineno,
+                col + 1,
+                "DDD012",
+                f"{node.name!r} holds another aggregate root {name!r} by object; "
+                f"reference it by its ID value object instead (e.g. {name}ID) — "
+                "aggregates cross each other's boundaries by identity, not by "
+                "holding the object",
+            )
+        )
+    return findings
+
+
+def _held_type_refs(node: ast.ClassDef) -> list[tuple[str, int, int]]:
+    """Every type name referenced by a field's annotation, with its location.
+
+    Reads both idioms: an entity's ``__init__`` parameter annotations (plain
+    classes declare composition there) and class-level ``AnnAssign`` fields
+    (dataclass-style). ``list[Warehouse]`` yields both ``list`` and ``Warehouse``
+    — the caller resolves each against the registry, so container names simply
+    don't match. De-duplicated by (name, line, col).
+    """
+    refs: list[tuple[str, int, int]] = []
+    seen: set[tuple[str, int, int]] = set()
+
+    def collect(annotation: ast.expr) -> None:
+        for sub in ast.walk(annotation):
+            if isinstance(sub, ast.Name):
+                key = (sub.id, sub.lineno, sub.col_offset)
+            elif isinstance(sub, ast.Attribute):
+                key = (sub.attr, sub.lineno, sub.col_offset)
+            else:
+                continue
+            if key not in seen:
+                seen.add(key)
+                refs.append(key)
+
+    for member in node.body:
+        if isinstance(member, ast.FunctionDef) and member.name == "__init__":
+            params = [
+                *member.args.posonlyargs,
+                *member.args.args,
+                *member.args.kwonlyargs,
+            ]
+            for arg in params:
+                if arg.arg != "self" and arg.annotation is not None:
+                    collect(arg.annotation)
+        elif isinstance(member, ast.AnnAssign):
+            collect(member.annotation)
+    return refs
 
 
 def _bare_self_field_returned(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
