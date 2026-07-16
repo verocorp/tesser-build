@@ -69,3 +69,18 @@ def test_setattr_delattr_both_flagged_outside_post_init() -> None:
         "        object.__delattr__(self, 'v')\n"
     )
     assert {f.code for f in check_source("s.py", src, is_test=False)} == {"DDD003"}
+
+
+def test_ddd002_exempts_a_spec_row_collection_field() -> None:
+    # DDD002 is a value-object rule, keyed on classification. A frozen dataclass
+    # that is a spec / persistence row (public primitive fields, no validation)
+    # classifies SPEC, not VALUE_OBJECT, so its collection field must NOT trip
+    # DDD002 — the repo-row false positive the fold removes.
+    src = (
+        "from dataclasses import dataclass\n"
+        "@dataclass(frozen=True)\n"
+        "class ReportRow:\n"
+        "    id: str\n"
+        "    labels: dict[str, str]\n"
+    )
+    assert check_source("row.py", src, is_test=False) == []

@@ -1,16 +1,24 @@
-"""The AST checks. One ``ast.NodeVisitor`` produces every :class:`Finding`.
+"""The per-file AST checks. One ``ast.NodeVisitor`` produces every
+:class:`Finding` for DDD001-004.
 
-Each check is faithful to a rule in ``skills/ddd/python.md`` and is deliberately
-*syntactic* — it reads the shape of the code, never resolved types. The checks
-operate on dataclasses generically (VO / spec / DTO alike), because the rules
-hold for all of them and that sidesteps the one genuinely hard call (VO vs
-entity vs aggregate), which v1 does not need.
+Most are deliberately *syntactic* — they read the shape of the code:
+
+* **DDD001** (frozen) is the gateway: a non-frozen dataclass classifies as
+  ``OTHER``, so it *cannot* be keyed on the value-object stereotype (the
+  classifier uses frozen-ness to recognise a VO). It stays a shape check.
+* **DDD003** (setattr-bypass) and **DDD004** (str-equality) are shape/expression
+  checks with no stereotype dependency.
+* **DDD002** (hash-hazard) is the exception — it is **classification-aware**: the
+  "back a collection with a tuple" rule is a *value-object* rule, so it fires
+  only on a class classified ``VALUE_OBJECT``. A frozen dataclass that is really
+  a spec / persistence row (public primitive fields, no validation) is a ``SPEC``
+  and is exempt — that is what stops a repo row's ``dict`` field tripping DDD002.
 """
 
 import ast
 
 from ddd_vet.astutil import _annotation_base, _dataclass_frozen, _is_str_call
-from ddd_vet.classify import ClassInfo, classify_trees
+from ddd_vet.classify import ClassInfo, Stereotype, classify_trees
 from ddd_vet.finding import Finding
 from ddd_vet.typed_checks import check_typed
 
@@ -40,12 +48,23 @@ _SUPPRESS_MARKER = "# ddd:ignore"
 
 
 class _Checker(ast.NodeVisitor):
-    def __init__(self, path: str, source: str, is_test: bool) -> None:
+    def __init__(
+        self,
+        path: str,
+        source: str,
+        is_test: bool,
+        registry: dict[str, ClassInfo],
+    ) -> None:
         self._path = path
         self._lines = source.splitlines()
         self._is_test = is_test
+        self._registry = registry
         self._func_stack: list[str] = []
         self.findings: list[Finding] = []
+
+    def _is_value_object(self, name: str) -> bool:
+        info = self._registry.get(name)
+        return info is not None and info.stereotype is Stereotype.VALUE_OBJECT
 
     # -- emit ---------------------------------------------------------------
 
@@ -78,8 +97,13 @@ class _Checker(ast.NodeVisitor):
         self.generic_visit(node)
 
     def _check_hashable_fields(self, node: ast.ClassDef) -> None:
-        # DDD002 — only direct class-body fields (AnnAssign), never locals or
-        # instance attributes inside methods.
+        # DDD002 — a value-object rule: back a collection with a tuple/frozenset.
+        # A frozen dataclass that is a spec / persistence row (a SPEC) is exempt;
+        # only a class classified VALUE_OBJECT is checked.
+        if not self._is_value_object(node.name):
+            return
+        # Only direct class-body fields (AnnAssign), never locals or instance
+        # attributes inside methods.
         for stmt in node.body:
             if not isinstance(stmt, ast.AnnAssign):
                 continue
@@ -163,7 +187,7 @@ def check_tree(
     (``embeds_entity``, ``is_member``) resolves. Test files are exempt from the
     typed checks (they legitimately construct and exercise domain objects).
     """
-    checker = _Checker(path, source, is_test)
+    checker = _Checker(path, source, is_test, registry)
     checker.visit(tree)
     findings = list(checker.findings)
     if not is_test:

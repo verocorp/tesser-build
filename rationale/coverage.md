@@ -196,7 +196,7 @@ classifier design
 | Go analyzer | Python check | python.md rule | Fixture (`ddd-vet-py/testdata/`) |
 |---|---|---|---|
 | `vofields` | `DDD001` frozen-dataclass | "`frozen=True` always" | `ddd001/{good,bad}.py` |
-| `comparability` | `DDD002` hashable-fields | collection VO backs itself with a sorted tuple | `ddd002/{good,bad}.py` |
+| `comparability` | `DDD002` hashable-fields | collection VO backs itself with a sorted tuple (classification-aware: fires only on a `VALUE_OBJECT`, so a spec / persistence row is exempt) | `ddd002/{good,bad}.py` |
 | `voconstructor` | `DDD003` no-setattr-bypass | "no setters, no mutation" (canonicalize only in `__post_init__`) | `ddd003/{good,bad}.py` |
 | `stringequality` | `DDD004` no-string-equality | "Never `str(a) == str(b)`" | `ddd004/{good,bad}.py` |
 | `primitiveaccessor` | `DDD010` no-primitive-exposure | a value object hides its primitive (the spec/VO discriminator), keyed on the identity-taxonomy classifier | `ddd010/{good,bad}.py` |
