@@ -138,21 +138,17 @@ def _check_root_by_object(
     another aggregate root by its ID, not hold the root object across the
     boundary.
 
-    A root that owns a collection (``owns_collection``) is structurally definite
-    regardless of who holds it — that is the reliable "this is a root" signal
-    (``is_member`` cannot be used: the moment you wrongly hold a root, it looks
-    like your own member). Holding a member entity (a non-owning identity object
-    composed below you) is legitimate and not flagged; holding another root is.
+    "Another root" is the settled signal (``ClassInfo.is_aggregate_root``): a
+    reference-identity entity that embeds ≥1 *entity*. Holding a member entity —
+    an identity object that embeds only value objects, composed below you — is
+    legitimate composition and not flagged; holding another *root* is the
+    violation. (``is_member`` cannot be the signal: the moment you wrongly hold a
+    root, it looks like your own member.)
     """
     findings: list[Finding] = []
     for name, lineno, col in _held_type_refs(node):
         held = registry.get(name)
-        if (
-            held is None
-            or held.stereotype is not Stereotype.IDENTITY_OBJECT
-            or not held.owns_collection
-            or name == node.name
-        ):
+        if held is None or not held.is_aggregate_root or name == node.name:
             continue
         if suppressed(lineno):
             continue

@@ -160,7 +160,7 @@ def check_tree(
     The syntactic checks (DDD001-004) read only this file's shape. The
     classification-aware checks (DDD010+) key on ``registry`` — which
     ``run_paths`` builds across the *whole tree*, so cross-file embedding
-    (``owns_collection``, ``is_member``) resolves. Test files are exempt from the
+    (``embeds_entity``, ``is_member``) resolves. Test files are exempt from the
     typed checks (they legitimately construct and exercise domain objects).
     """
     checker = _Checker(path, source, is_test)

@@ -26,18 +26,23 @@ def test_link_campaign_domain_classification() -> None:
     for name in ["CampaignSpec", "ShortLinkSpec", "MoneySpec", "ProductSpec"]:
         assert reg[name].stereotype is Stereotype.SPEC, name
 
-    # A fact entity: identity, owns no collection, composed in nothing.
+    # A fact entity: identity, embeds only VOs (so NOT a root), composed in
+    # nothing.
     assert reg["Product"].stereotype is Stereotype.IDENTITY_OBJECT
-    assert reg["Product"].owns_collection is False
+    assert reg["Product"].embeds_entity is False
+    assert reg["Product"].is_aggregate_root is False
     assert reg["Product"].is_member is False
 
-    # A member entity: identity, composed inside the Campaign aggregate.
+    # A member entity: identity, embeds only VOs, composed inside the Campaign
+    # aggregate — a member is a graph position, still not a root.
     assert reg["ShortLink"].stereotype is Stereotype.IDENTITY_OBJECT
     assert reg["ShortLink"].is_member is True
-    assert reg["ShortLink"].owns_collection is False
+    assert reg["ShortLink"].embeds_entity is False
+    assert reg["ShortLink"].is_aggregate_root is False
 
     # An aggregate root: a reference-identity entity that embeds ≥1 entity
     # (Campaign embeds the ShortLink entity) — the settled spec's root signal.
     assert reg["Campaign"].stereotype is Stereotype.IDENTITY_OBJECT
-    assert reg["Campaign"].owns_collection is True
+    assert reg["Campaign"].embeds_entity is True
+    assert reg["Campaign"].is_aggregate_root is True
     assert reg["Campaign"].is_member is False

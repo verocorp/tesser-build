@@ -65,7 +65,7 @@ def run_paths(paths: list[str]) -> tuple[list[Finding], list[str]]:
     Two passes so the classifier sees the *whole* tree: first read+parse every
     file into a shared ``{path: tree}``, then classify once and check each file
     against that one registry. This is what makes cross-file embedding
-    (``owns_collection``, ``is_member``) resolve — a per-file registry cannot see
+    (``embeds_entity``, ``is_member``) resolve — a per-file registry cannot see
     that ``Campaign`` owns a ``ShortLink`` defined in another module.
 
     Returns (findings, errors) where ``errors`` are human-readable messages for

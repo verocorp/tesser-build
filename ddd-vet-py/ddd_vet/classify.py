@@ -38,9 +38,9 @@ class Stereotype(Enum):
 
     ``IDENTITY_OBJECT`` deliberately covers both entity and aggregate root:
     entity-vs-aggregate is a non-distinction *as a type* (an aggregate root is
-    an entity in the state of owning + guarding a collection), so the aggregate
-    role is a structural attribute (:attr:`ClassInfo.owns_collection`), not a
-    separate stereotype.
+    an entity in the state of embedding + guarding another entity), so the
+    aggregate role is a structural attribute (:attr:`ClassInfo.embeds_entity` /
+    :attr:`ClassInfo.is_aggregate_root`), not a separate stereotype.
     """
 
     VALUE_OBJECT = "value object"
@@ -59,7 +59,7 @@ class ClassInfo:
     col: int
     stereotype: Stereotype
     # structural attributes (pass 2)
-    owns_collection: bool
+    embeds_entity: bool  # a field/collection element whose type is an entity
     is_member: bool
     # local signals (pass 1) — retained so checks needn't re-derive them
     frozen_dataclass: bool
@@ -69,6 +69,14 @@ class ClassInfo:
     has_eq_method: bool
     field_type_names: frozenset[str]
     collection_element_names: frozenset[str]
+
+    @property
+    def is_aggregate_root(self) -> bool:
+        """The settled root signal (design §2/§3): a reference-identity entity
+        that embeds ≥1 *entity*. Entity-vs-aggregate is not a stereotype — this
+        is the sub-state. An entity embedding only value objects is *not* a root.
+        """
+        return self.stereotype is Stereotype.IDENTITY_OBJECT and self.embeds_entity
 
 
 def _all_names(node: ast.expr) -> frozenset[str]:
@@ -196,12 +204,16 @@ def classify_trees(trees: dict[str, ast.Module]) -> dict[str, ClassInfo]:
                 scans[scan.name] = scan
                 stereos[scan.name] = _local_stereotype(scan)
 
-    domain = {n for n, s in stereos.items() if s in (Stereotype.VALUE_OBJECT, Stereotype.IDENTITY_OBJECT)}
-
     registry: dict[str, ClassInfo] = {}
     for name, scan in scans.items():
         stereo = stereos[name]
-        owns = bool(scan.collection_element_names & domain)
+        # The settled root signal: does this class embed ≥1 *entity*? A field or
+        # collection element whose type is an identity object. (VOs among the
+        # field types don't count — an entity embedding only VOs is an Entity,
+        # not an aggregate root.)
+        embeds_entity = any(
+            stereos.get(t) is Stereotype.IDENTITY_OBJECT for t in scan.field_type_names
+        )
         is_member = any(
             name in other.field_type_names
             for other_name, other in scans.items()
@@ -213,7 +225,7 @@ def classify_trees(trees: dict[str, ast.Module]) -> dict[str, ClassInfo]:
             lineno=scan.lineno,
             col=scan.col,
             stereotype=stereo,
-            owns_collection=owns,
+            embeds_entity=embeds_entity,
             is_member=is_member,
             frozen_dataclass=scan.frozen_dataclass,
             has_post_init=scan.has_post_init,
