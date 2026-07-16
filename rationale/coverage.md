@@ -200,5 +200,6 @@ classifier design
 | `voconstructor` | `DDD003` no-setattr-bypass | "no setters, no mutation" (canonicalize only in `__post_init__`) | `ddd003/{good,bad}.py` |
 | `stringequality` | `DDD004` no-string-equality | "Never `str(a) == str(b)`" | `ddd004/{good,bad}.py` |
 | `primitiveaccessor` | `DDD010` no-primitive-exposure | a value object hides its primitive (the spec/VO discriminator), keyed on the identity-taxonomy classifier | `ddd010/{good,bad}.py` |
+| `aggregatefield` (defensive-copy) | `DDD011` no-collection-leak | an aggregate/entity accessor returns a defensive copy, never the backing mutable collection, keyed on the classifier | `ddd011/{good,bad}.py` |
 | `mustnew` | — dissolved | "No `Must*` twin is needed" | — |
 | (type-aware residual) | — deferred (P1) | primitive-obsession field resolution; identity-`__eq__` field | — |

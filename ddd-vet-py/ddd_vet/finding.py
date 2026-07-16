@@ -64,6 +64,12 @@ CHECKS: tuple[CheckMeta, ...] = (
         "a value object must not expose a public primitive field — hide the "
         "representation (the spec/VO discriminator; specs expose, VOs don't)",
     ),
+    CheckMeta(
+        "DDD011",
+        "no-collection-leak",
+        "an aggregate/entity accessor must not return its backing mutable "
+        "collection directly — return a defensive copy",
+    ),
 )
 
 
