@@ -7,8 +7,8 @@ exactly one stereotype and checks conformance for that stereotype. v1's four
 checks (DDD001–004) are **subsumed** into this model, not discarded.
 
 Derived in a long working session (2026-07-15); the mypy-plugin spike that
-informed the "how much needs types" question lives at
-`docs/spikes/mypy-plugin/`.
+informed the "how much needs types" question is archived (out of mainline) at
+the `spike/mypy-plugin-archive` tag — `git show spike/mypy-plugin-archive`.
 
 ---
 
@@ -203,8 +203,8 @@ v1 is per-file. This model needs whole-tree context:
 **Consequence: most of the type-awareness needs no mypy** — pass 2 resolves names
 against our own registry, not full inference. The mypy plugin only buys the
 *disguised* cases (alias / `NewType` / cross-module import) — ~4 of 16 rows in
-the spike (`docs/spikes/mypy-plugin/README.md`). So mypy stays **optional
-hardening**, not a prerequisite.
+the spike (archived at the `spike/mypy-plugin-archive` tag; `README.md` there).
+So mypy stays **optional hardening**, not a prerequisite.
 
 ---
 
