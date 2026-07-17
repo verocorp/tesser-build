@@ -71,6 +71,25 @@ jobs:
           MYPYPATH=. mypy --strict campaign campaignapp linkcampaign linkcampaignimpl transport catalog main.py tests conftest.py
           pytest -q
 
+  errorspy-example:
+    # Gates the error-norms worked example (Python) at the same bar: mypy
+    # --strict + pytest. Proves the error-handling conventions in running,
+    # type-checked code before they are taught. examples/errorsgo mirrors it.
+    name: errorspy example (mypy --strict + pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dev tooling
+        run: pip install -r examples/errorspy/requirements-dev.txt
+      - name: examples/errorspy — mypy --strict + pytest
+        working-directory: examples/errorspy
+        run: |
+          MYPYPATH=. mypy --strict errors.py conftest.py domain tests
+          pytest -q
+
   ddd-vet-py:
     # The Python analog of ddd-vet: gates ddd-vet-py at the same bar as the Go
     # analyzers (mypy --strict + pytest). Its pytest suite includes the
