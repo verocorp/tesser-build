@@ -58,6 +58,10 @@ class Campaign:
         return self._id
 
     @property
+    def window(self) -> DateWindow:
+        return self._window
+
+    @property
     def links(self) -> tuple[ShortLink, ...]:
         # Defensive copy: the backing list never leaks.
         return tuple(self._links)

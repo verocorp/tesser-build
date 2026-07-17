@@ -20,6 +20,8 @@ unexpected 500. The adapter raises it so nothing vendor-shaped crosses inward.
 from __future__ import annotations
 
 import enum
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import assert_never
 
 
@@ -32,10 +34,21 @@ class DomainKind(enum.Enum):
     CONFLICT = "conflict"
 
 
+@dataclass(frozen=True)
+class FieldProblem:
+    """One field's failure inside an aggregated validation error (B6). Becomes
+    an RFC 9457 ``invalid-params`` entry."""
+
+    code: str
+    field: str | None
+    message: str
+
+
 class DomainError(Exception):
     """A domain error carrying an intrinsic Kind (-> status) and a stable Code
     (-> RFC 9457 ``type``). Construct via ``invalid`` / ``not_found`` /
-    ``conflict``, not directly, so a raw kind can never enter."""
+    ``conflict``, not directly, so a raw kind can never enter. ``problems`` is
+    non-empty only for an aggregated multi-field validation error (B6)."""
 
     def __init__(
         self,
@@ -44,15 +57,18 @@ class DomainError(Exception):
         message: str,
         *,
         field: str | None = None,
+        problems: tuple[FieldProblem, ...] = (),
     ) -> None:
         super().__init__(message)
         self.kind = kind
         self.code = code
+        self.message = message
         self.field = field
+        self.problems = problems
 
     def __str__(self) -> str:
         where = f" ({self.field})" if self.field is not None else ""
-        return f"[{self.code}]{where} {super().__str__()}"
+        return f"[{self.code}]{where} {self.message}"
 
 
 class InfraError(Exception):
@@ -87,6 +103,29 @@ def wrap(err: DomainError, message: str, *, field: str | None = None) -> DomainE
     return DomainError(
         err.kind, err.code, message, field=field if field is not None else err.field
     )
+
+
+def collect(**fields: Callable[[], object]) -> None:
+    """Run each field's validation thunk and AGGREGATE their validation failures
+    (B6): raise ONE validation DomainError whose ``problems`` lists every field
+    that failed, instead of failing fast on the first. A non-validation failure
+    (e.g. a conflict) is not aggregated — it re-raises immediately, since mixing
+    a 409 into a 422 batch would be wrong. Returns ``None`` when all pass."""
+    problems: list[FieldProblem] = []
+    for name, thunk in fields.items():
+        try:
+            thunk()
+        except DomainError as e:
+            if e.kind is not DomainKind.VALIDATION:
+                raise
+            problems.append(FieldProblem(e.code, e.field or name, e.message))
+    if problems:
+        raise DomainError(
+            DomainKind.VALIDATION,
+            "validation_failed",
+            "one or more fields are invalid",
+            problems=tuple(problems),
+        )
 
 
 def status_for(kind: DomainKind) -> int:

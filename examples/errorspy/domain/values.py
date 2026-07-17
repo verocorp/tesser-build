@@ -88,6 +88,16 @@ class DateWindow:
                 field="start",
             )
 
+    # Safe single-representation accessors for the persistence boundary: a
+    # date has exactly one representation, so exposing it is not a multi-rep leak.
+    @property
+    def start(self) -> date:
+        return self._start
+
+    @property
+    def end(self) -> date:
+        return self._end
+
     def __str__(self) -> str:
         return f"[{self._start.isoformat()}, {self._end.isoformat()})"
 
