@@ -13,11 +13,11 @@ class CampaignName:
     specific rule uncovered.
     """
 
-    value: str
+    _value: str
 
     def __post_init__(self) -> None:
-        if not self.value.strip():
+        if not self._value.strip():
             raise ValueError("campaign name must not be empty")
 
     def __str__(self) -> str:
-        return self.value
+        return self._value

@@ -7,7 +7,7 @@ from linkcampaignimpl import InMemoryCampaignRepository
 
 
 def _campaign(id: str = "c1") -> Campaign:
-    return Campaign.from_spec(
+    return Campaign(
         CampaignSpec(
             id=id,
             name="Spring",
@@ -27,8 +27,9 @@ def test_save_then_load_reconstructs_the_aggregate() -> None:
 
 
 def test_load_reruns_invariants_through_the_constructor() -> None:
-    # The repository reconstructs via Campaign.from_spec, so a loaded aggregate
-    # is a real, invariant-checked Campaign — not a bag of attributes.
+    # The repository reconstructs through the Campaign constructor (spec in), so
+    # a loaded aggregate is a real, invariant-checked Campaign — not a bag of
+    # attributes.
     repo = InMemoryCampaignRepository()
     repo.save(_campaign("c1"))
     loaded = repo.load(CampaignID("c1"))

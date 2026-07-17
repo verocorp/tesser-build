@@ -63,4 +63,4 @@ def test_value_objects_are_immutable() -> None:
 
     s = Slug("spring-sale")
     with pytest.raises(FrozenInstanceError):
-        s.value = "autumn-sale"  # type: ignore[misc]
+        s._value = "autumn-sale"  # type: ignore[misc]

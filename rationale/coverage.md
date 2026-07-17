@@ -173,3 +173,36 @@ go test ./rationale/...                 # the wins + the matrix meta-test
 go test -bench=. -benchmem ./rationale/ # the adversarial cost (collection-VO defensive-copy tax)
 ./rationale/measure-ablation.sh ...     # measure changeability on your own repo
 ```
+
+## Python enforcement (ddd-vet-py)
+
+The Go analyzers above are `go/analysis`; they do not run on Python. The Python
+analog is [`ddd-vet-py`](../ddd-vet-py/) — a zero-dependency stdlib-`ast` tool
+that enforces the *syntactically decidable* subset on the frozen-dataclass
+substrate `skills/ddd/python.md` teaches. Roughly half the Go ruleset dissolves
+(`mustnew` — Python constructors raise) and the rest reframe to the dataclass
+grain. `primitiveaccessor`, first dropped as theater, is **reinstated** as
+`DDD010`: it is the load-bearing spec/VO discriminator, keyed on the
+**identity-taxonomy classifier** (`ddd_vet/classify.py`) — a whole-tree two-pass
+pass that classifies each class as value_object / spec / identity_object / other.
+Its own meta-test (`ddd-vet-py/tests/test_meta.py`) is the Python analog of this
+matrix's silent-gap guard: it fails if a registered check has no good/bad
+fixture, if an unregistered code is emitted, or if the analyzer is not clean on
+the canonical `examples/python` tree. Full rationale:
+[`docs/design-python-analyzer.md`](../docs/design-python-analyzer.md) and the
+classifier design
+[`docs/design-python-domain-detection.md`](../docs/design-python-domain-detection.md).
+
+| Go analyzer | Python check | python.md rule | Fixture (`ddd-vet-py/testdata/`) |
+|---|---|---|---|
+| `vofields` | `DDD001` frozen-dataclass | "`frozen=True` always" | `ddd001/{good,bad}.py` |
+| `comparability` | `DDD002` hashable-fields | collection VO backs itself with a sorted tuple (classification-aware: fires only on a `VALUE_OBJECT`, so a spec / persistence row is exempt) | `ddd002/{good,bad}.py` |
+| `voconstructor` | `DDD003` no-setattr-bypass | "no setters, no mutation" (canonicalize only in `__post_init__`) | `ddd003/{good,bad}.py` |
+| `stringequality` | `DDD004` no-string-equality | "Never `str(a) == str(b)`" | `ddd004/{good,bad}.py` |
+| `primitiveaccessor` | `DDD010` no-primitive-exposure | a value object hides its primitive (the spec/VO discriminator), keyed on the identity-taxonomy classifier | `ddd010/{good,bad}.py` |
+| `aggregatefield` (defensive-copy) | `DDD011` no-collection-leak | an aggregate/entity accessor returns a defensive copy, never the backing mutable collection, keyed on the classifier | `ddd011/{good,bad}.py` |
+| `aggregateref` (boundary) | `DDD012` reference-roots-by-id | an aggregate references another root by its ID value object, never by holding the root object; keyed on the whole-tree registry (a root is a reference-identity entity that embeds ≥1 entity — `is_aggregate_root`) | `ddd012/{good,bad}.py` |
+| (construction) | `DDD013` construct-through-spec | a structured domain object (entity/aggregate) constructs through `__init__(self, spec)`; no separate `from_spec` factory (the value-taking-ctor half is a deferred extension) | `ddd013/{good,bad}.py` |
+| `comparability` / `equalitytest` | `DDD014` equality-by-type | equality matches the stereotype: VO compares by value (never blocks); entity defines `__eq__`+`__hash__` together (by ID); aggregate root blocks equality (`__eq__ = None`/`__hash__ = None`) — keyed on the classifier | `ddd014/{good,bad}.py` |
+| `mustnew` | — dissolved | "No `Must*` twin is needed" | — |
+| (type-aware residual) | — deferred (P1) | primitive-obsession field resolution; identity-`__eq__` field | — |

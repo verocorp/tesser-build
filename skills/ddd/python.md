@@ -53,7 +53,15 @@ class EmailAddress:
 runs on every construction path, so an invalid instance is unrepresentable —
 there is no bypassable factory.
 
-**Compound (two or more fields) — spec in, parsed and validated:**
+**Compound (two or more fields):** the primitive-leaf spec is parsed and
+validated on construction; the fields are **hidden** (a value object exposes no
+primitive field — `python.md#DDD010`). *REVISIT: the concrete construction
+mechanism for a compound value object is unsettled. An entity takes its spec
+directly in `__init__(self, spec)`; the compound-VO below still routes primitive
+parsing through a factory because a frozen dataclass's auto-generated `__init__`
+takes already-parsed fields, not the spec. Whether a compound VO should instead
+take the spec in a custom `__init__` (dropping the dataclass auto-init) is open —
+see `examples/python/catalog/money.py`.*
 
 ```python
 from dataclasses import dataclass
@@ -66,29 +74,31 @@ class MoneySpec:          # spec: primitive leaves only
 
 @dataclass(frozen=True)
 class Money:
-    amount: Decimal
-    currency: str
+    _amount: Decimal      # hidden: the wrapped primitive never leaks as a field
+    _currency: str
 
     @classmethod
-    def from_spec(cls, spec: MoneySpec) -> "Money":
+    def from_spec(cls, spec: MoneySpec) -> "Money":   # REVISIT (compound-VO construction, see note above)
         try:
             amount = Decimal(spec.amount)   # conversion only — no rules here
         except InvalidOperation as e:
             raise ValueError(f"invalid amount: {spec.amount!r}") from e
-        return cls(amount=amount, currency=spec.currency)
+        return cls(_amount=amount, _currency=spec.currency)
 
     def __post_init__(self) -> None:        # the rules live here, always run
-        if not self.currency:
+        if not self._currency:
             raise ValueError("currency is required")
 
     def add(self, other: "Money") -> "Money":
-        if self.currency != other.currency:
+        if self._currency != other._currency:
             raise ValueError("cannot add different currencies")
-        return Money(self.amount + other.amount, self.currency)
+        return Money(self._amount + other._amount, self._currency)
+
+    def __str__(self) -> str:               # display only; the Decimal leaves the domain only here
+        return f"{self._amount:.2f} {self._currency}"
 ```
 
-Factories (`from_spec`) convert primitives to typed values; **rules live only
-in `__post_init__`** so direct construction can't skip them.
+**Rules live only in `__post_init__`** so no construction path can skip them.
 
 **Collection (wraps a dict/list):**
 
@@ -163,21 +173,15 @@ class TransferSpec:       # primitive leaves, nested specs
     amount: MoneySpec
 
 class Transfer:
-    def __init__(self, id: TransferID, from_account: AccountRef,
-                 to_account: AccountRef, amount: Money) -> None:
-        self._id = id
-        self._from = from_account
-        self._to = to_account
-        self._amount = amount
-
-    @classmethod
-    def from_spec(cls, spec: TransferSpec) -> "Transfer":
+    def __init__(self, spec: TransferSpec) -> None:
+        # The single construction path: the constructor takes the spec, builds
+        # each child value object via its own constructor (error context added),
+        # and enforces any cross-field invariant. There is no second constructor.
         try:
-            id = TransferID(spec.id)
+            self._id = TransferID(spec.id)
         except ValueError as e:
             raise ValueError(f"invalid transfer ID: {e}") from e
-        # ... each child via its own constructor, error context added ...
-        return cls(id, from_account, to_account, amount)
+        # ... each remaining child via its own constructor, error context added ...
 
     @property
     def id(self) -> TransferID:
@@ -251,7 +255,7 @@ class CreditService:
     # Create use case: Delegate constructs a new aggregate.
     def record_payment(self, req: RecordPaymentRequest) -> RecordPaymentResponse:
         spec = to_payment_spec(req)                 # 1. Convert (DTO → spec)
-        payment = Payment.from_spec(spec)           # 2. Delegate (construct; raises on invalid)
+        payment = Payment(spec)                     # 2. Delegate (construct; raises on invalid)
         self._repo.save_payment(payment)            # 3. Persist (whole aggregate)
         return to_payment_response(payment)         # 4. Respond (domain → DTO)
 
@@ -306,13 +310,13 @@ class InMemoryOrderRepo:                   # satisfies the Protocol structurally
         rec = self._rows.get(str(id))
         if rec is None:
             raise LookupError(f"order {id} not found")
-        return Order.from_spec(rec.to_spec())         # reconstruct THROUGH the constructor
+        return Order(rec.to_spec())                   # reconstruct THROUGH the constructor
 ```
 
 - **`save` takes the root**; `decompose` (private) flattens it. The service
   never extracts children to save them.
-- **`load` reconstructs via `from_spec`**, so invariants re-run — never build
-  the aggregate by assigning attributes.
+- **`load` reconstructs through the constructor** (spec in), so invariants
+  re-run — never build the aggregate by assigning attributes.
 - **No domain math.** `find` may filter/order (persistence selection); summing
   or rule-checking is a leak
   (`application-services.md#domain-logic-leakage-checks`).
@@ -436,7 +440,9 @@ def wire(addr: tuple[str, int]) -> ThreadingHTTPServer:
 ## The Spec pattern
 
 Specs are frozen dataclasses with **primitive leaves** that carry construction
-data across the layer boundary; `from_spec` factories convert, `__post_init__`
+data across the layer boundary. A structured domain object's **constructor takes
+its spec** — that is the single construction path (no separate factory); it
+converts each primitive to a value object and `__post_init__`/the constructor
 validates.
 
 - A spec field is never a domain value object — the caller shouldn't have to
@@ -445,7 +451,9 @@ validates.
   never flattened prefixed fields. Ubiquitous child types are embedded in many
   parents; nesting means a change to the child's construction touches the
   child's spec only.
-- 1 field → skip the spec, construct directly; 2+ fields → spec.
+- **1 primitive field → no spec; the constructor takes the raw primitive**
+  (`Slug(value)`). **2+ fields (or embedded domain objects) → the constructor
+  takes the spec** (`Transfer(spec)`).
 - Enums cross the boundary as enums (`NormalBalance.CREDIT`), not strings.
 
 **Return types:** domain functions return domain types. If callers must

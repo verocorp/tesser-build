@@ -52,12 +52,11 @@ jobs:
         run: go test ./gclplugin/ -run CustomGCL -v
 
   python-example:
-    # Gates the Python worked examples at the same bar as the Go mechanics:
+    # Gates the Python worked example at the same bar as the Go mechanics:
     # mypy --strict and pytest must both be clean, so skills/ddd/python.md never
     # encodes a pattern that isn't backed by running, type-checked code.
-    # examples/python is the reference rendering; examples/python-expenses is the
-    # fresh-agent acceptance-gate output.
-    name: python examples (mypy --strict + pytest)
+    # examples/python is the reference rendering.
+    name: python example (mypy --strict + pytest)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -71,8 +70,28 @@ jobs:
         run: |
           MYPYPATH=. mypy --strict campaign campaignapp linkcampaign linkcampaignimpl transport catalog main.py tests conftest.py
           pytest -q
-      - name: examples/python-expenses — mypy --strict + pytest
-        working-directory: examples/python-expenses
+
+  ddd-vet-py:
+    # The Python analog of ddd-vet: gates ddd-vet-py at the same bar as the Go
+    # analyzers (mypy --strict + pytest). Its pytest suite includes the
+    # acceptance gate that the analyzer is clean on examples/python — the Python
+    # counterpart of "ddd-vet on examples/ddd" in the go job above.
+    name: ddd-vet-py (mypy --strict + pytest + examples/python gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dev tooling
+        run: pip install -r ddd-vet-py/requirements-dev.txt
+      - name: ddd-vet-py — mypy --strict + pytest
+        working-directory: ddd-vet-py
         run: |
-          MYPYPATH=. mypy --strict .
+          mypy
           pytest -q
+      - name: ddd-vet-py on examples/python (explicit CLI gate)
+        run: python -m ddd_vet examples/python
+        working-directory: .
+        env:
+          PYTHONPATH: ddd-vet-py

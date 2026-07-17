@@ -42,7 +42,7 @@ class CampaignService:
     def create_campaign(self, req: CreateCampaignRequest) -> CreateCampaignResponse:
         """Create use case: Delegate constructs a brand-new aggregate."""
         spec = _to_campaign_spec(req)  # 1. Convert
-        c = Campaign.from_spec(spec)  # 2. Delegate (construct; raises on invalid)
+        c = Campaign(spec)  # 2. Delegate (construct; raises on invalid)
         self._repo.save(c)  # 3. Persist (whole aggregate)
         return CreateCampaignResponse(  # 4. Respond (domain -> DTO)
             campaign_id=str(c.id),
