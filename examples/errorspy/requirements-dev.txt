@@ -1,0 +1,5 @@
+# Tooling for the error-norms worked example — the type checker and test runner
+# that gate it. Everything the example itself imports is the Python standard
+# library (dataclasses, enum, typing, http.server, json); these two are dev-only.
+mypy>=1.8
+pytest>=8.0
