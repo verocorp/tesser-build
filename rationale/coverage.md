@@ -85,7 +85,7 @@ rationale; it is gated on the skills landing in this repo. See
 
 The conventions are materialized in prose several times over: a concept file,
 two language mechanics files, an FAQ entry, and a resolver route in
-[`skills/ddd/`](../skills/ddd/) plus [`docs/faq.md`](../docs/faq.md). Separately
+[`skills/tesser-build/`](../skills/tesser-build/) plus [`docs/faq.md`](../docs/faq.md). Separately
 authored renderings drift; this matrix is the map of which renderings carry
 each rule, so a rule change is a walk across its row in one commit (and a
 `skill-version` bump in `SKILL.md`). The rows are maintained by hand, but the
@@ -148,7 +148,7 @@ provenance. This matrix row is the anti-silent-gap net for that dimension:
 `changeability/nooutward/*_test.go`, so a named arm test that is renamed or deleted
 fails the guard.
 
-| Decision (skills/ddd) | Change(s) | Arms | Result | Committed tests |
+| Decision (skills/tesser-build) | Change(s) | Arms | Result | Committed tests |
 |---|---|---|---|---|
 | **Public interface** (`composition-root.md`) | C1 backend migration (`-tags swap`); C2 substitution (`-tags subst`) | decoupled (depends on `Client`); coupled fan-out + 3 realistic patterns; Codex red-team `portless` (facade); a fake for substitution | **C1 is TIED** by the lower-ceremony facade (a facade decouples from a backend too) — decoupled 0 vs coupled N at N=8/16. **C2 the interface WINS** — it substitutes a fake at 0 edits; the facade cannot (no seam). | `anchor/`: `TestDecoupledArm_SurvivesBackendSwap`, `TestContrast_C1_DecoupledFlat_CoupledTracksN`, `TestInterfaceDependent_SubstitutesForFree`, `TestFacadeDependent_CannotSubstituteWithoutEdit` |
 | **No outward representation** (`application-services.md` Respond) | D3 outward-representation migration (`-tags repv2`: response DTO field reshaped) | decoupled (operate on `domain.Maneuver` value objects); coupled fan-out + 2 realistic patterns (`webhookpayload`, `burnsort`); Codex red-team `burnquery` (query facade) | **Decision 3 WINS** — a domain that emits its own DTO fans a wire reshape out to N; the decoupled arm is 0, coupled N at N=8/16. The red-team facade is the *sanctioned* mapper (0 edits) — it does not justify a domain emitting a DTO; it only ties on read-ceremony. **No compile guard** (a dumb DTO imports nothing → no cycle); the fan-out is the proof. | `nooutward/`: `TestDecoupledArm_SurvivesRepMigration`, `TestContrast_DecoupledFlat_CoupledTracksN` |
@@ -179,7 +179,7 @@ go test -bench=. -benchmem ./rationale/ # the adversarial cost (collection-VO de
 The Go analyzers above are `go/analysis`; they do not run on Python. The Python
 analog is [`tessercheck-py`](../tessercheck-py/) — a zero-dependency stdlib-`ast` tool
 that enforces the *syntactically decidable* subset on the frozen-dataclass
-substrate `skills/ddd/python.md` teaches. Roughly half the Go ruleset dissolves
+substrate `skills/tesser-build/python.md` teaches. Roughly half the Go ruleset dissolves
 (`mustnew` — Python constructors raise) and the rest reframe to the dataclass
 grain. `primitiveaccessor`, first dropped as theater, is **reinstated** as
 `TB010`: it is the load-bearing spec/VO discriminator, keyed on the

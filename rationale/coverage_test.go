@@ -57,7 +57,7 @@ func TestCoverageMatrix_NoSilentGaps(t *testing.T) {
 
 // TestSkillMaterializationAnchors is the structural half of the skill-matrix
 // contract (design v2, H6): every `file.md#anchor` the skill-materializations
-// table names must resolve to a real heading in that file under skills/ddd/. It
+// table names must resolve to a real heading in that file under skills/tesser-build/. It
 // catches a renamed heading, a mistyped anchor, or a routeless concept file —
 // the silent drift the manual matrix invites once the seam concepts expand it.
 // It does NOT check semantic agreement between renderings; that stays human
@@ -80,7 +80,7 @@ func TestSkillMaterializationAnchors(t *testing.T) {
 		section = before
 	}
 
-	skillDir := filepath.Join("..", "skills", "ddd")
+	skillDir := filepath.Join("..", "skills", "tesser-build")
 	anchorsByFile := map[string]map[string]bool{}
 	loadAnchors := func(file string) (map[string]bool, error) {
 		if a, ok := anchorsByFile[file]; ok {
@@ -122,11 +122,11 @@ func TestSkillMaterializationAnchors(t *testing.T) {
 		seen[ref] = true
 		set, err := loadAnchors(file)
 		if err != nil {
-			t.Errorf("matrix references %s but skills/ddd/%s: %v", ref, file, err)
+			t.Errorf("matrix references %s but skills/tesser-build/%s: %v", ref, file, err)
 			continue
 		}
 		if !set[anchor] {
-			t.Errorf("matrix references %s but no heading in skills/ddd/%s produces anchor #%s", ref, file, anchor)
+			t.Errorf("matrix references %s but no heading in skills/tesser-build/%s produces anchor #%s", ref, file, anchor)
 		}
 	}
 	if len(seen) == 0 {

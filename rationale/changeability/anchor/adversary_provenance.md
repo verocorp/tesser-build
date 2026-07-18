@@ -91,5 +91,5 @@ a *second* change: **C2 = substitute the implementation** (a test double / a sec
 impl). The forced-edit contrast under C2 is where `portless` pays N and
 `orders.Client` stays 0. That change, and the matching skill sharpening ("the
 public interface earns its place via substitutability, not migration-survival
-alone"), is the action this finding triggers — routed to `skills/ddd` per the
+alone"), is the action this finding triggers — routed to `skills/tesser-build` per the
 decision rule.

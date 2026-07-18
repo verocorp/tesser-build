@@ -53,7 +53,7 @@ jobs:
 
   python-example:
     # Gates the Python worked example at the same bar as the Go mechanics:
-    # mypy --strict and pytest must both be clean, so skills/ddd/python.md never
+    # mypy --strict and pytest must both be clean, so skills/tesser-build/python.md never
     # encodes a pattern that isn't backed by running, type-checked code.
     # examples/python is the reference rendering.
     name: python example (mypy --strict + pytest)

@@ -2,7 +2,7 @@
 
 The Python analog of tesser-build's `tessercheck`: a **zero-dependency, stdlib-`ast`**
 conformance analyzer for the DDD construction conventions in
-[`skills/ddd/python.md`](../skills/ddd/python.md). It runs locally and in CI to
+[`skills/tesser-build/python.md`](../skills/tesser-build/python.md). It runs locally and in CI to
 enforce conformance instead of relying on adversarial LLM/Codex review to find
 gaps.
 

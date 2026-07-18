@@ -1,4 +1,4 @@
-// Package exportrow is a realistic coupled arm for skills/ddd/composition-root.md
+// Package exportrow is a realistic coupled arm for skills/tesser-build/composition-root.md
 // (the public-interface rule): consumers should not expose backend persistence
 // rows in their own public APIs.
 //

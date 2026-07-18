@@ -1,4 +1,4 @@
-// Package locator is a realistic coupled arm for skills/ddd/composition-root.md
+// Package locator is a realistic coupled arm for skills/tesser-build/composition-root.md
 // (the public-interface rule): service locators can hide wiring while still
 // returning backend-specific types.
 //

@@ -1,8 +1,8 @@
 # Python worked example
 
-The verified Python rendering of the `skills/ddd` mechanics — the peer of the
+The verified Python rendering of the `skills/tesser-build` mechanics — the peer of the
 Go examples (`examples/ddd`, `examples/lending`, `examples/running`). Every
-pattern `skills/ddd/python.md` teaches is backed by runnable code here, gated
+pattern `skills/tesser-build/python.md` teaches is backed by runnable code here, gated
 by `mypy --strict` and `pytest` in CI.
 
 ## Layout

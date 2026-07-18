@@ -13,7 +13,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="tessercheck",
         description="DDD conformance analyzer for Python domain code "
-        "(see skills/ddd/python.md).",
+        "(see skills/tesser-build/python.md).",
     )
     p.add_argument("paths", nargs="*", default=["."], help="files or directories (default: .)")
     p.add_argument("--version", action="version", version=f"tessercheck-py {__version__}")

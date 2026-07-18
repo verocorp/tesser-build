@@ -60,7 +60,7 @@ resolution when the red-team ties on the first change — that is the red-team
 
 The decision: **a domain object emits no non-domain representation.** Turning a
 domain object into a DTO is the application service's **Respond** step
-(`skills/ddd/application-services.md`: "a domain object never leaves the service;
+(`skills/tesser-build/application-services.md`: "a domain object never leaves the service;
 returning one is a boundary leak — the service-layer twin of a value object leaking
 its representation"), never a method on the domain object. The correct layering,
 which the arms model faithfully:
@@ -195,13 +195,13 @@ action** — a "logged finding" that changes nothing is not an accepted outcome.
 | Outcome | What it means | Action |
 |---|---|---|
 | Red-team forced-edits > 0, or = 0 with **more** ceremony than ours | our boundary earns its place for C | assert the win; the `coverage.md` changeability row stands |
-| Red-team forced-edits = 0 with **less** ceremony than ours | the boundary is ceremony for C | **soften or retire the named `skills/ddd/` rule**; record the simpler approach as the recommended pattern |
-| A realistic **coupled** arm matches or beats our forced-edits | the rule doesn't buy what we claimed | **named `skills/ddd/` or doc change**, logged with the arm |
+| Red-team forced-edits = 0 with **less** ceremony than ours | the boundary is ceremony for C | **soften or retire the named `skills/tesser-build/` rule**; record the simpler approach as the recommended pattern |
+| A realistic **coupled** arm matches or beats our forced-edits | the rule doesn't buy what we claimed | **named `skills/tesser-build/` or doc change**, logged with the arm |
 | **Negative control**: our decoupled arm also pays N | the harness measures real coupling (not rigged) | control passes — the win elsewhere is credible |
 | Negative control: our decoupled arm pays 0 (boundary "helped" where it should not) | the harness is biased | **stop and investigate the harness**, do not report wins |
 
 "Which named rule" must be identifiable *before* running — name the
-`skills/ddd/*.md` rule each arm is evidence for, in the arm's doc comment.
+`skills/tesser-build/*.md` rule each arm is evidence for, in the arm's doc comment.
 
 ## Reproducibility & provenance
 

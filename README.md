@@ -1,6 +1,6 @@
 # go-ddd
 
-A DDD enforcement toolkit: `go/analysis` analyzers, a golangci-lint plugin, an executable rationale layer, an agent skill ([`skills/ddd/`](skills/ddd/)) that teaches coding agents the conventions (Go and Python), and human docs ([start here](docs/start-here.md), [FAQ](docs/faq.md)).
+A DDD enforcement toolkit: `go/analysis` analyzers, a golangci-lint plugin, an executable rationale layer, an agent skill ([`skills/tesser-build/`](skills/tesser-build/)) that teaches coding agents the conventions (Go and Python), and human docs ([start here](docs/start-here.md), [FAQ](docs/faq.md)).
 
 ## Why: the rationale layer
 
@@ -134,13 +134,13 @@ for on-save. Same on-save timing, no custom binary, but a third-party extension
 instead of the native pipeline. (Background on the trade: `docs/design-ddd-vet-migration.md`
 Decisions 14–15.)
 
-### `skills/ddd`: the agent skill
+### `skills/tesser-build`: the agent skill
 
 The skills rung of the adoption ladder (docs → skills → CI): a copy-in skill
 directory that teaches coding agents to classify and build domain objects —
 value objects, entities, aggregates — **and to place behavior correctly around
 them** (application services, repositories, a domain-service stub), before CI
-ever sees the code. [`SKILL.md`](skills/ddd/SKILL.md) is a small router
+ever sees the code. [`SKILL.md`](skills/tesser-build/SKILL.md) is a small router
 (progressive disclosure: agents read only the concept/language file a task
 routes to); construction mechanics ship for **Go** and **Python**. Humans: read
 [`docs/start-here.md`](docs/start-here.md) and [`docs/faq.md`](docs/faq.md)
@@ -152,7 +152,7 @@ instead.
   repo's `CLAUDE.md`:
 
   ```bash
-  cp -r skills/ddd /path/to/your-repo/.claude/skills/ddd
+  cp -r skills/tesser-build /path/to/your-repo/.claude/skills/tesser-build
   ```
 
   ```markdown
@@ -163,14 +163,14 @@ instead.
   ```
 
 - **Codex:** Codex has no skill auto-loading, so the routing line does the
-  work. Copy the directory anywhere in the repo (e.g. `skills/ddd/`) and add
+  work. Copy the directory anywhere in the repo (e.g. `skills/tesser-build/`) and add
   to `AGENTS.md`:
 
   ```markdown
   <!-- AGENTS.md -->
   Creating or modifying domain types (new type, field, constructor, validation),
   OR writing a handler/endpoint, a use-case / application or domain service, or
-  persistence / repository code → read skills/ddd/SKILL.md and follow its routing.
+  persistence / repository code → read skills/tesser-build/SKILL.md and follow its routing.
   ```
 
 Without the routing line the skill is just files on disk — agents won't

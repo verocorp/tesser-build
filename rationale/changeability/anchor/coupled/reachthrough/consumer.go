@@ -1,4 +1,4 @@
-// Package reachthrough is a realistic coupled arm for skills/ddd/composition-root.md
+// Package reachthrough is a realistic coupled arm for skills/tesser-build/composition-root.md
 // (the public-interface rule): consumers should depend on the public orders.Client
 // boundary, not backend-specific adapter helpers.
 //
