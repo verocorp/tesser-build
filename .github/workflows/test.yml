@@ -71,6 +71,27 @@ jobs:
           MYPYPATH=. mypy --strict campaign campaignapp linkcampaign linkcampaignimpl transport catalog main.py tests conftest.py
           pytest -q
 
+  python-app-example:
+    # Gates the composition-root / wiring worked example (Python) at the same bar:
+    # mypy --strict + pytest. Proves the bounded-context anatomy + srv/config/
+    # bootstrap model in running, type-checked code before it is taught, and runs
+    # the example's own self-enforcement tests (env-edge, exits, import-time side
+    # effects, directional import guard). examples/app mirrors it in Go.
+    name: python-app example (mypy --strict + pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dev tooling
+        run: pip install -r examples/python-app/requirements-dev.txt
+      - name: examples/python-app — mypy --strict + pytest
+        working-directory: examples/python-app
+        run: |
+          MYPYPATH=. mypy --strict errors.py lifecycle.py config.py campaign linkpolicy reports bootstrap srv tests conftest.py
+          pytest -q
+
   errorspy-example:
     # Gates the error-norms worked example (Python) at the same bar: mypy
     # --strict + pytest. Proves the error-handling conventions in running,
