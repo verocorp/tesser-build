@@ -1,5 +1,7 @@
 # Handler
 
+<!-- tb-status: partial -->
+
 An **inbound adapter**: it translates one delivery mechanism's wire format
 (HTTP, CLI, an event) to and from one context's public `Client`, and nothing
 else. Handlers are one of the two adapter types in the anatomy — inbound

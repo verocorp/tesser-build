@@ -1,0 +1,187 @@
+{
+  "_comment": "The canonical row registry for the roadmap matrix (eng review D11b): the row taxonomy lives HERE, never as constants inside the generator — adding a component is a registry edit, not a code edit. Columns are DERIVED by roadmap/generate.py: this file declares where each row's artifacts live (or will live); it never carries a status symbol. Judgment cells are annotated at the source they describe with tb-cell markers (schema: docs/skill-authoring.md).",
+  "_column_semantics": {
+    "skill": "component-doc filename under skills/tesser-build/; absent key = n/a (—); named-but-missing file = ❌; present file's tb-status marker decides ✅ (full) vs 🟡 (partial/stub)",
+    "py_example, go_example": "candidate paths relative to repo root; absent key = n/a (—); any path exists = ✅; none exist = ❌",
+    "go_analyzers, py_checks": "names in internal/analyzers.All / codes in tessercheck.finding.CHECKS; a listed name missing from the live registry is a loud error (drift)",
+    "enforcement_tests": "in-example enforcement test paths; these alone cap the checker cell at 🟡 in-example",
+    "rationale": "glob patterns for executable-rationale test files; absent key = n/a (—); no match = ❌"
+  },
+  "rows": [
+    {
+      "key": "value-objects",
+      "title": "Value objects",
+      "skill": "value-objects.md",
+      "py_example": ["examples/python/campaign", "examples/python/catalog"],
+      "go_example": ["examples/ddd", "examples/catalog", "examples/running"],
+      "go_analyzers": ["mustnew", "vofields", "voconstructor", "stringequality", "stringer", "primitiveaccessor", "comparability"],
+      "py_checks": ["TB001", "TB002", "TB003", "TB004", "TB010"],
+      "rationale": ["rationale/*_test.go"]
+    },
+    {
+      "key": "entities",
+      "title": "Entities",
+      "skill": "entities.md",
+      "py_example": ["examples/python"],
+      "go_example": ["examples/ddd"],
+      "go_analyzers": [],
+      "py_checks": ["TB013", "TB014"],
+      "rationale": []
+    },
+    {
+      "key": "aggregates",
+      "title": "Aggregates",
+      "skill": "aggregates.md",
+      "py_example": ["examples/python"],
+      "go_example": ["examples/ddd"],
+      "go_analyzers": [],
+      "py_checks": ["TB011", "TB012"],
+      "rationale": []
+    },
+    {
+      "key": "domain-services",
+      "title": "Domain services",
+      "skill": "domain-services.md",
+      "py_example": [],
+      "go_example": [],
+      "go_analyzers": [],
+      "py_checks": [],
+      "rationale": []
+    },
+    {
+      "key": "application-services",
+      "title": "Application services",
+      "skill": "application-services.md",
+      "py_example": ["examples/python"],
+      "go_example": ["examples/ddd", "examples/lending"],
+      "go_analyzers": [],
+      "py_checks": [],
+      "rationale": ["rationale/changeability/nooutward/*_test.go"]
+    },
+    {
+      "key": "public-interface",
+      "title": "Public interface",
+      "skill": "public-interface.md",
+      "py_example": ["examples/python-app"],
+      "go_example": ["examples/running"],
+      "go_analyzers": [],
+      "py_checks": [],
+      "enforcement_tests": ["examples/python-app/tests/test_shape.py", "examples/python-app/tests/test_discovery.py"],
+      "rationale": ["rationale/changeability/anchor/*_test.go"]
+    },
+    {
+      "key": "handlers",
+      "title": "Handlers",
+      "skill": "handlers.md",
+      "py_example": ["examples/python-app/campaign/adapters/handlers"],
+      "go_example": ["examples/running/transport"],
+      "go_analyzers": [],
+      "py_checks": [],
+      "enforcement_tests": ["examples/python-app/tests/test_enforcement.py"],
+      "rationale": []
+    },
+    {
+      "key": "gateway-repository",
+      "title": "Gateway: repository",
+      "skill": "repositories.md",
+      "py_example": ["examples/python", "examples/python-app/campaign/adapters/gateways"],
+      "go_example": ["examples/ddd", "examples/running"],
+      "go_analyzers": [],
+      "py_checks": [],
+      "rationale": []
+    },
+    {
+      "key": "gateway-cross-context",
+      "title": "Gateway: cross-context",
+      "skill": "gateway-cross-context.md",
+      "py_example": ["examples/python-app/campaign/adapters/gateways/target_checker.py"],
+      "go_example": ["examples/app"],
+      "go_analyzers": [],
+      "py_checks": [],
+      "enforcement_tests": ["examples/python-app/tests/test_direction.py", "examples/python-app/tests/test_call_fail_closed.py"],
+      "rationale": []
+    },
+    {
+      "key": "gateway-vendor",
+      "title": "Gateway: vendor/ACL",
+      "skill": "gateway-vendor.md",
+      "py_example": [],
+      "go_example": [],
+      "go_analyzers": [],
+      "py_checks": [],
+      "rationale": []
+    },
+    {
+      "key": "wiring",
+      "title": "Context wiring",
+      "skill": "wiring.md",
+      "py_example": ["examples/python-app/campaign/wiring"],
+      "go_example": ["examples/app"],
+      "go_analyzers": [],
+      "py_checks": [],
+      "enforcement_tests": ["examples/python-app/tests/test_impl_selection.py"],
+      "rationale": []
+    },
+    {
+      "key": "bootstrap",
+      "title": "bootstrap + app config + lifecycle",
+      "skill": "bootstrap.md",
+      "py_example": ["examples/python-app/bootstrap"],
+      "go_example": ["examples/app"],
+      "go_analyzers": [],
+      "py_checks": [],
+      "enforcement_tests": ["examples/python-app/tests/test_enforcement.py", "examples/python-app/tests/test_bootstrap_once.py", "examples/python-app/tests/test_cleanup.py"],
+      "rationale": []
+    },
+    {
+      "key": "srv",
+      "title": "srv hosts",
+      "skill": "srv.md",
+      "py_example": ["examples/python-app/srv"],
+      "go_example": ["examples/app"],
+      "go_analyzers": [],
+      "py_checks": [],
+      "enforcement_tests": ["examples/python-app/tests/test_enforcement.py"],
+      "rationale": []
+    },
+    {
+      "key": "map",
+      "title": "The map",
+      "skill": "map.md",
+      "rationale": []
+    },
+    {
+      "key": "strategic-design",
+      "title": "Strategic design",
+      "skill": "strategic-design.md",
+      "rationale": []
+    },
+    {
+      "key": "norm-errors",
+      "title": "Norm: errors",
+      "skill": "errors.md",
+      "py_example": ["examples/errorspy"],
+      "go_example": ["examples/errorsgo"],
+      "go_analyzers": [],
+      "py_checks": [],
+      "enforcement_tests": ["examples/errorspy/tests"],
+      "rationale": []
+    },
+    {
+      "key": "norm-testing",
+      "title": "Norm: testing",
+      "skill": "testing.md",
+      "py_example": [],
+      "go_example": [],
+      "rationale": []
+    },
+    {
+      "key": "norm-comments",
+      "title": "Norm: comments",
+      "skill": "comments.md",
+      "py_example": [],
+      "go_example": [],
+      "rationale": []
+    }
+  ]
+}

@@ -1,5 +1,7 @@
 # Strategic design — subdomains, bounded contexts, ubiquitous language
 
+<!-- tb-status: full -->
+
 Strategic design decides **where the model boundaries go and what language holds
 inside them** — the problem-and-solution-space concepts that sit *above* the tactical
 building blocks (value objects, entities, aggregates). The building blocks fill a

@@ -2,6 +2,8 @@
 // composition root that wires the in-memory repository, the application
 // service, the public Client, and the HTTP handler together, then serves
 // requests.
+//
+// tb-cell: public-interface go-example 🟡 -- v3 single-main shape; settled anatomy's Go mirror (examples/app) pending
 package main
 
 import (

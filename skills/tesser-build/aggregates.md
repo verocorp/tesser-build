@@ -1,5 +1,7 @@
 # Aggregate
 
+<!-- tb-status: full -->
+
 An aggregate is a **consistency boundary**: a cluster of objects that must
 change together under rules that span them, with one root entity as the only
 entry point. Outside code holds a reference to the root and nothing inside;

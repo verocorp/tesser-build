@@ -34,6 +34,12 @@ maps each rule to its demo and its checker, with a meta-test that forbids silent
 gaps. [`docs/case-study.md`](docs/case-study.md) carries the magnitude measured on
 a real ~1,100-commit codebase.
 
+The component-level coverage view — which convention has a Python example, a Go
+example, a skill doc, a checker, and executable rationale — is
+[`roadmap/ROADMAP.md`](roadmap/ROADMAP.md), **generated** by
+[`roadmap/generate.py`](roadmap/generate.py) from the repo itself (CI fails on
+drift); the row taxonomy lives in [`roadmap/registry.json`](roadmap/registry.json).
+
 The fixture runs **three contenders** over the same domain: bare primitives
 ([`rationale/primitive/`](rationale/primitive/)), a realistic *mixture* of
 primitives and inconsistently-built value objects

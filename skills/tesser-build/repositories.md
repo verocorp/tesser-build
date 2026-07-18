@@ -1,5 +1,7 @@
 # Gateway: repository
 
+<!-- tb-status: full -->
+
 A repository is the **persistence boundary** for an aggregate: it maps the
 aggregate to and from storage and hides how that storage works (Evans,
 *Domain-Driven Design*, ch. 6; Vernon, *IDDD*, ch. 12). In the anatomy it is a

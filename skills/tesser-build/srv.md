@@ -1,5 +1,7 @@
 # srv — the hosts
 
+<!-- tb-status: stub -->
+
 An app-wide directory of **hosts, one per delivery mechanism** (recommended
 subdirs `srv/{http,cli,wrk}`, not enforced). A host's `main` is the outermost
 edge of the app: it decodes the environment into the app `Config`, calls

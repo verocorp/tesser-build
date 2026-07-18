@@ -1,5 +1,7 @@
 # Application service
 
+<!-- tb-status: full -->
+
 An application service is the **coordination layer** between a request and the
 domain. It orchestrates a single use case — convert the request, drive the
 domain, persist the result, shape the response — and holds **no business logic

@@ -1,5 +1,7 @@
 # Public interface
 
+<!-- tb-status: full -->
+
 A `Client` interface plus its DTOs, published at the component's top level — the
 API you deliberately offer, **and nothing else**. Its purpose is to be a
 **decoupling boundary**: it separates the contract callers depend on from how you

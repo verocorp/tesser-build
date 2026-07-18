@@ -1,5 +1,7 @@
 # Bootstrap — the composition root + app config + lifecycle
 
+<!-- tb-status: partial -->
+
 The **composition root** is the single place that wires the app: it
 **constructs** the concrete services and repositories, **composes** them to
 satisfy each context's public `Client`, and hands the wired graph to the hosts

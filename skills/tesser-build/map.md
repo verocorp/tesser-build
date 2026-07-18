@@ -1,5 +1,7 @@
 # The map — application anatomy, connections, and the gap survey
 
+<!-- tb-status: full -->
+
 This is the **general map**: what the pieces of an application are, how they
 connect, and the survey procedure for finding which pieces your task actually
 needs (`SKILL.md` routes here from Mode 1). It is anatomy + procedure, not a
