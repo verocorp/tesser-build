@@ -1,5 +1,7 @@
 # Domain service (stub)
 
+<!-- tb-status: stub -->
+
 > **Stub — read this first.** A domain service is the **rare** case, and it is
 > the most-abused concept in DDD. Most logic that feels like it needs a "service"
 > actually belongs on a *type*. This file is deliberately shallow: it gives you
@@ -7,6 +9,8 @@
 > guidance** (the vero corpus has no domain-service doctrine) and **unvalidated**
 > in both Go and Python — treat it as a starting point, not settled convention.
 > It deepens (mechanics, worked examples) only when real usage proves the need.
+> Mechanics are not yet materialized; note the gap, don't invent a convention —
+> there is no verified impl to imitate yet.
 
 ## Before you reach for a domain service
 

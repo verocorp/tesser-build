@@ -1,5 +1,7 @@
 # Context wiring
 
+<!-- tb-status: stub -->
+
 A context's **own construction**: the one module inside the context that builds
 its object graph — picks the repository implementation from the context's
 config, composes the application service behind the public `Client`, and hands

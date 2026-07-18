@@ -1,5 +1,7 @@
 # Value Object
 
+<!-- tb-status: full -->
+
 A value object is a domain concept defined entirely by its attributes: two
 instances with the same attributes are the same value and are interchangeable.
 It has no identity and no lifecycle — you don't change a value object, you

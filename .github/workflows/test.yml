@@ -113,6 +113,33 @@ jobs:
           MYPYPATH=. mypy --strict errors.py conftest.py domain app transport main.py tests
           pytest -q
 
+  roadmap:
+    # The roadmap matrix is generated, never hand-maintained (Wave 2 item 10):
+    # this job fails when the committed rendering drifts from the derivation,
+    # when a tb-cell/tb-status annotation is malformed, when a stub doc lacks
+    # the 2A disclaimer, or when a living surface references a nonexistent
+    # path. Needs Go (the analyzers.All JSON bridge) and Python (the
+    # stdlib-only generator + its 6A test suite).
+    name: roadmap (generated matrix + annotation checks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dev tooling
+        run: pip install -r tessercheck-py/requirements-dev.txt
+      - name: Generated roadmap is current (drift check)
+        run: python3 roadmap/generate.py --check
+      - name: roadmap generator — mypy --strict + pytest
+        working-directory: roadmap
+        run: |
+          MYPYPATH=../tessercheck-py mypy --strict generate.py tests/test_generate.py
+          pytest tests -q
+
   tessercheck-py:
     # The Python analog of tessercheck: gates tessercheck-py at the same bar as the Go
     # analyzers (mypy --strict + pytest). Its pytest suite includes the

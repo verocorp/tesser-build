@@ -3,6 +3,8 @@
 // linkcampaign.Client method — the one handler rule: no domain math, no
 // repository. It depends on the linkcampaign.Client interface only, never
 // on a concrete application service or repository.
+//
+// tb-cell: handlers go-example 🟡 -- v3 transport/ shape; adapters/handlers layout pending the Go mirror
 package transport
 
 import (

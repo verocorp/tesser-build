@@ -170,6 +170,11 @@ Decisions 1 (app-service SRP) and 4 (repo speaks domain objects) are pending —
 needs its **discriminating** change (the facade/DTO lesson: not every change
 discriminates the rule you defend).
 
+<!-- tb-cell: application-services rationale 🟡 -- D3 (no outward representation) won; D1 (app-SRP) pending -->
+<!-- tb-cell: gateway-repository rationale ❌ -- D4 (repo speaks domain objects) pending -->
+<!-- tb-cell: norm-errors rationale ❌ -- the errorspy example matrix is the proof; no changeability arm -->
+
+
 ## Run
 
 ```

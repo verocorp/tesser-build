@@ -1,5 +1,7 @@
 # Gateway: cross-context
 
+<!-- tb-status: partial -->
+
 An **outbound adapter** from one context to a peer context you own: it satisfies
 a port the calling context defines, by calling the peer's public `Client`
 (`public-interface.md`). One of the gateway types in the anatomy

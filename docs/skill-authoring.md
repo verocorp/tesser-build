@@ -112,6 +112,42 @@ error handling, test skeletons. Section headings are stable anchors — the
 resolver and the coverage matrix link to them; renaming a heading is a
 breaking change to both.
 
+## Roadmap annotation schema (eng review 1A)
+
+The roadmap matrix (`roadmap/ROADMAP.md`) is **generated, never hand-edited**:
+`roadmap/generate.py` derives every cell from the repo. The row taxonomy lives
+in `roadmap/registry.json` (one canonical registry file — adding a component
+is a registry edit, not a generator edit, eng review D11b). Mechanically
+derivable cells are computed; **judgment cells are annotated at the source they
+describe** with ONE uniform marker grammar — the same line grammar in every
+file type, wrapped in that file's comment syntax (`<!-- -->` in Markdown, `//`
+in Go, `#` in Python). No per-file variants.
+
+```
+tb-status: full|partial|stub
+tb-cell: <row-key> <column> <symbol> [-- <free text>]
+tb-allow-missing: <path>
+```
+
+- **`tb-status`** — required in every skill doc a registry row names; drives
+  the Skill-doc column (`full` → ✅, `partial`/`stub` → 🟡 + label). A file
+  marked `partial` or `stub` **must contain the 2A disclaimer phrases**
+  ("not yet materialized", "don't invent a convention") — machine-checked by
+  the generator.
+- **`tb-cell`** — a judgment override for one cell. `<row-key>` is a registry
+  key; `<column>` is one of `py-example | go-example | skill | checker |
+  rationale`; `<symbol>` is exactly one of `✅ 🟡 ❌ —` (the machine value);
+  the `-- text` suffix is free commentary carried into the rendered cell. One
+  marker per cell repo-wide (a duplicate is an error); a malformed marker is a
+  named error with file:line.
+- **`tb-allow-missing`** — suppresses the generator's dead-path check for one
+  intentional forward reference (e.g. a planned example) in that file.
+
+Markers are scanned in `skills/`, `examples/`, `rationale/`, `passes/`,
+`tessercheck-py/` (`.md`/`.go`/`.py`; `testdata/` excluded). `docs/` and
+`roadmap/` are deliberately out of scan scope so this section and the
+generator's fixtures can quote the grammar.
+
 ## Delta-only norm sections (eng review 5A — review-enforced, not machine-checked)
 
 Cross-cutting norms (error handling, testing, comments) get a general layer

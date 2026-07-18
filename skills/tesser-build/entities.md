@@ -1,5 +1,7 @@
 # Entity
 
+<!-- tb-status: full -->
+
 An entity is a domain concept the system must track by **identity over time**:
 *this specific one*, distinguishable from another instance with identical
 attributes. Its attributes may change (or not); its identity persists through

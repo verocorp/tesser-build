@@ -1,5 +1,8 @@
 # examples/python-app — the composition-root / bounded-context wiring template (Python)
 
+<!-- tb-allow-missing: examples/app -->
+
+
 A runnable, CI-gated Python **application** that materializes the settled
 bounded-context anatomy and the `srv` / `config` / `bootstrap` model — a shape a
 real service can clone. (A Go mirror, `examples/app`, is planned but does not
