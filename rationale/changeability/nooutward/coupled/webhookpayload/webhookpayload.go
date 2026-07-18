@@ -2,7 +2,7 @@
 // webhook payload is assembled from the domain-emitted public DTO instead of from
 // domain value objects or an application-layer mapper.
 //
-// Evidence for skills/ddd/application-services.md: Respond belongs in the
+// Evidence for skills/tesser-build/application-services.md: Respond belongs in the
 // application service; a domain object emitting a DTO lets outward field names
 // spread into ordinary dependents.
 //
@@ -10,7 +10,7 @@
 // See ../../adversary_provenance.md.
 package webhookpayload
 
-import "github.com/verocorp/go-ddd/rationale/changeability/nooutward/emit"
+import "github.com/verocorp/tesser-build/rationale/changeability/nooutward/emit"
 
 type ManeuverWebhook struct {
 	ID           string

@@ -2,7 +2,7 @@
 // gives consumers the scalar they need without exposing either the public response
 // DTO or the domain value-object graph.
 //
-// Evidence for skills/ddd/application-services.md: this is a sanctioned
+// Evidence for skills/tesser-build/application-services.md: this is a sanctioned
 // application/outward mapper. It challenges the benchmark's decoupled arm on
 // ceremony, not by making the domain emit its own representation.
 //
@@ -13,8 +13,8 @@ package burnquery
 import (
 	"context"
 
-	"github.com/verocorp/go-ddd/rationale/changeability/nooutward/app"
-	"github.com/verocorp/go-ddd/rationale/changeability/nooutward/pub"
+	"github.com/verocorp/tesser-build/rationale/changeability/nooutward/app"
+	"github.com/verocorp/tesser-build/rationale/changeability/nooutward/pub"
 )
 
 func BurnSeconds(ctx context.Context, maneuverID string) (int64, error) {

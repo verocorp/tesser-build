@@ -12,8 +12,8 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/verocorp/go-ddd/rationale/changeability/anchor/decoupled/consumer00"
-	"github.com/verocorp/go-ddd/rationale/changeability/anchor/testfake"
+	"github.com/verocorp/tesser-build/rationale/changeability/anchor/decoupled/consumer00"
+	"github.com/verocorp/tesser-build/rationale/changeability/anchor/testfake"
 )
 
 // The interface WIN: a decoupled dependent is unit-testable against a fake with

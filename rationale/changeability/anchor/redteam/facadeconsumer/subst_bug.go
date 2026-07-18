@@ -16,7 +16,7 @@
 // interface. See ../../SCORING.md change C2.
 package facadeconsumer
 
-import "github.com/verocorp/go-ddd/rationale/changeability/anchor/redteam/portless"
+import "github.com/verocorp/tesser-build/rationale/changeability/anchor/redteam/portless"
 
 // portless.PlaceOrderWith does not exist: the facade has no injection seam.
 var _ = portless.PlaceOrderWith

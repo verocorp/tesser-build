@@ -1,4 +1,4 @@
-// Package portless is the Codex red-team arm for skills/ddd/composition-root.md
+// Package portless is the Codex red-team arm for skills/tesser-build/composition-root.md
 // (the public-interface rule). It is the adversary's best attempt to match the
 // decoupled arm's 0 forced-edits under the backend A->B migration with LESS
 // ceremony than orders.Client: a package-level facade over anchor.Wire(),
@@ -14,8 +14,8 @@ package portless
 import (
 	"context"
 
-	"github.com/verocorp/go-ddd/rationale/changeability/anchor"
-	"github.com/verocorp/go-ddd/rationale/changeability/anchor/orders"
+	"github.com/verocorp/tesser-build/rationale/changeability/anchor"
+	"github.com/verocorp/tesser-build/rationale/changeability/anchor/orders"
 )
 
 // PlaceOrder is a package-level facade over the app composition root.

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/verocorp/go-ddd/examples/running/campaignapp"
-	"github.com/verocorp/go-ddd/examples/running/linkcampaign"
+	"github.com/verocorp/tesser-build/examples/running/campaignapp"
+	"github.com/verocorp/tesser-build/examples/running/linkcampaign"
 )
 
 // TestNewClient_WiresEndToEnd demonstrates the wiring point: a real

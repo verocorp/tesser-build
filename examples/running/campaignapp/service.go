@@ -18,8 +18,8 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/verocorp/go-ddd/examples/running/campaign"
-	"github.com/verocorp/go-ddd/examples/running/linkcampaign"
+	"github.com/verocorp/tesser-build/examples/running/campaign"
+	"github.com/verocorp/tesser-build/examples/running/linkcampaign"
 )
 
 // CampaignRepository is the persistence boundary for the Campaign

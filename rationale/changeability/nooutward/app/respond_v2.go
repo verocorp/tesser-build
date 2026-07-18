@@ -6,8 +6,8 @@
 package app
 
 import (
-	"github.com/verocorp/go-ddd/rationale/changeability/nooutward/domain"
-	"github.com/verocorp/go-ddd/rationale/changeability/nooutward/pub"
+	"github.com/verocorp/tesser-build/rationale/changeability/nooutward/domain"
+	"github.com/verocorp/tesser-build/rationale/changeability/nooutward/pub"
 )
 
 func respond(m domain.Maneuver) pub.ManeuverResponse {

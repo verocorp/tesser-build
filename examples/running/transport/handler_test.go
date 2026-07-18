@@ -7,10 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/verocorp/go-ddd/examples/running/campaignapp"
-	"github.com/verocorp/go-ddd/examples/running/linkcampaign"
-	"github.com/verocorp/go-ddd/examples/running/linkcampaignimpl"
-	"github.com/verocorp/go-ddd/examples/running/transport"
+	"github.com/verocorp/tesser-build/examples/running/campaignapp"
+	"github.com/verocorp/tesser-build/examples/running/linkcampaign"
+	"github.com/verocorp/tesser-build/examples/running/linkcampaignimpl"
+	"github.com/verocorp/tesser-build/examples/running/transport"
 )
 
 // newTestHandler wires a real Client (in-memory repo + application service)

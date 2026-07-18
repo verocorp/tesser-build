@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/verocorp/go-ddd/examples/running/campaign"
+	"github.com/verocorp/tesser-build/examples/running/campaign"
 )
 
 // campaignRecord and linkRecord are storage rows: primitive leaves, shaped

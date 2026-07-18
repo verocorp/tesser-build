@@ -1,4 +1,4 @@
-// Package reachthrough is a realistic coupled arm for skills/ddd/composition-root.md
+// Package reachthrough is a realistic coupled arm for skills/tesser-build/composition-root.md
 // (the public-interface rule): consumers should depend on the public orders.Client
 // boundary, not backend-specific adapter helpers.
 //
@@ -10,8 +10,8 @@ package reachthrough
 import (
 	"context"
 
-	"github.com/verocorp/go-ddd/rationale/changeability/anchor/backend"
-	"github.com/verocorp/go-ddd/rationale/changeability/anchor/orders"
+	"github.com/verocorp/tesser-build/rationale/changeability/anchor/backend"
+	"github.com/verocorp/tesser-build/rationale/changeability/anchor/orders"
 )
 
 // Snapshot places an order through the public client, then reaches through to

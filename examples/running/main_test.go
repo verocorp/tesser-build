@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/verocorp/go-ddd/examples/running/linkcampaign"
+	"github.com/verocorp/tesser-build/examples/running/linkcampaign"
 )
 
 // TestWiring_EndToEnd drives the composition root's object graph through a

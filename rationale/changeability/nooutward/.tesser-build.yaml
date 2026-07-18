@@ -1,0 +1,15 @@
+# Human-ratified exclude list for the value-object heuristic (see
+# internal/voscan/config.go). tessercheck walks up from each package to the nearest
+# .tesser-build.yaml, so this one scopes the excludes to the decision-3 fixture.
+#
+# Maneuver matches the NewX(...) (X, error) constructor shape the analyzers read
+# as a value-object signal, but it is NOT a value object:
+#
+#   - domain.Maneuver is an entity: identity is by ManeuverID (see Maneuver.Equal),
+#     not by attributes.
+#   - emit.Maneuver is the decision-3 VIOLATION wrapper (a domain object that emits
+#     its own DTO via ToResponse()); same name, also not a value object.
+#
+# The exclude is by type name, so the single entry covers both.
+exclude:
+  - Maneuver

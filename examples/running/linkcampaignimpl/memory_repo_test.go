@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/verocorp/go-ddd/examples/running/campaign"
+	"github.com/verocorp/tesser-build/examples/running/campaign"
 )
 
 func TestInMemoryCampaignRepository_RoundTrip(t *testing.T) {

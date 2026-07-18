@@ -1,16 +1,16 @@
-# Enable the bundled ddd-vet analyzers (the "dddvet" custom linter) in your
+# Enable the bundled tessercheck analyzers (the "tessercheck" custom linter) in your
 # golangci-lint run — in CI and, via the custom binary, in your editor on save.
-# This enables dddvet alongside whatever else you run; to try it in isolation,
+# This enables tessercheck alongside whatever else you run; to try it in isolation,
 # add `default: none` under linters.
 version: "2"
 linters:
   enable:
-    - dddvet
+    - tessercheck
   settings:
     custom:
-      dddvet:
+      tessercheck:
         type: module
-        description: DDD value-object analyzers (ddd-vet)
-# ddd-vet reads its exclude list from .go-ddd.yaml at the repo root — the same
-# file the standalone `ddd-vet` / `go tool ddd-vet` uses. Excludes are NOT
-# duplicated here; .go-ddd.yaml stays the single config source.
+        description: DDD value-object analyzers (tessercheck)
+# tessercheck reads its exclude list from .tesser-build.yaml at the repo root — the same
+# file the standalone `tessercheck` / `go tool tessercheck` uses. Excludes are NOT
+# duplicated here; .tesser-build.yaml stays the single config source.

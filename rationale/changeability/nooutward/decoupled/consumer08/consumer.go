@@ -6,7 +6,7 @@
 // any N.
 package consumer08
 
-import "github.com/verocorp/go-ddd/rationale/changeability/nooutward/domain"
+import "github.com/verocorp/tesser-build/rationale/changeability/nooutward/domain"
 
 // Use reads the domain object through its value objects and nothing outward.
 func Use(m domain.Maneuver) int64 {

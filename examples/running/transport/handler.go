@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/verocorp/go-ddd/examples/running/linkcampaign"
+	"github.com/verocorp/tesser-build/examples/running/linkcampaign"
 )
 
 // Handler routes the link-campaign HTTP endpoints to a linkcampaign.Client,

@@ -1,7 +1,7 @@
 // Package ordersapp is the impl behind orders.Client: the domain Order, the
 // repository port, and the service that satisfies the public contract. It is a
 // focused changeability fixture, not the full DDD worked example (examples/ holds
-// that), but it follows the toolkit's own conventions so ddd-vet is clean here.
+// that), but it follows the toolkit's own conventions so tessercheck is clean here.
 package ordersapp
 
 import "fmt"

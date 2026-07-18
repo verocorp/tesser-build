@@ -10,7 +10,7 @@ package backend
 import (
 	"context"
 
-	"github.com/verocorp/go-ddd/rationale/changeability/anchor/ordersapp"
+	"github.com/verocorp/tesser-build/rationale/changeability/anchor/ordersapp"
 )
 
 // OrderRowB is backend B's row shape. Deliberately different from OrderRowA, and

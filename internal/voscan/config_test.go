@@ -7,7 +7,7 @@ import (
 )
 
 // TestExcludesFromConfig locks the missing-vs-malformed distinction: a missing
-// .go-ddd.yaml is not an error (no excludes), but a present-but-malformed one IS
+// .tesser-build.yaml is not an error (no excludes), but a present-but-malformed one IS
 // an error so the tool fails loud instead of silently disabling excludes.
 func TestExcludesFromConfig(t *testing.T) {
 	t.Run("missing file is not an error", func(t *testing.T) {

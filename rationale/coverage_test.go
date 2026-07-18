@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/verocorp/go-ddd/internal/analyzers"
+	"github.com/verocorp/tesser-build/internal/analyzers"
 )
 
 // TestCoverageMatrix_NoSilentGaps keeps coverage.md honest: every analyzer
-// ddd-vet ships (internal/analyzers.All) must appear in the matrix, and every
+// tessercheck ships (internal/analyzers.All) must appear in the matrix, and every
 // Test* the matrix names must exist in this package. It tolerates the ❌/⚠️ rows
 // by design (the rationale is broader than the enforcement, and some analyzers
 // enforce a rubric rule whose demo is still pending); it forbids a SILENT gap —
@@ -24,7 +24,7 @@ func TestCoverageMatrix_NoSilentGaps(t *testing.T) {
 	}
 	content := string(matrix)
 
-	// 1. Every analyzer ddd-vet ships is named in the matrix. Keyed off the
+	// 1. Every analyzer tessercheck ships is named in the matrix. Keyed off the
 	// analyzers.All registry — not the cmd/check* dirs — so the guard stays live
 	// after the standalone walkers are removed.
 	for _, a := range analyzers.All {
@@ -57,7 +57,7 @@ func TestCoverageMatrix_NoSilentGaps(t *testing.T) {
 
 // TestSkillMaterializationAnchors is the structural half of the skill-matrix
 // contract (design v2, H6): every `file.md#anchor` the skill-materializations
-// table names must resolve to a real heading in that file under skills/ddd/. It
+// table names must resolve to a real heading in that file under skills/tesser-build/. It
 // catches a renamed heading, a mistyped anchor, or a routeless concept file —
 // the silent drift the manual matrix invites once the seam concepts expand it.
 // It does NOT check semantic agreement between renderings; that stays human
@@ -80,7 +80,7 @@ func TestSkillMaterializationAnchors(t *testing.T) {
 		section = before
 	}
 
-	skillDir := filepath.Join("..", "skills", "ddd")
+	skillDir := filepath.Join("..", "skills", "tesser-build")
 	anchorsByFile := map[string]map[string]bool{}
 	loadAnchors := func(file string) (map[string]bool, error) {
 		if a, ok := anchorsByFile[file]; ok {
@@ -122,11 +122,11 @@ func TestSkillMaterializationAnchors(t *testing.T) {
 		seen[ref] = true
 		set, err := loadAnchors(file)
 		if err != nil {
-			t.Errorf("matrix references %s but skills/ddd/%s: %v", ref, file, err)
+			t.Errorf("matrix references %s but skills/tesser-build/%s: %v", ref, file, err)
 			continue
 		}
 		if !set[anchor] {
-			t.Errorf("matrix references %s but no heading in skills/ddd/%s produces anchor #%s", ref, file, anchor)
+			t.Errorf("matrix references %s but no heading in skills/tesser-build/%s produces anchor #%s", ref, file, anchor)
 		}
 	}
 	if len(seen) == 0 {

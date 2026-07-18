@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/verocorp/go-ddd/examples/running/campaign"
-	"github.com/verocorp/go-ddd/examples/running/linkcampaign"
+	"github.com/verocorp/tesser-build/examples/running/campaign"
+	"github.com/verocorp/tesser-build/examples/running/linkcampaign"
 )
 
 // fakeCampaignRepository is a minimal, test-only CampaignRepository — the

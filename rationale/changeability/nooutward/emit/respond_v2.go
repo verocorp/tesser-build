@@ -5,7 +5,7 @@
 // itself part of the harm (the domain is dragged into the outward change).
 package emit
 
-import "github.com/verocorp/go-ddd/rationale/changeability/nooutward/pub"
+import "github.com/verocorp/tesser-build/rationale/changeability/nooutward/pub"
 
 func (m Maneuver) build() pub.ManeuverResponse {
 	return pub.ManeuverResponse{

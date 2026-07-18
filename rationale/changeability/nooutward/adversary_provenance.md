@@ -88,7 +88,7 @@ variant).
 > The red-team does find a narrower lower-ceremony tie for scalar reads: a query
 > facade reaches 0 dependent forced edits with fewer consumer symbols than direct
 > domain VO use. Under `SCORING.md`'s finding rule, this should soften the named
-> `skills/ddd/application-services.md` guidance, not retire D3: keep "domain objects
+> `skills/tesser-build/application-services.md` guidance, not retire D3: keep "domain objects
 > do not emit public DTOs," but record "for narrow read consumers, prefer an
 > application/query projection facade over exposing the domain VO graph."
 
@@ -106,7 +106,7 @@ existing CQRS-read sanctioning (`repositories.md` read path; decision 4's
 "projections OK").
 
 **Action:** apply the *anatomy-of-a-perfect-technical-answer* heuristic to
-`skills/ddd/application-services.md` (as the anchor's facade finding was folded into
+`skills/tesser-build/application-services.md` (as the anchor's facade finding was folded into
 `composition-root.md`): teach not just the rule but the alternatives, which axis each
 wins/loses, and the negative —
 - **the invariant:** the domain never emits its own DTO (`ToResponse()` on a domain

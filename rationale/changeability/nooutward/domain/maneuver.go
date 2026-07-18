@@ -8,7 +8,7 @@
 // when the outward representation (a public-interface DTO) is reshaped — the
 // decoupled arm of decision 3. The types here follow the toolkit's own
 // conventions (validating constructors + Must* helpers for value objects; the
-// spec pattern for the aggregate) so ddd-vet is clean on this package.
+// spec pattern for the aggregate) so tessercheck is clean on this package.
 // See ../../SCORING.md.
 package domain
 

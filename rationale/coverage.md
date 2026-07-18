@@ -2,7 +2,7 @@
 
 This is the single source of truth linking each value-object rule to (a) the
 executable demo in this `rationale/` package that shows the bug it prevents, and
-(b) the `ddd-vet` analyzer that enforces it (if one exists). `coverage_test.go`
+(b) the `tessercheck` analyzer that enforces it (if one exists). `coverage_test.go`
 fails on a **silent gap** — a shipping analyzer (`internal/analyzers.All`) with no
 row here, or a row naming a test that doesn't exist. It tolerates the honest ❌/⚠️
 rows by design: the rationale makes the case for the whole discipline, and some
@@ -10,7 +10,7 @@ analyzers enforce a rubric rule that has no demo *yet* — both directions are
 tracked openly, neither is allowed to be silent.
 
 > Enforcement moved from the standalone `cmd/check*` directory-walkers to the
-> `go/analysis` analyzers in `ddd-vet` (see
+> `go/analysis` analyzers in `tessercheck` (see
 > [`docs/design-ddd-vet-migration.md`](../docs/design-ddd-vet-migration.md)). The
 > rows below name the analyzers; the guard keys off the `analyzers.All` registry
 > so it stays live after the old walkers are deleted.
@@ -23,7 +23,7 @@ tracked openly, neither is allowed to be silent.
 | VO constructors get `MustNew*` helpers | `TestMustReimplementation_HandRolledHelpersDiverge` (consistency demo, table below) | without it, authors reinvent divergent must-helpers | `mustnew` | ✅ consistency demo |
 | `.String()` is for display, not equality | `TestEqualityByString_InconsistentIsWrong` — display-string equality mis-equates `0°C` and `273.15K` | `a.String() == b.String()` mis-equates multi-rep VOs | `stringequality` | ✅ 1:1 |
 
-**Reading the gaps:** the ❌ row (distinct types) is a win go-ddd does not yet
+**Reading the gaps:** the ❌ row (distinct types) is a win tesser-build does not yet
 enforce. The two ⚠️ rows are honest partials worth naming: **value equality** lost
 its enforcer when `equalitytest` (the `Test*_Equality` existence tripwire) was
 parked — `comparability` now guards the structural `==` hazard (pointer/interface
@@ -34,7 +34,7 @@ single path, not that its body validates). Nothing here is a *silent* gap.
 
 ## VO-construction rubric — enforced, demo pending
 
-These analyzers ship in `ddd-vet` and enforce value-object rubric rules, but the
+These analyzers ship in `tessercheck` and enforce value-object rubric rules, but the
 `rationale/` package does not yet carry an executable demo of the leak each
 prevents. They are the inverse of the ❌ rows above (a demonstrated win with no
 checker): here the checker leads its demo. Tracked openly so the gap is not
@@ -85,7 +85,7 @@ rationale; it is gated on the skills landing in this repo. See
 
 The conventions are materialized in prose several times over: a concept file,
 two language mechanics files, an FAQ entry, and a resolver route in
-[`skills/ddd/`](../skills/ddd/) plus [`docs/faq.md`](../docs/faq.md). Separately
+[`skills/tesser-build/`](../skills/tesser-build/) plus [`docs/faq.md`](../docs/faq.md). Separately
 authored renderings drift; this matrix is the map of which renderings carry
 each rule, so a rule change is a walk across its row in one commit (and a
 `skill-version` bump in `SKILL.md`). The rows are maintained by hand, but the
@@ -148,7 +148,7 @@ provenance. This matrix row is the anti-silent-gap net for that dimension:
 `changeability/nooutward/*_test.go`, so a named arm test that is renamed or deleted
 fails the guard.
 
-| Decision (skills/ddd) | Change(s) | Arms | Result | Committed tests |
+| Decision (skills/tesser-build) | Change(s) | Arms | Result | Committed tests |
 |---|---|---|---|---|
 | **Public interface** (`composition-root.md`) | C1 backend migration (`-tags swap`); C2 substitution (`-tags subst`) | decoupled (depends on `Client`); coupled fan-out + 3 realistic patterns; Codex red-team `portless` (facade); a fake for substitution | **C1 is TIED** by the lower-ceremony facade (a facade decouples from a backend too) — decoupled 0 vs coupled N at N=8/16. **C2 the interface WINS** — it substitutes a fake at 0 edits; the facade cannot (no seam). | `anchor/`: `TestDecoupledArm_SurvivesBackendSwap`, `TestContrast_C1_DecoupledFlat_CoupledTracksN`, `TestInterfaceDependent_SubstitutesForFree`, `TestFacadeDependent_CannotSubstituteWithoutEdit` |
 | **No outward representation** (`application-services.md` Respond) | D3 outward-representation migration (`-tags repv2`: response DTO field reshaped) | decoupled (operate on `domain.Maneuver` value objects); coupled fan-out + 2 realistic patterns (`webhookpayload`, `burnsort`); Codex red-team `burnquery` (query facade) | **Decision 3 WINS** — a domain that emits its own DTO fans a wire reshape out to N; the decoupled arm is 0, coupled N at N=8/16. The red-team facade is the *sanctioned* mapper (0 edits) — it does not justify a domain emitting a DTO; it only ties on read-ceremony. **No compile guard** (a dumb DTO imports nothing → no cycle); the fan-out is the proof. | `nooutward/`: `TestDecoupledArm_SurvivesRepMigration`, `TestContrast_DecoupledFlat_CoupledTracksN` |
@@ -174,18 +174,18 @@ go test -bench=. -benchmem ./rationale/ # the adversarial cost (collection-VO de
 ./rationale/measure-ablation.sh ...     # measure changeability on your own repo
 ```
 
-## Python enforcement (ddd-vet-py)
+## Python enforcement (tessercheck-py)
 
 The Go analyzers above are `go/analysis`; they do not run on Python. The Python
-analog is [`ddd-vet-py`](../ddd-vet-py/) — a zero-dependency stdlib-`ast` tool
+analog is [`tessercheck-py`](../tessercheck-py/) — a zero-dependency stdlib-`ast` tool
 that enforces the *syntactically decidable* subset on the frozen-dataclass
-substrate `skills/ddd/python.md` teaches. Roughly half the Go ruleset dissolves
+substrate `skills/tesser-build/python.md` teaches. Roughly half the Go ruleset dissolves
 (`mustnew` — Python constructors raise) and the rest reframe to the dataclass
 grain. `primitiveaccessor`, first dropped as theater, is **reinstated** as
-`DDD010`: it is the load-bearing spec/VO discriminator, keyed on the
-**identity-taxonomy classifier** (`ddd_vet/classify.py`) — a whole-tree two-pass
+`TB010`: it is the load-bearing spec/VO discriminator, keyed on the
+**identity-taxonomy classifier** (`tessercheck/classify.py`) — a whole-tree two-pass
 pass that classifies each class as value_object / spec / identity_object / other.
-Its own meta-test (`ddd-vet-py/tests/test_meta.py`) is the Python analog of this
+Its own meta-test (`tessercheck-py/tests/test_meta.py`) is the Python analog of this
 matrix's silent-gap guard: it fails if a registered check has no good/bad
 fixture, if an unregistered code is emitted, or if the analyzer is not clean on
 the canonical `examples/python` tree. Full rationale:
@@ -193,16 +193,16 @@ the canonical `examples/python` tree. Full rationale:
 classifier design
 [`docs/design-python-domain-detection.md`](../docs/design-python-domain-detection.md).
 
-| Go analyzer | Python check | python.md rule | Fixture (`ddd-vet-py/testdata/`) |
+| Go analyzer | Python check | python.md rule | Fixture (`tessercheck-py/testdata/`) |
 |---|---|---|---|
-| `vofields` | `DDD001` frozen-dataclass | "`frozen=True` always" | `ddd001/{good,bad}.py` |
-| `comparability` | `DDD002` hashable-fields | collection VO backs itself with a sorted tuple (classification-aware: fires only on a `VALUE_OBJECT`, so a spec / persistence row is exempt) | `ddd002/{good,bad}.py` |
-| `voconstructor` | `DDD003` no-setattr-bypass | "no setters, no mutation" (canonicalize only in `__post_init__`) | `ddd003/{good,bad}.py` |
-| `stringequality` | `DDD004` no-string-equality | "Never `str(a) == str(b)`" | `ddd004/{good,bad}.py` |
-| `primitiveaccessor` | `DDD010` no-primitive-exposure | a value object hides its primitive (the spec/VO discriminator), keyed on the identity-taxonomy classifier | `ddd010/{good,bad}.py` |
-| — no Go analyzer (defensive-copy check is Python-only today) | `DDD011` no-collection-leak | an aggregate/entity accessor returns a defensive copy, never the backing mutable collection, keyed on the classifier | `ddd011/{good,bad}.py` |
-| — no Go analyzer (reference-boundary check is Python-only today) | `DDD012` reference-roots-by-id | an aggregate references another root by its ID value object, never by holding the root object; keyed on the whole-tree registry (a root is a reference-identity entity that embeds ≥1 entity — `is_aggregate_root`) | `ddd012/{good,bad}.py` |
-| (construction) | `DDD013` construct-through-spec | a structured domain object (entity/aggregate) constructs through `__init__(self, spec)`; no separate `from_spec` factory (the value-taking-ctor half is a deferred extension) | `ddd013/{good,bad}.py` |
-| `comparability` / `equalitytest` | `DDD014` equality-by-type | equality matches the stereotype: VO compares by value (never blocks); entity defines `__eq__`+`__hash__` together (by ID); aggregate root blocks equality (`__eq__ = None`/`__hash__ = None`) — keyed on the classifier | `ddd014/{good,bad}.py` |
+| `vofields` | `TB001` frozen-dataclass | "`frozen=True` always" | `tb001/{good,bad}.py` |
+| `comparability` | `TB002` hashable-fields | collection VO backs itself with a sorted tuple (classification-aware: fires only on a `VALUE_OBJECT`, so a spec / persistence row is exempt) | `tb002/{good,bad}.py` |
+| `voconstructor` | `TB003` no-setattr-bypass | "no setters, no mutation" (canonicalize only in `__post_init__`) | `tb003/{good,bad}.py` |
+| `stringequality` | `TB004` no-string-equality | "Never `str(a) == str(b)`" | `tb004/{good,bad}.py` |
+| `primitiveaccessor` | `TB010` no-primitive-exposure | a value object hides its primitive (the spec/VO discriminator), keyed on the identity-taxonomy classifier | `tb010/{good,bad}.py` |
+| — no Go analyzer (defensive-copy check is Python-only today) | `TB011` no-collection-leak | an aggregate/entity accessor returns a defensive copy, never the backing mutable collection, keyed on the classifier | `tb011/{good,bad}.py` |
+| — no Go analyzer (reference-boundary check is Python-only today) | `TB012` reference-roots-by-id | an aggregate references another root by its ID value object, never by holding the root object; keyed on the whole-tree registry (a root is a reference-identity entity that embeds ≥1 entity — `is_aggregate_root`) | `tb012/{good,bad}.py` |
+| (construction) | `TB013` construct-through-spec | a structured domain object (entity/aggregate) constructs through `__init__(self, spec)`; no separate `from_spec` factory (the value-taking-ctor half is a deferred extension) | `tb013/{good,bad}.py` |
+| `comparability` / `equalitytest` | `TB014` equality-by-type | equality matches the stereotype: VO compares by value (never blocks); entity defines `__eq__`+`__hash__` together (by ID); aggregate root blocks equality (`__eq__ = None`/`__hash__ = None`) — keyed on the classifier | `tb014/{good,bad}.py` |
 | `mustnew` | — dissolved | "No `Must*` twin is needed" | — |
 | (type-aware residual) | — deferred (P1) | primitive-obsession field resolution; identity-`__eq__` field | — |

@@ -25,16 +25,16 @@ jobs:
         run: go vet ./...
       - name: go test
         run: go test ./...
-      - name: ddd-vet on examples/ddd (dogfood the consumer configuration)
+      - name: tessercheck on examples/ddd (dogfood the consumer configuration)
         # examples/ddd is the acceptance-gate output and the canonical worked
-        # example consumers imitate; running ddd-vet on it with its own
-        # .go-ddd.yaml exclude list exercises the exact consumer setup and
+        # example consumers imitate; running tessercheck on it with its own
+        # .tesser-build.yaml exclude list exercises the exact consumer setup and
         # keeps the example from silently drifting out of conformance.
-        run: go run ./cmd/ddd-vet ./examples/ddd/
+        run: go run ./cmd/tessercheck ./examples/ddd/
 
   plugin:
     # Proves gclplugin/ actually bundles into a golangci-lint v2 custom binary
-    # and the dddvet linter runs end-to-end — the editor-integration path that
+    # and the tessercheck linter runs end-to-end — the editor-integration path that
     # `go test ./...` cannot exercise (no golangci-lint on PATH there, so the
     # TestCustomGCL test skips in the job above and runs only here).
     name: golangci-lint plugin bundling
@@ -53,7 +53,7 @@ jobs:
 
   python-example:
     # Gates the Python worked example at the same bar as the Go mechanics:
-    # mypy --strict and pytest must both be clean, so skills/ddd/python.md never
+    # mypy --strict and pytest must both be clean, so skills/tesser-build/python.md never
     # encodes a pattern that isn't backed by running, type-checked code.
     # examples/python is the reference rendering.
     name: python example (mypy --strict + pytest)
@@ -113,12 +113,12 @@ jobs:
           MYPYPATH=. mypy --strict errors.py conftest.py domain app transport main.py tests
           pytest -q
 
-  ddd-vet-py:
-    # The Python analog of ddd-vet: gates ddd-vet-py at the same bar as the Go
+  tessercheck-py:
+    # The Python analog of tessercheck: gates tessercheck-py at the same bar as the Go
     # analyzers (mypy --strict + pytest). Its pytest suite includes the
     # acceptance gate that the analyzer is clean on examples/python — the Python
-    # counterpart of "ddd-vet on examples/ddd" in the go job above.
-    name: ddd-vet-py (mypy --strict + pytest + examples/python gate)
+    # counterpart of "tessercheck on examples/ddd" in the go job above.
+    name: tessercheck-py (mypy --strict + pytest + examples/python gate)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -126,14 +126,14 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install dev tooling
-        run: pip install -r ddd-vet-py/requirements-dev.txt
-      - name: ddd-vet-py — mypy --strict + pytest
-        working-directory: ddd-vet-py
+        run: pip install -r tessercheck-py/requirements-dev.txt
+      - name: tessercheck-py — mypy --strict + pytest
+        working-directory: tessercheck-py
         run: |
           mypy
           pytest -q
-      - name: ddd-vet-py on examples/python (explicit CLI gate)
-        run: python -m ddd_vet examples/python
+      - name: tessercheck-py on examples/python (explicit CLI gate)
+        run: python -m tessercheck examples/python
         working-directory: .
         env:
-          PYTHONPATH: ddd-vet-py
+          PYTHONPATH: tessercheck-py

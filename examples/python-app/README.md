@@ -84,5 +84,5 @@ exists to prevent, and a clone inherits them by copying the tree. Contexts are
 `Client`), so a new context is checked by construction; the totality guard fails
 on any root package that classifies as neither an app-level piece nor a
 `Client`-bearing context, so a context that forgot its `Client` cannot hide. The general
-`ddd-vet` analyzer that generalizes these checks across repos is a separate
+`tessercheck` analyzer that generalizes these checks across repos is a separate
 follow-on.

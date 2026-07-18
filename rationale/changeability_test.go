@@ -15,8 +15,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/verocorp/go-ddd/rationale/primitive"
-	"github.com/verocorp/go-ddd/rationale/valueobject"
+	"github.com/verocorp/tesser-build/rationale/primitive"
+	"github.com/verocorp/tesser-build/rationale/valueobject"
 )
 
 // --- Risk class 1: type confusion (Mars Climate Orbiter) -------------------

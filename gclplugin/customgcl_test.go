@@ -13,13 +13,13 @@ import (
 var gclVersionRE = regexp.MustCompile(`version v?(\d+\.\d+\.\d+)`)
 
 // TestCustomGCL_BundlesAndRuns proves this package actually builds into a
-// golangci-lint v2 custom binary and that the bundled dddvet linter runs
+// golangci-lint v2 custom binary and that the bundled tessercheck linter runs
 // end-to-end against real code. plugin_test.go covers the plugin's Go API
 // (registry parity, load mode), but only `golangci-lint custom` exercises the
 // module-plugin bundling — the editor-integration path the README documents.
 //
 // Skipped unless a golangci-lint v2 binary is on PATH (CI installs one); v1 has
-// no module plugins. Like the cmd/ddd-vet e2e test, it builds a binary and
+// no module plugins. Like the cmd/tessercheck e2e test, it builds a binary and
 // shells out, so it is also -short-skippable.
 func TestCustomGCL_BundlesAndRuns(t *testing.T) {
 	if testing.Short() {
@@ -56,8 +56,8 @@ func TestCustomGCL_BundlesAndRuns(t *testing.T) {
 		"name: custom-gcl\n" +
 		"destination: " + work + "\n" +
 		"plugins:\n" +
-		"  - module: github.com/verocorp/go-ddd\n" +
-		"    import: github.com/verocorp/go-ddd/gclplugin\n" +
+		"  - module: github.com/verocorp/tesser-build\n" +
+		"    import: github.com/verocorp/tesser-build/gclplugin\n" +
 		"    path: " + moduleRoot + "\n"
 	if err := os.WriteFile(filepath.Join(work, ".custom-gcl.yml"), []byte(customCfg), 0o644); err != nil {
 		t.Fatal(err)
@@ -72,7 +72,7 @@ func TestCustomGCL_BundlesAndRuns(t *testing.T) {
 		t.Fatalf("custom-gcl binary not produced: %v", err)
 	}
 
-	// 2. Fixture module with one clear voconstructor violation; dddvet is the
+	// 2. Fixture module with one clear voconstructor violation; tessercheck is the
 	// only enabled linter so the assertion can't be perturbed by defaults.
 	fix := filepath.Join(work, "fixture")
 	if err := os.MkdirAll(fix, 0o755); err != nil {
@@ -93,14 +93,14 @@ func TestCustomGCL_BundlesAndRuns(t *testing.T) {
 		"linters:\n"+
 		"  default: none\n"+
 		"  enable:\n"+
-		"    - dddvet\n"+
+		"    - tessercheck\n"+
 		"  settings:\n"+
 		"    custom:\n"+
-		"      dddvet:\n"+
+		"      tessercheck:\n"+
 		"        type: module\n"+
-		"        description: DDD value-object analyzers (ddd-vet)\n")
+		"        description: DDD value-object analyzers (tessercheck)\n")
 
-	// 3. The bundled linter must surface the dddvet finding and exit non-zero.
+	// 3. The bundled linter must surface the tessercheck finding and exit non-zero.
 	run := exec.Command(customGCL, "run", "./...")
 	run.Dir = fix
 	out, err := run.CombinedOutput()
@@ -108,8 +108,8 @@ func TestCustomGCL_BundlesAndRuns(t *testing.T) {
 		t.Errorf("custom-gcl run: expected non-zero exit (a finding), got 0\n%s", out)
 	}
 	got := string(out)
-	if !strings.Contains(got, "(dddvet)") {
-		t.Errorf("custom-gcl run: dddvet did not fire through the plugin\n%s", got)
+	if !strings.Contains(got, "(tessercheck)") {
+		t.Errorf("custom-gcl run: tessercheck did not fire through the plugin\n%s", got)
 	}
 	if !strings.Contains(got, "no validating constructor") {
 		t.Errorf("custom-gcl run: missing the voconstructor diagnostic\n%s", got)

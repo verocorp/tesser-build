@@ -3,7 +3,7 @@
 You've landed in a toolkit that enforces domain-driven design conventions.
 This page is the human on-ramp: what the concepts are, why the conventions
 exist, and where everything lives. (Agents don't start here — they load
-`skills/ddd/SKILL.md`, which routes them task-by-task.)
+`skills/tesser-build/SKILL.md`, which routes them task-by-task.)
 
 ## The idea in three sentences
 
@@ -15,7 +15,7 @@ testable: **consistently-built domain objects make change cheaper**, because a
 change to a concept lands in one place instead of rippling through every call
 site — and inconsistently-applied conventions buy you nothing. So the
 conventions here are enforced by machines (analyzers in CI), demonstrated by
-executable evidence (`rationale/`), and taught to agents (`skills/ddd/`), not
+executable evidence (`rationale/`), and taught to agents (`skills/tesser-build/`), not
 just written down.
 
 ## The three building blocks (v1)
@@ -42,7 +42,7 @@ rule, and domain events.
 - **[`faq.md`](faq.md)** — the questions everyone actually asks ("entity vs
   aggregate — when do I use which?"), answered as decisions. Start there when
   a distinction feels fuzzy.
-- **[`skills/ddd/`](../skills/ddd/)** — the agent-facing skill: a router plus
+- **[`skills/tesser-build/`](../skills/tesser-build/)** — the agent-facing skill: a router plus
   per-concept and per-language (Go, Python) construction guides. Also the most
   precise statement of the conventions — humans can read it too.
 - **[`rationale/`](../rationale/)** — the executable "why": three competing
@@ -60,9 +60,9 @@ You don't have to take all of it at once:
 
 1. **Docs** — read this page and the FAQ; agree the concepts name real things
    in your domain.
-2. **Skill** — copy `skills/ddd/` into your repo (see the README's
+2. **Skill** — copy `skills/tesser-build/` into your repo (see the README's
    "Distribution" section) so agents build new domain objects consistently
    from day one. This is the highest-leverage step for agent-heavy codebases.
-3. **CI** — install `ddd-vet` (README) so the conventions can't silently
+3. **CI** — install `tessercheck` (README) so the conventions can't silently
    erode. Generate your exclude list with `-gen-excludes` and ratify it by
    hand — the machine flags candidates; you make the domain calls.

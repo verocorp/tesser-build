@@ -1,4 +1,4 @@
-module github.com/verocorp/go-ddd
+module github.com/verocorp/tesser-build
 
 go 1.25.0
 

@@ -22,7 +22,7 @@ import (
 
 	"golang.org/x/tools/go/analysis"
 
-	"github.com/verocorp/go-ddd/internal/voscan"
+	"github.com/verocorp/tesser-build/internal/voscan"
 )
 
 var exclude string

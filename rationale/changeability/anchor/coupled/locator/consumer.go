@@ -1,4 +1,4 @@
-// Package locator is a realistic coupled arm for skills/ddd/composition-root.md
+// Package locator is a realistic coupled arm for skills/tesser-build/composition-root.md
 // (the public-interface rule): service locators can hide wiring while still
 // returning backend-specific types.
 //
@@ -8,7 +8,7 @@
 package locator
 
 import (
-	"github.com/verocorp/go-ddd/rationale/changeability/anchor/backend"
+	"github.com/verocorp/tesser-build/rationale/changeability/anchor/backend"
 )
 
 // RawOrderLocator is a consumer-level global accessor used by legacy jobs that

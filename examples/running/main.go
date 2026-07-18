@@ -8,9 +8,9 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/verocorp/go-ddd/examples/running/campaignapp"
-	"github.com/verocorp/go-ddd/examples/running/linkcampaignimpl"
-	"github.com/verocorp/go-ddd/examples/running/transport"
+	"github.com/verocorp/tesser-build/examples/running/campaignapp"
+	"github.com/verocorp/tesser-build/examples/running/linkcampaignimpl"
+	"github.com/verocorp/tesser-build/examples/running/transport"
 )
 
 // wire is the composition root: the one place that chooses the concrete

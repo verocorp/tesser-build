@@ -9,7 +9,7 @@ package backend
 import (
 	"context"
 
-	"github.com/verocorp/go-ddd/rationale/changeability/anchor/ordersapp"
+	"github.com/verocorp/tesser-build/rationale/changeability/anchor/ordersapp"
 )
 
 // OrderRowA is backend A's persistence row — a BACKEND-SPECIFIC type. A

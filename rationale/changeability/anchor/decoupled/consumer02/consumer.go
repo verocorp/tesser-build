@@ -8,7 +8,7 @@ package consumer02
 import (
 	"context"
 
-	"github.com/verocorp/go-ddd/rationale/changeability/anchor/orders"
+	"github.com/verocorp/tesser-build/rationale/changeability/anchor/orders"
 )
 
 // Use exercises the public contract and nothing else.

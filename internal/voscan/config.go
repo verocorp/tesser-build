@@ -11,16 +11,16 @@ import (
 )
 
 // ConfigName is the shared, repo-root configuration file every analyzer reads.
-const ConfigName = ".go-ddd.yaml"
+const ConfigName = ".tesser-build.yaml"
 
-// Config is the .go-ddd.yaml shape: one exclude list, shared by all analyzers,
+// Config is the .tesser-build.yaml shape: one exclude list, shared by all analyzers,
 // naming the aggregate/entity types that match the value-object heuristic but
-// are not value objects. Generate a starter with `ddd-vet -gen-excludes`.
+// are not value objects. Generate a starter with `tessercheck -gen-excludes`.
 type Config struct {
 	Exclude []string `yaml:"exclude"`
 }
 
-// FindConfig walks up from startDir looking for .go-ddd.yaml, stopping at the
+// FindConfig walks up from startDir looking for .tesser-build.yaml, stopping at the
 // filesystem root. It returns the path and whether one was found.
 func FindConfig(startDir string) (string, bool) {
 	dir := startDir
@@ -37,7 +37,7 @@ func FindConfig(startDir string) (string, bool) {
 	}
 }
 
-// LoadConfig reads and parses a .go-ddd.yaml file.
+// LoadConfig reads and parses a .tesser-build.yaml file.
 func LoadConfig(path string) (*Config, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -52,7 +52,7 @@ func LoadConfig(path string) (*Config, error) {
 
 // CombinedExcludes is the exclude set every analyzer uses: the per-analyzer
 // -exclude flag value unioned with the exclude: list from the nearest
-// .go-ddd.yaml above the package's directory. The file is the shared,
+// .tesser-build.yaml above the package's directory. The file is the shared,
 // version-controlled source; the flag is an override (and the only path used by
 // the standalone tests).
 //
@@ -77,7 +77,7 @@ func CombinedExcludes(pass *analysis.Pass, flagValue string) (map[string]bool, e
 	return out, nil
 }
 
-// excludesFromConfig loads the exclude set from the nearest .go-ddd.yaml above
+// excludesFromConfig loads the exclude set from the nearest .tesser-build.yaml above
 // dir. A missing file yields an empty set and no error; a present-but-malformed
 // file yields an error. Split out from CombinedExcludes so the missing-vs-
 // malformed distinction is unit-testable without constructing an analysis.Pass.
@@ -100,7 +100,7 @@ func excludesFromConfig(dir string) (map[string]bool, error) {
 }
 
 // passDir returns the directory of the first file in the pass, the anchor for
-// the .go-ddd.yaml search.
+// the .tesser-build.yaml search.
 func passDir(pass *analysis.Pass) string {
 	if len(pass.Files) == 0 {
 		return ""

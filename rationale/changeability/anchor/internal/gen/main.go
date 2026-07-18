@@ -29,7 +29,7 @@ package consumer%02d
 import (
 	"context"
 
-	"github.com/verocorp/go-ddd/rationale/changeability/anchor/orders"
+	"github.com/verocorp/tesser-build/rationale/changeability/anchor/orders"
 )
 
 // Use exercises the public contract and nothing else.
@@ -50,8 +50,8 @@ package consumer%02d
 import (
 	"context"
 
-	"github.com/verocorp/go-ddd/rationale/changeability/anchor/backend"
-	"github.com/verocorp/go-ddd/rationale/changeability/anchor/orders"
+	"github.com/verocorp/tesser-build/rationale/changeability/anchor/backend"
+	"github.com/verocorp/tesser-build/rationale/changeability/anchor/orders"
 )
 
 // Use places an order, then reaches through to backend A's storage row.

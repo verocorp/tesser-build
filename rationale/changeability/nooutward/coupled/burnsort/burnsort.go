@@ -1,7 +1,7 @@
 // Package burnsort models reporting/UI code that sorts domain objects by fields
 // on a domain-emitted outward representation.
 //
-// Evidence for skills/ddd/application-services.md: if the domain exposes
+// Evidence for skills/tesser-build/application-services.md: if the domain exposes
 // ToResponse(), ordinary read-side code starts treating the wire shape as the
 // domain's inspection API.
 //
@@ -12,7 +12,7 @@ package burnsort
 import (
 	"sort"
 
-	"github.com/verocorp/go-ddd/rationale/changeability/nooutward/emit"
+	"github.com/verocorp/tesser-build/rationale/changeability/nooutward/emit"
 )
 
 func ByBurnSeconds(maneuvers []emit.Maneuver) {

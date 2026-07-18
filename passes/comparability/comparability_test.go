@@ -5,7 +5,7 @@ import (
 
 	"golang.org/x/tools/go/analysis/analysistest"
 
-	"github.com/verocorp/go-ddd/passes/comparability"
+	"github.com/verocorp/tesser-build/passes/comparability"
 )
 
 func TestComparability(t *testing.T) {

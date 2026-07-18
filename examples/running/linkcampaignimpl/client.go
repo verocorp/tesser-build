@@ -1,8 +1,8 @@
 package linkcampaignimpl
 
 import (
-	"github.com/verocorp/go-ddd/examples/running/campaignapp"
-	"github.com/verocorp/go-ddd/examples/running/linkcampaign"
+	"github.com/verocorp/tesser-build/examples/running/campaignapp"
+	"github.com/verocorp/tesser-build/examples/running/linkcampaign"
 )
 
 // client embeds *campaignapp.CampaignService, which promotes its methods

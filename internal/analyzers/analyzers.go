@@ -1,5 +1,5 @@
 // Package analyzers is the single registry of the DDD value-object analyzers.
-// cmd/ddd-vet composes All into its multichecker, and the meta-test iterates
+// cmd/tessercheck composes All into its multichecker, and the meta-test iterates
 // All to guarantee no analyzer ships without test coverage — so this slice is
 // the one place an analyzer is enrolled.
 package analyzers
@@ -7,18 +7,18 @@ package analyzers
 import (
 	"golang.org/x/tools/go/analysis"
 
-	"github.com/verocorp/go-ddd/passes/comparability"
-	"github.com/verocorp/go-ddd/passes/mustnew"
-	"github.com/verocorp/go-ddd/passes/primitiveaccessor"
-	"github.com/verocorp/go-ddd/passes/stringequality"
-	"github.com/verocorp/go-ddd/passes/stringer"
-	"github.com/verocorp/go-ddd/passes/voconstructor"
-	"github.com/verocorp/go-ddd/passes/vofields"
+	"github.com/verocorp/tesser-build/passes/comparability"
+	"github.com/verocorp/tesser-build/passes/mustnew"
+	"github.com/verocorp/tesser-build/passes/primitiveaccessor"
+	"github.com/verocorp/tesser-build/passes/stringequality"
+	"github.com/verocorp/tesser-build/passes/stringer"
+	"github.com/verocorp/tesser-build/passes/voconstructor"
+	"github.com/verocorp/tesser-build/passes/vofields"
 )
 
-// All is every analyzer ddd-vet runs. Each is independently adoptable — a menu,
+// All is every analyzer tessercheck runs. Each is independently adoptable — a menu,
 // not an all-or-nothing — but they share the value-object identification and
-// .go-ddd.yaml exclude config in internal/voscan.
+// .tesser-build.yaml exclude config in internal/voscan.
 var All = []*analysis.Analyzer{
 	mustnew.Analyzer,           // #4  paired MustNewX
 	vofields.Analyzer,          // #1  no exported fields

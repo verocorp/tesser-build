@@ -29,7 +29,7 @@ library**, and each branch converged internally.
 | 2026 | **quanta** | flat pure-math library, no contexts | none | whole package | none |
 
 **Synthesis DNA:** rev contributed the layered/encapsulation instinct (its
-Aug-2024 "struct-init hiding" campaign is the private-fields rule the go-ddd skill
+Aug-2024 "struct-init hiding" campaign is the private-fields rule the tesser-build skill
 now enforces). ridedar contributed the published-`Client` contract + DI-registry +
 per-context shape. flow is the synthesis — rev's single-module `internal/`
 discipline + ridedar's contract/registry ideas, minus ridedar's layer-per-module
@@ -48,7 +48,7 @@ Which one a context uses is decided by **application vs library**: a library shi
 the four roles but no wiring and no hosts (the consumer supplies them); an app has
 both. The invariants that held across *both* branches — VO-first + `NewX`/`MustNewX`
 + constructor-only construction, ports-beside-consumer, primitive-leaved DTOs — are
-exactly what the go-ddd skill already teaches.
+exactly what the tesser-build skill already teaches.
 
 ---
 
@@ -188,7 +188,7 @@ excavation + Codex found these to be bugs:
    a third service. Never nil-then-setter.
 4. **`log.Fatal` / env reads buried in providers → only the edge exits.**
    `config` reading and `log.Fatal` live at the outermost `main`, nothing below.
-   (Codex flagged this should be a `ddd-vet` check: ban `os.Getenv` outside the
+   (Codex flagged this should be a `tessercheck` check: ban `os.Getenv` outside the
    edge decoder, `log.Fatal` outside `srv/*/main`, `init` side effects.)
 
 ---

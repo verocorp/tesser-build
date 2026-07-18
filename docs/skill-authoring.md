@@ -1,4 +1,4 @@
-# Authoring the `skills/ddd/` files
+# Authoring the `skills/tesser-build/` files
 
 This is the repo-side contract for writing and revising the agent skill. It is
 not copied into consumer repos. The design it implements is the 2026-07-11

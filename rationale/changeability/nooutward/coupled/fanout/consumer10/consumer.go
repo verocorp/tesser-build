@@ -7,7 +7,7 @@
 // source names ToResponse().BurnSeconds.
 package consumer10
 
-import "github.com/verocorp/go-ddd/rationale/changeability/nooutward/emit"
+import "github.com/verocorp/tesser-build/rationale/changeability/nooutward/emit"
 
 // Use reaches through the domain-emitted outward DTO to a wire-format field.
 func Use(m emit.Maneuver) int64 {

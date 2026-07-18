@@ -1,36 +1,36 @@
 {
-  // Editor integration for ddd-vet. Copy this to your repo's
+  // Editor integration for tessercheck. Copy this to your repo's
   // .vscode/tasks.json.
   //
   // Why a task and not the language server: gopls only runs the analyzers
   // compiled into it, so it cannot surface a custom go/analysis analyzer like
-  // ddd-vet. The editor path is therefore a task whose output is parsed by the
+  // tessercheck. The editor path is therefore a task whose output is parsed by the
   // problemMatcher below into squiggles + the Problems panel.
   //
   // Two ways to run it:
-  //   1. On demand   — Command Palette -> "Tasks: Run Task" -> "ddd-vet".
+  //   1. On demand   — Command Palette -> "Tasks: Run Task" -> "tessercheck".
   //   2. On every save — install "Trigger Task on Save"
   //      (Gruntfuggly.triggertaskonsave) and add to .vscode/settings.json:
-  //          "triggerTaskOnSave.tasks": { "ddd-vet": ["**/*.go"] },
+  //          "triggerTaskOnSave.tasks": { "tessercheck": ["**/*.go"] },
   //          "triggerTaskOnSave.showStatusBarToggle": true
   //      golangci-lint's editor integration also runs only on save, so this is
   //      the same trigger with none of the custom-binary setup.
   //
   // Requires the tool pinned in your go.mod:
-  //   go get -tool github.com/verocorp/go-ddd/cmd/ddd-vet@latest
-  // Not adopted yet (dogfooding from a sibling go-ddd checkout)? Use the
+  //   go get -tool github.com/verocorp/tesser-build/cmd/tessercheck@latest
+  // Not adopted yet (dogfooding from a sibling tesser-build checkout)? Use the
   // from-source command variant noted below instead.
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "ddd-vet",
+      "label": "tessercheck",
       "detail": "Run the DDD analyzers on this module",
       "type": "shell",
-      "command": "go tool ddd-vet ./...",
-      // From-source variant (pre-adoption / dogfooding), go-ddd as a sibling dir:
-      //   "command": "go build -C ../go-ddd -o /tmp/ddd-vet ./cmd/ddd-vet && /tmp/ddd-vet ./...",
+      "command": "go tool tessercheck ./...",
+      // From-source variant (pre-adoption / dogfooding), tesser-build as a sibling dir:
+      //   "command": "go build -C ../tesser-build -o /tmp/tessercheck ./cmd/tessercheck && /tmp/tessercheck ./...",
       // Large repo? Scope to the saved file's package instead of ./... to keep
-      // each save fast (ddd-vet type-checks what you point it at).
+      // each save fast (tessercheck type-checks what you point it at).
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -41,9 +41,9 @@
         "clear": true
       },
       "problemMatcher": {
-        "owner": "ddd-vet",
-        "source": "ddd-vet",
-        // ddd-vet emits absolute file paths.
+        "owner": "tessercheck",
+        "source": "tessercheck",
+        // tessercheck emits absolute file paths.
         "fileLocation": "absolute",
         "pattern": {
           "regexp": "^(.+?):(\\d+):(\\d+):\\s+(.+)$",

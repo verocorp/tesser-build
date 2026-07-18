@@ -5,7 +5,7 @@ import (
 
 	"golang.org/x/tools/go/analysis/analysistest"
 
-	"github.com/verocorp/go-ddd/passes/mustnew"
+	"github.com/verocorp/tesser-build/passes/mustnew"
 )
 
 func TestMustNew(t *testing.T) {

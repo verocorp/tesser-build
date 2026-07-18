@@ -5,7 +5,7 @@ import (
 
 	"golang.org/x/tools/go/analysis/analysistest"
 
-	"github.com/verocorp/go-ddd/passes/stringer"
+	"github.com/verocorp/tesser-build/passes/stringer"
 )
 
 func TestStringer(t *testing.T) {

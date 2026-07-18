@@ -1,4 +1,4 @@
-// Package exportrow is a realistic coupled arm for skills/ddd/composition-root.md
+// Package exportrow is a realistic coupled arm for skills/tesser-build/composition-root.md
 // (the public-interface rule): consumers should not expose backend persistence
 // rows in their own public APIs.
 //
@@ -8,7 +8,7 @@
 package exportrow
 
 import (
-	"github.com/verocorp/go-ddd/rationale/changeability/anchor/backend"
+	"github.com/verocorp/tesser-build/rationale/changeability/anchor/backend"
 )
 
 // OrderExport is a consumer-owned API type that accidentally bakes backend A's

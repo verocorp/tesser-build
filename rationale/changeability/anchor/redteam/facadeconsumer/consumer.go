@@ -13,7 +13,7 @@ package facadeconsumer
 import (
 	"context"
 
-	"github.com/verocorp/go-ddd/rationale/changeability/anchor/redteam/portless"
+	"github.com/verocorp/tesser-build/rationale/changeability/anchor/redteam/portless"
 )
 
 // Reserve places an order through the facade. It cannot be handed a substitute

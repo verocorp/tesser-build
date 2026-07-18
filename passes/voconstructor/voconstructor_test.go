@@ -5,7 +5,7 @@ import (
 
 	"golang.org/x/tools/go/analysis/analysistest"
 
-	"github.com/verocorp/go-ddd/passes/voconstructor"
+	"github.com/verocorp/tesser-build/passes/voconstructor"
 )
 
 func TestVOConstructor(t *testing.T) {

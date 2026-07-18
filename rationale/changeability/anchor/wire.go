@@ -8,9 +8,9 @@ package anchor
 //go:generate go run ./internal/gen
 
 import (
-	"github.com/verocorp/go-ddd/rationale/changeability/anchor/backend"
-	"github.com/verocorp/go-ddd/rationale/changeability/anchor/orders"
-	"github.com/verocorp/go-ddd/rationale/changeability/anchor/ordersapp"
+	"github.com/verocorp/tesser-build/rationale/changeability/anchor/backend"
+	"github.com/verocorp/tesser-build/rationale/changeability/anchor/orders"
+	"github.com/verocorp/tesser-build/rationale/changeability/anchor/ordersapp"
 )
 
 // Wire constructs the ordering Client over whichever backend is compiled in.

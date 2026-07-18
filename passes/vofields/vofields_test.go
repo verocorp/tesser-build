@@ -5,7 +5,7 @@ import (
 
 	"golang.org/x/tools/go/analysis/analysistest"
 
-	"github.com/verocorp/go-ddd/passes/vofields"
+	"github.com/verocorp/tesser-build/passes/vofields"
 )
 
 func TestVOFields(t *testing.T) {

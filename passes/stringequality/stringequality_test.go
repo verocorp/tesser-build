@@ -5,7 +5,7 @@ import (
 
 	"golang.org/x/tools/go/analysis/analysistest"
 
-	"github.com/verocorp/go-ddd/passes/stringequality"
+	"github.com/verocorp/tesser-build/passes/stringequality"
 )
 
 func TestStringEquality(t *testing.T) {
