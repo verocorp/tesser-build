@@ -1,8 +1,9 @@
 # examples/python-app — the composition-root / bounded-context wiring template (Python)
 
 A runnable, CI-gated Python **application** that materializes the settled
-bounded-context anatomy and the `srv` / `config` / `bootstrap` model. It is the
-Python mirror of `examples/app` (Go) and a shape a real service can clone. It is a
+bounded-context anatomy and the `srv` / `config` / `bootstrap` model — a shape a
+real service can clone. (A Go mirror, `examples/app`, is planned but does not
+exist yet; this is currently the only worked app example.) It is a
 **production reference template**, not a teaching toy: a mistake here replicates
 into every service cloned from it, so the example **enforces itself** (see below).
 
