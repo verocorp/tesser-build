@@ -1,17 +1,24 @@
-"""The HTTP host (delivery mechanism 1). It decodes config, calls
-``bootstrap.new`` ONCE, mounts the contexts' inbound handlers + the in-process
-reports read, and serves. It is the only exiter. ``main`` reads no env directly —
-it calls the ``config`` decoders.
+"""The HTTP host (delivery mechanism 1). It is the env edge: ``main`` populates
+the spec-shaped ``Config`` directly with ``os.getenv`` calls (including its own
+launch config, the listen addr) and hands it to ``bootstrap.new`` ONCE, which
+validates fail-fast. It mounts the contexts' inbound handlers + the in-process
+reports read, and serves. It is the only exiter.
+
+A real service would resolve secret *references* (Vault/AWS/GCP) here too; that
+launch-time loader is a legitimate host-side concern, deliberately not built.
 """
 
 from __future__ import annotations
 
 import json
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
-import config
 from bootstrap.bootstrap import App, new
+from bootstrap.config import Config
+from campaign.wiring.config import Config as CampaignConfig
+from linkpolicy.wiring.config import Config as LinkPolicyConfig
 from campaign.adapters.handlers.http import Handler, Response
 
 
@@ -55,9 +62,15 @@ def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
 
 
 def main() -> None:
-    cfg = config.from_env()  # the only env read is inside config
+    # The host is the env edge: a missing coordinate stays empty and
+    # bootstrap.new fails fast on it — it never defaults to volatile storage.
+    cfg = Config(
+        campaign=CampaignConfig(storage=os.getenv("CAMPAIGN_STORAGE") or ""),
+        linkpolicy=LinkPolicyConfig(storage=os.getenv("LINKPOLICY_STORAGE") or ""),
+    )
     app = new(cfg)  # graph built once per process
-    host, port = config.http_addr_from_env()
+    host = os.getenv("HTTP_HOST") or ""  # the host's OWN launch config, same edge
+    port = int(os.getenv("HTTP_PORT") or "8080")
     server = make_server((host, port), app)
     print(f"campaign+linkpolicy app listening on {host or '0.0.0.0'}:{port}")  # noqa: T201
     try:

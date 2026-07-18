@@ -1,6 +1,7 @@
 """The composition root: service-owned, source-agnostic. ``new(cfg)`` validates
 the config, builds the object graph ONCE, and returns an ``App`` with ``close()``.
-It reads no environment (a host's decoder does that and passes ``cfg`` in).
+It reads no environment (the host is the env edge: each ``srv/*/main`` populates
+``cfg`` and passes it in).
 
 Two things the governing rule makes required correctness (not machinery):
   - It builds each closeable onto a CLEANUP STACK; if a later dep fails, the

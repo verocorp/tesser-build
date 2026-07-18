@@ -38,10 +38,14 @@ Each context has the four roles — `domain`, `application`, `adapters`
 Protocol + primitive DTOs at its top level. A context's own config lives in its
 `wiring`, never on the public seam.
 
-App-level: `config.py` is the single env edge (a shared pure `from_env` decoder the
-hosts call); `bootstrap` is the service-owned composition root (`new(cfg) -> App`,
-builds the graph once with a cleanup stack, `App.close()`); `srv/{http,cli}` are
-the hosts, one per delivery mechanism, each calling `bootstrap.new` once.
+App-level: **the host is the env edge** — each `srv/*/main` populates the
+spec-shaped application `Config` (`bootstrap/config.py`: frozen dataclass,
+primitive leaves, no constructor logic, no methods) directly with `os.getenv`
+calls, including its own launch config (e.g. the HTTP addr), and hands it to
+`bootstrap.new`, which validates fail-fast. `bootstrap` is the service-owned
+composition root (`new(cfg) -> App`, builds the graph once with a cleanup stack,
+`App.close()`); `srv/{http,cli}` are the hosts, one per delivery mechanism, each
+calling `bootstrap.new` once.
 
 ## Run it
 
@@ -54,12 +58,12 @@ CAMPAIGN_STORAGE=memory LINKPOLICY_STORAGE=memory python -m srv.cli.main create-
 
 ```
 pip install -r requirements-dev.txt
-MYPYPATH=. mypy --strict errors.py lifecycle.py config.py campaign linkpolicy reports bootstrap srv tests conftest.py
+MYPYPATH=. mypy --strict errors.py lifecycle.py campaign linkpolicy reports bootstrap srv tests conftest.py
 pytest -q
 ```
 
 `mypy --strict` + `pytest` are the same bar the other examples meet. The
-`tests/test_enforcement.py` checks (env read only at the config edge; only the edge
+`tests/test_enforcement.py` checks (env calls only in `srv/*/main`; only the edge
 exits; no import-time side effects) and `tests/test_direction.py` (linkpolicy never
 imports campaign) are **executable spec** — they fail on the violations the template
 exists to prevent, and a clone inherits them by copying the tree. The general
