@@ -1,0 +1,6 @@
+# Tooling for the wiring worked example — the type checker and test runner that
+# gate it. Everything the app itself imports is the Python standard library
+# (dataclasses, typing.Protocol, enum, http.server, json); these two are
+# dev-only.
+mypy>=1.8
+pytest>=8.0
