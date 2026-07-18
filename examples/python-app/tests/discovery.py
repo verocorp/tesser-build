@@ -9,8 +9,8 @@ or a Client-bearing context; anything else is "unclassified" and fails, so a
 context that forgot its ``Client`` (the ``reports/`` defect class) cannot hide
 from the checks by being invisible to them.
 
-This is the porting seam for the later ddd-vet generalization: the same
-whole-tree classify-then-check move as ``ddd_vet/classify.py``, kept pure over
+This is the porting seam for the later tessercheck generalization: the same
+whole-tree classify-then-check move as ``tessercheck/classify.py``, kept pure over
 ``pathlib``/``ast`` so it lifts out unchanged.
 """
 

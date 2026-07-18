@@ -55,7 +55,7 @@ there is no bypassable factory.
 
 **Compound (two or more fields):** the primitive-leaf spec is parsed and
 validated on construction; the fields are **hidden** (a value object exposes no
-primitive field — `python.md#DDD010`). *REVISIT: the concrete construction
+primitive field — `python.md#TB010`). *REVISIT: the concrete construction
 mechanism for a compound value object is unsettled. An entity takes its spec
 directly in `__init__(self, spec)`; the compound-VO below still routes primitive
 parsing through a factory because a frozen dataclass's auto-generated `__init__`

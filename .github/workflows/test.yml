@@ -133,7 +133,7 @@ jobs:
           mypy
           pytest -q
       - name: tessercheck-py on examples/python (explicit CLI gate)
-        run: python -m ddd_vet examples/python
+        run: python -m tessercheck examples/python
         working-directory: .
         env:
           PYTHONPATH: tessercheck-py

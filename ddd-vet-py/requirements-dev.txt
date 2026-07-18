@@ -1,5 +1,0 @@
-# Dev tooling for ddd-vet-py — the analyzer itself imports only the standard
-# library (ast, argparse, os); these two gate it at the same bar as the rest of
-# the repo.
-mypy>=1.8
-pytest>=8.0
