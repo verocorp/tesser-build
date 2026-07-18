@@ -15,10 +15,17 @@ from campaign.wiring.config import Config as CampaignConfig
 from campaign.wiring.wire import build as real_campaign_build
 from lifecycle import Closeable
 from linkpolicy.wiring.config import Config as LinkPolicyConfig
+from reports.wiring.config import Config as ReportsConfig
 
 
 def _mem() -> App:
-    return new(Config(campaign=CampaignConfig("memory"), linkpolicy=LinkPolicyConfig("memory")))
+    return new(
+        Config(
+            campaign=CampaignConfig("memory"),
+            linkpolicy=LinkPolicyConfig("memory"),
+            reports=ReportsConfig(),
+        )
+    )
 
 
 def test_graph_built_once_state_persists_across_calls() -> None:

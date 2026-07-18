@@ -3,7 +3,9 @@ teaches can't silently rot in a clone. These are real ``ast`` checks (not
 string-grep, so comments/strings/generated code don't false-positive), scoped to
 what the AST can actually prove:
 
-  - env is read at ONE edge only (``config.py``) — nowhere else, not even a host main;
+  - the HOST is the env edge: ``os.getenv``/``os.environ`` calls are legal only in
+    ``srv/*/main`` (there is no shared decoder — the host populates the spec-shaped
+    ``Config`` and ``bootstrap.new`` validates it) — banned everywhere else;
   - only the edge exits (no ``sys.exit``/``os._exit`` below ``srv/*/main``);
   - no import-time side effects (module-level bare calls) in a context or bootstrap.
 
@@ -15,6 +17,8 @@ from __future__ import annotations
 
 import ast
 import pathlib
+
+from tests.discovery import discovered_contexts
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -78,13 +82,26 @@ def _py_files(*, exclude: set[pathlib.Path]) -> list[pathlib.Path]:
     ]
 
 
-def test_env_read_only_in_config() -> None:
+def _is_env_edge(rel: pathlib.PurePath) -> bool:
+    """``srv/<host>/main.py`` — the host mains are the only legal env edge."""
+    return len(rel.parts) == 3 and rel.parts[0] == "srv" and rel.parts[2] == "main.py"
+
+
+def _env_offenders(files: list[tuple[str, ast.Module]]) -> dict[str, list[int]]:
     offenders: dict[str, list[int]] = {}
-    for path in _py_files(exclude={(ROOT / "config.py").resolve()}):
-        lines = _env_reads(_parse(path))
+    for rel, tree in files:
+        if _is_env_edge(pathlib.PurePosixPath(rel)):
+            continue
+        lines = _env_reads(tree)
         if lines:
-            offenders[str(path.relative_to(ROOT))] = lines
-    assert not offenders, f"env read outside the config decoder: {offenders}"
+            offenders[rel] = lines
+    return offenders
+
+
+def test_env_calls_only_in_srv_main() -> None:
+    files = [(p.relative_to(ROOT).as_posix(), _parse(p)) for p in _py_files(exclude=set())]
+    offenders = _env_offenders(files)
+    assert not offenders, f"env access outside srv/*/main: {offenders}"
 
 
 def test_only_the_edge_exits() -> None:
@@ -98,8 +115,10 @@ def test_only_the_edge_exits() -> None:
 
 
 def test_no_import_time_side_effects_in_contexts_or_bootstrap() -> None:
+    # Contexts are DISCOVERED (tests/discovery.py), not enumerated — a new
+    # context is covered by construction.
     offenders: dict[str, list[int]] = {}
-    for pkg in ("campaign", "linkpolicy", "reports", "bootstrap"):
+    for pkg in (*discovered_contexts(), "bootstrap"):
         for path in (ROOT / pkg).rglob("*.py"):
             lines = _import_time_side_effects(_parse(path))
             if lines:
@@ -114,3 +133,15 @@ def test_checkers_flag_injected_violations() -> None:
     assert _exits(ast.parse("import sys\ndef f() -> None:\n    sys.exit(1)\n"))
     assert _exits(ast.parse("import os\nos._exit(0)\n"))
     assert _import_time_side_effects(ast.parse("configure_logging()\n"))
+
+
+def test_env_edge_scoping_teeth() -> None:
+    # Teeth for the flipped rule: the same injected env call is flagged in a
+    # context / wiring / bootstrap module and allowed in a host main.
+    getenv_call = ast.parse("import os\nx = os.getenv('CAMPAIGN_STORAGE')\n")
+    environ_read = ast.parse("import os\ny = os.environ['X']\n")
+    assert _env_offenders([("campaign/wiring/wire.py", getenv_call)])
+    assert _env_offenders([("bootstrap/bootstrap.py", environ_read)])
+    assert _env_offenders([("linkpolicy/application/service.py", getenv_call)])
+    assert not _env_offenders([("srv/http/main.py", getenv_call)])
+    assert not _env_offenders([("srv/cli/main.py", environ_read)])

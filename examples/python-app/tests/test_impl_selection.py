@@ -14,6 +14,7 @@ from campaign.wiring.wire import repo_for as campaign_repo_for
 from errors import DomainError
 from linkpolicy.wiring.config import Config as LinkPolicyConfig
 from linkpolicy.wiring.wire import repo_for as linkpolicy_repo_for
+from reports.wiring.config import Config as ReportsConfig
 
 
 def test_memory_coordinate_builds_and_is_its_own_closeable() -> None:
@@ -32,4 +33,10 @@ def test_absent_coordinate_errors_not_silent_memory() -> None:
 
 def test_bootstrap_fails_fast_on_absent_coordinate() -> None:
     with pytest.raises(DomainError):
-        new(Config(campaign=CampaignConfig(""), linkpolicy=LinkPolicyConfig("memory")))
+        new(
+            Config(
+                campaign=CampaignConfig(""),
+                linkpolicy=LinkPolicyConfig("memory"),
+                reports=ReportsConfig(),
+            )
+        )

@@ -1,6 +1,8 @@
-"""Moment 2 — the cross-context read, demonstrated IN-PROCESS on one App. It reads
-both public Clients (campaign links + linkpolicy verdicts) and joins them; the
-acyclic decomposition is what lets it exist above both contexts.
+"""Moment 2 — the cross-context read, demonstrated IN-PROCESS on one App. The
+reports context reads both peers' public Clients (campaign links + linkpolicy
+verdicts) and joins them; the acyclic decomposition — reports its own context
+above both — is what lets it exist. The domain-level tests lock the join
+semantics reports owns (left-join default, blocked-first ordering).
 """
 
 from __future__ import annotations
@@ -11,10 +13,18 @@ from campaign.client import CreateLinkRequest
 from campaign.wiring.config import Config as CampaignConfig
 from errors import DomainError
 from linkpolicy.wiring.config import Config as LinkPolicyConfig
+from reports.domain.report import Link, RecordedVerdict, join_links_with_verdicts
+from reports.wiring.config import Config as ReportsConfig
 
 
 def _mem() -> App:
-    return new(Config(campaign=CampaignConfig("memory"), linkpolicy=LinkPolicyConfig("memory")))
+    return new(
+        Config(
+            campaign=CampaignConfig("memory"),
+            linkpolicy=LinkPolicyConfig("memory"),
+            reports=ReportsConfig(),
+        )
+    )
 
 
 def test_report_reads_both_contexts_in_process() -> None:
@@ -40,3 +50,15 @@ def test_blocked_destination_never_becomes_a_link() -> None:
         assert app.reports.links_by_verdict() == ()
     finally:
         app.close()
+
+
+def test_join_semantics_default_and_ordering() -> None:
+    # The read-model semantics the reports DOMAIN owns: left-join (every link
+    # appears once; no recorded verdict -> allowed with an explicit reason),
+    # blocked rows first, then by slug.
+    links = (Link("z", "https://ok.example/z"), Link("a", "https://bad.example/a"))
+    verdicts = (RecordedVerdict("https://bad.example/a", False, "host blocked"),)
+    rows = join_links_with_verdicts(links, verdicts)
+    assert [r.slug for r in rows] == ["a", "z"]  # blocked first, then slug
+    assert not rows[0].allowed and rows[0].reason == "host blocked"
+    assert rows[1].allowed and rows[1].reason == "no verdict recorded"

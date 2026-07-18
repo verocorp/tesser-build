@@ -7,7 +7,10 @@ from __future__ import annotations
 
 import pytest
 
+import campaign
 import linkpolicy.wiring.wire as linkpolicy_wire
+import reports
+import reports.wiring.wire as reports_wire
 from bootstrap.bootstrap import CleanupStack, new
 from bootstrap.config import Config
 from campaign.wiring.config import Config as CampaignConfig
@@ -15,6 +18,8 @@ from errors import DomainError
 from lifecycle import Closeable
 from linkpolicy import CheckRequest, CheckResponse, Client, VerdictView
 from linkpolicy.wiring.config import Config as LinkPolicyConfig
+from reports.client import LinkVerdictView
+from reports.wiring.config import Config as ReportsConfig
 
 
 class _Spy:
@@ -62,5 +67,39 @@ def test_new_closes_already_built_deps_on_partial_failure(monkeypatch: pytest.Mo
 
     # linkpolicy builds (spy pushed), then campaign fails on its absent coordinate.
     with pytest.raises(DomainError):
-        new(Config(campaign=CampaignConfig(""), linkpolicy=LinkPolicyConfig("memory")))
+        new(
+            Config(
+                campaign=CampaignConfig(""),
+                linkpolicy=LinkPolicyConfig("memory"),
+                reports=ReportsConfig(),
+            )
+        )
     assert spy.closed, "the already-built linkpolicy resource was not cleaned up"
+
+
+class _DummyReports:
+    def links_by_verdict(self) -> tuple[LinkVerdictView, ...]:
+        return ()
+
+
+def test_reports_closeable_is_on_the_cleanup_stack(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Mirrored sibling guarantee: reports' closeable joins the stack like any
+    # other context's, and App.close() reaches it.
+    order: list[str] = []
+    spy = _Spy("reports", order)
+
+    def fake_build(
+        cfg: ReportsConfig, campaign_client: campaign.Client, policy_client: Client
+    ) -> tuple[reports.Client, Closeable]:
+        return _DummyReports(), spy
+
+    monkeypatch.setattr(reports_wire, "build", fake_build)
+    app = new(
+        Config(
+            campaign=CampaignConfig("memory"),
+            linkpolicy=LinkPolicyConfig("memory"),
+            reports=ReportsConfig(),
+        )
+    )
+    app.close()
+    assert spy.closed, "reports' closeable was not on the cleanup stack"
