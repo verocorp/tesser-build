@@ -78,11 +78,15 @@ go test -bench=. -benchmem ./rationale/ # the honest cost (collection-VO copy ta
 go vet ./... && gofmt -l .             # both must be clean
 ```
 
-## Git
+## Git & shipping
 
-After a set of file changes, commit before returning control. Write a
-descriptive message. Don't ask permission to commit. Stage files individually —
-never `git add -A`/`.`.
+**Never commit directly to `main`** (Chris ruling 2026-07-19, superseding the
+earlier trunk-based convention). For every change set: work on a **worktree
+branch** (`.claude/worktrees/<name>`), commit there, and open a **PR**; merge
+after CI is green. Ship via **/gstack-ship** — it owns the version → PR →
+release tracking arc. After a set of file changes, commit (on the branch)
+before returning control. Write a descriptive message. Don't ask permission
+to commit. Stage files individually — never `git add -A`/`.`.
 
 ## GBrain Search Guidance (configured by /sync-gbrain)
 <!-- gstack-gbrain-search-guidance:start -->
