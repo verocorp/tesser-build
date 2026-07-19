@@ -4,7 +4,7 @@
   "_column_semantics": {
     "skill": "component-doc filename under skills/tesser-build/; absent key = n/a (—); named-but-missing file = ❌; present file's tb-status marker decides ✅ (full) vs 🟡 (partial/stub)",
     "py_example, go_example": "candidate paths relative to repo root; absent key = n/a (—); any path exists = ✅; none exist = ❌",
-    "go_analyzers, py_checks": "names in internal/analyzers.All / codes in tessercheck.finding.CHECKS; a listed name missing from the live registry is a loud error (drift)",
+    "go_analyzers, py_checks": "names in internal/analyzers.All / codes in tessercheck.finding.CHECKS; a listed name missing from the live registry is a loud error (drift). Rendering: ✅ requires BOTH lists non-empty; only one populated caps the cell at 🟡 ('Py only'/'Go only'); neither populated falls back to enforcement_tests (🟡 in-example) and then ❌. Absent key = n/a (—), present-but-empty [] = ❌ planned-but-absent — the two are deliberately different",
     "enforcement_tests": "in-example enforcement test paths; these alone cap the checker cell at 🟡 in-example",
     "rationale": "glob patterns for executable-rationale test files; absent key = n/a (—); no match = ❌"
   },

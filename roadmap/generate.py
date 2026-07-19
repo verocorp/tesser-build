@@ -233,14 +233,16 @@ def py_check_codes(root: Path) -> set[str]:
 
 def _row_location(path: Path, key: object) -> str:
     """file:line of a row's ``"key"`` entry — the named-error anchor for
-    registry problems (a malformed ``kind`` must carry file:line, 6A-c)."""
+    registry problems (a malformed ``kind`` must carry file:line, 6A-c).
+    Whitespace-tolerant (compact or expanded JSON); degrades to the bare
+    path when the key can't be located."""
     if isinstance(key, str):
-        needle = f'"key": "{key}"'
+        needle = re.compile(r'"key"\s*:\s*"' + re.escape(key) + '"')
         try:
             for lineno, line in enumerate(
                 path.read_text(encoding="utf-8").splitlines(), start=1
             ):
-                if needle in line:
+                if needle.search(line):
                     return f"{path}:{lineno}"
         except OSError:
             pass
@@ -285,8 +287,10 @@ def load_registry(path: Path) -> list[dict[str, object]]:
         if key in seen:
             raise RoadmapError(f"{path}: duplicate row key {key!r}")
         seen.add(key)
-        if not isinstance(row.get("title"), str):
+        title = row.get("title")
+        if not isinstance(title, str):
             raise RoadmapError(f"{path}: row {key!r} missing 'title'")
+        _table_safe(title, key, "title")
     return [r for r in rows if isinstance(r, dict)]
 
 
@@ -367,14 +371,29 @@ def checker_cell(
     return SYMBOL_ABSENT
 
 
+def _table_safe(value: str, key: object, field: str) -> str:
+    """Reject characters that would corrupt the rendered markdown table —
+    a pipe or newline in a cell-bound field fabricates columns/rows and the
+    drift check cannot see it (both sides carry the same corruption)."""
+    if "|" in value or "\n" in value:
+        raise RoadmapError(
+            f"registry row {key!r}: {field} must not contain '|' or newlines "
+            f"(it is rendered into a markdown table cell): {value!r}"
+        )
+    return value
+
+
 def rule_cells(root: Path, row: dict[str, object]) -> dict[str, str]:
-    """Cells for a ``kind: rule`` row — taught-in path (existence-checked),
-    declared enforcer, and a status derived from the two: a rule is ✅ only
-    when it is both taught at a live path and has a named enforcer."""
+    """Cells for a ``kind: rule`` row — taught-in path (existence-checked,
+    ``#anchor`` verified against the target's explicit ``{#anchor}``
+    headings), declared enforcer, and a status derived from the two. The ✅
+    suffix says "enforcer declared" deliberately: the registry records the
+    named enforcement, it cannot verify a consumer-side tool actually runs.
+    """
     key = row.get("key")
     taught = row.get("taught_in")
-    if taught is not None and not isinstance(taught, str):
-        raise RoadmapError(f"registry rule row {key!r}: taught_in must be a string path")
+    if taught is not None and (not isinstance(taught, str) or not taught.strip()):
+        raise RoadmapError(f"registry rule row {key!r}: taught_in must be a non-empty string path")
     enforced = row.get("enforced_by")
     if enforced is not None and (not isinstance(enforced, str) or not enforced.strip()):
         raise RoadmapError(f"registry rule row {key!r}: enforced_by must be a non-empty string")
@@ -383,18 +402,26 @@ def rule_cells(root: Path, row: dict[str, object]) -> dict[str, str]:
     if taught is None:
         taught_cell = SYMBOL_ABSENT
     else:
-        target = taught.split("#", 1)[0].rstrip("/")
-        taught_ok = (root / target).exists()
+        _table_safe(taught, key, "taught_in")
+        target, _, anchor = taught.partition("#")
+        target = target.rstrip("/")
+        taught_ok = bool(target) and (root / target).exists()
+        if taught_ok and anchor:
+            if f"{{#{anchor}}}" not in (root / target).read_text(encoding="utf-8"):
+                raise RoadmapError(
+                    f"registry rule row {key!r}: taught_in anchor #{anchor} not found "
+                    f"in {target} (expected an explicit {{#{anchor}}} heading id)"
+                )
         taught_cell = f"`{taught}`" if taught_ok else cell(SYMBOL_ABSENT, f"`{taught}`")
 
-    enforced_cell = enforced if enforced is not None else SYMBOL_ABSENT
+    enforced_cell = _table_safe(enforced, key, "enforced_by") if enforced is not None else SYMBOL_ABSENT
 
     if taught_ok and enforced is not None:
-        status = cell(SYMBOL_DONE, "taught + enforced")
+        status = cell(SYMBOL_DONE, "taught + enforcer declared")
     elif taught_ok:
         status = cell(SYMBOL_PARTIAL, "taught only")
     elif enforced is not None:
-        status = cell(SYMBOL_PARTIAL, "enforced only")
+        status = cell(SYMBOL_PARTIAL, "enforcer declared only")
     else:
         status = SYMBOL_ABSENT
     return {"taught-in": taught_cell, "enforced-by": enforced_cell, "status": status}

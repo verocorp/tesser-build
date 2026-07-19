@@ -37,4 +37,4 @@ here honestly instead of bending the component columns.
 
 | Rule | Taught in | Enforced by | Status |
 |---|---|---|---|
-| Dependency direction (acyclic, inward) | `skills/tesser-build/map.md#how-contexts-connect` | import-linter — consumer-side declared layers/forbidden contracts (eng review 2A; a tessercheck-native direction check is deferred with this as its named standing enforcement) | ✅ taught + enforced |
+| Dependency direction (acyclic, inward) | `skills/tesser-build/map.md#how-contexts-connect` | import-linter — consumer-side declared layers/forbidden contracts (eng review 2A; a tessercheck-native direction check is deferred with this as its named standing enforcement) | ✅ taught + enforcer declared |

@@ -187,7 +187,7 @@ def test_rule_row_renders_in_second_table(tmp_path: Path) -> None:
     assert "| Rule | Taught in | Enforced by | Status |" in out
     assert (
         "| Dependency direction | `skills/tesser-build/widget.md` | "
-        "import-linter | ✅ taught + enforced |" in out
+        "import-linter | ✅ taught + enforcer declared |" in out
     )
     # The rule row must NOT leak into the component table.
     component_table = out.split("## Pay-now rules")[0]
@@ -216,12 +216,69 @@ def test_rule_row_rejects_component_keys(tmp_path: Path) -> None:
 def test_teeth_deleting_taught_in_target_flips_rule_status(tmp_path: Path) -> None:
     root, registry = make_fixture(tmp_path)
     _add_rule_row(registry)
-    assert "✅ taught + enforced" in generate_fixture(root, registry)
+    assert "✅ taught + enforcer declared" in generate_fixture(root, registry)
 
     (root / "skills" / "tesser-build" / "widget.md").unlink()
     after = generate_fixture(root, registry)
-    assert "🟡 enforced only" in after
+    assert "🟡 enforcer declared only" in after
     assert "❌ `skills/tesser-build/widget.md`" in after
+
+
+def test_rule_row_with_neither_field_is_bare_absent(tmp_path: Path) -> None:
+    root, registry = make_fixture(tmp_path)
+    data = json.loads(registry.read_text(encoding="utf-8"))
+    data["rows"].append({"key": "rule-bare", "title": "Bare rule", "kind": "rule"})
+    registry.write_text(json.dumps(data), encoding="utf-8")
+    out = generate_fixture(root, registry)
+    assert "| Bare rule | ❌ | ❌ | ❌ |" in out
+
+
+def test_empty_taught_in_is_a_named_error(tmp_path: Path) -> None:
+    """'' used to resolve to the repo root (always exists) and silently
+    render as taught (cumulative review, testing specialist)."""
+    root, registry = make_fixture(tmp_path)
+    _add_rule_row(registry, taught_in="")
+    with pytest.raises(gen.RoadmapError, match="taught_in must be a non-empty"):
+        generate_fixture(root, registry)
+
+
+def test_pipe_in_rule_field_is_a_named_error(tmp_path: Path) -> None:
+    """A '|' in a cell-bound field fabricates table columns and the drift
+    check can't see it (cumulative review F7)."""
+    root, registry = make_fixture(tmp_path)
+    _add_rule_row(registry, enforced_by="import-linter | totally fine")
+    with pytest.raises(gen.RoadmapError, match="must not contain"):
+        generate_fixture(root, registry)
+
+
+def test_bad_anchor_in_taught_in_is_a_named_error(tmp_path: Path) -> None:
+    """taught_in#anchor must resolve to an explicit {#anchor} heading id in
+    the target (cumulative review F8: bad anchors rendered green)."""
+    root, registry = make_fixture(tmp_path)
+    _add_rule_row(registry, taught_in="skills/tesser-build/widget.md#nonexistent-anchor")
+    with pytest.raises(gen.RoadmapError, match="anchor #nonexistent-anchor not found"):
+        generate_fixture(root, registry)
+
+
+def test_good_anchor_in_taught_in_renders_taught(tmp_path: Path) -> None:
+    root, registry = make_fixture(tmp_path)
+    doc = root / "skills" / "tesser-build" / "widget.md"
+    doc.write_text(doc.read_text(encoding="utf-8") + "\n## Rules {#rules}\n", encoding="utf-8")
+    _add_rule_row(registry, taught_in="skills/tesser-build/widget.md#rules")
+    assert "✅ taught + enforcer declared" in generate_fixture(root, registry)
+
+
+def test_row_location_tolerates_compact_json(tmp_path: Path) -> None:
+    """The file:line lookup must survive non-default JSON spacing
+    (cumulative review F10: the needle assumed '\"key\": \"...\"')."""
+    root, registry = make_fixture(tmp_path)
+    data = json.loads(registry.read_text(encoding="utf-8"))
+    data["rows"].append(
+        {"key": "rule-compact", "title": "Compact", "kind": "rulez"}
+    )
+    registry.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
+    with pytest.raises(gen.RoadmapError, match=r"registry\.json:\d+.*malformed kind"):
+        generate_fixture(root, registry)
 
 
 def test_rule_row_without_enforcer_is_taught_only(tmp_path: Path) -> None:
