@@ -53,6 +53,9 @@ rule, and domain events.
 - **[`docs/design-three-contender-changeability.md`](design-three-contender-changeability.md)**
   — the change-speed metric behind the whole repo, and the adoption ladder:
   docs → skills → CI.
+- **[`field-audit-checklist.md`](field-audit-checklist.md)** — the
+  consumer-side field-audit runbook: run it inside a consumer repo, behind
+  that repo's IP wall.
 
 ## The adoption ladder
 
