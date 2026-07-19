@@ -26,11 +26,18 @@ class Finding:
 
 @dataclass(frozen=True)
 class CheckMeta:
-    """Static description of a check, for the registry and the meta-test."""
+    """Static description of a check, for the registry and the meta-test.
+
+    ``scope`` declares the fixture shape the meta-test enforces: ``"file"``
+    checks are proven by a ``good.py``/``bad.py`` pair; ``"tree"`` checks
+    (whole-tree anatomy properties: discovery, env-edge, exits) are proven by
+    a ``good_tree/``/``bad_tree/`` directory pair.
+    """
 
     code: str
     name: str
     summary: str
+    scope: str = "file"
 
 
 # The registry. One entry per check; the meta-test fails if a code appears in
