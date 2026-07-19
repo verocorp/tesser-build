@@ -129,5 +129,5 @@ depends only on the public contract — with all five assertions and all three
 required tests satisfied, build/test/vet/gofmt clean, and genuinely runnable. The
 skill teaches v3.
 
-Remaining v3 work: the rhema copy-in + observed discovery-loop session (gated on
-Chris's rhema access) — the only unshipped piece.
+Remaining v3 work: the pilot copy-in + observed discovery-loop session (gated on
+pilot access) — the only unshipped piece.

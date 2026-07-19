@@ -8,7 +8,7 @@ plugin (`gclplugin/`), an executable rationale layer (`rationale/`), an agent
 skill (`skills/tesser-build/` — Go + Python construction guidance, copy-in distributed
 to consumers), and human docs (`docs/start-here.md`, `docs/faq.md`). If you are
 writing or changing domain objects here — or in a consumer repo (certus, metron,
-quanta, rhema) — follow the conventions below, because this repo is what
+quanta, and a pilot consumer) — follow the conventions below, because this repo is what
 enforces them in CI.
 
 **Creating or modifying domain types (new type, field, constructor, validation),

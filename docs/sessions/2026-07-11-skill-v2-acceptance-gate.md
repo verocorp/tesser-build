@@ -86,6 +86,6 @@ review added — the modify-existing load-transition-save shape, DTO responses,
 the leakage-check redirect, and the repository read-line — and a fresh Sonnet
 agent produced all of them correctly from the skill alone, citing the
 leakage-check anchor in its own comments. `examples/lending/` is the v2 gate
-output (the agent's work, not author-seeded). rhema discovery loop still pending
+output (the agent's work, not author-seeded). pilot discovery loop still pending
 (gated on access); the analyzer-misclassifies-seams finding is the harvested
 fast-follow input.

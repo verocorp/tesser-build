@@ -26,8 +26,8 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   - **Why:** recurring documented gap (`skill-artifact-plans-need-activation-design`
     learning): skill-artifact plans design distribution (copy-in) but omit
     activation, so doctrine ships without reaching the consuming agents.
-  - **Depends on:** the first verified rhema-side activation (Wave 3R eng
+  - **Depends on:** the first verified pilot-consumer-side activation (Wave 3R eng
     review 1A consumption contract) — evidence first, then the recipe; never
     document a host path that hasn't been exercised once.
-  - **Start at:** the de-identified relayed form of rhema's working
+  - **Start at:** the de-identified relayed form of the pilot consumer's working
     `AGENTS.md` line.

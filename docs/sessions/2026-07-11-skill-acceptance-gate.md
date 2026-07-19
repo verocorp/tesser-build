@@ -63,6 +63,6 @@ site, primitive-leaf spec + `from_spec`, no parent re-validation,
    package — surprising when generating for a sub-package. Candidate CLI
    improvement for the fast-follow.
 2. No resolver misroutes, no convention violations, no FAQ gaps observed in
-   either session. The rhema discovery loop (real unassisted sessions on real
+   either session. The pilot discovery loop (real unassisted sessions on real
    tasks) remains the meaningful test — these two runs are the floor, not the
    ceiling.

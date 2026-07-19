@@ -68,7 +68,7 @@ destination account. That is the rare shape a domain service fits.
 Mechanics are **deliberately deferred** — there is no validated reference
 implementation yet, and shipping a shallow `go.md#domain-services` /
 `python.md#domain-services` skeleton would invite exactly the dumping-ground use
-this stub warns against. When real usage (the rhema loop) shows agents genuinely
+this stub warns against. When real usage (the pilot discovery loop) shows agents genuinely
 hitting the no-single-owner case, deepen this file with mechanics and worked
 examples and add the language sections then. Until then: prove the type doesn't
 exist first; if it truly doesn't, write a stateless function in the domain layer

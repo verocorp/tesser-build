@@ -56,6 +56,6 @@ if an unregistered code is emitted, or if the analyzer is not clean on
 
 ## Distribution
 
-Self-contained and stdlib-only, so a consuming repo (e.g. rhema) vendors the
+Self-contained and stdlib-only, so a consuming repo vendors the
 `tessercheck/` package and runs it as a pre-commit hook + CI step, or installs it
 (`pip install tessercheck-py`, exposing the `tessercheck` console script).

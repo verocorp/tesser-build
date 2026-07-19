@@ -1,7 +1,7 @@
 # Design — the Python DDD analyzer (`ddd-vet-py`) and its sequencing (2026-07-15)
 
 Planning record from a `/office-hours` sequencing session. Driver: a new Python
-app for **rhema** is being built now (VOs, entities, aggregates, repositories,
+app for **the pilot consumer** is being built now (VOs, entities, aggregates, repositories,
 application services, composition root), and the goal is an **automated
 conformance gate that runs locally and in CI** — to replace the current
 adversarial-LLM/Codex review loop for catching DDD-convention gaps.
@@ -12,10 +12,10 @@ adversarial-LLM/Codex review loop for catching DDD-convention gaps.
    `main`. The "VO checker/vet failures after entities+aggregates" were **already
    fixed in this repo** — the last commits (`307367a`, `9fc1a52`) are the "pass
    ddd-vet" fixes. Confirmed dropped; there is no toolkit or consumer item to
-   chase, and nothing here blocks rhema.
+   chase, and nothing here blocks the pilot.
 
 2. **Python guidance already ships; enforcement does not.** `skills/ddd/python.md`
-   + `examples/python/` cover the whole stack rhema is building (VO simple/
+   + `examples/python/` cover the whole stack the pilot is building (VO simple/
    compound/collection, entity, aggregate fact+lifecycle, application service,
    repository, public-interface client, composition root, thin handler), gated
    by mypy-strict + pytest on the examples. There is **zero machine enforcement**
@@ -32,7 +32,7 @@ adversarial-LLM/Codex review loop for catching DDD-convention gaps.
    But the skill/examples that shipped afterward use **stdlib frozen dataclasses**
    (no pydantic anywhere; `requirements-dev.txt` = mypy + pytest only). Decision:
    the analyzer targets the **frozen-dataclass** substrate the skill teaches.
-   pydantic may still appear in rhema for runtime/transport validation — that is a
+   pydantic may still appear in the pilot's app for runtime/transport validation — that is a
    separate concern, outside the domain-object check surface.
 
 ## Why the dataclass substrate is simpler and higher-coverage than the pydantic design
@@ -69,7 +69,7 @@ So the mypy-plugin need shrinks close to zero for v1.
 
 Standalone stdlib-`ast` CLI, zero deps: `python -m ddd_vet <paths>`. Lives in
 go-ddd, distributed to consumers like the skill (copy-in / pre-commit), consumed
-by rhema.
+by the pilot.
 
 Four checks: (1) VO must be frozen, (2) no `object.__setattr__` bypass in
 non-test code, (3) no `str==str` equality in tests, (4) frozen VO with a
@@ -85,11 +85,11 @@ residuals are **out of v1**.
 
 ## Sequencing
 
-- **P0 — `ddd-vet-py` v1, now.** The one workstream that serves rhema and is the
+- **P0 — `ddd-vet-py` v1, now.** The one workstream that serves the pilot and is the
   stated goal. Step 1 (pin the check-set against `python.md`) absorbs most of the
   Python-side skill-reconciliation worry.
 - **P1 — mypy-plugin, decided by a parallel spike run *during* P0.** Not gated on
-  rhema having real code — Chris spikes the mypy-plugin approach in parallel with
+  the pilot having real code — Chris spikes the mypy-plugin approach in parallel with
   the P0 build so a decision is ready by the time P0 ships. What the plugin buys:
   the syntactic v1 checks approximate the primitive-obsession field rule ("VO
   fields are value objects, not raw primitives") by reading annotation *text* —
@@ -102,7 +102,7 @@ residuals are **out of v1**.
   for free. Optional flake8 adapter for editor-inline here too.
 - **P1↔P2 order is contingent, not fixed.** Which of the mypy-plugin work and the
   decisions-1&4 checks goes first depends on what the parallel mypy spike finds.
-- **P2 — decisions 1 & 4 as a second wave of checks (NOT rhema-gated).** These
+- **P2 — decisions 1 & 4 as a second wave of checks (NOT pilot-gated).** These
   have enforceable surfaces writable now, right after the v1 ports ship:
   decision 4 (repo speaks domain objects) → flag a repository method signature
   that takes/returns primitives or DTOs instead of domain types; decision 1
@@ -110,7 +110,7 @@ residuals are **out of v1**.
   objects / arithmetic inside an app service) `application-services.md` already
   describes. Testdata fixtures like v1. This is independent of the pending
   **rationale arms** for decisions 1 & 4 (the changeability *proof*, synthetic,
-  also not rhema-gated) — enforcement does not wait on the proof.
+  also not pilot-gated) — enforcement does not wait on the proof.
 
 _(Dropped: Go-checker-failure triage — the toolkit tree is green and the failures
 were already fixed in this repo; there was no consumer-repo item to chase.)_
