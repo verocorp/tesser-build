@@ -14,12 +14,12 @@ class InMemoryLinkRepository:
     def save(self, link: ShortLink) -> None:
         if self._down:
             raise InfraError("campaign store unavailable")
-        self._by_slug[link.slug.value] = link
+        self._by_slug[str(link.slug)] = link
 
     def find(self, slug: Slug) -> ShortLink | None:
         if self._down:
             raise InfraError("campaign store unavailable")
-        return self._by_slug.get(slug.value)
+        return self._by_slug.get(str(slug))
 
     def all(self) -> tuple[ShortLink, ...]:
         return tuple(self._by_slug.values())

@@ -32,22 +32,22 @@ class CampaignService:
     def create_link(self, req: CreateLinkRequest) -> CreateLinkResponse:
         slug = Slug(req.slug)
         target = TargetURL(req.target_url)
-        outcome = self._checker.check(target.value)
+        outcome = self._checker.check(str(target))
         if not outcome.allowed:
             raise conflict("destination_blocked", f"destination not allowed: {outcome.reason}")
         if self._repo.find(slug) is not None:
             raise conflict("duplicate_slug", f"slug {req.slug!r} already exists")
         self._repo.save(ShortLink(slug, target))
-        return CreateLinkResponse(slug=slug.value, target_url=target.value)
+        return CreateLinkResponse(slug=str(slug), target_url=str(target))
 
     def resolve(self, req: ResolveRequest) -> ResolveResponse:
         link = self._repo.find(Slug(req.slug))
         if link is None or not link.active:
             raise not_found("link_missing", f"no active link for slug {req.slug!r}")
-        return ResolveResponse(target_url=link.target.value)
+        return ResolveResponse(target_url=str(link.target))
 
     def list_links(self) -> tuple[LinkView, ...]:
         return tuple(
-            LinkView(slug=link.slug.value, target_url=link.target.value, active=link.active)
+            LinkView(slug=str(link.slug), target_url=str(link.target), active=link.active)
             for link in self._repo.all()
         )

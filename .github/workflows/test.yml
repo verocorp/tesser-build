@@ -164,24 +164,22 @@ jobs:
         working-directory: .
         env:
           PYTHONPATH: tessercheck-py
-      # Discovery acceptance gate on the verified impl: the totality guard
-      # must discover python-app's contexts (campaign, linkpolicy, reports)
-      # with zero configuration. --select TB001 scopes the finding set so
-      # only discovery structure gates here (python-app's remaining TB010
-      # nonconformance is tracked separately); discovery errors exit 2
-      # regardless of --select.
-      - name: tessercheck-py discovery on examples/python-app (--app-root gate)
-        run: python -m tessercheck --app-root examples/python-app --select TB001
+      # Full acceptance gate on the verified impl: discovery (the totality
+      # guard must find campaign, linkpolicy, reports with zero
+      # configuration; discovery errors exit 2) AND every check clean —
+      # python-app's former TB010 nonconformance (Slug/TargetURL public
+      # `value`) is fixed, so nothing is scoped out anymore.
+      - name: tessercheck-py full gate on examples/python-app (--app-root)
+        run: python -m tessercheck --app-root examples/python-app
         working-directory: .
         env:
           PYTHONPATH: tessercheck-py
-      # Comments-norm gate (TB020, skills/tesser-build/comments.md): the
-      # example trees are production templates and must stay comment- and
-      # docstring-free. examples/python is covered by the full acceptance
-      # gate above; python-app and errorspy gate on TB020 alone (python-app's
-      # remaining TB010 nonconformance is tracked separately).
-      - name: tessercheck-py comments norm on examples/python-app + errorspy (--select TB020)
-        run: python -m tessercheck --select TB020 examples/python-app examples/errorspy
+      # Comments-norm gate (TB020, skills/tesser-build/comments.md) for the
+      # remaining example tree: examples/python and examples/python-app are
+      # covered by their full gates above; errorspy gates on TB020 alone
+      # (its error-matrix classes are deliberately not domain-conformant).
+      - name: tessercheck-py comments norm on examples/errorspy (--select TB020)
+        run: python -m tessercheck --select TB020 examples/errorspy
         working-directory: .
         env:
           PYTHONPATH: tessercheck-py
