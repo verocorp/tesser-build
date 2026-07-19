@@ -221,9 +221,16 @@ re-copy to pick them up.
 
 ## The conventions, briefly
 
-The machine-enforced core is three rules about value objects (the skill teaches
-the broader construction conventions — entities, aggregates, services,
-repositories, composition roots — that the analyzers don't yet cover):
+The Go analyzers enforce value-object hygiene (the three rules below, plus
+no-exported-fields, a validating constructor, a `String()` display form, no
+primitive accessors, and `Equal` where `==` is unavailable or unsafe) and the
+**comments norm** (`comments` analyzer: zero code comments, machine directives
+exempt — `skills/tesser-build/comments.md`). The Python side goes further:
+`tessercheck-py` adds classification-aware identity-taxonomy checks
+(TB010–TB014) and whole-tree context discovery (`tessercheck-py/README.md`).
+The skill teaches the broader construction conventions — entities, aggregates,
+services, repositories, wiring, bootstrap, hosts — ahead of what the analyzers
+cover. The original three, briefly:
 
 1. **Value objects get `MustNew*` helpers.** Value objects are cheap to construct; tests should be able to write `MustNewCustomerID("cust-1")` inline without error-handling noise. Aggregates and entities are not value objects; they carry real construction risk and don't get `Must*` constructors.
 
