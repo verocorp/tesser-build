@@ -15,10 +15,47 @@ _EXAMPLES = _ROOT / "examples" / "python"
 
 
 def test_every_check_has_a_good_and_bad_fixture() -> None:
+    """File-scoped checks prove themselves with a good.py/bad.py pair;
+    tree-scoped checks (whole-tree anatomy properties) with a
+    good_tree/ / bad_tree/ directory pair. Either way: no check ships
+    without its fixtures — the no-silent-gap guarantee covers both shapes."""
     for meta in CHECKS:
         d = _TESTDATA / meta.code.lower()
-        assert (d / "good.py").is_file(), f"{meta.code} missing good.py fixture"
-        assert (d / "bad.py").is_file(), f"{meta.code} missing bad.py fixture"
+        if meta.scope == "file":
+            assert (d / "good.py").is_file(), f"{meta.code} missing good.py fixture"
+            assert (d / "bad.py").is_file(), f"{meta.code} missing bad.py fixture"
+        elif meta.scope == "tree":
+            for name in ("good_tree", "bad_tree"):
+                tree_dir = d / name
+                assert tree_dir.is_dir(), f"{meta.code} missing {name}/ fixture dir"
+                assert list(tree_dir.rglob("*.py")), f"{meta.code} {name}/ has no .py files"
+        else:
+            raise AssertionError(f"{meta.code}: unknown scope {meta.scope!r}")
+
+
+def test_tree_fixture_pairs_prove_their_check() -> None:
+    """The teeth for tree-scoped checks: bad_tree/ must emit the check's code
+    (the injected violation is caught) and good_tree/ must not (no false
+    positive on the conformant shape). Fixture trees are checked as domain
+    code — the harness injects a no-op test predicate because testdata/ paths
+    are test-scoped by default."""
+    def as_domain(_path: str) -> bool:
+        return False
+
+    for meta in CHECKS:
+        if meta.scope != "tree":
+            continue
+        d = _TESTDATA / meta.code.lower()
+        bad_findings, bad_errors = run_paths([str(d / "bad_tree")], is_test=as_domain)
+        assert bad_errors == [], f"{meta.code} bad_tree: {bad_errors}"
+        assert any(f.code == meta.code for f in bad_findings), (
+            f"{meta.code}: bad_tree/ emitted no {meta.code} finding — the check has no teeth"
+        )
+        good_findings, good_errors = run_paths([str(d / "good_tree")], is_test=as_domain)
+        assert good_errors == [], f"{meta.code} good_tree: {good_errors}"
+        assert not any(f.code == meta.code for f in good_findings), (
+            f"{meta.code}: good_tree/ emitted {meta.code} — false positive on the conformant shape"
+        )
 
 
 def test_registry_codes_are_unique() -> None:

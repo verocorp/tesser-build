@@ -2,6 +2,7 @@
 
 import ast
 import os
+from collections.abc import Callable
 
 from tessercheck.checks import check_source, check_tree
 from tessercheck.classify import classify_trees
@@ -59,7 +60,10 @@ def _iter_py_files(root: str) -> list[str]:
     return sorted(found)
 
 
-def run_paths(paths: list[str]) -> tuple[list[Finding], list[str]]:
+def run_paths(
+    paths: list[str],
+    is_test: Callable[[str], bool] | None = None,
+) -> tuple[list[Finding], list[str]]:
     """Check every ``.py`` file under ``paths`` as one tree.
 
     Two passes so the classifier sees the *whole* tree: first read+parse every
@@ -68,10 +72,17 @@ def run_paths(paths: list[str]) -> tuple[list[Finding], list[str]]:
     (``embeds_entity``, ``is_member``) resolve — a per-file registry cannot see
     that ``Campaign`` owns a ``ShortLink`` defined in another module.
 
+    ``is_test`` overrides the test-scoping predicate (default:
+    :func:`is_test_path`). The tree-fixture harness needs this: fixtures live
+    under ``testdata/``, which the default predicate treats as test code, so
+    the meta-test injects ``lambda _: False`` to check a fixture tree as
+    domain code.
+
     Returns (findings, errors) where ``errors`` are human-readable messages for
     files that could not be read or parsed (those files are excluded from the
     registry and the checks, not fatal to the run).
     """
+    scoping = is_test_path if is_test is None else is_test
     errors: list[str] = []
     trees: dict[str, ast.Module] = {}
     sources: dict[str, str] = {}
@@ -97,13 +108,13 @@ def run_paths(paths: list[str]) -> tuple[list[Finding], list[str]]:
     # but are not themselves domain, and a test fixture class must not shadow a
     # domain type in the shared registry.
     registry = classify_trees(
-        {path: tree for path, tree in trees.items() if not is_test_path(path)}
+        {path: tree for path, tree in trees.items() if not scoping(path)}
     )
 
     findings: list[Finding] = []
     for path, tree in trees.items():
         findings.extend(
-            check_tree(path, sources[path], tree, is_test_path(path), registry)
+            check_tree(path, sources[path], tree, scoping(path), registry)
         )
     findings.sort(key=lambda f: (f.path, f.line, f.col, f.code))
     return findings, errors
