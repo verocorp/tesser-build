@@ -1,11 +1,13 @@
 """Per-check good/bad behavior, the test-scoping exemption, and suppression."""
 
+import ast
 from pathlib import Path
 
 import pytest
 
 from tessercheck.checks import check_source
-from tessercheck.finding import CHECKS
+from tessercheck.comments_check import check_comments
+from tessercheck.finding import CHECKS, Finding
 from tessercheck.run import run_source
 
 _TESTDATA = Path(__file__).resolve().parents[1] / "testdata"
@@ -136,3 +138,90 @@ def test_tb014_entity_with_paired_eq_hash_is_clean() -> None:
         "        return hash(self._id)\n"
     )
     assert {f.code for f in check_source("w.py", src, is_test=False)} == set()
+
+
+def _tb020(source: str) -> list[Finding]:
+    return check_comments("f.py", source, ast.parse(source))
+
+
+def test_tb020_flags_class_and_async_function_docstrings() -> None:
+    # The good.py/bad.py fixtures only exercise Module + FunctionDef docstrings.
+    # ClassDef and AsyncFunctionDef are separate members of the isinstance tuple;
+    # a regression dropping either would ship undetected without this.
+    src = (
+        "class C:\n"
+        '    """class doc"""\n'
+        "    x = 1\n"
+        "async def g() -> None:\n"
+        '    """async doc"""\n'
+        "    return None\n"
+    )
+    findings = _tb020(src)
+    assert {f.line for f in findings} == {2, 5}
+    assert all(f.code == "TB020" for f in findings)
+
+
+@pytest.mark.parametrize(
+    "comment",
+    [
+        "# coding: utf-8",
+        "# -*- coding: utf-8 -*-",
+        "# fmt: off",
+        "# isort: skip",
+        "# ruff: noqa",
+        # tb-* markers are split so a contiguous marker token in this source is
+        # not picked up by roadmap/generate.py's marker scan.
+        "# tb-" + "cell: value-objects py-example",
+        "# tb-" + "status: green",
+        "# tb-" + "allow-missing: some/path",
+    ],
+)
+def test_tb020_directive_ledger_entries_are_exempt(comment: str) -> None:
+    # The fixture proves only shebang/noqa/type:/pragma. These remaining ledger
+    # entries live inside the directive regex, invisible to branch coverage —
+    # dropping an alternation would pass every other test.
+    assert _tb020(f"x = 1  {comment}\n") == []
+
+
+def test_tb020_trailing_marker_suppresses_comment_and_docstring() -> None:
+    # A real comment and a real docstring, each on a line carrying the
+    # `# tessercheck:ignore` marker, are suppressed (the `suppressed` branch in
+    # both loops).
+    assert _tb020("x = 1  # real prose  # tessercheck:ignore\n") == []
+    assert (
+        _tb020('def f() -> None:\n    """doc"""  # tessercheck:ignore\n    return None\n')
+        == []
+    )
+
+
+def test_tb020_tokenize_error_is_loud_and_docstring_check_still_runs() -> None:
+    # tokenize and ast do not share a lexer; a source that ast accepts can
+    # still raise TokenError. The failure must be LOUD (a finding, not a
+    # silently comment-blind pass) and the docstring pass must still run.
+    tree = ast.parse('"""module doc"""\n')
+    findings = check_comments("f.py", "(", tree)
+    assert [f.code for f in findings] == ["TB020", "TB020"]
+    assert "could not be tokenized" in findings[0].message
+    assert "docstring" in findings[1].message
+
+
+def test_tb020_coding_word_beyond_line_two_is_flagged() -> None:
+    # The coding exemption is anchored to lines 1-2 (PEP 263). A comment merely
+    # containing "coding" further down is prose and must be flagged — an
+    # unanchored exemption previously let it escape. bad.py exercises this line,
+    # but the meta-test only pins the code *set*, so this locks the specific
+    # flag; the line-1 exempt direction is covered by the directive-ledger test.
+    src = "x = 1\ny = 2\n# hardcoding=1 is a workaround, not a coding decl\n"
+    findings = _tb020(src)
+    assert [(f.line, f.code) for f in findings] == [(3, "TB020")]
+
+
+def test_tb020_bare_string_statement_is_flagged_distinctly_from_docstring() -> None:
+    # A string-literal statement mid-body is prose smuggled as a string; it is
+    # flagged with the bare-string message, distinct from the docstring message
+    # a leading string in a def/class/module gets.
+    bare = _tb020('def f() -> None:\n    x = 1\n    "smuggled prose"\n    return None\n')
+    assert [f.line for f in bare] == [3]
+    assert "bare string-literal" in bare[0].message
+    doc = _tb020('"""module doc"""\n')
+    assert "docstring" in doc[0].message

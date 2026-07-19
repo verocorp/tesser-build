@@ -11,6 +11,7 @@ package comments
 
 import (
 	"go/ast"
+	"go/token"
 	"regexp"
 	"strings"
 
@@ -28,14 +29,18 @@ var Analyzer = &analysis.Analyzer{
 // is exempt iff it starts with one of these — trailing text rides along
 // (a //nolint's reason is part of the directive).
 var directivePrefixes = []string{
-	"//go:",
 	"//line ",
+	"/*line ",
 	"//nolint",
 	"//export ",
 	"//extern ",
 	"//sys",
 	"// +build",
 }
+
+// goDirective is the `//go:name` family. A space after the colon is never a
+// real directive — `//go: prose` must not ride the exemption.
+var goDirective = regexp.MustCompile(`^//go:\S`)
 
 // tbMarker is the roadmap annotation grammar (docs/skill-authoring.md). The
 // pattern is spelled as an alternation so this source line does not itself
@@ -48,7 +53,7 @@ func isDirective(text string) bool {
 			return true
 		}
 	}
-	return tbMarker.MatchString(text)
+	return goDirective.MatchString(text) || tbMarker.MatchString(text)
 }
 
 func run(pass *analysis.Pass) (any, error) {
@@ -56,7 +61,11 @@ func run(pass *analysis.Pass) (any, error) {
 		if ast.IsGenerated(f) {
 			continue
 		}
+		preambles := cgoPreambles(f)
 		for _, group := range f.Comments {
+			if preambles[group] {
+				continue
+			}
 			for _, c := range group.List {
 				if isDirective(c.Text) {
 					continue
@@ -66,4 +75,30 @@ func run(pass *analysis.Pass) (any, error) {
 		}
 	}
 	return nil, nil
+}
+
+// cgoPreambles returns the comment groups the Go toolchain itself consumes:
+// the preamble attached to an `import "C"` declaration. Those comments are
+// code, not prose — banning them would ban cgo.
+func cgoPreambles(f *ast.File) map[*ast.CommentGroup]bool {
+	exempt := map[*ast.CommentGroup]bool{}
+	for _, decl := range f.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok || gen.Tok != token.IMPORT {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			imp, ok := spec.(*ast.ImportSpec)
+			if !ok || imp.Path == nil || imp.Path.Value != `"C"` {
+				continue
+			}
+			if gen.Doc != nil {
+				exempt[gen.Doc] = true
+			}
+			if imp.Doc != nil {
+				exempt[imp.Doc] = true
+			}
+		}
+	}
+	return exempt
 }

@@ -13,20 +13,24 @@ judgment call made inline at write time (Chris ruling 2026-07-19).
 1. **No code comments.** No line comments, no block comments, no doc
    comments — in domain code, seams, adapters, wiring, hosts, and tests
    alike. There is no test exemption: the norm covers the whole tree.
-2. **No docstrings.** A Python docstring and a Go doc comment are the same
-   thing under this norm: prose attached to code. The name, the signature,
-   the types, and the tests carry the meaning; prose that restates them
-   drifts from them.
+2. **No docstrings, and no bare string-literal statements.** A Python
+   docstring and a Go doc comment are the same thing under this norm: prose
+   attached to code — and a bare string expression parked mid-body is a
+   comment smuggled as a string. The name, the signature, the types, and
+   the tests carry the meaning; prose that restates them drifts from them.
 3. **Machine directives are exempt.** A directive is an instruction to a
    tool, not prose for a reader. The v0 ledger:
-   - Python: shebang (`#!`), coding lines, `# type: ...` (mypy),
+   - Python: shebang (`#!`), PEP 263 coding declarations (lines 1-2 only),
+     `# type: ...` (mypy),
      `# noqa...` (a reason may ride the directive), `# tessercheck:ignore`,
      the roadmap marker grammar (`tb-cell` / `tb-status` /
      `tb-allow-missing` lines, `docs/skill-authoring.md`), `# pragma...`, and formatter/linter controls
      (`# fmt:`, `# isort:`, `# ruff:`).
    - Go: `//go:` directives, build constraints (`// +build`), `//line`,
      `//nolint...`, `//export` / `//extern` / `//sys`, the roadmap marker
-     grammar (same three, `//`-wrapped), and generated files (`// Code generated ... DO NOT EDIT.` — skipped
+     grammar (same three, `//`-wrapped), the cgo preamble attached to an
+     `import "C"` declaration (the toolchain consumes it — it is code), and
+     generated files (`// Code generated ... DO NOT EDIT.` — skipped
      wholesale; a generator's output is the generator's business).
 4. **Explanation moves up a layer, it doesn't disappear.** What a comment
    wanted to say belongs in one of the places that can't silently rot
@@ -66,9 +70,9 @@ judgment call made inline at write time (Chris ruling 2026-07-19).
 ## Carve-outs: how an exception gets in
 
 v0 ships with the directive ledger only. A new carve-out is added when real
-use (Chris's own, or a de-identified rhema relay) surfaces a case where the
-right fix is genuinely a comment — not a rename, not a type, not a test,
-not a doc. Each carve-out lands in this file with:
+use (the maintainer's own, or a de-identified pilot-consumer relay) surfaces
+a case where the right fix is genuinely a comment — not a rename, not a
+type, not a test, not a doc. Each carve-out lands in this file with:
 
 1. the **case** (what kept needing prose at the code site),
 2. the **principle** (the rule that makes it recognizable next time),
