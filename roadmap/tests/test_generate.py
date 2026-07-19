@@ -260,6 +260,28 @@ def test_bad_anchor_in_taught_in_is_a_named_error(tmp_path: Path) -> None:
         generate_fixture(root, registry)
 
 
+def test_empty_anchor_fragment_is_a_named_error(tmp_path: Path) -> None:
+    """'path#' used to skip anchor validation entirely (Codex P2)."""
+    root, registry = make_fixture(tmp_path)
+    _add_rule_row(registry, taught_in="skills/tesser-build/widget.md#")
+    with pytest.raises(gen.RoadmapError, match="empty #fragment"):
+        generate_fixture(root, registry)
+
+
+def test_anchor_in_body_text_does_not_count(tmp_path: Path) -> None:
+    """The anchor must sit on a heading line — a body-text mention of the
+    {#id} token is not a heading id (Codex P2)."""
+    root, registry = make_fixture(tmp_path)
+    doc = root / "skills" / "tesser-build" / "widget.md"
+    doc.write_text(
+        doc.read_text(encoding="utf-8") + "\nThe id {#rules} is discussed here.\n",
+        encoding="utf-8",
+    )
+    _add_rule_row(registry, taught_in="skills/tesser-build/widget.md#rules")
+    with pytest.raises(gen.RoadmapError, match="anchor #rules not found"):
+        generate_fixture(root, registry)
+
+
 def test_good_anchor_in_taught_in_renders_taught(tmp_path: Path) -> None:
     root, registry = make_fixture(tmp_path)
     doc = root / "skills" / "tesser-build" / "widget.md"

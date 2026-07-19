@@ -403,14 +403,22 @@ def rule_cells(root: Path, row: dict[str, object]) -> dict[str, str]:
         taught_cell = SYMBOL_ABSENT
     else:
         _table_safe(taught, key, "taught_in")
-        target, _, anchor = taught.partition("#")
+        target, sep, anchor = taught.partition("#")
         target = target.rstrip("/")
+        if sep and not anchor:
+            raise RoadmapError(
+                f"registry rule row {key!r}: taught_in {taught!r} has an empty "
+                "#fragment — name the heading anchor or drop the '#'"
+            )
         taught_ok = bool(target) and (root / target).exists()
         if taught_ok and anchor:
-            if f"{{#{anchor}}}" not in (root / target).read_text(encoding="utf-8"):
+            heading = re.compile(r"^#{1,6} .*\{#" + re.escape(anchor) + r"\}\s*$")
+            lines = (root / target).read_text(encoding="utf-8").splitlines()
+            if not any(heading.match(line) for line in lines):
                 raise RoadmapError(
                     f"registry rule row {key!r}: taught_in anchor #{anchor} not found "
-                    f"in {target} (expected an explicit {{#{anchor}}} heading id)"
+                    f"on a heading line of {target} (expected an explicit "
+                    f"{{#{anchor}}} heading id)"
                 )
         taught_cell = f"`{taught}`" if taught_ok else cell(SYMBOL_ABSENT, f"`{taught}`")
 
