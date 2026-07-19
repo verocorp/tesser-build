@@ -70,11 +70,12 @@ all-or-nothing):
 | `stringer` | A value object has a `String() string` display form. |
 | `primitiveaccessor` | A value object exposes no primitive accessors (`ToString` / `To<builtin>`). |
 | `comparability` | A value object defines `Equal` when `==` is unavailable (slice/map/func field) or unsafe (pointer/interface field). |
-| `comments` | Constructed-app code carries no comments; machine directives (`//go:`, build constraints, `//nolint`, `//line`, cgo preambles, roadmap markers) and generated files are exempt. |
+| `comments` | Constructed-app code carries no comments; machine directives (`//go:`, build constraints, `//nolint`, `//line` / `/*line*/`, cgo `//export`/`//extern`/`//sys` and preambles, roadmap markers) and generated files are exempt. |
 
 Configuration is a single `.tesser-build.yaml` `exclude:` list at the consumer
-repo root, read by every analyzer: the aggregate/entity types that match the
-value-object heuristic but aren't value objects. Generate a starter with
+repo root, read by the value-object analyzers: the aggregate/entity types that
+match the value-object heuristic but aren't value objects. (The `comments`
+analyzer classifies nothing, so it doesn't consult the exclude list.) Generate a starter with
 `tessercheck -gen-excludes ./...`, then review and curate it. The list is
 per-consumer config. Every repo has its own aggregates.
 
