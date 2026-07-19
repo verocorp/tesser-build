@@ -27,3 +27,14 @@ Legend: ✅ done · 🟡 partial · ❌ absent · — intentionally n/a.
 | Norm: errors | ✅ | ❌ | ❌ | 🟡 in-example | ❌ the errorspy example matrix is the proof; no changeability arm |
 | Norm: testing | ❌ | ❌ | ❌ | — | ❌ |
 | Norm: comments | ❌ | ❌ | ❌ | — | ❌ |
+
+## Pay-now rules
+
+One row per pay-now rule (`kind: rule` in the registry) — the
+rules whose violations hide or whose fix is structural, enforced
+from day one. External enforcers (e.g. import-linter) render
+here honestly instead of bending the component columns.
+
+| Rule | Taught in | Enforced by | Status |
+|---|---|---|---|
+| Dependency direction (acyclic, inward) | `skills/tesser-build/map.md#how-contexts-connect` | import-linter — consumer-side declared layers/forbidden contracts (eng review 2A; a tessercheck-native direction check is deferred with this as its named standing enforcement) | ✅ taught + enforcer declared |

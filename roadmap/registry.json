@@ -1,9 +1,10 @@
 {
   "_comment": "The canonical row registry for the roadmap matrix (eng review D11b): the row taxonomy lives HERE, never as constants inside the generator — adding a component is a registry edit, not a code edit. Columns are DERIVED by roadmap/generate.py: this file declares where each row's artifacts live (or will live); it never carries a status symbol. Judgment cells are annotated at the source they describe with tb-cell markers (schema: docs/skill-authoring.md).",
+  "_row_kinds": "Typed rows (eng review 5A): absent 'kind' = component (the matrix above); 'kind': 'rule' = one pay-now rule, rendered in the second 'Pay-now rules' table (rule / taught in / enforced by / status) so external enforcers render honestly. Rule-row keys (narrow v1): taught_in = repo path (optional #anchor) where the rule is taught, existence-checked; enforced_by = free text naming the enforcer (external tools like import-linter live here; listing check codes on rule rows lands with the fused anatomy checks). A malformed kind is a named file:line error.",
   "_column_semantics": {
     "skill": "component-doc filename under skills/tesser-build/; absent key = n/a (—); named-but-missing file = ❌; present file's tb-status marker decides ✅ (full) vs 🟡 (partial/stub)",
     "py_example, go_example": "candidate paths relative to repo root; absent key = n/a (—); any path exists = ✅; none exist = ❌",
-    "go_analyzers, py_checks": "names in internal/analyzers.All / codes in tessercheck.finding.CHECKS; a listed name missing from the live registry is a loud error (drift)",
+    "go_analyzers, py_checks": "names in internal/analyzers.All / codes in tessercheck.finding.CHECKS; a listed name missing from the live registry is a loud error (drift). Rendering: ✅ requires BOTH lists non-empty; only one populated caps the cell at 🟡 ('Py only'/'Go only'); neither populated falls back to enforcement_tests (🟡 in-example) and then ❌. Absent key = n/a (—), present-but-empty [] = ❌ planned-but-absent — the two are deliberately different",
     "enforcement_tests": "in-example enforcement test paths; these alone cap the checker cell at 🟡 in-example",
     "rationale": "glob patterns for executable-rationale test files; absent key = n/a (—); no match = ❌"
   },
@@ -182,6 +183,13 @@
       "py_example": [],
       "go_example": [],
       "rationale": []
+    },
+    {
+      "key": "rule-dependency-direction",
+      "title": "Dependency direction (acyclic, inward)",
+      "kind": "rule",
+      "taught_in": "skills/tesser-build/map.md#how-contexts-connect",
+      "enforced_by": "import-linter — consumer-side declared layers/forbidden contracts (eng review 2A; a tessercheck-native direction check is deferred with this as its named standing enforcement)"
     }
   ]
 }

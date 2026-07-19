@@ -143,6 +143,17 @@ tb-allow-missing: <path>
 - **`tb-allow-missing`** — suppresses the generator's dead-path check for one
   intentional forward reference (e.g. a planned example) in that file.
 
+Registry rows are **typed** (eng review 5A): `"kind": "component"` (the
+default when absent) renders in the component × materialization matrix;
+`"kind": "rule"` — one row per pay-now rule, added fused with its
+enforcement — renders in a second "Pay-now rules" table
+(rule / taught in / enforced by / status), so an external enforcer like
+import-linter renders honestly instead of bending the component columns.
+A rule row carries `taught_in` (a repo path, optionally `#anchor`,
+existence-checked) and `enforced_by` (free text naming the enforcer); a
+malformed `kind` is a named file:line error. `tb-cell` overrides apply to
+component rows only.
+
 Markers are scanned in `skills/`, `examples/`, `rationale/`, `passes/`,
 `tessercheck-py/` (`.md`/`.go`/`.py`; `testdata/` excluded). `docs/` and
 `roadmap/` are deliberately out of scan scope so this section and the
