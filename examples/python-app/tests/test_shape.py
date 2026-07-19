@@ -1,12 +1,3 @@
-"""Shape properties, applied to DISCOVERED contexts (see ``tests/discovery.py``
-— a new context is checked by construction, no list to remember): the required
-roles are present per context (adapters are optional — OQ5: a context that
-reaches peers only through injected Clients needs none); the public seam is
-Client + primitive DTOs at the top level; each context's config lives in its
-``wiring`` (impl), not on the public top level; the handler translates
-wire<->Client DTOs.
-"""
-
 from __future__ import annotations
 
 import dataclasses
@@ -29,8 +20,6 @@ def test_required_roles_present_per_context() -> None:
     for ctx in discovered_contexts():
         for role in ("domain", "application", "wiring"):
             assert (ROOT / ctx / role).is_dir(), f"{ctx}/{role} missing"
-    # campaign and linkpolicy carry adapters (handlers/gateways); reports needs
-    # none — it reaches its peers only through the injected Clients.
     for ctx in ("campaign", "linkpolicy"):
         assert (ROOT / ctx / "adapters").is_dir(), f"{ctx}/adapters missing"
 
@@ -39,7 +28,6 @@ def test_public_seam_is_client_plus_dtos_at_top_level() -> None:
     assert hasattr(campaign, "Client")
     assert hasattr(linkpolicy, "Client")
     assert hasattr(reports, "Client")
-    # Client DTOs are frozen dataclasses with primitive leaves.
     assert dataclasses.is_dataclass(CreateLinkResponse)
     for field in dataclasses.fields(CreateLinkResponse):
         assert field.type in ("str", str), field

@@ -10,10 +10,6 @@ import (
 	"github.com/verocorp/tesser-build/examples/running/linkcampaign"
 )
 
-// TestWiring_EndToEnd drives the composition root's object graph through a
-// real HTTP request: create a campaign, then fetch it back. It demonstrates
-// the app is wired together correctly end-to-end, from the handler down to
-// the in-memory repository.
 func TestWiring_EndToEnd(t *testing.T) {
 	ts := httptest.NewServer(wire())
 	defer ts.Close()

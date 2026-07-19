@@ -32,7 +32,6 @@ def test_rejects_invalid_child() -> None:
 
 def test_equality_is_identity() -> None:
     a = Product(_spec())
-    # Same SKU, different price/labels -> still the same product.
     b = Product(
         ProductSpec(
             sku="TSHIRT-BLK-M",
@@ -42,7 +41,6 @@ def test_equality_is_identity() -> None:
     )
     assert a == b
     assert hash(a) == hash(b)
-    # Different SKU -> different product.
     c = Product(
         ProductSpec(sku="TSHIRT-WHT-L", price=MoneySpec(amount="19.99", currency="USD"), labels={})
     )

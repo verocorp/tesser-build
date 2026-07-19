@@ -46,6 +46,7 @@ silent; the demos are backlog, not a blocker.
 | #6 a value object has a `String() string` display form | `stringer` | — | ❌ demo pending |
 | #6a/6b no primitive accessors (`ToString` / `To<builtin>`) | `primitiveaccessor` | — | ❌ demo pending |
 | #7 `Equal` exists when `==` is unavailable or unsafe (slice/map/func, or pointer/interface field) | `comparability` | — | ❌ demo pending |
+| Comments norm v0: zero code comments, machine directives exempt (`skills/tesser-build/comments.md`) | `comments` | — | ❌ demo pending (a norm, not a VO rule; carve-outs land here as they are discovered) |
 
 ## Consistency dimension — the case for the *standard*, not just the pattern
 
@@ -214,4 +215,5 @@ classifier design
 | (construction) | `TB013` construct-through-spec | a structured domain object (entity/aggregate) constructs through `__init__(self, spec)`; no separate `from_spec` factory (the value-taking-ctor half is a deferred extension) | `tb013/{good,bad}.py` |
 | `comparability` / `equalitytest` | `TB014` equality-by-type | equality matches the stereotype: VO compares by value (never blocks); entity defines `__eq__`+`__hash__` together (by ID); aggregate root blocks equality (`__eq__ = None`/`__hash__ = None`) — keyed on the classifier | `tb014/{good,bad}.py` |
 | `mustnew` | — dissolved | "No `Must*` twin is needed" | — |
+| `comments` | `TB020` no-comments | comments norm v0 (`comments.md`): zero comments and docstrings, machine directives exempt | `tb020/{good,bad}.py` |
 | (type-aware residual) | — deferred (P1) | primitive-obsession field resolution; identity-`__eq__` field | — |

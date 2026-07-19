@@ -1,20 +1,3 @@
-"""Context discovery + the totality classifier — the classify-then-check move.
-
-A bounded context is ANY root-level package whose ``__init__.py`` exposes a
-``Client`` (defined there or re-exported). The shape/enforcement checks loop
-over what discovery finds, so a NEW context is checked by construction —
-nothing to remember to add to a list. The totality guard makes discovery
-fail-safe: every root-level package must classify as a known app-level piece
-or a Client-bearing context; anything else is "unclassified" and fails, so a
-context that forgot its ``Client`` (the ``reports/`` defect class) cannot hide
-from the checks by being invisible to them.
-
-The port landed: ``tessercheck-py/tessercheck/discovery.py`` generalizes this
-(app-level set parameterized, non-Python dirs scoped out); this in-example
-copy stays as the verified impl's own gate, deliberately hardcoded to its
-layout.
-"""
-
 from __future__ import annotations
 
 import ast
@@ -22,13 +5,10 @@ import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-# The known app-level pieces: every root-level package that is NOT a bounded
-# context. (errors/lifecycle are modules, not packages, and need no entry.)
 APP_LEVEL_PACKAGES = frozenset({"bootstrap", "srv", "tests"})
 
 
 def exposes_client(pkg_dir: pathlib.Path) -> bool:
-    """The discovery key: does the package's top level expose a ``Client``?"""
     init = pkg_dir / "__init__.py"
     if not init.is_file():
         return False
@@ -43,11 +23,6 @@ def exposes_client(pkg_dir: pathlib.Path) -> bool:
 
 
 def classify(root: pathlib.Path) -> tuple[list[str], list[str]]:
-    """Classify every root-level package dir: ``(contexts, unclassified)``.
-
-    App-level pieces are recognized by name; a context by its ``Client``;
-    everything else lands in ``unclassified`` — the totality guard asserts
-    that bucket is empty."""
     contexts: list[str] = []
     unclassified: list[str] = []
     for path in sorted(root.iterdir()):

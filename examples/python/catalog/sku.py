@@ -6,8 +6,6 @@ _SKU_PATTERN = re.compile(r"^[A-Z0-9-]{3,20}$")
 
 @dataclass(frozen=True)
 class SKU:
-    """A product's stock-keeping unit and its identity. Simple, single-value
-    value object: one field, native (field-wise) equality."""
 
     _value: str
 

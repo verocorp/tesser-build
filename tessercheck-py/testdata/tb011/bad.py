@@ -1,12 +1,3 @@
-"""An aggregate that leaks its backing collection through an accessor — TB011.
-
-``Roster`` is an entity (identity equality), but its ``members`` accessor hands
-back ``self._members`` directly. A caller can now ``roster.members.append(x)``
-and mutate the aggregate's internals without going through ``add`` — bypassing
-whatever invariant the root guards. Return ``list(self._members)`` instead.
-"""
-
-
 class Roster:
     def __init__(self, id: str, members: list[str]) -> None:
         self._id = id
@@ -14,7 +5,7 @@ class Roster:
 
     @property
     def members(self) -> list[str]:
-        return self._members  # leaks the backing list — TB011
+        return self._members
 
     def add(self, member: str) -> None:
         self._members = [*self._members, member]

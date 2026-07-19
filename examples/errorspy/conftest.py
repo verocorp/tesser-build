@@ -1,7 +1,3 @@
-"""Put examples/errorspy on sys.path so the example's top-level modules import
-cleanly under pytest without any install step — plain venv, no packaging.
-"""
-
 import os
 import sys
 

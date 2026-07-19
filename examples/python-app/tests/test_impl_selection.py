@@ -1,8 +1,3 @@
-"""Coordinate-driven impl selection (illustrated) + fail-fast. The "memory"
-coordinate builds the in-memory repo; an ABSENT coordinate ERRORS at construction
-— no path silently falls into volatile storage.
-"""
-
 from __future__ import annotations
 
 import pytest
@@ -19,7 +14,7 @@ from reports.wiring.config import Config as ReportsConfig
 
 def test_memory_coordinate_builds_and_is_its_own_closeable() -> None:
     repo, closeable = campaign_repo_for(CampaignConfig("memory"))
-    assert id(repo) == id(closeable)  # the in-mem repo is its own closeable
+    assert id(repo) == id(closeable)
     lp_repo, lp_closeable = linkpolicy_repo_for(LinkPolicyConfig("memory"))
     assert id(lp_repo) == id(lp_closeable)
 

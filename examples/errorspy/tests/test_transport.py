@@ -1,7 +1,3 @@
-"""Cells B3 (kind -> status via the pure mapper), B4 (RFC 9457 body with type +
-field), B5 (malformed request -> 400, not 422), B6 (aggregated multi-field
-validation), plus the InfraError -> 503 path."""
-
 from __future__ import annotations
 
 import json
@@ -29,7 +25,6 @@ def test_create_valid_is_201() -> None:
 
 
 def test_validation_is_422_with_rfc9457_body() -> None:
-    # B3 + B4: a bad slug -> 422, body carries the code as `type` and the field.
     bad = json.dumps(
         {
             "window": {"start": "2026-01-01", "end": "2026-02-01"},
@@ -44,7 +39,6 @@ def test_validation_is_422_with_rfc9457_body() -> None:
 
 
 def test_not_found_is_404() -> None:
-    # B3: kind=not_found -> 404, through the same pure mapper.
     resp = _handler().get_campaign("nope")
     assert resp.status == 404
     assert resp.body["type"] == "/problems/campaign_missing"
@@ -60,14 +54,12 @@ def test_conflict_is_409() -> None:
 
 
 def test_malformed_json_is_400_not_422() -> None:
-    # B5: a parse failure is a transport concern (400), never domain validation.
     resp = _handler().create_campaign("c1", "{not json")
     assert resp.status == 400
     assert resp.body["type"] == "/problems/malformed_request"
 
 
 def test_aggregated_validation_lists_all_invalid_params() -> None:
-    # B6: both fields bad -> one 422 carrying every failure in invalid-params.
     h = _handler()
     h.create_campaign("c1", _VALID_CREATE)
     both_bad = json.dumps({"slug": "BAD", "target_url": "ftp://nope"})

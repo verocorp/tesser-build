@@ -1,11 +1,3 @@
-"""An entity that constructs the ungrounded way — TB013.
-
-``Widget`` exposes the two construction paths Go keeps to one: a value-taking
-``__init__(self, id)`` that takes an already-built value object, AND a
-``from_spec`` classmethod (the second constructor). The single path is
-``__init__(self, spec)``, converting primitives to value objects there.
-"""
-
 from dataclasses import dataclass
 
 
@@ -18,16 +10,16 @@ class WidgetID:
 
 
 @dataclass(frozen=True)
-class WidgetSpec:  # primitive leaves
+class WidgetSpec:
     id: str
 
 
 class Widget:
-    def __init__(self, id: WidgetID) -> None:  # takes the built VO, not the spec
+    def __init__(self, id: WidgetID) -> None:
         self._id = id
 
     @classmethod
-    def from_spec(cls, spec: WidgetSpec) -> "Widget":  # a second constructor
+    def from_spec(cls, spec: WidgetSpec) -> "Widget":
         return cls(WidgetID(spec.id))
 
     @property

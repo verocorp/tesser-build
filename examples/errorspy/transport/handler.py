@@ -1,19 +1,3 @@
-"""The transport boundary: the ONE place errors become HTTP status + body.
-
-This is where the two-level model pays off:
-- B3: kind -> status goes through the pure ``status_for`` mapper only. No status
-  literal appears in an endpoint; the handler recovers the error at runtime and
-  the pure function assigns the status.
-- B4/B6: the RFC 9457 problem+json body carries ``type`` (from Code), the
-  ``field``, and, for an aggregated validation error, an ``invalid-params`` list.
-- B5: a malformed request is a TRANSPORT concern -> 400 (BadRequest), never a
-  domain validation 422.
-- InfraError -> 503; anything unexpected -> 500. Neither is a domain kind.
-
-Endpoints return a ``Response`` (status + JSON-able body) so the mapping is
-testable without a live server; ``main.py`` can wrap it in http.server.
-"""
-
 from __future__ import annotations
 
 import json
@@ -31,8 +15,7 @@ JSONObject = dict[str, object]
 
 
 class BadRequest(Exception):
-    """A transport-level failure (unparseable / wrong-shape request). Maps to
-    400 — distinct from a domain validation error (422)."""
+    pass
 
 
 @dataclass(frozen=True)
@@ -85,7 +68,6 @@ class Handler:
             body = _parse(raw)
             slug = _str(body.get("slug"))
             target_url = _str(body.get("target_url"))
-            # B6: validate both fields and aggregate their failures into one 422.
             errors.collect(
                 slug=lambda: Slug(slug), target_url=lambda: TargetURL(target_url)
             )
@@ -109,8 +91,8 @@ class Handler:
         except BadRequest as e:
             return Response(400, _problem("malformed_request", "Bad Request", 400, str(e)))
         except DomainError as e:
-            status = status_for(e.kind)  # B3: the only kind -> status decision
-            return Response(status, _problem_for(e, status))  # B4 / B6
+            status = status_for(e.kind)
+            return Response(status, _problem_for(e, status))
         except InfraError:
             return Response(
                 503, _problem("unavailable", "Service Unavailable", 503, "please retry")
@@ -123,7 +105,7 @@ class Handler:
 
 def _problem(code: str, title: str, status: int, detail: str) -> JSONObject:
     return {
-        "type": f"/problems/{code}",  # RFC 9457 type
+        "type": f"/problems/{code}",
         "title": title,
         "status": status,
         "detail": detail,
@@ -134,15 +116,13 @@ def _problem_for(err: DomainError, status: int) -> JSONObject:
     body = _problem(err.code, err.code.replace("_", " "), status, err.message)
     if err.field is not None:
         body["field"] = err.field
-    if err.problems:  # B6: aggregated multi-field validation
+    if err.problems:
         body["invalid-params"] = [
             {"name": p.field, "code": p.code, "reason": p.message}
             for p in err.problems
         ]
     return body
 
-
-# --- request-shape helpers: shape failures are transport 400s (B5), not 422s ---
 
 def _parse(raw: str) -> JSONObject:
     try:

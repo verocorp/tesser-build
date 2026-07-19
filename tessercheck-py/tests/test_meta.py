@@ -80,7 +80,11 @@ def test_acceptance_gate_examples_python_is_clean() -> None:
 
 
 def test_analyzer_passes_its_own_checks() -> None:
-    # Dogfood: the analyzer's own source conforms.
+    # Dogfood: the analyzer's own source conforms. TB020 is excluded by
+    # ruling: the comments norm governs constructed-app code and the example
+    # templates; the toolkit's own internals are outside its governed scope
+    # (skills/tesser-build/comments.md "Where the norm applies").
     findings, errors = run_paths([str(_PKG)])
+    findings = [f for f in findings if f.code != "TB020"]
     assert findings == [], "\n".join(f.render() for f in findings)
     assert errors == [], "\n".join(errors)

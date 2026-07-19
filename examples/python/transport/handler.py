@@ -1,10 +1,3 @@
-"""The HTTP transport layer for the link-campaign service. Each route parses
-the request, then calls exactly one ``linkcampaign.Client`` method — the one
-handler rule: no domain math, no repository. It depends on the
-``linkcampaign.Client`` Protocol only, never on a concrete application service
-or repository.
-"""
-
 import json
 import re
 from http import HTTPStatus
@@ -27,9 +20,6 @@ _DEACTIVATE = re.compile(r"^/campaigns/(?P<id>[^/]+)/links/(?P<slug>[^/]+)/deact
 
 
 def make_handler(client: Client) -> type[BaseHTTPRequestHandler]:
-    """Build the request-handler class wired to ``client``. The Client is
-    captured by closure — injected by the composition root, constructed by the
-    handler never."""
 
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self) -> None:  # noqa: N802 (stdlib dispatch name)
@@ -48,7 +38,6 @@ def make_handler(client: Client) -> type[BaseHTTPRequestHandler]:
             else:
                 self._write_error(HTTPStatus.NOT_FOUND, "no such route")
 
-        # --- one route = parse, call exactly one Client method, respond ---
 
         def _create_campaign(self) -> None:
             body = self._read_json()
@@ -100,7 +89,6 @@ def make_handler(client: Client) -> type[BaseHTTPRequestHandler]:
                 return self._write_error(HTTPStatus.UNPROCESSABLE_ENTITY, str(e))
             self._write_json(HTTPStatus.OK, resp)
 
-        # --- transport plumbing (no domain concern) ---
 
         def _read_json(self) -> dict[str, Any] | None:
             length = int(self.headers.get("Content-Length", 0))
@@ -127,7 +115,7 @@ def make_handler(client: Client) -> type[BaseHTTPRequestHandler]:
             self._write_json(status, {"error": message})
 
         def log_message(self, format: str, *args: Any) -> None:
-            pass  # keep the example quiet under test
+            pass
 
     return Handler
 
@@ -137,8 +125,6 @@ def _as_list(value: object) -> list[Any]:
 
 
 def _as_jsonable(body: object) -> object:
-    """Turn a frozen-dataclass DTO (and its nested tuples) into JSON-native
-    structures. Kept in transport, since serialization is a transport concern."""
     from dataclasses import asdict, is_dataclass
 
     if is_dataclass(body) and not isinstance(body, type):

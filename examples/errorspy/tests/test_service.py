@@ -1,7 +1,3 @@
-"""Cell X2: the service is orchestration only and does NOT wrap domain / repo
-errors — they propagate with their identity (kind + code) intact, so the
-boundary can still map them and the client still sees the specific problem."""
-
 from __future__ import annotations
 
 import pytest
@@ -20,7 +16,6 @@ def _service(*, down: bool = False) -> CampaignService:
 def test_not_found_propagates_unwrapped_through_the_service() -> None:
     with pytest.raises(DomainError) as ei:
         _service().get("missing")
-    # identity intact — no "failed to load campaign" re-wrap changed the code.
     assert ei.value.kind is DomainKind.NOT_FOUND
     assert ei.value.code == "campaign_missing"
 

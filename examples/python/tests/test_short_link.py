@@ -20,8 +20,6 @@ class TestShortLink:
             ShortLink(_spec(slug="X"))
 
     def test_equality_is_identity_by_slug(self) -> None:
-        # Same slug -> same link, even if other attributes differ; different
-        # slug -> different link.
         a = ShortLink(_spec(slug="spring-sale", active=True))
         b = ShortLink(_spec(slug="spring-sale", active=False))
         c = ShortLink(_spec(slug="autumn-sale"))
@@ -33,6 +31,5 @@ class TestShortLink:
         link = ShortLink(_spec())
         link.deactivate()
         assert link.active is False
-        # A link can only be deactivated once.
         with pytest.raises(ValueError, match="already deactivated"):
             link.deactivate()

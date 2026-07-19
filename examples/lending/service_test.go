@@ -42,9 +42,6 @@ func TestLendingService_CheckOutBook_InvalidMemberIDPropagates(t *testing.T) {
 	}
 }
 
-// TestLendingService_CheckOutBook_FourthBookRejected proves the max-3
-// rule is enforced by the domain (Member.CheckOut), not re-implemented in
-// the service: three successful checkouts, then a rejected fourth.
 func TestLendingService_CheckOutBook_FourthBookRejected(t *testing.T) {
 	svc := NewLendingService(NewInMemoryMemberRepository())
 	ctx := context.Background()
@@ -68,7 +65,7 @@ func TestLendingService_ReturnBook_Succeeds_ComputesLateFee(t *testing.T) {
 	if _, err := svc.CheckOutBook(ctx, CheckOutBookRequest{
 		MemberID:     "member-1",
 		BookID:       "book-1",
-		CheckoutDate: day(2026, time.January, 1), // due 2026-01-15
+		CheckoutDate: day(2026, time.January, 1),
 	}); err != nil {
 		t.Fatalf("CheckOutBook returned unexpected error: %v", err)
 	}
@@ -76,7 +73,7 @@ func TestLendingService_ReturnBook_Succeeds_ComputesLateFee(t *testing.T) {
 	resp, err := svc.ReturnBook(ctx, ReturnBookRequest{
 		MemberID:   "member-1",
 		BookID:     "book-1",
-		ReturnDate: day(2026, time.January, 19), // 4 days late
+		ReturnDate: day(2026, time.January, 19),
 	})
 	if err != nil {
 		t.Fatalf("ReturnBook returned unexpected error: %v", err)
@@ -112,7 +109,7 @@ func TestLendingService_ReturnBook_NoActiveLoanRejected(t *testing.T) {
 func TestLendingService_GetTotalLateFees_SumsOutstandingOverdueLoans(t *testing.T) {
 	svc := NewLendingService(NewInMemoryMemberRepository())
 	ctx := context.Background()
-	checkoutDate := day(2026, time.January, 1) // due 2026-01-15
+	checkoutDate := day(2026, time.January, 1)
 
 	if _, err := svc.CheckOutBook(ctx, CheckOutBookRequest{MemberID: "member-1", BookID: "book-1", CheckoutDate: checkoutDate}); err != nil {
 		t.Fatalf("CheckOutBook returned unexpected error: %v", err)
@@ -121,7 +118,7 @@ func TestLendingService_GetTotalLateFees_SumsOutstandingOverdueLoans(t *testing.
 		t.Fatalf("CheckOutBook returned unexpected error: %v", err)
 	}
 
-	resp, err := svc.GetTotalLateFees(ctx, GetTotalLateFeesRequest{MemberID: "member-1", AsOf: day(2026, time.January, 19)}) // 4 days late each
+	resp, err := svc.GetTotalLateFees(ctx, GetTotalLateFeesRequest{MemberID: "member-1", AsOf: day(2026, time.January, 19)})
 	if err != nil {
 		t.Fatalf("GetTotalLateFees returned unexpected error: %v", err)
 	}
@@ -144,7 +141,7 @@ func TestLendingService_GetTotalLateFees_UnknownMemberReturnsZero(t *testing.T) 
 func TestLendingService_ListOverdueLoans_AcrossMultipleMembers(t *testing.T) {
 	svc := NewLendingService(NewInMemoryMemberRepository())
 	ctx := context.Background()
-	checkoutDate := day(2026, time.January, 1) // due 2026-01-15
+	checkoutDate := day(2026, time.January, 1)
 
 	if _, err := svc.CheckOutBook(ctx, CheckOutBookRequest{MemberID: "member-1", BookID: "book-1", CheckoutDate: checkoutDate}); err != nil {
 		t.Fatalf("CheckOutBook returned unexpected error: %v", err)
@@ -156,7 +153,7 @@ func TestLendingService_ListOverdueLoans_AcrossMultipleMembers(t *testing.T) {
 		t.Fatalf("ReturnBook returned unexpected error: %v", err)
 	}
 
-	resp, err := svc.ListOverdueLoans(ctx, ListOverdueLoansRequest{AsOf: day(2026, time.January, 19)}) // 4 days late
+	resp, err := svc.ListOverdueLoans(ctx, ListOverdueLoansRequest{AsOf: day(2026, time.January, 19)})
 	if err != nil {
 		t.Fatalf("ListOverdueLoans returned unexpected error: %v", err)
 	}

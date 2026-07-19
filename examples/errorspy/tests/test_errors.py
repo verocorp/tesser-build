@@ -1,6 +1,3 @@
-"""Cell 1: the error model itself — Kind/Code, the named constructors, the pure
-status mapper, chain fidelity, and the two-level identity (D3)."""
-
 from __future__ import annotations
 
 from errors import (
@@ -33,14 +30,11 @@ def test_status_for_maps_each_kind() -> None:
 
 
 def test_status_for_is_total_over_the_enum() -> None:
-    # Every member maps to a status — no kind left unmapped. (The static proof is
-    # assert_never in status_for; this is the runtime witness.)
     for kind in DomainKind:
         assert status_for(kind) in (422, 404, 409)
 
 
 def test_two_codes_share_one_kind() -> None:
-    # D3: distinct problems, same kind, different code — the two-level model.
     dup = conflict("duplicate_slug", "slug taken")
     deactivated = conflict("already_deactivated", "link already off")
     assert dup.kind is deactivated.kind is DomainKind.CONFLICT
@@ -48,7 +42,6 @@ def test_two_codes_share_one_kind() -> None:
 
 
 def test_chaining_preserves_cause_and_field() -> None:
-    # X1 in miniature: wrapping a lower error keeps the cause and the field.
     try:
         try:
             raise ValueError("low level")
@@ -70,7 +63,5 @@ def test_str_shows_code_and_field() -> None:
 
 
 def test_infra_is_not_a_domain_error() -> None:
-    # InfraError is a separate channel: the boundary maps it to 503, never to a
-    # domain status. It must not be catchable as a DomainError.
     assert not issubclass(InfraError, DomainError)
     assert not isinstance(InfraError("db down"), DomainError)

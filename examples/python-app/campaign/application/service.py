@@ -1,15 +1,3 @@
-"""The campaign application service: convert -> delegate -> persist -> respond.
-
-``create_link`` is Moment 1: it vets the destination through the ``TargetChecker``
-port SYNCHRONOUSLY and FAIL-CLOSED. A rejection becomes a domain ``conflict``; an
-outage surfaces as an ``InfraError`` from the checker and PROPAGATES untouched —
-either way no link is created. This is the opposite of a best-effort telemetry
-write, and it is why coupling the two contexts here is correct.
-
-It satisfies ``campaign.Client`` structurally. The repository port is declared
-here, beside its only consumer.
-"""
-
 from __future__ import annotations
 
 from typing import Protocol
@@ -28,8 +16,6 @@ from errors import conflict, not_found
 
 
 class LinkRepository(Protocol):
-    """Outbound port owned by the application, satisfied by an adapter in
-    ``adapters/gateways``."""
 
     def save(self, link: ShortLink) -> None: ...
 
@@ -44,10 +30,10 @@ class CampaignService:
         self._checker = checker
 
     def create_link(self, req: CreateLinkRequest) -> CreateLinkResponse:
-        slug = Slug(req.slug)  # validation in the domain
-        target = TargetURL(req.target_url)  # validation in the domain
-        outcome = self._checker.check(target.value)  # Moment 1: synchronous, fail-closed
-        if not outcome.allowed:  # a policy rejection -> refuse to create
+        slug = Slug(req.slug)
+        target = TargetURL(req.target_url)
+        outcome = self._checker.check(target.value)
+        if not outcome.allowed:
             raise conflict("destination_blocked", f"destination not allowed: {outcome.reason}")
         if self._repo.find(slug) is not None:
             raise conflict("duplicate_slug", f"slug {req.slug!r} already exists")

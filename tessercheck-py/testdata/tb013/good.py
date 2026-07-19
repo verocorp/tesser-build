@@ -1,11 +1,3 @@
-"""An entity that constructs through its spec — TB013 clean.
-
-``Widget`` is a reference-identity entity with a single construction path:
-``__init__(self, spec)`` takes the primitive-leaf ``WidgetSpec``, converts each
-primitive to a value object, and validates. There is no ``from_spec`` factory and
-no value-taking constructor.
-"""
-
 from dataclasses import dataclass
 
 
@@ -18,7 +10,7 @@ class WidgetID:
 
 
 @dataclass(frozen=True)
-class WidgetSpec:  # primitive leaves
+class WidgetSpec:
     id: str
 
 

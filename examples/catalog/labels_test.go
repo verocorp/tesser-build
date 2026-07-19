@@ -12,7 +12,7 @@ func TestLabels_NilNormalizesToEmpty(t *testing.T) {
 func TestLabels_CopiesInputDefensively(t *testing.T) {
 	src := map[string]string{"color": "black"}
 	l := NewLabels(src)
-	src["color"] = "white" // mutating the source must not affect the value object
+	src["color"] = "white"
 	if got, _ := l.Get("color"); got != "black" {
 		t.Errorf("Labels captured a reference to the input map: got %q", got)
 	}
@@ -21,7 +21,7 @@ func TestLabels_CopiesInputDefensively(t *testing.T) {
 func TestLabels_CopiesOutputDefensively(t *testing.T) {
 	l := NewLabels(map[string]string{"color": "black"})
 	out := l.Values()
-	out["color"] = "white" // mutating the returned map must not affect the value object
+	out["color"] = "white"
 	if got, _ := l.Get("color"); got != "black" {
 		t.Errorf("Values() leaked the backing map: got %q", got)
 	}
@@ -39,7 +39,7 @@ func TestLabels_Equality(t *testing.T) {
 }
 
 func TestLabels_String(t *testing.T) {
-	// Display form is deterministic (sorted) — every VO implements Stringer.
+
 	l := NewLabels(map[string]string{"size": "M", "color": "black"})
 	if got := l.String(); got != "color=black,size=M" {
 		t.Errorf("String() = %q, want %q", got, "color=black,size=M")

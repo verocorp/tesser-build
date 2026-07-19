@@ -8,8 +8,6 @@ from campaign.target_url import TargetURL
 
 class TestSlug:
     def test_equality(self) -> None:
-        # A slug has one representation; equal values are equal, and hash
-        # agrees so slugs work as dict keys / set members.
         assert Slug("spring-sale") == Slug("spring-sale")
         assert hash(Slug("spring-sale")) == hash(Slug("spring-sale"))
         assert Slug("spring-sale") != Slug("autumn-sale")
@@ -58,7 +56,6 @@ class TestCampaignName:
 
 
 def test_value_objects_are_immutable() -> None:
-    # frozen=True: assignment raises. Behavior never mutates a value object.
     from dataclasses import FrozenInstanceError
 
     s = Slug("spring-sale")

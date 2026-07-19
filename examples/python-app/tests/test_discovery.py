@@ -1,8 +1,3 @@
-"""The discovery classifier's own guarantees: totality over the real tree, and
-teeth on synthetic packages (a Client-less context dir MUST be flagged — the
-``reports/`` defect class; a Client-bearing one MUST be discovered).
-"""
-
 from __future__ import annotations
 
 import pathlib

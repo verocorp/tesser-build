@@ -13,14 +13,14 @@ func TestNewSeatNumber_Valid(t *testing.T) {
 
 func TestNewSeatNumber_InvalidRejected(t *testing.T) {
 	invalid := []string{
-		"",     // empty
-		"12",   // missing letter
-		"A12",  // letter first
-		"12a",  // lowercase letter
-		"0A",   // row must be >= 1
-		"100A", // row too large (3 digits)
-		"12AA", // two letters
-		" 12A", // leading whitespace
+		"",
+		"12",
+		"A12",
+		"12a",
+		"0A",
+		"100A",
+		"12AA",
+		" 12A",
 	}
 	for _, v := range invalid {
 		if _, err := NewSeatNumber(v); err == nil {

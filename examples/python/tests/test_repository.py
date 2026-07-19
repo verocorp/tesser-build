@@ -27,13 +27,9 @@ def test_save_then_load_reconstructs_the_aggregate() -> None:
 
 
 def test_load_reruns_invariants_through_the_constructor() -> None:
-    # The repository reconstructs through the Campaign constructor (spec in), so
-    # a loaded aggregate is a real, invariant-checked Campaign — not a bag of
-    # attributes.
     repo = InMemoryCampaignRepository()
     repo.save(_campaign("c1"))
     loaded = repo.load(CampaignID("c1"))
-    # It behaves like a live aggregate: its transitions still guard.
     with pytest.raises(ValueError, match="duplicate slug"):
         loaded.add_short_link(
             ShortLinkSpec(slug="spring-sale", target_url="https://b.example", active=True)

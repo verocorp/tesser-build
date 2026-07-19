@@ -1,42 +1,79 @@
 {
-  "_comment": "The canonical row registry for the roadmap matrix (eng review D11b): the row taxonomy lives HERE, never as constants inside the generator — adding a component is a registry edit, not a code edit. Columns are DERIVED by roadmap/generate.py: this file declares where each row's artifacts live (or will live); it never carries a status symbol. Judgment cells are annotated at the source they describe with tb-cell markers (schema: docs/skill-authoring.md).",
+  "_comment": "The canonical row registry for the roadmap matrix (eng review D11b): the row taxonomy lives HERE, never as constants inside the generator \u2014 adding a component is a registry edit, not a code edit. Columns are DERIVED by roadmap/generate.py: this file declares where each row's artifacts live (or will live); it never carries a status symbol. Judgment cells are annotated at the source they describe with tb-cell markers (schema: docs/skill-authoring.md).",
   "_row_kinds": "Typed rows (eng review 5A): absent 'kind' = component (the matrix above); 'kind': 'rule' = one pay-now rule, rendered in the second 'Pay-now rules' table (rule / taught in / enforced by / status) so external enforcers render honestly. Rule-row keys (narrow v1): taught_in = repo path (optional #anchor) where the rule is taught, existence-checked; enforced_by = free text naming the enforcer (external tools like import-linter live here; listing check codes on rule rows lands with the fused anatomy checks). A malformed kind is a named file:line error.",
   "_column_semantics": {
-    "skill": "component-doc filename under skills/tesser-build/; absent key = n/a (—); named-but-missing file = ❌; present file's tb-status marker decides ✅ (full) vs 🟡 (partial/stub)",
-    "py_example, go_example": "candidate paths relative to repo root; absent key = n/a (—); any path exists = ✅; none exist = ❌",
-    "go_analyzers, py_checks": "names in internal/analyzers.All / codes in tessercheck.finding.CHECKS; a listed name missing from the live registry is a loud error (drift). Rendering: ✅ requires BOTH lists non-empty; only one populated caps the cell at 🟡 ('Py only'/'Go only'); neither populated falls back to enforcement_tests (🟡 in-example) and then ❌. Absent key = n/a (—), present-but-empty [] = ❌ planned-but-absent — the two are deliberately different",
-    "enforcement_tests": "in-example enforcement test paths; these alone cap the checker cell at 🟡 in-example",
-    "rationale": "glob patterns for executable-rationale test files; absent key = n/a (—); no match = ❌"
+    "skill": "component-doc filename under skills/tesser-build/; absent key = n/a (\u2014); named-but-missing file = \u274c; present file's tb-status marker decides \u2705 (full) vs \ud83d\udfe1 (partial/stub)",
+    "py_example, go_example": "candidate paths relative to repo root; absent key = n/a (\u2014); any path exists = \u2705; none exist = \u274c",
+    "go_analyzers, py_checks": "names in internal/analyzers.All / codes in tessercheck.finding.CHECKS; a listed name missing from the live registry is a loud error (drift). Rendering: \u2705 requires BOTH lists non-empty; only one populated caps the cell at \ud83d\udfe1 ('Py only'/'Go only'); neither populated falls back to enforcement_tests (\ud83d\udfe1 in-example) and then \u274c. Absent key = n/a (\u2014), present-but-empty [] = \u274c planned-but-absent \u2014 the two are deliberately different",
+    "enforcement_tests": "in-example enforcement test paths; these alone cap the checker cell at \ud83d\udfe1 in-example",
+    "rationale": "glob patterns for executable-rationale test files; absent key = n/a (\u2014); no match = \u274c"
   },
   "rows": [
     {
       "key": "value-objects",
       "title": "Value objects",
       "skill": "value-objects.md",
-      "py_example": ["examples/python/campaign", "examples/python/catalog"],
-      "go_example": ["examples/ddd", "examples/catalog", "examples/running"],
-      "go_analyzers": ["mustnew", "vofields", "voconstructor", "stringequality", "stringer", "primitiveaccessor", "comparability"],
-      "py_checks": ["TB001", "TB002", "TB003", "TB004", "TB010"],
-      "rationale": ["rationale/*_test.go"]
+      "py_example": [
+        "examples/python/campaign",
+        "examples/python/catalog"
+      ],
+      "go_example": [
+        "examples/ddd",
+        "examples/catalog",
+        "examples/running"
+      ],
+      "go_analyzers": [
+        "mustnew",
+        "vofields",
+        "voconstructor",
+        "stringequality",
+        "stringer",
+        "primitiveaccessor",
+        "comparability"
+      ],
+      "py_checks": [
+        "TB001",
+        "TB002",
+        "TB003",
+        "TB004",
+        "TB010"
+      ],
+      "rationale": [
+        "rationale/*_test.go"
+      ]
     },
     {
       "key": "entities",
       "title": "Entities",
       "skill": "entities.md",
-      "py_example": ["examples/python"],
-      "go_example": ["examples/ddd"],
+      "py_example": [
+        "examples/python"
+      ],
+      "go_example": [
+        "examples/ddd"
+      ],
       "go_analyzers": [],
-      "py_checks": ["TB013", "TB014"],
+      "py_checks": [
+        "TB013",
+        "TB014"
+      ],
       "rationale": []
     },
     {
       "key": "aggregates",
       "title": "Aggregates",
       "skill": "aggregates.md",
-      "py_example": ["examples/python"],
-      "go_example": ["examples/ddd"],
+      "py_example": [
+        "examples/python"
+      ],
+      "go_example": [
+        "examples/ddd"
+      ],
       "go_analyzers": [],
-      "py_checks": ["TB011", "TB012"],
+      "py_checks": [
+        "TB011",
+        "TB012"
+      ],
       "rationale": []
     },
     {
@@ -53,40 +90,68 @@
       "key": "application-services",
       "title": "Application services",
       "skill": "application-services.md",
-      "py_example": ["examples/python"],
-      "go_example": ["examples/ddd", "examples/lending"],
+      "py_example": [
+        "examples/python"
+      ],
+      "go_example": [
+        "examples/ddd",
+        "examples/lending"
+      ],
       "go_analyzers": [],
       "py_checks": [],
-      "rationale": ["rationale/changeability/nooutward/*_test.go"]
+      "rationale": [
+        "rationale/changeability/nooutward/*_test.go"
+      ]
     },
     {
       "key": "public-interface",
       "title": "Public interface",
       "skill": "public-interface.md",
-      "py_example": ["examples/python-app"],
-      "go_example": ["examples/running"],
+      "py_example": [
+        "examples/python-app"
+      ],
+      "go_example": [
+        "examples/running"
+      ],
       "go_analyzers": [],
       "py_checks": [],
-      "enforcement_tests": ["examples/python-app/tests/test_shape.py", "examples/python-app/tests/test_discovery.py"],
-      "rationale": ["rationale/changeability/anchor/*_test.go"]
+      "enforcement_tests": [
+        "examples/python-app/tests/test_shape.py",
+        "examples/python-app/tests/test_discovery.py"
+      ],
+      "rationale": [
+        "rationale/changeability/anchor/*_test.go"
+      ]
     },
     {
       "key": "handlers",
       "title": "Handlers",
       "skill": "handlers.md",
-      "py_example": ["examples/python-app/campaign/adapters/handlers"],
-      "go_example": ["examples/running/transport"],
+      "py_example": [
+        "examples/python-app/campaign/adapters/handlers"
+      ],
+      "go_example": [
+        "examples/running/transport"
+      ],
       "go_analyzers": [],
       "py_checks": [],
-      "enforcement_tests": ["examples/python-app/tests/test_enforcement.py"],
+      "enforcement_tests": [
+        "examples/python-app/tests/test_enforcement.py"
+      ],
       "rationale": []
     },
     {
       "key": "gateway-repository",
       "title": "Gateway: repository",
       "skill": "repositories.md",
-      "py_example": ["examples/python", "examples/python-app/campaign/adapters/gateways"],
-      "go_example": ["examples/ddd", "examples/running"],
+      "py_example": [
+        "examples/python",
+        "examples/python-app/campaign/adapters/gateways"
+      ],
+      "go_example": [
+        "examples/ddd",
+        "examples/running"
+      ],
       "go_analyzers": [],
       "py_checks": [],
       "rationale": []
@@ -95,11 +160,18 @@
       "key": "gateway-cross-context",
       "title": "Gateway: cross-context",
       "skill": "gateway-cross-context.md",
-      "py_example": ["examples/python-app/campaign/adapters/gateways/target_checker.py"],
-      "go_example": ["examples/app"],
+      "py_example": [
+        "examples/python-app/campaign/adapters/gateways/target_checker.py"
+      ],
+      "go_example": [
+        "examples/app"
+      ],
       "go_analyzers": [],
       "py_checks": [],
-      "enforcement_tests": ["examples/python-app/tests/test_direction.py", "examples/python-app/tests/test_call_fail_closed.py"],
+      "enforcement_tests": [
+        "examples/python-app/tests/test_direction.py",
+        "examples/python-app/tests/test_call_fail_closed.py"
+      ],
       "rationale": []
     },
     {
@@ -116,33 +188,53 @@
       "key": "wiring",
       "title": "Context wiring",
       "skill": "wiring.md",
-      "py_example": ["examples/python-app/campaign/wiring"],
-      "go_example": ["examples/app"],
+      "py_example": [
+        "examples/python-app/campaign/wiring"
+      ],
+      "go_example": [
+        "examples/app"
+      ],
       "go_analyzers": [],
       "py_checks": [],
-      "enforcement_tests": ["examples/python-app/tests/test_impl_selection.py"],
+      "enforcement_tests": [
+        "examples/python-app/tests/test_impl_selection.py"
+      ],
       "rationale": []
     },
     {
       "key": "bootstrap",
       "title": "bootstrap + app config + lifecycle",
       "skill": "bootstrap.md",
-      "py_example": ["examples/python-app/bootstrap"],
-      "go_example": ["examples/app"],
+      "py_example": [
+        "examples/python-app/bootstrap"
+      ],
+      "go_example": [
+        "examples/app"
+      ],
       "go_analyzers": [],
       "py_checks": [],
-      "enforcement_tests": ["examples/python-app/tests/test_enforcement.py", "examples/python-app/tests/test_bootstrap_once.py", "examples/python-app/tests/test_cleanup.py"],
+      "enforcement_tests": [
+        "examples/python-app/tests/test_enforcement.py",
+        "examples/python-app/tests/test_bootstrap_once.py",
+        "examples/python-app/tests/test_cleanup.py"
+      ],
       "rationale": []
     },
     {
       "key": "srv",
       "title": "srv hosts",
       "skill": "srv.md",
-      "py_example": ["examples/python-app/srv"],
-      "go_example": ["examples/app"],
+      "py_example": [
+        "examples/python-app/srv"
+      ],
+      "go_example": [
+        "examples/app"
+      ],
       "go_analyzers": [],
       "py_checks": [],
-      "enforcement_tests": ["examples/python-app/tests/test_enforcement.py"],
+      "enforcement_tests": [
+        "examples/python-app/tests/test_enforcement.py"
+      ],
       "rationale": []
     },
     {
@@ -161,11 +253,17 @@
       "key": "norm-errors",
       "title": "Norm: errors",
       "skill": "errors.md",
-      "py_example": ["examples/errorspy"],
-      "go_example": ["examples/errorsgo"],
+      "py_example": [
+        "examples/errorspy"
+      ],
+      "go_example": [
+        "examples/errorsgo"
+      ],
       "go_analyzers": [],
       "py_checks": [],
-      "enforcement_tests": ["examples/errorspy/tests"],
+      "enforcement_tests": [
+        "examples/errorspy/tests"
+      ],
       "rationale": []
     },
     {
@@ -180,16 +278,31 @@
       "key": "norm-comments",
       "title": "Norm: comments",
       "skill": "comments.md",
-      "py_example": [],
-      "go_example": [],
-      "rationale": []
+      "py_example": [
+        "examples/python",
+        "examples/python-app",
+        "examples/errorspy"
+      ],
+      "go_example": [
+        "examples/ddd",
+        "examples/catalog",
+        "examples/lending",
+        "examples/running"
+      ],
+      "rationale": [],
+      "go_analyzers": [
+        "comments"
+      ],
+      "py_checks": [
+        "TB020"
+      ]
     },
     {
       "key": "rule-dependency-direction",
       "title": "Dependency direction (acyclic, inward)",
       "kind": "rule",
       "taught_in": "skills/tesser-build/map.md#how-contexts-connect",
-      "enforced_by": "import-linter — consumer-side declared layers/forbidden contracts (eng review 2A; a tessercheck-native direction check is deferred with this as its named standing enforcement)"
+      "enforced_by": "import-linter \u2014 consumer-side declared layers/forbidden contracts (eng review 2A; a tessercheck-native direction check is deferred with this as its named standing enforcement)"
     }
   ]
 }

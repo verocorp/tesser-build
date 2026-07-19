@@ -19,6 +19,7 @@ import ast
 
 from tessercheck.astutil import _annotation_base, _dataclass_frozen, _is_str_call
 from tessercheck.classify import ClassInfo, Stereotype, classify_trees
+from tessercheck.comments_check import check_comments
 from tessercheck.finding import Finding
 from tessercheck.typed_checks import check_typed
 
@@ -192,6 +193,8 @@ def check_tree(
     findings = list(checker.findings)
     if not is_test:
         findings.extend(check_typed(registry, path, tree, source))
+    # TB020 has no test exemption — the comments norm covers the whole tree.
+    findings.extend(check_comments(path, source, tree))
     return sorted(findings, key=lambda f: (f.line, f.col, f.code))
 
 

@@ -1,9 +1,3 @@
-"""Directional import guard: ``linkpolicy`` never imports ``campaign``. Checked
-over every ``.py`` in the linkpolicy package (the Python analog of Go's
-``go list -deps -test`` full-transitive check — we parse the whole package source,
-not just direct top-of-file imports).
-"""
-
 from __future__ import annotations
 
 import ast
@@ -30,15 +24,11 @@ def test_linkpolicy_never_imports_campaign() -> None:
 
 
 def test_no_peer_imports_reports() -> None:
-    # reports sits ABOVE both peers (it composes their Clients); the cycle is
-    # avoided by dependency direction, so nothing may import reports back.
     assert "reports" not in _top_level_imports(ROOT / "campaign")
     assert "reports" not in _top_level_imports(ROOT / "linkpolicy")
 
 
 def test_guard_would_catch_a_reverse_import() -> None:
-    # Proof the guard has teeth: a synthetic linkpolicy module importing campaign
-    # is detected by the same parser.
     tree = ast.parse("from campaign import Client\n")
     found = {
         node.module.split(".")[0]

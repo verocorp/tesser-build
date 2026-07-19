@@ -8,8 +8,6 @@ from catalog.sku import SKU
 
 @dataclass(frozen=True)
 class ProductSpec:
-    """Primitive leaves and nested specs: Price is a MoneySpec; Labels is a raw
-    mapping the Labels constructor will copy."""
 
     sku: str
     price: MoneySpec
@@ -17,17 +15,8 @@ class ProductSpec:
 
 
 class Product:
-    """The entity that gives the value objects a domain-meaningful home: the
-    system tracks a specific product by its SKU identity. A fact entity — it
-    records a price and labels with no lifecycle transition — so equality is
-    identity (by SKU) and it exposes no setters. Its ``__eq__`` and ``__hash__``
-    are defined together, by SKU.
-    """
 
     def __init__(self, spec: ProductSpec) -> None:
-        """Construct from the spec — the single construction path. Each child
-        value object validates itself; the constructor adds error context and
-        enforces any invariants that span the fields."""
         try:
             self._sku = SKU(spec.sku)
         except ValueError as e:

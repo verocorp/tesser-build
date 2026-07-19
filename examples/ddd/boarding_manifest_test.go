@@ -15,9 +15,6 @@ func validManifestSpec() BoardingManifestSpec {
 	}
 }
 
-// TestNewBoardingManifest_Valid proves the invariant holds for a
-// non-conflicting set of passengers: construction succeeds and every
-// passenger is seated.
 func TestNewBoardingManifest_Valid(t *testing.T) {
 	spec := validManifestSpec()
 	m, err := NewBoardingManifest(spec)
@@ -48,9 +45,6 @@ func TestNewBoardingManifest_InvalidPassengerRejected(t *testing.T) {
 	}
 }
 
-// TestNewBoardingManifest_DuplicateSeatRejected is the aggregate's reason
-// to exist: two passengers assigned the same seat must be rejected by the
-// constructor.
 func TestNewBoardingManifest_DuplicateSeatRejected(t *testing.T) {
 	spec := BoardingManifestSpec{
 		Flight: "DL2703",
@@ -64,8 +58,6 @@ func TestNewBoardingManifest_DuplicateSeatRejected(t *testing.T) {
 	}
 }
 
-// TestBoardingManifest_Passengers_DefensiveCopy mutates the slice returned
-// by Passengers() and asserts the manifest itself is unaffected.
 func TestBoardingManifest_Passengers_DefensiveCopy(t *testing.T) {
 	m, err := NewBoardingManifest(validManifestSpec())
 	if err != nil {
@@ -73,7 +65,7 @@ func TestBoardingManifest_Passengers_DefensiveCopy(t *testing.T) {
 	}
 
 	got := m.Passengers()
-	got[0] = Passenger{} // mutate the returned copy
+	got[0] = Passenger{}
 
 	again := m.Passengers()
 	if again[0].ID().String() != "PNR-1" {
@@ -81,9 +73,6 @@ func TestBoardingManifest_Passengers_DefensiveCopy(t *testing.T) {
 	}
 }
 
-// TestBoardingManifest_Equality_Blocked asserts native `==` on
-// BoardingManifest does not compile-time compare by value; the aggregate
-// is not comparable.
 func TestBoardingManifest_Equality_Blocked(t *testing.T) {
 	if reflect.TypeFor[BoardingManifest]().Comparable() {
 		t.Fatal("BoardingManifest must be non-comparable")
@@ -113,9 +102,6 @@ func TestBoardingManifest_AddPassenger_Succeeds(t *testing.T) {
 	}
 }
 
-// TestBoardingManifest_AddPassenger_RejectsDuplicateSeat proves the
-// lifecycle transition re-establishes the invariant and leaves the
-// manifest unchanged on failure (no partial mutation).
 func TestBoardingManifest_AddPassenger_RejectsDuplicateSeat(t *testing.T) {
 	m, err := NewBoardingManifest(validManifestSpec())
 	if err != nil {

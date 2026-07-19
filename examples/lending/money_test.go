@@ -28,10 +28,6 @@ func TestMustNewMoney_PanicsOnInvalid(t *testing.T) {
 	MustNewMoney(-1)
 }
 
-// TestMoney_Equality locks Money's equality semantics. Money wraps a
-// single int64 count of cents — there is exactly one representation per
-// logical value (unlike a decimal-backed Money), so native `==` is
-// correct and no Equal method is needed.
 func TestMoney_Equality(t *testing.T) {
 	if !reflect.TypeFor[Money]().Comparable() {
 		t.Fatal("Money wraps a single int64 and must remain natively comparable")

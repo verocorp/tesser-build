@@ -15,10 +15,6 @@ func TestInMemoryMemberRepository_Load_NotFound(t *testing.T) {
 	}
 }
 
-// TestInMemoryMemberRepository_SaveAndLoad_RoundTrip proves a member with
-// both active and returned loans survives Save then Load with every
-// invariant (and every loan's state) intact — reconstructed through
-// NewMember, not by field-poking.
 func TestInMemoryMemberRepository_SaveAndLoad_RoundTrip(t *testing.T) {
 	repo := NewInMemoryMemberRepository()
 	ctx := context.Background()
@@ -95,14 +91,10 @@ func TestInMemoryMemberRepository_Save_Overwrites(t *testing.T) {
 	}
 }
 
-// TestInMemoryMemberRepository_FindOverdueLoans_AcrossMultipleMembers
-// proves the read query spans every saved member, includes only loans
-// that are actually overdue as of the given date, and excludes returned
-// loans.
 func TestInMemoryMemberRepository_FindOverdueLoans_AcrossMultipleMembers(t *testing.T) {
 	repo := NewInMemoryMemberRepository()
 	ctx := context.Background()
-	checkoutDate := day(2026, time.January, 1) // due 2026-01-15
+	checkoutDate := day(2026, time.January, 1)
 	asOf := day(2026, time.January, 20)
 
 	overdueMember, err := NewMember(MemberSpec{ID: "member-overdue"})

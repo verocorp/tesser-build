@@ -7,6 +7,7 @@ package analyzers
 import (
 	"golang.org/x/tools/go/analysis"
 
+	"github.com/verocorp/tesser-build/passes/comments"
 	"github.com/verocorp/tesser-build/passes/comparability"
 	"github.com/verocorp/tesser-build/passes/mustnew"
 	"github.com/verocorp/tesser-build/passes/primitiveaccessor"
@@ -27,6 +28,7 @@ var All = []*analysis.Analyzer{
 	stringer.Analyzer,          // #6  String() string
 	primitiveaccessor.Analyzer, // #6a/6b  no primitive accessors
 	comparability.Analyzer,     // #7  == unavailable/unsafe VOs need Equal
+	comments.Analyzer,          // comments norm v0: zero comments, directives exempt
 }
 
 // equalitytest (#8, Test*_Equality existence) was built (commit c571e38) then

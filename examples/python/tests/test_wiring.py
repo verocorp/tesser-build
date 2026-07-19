@@ -1,9 +1,3 @@
-"""End-to-end tests over the composition root (main.wire) — the analog of the
-Go example's main_test.go. Drives real HTTP against the fully wired stack, so
-it proves the whole example produces a runnable service, not just that the
-pieces typecheck.
-"""
-
 import json
 import threading
 import urllib.error
@@ -23,7 +17,7 @@ from transport import make_handler
 
 @pytest.fixture()
 def base_url() -> Iterator[str]:
-    server = wire(("127.0.0.1", 0))  # the composition root, on an ephemeral port
+    server = wire(("127.0.0.1", 0))
     port = server.server_address[1]
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -49,7 +43,6 @@ def _request(
 
 
 def test_end_to_end_create_get_add_deactivate(base_url: str) -> None:
-    # Create a campaign with one link.
     status, created = _request(
         "POST",
         f"{base_url}/campaigns",
@@ -59,12 +52,10 @@ def test_end_to_end_create_get_add_deactivate(base_url: str) -> None:
     cid = created["campaign_id"]
     assert created["name"] == "Spring"
 
-    # Fetch it back.
     status, got = _request("GET", f"{base_url}/campaigns/{cid}")
     assert status == 200
     assert {l["slug"] for l in got["links"]} == {"spring-sale"}
 
-    # Add a second link.
     status, added = _request(
         "POST",
         f"{base_url}/campaigns/{cid}/links",
@@ -73,7 +64,6 @@ def test_end_to_end_create_get_add_deactivate(base_url: str) -> None:
     assert status == 200
     assert {l["slug"] for l in added["links"]} == {"spring-sale", "autumn-sale"}
 
-    # Deactivate the first link.
     status, deactivated = _request(
         "POST", f"{base_url}/campaigns/{cid}/links/spring-sale/deactivate"
     )
@@ -84,8 +74,6 @@ def test_end_to_end_create_get_add_deactivate(base_url: str) -> None:
 
 
 def test_domain_rule_rejected_end_to_end(base_url: str) -> None:
-    # An invalid slug is a domain-rule rejection surfaced as 422, proving the
-    # aggregate's validation runs behind the whole HTTP stack.
     status, err = _request(
         "POST",
         f"{base_url}/campaigns",
@@ -96,8 +84,6 @@ def test_domain_rule_rejected_end_to_end(base_url: str) -> None:
 
 
 def test_no_domain_object_leaks_across_the_boundary(base_url: str) -> None:
-    # Every response is a DTO projection: primitive-leaved JSON with exactly the
-    # public ShortLinkView fields — never the domain object's shape.
     _, created = _request(
         "POST",
         f"{base_url}/campaigns",
@@ -111,8 +97,6 @@ def test_no_domain_object_leaks_across_the_boundary(base_url: str) -> None:
 
 
 class _NullRepo:
-    """A throwaway repository that satisfies campaignapp.CampaignRepository
-    structurally — no inheritance, no storage."""
 
     def save(self, c: object) -> None:
         pass
@@ -122,12 +106,8 @@ class _NullRepo:
 
 
 def test_repository_is_substitutable_at_the_composition_seam() -> None:
-    # The composition root chooses the concrete repository; because it's a
-    # Protocol, a fake substitutes with no change to the service, client, or
-    # handler. Here we wire the same public Client over a throwaway repo.
     client: Client = new_client(CampaignService(_NullRepo()))
-    handler_cls = make_handler(client)  # the handler depends only on Client
+    handler_cls = make_handler(client)
     assert handler_cls is not None
-    # The client satisfies the whole public surface structurally.
     for method in ("create_campaign", "add_short_link", "deactivate_short_link", "get_campaign"):
         assert callable(getattr(client, method))

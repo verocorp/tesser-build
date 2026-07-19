@@ -1,7 +1,3 @@
-"""Public contract for the link-campaign component. Re-exports the ``Client``
-Protocol and its DTOs so callers import them from ``linkcampaign`` directly.
-"""
-
 from linkcampaign.client import (
     AddShortLinkRequest,
     AddShortLinkResponse,

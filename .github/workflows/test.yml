@@ -175,3 +175,13 @@ jobs:
         working-directory: .
         env:
           PYTHONPATH: tessercheck-py
+      # Comments-norm gate (TB020, skills/tesser-build/comments.md): the
+      # example trees are production templates and must stay comment- and
+      # docstring-free. examples/python is covered by the full acceptance
+      # gate above; python-app and errorspy gate on TB020 alone (python-app's
+      # remaining TB010 nonconformance is tracked separately).
+      - name: tessercheck-py comments norm on examples/python-app + errorspy (--select TB020)
+        run: python -m tessercheck --select TB020 examples/python-app examples/errorspy
+        working-directory: .
+        env:
+          PYTHONPATH: tessercheck-py

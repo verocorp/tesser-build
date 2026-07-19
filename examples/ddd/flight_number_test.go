@@ -13,13 +13,13 @@ func TestNewFlightNumber_Valid(t *testing.T) {
 
 func TestNewFlightNumber_InvalidRejected(t *testing.T) {
 	invalid := []string{
-		"",        // empty
-		"100",     // missing airline code
-		"AA",      // missing flight digits
-		"aa100",   // lowercase airline code
-		"ABCD100", // airline code too long
-		"AA12345", // too many digits
-		"AA 100",  // internal whitespace
+		"",
+		"100",
+		"AA",
+		"aa100",
+		"ABCD100",
+		"AA12345",
+		"AA 100",
 	}
 	for _, v := range invalid {
 		if _, err := NewFlightNumber(v); err == nil {

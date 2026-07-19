@@ -47,9 +47,6 @@ func TestNewPassenger_InvalidSeatRejected(t *testing.T) {
 	}
 }
 
-// TestPassenger_Equality locks Passenger's identity semantics: same ID is
-// the same passenger regardless of other attributes; different ID is a
-// different passenger even with identical attributes otherwise.
 func TestPassenger_Equality(t *testing.T) {
 	same, err := NewPassenger(PassengerSpec{ID: "PNR-ABC123", Name: "Ada Lovelace", Seat: "12A"})
 	if err != nil {

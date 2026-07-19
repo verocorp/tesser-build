@@ -1,6 +1,3 @@
-"""Cells B1 (repo not_found), B2 (vendor error translated at the adapter), and
-B7 (corrupted record on reconstruction -> infra, not domain validation)."""
-
 from __future__ import annotations
 
 import pytest
@@ -34,7 +31,6 @@ def test_save_then_get_roundtrip() -> None:
 
 
 def test_missing_is_domain_not_found() -> None:
-    # B1: a storage miss becomes a domain not_found, never a StorageError.
     repo = StorageCampaignRepository(FakeStorage())
     with pytest.raises(DomainError) as ei:
         repo.get("nope")
@@ -43,8 +39,6 @@ def test_missing_is_domain_not_found() -> None:
 
 
 def test_outage_is_infra_not_domain() -> None:
-    # B2: a storage outage becomes an InfraError (-> 503), not a domain error,
-    # and nothing StorageError-shaped escapes.
     repo = StorageCampaignRepository(FakeStorage(down=True))
     with pytest.raises(InfraError) as ei:
         repo.get("c1")
@@ -53,8 +47,6 @@ def test_outage_is_infra_not_domain() -> None:
 
 
 def test_corrupted_record_is_infra_not_validation() -> None:
-    # B7: stored data that fails the domain constructor is corruption, surfaced
-    # as infra (-> 500), NOT a domain validation error (the user did not send it).
     storage = FakeStorage()
     storage.put(
         "c1",
@@ -67,6 +59,5 @@ def test_corrupted_record_is_infra_not_validation() -> None:
     with pytest.raises(InfraError) as ei:
         repo.get("c1")
     assert not isinstance(ei.value, DomainError)
-    # the domain validation error is preserved as the cause, but not surfaced as one
     assert isinstance(ei.value.__cause__, DomainError)
     assert ei.value.__cause__.kind is DomainKind.VALIDATION

@@ -1,8 +1,3 @@
-"""In-memory short-link store — the outbound gateway satisfying the application's
-``LinkRepository`` port. ``close()`` makes it a ``lifecycle.Closeable`` so the
-composition root's cleanup stack can tear it down.
-"""
-
 from __future__ import annotations
 
 from campaign.domain.short_link import ShortLink

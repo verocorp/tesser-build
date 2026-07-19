@@ -1,8 +1,3 @@
-"""A tiny runnable demo of the error-norms stack: wire transport -> service ->
-domain -> repo -> storage, then drive a few requests and print each status and
-RFC 9457 body. Run: ``python main.py``.
-"""
-
 from __future__ import annotations
 
 import json

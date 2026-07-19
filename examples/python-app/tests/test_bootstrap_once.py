@@ -1,8 +1,3 @@
-"""Built-once-per-process + idempotent Close. The graph is constructed exactly once
-via ``bootstrap.new``; many client calls reuse it (state persists across calls), and
-``close()`` is safe to call twice.
-"""
-
 from __future__ import annotations
 
 import pytest
@@ -33,7 +28,6 @@ def test_graph_built_once_state_persists_across_calls() -> None:
     try:
         app.campaign.create_link(CreateLinkRequest("a", "https://ok.example/a"))
         app.campaign.create_link(CreateLinkRequest("b", "https://ok.example/b"))
-        # Both persisted in the SAME repo — the graph is not rebuilt per call.
         assert {v.slug for v in app.campaign.list_links()} == {"a", "b"}
     finally:
         app.close()
@@ -51,7 +45,7 @@ def test_constructor_runs_once_across_many_calls(monkeypatch: pytest.MonkeyPatch
     try:
         for _ in range(5):
             app.campaign.list_links()
-        assert calls["n"] == 1  # one construction, reused across calls
+        assert calls["n"] == 1
     finally:
         app.close()
 
@@ -59,4 +53,4 @@ def test_constructor_runs_once_across_many_calls(monkeypatch: pytest.MonkeyPatch
 def test_close_is_idempotent() -> None:
     app = _mem()
     app.close()
-    app.close()  # no error on a second close
+    app.close()

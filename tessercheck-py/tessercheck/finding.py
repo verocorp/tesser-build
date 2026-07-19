@@ -96,6 +96,15 @@ CHECKS: tuple[CheckMeta, ...] = (
         "an entity defines __eq__ and __hash__ together (by ID); an aggregate "
         "root blocks accidental equality (__eq__ = None / __hash__ = None)",
     ),
+    CheckMeta(
+        "TB020",
+        "no-comments",
+        "the comments norm v0: no code comments and no docstrings — machine "
+        "directives (shebang, coding, type: ignore, noqa, tessercheck:ignore, "
+        "tb-* markers, pragma, formatter/linter controls) are exempt; "
+        "carve-outs are added only from discovered evidence "
+        "(skills/tesser-build/comments.md)",
+    ),
 )
 
 

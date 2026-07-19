@@ -81,8 +81,6 @@ func TestNewLoan_ReturnDateBeforeCheckoutRejected(t *testing.T) {
 	}
 }
 
-// TestNewLoan_ReconstructReturnedLoan proves a repository can reconstruct
-// an already-returned loan through the same single constructor.
 func TestNewLoan_ReconstructReturnedLoan(t *testing.T) {
 	spec := validLoanSpec()
 	spec.Returned = true
@@ -100,9 +98,6 @@ func TestNewLoan_ReconstructReturnedLoan(t *testing.T) {
 	}
 }
 
-// TestLoan_Equality locks Loan's identity semantics: same ID is the same
-// loan regardless of other attributes; different ID is a different loan
-// even with identical attributes otherwise.
 func TestLoan_Equality(t *testing.T) {
 	same, err := NewLoan(LoanSpec{ID: "loan-1", BookID: "book-1", CheckoutDate: day(2026, time.January, 1)})
 	if err != nil {
@@ -171,7 +166,7 @@ func TestLoan_Return_RejectsBeforeCheckoutDate(t *testing.T) {
 }
 
 func TestLoan_IsOverdueAsOf(t *testing.T) {
-	l, err := NewLoan(validLoanSpec()) // due 2026-01-15
+	l, err := NewLoan(validLoanSpec())
 	if err != nil {
 		t.Fatalf("NewLoan returned unexpected error: %v", err)
 	}
@@ -196,7 +191,7 @@ func TestLoan_IsOverdueAsOf_ReturnedLoanNeverOverdue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewLoan returned unexpected error: %v", err)
 	}
-	if err := l.Return(day(2026, time.January, 20)); err != nil { // returned 5 days late
+	if err := l.Return(day(2026, time.January, 20)); err != nil {
 		t.Fatalf("Return returned unexpected error: %v", err)
 	}
 	if l.IsOverdueAsOf(day(2026, time.June, 1)) {
@@ -205,7 +200,7 @@ func TestLoan_IsOverdueAsOf_ReturnedLoanNeverOverdue(t *testing.T) {
 }
 
 func TestLoan_DaysOverdueAsOf(t *testing.T) {
-	l, err := NewLoan(validLoanSpec()) // due 2026-01-15
+	l, err := NewLoan(validLoanSpec())
 	if err != nil {
 		t.Fatalf("NewLoan returned unexpected error: %v", err)
 	}
@@ -238,24 +233,22 @@ func TestLoan_LateFeeAsOf_NotOverdue(t *testing.T) {
 }
 
 func TestLoan_LateFeeAsOf_ChargesTwentyFiveCentsPerDayLate(t *testing.T) {
-	l, err := NewLoan(validLoanSpec()) // due 2026-01-15
+	l, err := NewLoan(validLoanSpec())
 	if err != nil {
 		t.Fatalf("NewLoan returned unexpected error: %v", err)
 	}
-	fee := l.LateFeeAsOf(day(2026, time.January, 19)) // 4 days late
+	fee := l.LateFeeAsOf(day(2026, time.January, 19))
 	if want := MustNewMoney(100); fee != want {
 		t.Errorf("LateFeeAsOf(4 days late) = %s, want %s", fee, want)
 	}
 }
 
-// TestLoan_LateFeeAsOf_FrozenAtReturn proves a returned loan's fee is
-// fixed at the moment it came back, not affected by a later asOf.
 func TestLoan_LateFeeAsOf_FrozenAtReturn(t *testing.T) {
-	l, err := NewLoan(validLoanSpec()) // due 2026-01-15
+	l, err := NewLoan(validLoanSpec())
 	if err != nil {
 		t.Fatalf("NewLoan returned unexpected error: %v", err)
 	}
-	if err := l.Return(day(2026, time.January, 19)); err != nil { // 4 days late
+	if err := l.Return(day(2026, time.January, 19)); err != nil {
 		t.Fatalf("Return returned unexpected error: %v", err)
 	}
 	want := MustNewMoney(100)

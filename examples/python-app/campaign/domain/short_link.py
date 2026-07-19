@@ -1,8 +1,3 @@
-"""The ``ShortLink`` entity — the campaign context's aggregate root. Identity is
-its ``Slug``; it carries a validated ``TargetURL`` and an active flag, and it is
-the unit the repository persists.
-"""
-
 from __future__ import annotations
 
 from campaign.domain.values import Slug, TargetURL

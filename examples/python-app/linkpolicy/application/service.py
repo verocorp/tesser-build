@@ -1,10 +1,3 @@
-"""The linkpolicy application service: convert -> delegate -> persist -> respond.
-
-It satisfies ``linkpolicy.Client`` structurally (same four... two methods, same
-DTOs), so ``wiring`` can return it directly as the public Client. The repository
-port is declared HERE, beside its only consumer.
-"""
-
 from __future__ import annotations
 
 from typing import Protocol
@@ -14,8 +7,6 @@ from linkpolicy.domain.policy import Policy, Verdict
 
 
 class VerdictRepository(Protocol):
-    """Outbound port owned by the application, satisfied by an adapter in
-    ``adapters/gateways``."""
 
     def record(self, verdict: Verdict) -> None: ...
 
@@ -29,7 +20,7 @@ class LinkPolicyService:
 
     def check(self, req: CheckRequest) -> CheckResponse:
         verdict = self._policy.evaluate(req.target_url)
-        self._repo.record(verdict)  # an InfraError here propagates (fail-closed for the caller)
+        self._repo.record(verdict)
         return CheckResponse(allowed=verdict.allowed, reason=verdict.reason)
 
     def list_verdicts(self) -> tuple[VerdictView, ...]:

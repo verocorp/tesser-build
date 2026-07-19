@@ -1,12 +1,3 @@
-"""linkpolicy's construction: pick the repo from the coordinate, compose the
-service behind the public ``Client``, and hand back the closeable so the
-composition root can register it on its cleanup stack.
-
-Coordinate-driven impl selection (decision 8, illustrated): ``storage == "memory"``
-builds the in-memory repo; an ABSENT coordinate is an ERROR, never a silent fall
-into volatile storage. A real service would map a DSN scheme to a SQL repo here.
-"""
-
 from __future__ import annotations
 
 from errors import invalid
@@ -28,7 +19,6 @@ def repo_for(cfg: Config) -> tuple[VerdictRepository, Closeable]:
 
 
 def build(cfg: Config) -> tuple[Client, Closeable]:
-    """Return the public ``Client`` and the closeable resource behind it."""
     repo, closeable = repo_for(cfg)
     service = LinkPolicyService(repo, Policy.default())
     return service, closeable

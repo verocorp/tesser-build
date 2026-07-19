@@ -1,13 +1,3 @@
-"""The reports application service: fetch from both peers, translate their DTOs
-into the domain's vocabulary, delegate the join to the domain, respond with the
-public DTOs. It satisfies ``reports.Client`` structurally, so ``wiring`` can
-return it directly as the public Client.
-
-reports reaches its peers only through their public ``Client``s, injected by
-the composition root — it never constructs a peer. That is why this context
-needs no adapters of its own (OQ5 ruling: adapters are optional).
-"""
-
 from __future__ import annotations
 
 import campaign

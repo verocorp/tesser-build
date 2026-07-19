@@ -1,9 +1,3 @@
-// Package transport is the HTTP transport layer for the link-campaign
-// service. Each handler method parses the request, then calls exactly one
-// linkcampaign.Client method — the one handler rule: no domain math, no
-// repository. It depends on the linkcampaign.Client interface only, never
-// on a concrete application service or repository.
-//
 // tb-cell: handlers go-example 🟡 -- v3 transport/ shape; adapters/handlers layout pending the Go mirror
 package transport
 
@@ -14,14 +8,11 @@ import (
 	"github.com/verocorp/tesser-build/examples/running/linkcampaign"
 )
 
-// Handler routes the link-campaign HTTP endpoints to a linkcampaign.Client,
-// injected through this constructor — the handler constructs nothing.
 type Handler struct {
 	client linkcampaign.Client
 	mux    *http.ServeMux
 }
 
-// NewHandler constructs a Handler wired to client.
 func NewHandler(client linkcampaign.Client) *Handler {
 	h := &Handler{client: client, mux: http.NewServeMux()}
 	h.mux.HandleFunc("POST /campaigns", h.createCampaign)
@@ -35,7 +26,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.mux.ServeHTTP(w, r)
 }
 
-// createCampaign backs "create a new campaign".
 func (h *Handler) createCampaign(w http.ResponseWriter, r *http.Request) {
 	var req linkcampaign.CreateCampaignRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -50,7 +40,6 @@ func (h *Handler) createCampaign(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, resp)
 }
 
-// getCampaign backs "fetch a campaign and its links for display".
 func (h *Handler) getCampaign(w http.ResponseWriter, r *http.Request) {
 	req := linkcampaign.GetCampaignRequest{CampaignID: r.PathValue("id")}
 	resp, err := h.client.GetCampaign(r.Context(), req)
@@ -61,7 +50,6 @@ func (h *Handler) getCampaign(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// addShortLink backs "add a short link to an existing campaign".
 func (h *Handler) addShortLink(w http.ResponseWriter, r *http.Request) {
 	var body linkcampaign.ShortLinkInput
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -81,7 +69,6 @@ func (h *Handler) addShortLink(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// deactivateShortLink backs "deactivate a short link in a campaign".
 func (h *Handler) deactivateShortLink(w http.ResponseWriter, r *http.Request) {
 	req := linkcampaign.DeactivateShortLinkRequest{
 		CampaignID: r.PathValue("id"),

@@ -9,9 +9,6 @@ import (
 	"github.com/verocorp/tesser-build/examples/running/linkcampaign"
 )
 
-// fakeCampaignRepository is a minimal, test-only CampaignRepository — the
-// service depends on the interface, so a test may substitute its own
-// implementation without touching the service under test.
 type fakeCampaignRepository struct {
 	campaigns map[string]campaign.Campaign
 }
@@ -60,7 +57,7 @@ func TestCampaignService_CreateCampaign_RejectionPropagates(t *testing.T) {
 	svc := NewCampaignService(newFakeCampaignRepository())
 
 	_, err := svc.CreateCampaign(context.Background(), linkcampaign.CreateCampaignRequest{
-		Name: "", // invalid: campaign name must not be empty
+		Name: "",
 	})
 	if err == nil {
 		t.Fatal("expected the domain constructor's rejection to propagate")
@@ -88,8 +85,6 @@ func TestCampaignService_AddShortLink(t *testing.T) {
 		t.Fatalf("expected 1 link after add, got %d", len(resp.Links))
 	}
 
-	// Adding a duplicate slug must fail — the rejection from the
-	// aggregate's guarded transition, propagated by the service.
 	_, err = svc.AddShortLink(context.Background(), linkcampaign.AddShortLinkRequest{
 		CampaignID: created.CampaignID,
 		Slug:       "spring-sale",
@@ -125,8 +120,6 @@ func TestCampaignService_DeactivateShortLink(t *testing.T) {
 		t.Error("expected the short link to be inactive after deactivation")
 	}
 
-	// Deactivating again must fail — the entity's guarded transition
-	// rejects it, and the service propagates that rejection.
 	if _, err := svc.DeactivateShortLink(context.Background(), linkcampaign.DeactivateShortLinkRequest{
 		CampaignID: created.CampaignID,
 		Slug:       "spring-sale",

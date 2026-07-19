@@ -1,13 +1,3 @@
-"""Inbound HTTP handler for the campaign context (transport layer 1): translate
-wire (JSON) <-> the public ``Client`` DTOs, one ``Client`` call per endpoint, and
-map errors to a status. The wire/JSON shape is NOT the context's contract — it is
-translated to/from ``Client`` DTOs here, so a JSON change never reaches the domain.
-
-Error mapping goes through the pure ``errors.status_for``; an ``InfraError`` (e.g.
-a linkpolicy outage that failed the vetting call) becomes 503, which is how the
-fail-closed cross-context call surfaces to the client.
-"""
-
 from __future__ import annotations
 
 import json
@@ -21,7 +11,7 @@ JSONObject = dict[str, object]
 
 
 class BadRequest(Exception):
-    """A transport-level failure (unparseable/wrong-shape request) -> 400."""
+    pass
 
 
 @dataclass(frozen=True)

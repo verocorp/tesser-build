@@ -1,7 +1,3 @@
-"""End-to-end: drive the whole stack (transport -> service -> domain -> repo ->
-storage) and confirm every status the boundary can emit is reachable through the
-real handler, each carrying an RFC 9457 body."""
-
 from __future__ import annotations
 
 import json
@@ -44,7 +40,6 @@ def test_every_status_is_reachable_with_a_problem_body() -> None:
     h.create_campaign("c1", _CREATE)
 
     seen: dict[int, str] = {}
-    # 201 create, 200 get already exercised above; here the error statuses:
     seen[400] = str(h.create_campaign("c2", "{bad").body["type"])
     seen[404] = str(h.get_campaign("missing").body["type"])
     seen[409] = str(
@@ -57,7 +52,6 @@ def test_every_status_is_reachable_with_a_problem_body() -> None:
     seen[503] = str(down.get_campaign("c1").body["type"])
 
     assert set(seen) == {400, 404, 409, 422, 503}
-    # every error response carried an RFC 9457 problem `type`
     assert all(t.startswith("/problems/") for t in seen.values())
 
 

@@ -3,8 +3,7 @@ package catalog
 import "testing"
 
 func TestMoney_EqualityAcrossRepresentations(t *testing.T) {
-	// The whole reason Money needs Equal: 1.5 and 1.50 are the same amount but
-	// not the same *big.Rat pointer, so == would lie. Equal compares by value.
+
 	a := MustNewMoney(MoneySpec{Amount: "1.5", Currency: "USD"})
 	b := MustNewMoney(MoneySpec{Amount: "1.50", Currency: "USD"})
 	if !a.Equal(b) {
@@ -54,7 +53,7 @@ func TestMoney_AddRejectsCurrencyMismatch(t *testing.T) {
 }
 
 func TestMoney_String(t *testing.T) {
-	// Display only — never an equality path.
+
 	m := MustNewMoney(MoneySpec{Amount: "1.5", Currency: "USD"})
 	if got := m.String(); got != "1.50 USD" {
 		t.Errorf("String() = %q, want %q", got, "1.50 USD")

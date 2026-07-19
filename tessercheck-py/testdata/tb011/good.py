@@ -1,20 +1,11 @@
-"""An aggregate that copies its collection out on access — TB011 clean.
-
-``Roster`` is an entity (identity equality by id, not by value). It owns a list
-of members and its accessor returns a *copy* (``list(self._members)``), so a
-caller mutating the returned list cannot reach into the aggregate's internals —
-every real change goes through the root-guarded ``add`` transition.
-"""
-
-
 class Roster:
     def __init__(self, id: str, members: list[str]) -> None:
         self._id = id
-        self._members = list(members)  # own your copy
+        self._members = list(members)
 
     @property
     def members(self) -> list[str]:
-        return list(self._members)  # defensive copy out
+        return list(self._members)
 
     def add(self, member: str) -> None:
         self._members = [*self._members, member]

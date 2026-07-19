@@ -3,9 +3,6 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class TargetURL:
-    """The URL a ShortLink redirects to. Simple, single-value value object:
-    one field, native equality (one representation per value).
-    """
 
     _value: str
 

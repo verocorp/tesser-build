@@ -60,29 +60,22 @@ class TestCampaignTransitions:
 def test_links_accessor_is_a_defensive_copy() -> None:
     c = Campaign(_spec("spring-sale"))
     links = c.links
-    assert isinstance(links, tuple)  # callers can't mutate the root's collection
-    # Mutating the returned children does not change the campaign's own count.
+    assert isinstance(links, tuple)
     c.add_short_link(_link("autumn-sale"))
     assert len(links) == 1
     assert len(c.links) == 2
 
 
 def test_links_accessor_does_not_leak_mutable_children() -> None:
-    # The container is copied AND so are the mutable child entities: calling a
-    # mutating method on a returned link must not reach the aggregate's own
-    # state. Deactivation only happens through the root's guarded transition.
     c = Campaign(_spec("spring-sale"))
-    c.links[0].deactivate()  # try to mutate a returned child directly
-    assert c.links[0].active is True  # the aggregate's own state is untouched
+    c.links[0].deactivate()
+    assert c.links[0].active is True
 
 
 def test_aggregates_are_not_value_compared() -> None:
-    # Comparing aggregates by value is a bug; __eq__ = None makes it raise.
     a = Campaign(_spec("spring-sale"))
     b = Campaign(_spec("spring-sale"))
     with pytest.raises(TypeError):
-        # mypy also rejects this statically ("None not callable"), so the ignore
-        # documents that the comparison is deliberately exercised for its raise.
         _ = a == b  # type: ignore[misc]
     with pytest.raises(TypeError):
-        hash(a)  # and unhashable, so it can't be a dict key / set member
+        hash(a)

@@ -1,8 +1,3 @@
-"""Partial-construction cleanup. The CleanupStack closes in reverse and keeps going
-even when a close itself raises (covering the hard cases, not just a happy-path
-counter); and ``bootstrap.new`` closes what it already built when a later dep fails.
-"""
-
 from __future__ import annotations
 
 import pytest
@@ -43,8 +38,8 @@ def test_stack_closes_reverse_order_and_all_despite_error() -> None:
     for r in (a, b, c):
         stack.push(r)
     errors = stack.close_all()
-    assert order == ["c", "b", "a"]  # reverse of construction
-    assert a.closed and b.closed and c.closed  # a leaky close (b) does not orphan a
+    assert order == ["c", "b", "a"]
+    assert a.closed and b.closed and c.closed
     assert len(errors) == 1
 
 
@@ -65,7 +60,6 @@ def test_new_closes_already_built_deps_on_partial_failure(monkeypatch: pytest.Mo
 
     monkeypatch.setattr(linkpolicy_wire, "build", fake_build)
 
-    # linkpolicy builds (spy pushed), then campaign fails on its absent coordinate.
     with pytest.raises(DomainError):
         new(
             Config(
@@ -83,8 +77,6 @@ class _DummyReports:
 
 
 def test_reports_closeable_is_on_the_cleanup_stack(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Mirrored sibling guarantee: reports' closeable joins the stack like any
-    # other context's, and App.close() reaches it.
     order: list[str] = []
     spy = _Spy("reports", order)
 

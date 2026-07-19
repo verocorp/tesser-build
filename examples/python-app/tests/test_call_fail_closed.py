@@ -1,8 +1,3 @@
-"""Moment 1 — the synchronous, fail-closed cross-context call. A policy rejection
-becomes a domain conflict and creates nothing; a checker outage propagates as an
-InfraError and creates nothing. Only an allowed verdict creates the link.
-"""
-
 from __future__ import annotations
 
 import pytest

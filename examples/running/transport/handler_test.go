@@ -13,9 +13,6 @@ import (
 	"github.com/verocorp/tesser-build/examples/running/transport"
 )
 
-// newTestHandler wires a real Client (in-memory repo + application service)
-// behind the Handler, the same way the composition root does, so this
-// test exercises the handler against real wiring rather than a mock.
 func newTestHandler() *transport.Handler {
 	repo := linkcampaignimpl.NewInMemoryCampaignRepository()
 	svc := campaignapp.NewCampaignService(repo)

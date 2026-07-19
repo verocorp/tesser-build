@@ -1,14 +1,3 @@
-"""campaign's construction: pick the repo from the coordinate, compose the service
-behind the public ``Client`` with the injected ``TargetChecker``, and hand back the
-closeable.
-
-``build`` takes the ``TargetChecker`` as a parameter — campaign does not build its
-own cross-context adapter; the composition root constructs
-``LinkPolicyTargetChecker`` (wrapping ``linkpolicy.Client``) and injects it here.
-Coordinate-driven impl selection with a fail-fast on an absent coordinate (never a
-silent fall into memory).
-"""
-
 from __future__ import annotations
 
 from campaign.adapters.gateways.repo_memory import InMemoryLinkRepository

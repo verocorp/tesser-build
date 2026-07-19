@@ -8,10 +8,6 @@ def _money(amount: str, currency: str = "USD") -> Money:
 
 
 def test_equality_across_representations() -> None:
-    # The point of the Decimal example: 1.5 and 1.50 are the same amount, and
-    # the frozen dataclass's DEFAULT equality is already correct — but the
-    # equality test must lock BOTH == and hash, since the field has multiple
-    # representations.
     a = _money("1.5")
     b = _money("1.50")
     assert a == b

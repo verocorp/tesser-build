@@ -37,7 +37,6 @@ func TestProduct_RejectsInvalidChild(t *testing.T) {
 func TestProduct_EqualityIsIdentity(t *testing.T) {
 	a, _ := NewProduct(validProductSpec())
 
-	// Same SKU, different price/labels -> still the same product.
 	other := validProductSpec()
 	other.Price = MoneySpec{Amount: "29.99", Currency: "USD"}
 	other.Labels = map[string]string{"color": "white"}
@@ -46,7 +45,6 @@ func TestProduct_EqualityIsIdentity(t *testing.T) {
 		t.Errorf("products with the same SKU should be equal by identity")
 	}
 
-	// Different SKU -> different product.
 	diff := validProductSpec()
 	diff.SKU = "TSHIRT-WHT-L"
 	c, _ := NewProduct(diff)

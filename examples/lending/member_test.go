@@ -46,9 +46,6 @@ func TestNewMember_InvalidLoanRejected(t *testing.T) {
 	}
 }
 
-// TestNewMember_TooManyActiveLoansRejected is the aggregate's reason to
-// exist: a member reconstructed with more than 3 active loans must be
-// rejected by the constructor.
 func TestNewMember_TooManyActiveLoansRejected(t *testing.T) {
 	spec := MemberSpec{
 		ID: "member-1",
@@ -64,8 +61,6 @@ func TestNewMember_TooManyActiveLoansRejected(t *testing.T) {
 	}
 }
 
-// TestNewMember_ReturnedLoansDontCountTowardTheLimit proves the limit is
-// on active loans, not total loan history.
 func TestNewMember_ReturnedLoansDontCountTowardTheLimit(t *testing.T) {
 	spec := MemberSpec{
 		ID: "member-1",
@@ -82,8 +77,6 @@ func TestNewMember_ReturnedLoansDontCountTowardTheLimit(t *testing.T) {
 	}
 }
 
-// TestMember_Loans_DefensiveCopy mutates the slice returned by Loans() and
-// asserts the member itself is unaffected.
 func TestMember_Loans_DefensiveCopy(t *testing.T) {
 	m, err := NewMember(validMemberSpec())
 	if err != nil {
@@ -98,8 +91,6 @@ func TestMember_Loans_DefensiveCopy(t *testing.T) {
 	}
 }
 
-// TestMember_Equality_Blocked asserts native `==` on Member does not
-// compile-time compare by value; the aggregate is not comparable.
 func TestMember_Equality_Blocked(t *testing.T) {
 	if reflect.TypeFor[Member]().Comparable() {
 		t.Fatal("Member must be non-comparable")
@@ -124,10 +115,6 @@ func TestMember_CheckOut_Succeeds(t *testing.T) {
 	}
 }
 
-// TestMember_CheckOut_RejectsFourthBook is the aggregate's reason to
-// exist, exercised through its transition: a member who already has 3
-// books on loan cannot check out a 4th, and the attempt leaves the member
-// unchanged.
 func TestMember_CheckOut_RejectsFourthBook(t *testing.T) {
 	m, err := NewMember(MemberSpec{ID: "member-1"})
 	if err != nil {
@@ -148,8 +135,6 @@ func TestMember_CheckOut_RejectsFourthBook(t *testing.T) {
 	}
 }
 
-// TestMember_CheckOut_AllowsAnotherAfterReturn proves the limit is on
-// active loans: returning one of 3 frees a slot for a new checkout.
 func TestMember_CheckOut_AllowsAnotherAfterReturn(t *testing.T) {
 	m, err := NewMember(MemberSpec{ID: "member-1"})
 	if err != nil {
@@ -181,7 +166,7 @@ func TestMember_Return_Succeeds(t *testing.T) {
 		t.Fatalf("CheckOut returned unexpected error: %v", err)
 	}
 
-	returnDate := day(2026, time.January, 19) // due 1/15, 4 days late
+	returnDate := day(2026, time.January, 19)
 	fee, err := m.Return(MustNewBookID("book-1"), returnDate)
 	if err != nil {
 		t.Fatalf("Return returned unexpected error: %v", err)
@@ -222,9 +207,9 @@ func TestMember_TotalLateFees_SumsOverdueLoans(t *testing.T) {
 	spec := MemberSpec{
 		ID: "member-1",
 		Loans: []LoanSpec{
-			// due 2026-01-15, 4 days overdue as of 2026-01-19 -> $1.00
+
 			{ID: "loan-1", BookID: "book-1", CheckoutDate: day(2026, time.January, 1)},
-			// due 2026-01-15, 2 days overdue as of 2026-01-19 (checked out later) -> $0.50
+
 			{ID: "loan-2", BookID: "book-2", CheckoutDate: day(2026, time.January, 3)},
 		},
 	}
@@ -242,9 +227,9 @@ func TestMember_TotalLateFees_ExcludesReturnedLoans(t *testing.T) {
 	spec := MemberSpec{
 		ID: "member-1",
 		Loans: []LoanSpec{
-			// returned late, but settled — must not count toward what's currently owed
+
 			{ID: "loan-1", BookID: "book-1", CheckoutDate: day(2026, time.January, 1), Returned: true, ReturnDate: day(2026, time.January, 19)},
-			// still outstanding and overdue
+
 			{ID: "loan-2", BookID: "book-2", CheckoutDate: day(2026, time.January, 1)},
 		},
 	}
@@ -253,13 +238,13 @@ func TestMember_TotalLateFees_ExcludesReturnedLoans(t *testing.T) {
 		t.Fatalf("NewMember returned unexpected error: %v", err)
 	}
 	got := m.TotalLateFees(day(2026, time.January, 19))
-	if want := MustNewMoney(100); got != want { // only loan-2's $1.00
+	if want := MustNewMoney(100); got != want {
 		t.Errorf("TotalLateFees = %s, want %s (returned loan-1 must be excluded)", got, want)
 	}
 }
 
 func TestMember_TotalLateFees_ZeroWhenNoneOverdue(t *testing.T) {
-	m, err := NewMember(validMemberSpec()) // checked out 2026-01-01, due 2026-01-15
+	m, err := NewMember(validMemberSpec())
 	if err != nil {
 		t.Fatalf("NewMember returned unexpected error: %v", err)
 	}

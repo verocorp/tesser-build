@@ -8,9 +8,6 @@ import (
 	"github.com/verocorp/tesser-build/examples/running/linkcampaign"
 )
 
-// TestNewClient_WiresEndToEnd demonstrates the wiring point: a real
-// CampaignService, composed behind the public linkcampaign.Client via
-// NewClient, runs a real use case against the in-memory repository.
 func TestNewClient_WiresEndToEnd(t *testing.T) {
 	repo := NewInMemoryCampaignRepository()
 	svc := campaignapp.NewCampaignService(repo)

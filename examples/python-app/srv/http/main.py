@@ -1,13 +1,3 @@
-"""The HTTP host (delivery mechanism 1). It is the env edge: ``main`` populates
-the spec-shaped ``Config`` directly with ``os.getenv`` calls (including its own
-launch config, the listen addr) and hands it to ``bootstrap.new`` ONCE, which
-validates fail-fast. It mounts the contexts' inbound handlers + the in-process
-reports read, and serves. It is the only exiter.
-
-A real service would resolve secret *references* (Vault/AWS/GCP) here too; that
-launch-time loader is a legitimate host-side concern, deliberately not built.
-"""
-
 from __future__ import annotations
 
 import json
@@ -24,8 +14,6 @@ from reports.wiring.config import Config as ReportsConfig
 
 
 def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
-    """Mount the app's handlers on an HTTP server. Built from a single ``App`` —
-    the graph is not reconstructed per request."""
     campaign_handler = Handler(app.campaign)
     reports = app.reports
 
@@ -36,7 +24,7 @@ def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
                 return
             length = int(self.headers.get("Content-Length") or "0")
             raw = self.rfile.read(length).decode("utf-8")
-            self._send(campaign_handler.create_link(raw))  # Moment 1 fires here (vet -> create)
+            self._send(campaign_handler.create_link(raw))
 
         def do_GET(self) -> None:
             if self.path != "/reports/links-by-verdict":
@@ -44,11 +32,11 @@ def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
                 return
             rows = [
                 {"slug": r.slug, "target_url": r.target_url, "allowed": r.allowed, "reason": r.reason}
-                for r in reports.links_by_verdict()  # Moment 2: in-process cross-context read
+                for r in reports.links_by_verdict()
             ]
             self._send(Response(200, {"links": rows}))
 
-        def log_message(self, format: str, *args: Any) -> None:  # quiet in the example
+        def log_message(self, format: str, *args: Any) -> None:
             return
 
         def _send(self, resp: Response) -> None:
@@ -63,15 +51,13 @@ def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
 
 
 def main() -> None:
-    # The host is the env edge: a missing coordinate stays empty and
-    # bootstrap.new fails fast on it — it never defaults to volatile storage.
     cfg = Config(
         campaign=CampaignConfig(storage=os.getenv("CAMPAIGN_STORAGE") or ""),
         linkpolicy=LinkPolicyConfig(storage=os.getenv("LINKPOLICY_STORAGE") or ""),
         reports=ReportsConfig(),
     )
-    app = new(cfg)  # graph built once per process
-    host = os.getenv("HTTP_HOST") or ""  # the host's OWN launch config, same edge
+    app = new(cfg)
+    host = os.getenv("HTTP_HOST") or ""
     port = int(os.getenv("HTTP_PORT") or "8080")
     server = make_server((host, port), app)
     print(f"campaign+linkpolicy app listening on {host or '0.0.0.0'}:{port}")  # noqa: T201

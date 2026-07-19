@@ -6,8 +6,6 @@ import (
 	"testing"
 )
 
-// testSlug returns a distinct, valid slug for index i — used to fill a
-// campaign to (and past) its capacity in the tests below.
 func testSlug(i int) string {
 	return fmt.Sprintf("slug-%04d", i)
 }

@@ -13,9 +13,6 @@ from linkcampaign import (
 
 
 class FakeRepo:
-    """A hand-rolled fake that satisfies campaignapp.CampaignRepository
-    structurally (Protocol) — no inheritance. Records saves so the test can
-    assert the service persists the whole aggregate."""
 
     def __init__(self) -> None:
         self.saved: list[Campaign] = []
@@ -54,10 +51,10 @@ def test_create_campaign_constructs_and_persists() -> None:
         )
     )
     assert resp.name == "Spring"
-    assert resp.campaign_id != ""  # the service generated an id
+    assert resp.campaign_id != ""
     assert resp.links[0].slug == "spring-sale"
     assert resp.links[0].active is True
-    assert len(repo.saved) == 1  # persisted the whole aggregate
+    assert len(repo.saved) == 1
 
 
 def test_create_campaign_rejects_invalid_domain_input() -> None:
@@ -83,7 +80,7 @@ def test_add_short_link_loads_transitions_saves() -> None:
     )
     slugs = {v.slug for v in resp.links}
     assert slugs == {"spring-sale", "autumn-sale"}
-    assert len(repo.saved) == 2  # create + add each persisted
+    assert len(repo.saved) == 2
 
 
 def test_deactivate_short_link_reflected_in_response() -> None:
@@ -102,4 +99,4 @@ def test_get_campaign_is_read_only() -> None:
     saved_before = len(repo.saved)
     resp = svc.get_campaign(GetCampaignRequest(campaign_id=cid))
     assert resp.name == "Spring"
-    assert len(repo.saved) == saved_before  # no persist on a read
+    assert len(repo.saved) == saved_before

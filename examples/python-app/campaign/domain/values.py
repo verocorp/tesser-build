@@ -1,12 +1,3 @@
-"""campaign value objects: ``Slug`` and ``TargetURL``. Private-by-convention
-frozen dataclasses with a single validating constructor path (``__post_init__``),
-value equality, and a display ``__str__`` that is never used for equality.
-
-``TargetURL`` validates *well-formedness* only (http/https + a host). Whether a
-well-formed destination is *allowed* is a separate concern owned by the linkpolicy
-context — which is exactly why Moment 1 is a cross-context call.
-"""
-
 from __future__ import annotations
 
 import re

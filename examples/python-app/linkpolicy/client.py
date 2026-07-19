@@ -1,8 +1,3 @@
-"""The public contract for the linkpolicy context — the entire surface callers
-depend on. ``Client`` Protocol + primitive-leaved DTOs only; no domain type
-crosses this boundary.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -22,7 +17,6 @@ class CheckResponse:
 
 @dataclass(frozen=True)
 class VerdictView:
-    """A recorded verdict, primitive-leaved — never a domain object."""
 
     target_url: str
     allowed: bool
@@ -30,7 +24,6 @@ class VerdictView:
 
 
 class Client(Protocol):
-    """The entire public surface of the linkpolicy context."""
 
     def check(self, req: CheckRequest) -> CheckResponse: ...
 

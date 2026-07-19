@@ -1,13 +1,3 @@
-"""In-memory verdict store — the outbound gateway satisfying the application's
-``VerdictRepository`` port. ``close()`` makes it a ``lifecycle.Closeable`` (a
-no-op here; a real SQL repo would close its pool), so the composition root's
-cleanup stack can tear it down.
-
-``down`` forces the outage path so a test can exercise the caller's fail-closed
-behavior: ``record`` raises an ``InfraError`` (the vendor-shaped failure a real
-driver would surface), which propagates out through ``linkpolicy.Client``.
-"""
-
 from __future__ import annotations
 
 from errors import InfraError
