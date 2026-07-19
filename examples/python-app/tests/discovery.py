@@ -9,9 +9,10 @@ or a Client-bearing context; anything else is "unclassified" and fails, so a
 context that forgot its ``Client`` (the ``reports/`` defect class) cannot hide
 from the checks by being invisible to them.
 
-This is the porting seam for the later tessercheck generalization: the same
-whole-tree classify-then-check move as ``tessercheck/classify.py``, kept pure over
-``pathlib``/``ast`` so it lifts out unchanged.
+The port landed: ``tessercheck-py/tessercheck/discovery.py`` generalizes this
+(app-level set parameterized, non-Python dirs scoped out); this in-example
+copy stays as the verified impl's own gate, deliberately hardcoded to its
+layout.
 """
 
 from __future__ import annotations

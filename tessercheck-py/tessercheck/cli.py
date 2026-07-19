@@ -1,10 +1,12 @@
 """``python -m tessercheck`` — run the checks over paths, print flake8-style."""
 
 import argparse
+import pathlib
 import sys
 from collections.abc import Sequence
 
 from tessercheck import __version__
+from tessercheck.discovery import APP_LEVEL_PACKAGES, classify_root, totality_errors
 from tessercheck.finding import CHECKS, codes
 from tessercheck.run import run_paths
 
@@ -15,7 +17,12 @@ def _build_parser() -> argparse.ArgumentParser:
         description="DDD conformance analyzer for Python domain code "
         "(see skills/tesser-build/python.md).",
     )
-    p.add_argument("paths", nargs="*", default=["."], help="files or directories (default: .)")
+    p.add_argument(
+        "paths",
+        nargs="*",
+        default=[],
+        help="files or directories (default: --app-root if given, else .)",
+    )
     p.add_argument("--version", action="version", version=f"tessercheck-py {__version__}")
     p.add_argument(
         "--list-checks",
@@ -33,6 +40,23 @@ def _build_parser() -> argparse.ArgumentParser:
         "--ignore",
         metavar="CODES",
         help="comma-separated check codes to skip (applied after --select)",
+    )
+    p.add_argument(
+        "--app-root",
+        metavar="DIR",
+        help="treat DIR as an app root: discover its bounded contexts by their "
+        "Client seam and fail on any root-level package that classifies as "
+        "neither app-level nor context (the totality guard); when no paths "
+        "are given, DIR is also what gets checked. Discovery failures are "
+        "structural errors (exit 2), not findings — --select/--ignore never "
+        "scope them away",
+    )
+    p.add_argument(
+        "--app-level",
+        metavar="NAMES",
+        help="comma-separated package names to treat as app-level plumbing in "
+        f"addition to the template's ({', '.join(sorted(APP_LEVEL_PACKAGES))}); "
+        "requires --app-root — an extension is declared, never inferred",
     )
     return p
 
@@ -66,8 +90,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.ignore is not None:
         ignored = _parse_codes(args.ignore, parser, "--ignore")
 
-    paths: list[str] = args.paths or ["."]
+    if args.app_level is not None and args.app_root is None:
+        parser.error("--app-level requires --app-root")
+    app_root: pathlib.Path | None = None
+    app_level = APP_LEVEL_PACKAGES
+    if args.app_root is not None:
+        app_root = pathlib.Path(args.app_root)
+        if not app_root.is_dir():
+            parser.error(f"--app-root: not a directory: {args.app_root}")
+        if args.app_level is not None:
+            extra = frozenset(n.strip() for n in args.app_level.split(",") if n.strip())
+            if not extra:
+                parser.error("--app-level: no package names given")
+            app_level = APP_LEVEL_PACKAGES | extra
+
+    paths: list[str] = args.paths or ([str(app_root)] if app_root is not None else ["."])
     findings, errors = run_paths(paths)
+    if app_root is not None:
+        errors.extend(totality_errors(app_root, classify_root(app_root, app_level), app_level))
     if selected is not None:
         findings = [f for f in findings if f.code in selected]
     if ignored:

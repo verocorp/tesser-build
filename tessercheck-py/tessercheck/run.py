@@ -12,7 +12,7 @@ from tessercheck.finding import Finding
 # non-conforming fixtures (the Go side excludes its ``testdata`` dirs the same
 # way), so recursion skips it — point the analyzer at a fixture file directly to
 # check it.
-_SKIP_DIRS: frozenset[str] = frozenset(
+SKIP_DIRS: frozenset[str] = frozenset(
     {
         ".git",
         "__pycache__",
@@ -53,7 +53,7 @@ def _iter_py_files(root: str) -> list[str]:
         return [root]
     found: list[str] = []
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
         for name in filenames:
             if name.endswith(".py"):
                 found.append(os.path.join(dirpath, name))
