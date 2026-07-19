@@ -47,7 +47,9 @@ def _build_parser() -> argparse.ArgumentParser:
         help="treat DIR as an app root: discover its bounded contexts by their "
         "Client seam and fail on any root-level package that classifies as "
         "neither app-level nor context (the totality guard); when no paths "
-        "are given, DIR is also what gets checked",
+        "are given, DIR is also what gets checked. Discovery failures are "
+        "structural errors (exit 2), not findings — --select/--ignore never "
+        "scope them away",
     )
     p.add_argument(
         "--app-level",

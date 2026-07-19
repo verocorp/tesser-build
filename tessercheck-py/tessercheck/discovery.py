@@ -28,10 +28,11 @@ layout; assumptions parameterized, not copied):
 """
 
 import ast
+import os
 import pathlib
 from dataclasses import dataclass
 
-from tessercheck.run import _SKIP_DIRS
+from tessercheck.run import SKIP_DIRS
 
 # The template's mandatory app-level top dirs (skills/tesser-build/map.md
 # "App-level, not per-context"), plus the conventional tests dir. Everything
@@ -52,8 +53,12 @@ def exposes_client(pkg_dir: pathlib.Path) -> bool:
 
     True for a ``class Client`` defined in ``__init__.py`` or any
     ``from ... import`` that binds the name ``Client`` (directly or via
-    ``as Client``). Missing or unparsable ``__init__.py`` is False — the
-    caller classifies the package as unclassified, never exempt.
+    ``as Client``) — **as a top-level statement only**. A binding nested in
+    a function, class, or conditional (``if False:``, ``if TYPE_CHECKING:``)
+    is not a public package attribute at runtime and does not count — a
+    dead import cannot smuggle a package past the totality guard. Missing
+    or unparsable ``__init__.py`` is False — the caller classifies the
+    package as unclassified, never exempt.
     """
     init = pkg_dir / "__init__.py"
     if not init.is_file():
@@ -62,7 +67,7 @@ def exposes_client(pkg_dir: pathlib.Path) -> bool:
         tree = ast.parse(init.read_text(encoding="utf-8"))
     except (SyntaxError, ValueError):
         return False
-    for node in ast.walk(tree):
+    for node in tree.body:
         if isinstance(node, ast.ImportFrom):
             if any((alias.asname or alias.name) == "Client" for alias in node.names):
                 return True
@@ -72,12 +77,19 @@ def exposes_client(pkg_dir: pathlib.Path) -> bool:
 
 
 def _is_python_package_dir(path: pathlib.Path) -> bool:
-    """Contract: a root-level dir participates when it holds any ``.py`` file."""
-    return any(
-        p.suffix == ".py"
-        for p in path.rglob("*.py")
-        if not any(part in _SKIP_DIRS or part.startswith(".") for part in p.parts)
-    )
+    """Contract: a root-level dir participates when it holds any ``.py`` file.
+
+    Walks with skip-dir *pruning* (never descending into skipped/hidden
+    subtrees) and stops at the first hit, so a giant vendored tree inside a
+    root-level dir costs nothing. Only components *below* ``path`` are
+    judged — an absolute path whose ancestors contain hidden dirs (e.g. a
+    checkout under ``.claude/worktrees/``) must not disqualify the tree.
+    """
+    for _dirpath, dirnames, filenames in os.walk(path):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
+        if any(n.endswith(".py") for n in filenames):
+            return True
+    return False
 
 
 def classify_root(
@@ -93,7 +105,7 @@ def classify_root(
     contexts: list[str] = []
     unclassified: list[str] = []
     for path in sorted(root.iterdir()):
-        if not path.is_dir() or path.name.startswith(".") or path.name in _SKIP_DIRS:
+        if not path.is_dir() or path.name.startswith(".") or path.name in SKIP_DIRS:
             continue
         if path.name in app_level:
             continue

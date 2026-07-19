@@ -92,6 +92,84 @@ def test_extended_app_level_set(tmp_path: pathlib.Path) -> None:
     assert classify_root(tmp_path, extended).unclassified == ()
 
 
+def test_dead_conditional_client_binding_does_not_count(tmp_path: pathlib.Path) -> None:
+    """A dead import cannot smuggle a package past the totality guard
+    (cumulative review F2/C1: ast.walk over-matched nested bindings)."""
+    _pkg(tmp_path, "billing", "if False:\n    from billing.client import Client\n")
+    assert not exposes_client(tmp_path / "billing")
+    assert classify_root(tmp_path).unclassified == ("billing",)
+
+
+def test_type_checking_only_import_does_not_count(tmp_path: pathlib.Path) -> None:
+    _pkg(
+        tmp_path,
+        "billing",
+        "from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n"
+        "    from billing.client import Client\n",
+    )
+    assert not exposes_client(tmp_path / "billing")
+
+
+def test_nested_class_client_does_not_count(tmp_path: pathlib.Path) -> None:
+    _pkg(tmp_path, "billing", "class Outer:\n    class Client:\n        pass\n")
+    assert not exposes_client(tmp_path / "billing")
+
+
+def test_absolute_root_under_hidden_ancestor_still_discovers(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Only components BELOW the app root are judged for skipping — an app
+    root checked out under a hidden ancestor (e.g. .claude/worktrees/) must
+    discover normally (cumulative review F1: p.parts included ancestors)."""
+    root = tmp_path / ".hidden" / "app"
+    root.mkdir(parents=True)
+    _pkg(root, "billing", "from billing.client import Client\n")
+    _pkg(root, "reports", '"""forgot its Client"""\n')
+    d = classify_root(root.resolve())
+    assert d.contexts == ("billing",)
+    assert d.unclassified == ("reports",)
+
+
+def test_vendored_tree_inside_root_dir_is_pruned(tmp_path: pathlib.Path) -> None:
+    """A dir whose only Python lives in a skip dir is outside the contract —
+    and the walk prunes rather than enumerating the vendored tree (F3)."""
+    vendored = tmp_path / "frontend" / "node_modules" / "lib"
+    vendored.mkdir(parents=True)
+    (vendored / "index.py").write_text("x = 1\n", encoding="utf-8")
+    d = classify_root(tmp_path)
+    assert d.contexts == () and d.unclassified == ()
+
+
+def test_multiple_packages_classify_sorted(tmp_path: pathlib.Path) -> None:
+    _pkg(tmp_path, "widgets", "from widgets.client import Client\n")
+    _pkg(tmp_path, "billing", "from billing.client import Client\n")
+    _pkg(tmp_path, "reports", "x = 1\n")
+    _pkg(tmp_path, "alerts", "x = 1\n")
+    d = classify_root(tmp_path)
+    assert d.contexts == ("billing", "widgets")
+    assert d.unclassified == ("alerts", "reports")
+
+
+def test_cli_app_root_nonexistent_is_usage_error(tmp_path: pathlib.Path) -> None:
+    with pytest.raises(SystemExit) as exc:
+        main(["--app-root", str(tmp_path / "nope")])
+    assert exc.value.code == 2
+
+
+def test_cli_app_root_file_is_usage_error(tmp_path: pathlib.Path) -> None:
+    f = tmp_path / "afile.py"
+    f.write_text("x = 1\n", encoding="utf-8")
+    with pytest.raises(SystemExit) as exc:
+        main(["--app-root", str(f)])
+    assert exc.value.code == 2
+
+
+def test_cli_app_level_blank_value_is_usage_error(tmp_path: pathlib.Path) -> None:
+    with pytest.raises(SystemExit) as exc:
+        main(["--app-root", str(tmp_path), "--app-level", " , "])
+    assert exc.value.code == 2
+
+
 def test_totality_errors_name_package_and_fix(tmp_path: pathlib.Path) -> None:
     _pkg(tmp_path, "reports", '"""the defect class"""\n')
     errors = totality_errors(tmp_path, classify_root(tmp_path))
