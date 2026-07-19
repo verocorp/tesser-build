@@ -144,11 +144,14 @@ ballgame — a convention applied 90% of the time buys ~0% of the benefit.
 
 ## 12. Where do application services, repositories, and bounded contexts fit?
 
-Application services and repositories are now covered (see #13–#16 and the
-skill's `application-services.md` / `repositories.md`). **Bounded contexts are
-still coming** — the toolkit doesn't yet help you draw context boundaries or map
-between them; model the pieces inside one context with the skill and flag the
-cross-context question for a human.
+All three are covered now. Application services and repositories: see #13–#16
+and the skill's `application-services.md` / `repositories.md`. Bounded
+contexts: `strategic-design.md` covers drawing the boundary (one model, one
+language), `map.md#how-contexts-connect` covers how contexts talk (through the
+`Client` + DTOs, one-way dependencies, fail-closed sync calls —
+`gateway-cross-context.md`), and in Python the contexts are *discovered* by
+their `Client` seam and gated by the totality guard
+(`tessercheck --app-root`).
 
 ## 13. Where does business logic go — the service, or the domain?
 

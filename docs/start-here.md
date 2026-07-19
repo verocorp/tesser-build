@@ -33,9 +33,13 @@ The **seams** around those blocks are now covered too — **application services
 (coordinate a use case, hold no business logic) and **repositories** (the
 persistence boundary), plus a **domain-service stub** for the rare operation
 owned by no single object. Together they answer the placement question — where a
-line of behavior goes — which is where most spaghetti actually forms. Still on
-the roadmap: bounded contexts, the transport/HTTP layer beyond the one handler
-rule, and domain events.
+line of behavior goes — which is where most spaghetti actually forms. The
+**app-level anatomy** is covered too: bounded contexts and strategic design
+(`strategic-design.md`, `map.md`), per-context wiring, the composition root,
+hosts, and handlers (each with a full skill doc, backed by the
+`examples/python-app` template) — plus the **comments norm** (`comments.md`:
+zero comments, enforced in both languages). Still on the roadmap: domain
+events, the vendor/ACL gateway, and the Go mirror of the app-level anatomy.
 
 ## Where everything lives
 
