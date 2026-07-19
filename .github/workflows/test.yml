@@ -164,3 +164,14 @@ jobs:
         working-directory: .
         env:
           PYTHONPATH: tessercheck-py
+      # Discovery acceptance gate on the verified impl: the totality guard
+      # must discover python-app's contexts (campaign, linkpolicy, reports)
+      # with zero configuration. --select TB001 scopes the finding set so
+      # only discovery structure gates here (python-app's remaining TB010
+      # nonconformance is tracked separately); discovery errors exit 2
+      # regardless of --select.
+      - name: tessercheck-py discovery on examples/python-app (--app-root gate)
+        run: python -m tessercheck --app-root examples/python-app --select TB001
+        working-directory: .
+        env:
+          PYTHONPATH: tessercheck-py
