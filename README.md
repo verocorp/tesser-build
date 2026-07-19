@@ -70,6 +70,7 @@ all-or-nothing):
 | `stringer` | A value object has a `String() string` display form. |
 | `primitiveaccessor` | A value object exposes no primitive accessors (`ToString` / `To<builtin>`). |
 | `comparability` | A value object defines `Equal` when `==` is unavailable (slice/map/func field) or unsafe (pointer/interface field). |
+| `comments` | Constructed-app code carries no comments; machine directives (`//go:`, build constraints, `//nolint`, `//line`, cgo preambles, roadmap markers) and generated files are exempt. |
 
 Configuration is a single `.tesser-build.yaml` `exclude:` list at the consumer
 repo root, read by every analyzer: the aggregate/entity types that match the
@@ -82,8 +83,9 @@ per-consumer config. Every repo has its own aggregates.
 The Python analog ([`tessercheck-py/`](tessercheck-py/)): a zero-dependency,
 stdlib-`ast` conformance analyzer for the frozen-dataclass conventions in
 [`skills/tesser-build/python.md`](skills/tesser-build/python.md). Syntactic
-checks (`TB001`–`TB004`) plus classification-aware checks (`TB010`–`TB014`)
-that distinguish value objects from identity objects. Run
+checks (`TB001`–`TB004`), classification-aware checks (`TB010`–`TB014`)
+that distinguish value objects from identity objects, and a zero-comment
+check (`TB020`, no test exemption — the norm covers the whole tree). Run
 `python -m tessercheck path/to/domain`; flake8-style output; suppress a single
 line with a trailing `# tessercheck:ignore`.
 
