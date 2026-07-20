@@ -51,26 +51,24 @@ class DateWindowSpec:
     end: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class DateWindow:
 
     _start: date
     _end: date
 
-    @classmethod
-    def from_spec(cls, spec: DateWindowSpec) -> "DateWindow":
+    def __init__(self, spec: DateWindowSpec) -> None:
         start = _parse_date(spec.start, field="start")
         end = _parse_date(spec.end, field="end")
-        return cls(_start=start, _end=end)
-
-    def __post_init__(self) -> None:
-        if self._start >= self._end:
+        if start >= end:
             raise invalid(
                 "window_order",
-                f"window start {self._start.isoformat()} must be before "
-                f"end {self._end.isoformat()}",
+                f"window start {start.isoformat()} must be before "
+                f"end {end.isoformat()}",
                 field="start",
             )
+        object.__setattr__(self, "_start", start)
+        object.__setattr__(self, "_end", end)
 
     @property
     def start(self) -> date:
@@ -79,9 +77,6 @@ class DateWindow:
     @property
     def end(self) -> date:
         return self._end
-
-    def __str__(self) -> str:
-        return f"[{self._start.isoformat()}, {self._end.isoformat()})"
 
 
 def _parse_date(value: str, *, field: str) -> date:

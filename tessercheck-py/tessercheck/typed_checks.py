@@ -67,12 +67,23 @@ _CONVERSION_DUNDERS: frozenset[str] = frozenset(
     {"__str__", "__int__", "__float__", "__bytes__"}
 )
 
-# Backing type -> its canonical exit. The four native primitives map to their
-# own protocol; the representations *without* a conversion protocol (Decimal,
-# datetime) exit as canonical text under the pinned policies, so their exit is
-# __str__. Backing types outside this table (bool, complex, UUID, Enum, ...)
-# are out of contract: the norm has not ruled on them, so a leaf backed by one
-# is left alone rather than guessed at.
+# Scalar representation types a leaf value object may wrap. Deliberately broader
+# than the ruled canonical exits below: a leaf backed by a scalar the norm has
+# not yet ruled on (``date`` today) is still a *leaf* — its exit is simply out
+# of contract and left unchecked, never mistaken for a structured type. What is
+# NOT here is what makes a single-field class structured: a collection field
+# (``tuple[Label, ...]`` — a collection value object, zero dunders) or a field
+# typed as another domain object.
+_SCALAR_TYPES: frozenset[str] = frozenset(
+    {"str", "int", "float", "bool", "bytes", "complex", "Decimal", "date", "datetime", "time"}
+)
+
+# The subset of scalars with a *ruled* canonical exit. The four native
+# primitives map to their own conversion protocol; the representations without
+# one (Decimal, datetime) exit as canonical text under the pinned policies, so
+# their exit is __str__. A leaf backed by a scalar absent here (``date``, and
+# the never-a-leaf ``bool``/``complex``) has no ruled exit yet — its dunder, if
+# any, is out of contract and left alone rather than guessed at.
 _CANONICAL_EXIT: dict[str, str] = {
     "str": "__str__",
     "int": "__int__",
@@ -95,22 +106,26 @@ def _fields(node: ast.ClassDef) -> list[ast.AnnAssign]:
     ]
 
 
-def _backing_primitive(node: ast.ClassDef) -> str | None:
-    """The backing primitive of a *leaf* value object, or ``None`` if the class
-    is structured.
+def _leaf_backing(node: ast.ClassDef) -> str | None:
+    """The backing scalar of a *leaf* value object, or ``None`` if the class is
+    structured.
 
     A leaf is the mechanically crisp case: exactly one field, annotated with a
-    bare primitive name. Anything else — two or more fields, a field typed as
-    another domain object, a collection field — is structured, and structured
-    types have no primitive exit at all. This is the discriminator the norm's
-    "a leaf has exactly one matching conversion dunder; a structured type has
-    none" contract rests on.
+    bare scalar name. Anything else — two or more fields (a compound), a
+    collection field (a collection value object), a field typed as another
+    domain object — is structured, and structured types have no primitive exit
+    at all. This is the discriminator the norm's "a leaf has exactly one
+    matching conversion dunder; a structured type has none" contract rests on.
+
+    Membership is keyed on :data:`_SCALAR_TYPES`, NOT on the ruled-exit table:
+    a ``date``-backed single field is a leaf even though the norm has not ruled
+    its exit, so its legitimate ``__str__`` is never mistaken for a compound's.
     """
     fields = _fields(node)
     if len(fields) != 1:
         return None
     base = _annotation_base(fields[0].annotation)
-    return base if base in _CANONICAL_EXIT else None
+    return base if base in _SCALAR_TYPES else None
 
 
 def _defined_conversion_dunders(node: ast.ClassDef) -> list[ast.FunctionDef]:
@@ -484,7 +499,7 @@ def _check_public_decompiler(
     if not dunders:
         return findings
 
-    backing = _backing_primitive(node)
+    backing = _leaf_backing(node)
     if node.name in registry and registry[node.name].stereotype is Stereotype.IDENTITY_OBJECT:
         backing = None
 
@@ -499,7 +514,13 @@ def _check_public_decompiler(
             )
         return findings
 
-    expected = _CANONICAL_EXIT[backing]
+    expected = _CANONICAL_EXIT.get(backing)
+    if expected is None:
+        # A leaf backed by a scalar the norm has not ruled (``date``): it IS a
+        # leaf, so it is not the structured-type violation above, but its exit
+        # has no ruled shape to check against — out of contract, left alone.
+        return findings
+
     for fn in dunders:
         if fn.name != expected:
             flag(

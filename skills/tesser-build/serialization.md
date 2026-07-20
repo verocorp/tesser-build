@@ -161,15 +161,19 @@ belongs to the edge, recorded where its golden test lives.
   compound/entity/aggregate** (rule 5's zero-dunder contract), collection
   value objects included. Deeper laundering (locals, helpers, dict-building)
   is declared out of contract — review territory. Leaf-vs-structured is
-  decided mechanically: exactly one field, annotated with a bare backing
-  type, is a leaf; anything else — two or more fields, a field typed as
-  another domain object, a collection field — is structured.
+  decided mechanically: exactly one field annotated with a bare scalar is a
+  leaf; anything else — two or more fields, a collection field, a field typed
+  as another domain object — is structured. A leaf backed by a scalar the
+  norm has not yet ruled an exit for (`date` today) is still a leaf, so its
+  legitimate canonical `__str__` is left alone rather than mistaken for a
+  structured type's dunder.
 - **TB016** (the compound-raw-primitive check) flags rule 5's internal
   half: a multi-field VO holding bare primitives instead of child VOs.
   Backing types the norm has not ruled on (`bool`, `complex`, `UUID`,
-  `Enum`) are out of contract rather than guessed at, and `date`/`datetime`
-  are a known under-reach both checks inherit from TB010's primitive set —
-  `TODOS.md` (representation-type coverage).
+  `Enum`) are out of contract rather than guessed at. `date`/`datetime`/
+  `time` are a deliberate under-reach — the temporal-type ruling that would
+  bring them under TB010/TB016 is a maintainer call (`TODOS.md`), because it
+  widens the consumer-facing accessor ban.
 - The **parts import boundary** (adapters consume parts, not domain types,
   outbound) is a named deferred check; until it ships, rule 7 is
   review-enforced. Honest gap, stated.

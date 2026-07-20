@@ -104,44 +104,39 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   - **Trigger:** a measured performance problem in a real consumer, not
     aesthetics.
 
-- [ ] **Representation types missing from the primitive set** (opened
-  2026-07-20, found while building TB016)
-  - **What:** `typed_checks._PRIMITIVE_TYPES` is `{str, int, float, bool,
-    bytes, complex, Decimal}` — it omits `date`, `datetime`, `time`, `UUID`.
-    Every check keyed on it under-reaches on those types: TB010 does not flag
-    an accessor handing back a raw `date`, and TB016 does not flag a compound
-    holding one. `datetime` is already named in the serialization norm (it has
-    a pinned canonical text policy), so its absence here is an inconsistency,
-    not an open question.
-  - **Measured blast radius (2026-07-20):** adding `date`/`datetime`/`time`
-    leaves `examples/python`, `examples/python-app` and `examples/serdepy`
-    clean and the full tessercheck-py suite green. The entire effect is on
-    `examples/errorspy` — 2 new TB016 + 2 new TB010 findings on `DateWindow`
-    (see the entry below).
-  - **Why not now:** it widens **TB010**, a shipped consumer-facing check with
-    an adoption ratchet — a consumer's `date`-typed accessors would begin
-    failing. That is a norm-strengthening ruling of the same kind as the
-    2026-07-19 accessor-primitive ban, and it belongs to the maintainer, not
-    to a checker-implementation PR. One shared set, one ruling, both checks —
-    divergent per-check primitive sets would be the real smell.
-
-- [ ] **examples/errorspy is not conformant to the serialization norm**
-  (opened 2026-07-20, surfaced by TB015)
-  - **What:** `errorspy/domain/values.py`'s `DateWindow` violates several of
-    the 2026-07-20 rulings at once: a `__str__` on a two-field compound (the
-    zero-dunder contract — TB015 flags this today), a `from_spec` classmethod
-    (closed by the (b)-uniform one-door ruling; TB013 does not reach it
-    because that check is scoped to identity objects), and `start`/`end`
-    accessors handing back raw `date` values (invisible only because of the
-    primitive-set gap above).
-  - **Why CI is still green:** `errorspy` is deliberately gated with
-    `--select TB020` only (the comments norm) — it is the error-norms worked
-    example and was never swept for serialization. Honest gap, stated.
-  - **The real decision:** sweeping it changes what the example *teaches*
-    (`DateWindow` is a vehicle for error propagation, and wrapping its bounds
-    in leaf VOs adds surface unrelated to that lesson). Either sweep it and
-    accept the added surface, or declare it out of the serialization norm's
-    scope in the tree's own README. Not a silent choice either way.
+- [ ] **date/datetime/time as representation types — a maintainer ruling**
+  (opened 2026-07-20, found while building TB015/TB016; MAINTAINER CALL)
+  - **What:** two checker tables decide how the temporal types are treated.
+    `_PRIMITIVE_TYPES` (`{str, int, float, bool, bytes, complex, Decimal}`)
+    drives TB010 (an accessor must not return a raw primitive) and TB016 (a
+    compound must not hold one). `_CANONICAL_EXIT` (`{str, int, float, bytes,
+    Decimal, datetime}`) drives TB015's leaf-exit check. `date` and `time`
+    are in NEITHER; `datetime` is in `_CANONICAL_EXIT` (it has a pinned
+    canonical-text policy in the norm) but NOT `_PRIMITIVE_TYPES`. The result:
+    a compound holding a raw `date`, or an accessor returning one, is not
+    flagged. A third table, `_SCALAR_TYPES`, DOES already list all three — it
+    is the leaf-vs-structured discriminator, deliberately broad so a
+    `date`-backed leaf is never mistaken for a compound (that correctness fix
+    shipped with C1). What is a ruling, not a bug, is whether the temporal
+    types join `_PRIMITIVE_TYPES` + `_CANONICAL_EXIT`.
+  - **The ruling:** should `date`/`datetime`/`time` be representation types the
+    norm requires wrapping — i.e. a compound holding one must give it a child
+    VO (TB016), an accessor must not hand a raw one back (TB010), and a
+    date-backed leaf must exit via `__str__` canonical text (TB015)? They are
+    the same family as `Decimal`/`datetime`, which the norm already covers.
+  - **Measured blast radius (2026-07-20):** adding all three to
+    `_PRIMITIVE_TYPES` leaves `examples/python`, `examples/python-app` and
+    `examples/serdepy` clean and the full suite green — the entire in-repo
+    effect is `examples/errorspy`'s `DateWindow` (2 TB016 + 2 TB010 on its
+    raw-`date` bounds). errorspy is already swept for everything else, so
+    executing the ruling = wrap those two bounds in a `Day` leaf VO
+    (`date`-backed, `__str__` canonical-text exit) + add `date`/`time` to
+    `_CANONICAL_EXIT`, in one change.
+  - **Why the maintainer, not a checker PR:** it widens **TB010**, a shipped
+    consumer-facing check with an `--exclude` adoption ratchet — a consumer's
+    `date`-typed accessor would begin failing. Same class of norm-strengthening
+    ruling as the 2026-07-19 accessor-primitive ban. Do it as its own small
+    ruling + PR (or fold into C2) so the ratchet event is legible in history.
 
 - [ ] **python-app pre-existing error-path test gaps** (opened 2026-07-20,
   PR-B ship review; explicitly NOT that PR's debt)

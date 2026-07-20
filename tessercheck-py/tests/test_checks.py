@@ -708,3 +708,19 @@ def test_tb016_is_suppressible_inline() -> None:
         "    def __post_init__(self) -> None:\n        pass\n"
     )
     assert "TB016" not in _codes(src)
+
+
+def test_tb015_leaf_backed_by_an_unruled_scalar_is_not_mistaken_for_structured() -> None:
+    # A date-backed leaf with its canonical-text exit is a LEAF, not a compound.
+    # date has no ruled canonical exit yet, so its __str__ is out of contract
+    # and left alone — never flagged as a structured-type dunder.
+    src = (
+        "from datetime import date\n"
+        "from dataclasses import dataclass\n"
+        "@dataclass(frozen=True)\n"
+        "class Day:\n"
+        "    _value: date\n"
+        "    def __post_init__(self) -> None:\n        pass\n"
+        "    def __str__(self) -> str:\n        return self._value.isoformat()\n"
+    )
+    assert "TB015" not in _codes(src)
