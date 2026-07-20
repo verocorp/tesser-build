@@ -104,6 +104,28 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   - **Trigger:** a measured performance problem in a real consumer, not
     aesthetics.
 
+- [ ] **python-app pre-existing error-path test gaps** (opened 2026-07-20,
+  PR-B ship review; explicitly NOT that PR's debt)
+  - **What:** two error surfaces in `examples/python-app` have never had
+    tests, predating the parts restructure. (1) The HTTP handler's `_respond`
+    translation matrix — all four branches (`BadRequest`→400,
+    `DomainError`→`status_for(kind)`, `InfraError`→503, bare
+    `Exception`→500) are the boundary that turns domain failure into wire
+    status, and only the first two are now exercised (by the deactivate
+    lifecycle tests). (2) `InMemoryCampaignRepository`'s `down=True`
+    InfraError branch on all four methods — the flag exists solely to make
+    that path testable and nothing calls it.
+  - **Why it matters here:** the anatomy is what consumers adopt, and the
+    error-translation boundary is one of the parts they copy most directly;
+    an untested matrix teaches a matrix nobody checked.
+  - **How:** a `tests/test_error_translation.py` driving each branch through
+    `Handler` with a stub client that raises each error type, plus a
+    `down=True` repo asserting 503 through the handler rather than the raw
+    exception.
+  - **Why not now:** the deactivate fix was scoped to the unreachable-state
+    defect and the negative paths on code that PR introduced; sweeping
+    pre-existing surfaces would have hidden that change inside a larger diff.
+
 - [ ] **Repository read paths / projections — a named norm gap** (opened
   2026-07-20, PR-B outside review)
   - **What:** the serialization norm covers how domain data crosses an edge

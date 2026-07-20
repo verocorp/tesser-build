@@ -9,6 +9,7 @@ from campaign.client import (
     CampaignView,
     Client,
     CreateCampaignRequest,
+    DeactivateLinkRequest,
     GetCampaignRequest,
     ResolveRequest,
 )
@@ -53,6 +54,19 @@ class Handler:
                     campaign_id=_str(body.get("campaign_id")),
                     slug=_str(body.get("slug")),
                     target_url=_str(body.get("target_url")),
+                )
+            )
+            return Response(200, _campaign_body(view))
+
+        return self._respond(run)
+
+    def deactivate_link(self, raw: str) -> Response:
+        def run() -> Response:
+            body = _parse(raw)
+            view = self._client.deactivate_link(
+                DeactivateLinkRequest(
+                    campaign_id=_str(body.get("campaign_id")),
+                    slug=_str(body.get("slug")),
                 )
             )
             return Response(200, _campaign_body(view))

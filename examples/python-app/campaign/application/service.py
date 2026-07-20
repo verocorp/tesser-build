@@ -8,6 +8,7 @@ from campaign.client import (
     AddLinkRequest,
     CampaignView,
     CreateCampaignRequest,
+    DeactivateLinkRequest,
     GetCampaignRequest,
     LinkView,
     ResolveRequest,
@@ -56,6 +57,12 @@ class CampaignService:
         if self._repo.find_by_slug(slug) is not None:
             raise conflict("duplicate_slug", f"slug {req.slug!r} already exists")
         c.add_short_link(ShortLinkSpec(slug=req.slug, target_url=req.target_url, active=True))
+        self._repo.save(c)
+        return _campaign_view(campaign_parts(c))
+
+    def deactivate_link(self, req: DeactivateLinkRequest) -> CampaignView:
+        c = self._find_campaign(CampaignID(req.campaign_id))
+        c.deactivate_short_link(Slug(req.slug))
         self._repo.save(c)
         return _campaign_view(campaign_parts(c))
 
