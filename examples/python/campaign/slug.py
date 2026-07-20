@@ -1,6 +1,8 @@
 import re
 from dataclasses import dataclass
 
+from serialization import canonical_str
+
 _SLUG_PATTERN = re.compile(r"^[a-z0-9-]{4,20}$")
 
 
@@ -17,4 +19,4 @@ class Slug:
             )
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)

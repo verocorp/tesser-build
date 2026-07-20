@@ -61,10 +61,10 @@ Yes → handler.
 
 class Handler:
     def __init__(self, client: Client) -> None: ...     # injected, held as the contract
-    def create_link(self, raw: str) -> Response:        # wire in → DTO → Client → wire out
+    def add_link(self, raw: str) -> Response:           # wire in → DTO → Client → wire out
         body = _parse(raw)                              # transport guard → 400
-        resp = self._client.create_link(CreateLinkRequest(slug=..., target_url=...))
-        return Response(201, {...})                     # DTO → wire, field by field
+        view = self._client.add_link(AddLinkRequest(campaign_id=..., slug=..., target_url=...))
+        return Response(200, _campaign_body(view))      # DTO → wire, the edge's own shape
 ```
 
 One `Client` call per endpoint; a `Response` is a status + body the host

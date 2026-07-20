@@ -28,6 +28,3 @@ class Labels:
 
     def __len__(self) -> int:
         return len(self._values)
-
-    def __str__(self) -> str:
-        return ",".join(f"{k}={v}" for k, v in self._values)

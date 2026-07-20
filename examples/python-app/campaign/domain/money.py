@@ -1,32 +1,33 @@
+from __future__ import annotations
+
+import re
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
+from errors import invalid
 from serialization import canonical_decimal, canonical_str
+
+_CURRENCY_RE = re.compile(r"[A-Z]{3}")
 
 
 @dataclass(frozen=True)
 class MoneySpec:
-
     amount: str
     currency: str
 
 
 @dataclass(frozen=True, init=False)
 class MoneyAmount:
-
     _value: Decimal
 
     def __init__(self, value: str) -> None:
         try:
             parsed = Decimal(value)
         except InvalidOperation as e:
-            raise ValueError(f"invalid amount: {value!r}") from e
+            raise invalid("invalid_budget_amount", f"budget amount {value!r} is not a number") from e
         if parsed < 0:
-            raise ValueError(f"amount must not be negative: {parsed}")
+            raise invalid("invalid_budget_amount", f"budget amount must not be negative: {parsed}")
         object.__setattr__(self, "_value", parsed)
-
-    def add(self, other: "MoneyAmount") -> "MoneyAmount":
-        return MoneyAmount(canonical_decimal(self._value + other._value))
 
     def __str__(self) -> str:
         return canonical_decimal(self._value)
@@ -34,12 +35,11 @@ class MoneyAmount:
 
 @dataclass(frozen=True)
 class MoneyCurrency:
-
     _value: str
 
     def __post_init__(self) -> None:
-        if not self._value:
-            raise ValueError("currency is required")
+        if not _CURRENCY_RE.fullmatch(self._value):
+            raise invalid("invalid_budget_currency", f"budget currency {self._value!r} must be 3 uppercase letters")
 
     def __str__(self) -> str:
         return canonical_str(self._value)
@@ -47,7 +47,6 @@ class MoneyCurrency:
 
 @dataclass(frozen=True, init=False)
 class Money:
-
     _amount: MoneyAmount
     _currency: MoneyCurrency
 
@@ -62,9 +61,3 @@ class Money:
     @property
     def currency(self) -> MoneyCurrency:
         return self._currency
-
-    def add(self, other: "Money") -> "Money":
-        if self._currency != other._currency:
-            raise ValueError(f"cannot add {self._currency} and {other._currency}")
-        total = self._amount.add(other._amount)
-        return Money(MoneySpec(amount=str(total), currency=str(self._currency)))

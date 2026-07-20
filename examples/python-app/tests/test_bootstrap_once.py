@@ -5,7 +5,7 @@ import pytest
 import campaign.wiring.wire as campaign_wire
 from bootstrap.bootstrap import App, new
 from bootstrap.config import Config
-from campaign.client import Client, CreateLinkRequest, TargetChecker
+from campaign.client import AddLinkRequest, Client, CreateCampaignRequest, TargetChecker
 from campaign.wiring.config import Config as CampaignConfig
 from campaign.wiring.wire import build as real_campaign_build
 from lifecycle import Closeable
@@ -26,8 +26,9 @@ def _mem() -> App:
 def test_graph_built_once_state_persists_across_calls() -> None:
     app = _mem()
     try:
-        app.campaign.create_link(CreateLinkRequest("a", "https://ok.example/a"))
-        app.campaign.create_link(CreateLinkRequest("b", "https://ok.example/b"))
+        view = app.campaign.create_campaign(CreateCampaignRequest("100.00", "USD"))
+        app.campaign.add_link(AddLinkRequest(view.campaign_id, "a", "https://ok.example/a"))
+        app.campaign.add_link(AddLinkRequest(view.campaign_id, "b", "https://ok.example/b"))
         assert {v.slug for v in app.campaign.list_links()} == {"a", "b"}
     finally:
         app.close()

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from bootstrap.bootstrap import App, new
 from bootstrap.config import Config
-from campaign.client import CreateLinkRequest
+from campaign.client import AddLinkRequest, CreateCampaignRequest
 from campaign.wiring.config import Config as CampaignConfig
 from errors import DomainError
 from linkpolicy.wiring.config import Config as LinkPolicyConfig
@@ -23,8 +23,9 @@ def _mem() -> App:
 def test_report_reads_both_contexts_in_process() -> None:
     app = _mem()
     try:
-        app.campaign.create_link(CreateLinkRequest("a", "https://ok.example/a"))
-        app.campaign.create_link(CreateLinkRequest("b", "https://ok.example/b"))
+        view = app.campaign.create_campaign(CreateCampaignRequest("100.00", "USD"))
+        app.campaign.add_link(AddLinkRequest(view.campaign_id, "a", "https://ok.example/a"))
+        app.campaign.add_link(AddLinkRequest(view.campaign_id, "b", "https://ok.example/b"))
         rows = app.reports.links_by_verdict()
         assert {r.slug for r in rows} == {"a", "b"}
         assert all(r.allowed and r.reason == "ok" for r in rows)
@@ -35,8 +36,9 @@ def test_report_reads_both_contexts_in_process() -> None:
 def test_blocked_destination_never_becomes_a_link() -> None:
     app = _mem()
     try:
+        view = app.campaign.create_campaign(CreateCampaignRequest("100.00", "USD"))
         try:
-            app.campaign.create_link(CreateLinkRequest("bad", "http://ok.example/a"))
+            app.campaign.add_link(AddLinkRequest(view.campaign_id, "bad", "http://ok.example/a"))
         except DomainError:
             pass
         assert app.reports.links_by_verdict() == ()

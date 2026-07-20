@@ -93,7 +93,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 
 - [ ] **Behavior-rebuild ergonomics (performance-triggered only)** (2026-07-20)
   - **What:** behavior methods rebuild new instances THROUGH the public
-    constructor via canonical forms (`MoneyAmount(str(total))`) — ruled
+    constructor via canonical forms (`MoneyAmount(canonical_decimal(total))`) — ruled
     2026-07-20; the cost is parse overhead only, and cosmetic "ickiness" is
     not evidence. If a consumer measures a real hot-path cost, the recorded
     candidate designs are: a TB003-sanctioned same-class private rebuild
@@ -103,6 +103,26 @@ Deferred work with context. Each entry carries enough for a cold pickup.
     perf-only benefit).
   - **Trigger:** a measured performance problem in a real consumer, not
     aesthetics.
+
+- [ ] **Repository read paths / projections — a named norm gap** (opened
+  2026-07-20, PR-B outside review)
+  - **What:** the serialization norm covers how domain data crosses an edge
+    but says nothing about READ paths. The verified impl's
+    `CampaignRepository.all()` reconstructs every aggregate (row → spec →
+    constructor, invariants re-run) just to feed a flat read view
+    (`list_links`) — correct and honest at template scale, but a bad clone
+    at consumer scale: a list endpoint over 100k aggregates becomes full
+    hydration, and one stale invalid row breaks an unrelated projection.
+    The undecided question: does the anatomy teach a read-side
+    query/projection port (a port returning parts-shaped projections
+    straight from storage, no aggregate hydration) alongside the aggregate
+    repository, and what keeps it honest (no invariant re-run on reads —
+    is that acceptable, and where is it stated)?
+  - **Trigger:** the first consumer with a list/report endpoint over a
+    non-trivial aggregate count, or the reports-context restructure.
+  - **Why not now:** it is a norm-level ruling (repositories.md +
+    serialization.md scope), not a PR-B patch; inventing it inline would
+    violate the evidence-first discipline.
 
 - [ ] **Checker contracts as fixtures-first** (2026-07-20)
   - **What:** a check's *normative* contract artifact is its

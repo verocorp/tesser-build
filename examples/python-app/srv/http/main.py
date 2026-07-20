@@ -19,14 +19,23 @@ def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
 
     class _RequestHandler(BaseHTTPRequestHandler):
         def do_POST(self) -> None:
-            if self.path != "/links":
-                self._send(Response(404, {"type": "/problems/not_found", "detail": "unknown route"}))
-                return
             length = int(self.headers.get("Content-Length") or "0")
             raw = self.rfile.read(length).decode("utf-8")
-            self._send(campaign_handler.create_link(raw))
+            if self.path == "/campaigns":
+                self._send(campaign_handler.create_campaign(raw))
+                return
+            if self.path == "/links":
+                self._send(campaign_handler.add_link(raw))
+                return
+            self._send(Response(404, {"type": "/problems/not_found", "detail": "unknown route"}))
 
         def do_GET(self) -> None:
+            if self.path.startswith("/campaigns/"):
+                self._send(campaign_handler.get_campaign(self.path.removeprefix("/campaigns/")))
+                return
+            if self.path.startswith("/r/"):
+                self._send(campaign_handler.resolve(self.path.removeprefix("/r/")))
+                return
             if self.path != "/reports/links-by-verdict":
                 self._send(Response(404, {"type": "/problems/not_found", "detail": "unknown route"}))
                 return

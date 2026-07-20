@@ -4,7 +4,14 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from campaign.client import Client, CreateLinkRequest, ResolveRequest
+from campaign.client import (
+    AddLinkRequest,
+    CampaignView,
+    Client,
+    CreateCampaignRequest,
+    GetCampaignRequest,
+    ResolveRequest,
+)
 from errors import DomainError, InfraError, status_for
 
 JSONObject = dict[str, object]
@@ -24,13 +31,38 @@ class Handler:
     def __init__(self, client: Client) -> None:
         self._client = client
 
-    def create_link(self, raw: str) -> Response:
+    def create_campaign(self, raw: str) -> Response:
         def run() -> Response:
             body = _parse(raw)
-            resp = self._client.create_link(
-                CreateLinkRequest(slug=_str(body.get("slug")), target_url=_str(body.get("target_url")))
+            budget = _obj(body.get("budget"))
+            view = self._client.create_campaign(
+                CreateCampaignRequest(
+                    budget_amount=_str(budget.get("amount")),
+                    budget_currency=_str(budget.get("currency")),
+                )
             )
-            return Response(201, {"slug": resp.slug, "target_url": resp.target_url})
+            return Response(201, _campaign_body(view))
+
+        return self._respond(run)
+
+    def add_link(self, raw: str) -> Response:
+        def run() -> Response:
+            body = _parse(raw)
+            view = self._client.add_link(
+                AddLinkRequest(
+                    campaign_id=_str(body.get("campaign_id")),
+                    slug=_str(body.get("slug")),
+                    target_url=_str(body.get("target_url")),
+                )
+            )
+            return Response(200, _campaign_body(view))
+
+        return self._respond(run)
+
+    def get_campaign(self, campaign_id: str) -> Response:
+        def run() -> Response:
+            view = self._client.get_campaign(GetCampaignRequest(campaign_id=campaign_id))
+            return Response(200, _campaign_body(view))
 
         return self._respond(run)
 
@@ -54,6 +86,17 @@ class Handler:
             return Response(500, _problem("internal", "unexpected error"))
 
 
+def _campaign_body(view: CampaignView) -> JSONObject:
+    return {
+        "campaign_id": view.campaign_id,
+        "budget": {"amount": view.budget_amount, "currency": view.budget_currency},
+        "links": [
+            {"slug": link.slug, "target_url": link.target_url, "active": link.active}
+            for link in view.links
+        ],
+    }
+
+
 def _problem(code: str, detail: str) -> JSONObject:
     return {"type": f"/problems/{code}", "detail": detail}
 
@@ -66,6 +109,12 @@ def _parse(raw: str) -> JSONObject:
     if not isinstance(data, dict):
         raise BadRequest("expected a JSON object")
     return data
+
+
+def _obj(value: object) -> JSONObject:
+    if not isinstance(value, dict):
+        raise BadRequest("expected a JSON object field")
+    return value
 
 
 def _str(value: object) -> str:

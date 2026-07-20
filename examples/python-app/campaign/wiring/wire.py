@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from campaign.adapters.gateways.repo_memory import InMemoryLinkRepository
-from campaign.application.service import CampaignService, LinkRepository
+from campaign.adapters.gateways.repo_memory import InMemoryCampaignRepository
+from campaign.application.service import CampaignRepository, CampaignService
 from campaign.client import Client, TargetChecker
 from campaign.wiring.config import Config
 from errors import invalid
 from lifecycle import Closeable
 
 
-def repo_for(cfg: Config) -> tuple[LinkRepository, Closeable]:
+def repo_for(cfg: Config) -> tuple[CampaignRepository, Closeable]:
     if cfg.storage == "memory":
-        repo = InMemoryLinkRepository()
+        repo = InMemoryCampaignRepository()
         return repo, repo
     if not cfg.storage:
         raise invalid("missing_coordinate", "campaign storage coordinate is required")

@@ -1,7 +1,6 @@
 # Norm: serialization
 
 <!-- tb-status: full -->
-<!-- tb-allow-missing: examples/python-app/campaign/application/parts.py -->
 
 **A domain object never serializes itself, and its primitives leave through
 exactly one door per shape.** This norm is scoped to the domain data types —
@@ -51,23 +50,35 @@ data crosses an edge (maintainer rulings 2026-07-20).
    the canonical form reproduces an equal value (`Slug(str(s)) == s`), and a
    test asserts it per leaf. Changing a canonical form is a representation
    change — a breaking change — never a formatting tweak.
-   **Unwrap through the named helper, not a bare cast:** serialization code
-   (the parts module, a private mirror) extracts leaves via one app-level
-   `canonical(vo)` helper that dispatches to the single conversion dunder
-   the class itself defines — never a bare `str(x)`/`int(x)`. The helper
-   makes every serialization-purpose unwrap greppable and self-announcing
-   (a bare `str(x)` in an f-string stays visibly *not* serialization), and
-   it runtime-asserts the one-dunder norm:
+   **The exit routes through a per-type policy helper — the dunder body is
+   one line.** The app-level serialization module owns one function per
+   backing type — `canonical_str` / `canonical_int` / `canonical_float` /
+   `canonical_bytes` (identity for the native primitives) and
+   `canonical_decimal` / `canonical_datetime` (the text policies above,
+   executable) — and every leaf's conversion dunder delegates to the
+   matching one:
 
    ```python
-   def canonical(vo: object) -> str | int | float | bytes:
-       cls = type(vo)
-       for name, cast in (("__int__", int), ("__float__", float),
-                          ("__bytes__", bytes), ("__str__", str)):
-           if name in cls.__dict__:
-               return cast(vo)
-       raise TypeError(f"{cls.__name__} defines no canonical exit")
+   def __str__(self) -> str:
+       return canonical_decimal(self._value)
    ```
+
+   This gives each canonical-form policy exactly ONE implementation site (a
+   consumer's tenth datetime VO cannot drift from the pinned format), makes
+   every canonical exit self-announcing at its definition (grep
+   `canonical_` to find them all — a hand-rolled `__str__` is visibly not a
+   canonical exit), and is statically typed with no runtime dispatch.
+   Consumers of the exit — the parts walk, edges — call the conversion
+   protocol directly (`str(vo)`, `int(vo)`). (Maintainer ruling 2026-07-20,
+   superseding two same-day edge-side shapes — a one-arg introspective
+   `canonical(vo)` dispatcher, then a two-arg `canonical(vo, expected)`
+   verifier: the helper belongs at the exit's definition, not at the unwrap
+   site; runtime introspection re-derived facts the call site already knew.
+   What the runtime verifier guarded — `str()` on a structured type
+   silently yielding `repr` garbage, since `str()` never fails — is covered
+   by the mandatory per-edge goldens below and the zero-dunder checker.)
+   Verified impls: `examples/python-app/serialization.py` (the module),
+   `examples/serdepy/` (every backing type exercised).
 4. **Display is a presentation concern, never the value object's.** Locale,
    grouping, currency symbols, human phrasing — a formatter at the
    presentation edge owns them. The canonical form is not "how it looks";
@@ -178,9 +189,19 @@ belongs to the edge, recorded where its golden test lives.
   divergent adapter instead.
 - **Parsing `str(x)` to extract data:** the canonical form is an exit, not
   a transport container for components.
-- **Bare-cast unwrapping:** `str(vo)` inside a parts module where
-  `canonical(vo)` belongs — the unwrap works but stops being greppable or
-  distinguishable from incidental display casts.
+- **Hand-rolling a canonical form inside a dunder:** a leaf's `__str__`
+  formatting its value inline (`self._value.isoformat()`,
+  `f"{self._value:.2f}"`) instead of delegating to the matching
+  `canonical_*` policy helper — the tenth such VO silently drifts from the
+  pinned format, and the exit stops being greppable as canonical.
+- **Merging parts and spec because they look alike:** a minimal context's
+  parts record is often a field-for-field twin of its spec — that is a
+  coincidence of the simple case, not an identity. The spec is inbound-only
+  (accepts any valid representation, feeds the validating constructor); the
+  parts record is outbound-only (carries exactly the canonical forms, and
+  grows derived fields the constructor must never accept). Deduplicating
+  them welds the two directions together; the verified impl locks the
+  separation with a test that the parts module never imports a spec.
 - **A "just for logging" dunder on a compound:** the zero-dunder contract
   has no debug carve-out; `repr` is the debug surface, and logging norms
   are `logging.md`'s to settle.
@@ -193,6 +214,12 @@ belongs to the edge, recorded where its golden test lives.
   `python.md#the-spec-pattern` (inbound door). Compound shape verified in
   `examples/python/catalog/money.py`; parts verified impl:
   `examples/python-app/campaign/application/parts.py`.
+- The all-cases worked example: `examples/serdepy/` — every backing type's
+  exit (all four conversion dunders, the Decimal and datetime text
+  policies), the zero-dunder compound, a parts record whose derived field
+  (`heavy`) proves parts ≠ spec by construction, an edge golden with
+  edge-owned keys and framing (bytes → hex), and the full required test
+  set in miniature.
 - Go: **not yet materialized — note the gap, don't invent a convention.**
   The Go rendering re-hinges canonical text from `fmt.Stringer` to
   `encoding.TextMarshaler`/`TextUnmarshaler` (Stringer is Go's implicit
