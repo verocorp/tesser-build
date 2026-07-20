@@ -10,6 +10,30 @@ class Slug:
 
 
 @dataclass(frozen=True)
+class GivenName:
+    _value: str
+
+    def __post_init__(self) -> None:
+        if not self._value:
+            raise ValueError("given name is required")
+
+    def __str__(self) -> str:
+        return self._value
+
+
+@dataclass(frozen=True)
+class FamilyName:
+    _value: str
+
+    def __post_init__(self) -> None:
+        if not self._value:
+            raise ValueError("family name is required")
+
+    def __str__(self) -> str:
+        return self._value
+
+
+@dataclass(frozen=True)
 class PersonNameSpec:
     given: str
     family: str
@@ -17,11 +41,9 @@ class PersonNameSpec:
 
 @dataclass(frozen=True, init=False)
 class PersonName:
-    _given: str
-    _family: str
+    _given: GivenName
+    _family: FamilyName
 
     def __init__(self, spec: PersonNameSpec) -> None:
-        if not spec.given or not spec.family:
-            raise ValueError("given and family are required")
-        object.__setattr__(self, "_given", spec.given.strip())
-        object.__setattr__(self, "_family", spec.family.strip())
+        object.__setattr__(self, "_given", GivenName(spec.given.strip()))
+        object.__setattr__(self, "_family", FamilyName(spec.family.strip()))
