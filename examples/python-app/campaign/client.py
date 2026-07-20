@@ -18,6 +18,12 @@ class AddLinkRequest:
 
 
 @dataclass(frozen=True)
+class DeactivateLinkRequest:
+    campaign_id: str
+    slug: str
+
+
+@dataclass(frozen=True)
 class GetCampaignRequest:
     campaign_id: str
 
@@ -61,6 +67,8 @@ class Client(Protocol):
     def create_campaign(self, req: CreateCampaignRequest) -> CampaignView: ...
 
     def add_link(self, req: AddLinkRequest) -> CampaignView: ...
+
+    def deactivate_link(self, req: DeactivateLinkRequest) -> CampaignView: ...
 
     def get_campaign(self, req: GetCampaignRequest) -> CampaignView: ...
 

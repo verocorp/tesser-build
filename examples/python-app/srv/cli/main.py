@@ -5,14 +5,15 @@ import sys
 
 from bootstrap.bootstrap import new
 from bootstrap.config import Config
-from campaign.client import AddLinkRequest, CreateCampaignRequest
+from campaign.client import AddLinkRequest, CreateCampaignRequest, DeactivateLinkRequest
 from campaign.wiring.config import Config as CampaignConfig
 from linkpolicy.wiring.config import Config as LinkPolicyConfig
 from reports.wiring.config import Config as ReportsConfig
 
 _USAGE = (
     "usage: python -m srv.cli.main create-campaign <budget_amount> <currency>\n"
-    "       python -m srv.cli.main add-link <campaign_id> <slug> <target_url>"
+    "       python -m srv.cli.main add-link <campaign_id> <slug> <target_url>\n"
+    "       python -m srv.cli.main deactivate-link <campaign_id> <slug>"
 )
 
 
@@ -35,6 +36,13 @@ def run(argv: list[str]) -> int:
                 AddLinkRequest(campaign_id=argv[1], slug=argv[2], target_url=argv[3])
             )
             print(f"campaign {view.campaign_id} now has {len(view.links)} link(s)")  # noqa: T201
+            return 0
+        if len(argv) == 3 and argv[0] == "deactivate-link":
+            view = app.campaign.deactivate_link(
+                DeactivateLinkRequest(campaign_id=argv[1], slug=argv[2])
+            )
+            active = sum(1 for link in view.links if link.active)
+            print(f"campaign {view.campaign_id} now has {active} active link(s)")  # noqa: T201
             return 0
         print(_USAGE)  # noqa: T201
         return 2
