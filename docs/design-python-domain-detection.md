@@ -122,6 +122,25 @@ accessor at all, only `__str__`.
 > hidden). Components are exposed as value objects; TB010 now flags the
 > passthrough accessor shape too.
 
+> **Amended 2026-07-20 (maintainer rulings, serialization norm).** Two
+> refinements, doctrine in `skills/tesser-build/serialization.md`:
+> (1) "only `__str__`" generalizes to the **canonical conversion exit** — a
+> leaf VO exposes exactly ONE conversion dunder, the one matching its
+> backing primitive (`__str__`/`__int__`/`__float__`/`__bytes__`);
+> `Decimal`/`datetime` exit as canonical text via `__str__` under an
+> explicit per-type policy; the round-trip law locks it; display formatting
+> is a presentation concern, never the VO's. A second or mismatched
+> conversion dunder is a disguise (checker queued this wave).
+> (2) A compound VO's components are **child value objects internally**,
+> not hidden raw primitives — `Money{MoneyAmount, MoneyCurrency}`
+> (`examples/python/catalog/money.py`); single-concept behavior lives on
+> the child, cross-field invariants on the compound; the compound
+> construction REVISIT is closed to the factory shape (`from_spec` parses
+> leaves into child VOs; the auto-init accepts only child VOs and needs no
+> guard). Compounds, entities, and aggregates have no primitive exit at
+> all — they decompose via the per-context parts module (application
+> layer); the spec stays inbound-only.
+
 ---
 
 ## 4. Decided rules (this session)
@@ -247,7 +266,11 @@ the "other"/value-family rules above.
    previously lived in `examples/python-expenses`, which was **removed** because
    its `ExpenseReport` "aggregate root" owned a collection of *value objects*,
    contradicting the settled root definition (§2: a root embeds ≥1 **entity**).
-   Re-create the `DecimalAmount` example in a spec-correct tree when one needs it.
+   *Resolved 2026-07-20: the worked example is `MoneyAmount` in
+   `examples/python/catalog/money.py` (Decimal-backed child VO — `parse`,
+   non-negative guard, `add`, canonical text via `__str__`, round-trip law
+   locked in tests), held by `Money` and exposed as a VO accessor, exactly
+   this pattern.*
 3. **Do specs live in `*/domain/**`** — they sit beside domain types; detection
    classifies them by signature regardless, so this is a labeling call, not a
    blocker.

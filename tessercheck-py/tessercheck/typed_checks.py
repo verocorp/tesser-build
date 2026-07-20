@@ -41,7 +41,9 @@ _Suppressed = Callable[[int], bool]
 # as a public field nor through a passthrough accessor (the 2026-07-19 ruling
 # closed the earlier "safe single-representation accessor" allowance: a
 # currency code is a Currency VO). A multi-representation primitive (Decimal)
-# is likewise wrapped in its own VO; ``__str__`` is the sole primitive exit.
+# is likewise wrapped in its own VO; a leaf's canonical conversion exit
+# (2026-07-20 ruling: the ONE dunder matching its backing primitive —
+# skills/tesser-build/serialization.md rule 3) is the sole primitive door.
 _PRIMITIVE_TYPES: frozenset[str] = frozenset(
     {"str", "int", "float", "bool", "bytes", "complex", "Decimal"}
 )
@@ -113,8 +115,8 @@ def _check_vo_exposure(
     primitive field nor through a passthrough accessor that hands the raw
     value back (``@property def x(self) -> str: return self._x`` is the same
     leak as ``x: str`` — the rename alone enforces nothing). Components are
-    exposed as value objects; ``__str__`` is the sole primitive exit
-    (display, and unwrapping at the service/repository edge)."""
+    exposed as value objects; a leaf's canonical conversion exit is the sole
+    primitive door (serialization.md rule 3), consumed by the parts layer."""
     field_annotations: dict[str, ast.expr] = {}
     for member in node.body:
         if isinstance(member, ast.AnnAssign) and isinstance(member.target, ast.Name):
@@ -164,8 +166,8 @@ def _check_vo_exposure(
                     f"value object {node.name!r} accessor {member.name!r} returns "
                     f"its raw primitive ({returned!r}); the primitive must not "
                     "leak through an accessor either — expose a value object "
-                    "(wrap the component), and unwrap via __str__ only at the "
-                    "serialization edge",
+                    "(wrap the component); a leaf's canonical conversion exit "
+                    "is the sole primitive door (serialization.md)",
                 )
             )
     return findings

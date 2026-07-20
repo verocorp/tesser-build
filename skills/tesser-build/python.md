@@ -56,33 +56,47 @@ runs on every construction path, so an invalid instance is unrepresentable —
 there is no bypassable factory. The field is **hidden and stays hidden**: a
 leaf value object gets **no accessor at all** — no public field, no `value`
 property handing the raw string back (a passthrough accessor is the same
-leak as the public field, and TB010 flags both). `__str__` is the sole
-primitive exit; the serialization edge (repository, wire adapter) unwraps
-with `str(email)` there, never inside the domain.
+leak as the public field, and TB010 flags both). The leaf's **canonical
+exit** is the one conversion dunder matching its backing primitive —
+str-backed → `__str__` (as here), int-backed → `__int__`, float-backed →
+`__float__`, bytes-backed → `__bytes__`; `Decimal`/`datetime` exit as
+canonical text via `__str__` under the explicit per-type policy in
+`serialization.md` rule 3. One dunder per leaf, matching its
+representation — a second or mismatched one is a disguise. The canonical
+form is what the serialization layer carries (`serialization.md`); display
+formatting is a presentation concern and never the value object's job. The
+round-trip law locks the exit: `EmailAddress(str(email)) == email`, asserted
+in a test per leaf.
 
-**Compound (two or more fields):** the primitive-leaf spec is parsed and
-validated on construction; the fields are **hidden** (a value object exposes no
-primitive field — `python.md#TB010`), and **each component is exposed — when it
-must be exposed at all — as a value object, never as the raw primitive**
-(maintainer ruling 2026-07-19: `rect.x` returning `"1"` is primitive obsession
-wearing an accessor; `x` and `y` are value objects). *REVISIT (narrowed): which
-construction shape is canonical is still open, but both below are sanctioned and
-the analyzer accepts both. (a) The factory shape — `from_spec` parses, the
-auto-generated `__init__` takes parsed fields, `__post_init__` guards every path
-(`examples/python/catalog/money.py`, shown here). (b) The entity-matching shape —
-`@dataclass(frozen=True, init=False)` with `__init__(self, spec)` assigning via
-`object.__setattr__` (TB003 sanctions exactly this site), the same single door an
-entity has. Shape (b)'s open cost: behavior methods like `add` that rebuild from
-already-parsed values need a private raw path; shape (a)'s open cost: the
-auto-init is a second public door, guarded only by `__post_init__`.*
+**Compound (two or more fields): the components are child value objects.**
+Not hidden raw primitives — child VOs (maintainer rulings 2026-07-19/20:
+`rect.x` returning `"1"` is primitive obsession wearing an accessor; `x` and
+`y` are value objects, held and exposed as such). Single-concept behavior
+migrates into the child (`MoneyAmount.add` owns the arithmetic — the
+reference discipline's `quanta.Decimal` pattern); what remains the
+compound's own is exactly the **cross-field invariants** (currency match on
+`Money.add`). This is what gives each component's rules one home, makes
+same-primitive transposition a type error, and gives serialization a
+conformant path (`serialization.md` rule 5).
+
+*The construction REVISIT is closed (2026-07-20):* the canonical compound
+shape is **the factory shape** — `from_spec` parses each primitive leaf into
+its child VO; the auto-generated `__init__` takes child VOs. The old
+objection to this shape (the auto-init as an unguarded second door)
+dissolved with child-VO components: the auto-init accepts only types that
+cannot exist invalid, so the compound needs no `__post_init__` guard at all
+— invalid Money is unrepresentable *by construction of its parts*. The
+`@dataclass(frozen=True, init=False)` spec-taking-`__init__` shape remains
+the **entity** door (`python.md#entities`; TB003 sanctions exactly that
+site), not the compound-VO norm.
 
 **Warning — hiding a field breaks keyword construction.** Renaming `amount` to
 `_amount` renames the auto-generated `__init__` parameter, so
 `Money(amount=..., currency=...)` raises `TypeError` at every call site the
 moment you comply with TB010. Don't reach for `Money(_amount=...)` (leaks the
 private name) or positional args (unreadable past two fields) — **route
-construction through the spec** (`Money.from_spec(MoneySpec(...))` / shape (b)'s
-`Money(MoneySpec(...))`), which is the construction path tests should exercise
+construction through the spec** (`Money.from_spec(MoneySpec(...))`), which is
+the construction path tests should exercise
 anyway. Field data (consumer pilot, 2026-07-19): the field rename itself is
 minutes; the construction-site fallout is the real cost, and spec-routing is the
 shape that survives it.
@@ -92,37 +106,73 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 @dataclass(frozen=True)
-class MoneySpec:          # spec: primitive leaves only
+class MoneySpec:          # spec: primitive leaves only — the inbound door
     amount: str
     currency: str
 
 @dataclass(frozen=True)
-class Money:
-    _amount: Decimal      # hidden: the wrapped primitive never leaks as a field
-    _currency: str
+class MoneyAmount:        # child VO: owns the single-concept rules + behavior
+    _value: Decimal
 
     @classmethod
-    def from_spec(cls, spec: MoneySpec) -> "Money":   # REVISIT (compound-VO construction, see note above)
+    def parse(cls, raw: str) -> "MoneyAmount":
         try:
-            amount = Decimal(spec.amount)   # conversion only — no rules here
+            value = Decimal(raw)
         except InvalidOperation as e:
-            raise ValueError(f"invalid amount: {spec.amount!r}") from e
-        return cls(_amount=amount, _currency=spec.currency)
+            raise ValueError(f"invalid amount: {raw!r}") from e
+        return cls(value)
 
-    def __post_init__(self) -> None:        # the rules live here, always run
-        if not self._currency:
+    def __post_init__(self) -> None:
+        if self._value < 0:
+            raise ValueError(f"amount must not be negative: {self._value}")
+
+    def add(self, other: "MoneyAmount") -> "MoneyAmount":
+        return MoneyAmount(self._value + other._value)
+
+    def __str__(self) -> str:               # canonical exit (Decimal → canonical text)
+        return str(self._value)
+
+@dataclass(frozen=True)
+class MoneyCurrency:
+    _value: str
+
+    def __post_init__(self) -> None:
+        if not self._value:
             raise ValueError("currency is required")
 
-    def add(self, other: "Money") -> "Money":
-        if self._currency != other._currency:
-            raise ValueError("cannot add different currencies")
-        return Money(self._amount + other._amount, self._currency)
+    def __str__(self) -> str:
+        return self._value
 
-    def __str__(self) -> str:               # display only; the Decimal leaves the domain only here
-        return f"{self._amount:.2f} {self._currency}"
+@dataclass(frozen=True)
+class Money:
+    _amount: MoneyAmount   # child VOs — invalid Money is unrepresentable by types
+    _currency: MoneyCurrency
+
+    @classmethod
+    def from_spec(cls, spec: MoneySpec) -> "Money":
+        return cls(MoneyAmount.parse(spec.amount), MoneyCurrency(spec.currency))
+
+    @property
+    def amount(self) -> MoneyAmount:        # components exposed as VOs, never primitives
+        return self._amount
+
+    @property
+    def currency(self) -> MoneyCurrency:
+        return self._currency
+
+    def add(self, other: "Money") -> "Money":
+        if self._currency != other._currency:   # cross-field invariant: the compound's own job
+            raise ValueError(f"cannot add {self._currency} and {other._currency}")
+        return Money(self._amount.add(other._amount), self._currency)
+
+    def __str__(self) -> str:               # debug convenience — never serialized
+        return f"{self._amount} {self._currency}"
 ```
 
-**Rules live only in `__post_init__`** so no construction path can skip them.
+**Each rule lives on the type that owns it** — the child's `__post_init__`
+guards the child; the compound's methods guard only cross-field relations —
+so no construction path can skip a rule, and no rule has two homes.
+Verified impl: `examples/python/catalog/money.py`.
 
 **Collection (wraps a dict/list):**
 
@@ -167,17 +217,20 @@ canonicalized. When callers need different nil-handling, add a variant
   hide. A boundary shape that genuinely must mutate declares itself with an
   inline `# tessercheck:ignore`.
 - **The primitive never escapes** (TB010): no public primitive field, and no
-  passthrough accessor returning one — a leaf VO exposes nothing but
-  `__str__`; a compound VO's components are value objects and are exposed as
-  such. Defensive copy-outs of a collection VO's entries (`as_dict`) remain
-  the sanctioned collection read.
+  passthrough accessor returning one — a leaf VO exposes nothing but its
+  canonical exit; a compound VO's components are child value objects, held
+  and exposed as such. Defensive copy-outs of a collection VO's entries
+  (`as_dict`) remain the sanctioned collection read.
 - No `Must*` twin is needed: construction already raises on invalid input.
   The Go `New/MustNew` split exists because Go returns errors; Python's
   exception IS the panic path — in tests, construct directly with known-valid
   literals.
-- `__str__` is for display only — and it doubles as the single unwrap point
-  where the serialization edge (repository key, wire adapter) extracts the
-  value. Never compare domain objects via `str(a) == str(b)`.
+- A leaf's conversion dunder is its **canonical form**, not display —
+  locked by the round-trip law; display formatting belongs to the
+  presentation edge; the serialization layer carries canonical primitives
+  (`serialization.md`). A compound's `__str__` is debug convenience and
+  never crosses an edge. Never compare domain objects via
+  `str(a) == str(b)`.
 
 **Equality — pick the correct path:**
 
@@ -319,7 +372,9 @@ class CreditService:
 
 Interface as a `Protocol` (structural typing, like Go's implicit satisfaction);
 whole aggregate in, reconstructed aggregate out, no business logic
-(`repositories.md`).
+(`repositories.md`). How the aggregate decomposes on the way out — the
+per-context parts module, and when a repo-private record suffices — is the
+serialization norm (`serialization.md` rules 6-8).
 
 ```python
 from typing import Protocol
@@ -648,5 +703,5 @@ def test_operation_transfers_are_defensive():
   message).
 - One invariant-violation test per aggregate — its reason to exist.
 - Defensive-copy assertions on every collection accessor.
-- Never `str(a) == str(b)` as an equality assertion; display gets its own
-  `test_*_str`.
+- Never `str(a) == str(b)` as an equality assertion; each leaf's canonical
+  exit gets its own round-trip test (`serialization.md#tests-you-must-write`).

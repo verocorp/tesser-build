@@ -39,39 +39,48 @@ persistence-only column, a local implementation detail. Blanket wrapping is
    never leaks; the constructor's guarantees can't be bypassed. An accessor
    that hands the wrapped primitive straight back (`slot.key → "tue-0900"`)
    is the public field with extra steps and is banned outright: a compound
-   value's components are value objects and are exposed as such; a leaf value
-   exposes no accessor at all, only its display form, which is also where the
-   serialization edge unwraps it.
+   value's components are themselves value objects — held as such and
+   exposed as such; a leaf value exposes no accessor at all, only its
+   **canonical exit** — the one conversion protocol matching its backing
+   primitive, locked by a round-trip law (`serialization.md` rule 3).
+   Display formatting is a presentation concern, never the value's.
 4. **Equality is by value, and it's explicit.** Same attributes ⇒ equal,
    across all representations of the same logical value.
 5. **Validation belongs to the value, not its parents.** A parent constructor
    never re-checks a child value object's rules — it just builds the child and
    propagates the error.
-6. **Display is not equality.** The string form exists for humans; comparing
-   two objects by their string forms silently mis-equates multi-representation
-   values.
+6. **The canonical form is not equality.** Comparing two objects by their
+   string/canonical forms silently mis-equates multi-representation values;
+   equality is by value, always (rule 4).
 7. **Domain behavior lives on the type** (`Add`, `Contains`, `Overlaps`...)
    and enforces its own consistency (e.g., same-currency arithmetic).
 
 ## Shape
 
 ```
-EmailAddress            Money
-  - value (hidden)        - amount   (hidden)
-                          - currency (hidden)
+EmailAddress (leaf)     Money (compound)
+  - value (hidden)        - amount   (hidden, a MoneyAmount)
+                          - currency (hidden, a MoneyCurrency)
   NewEmailAddress(...) → (EmailAddress, error)
 ```
 
+A compound's components are child value objects, not raw primitives —
+single-concept behavior (`MoneyAmount.add`) lives on the child; the
+cross-field invariants (currency match) are what remain the compound's own.
 Construction mechanics, spec structure, and language idioms: see
 `go.md#value-objects` / `python.md#value-objects`.
 
 ## Decisions you must make
 
-1. **Simple or compound?** One argument → flat constructor (the type *is* its
-   value: an ID, a code — it won't grow; growth would mean a different
-   concept). Two or more arguments → construct via a spec (compound concepts
-   accrete attributes; a spec prevents a definition cascade through every
-   parent that embeds the type). See `go.md#the-spec-pattern` /
+1. **Simple (leaf) or compound?** The discriminator: does the concept have a
+   **standardized canonical primitive representation** (an ID, a code, a URL
+   per RFC 3986, an E.164 phone number)? Yes → a leaf wrapping that
+   canonical form — even when it has meaningful sub-parts, which are exposed
+   as *derived* VO-returning accessors computed from parsing, not stored
+   components. No standardized single-primitive form (Money, a person's
+   name) → compound: child value objects, constructed via a spec (compound
+   concepts accrete attributes; a spec prevents a definition cascade through
+   every parent that embeds the type). See `go.md#the-spec-pattern` /
    `python.md#the-spec-pattern`.
 2. **Equality path.** If every logical value has exactly one representation,
    native equality works. If the same logical value has multiple
@@ -101,8 +110,9 @@ candidates for human judgment* — never the definition. A DTO can carry an
   across representations, native comparison blocked where it would lie.
 - **Panic-constructor contract** where the language provides one (`MustNew*`):
   panics on invalid input; used only with known-valid literals in tests.
-- **Display** (`Test*_String`): stringification tested in its own test — and
-  **never** used as an equality proxy anywhere else.
+- **Canonical round-trip** (leaf VOs): reconstructing from the canonical
+  form yields an equal value (`serialization.md#tests-you-must-write`) — and
+  the canonical form is **never** used as an equality proxy anywhere else.
 
 ## Common mistakes
 
@@ -115,6 +125,10 @@ candidates for human judgment* — never the definition. A DTO can carry an
 - **Leaked representation:** a public field, a passthrough accessor returning
   the wrapped primitive, or an accessor returning the mutable innards. Wrap
   components in their own value objects; copies out, never references.
+- **Raw-primitive compound:** a multi-field value object holding bare
+  primitives internally (`_currency: str`). Components are child value
+  objects — the invariant gets one home, transposition becomes a type
+  error, and serialization has a conformant path (`serialization.md`).
 - **Validation drift:** a second construction path (a mapper, a test helper)
   that skips the constructor. One door.
 
@@ -122,3 +136,4 @@ candidates for human judgment* — never the definition. A DTO can carry an
 
 - Go: `go.md#value-objects`, then `go.md#the-spec-pattern`
 - Python: `python.md#value-objects`, then `python.md#the-spec-pattern`
+- Crossing an edge (repo row, wire, payload): `serialization.md`

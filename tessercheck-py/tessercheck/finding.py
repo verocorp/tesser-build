@@ -74,8 +74,9 @@ CHECKS: tuple[CheckMeta, ...] = (
         "no-primitive-exposure",
         "a value object's primitive must not escape — neither as a public "
         "primitive field nor through a passthrough accessor returning it; "
-        "components are exposed as value objects, __str__ is the sole "
-        "primitive exit (the spec/VO discriminator; specs expose, VOs don't)",
+        "components are exposed as value objects, a leaf's canonical "
+        "conversion exit is the sole primitive door "
+        "(the spec/VO discriminator; specs expose, VOs don't)",
     ),
     CheckMeta(
         "TB011",
