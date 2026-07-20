@@ -25,7 +25,9 @@ Deferred work with context. Each entry carries enough for a cold pickup.
     (`docs/design-python-domain-detection.md` "Grounded against Go", amended:
     the `Money.Currency()` single-rep carve-out is closed) but no analyzer —
     `rationale/coverage.md` row "#6a/6b no primitive accessors" is still demo
-    pending.
+    pending. Concretely: `examples/catalog/money.go`'s `Currency() string`
+    accessor is the exact shape the amendment closes and is now a
+    non-conformant example with nothing to flag it until this ships.
   - **How:** a `go/analysis` pass over VO-candidate types flagging exported
     methods that return a builtin/`*big.Rat`/`decimal` field unchanged
     (mirror `_bare_self_field_returned`); add the coverage row + demo in the
