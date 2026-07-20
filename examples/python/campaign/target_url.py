@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from serialization import canonical_str
+
 
 @dataclass(frozen=True)
 class TargetURL:
@@ -14,4 +16,4 @@ class TargetURL:
             )
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)

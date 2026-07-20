@@ -103,9 +103,13 @@ def test_parts_module_never_touches_specs() -> None:
         if isinstance(node, ast.ImportFrom)
         for alias in node.names
     }
-    spec_imports = {name for name in imported if name.endswith("Spec")}
-    assert not spec_imports, f"parts is outbound-only; it must never touch specs: {spec_imports}"
-    assert "Spec" not in source
+    referenced = {
+        node.id
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Name)
+    }
+    spec_touches = {name for name in imported | referenced if name.endswith("Spec")}
+    assert not spec_touches, f"parts is outbound-only; it must never touch specs: {spec_touches}"
 
 
 def test_load_reruns_invariants_on_stale_rows() -> None:

@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
+from serialization import canonical_decimal, canonical_str
+
 
 @dataclass(frozen=True)
 class MoneySpec:
@@ -24,10 +26,10 @@ class MoneyAmount:
         object.__setattr__(self, "_value", parsed)
 
     def add(self, other: "MoneyAmount") -> "MoneyAmount":
-        return MoneyAmount(str(self._value + other._value))
+        return MoneyAmount(canonical_decimal(self._value + other._value))
 
     def __str__(self) -> str:
-        return str(self._value)
+        return canonical_decimal(self._value)
 
 
 @dataclass(frozen=True)
@@ -40,7 +42,7 @@ class MoneyCurrency:
             raise ValueError("currency is required")
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)
 
 
 @dataclass(frozen=True, init=False)

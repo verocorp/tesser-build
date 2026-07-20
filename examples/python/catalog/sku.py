@@ -1,6 +1,8 @@
 import re
 from dataclasses import dataclass
 
+from serialization import canonical_str
+
 _SKU_PATTERN = re.compile(r"^[A-Z0-9-]{3,20}$")
 
 
@@ -17,4 +19,4 @@ class SKU:
             )
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)

@@ -93,7 +93,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 
 - [ ] **Behavior-rebuild ergonomics (performance-triggered only)** (2026-07-20)
   - **What:** behavior methods rebuild new instances THROUGH the public
-    constructor via canonical forms (`MoneyAmount(str(total))`) — ruled
+    constructor via canonical forms (`MoneyAmount(canonical_decimal(total))`) — ruled
     2026-07-20; the cost is parse overhead only, and cosmetic "ickiness" is
     not evidence. If a consumer measures a real hot-path cost, the recorded
     candidate designs are: a TB003-sanctioned same-class private rebuild

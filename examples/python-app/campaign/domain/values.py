@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from urllib.parse import urlparse
 
 from errors import invalid
+from serialization import canonical_str
 
 _SLUG_RE = re.compile(r"[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?")
 _CAMPAIGN_ID_RE = re.compile(r"[a-f0-9]{16}")
@@ -19,7 +20,7 @@ class CampaignID:
             raise invalid("invalid_campaign_id", f"campaign id {self._value!r} must be 16 lowercase hex chars")
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)
 
 
 @dataclass(frozen=True)
@@ -31,7 +32,7 @@ class Slug:
             raise invalid("invalid_slug", f"slug {self._value!r} must be 1-64 lowercase alnum/hyphen")
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)
 
 
 @dataclass(frozen=True)
@@ -44,4 +45,4 @@ class TargetURL:
             raise invalid("invalid_target_url", f"target url {self._value!r} must be http(s) with a host")
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)

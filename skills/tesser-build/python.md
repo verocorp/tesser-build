@@ -38,6 +38,8 @@ them.
 ```python
 from dataclasses import dataclass
 
+from serialization import canonical_str
+
 @dataclass(frozen=True)
 class EmailAddress:
     _value: str           # hidden — the primitive never leaks (TB010)
@@ -47,7 +49,7 @@ class EmailAddress:
             raise ValueError(f"invalid email address: {self._value!r}")
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)   # canonical exit: one-line delegation to the policy helper
 ```
 
 `frozen=True` gives immutability (assignment raises) and a field-wise
@@ -93,7 +95,7 @@ inside — no `parse` classmethod, no union-typed door (ruled 2026-07-20: a
 union adds special cases for what is only a performance benefit). The
 cost, priced in deliberately: behavior methods — leaf and compound alike —
 that produce new instances re-enter **through the door** via canonical
-forms (`MoneyAmount(str(total))`), lossless by the round-trip law, so
+forms (`MoneyAmount(canonical_decimal(total))`), lossless by the round-trip law, so
 every instance that exists passed the one validating door. Revisit only on
 a measured performance problem (`TODOS.md`: behavior-rebuild ergonomics).
 
@@ -111,6 +113,8 @@ shape that survives it.
 ```python
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+
+from serialization import canonical_decimal, canonical_str
 
 @dataclass(frozen=True)
 class MoneySpec:          # spec: primitive leaves only — the inbound door
@@ -131,10 +135,10 @@ class MoneyAmount:        # child VO: owns the single-concept rules + behavior
         object.__setattr__(self, "_value", parsed)
 
     def add(self, other: "MoneyAmount") -> "MoneyAmount":
-        return MoneyAmount(str(self._value + other._value))   # re-enter the door
+        return MoneyAmount(canonical_decimal(self._value + other._value))   # re-enter the door
 
-    def __str__(self) -> str:               # canonical exit (Decimal → canonical text)
-        return str(self._value)
+    def __str__(self) -> str:               # canonical exit: the Decimal text policy, one site
+        return canonical_decimal(self._value)
 
 @dataclass(frozen=True)
 class MoneyCurrency:                        # no conversion needed → the auto-init IS the one door
@@ -145,7 +149,7 @@ class MoneyCurrency:                        # no conversion needed → the auto-
             raise ValueError("currency is required")
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)
 
 @dataclass(frozen=True, init=False)
 class Money:
@@ -233,8 +237,10 @@ canonicalized. When callers need different nil-handling, add a variant
   exception IS the panic path — in tests, construct directly with known-valid
   literals.
 - A leaf's conversion dunder is its **canonical form**, not display —
-  locked by the round-trip law; serialization code unwraps it through the
-  app-level `canonical(vo, expected)` helper, never a bare cast; display formatting
+  locked by the round-trip law. The dunder body is a one-line delegation to
+  the app-level per-type `canonical_*` policy helper (`canonical_str`,
+  `canonical_decimal`, `canonical_datetime`, …); edges consume it via the
+  conversion protocol (`str(vo)`, `int(vo)`); display formatting
   belongs to the presentation edge (`serialization.md`). A compound,
   entity, or aggregate defines **no conversion dunder at all** — `repr` is
   the debug surface. Never compare domain objects via `str(a) == str(b)`.

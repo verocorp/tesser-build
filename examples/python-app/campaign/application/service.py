@@ -19,7 +19,6 @@ from campaign.domain.money import MoneySpec
 from campaign.domain.short_link import ShortLinkSpec
 from campaign.domain.values import CampaignID, Slug, TargetURL
 from errors import conflict, not_found
-from serialization import canonical
 
 
 class CampaignRepository(Protocol):
@@ -50,7 +49,7 @@ class CampaignService:
     def add_link(self, req: AddLinkRequest) -> CampaignView:
         c = self._find_campaign(CampaignID(req.campaign_id))
         target = TargetURL(req.target_url)
-        outcome = self._checker.check(canonical(target, str))
+        outcome = self._checker.check(str(target))
         if not outcome.allowed:
             raise conflict("destination_blocked", f"destination not allowed: {outcome.reason}")
         slug = Slug(req.slug)
@@ -69,7 +68,7 @@ class CampaignService:
         c = self._repo.find_by_slug(slug)
         if c is None:
             raise not_found("link_missing", f"no active link for slug {req.slug!r}")
-        value = canonical(slug, str)
+        value = str(slug)
         parts = campaign_parts(c)
         row = next((link for link in parts.links if link.slug == value), None)
         if row is None or not row.active:

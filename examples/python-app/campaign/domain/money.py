@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 from errors import invalid
+from serialization import canonical_decimal, canonical_str
 
 _CURRENCY_RE = re.compile(r"[A-Z]{3}")
 
@@ -29,7 +30,7 @@ class MoneyAmount:
         object.__setattr__(self, "_value", parsed)
 
     def __str__(self) -> str:
-        return str(self._value)
+        return canonical_decimal(self._value)
 
 
 @dataclass(frozen=True)
@@ -41,7 +42,7 @@ class MoneyCurrency:
             raise invalid("invalid_budget_currency", f"budget currency {self._value!r} must be 3 uppercase letters")
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)
 
 
 @dataclass(frozen=True, init=False)

@@ -4,8 +4,6 @@ from dataclasses import dataclass
 
 from campaign.domain.campaign import Campaign
 from campaign.domain.short_link import ShortLink
-from serialization import canonical
-
 
 @dataclass(frozen=True)
 class MoneyParts:
@@ -29,10 +27,10 @@ class CampaignParts:
 
 def campaign_parts(c: Campaign) -> CampaignParts:
     return CampaignParts(
-        id=canonical(c.id, str),
+        id=str(c.id),
         budget=MoneyParts(
-            amount=canonical(c.budget.amount, str),
-            currency=canonical(c.budget.currency, str),
+            amount=str(c.budget.amount),
+            currency=str(c.budget.currency),
         ),
         links=tuple(_short_link_parts(link) for link in c.links),
     )
@@ -40,7 +38,7 @@ def campaign_parts(c: Campaign) -> CampaignParts:
 
 def _short_link_parts(link: ShortLink) -> ShortLinkParts:
     return ShortLinkParts(
-        slug=canonical(link.slug, str),
-        target_url=canonical(link.target_url, str),
+        slug=str(link.slug),
+        target_url=str(link.target_url),
         active=link.active,
     )

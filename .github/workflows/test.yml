@@ -68,7 +68,7 @@ jobs:
       - name: examples/python — mypy --strict + pytest
         working-directory: examples/python
         run: |
-          MYPYPATH=. mypy --strict campaign campaignapp linkcampaign linkcampaignimpl transport catalog main.py tests conftest.py
+          MYPYPATH=. mypy --strict campaign campaignapp linkcampaign linkcampaignimpl transport catalog serialization.py main.py tests conftest.py
           pytest -q
 
   python-app-example:
@@ -90,7 +90,29 @@ jobs:
       - name: examples/python-app — mypy --strict + pytest
         working-directory: examples/python-app
         run: |
-          MYPYPATH=. mypy --strict errors.py lifecycle.py campaign linkpolicy reports bootstrap srv tests conftest.py
+          MYPYPATH=. mypy --strict errors.py lifecycle.py serialization.py campaign linkpolicy reports bootstrap srv tests conftest.py
+          pytest -q
+
+  serdepy-example:
+    # Gates the serialization-norm worked example (Python) at the same bar:
+    # mypy --strict + pytest. Shows every canonical-exit case in running code
+    # (all four conversion dunders, the Decimal and datetime text policies,
+    # zero-dunder compound, parts with a derived field diverging from the
+    # spec, an edge golden) — the all-cases companion to python-app's
+    # production-shaped parts impl.
+    name: serdepy example (mypy --strict + pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dev tooling
+        run: pip install -r examples/serdepy/requirements-dev.txt
+      - name: examples/serdepy — mypy --strict + pytest
+        working-directory: examples/serdepy
+        run: |
+          MYPYPATH=. mypy --strict serialization.py parcel.py parts.py wire.py conftest.py tests
           pytest -q
 
   errorspy-example:
@@ -178,6 +200,11 @@ jobs:
       # remaining example tree: examples/python and examples/python-app are
       # covered by their full gates above; errorspy gates on TB020 alone
       # (its error-matrix classes are deliberately not domain-conformant).
+      - name: tessercheck-py on examples/serdepy (explicit CLI gate)
+        run: python -m tessercheck examples/serdepy
+        working-directory: .
+        env:
+          PYTHONPATH: tessercheck-py
       - name: tessercheck-py comments norm on examples/errorspy (--select TB020)
         run: python -m tessercheck --select TB020 examples/errorspy
         working-directory: .

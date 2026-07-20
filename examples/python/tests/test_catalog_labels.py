@@ -43,5 +43,8 @@ def test_raw_constructor_with_duplicate_keys_canonicalizes() -> None:
     assert dup.as_dict() == {"a": "2"}
 
 
-def test_str_is_sorted_display() -> None:
-    assert str(Labels.new({"size": "M", "color": "black"})) == "color=black,size=M"
+def test_collection_vo_has_no_conversion_dunders() -> None:
+    labels = Labels.new({"size": "M", "color": "black"})
+    for name in ("__str__", "__int__", "__float__", "__bytes__"):
+        assert name not in Labels.__dict__
+    assert labels.as_dict() == {"size": "M", "color": "black"}
