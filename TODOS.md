@@ -91,6 +91,19 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   - **Why not now:** wave (a/b/c) ships the static norms first; the red team
     needs those fixed as its subject.
 
+- [ ] **Behavior-rebuild ergonomics (performance-triggered only)** (2026-07-20)
+  - **What:** behavior methods rebuild new instances THROUGH the public
+    constructor via canonical forms (`MoneyAmount(str(total))`) — ruled
+    2026-07-20; the cost is parse overhead only, and cosmetic "ickiness" is
+    not evidence. If a consumer measures a real hot-path cost, the recorded
+    candidate designs are: a TB003-sanctioned same-class private rebuild
+    (`object.__new__(EnclosingClass)` + setattr of declared fields inside the
+    class's own methods — Go's package-private struct-literal idiom ported),
+    or union-typed doors (rejected once already: special cases for a
+    perf-only benefit).
+  - **Trigger:** a measured performance problem in a real consumer, not
+    aesthetics.
+
 - [ ] **Checker contracts as fixtures-first** (2026-07-20)
   - **What:** a check's *normative* contract artifact is its
     `good/bad` fixture pair set — authored and reviewed BEFORE the checker,

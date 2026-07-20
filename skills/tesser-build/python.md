@@ -88,12 +88,14 @@ has (TB013), and the same shape as Go's `NewMoney(spec)` — one construction
 story across types and languages. There is **no `from_spec`** (a factory
 classmethod is a second public idiom for the same job) and no reliance on
 the dataclass auto-init. A leaf whose construction involves conversion
-(str → Decimal) widens its one door to a union (`str | Decimal`) rather
-than growing a `parse` classmethod. The cost, priced in deliberately:
-behavior methods that produce new instances re-enter **through the door**,
-building the spec from canonical forms (`str(total)`) — lossless by the
-round-trip law, and the only construction path stays the only construction
-path.
+(str → Decimal) takes the **canonical form** at its one door and converts
+inside — no `parse` classmethod, no union-typed door (ruled 2026-07-20: a
+union adds special cases for what is only a performance benefit). The
+cost, priced in deliberately: behavior methods — leaf and compound alike —
+that produce new instances re-enter **through the door** via canonical
+forms (`MoneyAmount(str(total))`), lossless by the round-trip law, so
+every instance that exists passed the one validating door. Revisit only on
+a measured performance problem (`TODOS.md`: behavior-rebuild ergonomics).
 
 **Warning — hiding a field breaks keyword construction.** Renaming `amount` to
 `_amount` renames the auto-generated `__init__` parameter, so
@@ -119,18 +121,17 @@ class MoneySpec:          # spec: primitive leaves only — the inbound door
 class MoneyAmount:        # child VO: owns the single-concept rules + behavior
     _value: Decimal
 
-    def __init__(self, value: "str | Decimal") -> None:   # ONE door; union = raw or canonical form
-        if isinstance(value, str):
-            try:
-                value = Decimal(value)
-            except InvalidOperation as e:
-                raise ValueError(f"invalid amount: {value!r}") from e
-        if value < 0:
-            raise ValueError(f"amount must not be negative: {value}")
-        object.__setattr__(self, "_value", value)
+    def __init__(self, value: str) -> None:   # ONE door: the canonical form in
+        try:
+            parsed = Decimal(value)
+        except InvalidOperation as e:
+            raise ValueError(f"invalid amount: {value!r}") from e
+        if parsed < 0:
+            raise ValueError(f"amount must not be negative: {parsed}")
+        object.__setattr__(self, "_value", parsed)
 
     def add(self, other: "MoneyAmount") -> "MoneyAmount":
-        return MoneyAmount(self._value + other._value)
+        return MoneyAmount(str(self._value + other._value))   # re-enter the door
 
     def __str__(self) -> str:               # canonical exit (Decimal → canonical text)
         return str(self._value)

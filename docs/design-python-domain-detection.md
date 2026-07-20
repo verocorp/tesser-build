@@ -141,10 +141,11 @@ accessor at all, only `__str__`.
 > symmetric) — **no `from_spec` classmethods** (supersedes the
 > `spec + from_spec` wording in §4.4 and §5's "structured type has a
 > `from_spec`" detection signal, which becomes "structured type's `__init__`
-> takes its spec"); a leaf needing conversion widens its one door to a
-> union (`str | Decimal`), no `parse` classmethod; behavior methods
-> re-enter through the door via canonical forms (lossless by the
-> round-trip law). Compounds, entities, and aggregates have no primitive
+> takes its spec"); a leaf needing conversion takes the canonical text at
+> its one door and converts inside — no `parse` classmethod, no
+> union-typed door; behavior methods (leaf and compound) re-enter through
+> the door via canonical forms (lossless by the round-trip law;
+> performance-only cost, revisit on evidence). Compounds, entities, and aggregates have no primitive
 > exit at all — zero conversion dunders (`repr` is the debug surface;
 > logging is its own future norm) — they decompose via the per-context
 > parts module (application layer); the spec stays inbound-only.
@@ -275,10 +276,11 @@ the "other"/value-family rules above.
    its `ExpenseReport` "aggregate root" owned a collection of *value objects*,
    contradicting the settled root definition (§2: a root embeds ≥1 **entity**).
    *Resolved 2026-07-20: the worked example is `MoneyAmount` in
-   `examples/python/catalog/money.py` (Decimal-backed child VO — one
-   union-door `__init__(str | Decimal)`, non-negative guard, `add`,
-   canonical text via `__str__`, round-trip law locked in tests), held by
-   `Money` and exposed as a VO accessor, exactly this pattern.*
+   `examples/python/catalog/money.py` (Decimal-backed child VO — one door
+   `__init__(value: str)` taking the canonical text, non-negative guard,
+   `add` re-entering the door, canonical text out via `__str__`, round-trip
+   law locked in tests), held by `Money` and exposed as a VO accessor,
+   exactly this pattern.*
 3. **Do specs live in `*/domain/**`** — they sit beside domain types; detection
    classifies them by signature regardless, so this is a labeling call, not a
    blocker.
