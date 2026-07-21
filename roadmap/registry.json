@@ -301,6 +301,46 @@
       ]
     },
     {
+      "key": "norm-serialization",
+      "title": "Norm: serialization",
+      "skill": "serialization.md",
+      "py_example": [
+        "examples/serdepy"
+      ],
+      "go_example": [],
+      "go_analyzers": [],
+      "py_checks": [
+        "TB015",
+        "TB016",
+        "TB017",
+        "TB018"
+      ],
+      "enforcement_tests": [
+        "examples/serdepy/tests"
+      ],
+      "rationale": []
+    },
+    {
+      "key": "norm-logging",
+      "title": "Norm: logging",
+      "skill": "logging.md",
+      "py_example": [],
+      "go_example": [],
+      "go_analyzers": [],
+      "py_checks": [],
+      "rationale": []
+    },
+    {
+      "key": "norm-imports",
+      "title": "Norm: imports",
+      "skill": "imports.md",
+      "py_example": [],
+      "go_example": [],
+      "go_analyzers": [],
+      "py_checks": [],
+      "rationale": []
+    },
+    {
       "key": "rule-dependency-direction",
       "title": "Dependency direction (acyclic, inward)",
       "kind": "rule",

@@ -27,6 +27,9 @@ Legend: ✅ done · 🟡 partial · ❌ absent · — intentionally n/a.
 | Norm: errors | ✅ | ❌ | ❌ | 🟡 in-example | ❌ the errorspy example matrix is the proof; no changeability arm |
 | Norm: testing | ❌ | ❌ | 🟡 partial | 🟡 Py only (TB030) | ❌ |
 | Norm: comments | ✅ | ✅ | ✅ | ✅ 1 Go + 1 Py | ❌ |
+| Norm: serialization | ✅ | ❌ | ✅ | 🟡 Py only (TB015, TB016, TB017, TB018) | ❌ |
+| Norm: logging | ❌ | ❌ | 🟡 stub | ❌ | ❌ |
+| Norm: imports | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 ## Pay-now rules
 
