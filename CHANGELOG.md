@@ -5,6 +5,74 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.6.0] - 2026-07-21
+
+The serialization wave: how a domain object is built, and how its primitive
+gets out. Seven commits across six pull requests, landing a new norm document,
+four new Python checks, and the worked examples that prove them.
+
+### Added
+
+- **The serialization norm** (`skills/tesser-build/serialization.md`): one
+  document covering how a value object, entity or aggregate crosses an edge.
+  Its core is the **parts pattern** — a per-context module in the application
+  layer owning the single decompose walk into a total, typed, domain-named
+  record. Edges own their wire keys; goldens live on edges only. This is the
+  only direction-legal home: both the application service's `Respond` and the
+  adapters consume it, and adapters may import application but never the
+  reverse.
+- **A leaf value object's canonical exit is pinned, and pinned once.** Each
+  backing type has exactly one conversion dunder (`__str__`/`__int__`/
+  `__float__`/`__bytes__`) delegating to one policy helper, so a consumer's
+  tenth datetime value object cannot drift from the format. `Decimal` exits as
+  a scientific string; `datetime` as UTC-normalized ISO-8601 at microsecond
+  precision, with naive datetimes refused. Compounds, entities and aggregates
+  have no primitive exit at all — they decompose structurally, and `repr` is
+  the debug surface.
+- **Four new checks.** `TB015` stops a domain object serializing itself (no
+  spec-returning method, no emit-a-sink, no second or mismatched exit, and no
+  conversion dunder at all on a structured type). `TB016` governs what a value
+  object is built from — compounds hold child value objects, and `bool`/
+  `complex` are not value-object material. `TB017` enforces ONE construction
+  door: any classmethod or staticmethod returning its own type is a second
+  door, whatever it is named. `TB018` requires each canonical exit to be a
+  one-line delegation to its policy helper.
+- **`examples/serdepy`**, a worked example covering every serialization case:
+  all four exits, the Decimal and datetime policies including their accepted
+  edges, a zero-dunder compound, and a parts record with a derived field that
+  proves parts are not specs.
+- **`web/presentation` is a named app-level role** in the anatomy, so a UI or
+  SPA has a stated home rather than being placed by taste.
+
+### Changed
+
+- **A compound value object now holds child value objects, not bare
+  primitives** — `Money` is `MoneyAmount` + `MoneyCurrency`, and each rule
+  lives on the type that owns it, so no construction path can skip one.
+- **One door per type, uniformly** (2026-07-21). A value object constructs
+  through its own `__init__` and nothing else. This swept in the collection
+  value object's `new`/`require` pair, which had looked like an exception and
+  turned out to be the case that settled it: two doors with different
+  invariants mean the type's guarantee depends on which door the caller
+  picked, so it guarantees nothing. When you need a stricter set, that is a
+  different type.
+- Repositories store reconstructable rows rather than live objects, so a load
+  rebuilds a value-equal, non-identical aggregate with its invariants re-run.
+- `python.md`, `go.md`, `handlers.md` and the check catalogs were reconciled
+  to the above; `skill-version` is now 16.
+
+### Fixed
+
+- A campaign's short link could never be deactivated: the domain supported the
+  state but no use case reached it, leaving the guard that reads it dead. The
+  use case is now wired end to end.
+- The analyzer no longer aborts a whole tree scan on one pathological file — a
+  deep string annotation raised an error the parser guard did not catch,
+  losing every finding for every other file and exiting with a traceback.
+- `TB018` no longer reports the module-qualified spelling
+  (`serialization.canonical_str(x)`) as hand-rolled; both import idioms are the
+  same delegation.
+
 ## [0.0.4.0] - 2026-07-19
 
 ### Added
