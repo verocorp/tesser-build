@@ -157,6 +157,27 @@ existence-checked) and `enforced_by` (free text naming the enforcer); a
 malformed `kind` is a named file:line error. `tb-cell` overrides apply to
 component rows only.
 
+### Totality: every artifact is claimed by a row
+
+Every check above runs **registry → repo** — "everything a row names exists".
+The generator also runs the opposite direction, **repo → registry**: every
+member of an enumerable universe must be claimed by some row. The universes
+are skill docs (`skills/tesser-build/*.md`, claimed via `skill`), Python check
+codes (`tessercheck-py` `CHECKS`, claimed via `py_checks`), and Go analyzer
+names (`internal/analyzers.All`, claimed via `go_analyzers`).
+
+This direction had no check until 2026-07-21, which is how `serialization.md`,
+`logging.md`, `TB015` and `TB016` all shipped green while the matrix reported
+none of them. **Adding a skill doc, a check, or an analyzer without a row now
+fails CI on that PR.**
+
+An artifact that genuinely belongs to no row is exempted **by name, with a
+reason**, in the registry's `_unrowed` block (today: `SKILL.md`, `go.md`,
+`python.md` — a router and two cross-cutting language guides). The exemption
+list is itself guarded: exempting something a row already claims, or something
+that no longer exists, is a named error, so the exemptions cannot quietly
+become the next stale surface.
+
 Markers are scanned in `skills/`, `examples/`, `rationale/`, `passes/`,
 `tessercheck-py/` (`.md`/`.go`/`.py`; `testdata/` excluded). `docs/` and
 `roadmap/` are deliberately out of scan scope so this section and the

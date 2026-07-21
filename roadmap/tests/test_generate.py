@@ -343,3 +343,78 @@ def test_dead_path_check_flags_and_allows(tmp_path: Path) -> None:
     # living surfaces too; this asserts it is.
     out = generate_fixture(root, registry)
     assert "Widget" in out
+
+
+# --- totality: repo → registry (every artifact is claimed by some row) ------
+
+
+def _write_unrowed(registry: Path, unrowed: object) -> None:
+    data = json.loads(registry.read_text(encoding="utf-8"))
+    data["_unrowed"] = unrowed
+    registry.write_text(json.dumps(data), encoding="utf-8")
+
+
+def test_unrowed_skill_doc_is_an_error(tmp_path: Path) -> None:
+    """The teeth-test for the guard: a skill doc no row claims fails the build
+    on the PR that adds it, instead of silently missing from the matrix (the
+    serialization.md / logging.md failure)."""
+    root, registry = make_fixture(tmp_path)
+    (root / "skills" / "tesser-build" / "orphan.md").write_text("# Orphan\n", encoding="utf-8")
+    with pytest.raises(gen.RoadmapError, match=r"claimed by no roadmap row.*orphan\.md"):
+        generate_fixture(root, registry)
+
+
+def test_unrowed_skill_doc_can_be_exempted_with_a_reason(tmp_path: Path) -> None:
+    root, registry = make_fixture(tmp_path)
+    (root / "skills" / "tesser-build" / "orphan.md").write_text("# Orphan\n", encoding="utf-8")
+    _write_unrowed(registry, {"skills": {"orphan.md": "language guide, owned by no single row"}})
+    assert "Widget" in generate_fixture(root, registry)
+
+
+def test_exemption_without_a_reason_is_an_error(tmp_path: Path) -> None:
+    root, registry = make_fixture(tmp_path)
+    (root / "skills" / "tesser-build" / "orphan.md").write_text("# Orphan\n", encoding="utf-8")
+    _write_unrowed(registry, {"skills": {"orphan.md": "   "}})
+    with pytest.raises(gen.RoadmapError, match="non-empty reason"):
+        generate_fixture(root, registry)
+
+
+def test_stale_exemption_is_an_error(tmp_path: Path) -> None:
+    """An exemption naming something that no longer exists must fail — else the
+    exemption list becomes the new stale surface and hides the next orphan."""
+    root, registry = make_fixture(tmp_path)
+    _write_unrowed(registry, {"skills": {"ghost.md": "deleted last week"}})
+    with pytest.raises(gen.RoadmapError, match="no longer exist"):
+        generate_fixture(root, registry)
+
+
+def test_exempting_a_claimed_member_is_an_error(tmp_path: Path) -> None:
+    root, registry = make_fixture(tmp_path)
+    _write_unrowed(registry, {"skills": {"widget.md": "but a row already claims it"}})
+    with pytest.raises(gen.RoadmapError, match="drop the exemption"):
+        generate_fixture(root, registry)
+
+
+def test_unknown_exemption_universe_is_an_error(tmp_path: Path) -> None:
+    root, registry = make_fixture(tmp_path)
+    _write_unrowed(registry, {"examples": {"foo": "typo'd universe"}})
+    with pytest.raises(gen.RoadmapError, match="unknown universe"):
+        generate_fixture(root, registry)
+
+
+def test_live_registries_are_totally_rowed() -> None:
+    """The real repo: every skill doc, every tessercheck-py check code, and
+    every Go analyzer is claimed by a row or explicitly exempted. This is the
+    guard running against the tree it exists to protect."""
+    rows = [
+        r
+        for r in gen.load_registry(REPO_ROOT / "roadmap" / "registry.json")
+        if gen.row_kind(r, REPO_ROOT / "roadmap" / "registry.json") == "component"
+    ]
+    gen.totality_check(
+        REPO_ROOT,
+        REPO_ROOT / "roadmap" / "registry.json",
+        rows,
+        gen.go_analyzer_names(REPO_ROOT, ["go", "run", "./cmd/analyzers-json"]),
+        gen.py_check_codes(REPO_ROOT),
+    )

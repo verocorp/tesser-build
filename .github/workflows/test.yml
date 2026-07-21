@@ -139,9 +139,11 @@ jobs:
     # The roadmap matrix is generated, never hand-maintained (Wave 2 item 10):
     # this job fails when the committed rendering drifts from the derivation,
     # when a tb-cell/tb-status annotation is malformed, when a stub doc lacks
-    # the 2A disclaimer, or when a living surface references a nonexistent
-    # path. Needs Go (the analyzers.All JSON bridge) and Python (the
-    # stdlib-only generator + its 6A test suite).
+    # the 2A disclaimer, when a living surface references a nonexistent path,
+    # or when a skill doc / check code / analyzer exists that no registry row
+    # claims (the totality guard — see docs/skill-authoring.md). Needs Go (the
+    # analyzers.All JSON bridge) and Python (the stdlib-only generator + its
+    # 6A test suite).
     name: roadmap (generated matrix + annotation checks)
     runs-on: ubuntu-latest
     steps:

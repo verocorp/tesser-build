@@ -8,6 +8,14 @@
     "enforcement_tests": "in-example enforcement test paths; these alone cap the checker cell at \ud83d\udfe1 in-example",
     "rationale": "glob patterns for executable-rationale test files; absent key = n/a (\u2014); no match = \u274c"
   },
+  "_unrowed_semantics": "The totality guard (2026-07-21) inverts each enumerable universe — skill docs under skills/tesser-build/*.md, tessercheck-py CHECKS codes, internal/analyzers.All names — and fails when a member is claimed by no row. Every other check runs registry → repo ('what a row names exists'); this one runs repo → registry ('what exists is claimed'), the direction that let serialization.md, logging.md, TB015 and TB016 ship with no row at all. A member that genuinely belongs to no row goes here BY NAME WITH A REASON. An exemption that is also claimed by a row, or that names something no longer present, is a loud error — the exemption list must not become the new stale thing.",
+  "_unrowed": {
+    "skills": {
+      "SKILL.md": "the skill's router/front door, not a component — it indexes the rows rather than being one",
+      "go.md": "language guide (Go rendering of every component), cross-cutting by construction — no single row owns it",
+      "python.md": "language guide (Python rendering of every component), cross-cutting by construction — no single row owns it"
+    }
+  },
   "rows": [
     {
       "key": "value-objects",

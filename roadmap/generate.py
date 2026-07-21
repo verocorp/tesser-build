@@ -19,6 +19,9 @@ Derivation is deterministic and non-LLM (design 2026-07-18, Wave 2 item 10):
 - Living markdown surfaces must not reference nonexistent repo paths
   (backticked paths only; suppress an intentional forward reference with
   ``tb-allow-missing:``).
+- **Totality**: every artifact in an enumerable universe (skill docs, Python
+  check codes, Go analyzer names) must be claimed by some row, or exempted by
+  name with a reason in the registry's ``_unrowed`` block.
 
 Run ``python3 roadmap/generate.py`` to regenerate in place; ``--check`` (CI)
 fails on any drift between the committed rendering and the derivation.
@@ -69,6 +72,25 @@ COMPONENT_ROW_KEYS_ALLOWED = {
 # codes on rule rows is the named later increment that lands with the fused
 # anatomy checks. tb-cell judgment overrides are component-table-only.
 RULE_ROW_KEYS_ALLOWED = {"key", "title", "kind", "taught_in", "enforced_by"}
+
+# The totality guard (2026-07-21). Every other check in this file runs
+# registry → repo: "everything a row names exists". This one runs the other
+# way — repo → registry: "everything that exists is claimed by a row". That
+# direction had no check at all, which is how serialization.md, logging.md,
+# TB015 and TB016 all shipped green with no row claiming them: the matrix
+# under-reported the toolkit and nothing could see it. An artifact that
+# genuinely belongs to no row is exempted BY NAME WITH A REASON in the
+# registry's ``_unrowed`` block — never by silence.
+SKILLS_DIR = "skills/tesser-build"
+
+UNROWED_KEY = "_unrowed"
+
+# universe -> (what a member is, where the claim lives on a row)
+UNROWED_UNIVERSES = {
+    "skills": ("skill doc", "skill"),
+    "py_checks": ("tessercheck-py check", "py_checks"),
+    "go_analyzers": ("Go analyzer", "go_analyzers"),
+}
 
 # The 2A stub-contract phrases every stub/partial doc must carry (machine check).
 DISCLAIMER_PHRASES = ("not yet materialized", "don't invent a convention")
@@ -294,6 +316,106 @@ def load_registry(path: Path) -> list[dict[str, object]]:
     return [r for r in rows if isinstance(r, dict)]
 
 
+def load_unrowed(path: Path) -> dict[str, dict[str, str]]:
+    """The ``_unrowed`` exemption block: universe -> {member: reason}.
+
+    Absent means "no exemptions". A reason is mandatory and must be non-empty
+    — an exemption without a stated reason is the silence this guard exists to
+    remove."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        raise RoadmapError(f"cannot read row registry {path}: {e}") from e
+    raw = data.get(UNROWED_KEY)
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise RoadmapError(f"{path}: {UNROWED_KEY} must be an object of universe -> {{member: reason}}")
+    out: dict[str, dict[str, str]] = {}
+    for universe, members in raw.items():
+        if universe not in UNROWED_UNIVERSES:
+            raise RoadmapError(
+                f"{path}: {UNROWED_KEY} names unknown universe {universe!r} "
+                f"(allowed: {', '.join(sorted(UNROWED_UNIVERSES))})"
+            )
+        if not isinstance(members, dict):
+            raise RoadmapError(f"{path}: {UNROWED_KEY}.{universe} must be an object of member -> reason")
+        exempt: dict[str, str] = {}
+        for member, reason in members.items():
+            if not isinstance(reason, str) or not reason.strip():
+                raise RoadmapError(
+                    f"{path}: {UNROWED_KEY}.{universe}[{member!r}] needs a non-empty reason string "
+                    "(say why it belongs to no row)"
+                )
+            exempt[str(member)] = reason
+        out[universe] = exempt
+    return out
+
+
+def _claimed(rows: list[dict[str, object]], row_key: str) -> set[str]:
+    """Every member named by some row, across a universe's claim key."""
+    claimed: set[str] = set()
+    for row in rows:
+        val = row.get(row_key)
+        if isinstance(val, str):
+            claimed.add(val)
+        elif isinstance(val, list):
+            claimed.update(str(x) for x in val)
+    return claimed
+
+
+def totality_check(
+    root: Path,
+    registry_path: Path,
+    rows: list[dict[str, object]],
+    go_names: set[str] | None,
+    py_codes: set[str] | None,
+) -> None:
+    """Fail when an artifact that exists is claimed by no row (the repo →
+    registry direction). A universe whose registry isn't present in this tree
+    is skipped, not guessed — the fixture repos in the test suite have no
+    ``tessercheck-py`` and no Go bridge, and a guard that invented empty
+    universes for them would pass vacuously in exactly the tree that matters.
+    """
+    exempt = load_unrowed(registry_path)
+    universes: dict[str, tuple[set[str], set[str]]] = {}
+
+    skills_dir = root / SKILLS_DIR
+    if skills_dir.is_dir():
+        universes["skills"] = (
+            {p.name for p in skills_dir.glob("*.md")},
+            _claimed(rows, "skill"),
+        )
+    if py_codes is not None:
+        universes["py_checks"] = (py_codes, _claimed(rows, "py_checks"))
+    if go_names is not None:
+        universes["go_analyzers"] = (go_names, _claimed(rows, "go_analyzers"))
+
+    for universe, (present, claimed) in sorted(universes.items()):
+        noun, row_key = UNROWED_UNIVERSES[universe]
+        ex = exempt.get(universe, {})
+
+        unclaimed = sorted(present - claimed - set(ex))
+        if unclaimed:
+            raise RoadmapError(
+                f"{registry_path}: {len(unclaimed)} {noun}(s) claimed by no roadmap row: "
+                f"{unclaimed}. Add a row naming them under {row_key!r}, or exempt each by "
+                f"name with a reason in {UNROWED_KEY}.{universe}"
+            )
+        both = sorted(set(ex) & claimed)
+        if both:
+            raise RoadmapError(
+                f"{registry_path}: {UNROWED_KEY}.{universe} exempts {both}, but a row already "
+                f"claims them — drop the exemption (a member is rowed or exempt, never both)"
+            )
+        stale = sorted(set(ex) - present)
+        if stale:
+            raise RoadmapError(
+                f"{registry_path}: {UNROWED_KEY}.{universe} exempts {stale}, which no longer "
+                f"exist — delete the stale exemption (it hides the next unrowed {noun})"
+            )
+
+
 def _str_list(row: dict[str, object], key: str) -> list[str] | None:
     if key not in row:
         return None
@@ -321,7 +443,7 @@ def skill_cell(root: Path, row: dict[str, object], markers: Markers) -> str:
         return SYMBOL_NA
     if not isinstance(name, str):
         raise RoadmapError(f"registry row {row.get('key')!r}: skill must be a string")
-    rel = f"skills/tesser-build/{name}"
+    rel = f"{SKILLS_DIR}/{name}"
     if not (root / rel).exists():
         return SYMBOL_ABSENT
     if rel not in markers.statuses:
@@ -539,10 +661,17 @@ def generate(root: Path, registry_path: Path, analyzers_cmd: list[str]) -> str:
     row_keys = {str(r["key"]) for r in rows}
     markers = scan_markers(root, row_keys)
 
-    need_go = any(_str_list(r, "go_analyzers") for r in rows)
-    need_py = any(_str_list(r, "py_checks") for r in rows)
+    # A universe is loaded when a row names it OR its registry exists in this
+    # tree — the totality guard has to invert the full universe, so "no row
+    # lists a check yet" must not be the reason the guard sees nothing.
+    need_go = any(_str_list(r, "go_analyzers") for r in rows) or (root / "cmd" / "analyzers-json").is_dir()
+    need_py = any(_str_list(r, "py_checks") for r in rows) or (
+        root / "tessercheck-py" / "tessercheck" / "finding.py"
+    ).is_file()
     go_names = go_analyzer_names(root, analyzers_cmd) if need_go else None
     py_codes = py_check_codes(root) if need_py else None
+
+    totality_check(root, registry_path, rows, go_names, py_codes)
 
     cells_by_row: dict[str, dict[str, str]] = {}
     for row in rows:
