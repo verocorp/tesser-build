@@ -296,18 +296,23 @@ Deferred work with context. Each entry carries enough for a cold pickup.
     Ruling the form means adding the helper to each tree's `serialization.py`,
     routing `Day`, and the map grows to match `_CANONICAL_EXIT`'s keys.
 
-- [ ] **The Go single-door mirror (TB017's analog)** (2026-07-21, wave C2 review)
-  - **What:** the one-door ruling is language-independent, but only Python
-    enforces it. `go.md` now states the rule and names it review-enforced;
-    `examples/catalog/labels.go` still ships `NewLabels` + `RequireLabels` (with
-    `TestRequireLabels_RejectsEmpty` locking the banned shape in), so the Go
-    worked example contradicts the Go prose.
-  - **Why it matters:** a reader who copies the Go example gets the two-door
-    shape the norm bans. This is the code half of a rendering that was only
-    half-swept.
-  - **Start at:** `examples/catalog/labels.go:17` — collapse to one `NewLabels`
-    carrying the invariant, drop `RequireLabels` and its test; then the Go
-    analyzer check, which folds into the queued Go serialization umbrella.
+- [ ] **The Go single-door ANALYZER (TB017's analog)** (2026-07-21, wave C2
+  review; the example half is done)
+  - **What:** the one-door ruling is language-independent and every *rendering*
+    now agrees — `go.md` states the rule, and `examples/catalog/labels.go` is
+    down to one `NewLabels`. What is still missing is the machine: no Go
+    analyzer flags a second exported constructor, so on the Go side this stays
+    review-enforced while Python has TB017.
+  - **Why it matters:** the asymmetry is now purely in enforcement, not in what
+    the two languages teach. That is the honest state, and `go.md` says so —
+    but a consumer's Go repo can still grow a `RequireX` and nothing catches it.
+  - **Shape:** a `go/analysis` pass over exported funcs returning their own
+    package type, mirroring TB017's "any second door, name-agnostic". The
+    interesting Go-specific question is whether `NewX`/`MustNewX` counts as two
+    doors — it does not (the `mustnew` convention is a sanctioned panic-wrapper
+    over the same door), so the check must exempt the `Must*` twin explicitly.
+  - **Start at:** `internal/analyzers/` alongside the existing passes; folds
+    into the queued Go serialization umbrella.
 
 - [ ] **TB018 trusts the helper's NAME, with no provenance check**
   (2026-07-21, wave C2 review)
