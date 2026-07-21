@@ -36,6 +36,7 @@ from tessercheck.astutil import (
 from tessercheck.classify import ClassInfo, Stereotype, classify_trees
 from tessercheck.comments_check import check_comments
 from tessercheck.finding import Finding
+from tessercheck.doubles_check import check_test_doubles
 from tessercheck.typed_checks import check_typed
 
 # Annotation base names that make a frozen dataclass unhashable at runtime
@@ -283,6 +284,10 @@ def check_tree(
         findings.extend(check_typed(registry, path, tree, source))
     # TB020 has no test exemption — the comments norm covers the whole tree.
     findings.extend(check_comments(path, source, tree))
+    # TB030 is global too — the fakes-only norm bans mock libraries in domain
+    # code and test code alike, and global scope keeps the bad.py fixture
+    # provable with is_test=False.
+    findings.extend(check_test_doubles(path, source, tree))
     return sorted(findings, key=lambda f: (f.line, f.col, f.code))
 
 

@@ -51,7 +51,7 @@ class _DummyPolicy:
         return ()
 
 
-def test_new_closes_already_built_deps_on_partial_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_new_closes_already_built_deps_on_partial_failure(monkeypatch: pytest.MonkeyPatch) -> None:  # tessercheck:ignore
     order: list[str] = []
     spy = _Spy("linkpolicy", order)
 
@@ -76,7 +76,7 @@ class _DummyReports:
         return ()
 
 
-def test_reports_closeable_is_on_the_cleanup_stack(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_reports_closeable_is_on_the_cleanup_stack(monkeypatch: pytest.MonkeyPatch) -> None:  # tessercheck:ignore
     order: list[str] = []
     spy = _Spy("reports", order)
 

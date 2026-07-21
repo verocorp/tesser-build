@@ -18,6 +18,9 @@ packages = ["tessercheck"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+# testdata/ holds analyzer fixtures, not tests — some are deliberately
+# non-conformant and must never be collected or imported.
+norecursedirs = ["testdata"]
 
 [tool.mypy]
 strict = true

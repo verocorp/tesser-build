@@ -58,6 +58,26 @@ def test_tree_fixture_pairs_prove_their_check() -> None:
         )
 
 
+def test_tb031_fixture_pair_holds_its_contract_before_the_checker_ships() -> None:
+    """TB031's checker is deliberately not built yet (fixtures-first), so it is
+    not in CHECKS and the registry-keyed guards above never reach its fixtures.
+    This is the interim owner: the pair must still DIFFER (the injected
+    violation survives) and both trees must stay clean of every OTHER check, so
+    that when TB031 lands the only delta is TB031 firing on bad_tree."""
+    d = _TESTDATA / "tb031"
+    good = (d / "good_tree" / "test_shortlink.py").read_text(encoding="utf-8")
+    bad = (d / "bad_tree" / "test_shortlink.py").read_text(encoding="utf-8")
+    assert good != bad, "tb031 fixtures converged — the pair no longer specifies a violation"
+
+    def as_domain(_path: str) -> bool:
+        return False
+
+    for name in ("good_tree", "bad_tree"):
+        findings, errors = run_paths([str(d / name)], is_test=as_domain)
+        assert errors == [], f"{name}: {errors}"
+        assert findings == [], f"{name}: " + "\n".join(f.render() for f in findings)
+
+
 def test_registry_codes_are_unique() -> None:
     seen = [c.code for c in CHECKS]
     assert len(seen) == len(set(seen))
