@@ -834,3 +834,156 @@ def test_tb016_leaves_an_entity_bool_field_alone() -> None:
         "    def __hash__(self) -> int:\n        return hash(self._id)\n"
     )
     assert "TB016" not in _codes(src)
+
+
+def test_tb017_flags_a_classmethod_factory_returning_its_own_type() -> None:
+    src = _LEAF + (
+        "    @classmethod\n"
+        "    def parse(cls, raw: str) -> 'Slug':\n        return cls(raw.strip())\n"
+    )
+    findings = [f for f in check_source("t.py", src, is_test=False) if f.code == "TB017"]
+    assert len(findings) == 1
+    assert "parse" in findings[0].message
+
+
+def test_tb017_flags_a_staticmethod_factory_too() -> None:
+    # Spelled without cls, it is the same second door.
+    src = _LEAF + (
+        "    @staticmethod\n"
+        "    def of(raw: str) -> 'Slug':\n        return Slug(raw)\n"
+    )
+    assert "TB017" in _codes(src)
+
+
+def test_tb017_sees_through_self_and_wrapped_return_annotations() -> None:
+    for ann in ("'Slug'", "Slug", "Self", "'Slug | None'", "Optional['Slug']"):
+        src = _LEAF + (
+            "    @classmethod\n"
+            f"    def make(cls, raw: str) -> {ann}:\n        return cls(raw)\n"
+        )
+        assert "TB017" in _codes(src), ann
+
+
+def test_tb017_leaves_a_factory_returning_another_type_alone() -> None:
+    # Not a construction door: it builds something else. The ban is on second
+    # ways to build THIS type.
+    src = _LEAF + (
+        "    @classmethod\n"
+        "    def field_names(cls) -> tuple[str, ...]:\n        return ('_value',)\n"
+    )
+    assert "TB017" not in _codes(src)
+
+
+def test_tb017_leaves_a_spec_factory_alone() -> None:
+    # A spec is an inert primitive carrier, not a value object — building one
+    # from a row is the inbound door's own business.
+    src = (
+        "from dataclasses import dataclass\n"
+        "from collections.abc import Mapping\n"
+        "@dataclass(frozen=True)\n"
+        "class SlugSpec:\n"
+        "    value: str\n"
+        "    @classmethod\n"
+        "    def from_row(cls, row: Mapping[str, str]) -> 'SlugSpec':\n"
+        "        return cls(value=row['value'])\n"
+    )
+    assert "TB017" not in _codes(src)
+
+
+def test_tb017_leaves_entities_to_tb013() -> None:
+    # TB013 owns identity objects and is deliberately narrower (the from_spec
+    # name only); TB017 must not widen that mandate by the back door.
+    src = (
+        "class Widget:\n"
+        "    def __init__(self, id: str) -> None:\n        self._id = id\n"
+        "    @classmethod\n"
+        "    def restore(cls, id: str) -> 'Widget':\n        return cls(id)\n"
+        "    def __eq__(self, other: object) -> bool:\n"
+        "        return isinstance(other, Widget) and other._id == self._id\n"
+        "    def __hash__(self) -> int:\n        return hash(self._id)\n"
+    )
+    assert "TB017" not in _codes(src)
+
+
+def test_tb017_is_suppressible() -> None:
+    src = _LEAF + (
+        "    @classmethod\n"
+        "    def parse(cls, raw: str) -> 'Slug':  # tessercheck:ignore\n"
+        "        return cls(raw)\n"
+    )
+    assert "TB017" not in _codes(src)
+
+
+_ROUTED = (
+    "from dataclasses import dataclass\n"
+    "from serialization import canonical_str\n"
+    "@dataclass(frozen=True)\n"
+    "class Slug:\n"
+    "    _value: str\n"
+)
+
+
+def test_tb018_clean_when_the_exit_delegates_to_its_policy_helper() -> None:
+    src = _ROUTED + "    def __str__(self) -> str:\n        return canonical_str(self._value)\n"
+    assert "TB018" not in _codes(src)
+
+
+def test_tb018_flags_a_hand_rolled_exit() -> None:
+    for body in ("self._value", "str(self._value)", "self._value.strip()"):
+        src = _ROUTED + f"    def __str__(self) -> str:\n        return {body}\n"
+        findings = [f for f in check_source("t.py", src, is_test=False) if f.code == "TB018"]
+        assert len(findings) == 1, body
+        assert "canonical_str" in findings[0].message
+
+
+def test_tb018_flags_delegation_to_the_wrong_policy() -> None:
+    # A Decimal leaf routed through str's identity gets a form nothing else
+    # in the system agrees on.
+    src = (
+        "from decimal import Decimal\nfrom dataclasses import dataclass\n"
+        "@dataclass(frozen=True)\n"
+        "class Price:\n"
+        "    _value: Decimal\n"
+        "    def __str__(self) -> str:\n        return canonical_str(str(self._value))\n"
+    )
+    findings = [f for f in check_source("t.py", src, is_test=False) if f.code == "TB018"]
+    assert len(findings) == 1
+    assert "canonical_decimal" in findings[0].message
+
+
+def test_tb018_flags_a_post_processed_helper_result() -> None:
+    # The helper's output is the canonical form; anything applied after it is a
+    # second author of the same form.
+    src = _ROUTED + (
+        "    def __str__(self) -> str:\n        return canonical_str(self._value).upper()\n"
+    )
+    assert "TB018" in _codes(src)
+
+
+def test_tb018_leaves_date_and_time_leaves_out_of_contract() -> None:
+    # A ruled exit (__str__) but no ruled canonical FORM yet — the time-type
+    # taxonomy is open (TODOS.md). Out of contract beats guessed at.
+    for imp, typ in (("from datetime import date", "date"), ("from datetime import time", "time")):
+        src = (
+            f"{imp}\nfrom dataclasses import dataclass\n"
+            "@dataclass(frozen=True)\n"
+            "class V:\n"
+            f"    _value: {typ}\n"
+            "    def __str__(self) -> str:\n        return self._value.isoformat()\n"
+        )
+        assert "TB018" not in _codes(src), typ
+
+
+def test_tb018_leaves_the_mismatched_dunder_shape_to_tb015() -> None:
+    # A str-backed leaf defining __int__ is one violation, and it is TB015's.
+    src = _ROUTED + "    def __int__(self) -> int:\n        return int(self._value)\n"
+    codes = _codes(src)
+    assert "TB015" in codes
+    assert "TB018" not in codes
+
+
+def test_tb018_is_suppressible() -> None:
+    src = _ROUTED + (
+        "    def __str__(self) -> str:  # tessercheck:ignore\n        return self._value\n"
+    )
+    assert "TB018" not in _codes(src)

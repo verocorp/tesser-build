@@ -2,12 +2,24 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 
+def canonical_decimal(value: Decimal) -> str:
+    return str(value)
+
+
+def canonical_int(value: int) -> int:
+    return value
+
+
+def canonical_str(value: str) -> str:
+    return value
+
+
 @dataclass(frozen=True)
 class Slug:
     _value: str
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)
 
 
 @dataclass(frozen=True)
@@ -15,7 +27,7 @@ class Count:
     _value: int
 
     def __int__(self) -> int:
-        return self._value
+        return canonical_int(self._value)
 
 
 @dataclass(frozen=True)
@@ -23,7 +35,7 @@ class MoneyAmount:
     _value: Decimal
 
     def __str__(self) -> str:
-        return str(self._value)
+        return canonical_decimal(self._value)
 
 
 @dataclass(frozen=True)
@@ -31,7 +43,7 @@ class MoneyCurrency:
     _value: str
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)
 
 
 @dataclass(frozen=True)
@@ -63,7 +75,7 @@ class Label:
     _value: str
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)
 
 
 @dataclass(frozen=True)

@@ -180,6 +180,30 @@ belongs to the edge, recorded where its golden test lives.
   wrappable set is now exactly the set with a ruled canonical exit; there is
   no must-wrap-without-an-exit gap. Types with no stereotype meaning at all
   (`UUID`, `Enum`) stay out of contract rather than guessed at.
+- **TB017** (the single-construction-door check) flags the inbound half of the
+  same discipline: a value object constructs through its own `__init__` and
+  nothing else, so **any** classmethod or staticmethod returning its own type
+  is a second door — name-agnostic, because the name was never what made it
+  one (`from_spec`, `parse`, `new`, `require`, `of` alike). Two doors mean two
+  invariant sets on one type: if `new` is permissive and `require` demands
+  non-empty, what the type guarantees depends on which door the caller picked.
+  A factory returning some *other* type is not a door and is left alone; specs
+  are inert carriers and out of scope; entities and aggregates keep TB013,
+  which is deliberately narrower (the `from_spec` name only) for migration
+  reasons, not principled ones.
+- **TB018** (the canonical-exit-routing check) flags rule 3's delegation half:
+  a leaf's conversion dunder must be a one-line delegation to the
+  `canonical_*` helper matching its backing type. Two shapes — not a
+  delegation at all (`return self._value`, `return str(self._value)`, or a
+  post-processed helper result), and delegation to the *wrong* policy (a
+  `Decimal` leaf routed through `canonical_str` gets str's identity instead of
+  the pinned decimal text). A hand-rolled exit is a second implementation of a
+  pinned form: correct the day it is written, silently drifted the day the
+  policy changes. The mismatched-*dunder* shape stays TB015's, so a violation
+  gets exactly one code. `date`- and `time`-backed leaves are **out of
+  contract**: they have a ruled exit (`__str__`) but no ruled canonical form
+  yet — the time-type taxonomy is a named open decision (`TODOS.md`) — and out
+  of contract beats guessed at, as with `UUID` and `Enum`.
 - The **parts import boundary** (adapters consume parts, not domain types,
   outbound) is a named deferred check; until it ships, rule 7 is
   review-enforced. Honest gap, stated.

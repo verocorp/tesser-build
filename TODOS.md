@@ -157,3 +157,23 @@ Deferred work with context. Each entry carries enough for a cold pickup.
     them; the meta-test already enforces pair existence.
   - **Why not now:** it IS now — this entry records the discipline so it
     outlives the wave.
+
+- [ ] **`date`/`time` have a ruled exit but no ruled canonical form**
+  (2026-07-21, wave C2)
+  - **What:** C1's temporal ruling put `date`/`datetime`/`time` in the
+    wrappable set, and `_CANONICAL_EXIT` gives all three `__str__`. But only
+    `datetime` has a *pinned form* (`canonical_datetime`). A `date`-backed leaf
+    exits as "canonical text" with no policy saying which text, and `time` is
+    worse (naive vs aware, precision). So `_CANONICAL_HELPER` is a proper
+    subset of `_CANONICAL_EXIT` and TB018 leaves those leaves out of contract.
+  - **Why it matters:** `examples/errorspy`'s `Day` is exactly this case — a
+    gated example tree shipping a hand-rolled `.isoformat()` exit that the norm
+    neither blesses nor flags. Every consumer with a date VO hits it.
+  - **Depends on / blocked by:** the time-type taxonomy decision (instant vs
+    date vs local time; per-precision types) already recorded above — `date`
+    is probably a one-line ruling (`value.isoformat()`), `time` is not, and
+    splitting them may be the answer.
+  - **Start at:** `_CANONICAL_HELPER` in `tessercheck-py/tessercheck/typed_checks.py`
+    (the gap is documented at the constant) and `serialization.md` rule 3.
+    Ruling the form means adding the helper to each tree's `serialization.py`,
+    routing `Day`, and the map grows to match `_CANONICAL_EXIT`'s keys.

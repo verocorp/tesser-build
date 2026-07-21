@@ -1,24 +1,14 @@
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class Labels:
 
-    _values: tuple[tuple[str, str], ...] = field(default=())
+    _values: tuple[tuple[str, str], ...]
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "_values", tuple(sorted(dict(self._values).items())))
-
-    @classmethod
-    def new(cls, values: Mapping[str, str] | None = None) -> "Labels":
-        return cls(tuple((values or {}).items()))
-
-    @classmethod
-    def require(cls, values: Mapping[str, str] | None = None) -> "Labels":
-        if not values:
-            raise ValueError("labels must not be empty")
-        return cls.new(values)
+    def __init__(self, values: Mapping[str, str]) -> None:
+        object.__setattr__(self, "_values", tuple(sorted(values.items())))
 
     def get(self, key: str) -> str | None:
         return dict(self._values).get(key)
