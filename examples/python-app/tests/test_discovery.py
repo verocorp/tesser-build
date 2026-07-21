@@ -27,6 +27,17 @@ def test_discovery_teeth_finds_client_bearing_context(tmp_path: pathlib.Path) ->
     assert not unclassified
 
 
+def test_web_dir_is_app_level_not_a_context(tmp_path: pathlib.Path) -> None:
+    (tmp_path / "web" / "admin").mkdir(parents=True)
+    (tmp_path / "web" / "ops").mkdir()
+    (tmp_path / "billing").mkdir()
+    (tmp_path / "billing" / "__init__.py").write_text("from billing.client import Client\n")
+    contexts, unclassified = classify(tmp_path)
+    assert contexts == ["billing"]
+    assert "web" not in unclassified
+    assert "web" not in contexts
+
+
 def test_exposes_client_detects_direct_definition(tmp_path: pathlib.Path) -> None:
     (tmp_path / "__init__.py").write_text(
         "from typing import Protocol\n\nclass Client(Protocol):\n    def ping(self) -> None: ...\n"

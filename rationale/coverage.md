@@ -103,6 +103,13 @@ problem-and-solution-space *reasoning*, not a type you construct, so they have a
 concept-file rendering and a resolver route but no language mechanics to
 materialize. That is the honest-gap `—`, not an omission.
 
+The **presentation** row carries `—` in go.md/python.md/FAQ for a different
+honest reason: it is doctrine with no verified `examples/` impl yet
+(`map.md#presentation`), so it materializes as a concept-file section and a
+resolver route only. The anatomy-shaped guard already recognizes it (the
+`web/` app-level role in `examples/python-app/tests/discovery.py`); the language
+mechanics and a worked example land when the shape is built.
+
 | Rule | Concept file | go.md | python.md | FAQ | Resolver route (SKILL.md) |
 |---|---|---|---|---|---|
 | One validating constructor, single construction path | `value-objects.md#rules` | `go.md#value-objects` | `python.md#value-objects` | #5 | "writing or changing a constructor" |
@@ -131,6 +138,7 @@ materialize. That is the honest-gap `—`, not an omission.
 | Context wiring: coordinate-driven impl selection, config lives in the wiring, cross-context deps injected | `wiring.md#rules` | — | `python.md#the-composition-root` | — | "wiring a context's own construction / its config" |
 | Hosts: one per delivery mechanism; the host is the env edge; only the edge exits; one graph per process | `srv.md#rules` | — | `python.md#inbound-handlers-and-hosts` | — | "writing an entry point / server / CLI host" |
 | The map: four-role anatomy, adapter taxonomy, connection patterns, gap-survey procedure | `map.md#the-anatomy` | — (a map is a doc, not code) | — | — | "understanding how the pieces of an app fit together" |
+| Presentation: web / out-of-process clients live app-level (top-level `web/<app>`), not in a context; server-rendered HTML is an inbound handler; a static-bundle host is a `srv/` concern | `map.md#presentation` | — | — | — | "placing a web UI / frontend / where presentation code lives" |
 | Compound VO components are child value objects; cross-field invariants stay on the compound | `value-objects.md#shape` | — (Go mirror queued, `TODOS.md`) | `python.md#value-objects` | — | — |
 | Canonical exit: one conversion dunder per leaf, matching its backing primitive; round-trip law; display is a presentation concern | `serialization.md#the-norm` | — (Go mirror queued: TextMarshaler re-hinge) | `python.md#value-objects` | — | "serializing a domain object" |
 | Domain objects never serialize themselves; one decompose walk per context (parts, application layer); edges own their shape | `serialization.md#the-norm` | — | — (verified impl pending `examples/python-app`; pointer in `python.md#repositories`) | — | "serializing a domain object" |

@@ -5,7 +5,7 @@ import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-APP_LEVEL_PACKAGES = frozenset({"bootstrap", "srv", "tests"})
+APP_LEVEL_PACKAGES = frozenset({"bootstrap", "srv", "web", "tests"})
 
 
 def exposes_client(pkg_dir: pathlib.Path) -> bool:
