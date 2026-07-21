@@ -14,13 +14,6 @@ func NewLabels(m map[string]string) Labels {
 	return Labels{values: copyMap(m)}
 }
 
-func RequireLabels(m map[string]string) (Labels, error) {
-	if len(m) == 0 {
-		return Labels{}, fmt.Errorf("labels must not be empty")
-	}
-	return Labels{values: copyMap(m)}, nil
-}
-
 func (l Labels) Get(key string) (string, bool) {
 	v, ok := l.values[key]
 	return v, ok
