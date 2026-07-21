@@ -649,6 +649,33 @@ def test_tb030_suppression_applies_to_an_import_shape() -> None:
     assert "TB030" in _tb030("from unittest.mock import MagicMock\n")
 
 
+def test_tb030_matches_submodules_of_a_banned_module() -> None:
+    # Exact-string matching let real submodules through: mock.mock is a genuine
+    # module of the PyPI backport that re-exports patch/MagicMock.
+    assert "TB030" in _tb030("import mock.mock\n")
+    assert "TB030" in _tb030("from mock.mock import patch\n")
+    assert "TB030" in _tb030("import unittest.mock.mock\n")
+    # A module that merely starts with the same letters is not a submodule.
+    assert "TB030" not in _tb030("import mockingbird\n")
+    assert "TB030" not in _tb030("from mockingbird import Song\n")
+
+
+def test_tb030_marker_must_be_a_real_comment_not_a_string_literal() -> None:
+    # Substring-scanning the raw line let a string literal that merely CONTAINS
+    # the marker text suppress a real violation — a review-invisible bypass.
+    # Suppression now keys on an actual COMMENT token.
+    spoof = "SRC = '# tessercheck:ignore'\nfrom unittest.mock import patch\n"
+    assert "TB030" in _tb030(spoof)
+    real = "from unittest.mock import patch  # tessercheck:ignore\n"
+    assert "TB030" not in _tb030(real)
+
+
+def test_tb030_catches_monkeypatch_from_its_private_home() -> None:
+    # MonkeyPatch's real definition lives in _pytest.monkeypatch; importing it
+    # from there is the same violation as importing it from pytest.
+    assert "TB030" in _tb030("from _pytest.monkeypatch import MonkeyPatch\n")
+
+
 def test_tb030_leaves_a_hand_written_fake_alone() -> None:
     src = (
         "class FakeSender:\n"

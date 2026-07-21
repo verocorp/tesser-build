@@ -36,7 +36,7 @@ from tessercheck.astutil import (
 from tessercheck.classify import ClassInfo, Stereotype, classify_trees
 from tessercheck.comments_check import check_comments
 from tessercheck.finding import Finding
-from tessercheck.test_double_check import check_test_doubles
+from tessercheck.doubles_check import check_test_doubles
 from tessercheck.typed_checks import check_typed
 
 # Annotation base names that make a frozen dataclass unhashable at runtime

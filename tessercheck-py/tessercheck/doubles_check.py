@@ -12,10 +12,29 @@ importing a mock library either):
   ``monkeypatch`` fixture parameter);
 * pytest-mock's ``mocker`` fixture parameter.
 
-The name can only enter a module through an import or an attribute chain, and
-both are caught above, so there is deliberately no bare-``MonkeyPatch``-Name
-arm: it would add no detection power while emitting a second finding per
-reference and forcing a suppression marker onto every one of those lines.
+There is deliberately no bare-``MonkeyPatch``-Name arm: for the import shapes
+above it adds no detection power, while emitting a second finding per reference
+and forcing a suppression marker onto every one of those lines.
+
+**Known holes — this is a syntactic checker, not a resolver.** It reports what
+it can see in one file's AST, and these shapes get through:
+
+* an **aliased module import** — ``import unittest as u`` then ``u.mock.patch``,
+  or ``import pytest as pt`` then ``pt.MonkeyPatch``. The attribute arms match
+  the literal module name; closing this needs an alias table built in a first
+  pass.
+* **dynamic import** — ``importlib.import_module("unittest.mock")``,
+  ``__import__``, ``getattr(unittest, "mock")``, ``sys.modules[...]``, or a
+  star-import re-export.
+* **use-site fixture access** — ``request.getfixturevalue("monkeypatch")``
+  takes no banned parameter, so the fixture-parameter arm never sees it.
+* a **suppressed import whitelists the module** — the mock-library arms fire on
+  the import, not on each use, so one marker on the import line clears every
+  call site below it.
+
+They are tracked rather than papered over; each is a self-service bypass by an
+author who could equally write the marker, which is why none of them blocks
+shipping the rule.
 
 Two scopes, on purpose. The **import** arms are global — domain and adapter
 code have no business importing a mock library either, and global scope keeps
@@ -32,6 +51,8 @@ formatter-wrapped import as well as a single-line one.
 """
 
 import ast
+import io
+import tokenize
 
 from tessercheck.finding import Finding
 
@@ -40,6 +61,36 @@ _SUPPRESS_MARKER = "# tessercheck:ignore"
 # A module whose import means a mocking library entered the file, in any import
 # shape (``import X``, ``import X as y``, ``from X import ...``).
 _MOCK_MODULES: frozenset[str] = frozenset({"unittest.mock", "mock"})
+
+
+def _is_mock_module(module: str) -> bool:
+    """Match a banned module or any submodule of one. Exact-string matching let
+    real submodules through: ``mock.mock`` is a genuine module of the PyPI
+    backport that re-exports ``patch``/``MagicMock``, and ``unittest.mock.mock``
+    resolves too."""
+    return any(
+        module == banned or module.startswith(banned + ".")
+        for banned in _MOCK_MODULES
+    )
+
+
+def _suppressed_lines(source: str) -> frozenset[int]:
+    """Line numbers carrying a real ``# tessercheck:ignore`` COMMENT token.
+
+    Tokenizing rather than substring-scanning the raw line is what stops a
+    string literal that merely CONTAINS the marker text from silently
+    suppressing a finding — ``SRC = '# tessercheck:ignore'`` is data, not a
+    directive. On a tokenize failure this returns empty, so the check fails
+    closed (findings are reported) rather than silently suppressing.
+    """
+    try:
+        return frozenset(
+            token.start[0]
+            for token in tokenize.generate_tokens(io.StringIO(source).readline)
+            if token.type == tokenize.COMMENT and _SUPPRESS_MARKER in token.string
+        )
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        return frozenset()
 
 # pytest fixture parameter names that inject a runtime patcher rather than a
 # hand-written fake: ``monkeypatch`` (builtin) and ``mocker`` (pytest-mock).
@@ -85,22 +136,18 @@ def _is_pytest_shaped(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
 def check_test_doubles(path: str, source: str, tree: ast.Module) -> list[Finding]:
     """Every TB030 finding for one file. Global scope: fires in test and
     non-test code alike."""
-    lines = source.splitlines()
+    marked = _suppressed_lines(source)
 
     def suppressed(node: ast.AST) -> bool:
         # Scan the node's whole line span, not just its first line: a
         # formatter-wrapped `from unittest.mock import (\n ... \n)` reports at
         # the statement's start, so a marker on the closing line would
         # otherwise suppress nothing. Every node emitted here is small (an
-        # import statement, an attribute, a name, a single argument), so the
-        # span never widens to a whole function body.
+        # import statement, an attribute, a single argument), so the span never
+        # widens to a whole function body.
         start = int(getattr(node, "lineno", 0))
         end = int(getattr(node, "end_lineno", start) or start)
-        return any(
-            _SUPPRESS_MARKER in lines[line - 1]
-            for line in range(start, end + 1)
-            if 1 <= line <= len(lines)
-        )
+        return any(line in marked for line in range(start, end + 1))
 
     findings: list[Finding] = []
 
@@ -114,16 +161,16 @@ def check_test_doubles(path: str, source: str, tree: ast.Module) -> list[Finding
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
-            if module in _MOCK_MODULES:
+            if _is_mock_module(module):
                 emit(node, _MOCK_LIB_MSG)
             elif module == "unittest" and any(a.name == "mock" for a in node.names):
                 emit(node, _MOCK_LIB_MSG)
-            elif module == "pytest" and any(
+            elif module in {"pytest", "_pytest.monkeypatch"} and any(
                 a.name == "MonkeyPatch" for a in node.names
             ):
                 emit(node, _MONKEYPATCH_MSG)
         elif isinstance(node, ast.Import):
-            if any(a.name in _MOCK_MODULES for a in node.names):
+            if any(_is_mock_module(a.name) for a in node.names):
                 emit(node, _MOCK_LIB_MSG)
         elif isinstance(node, ast.Attribute):
             # ``unittest.mock`` reached without importing it directly (the
