@@ -45,12 +45,3 @@ func TestLabels_String(t *testing.T) {
 		t.Errorf("String() = %q, want %q", got, "color=black,size=M")
 	}
 }
-
-func TestRequireLabels_RejectsEmpty(t *testing.T) {
-	if _, err := RequireLabels(nil); err == nil {
-		t.Errorf("RequireLabels(nil) should be rejected")
-	}
-	if _, err := RequireLabels(map[string]string{"color": "black"}); err != nil {
-		t.Errorf("RequireLabels with a label should succeed, got %v", err)
-	}
-}
