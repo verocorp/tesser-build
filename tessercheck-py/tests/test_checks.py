@@ -495,6 +495,80 @@ def test_tb003_nested_def_named_init_never_inherits_the_exemption() -> None:
     assert [f.line for f in findings] == [8]
 
 
+def _tb030(src: str, is_test: bool = False) -> set[str]:
+    return {f.code for f in check_source("t.py", src, is_test=is_test)}
+
+
+def test_tb030_bans_every_unittest_mock_import_shape() -> None:
+    # from unittest.mock import X ; import unittest.mock ; import unittest.mock as m ;
+    # from unittest import mock — each brings a mocking library into the file.
+    for src in (
+        "from unittest.mock import MagicMock\n",
+        "from unittest.mock import patch, AsyncMock\n",
+        "import unittest.mock\n",
+        "import unittest.mock as m\n",
+        "from unittest import mock\n",
+    ):
+        assert "TB030" in _tb030(src), src
+
+
+def test_tb030_bans_the_mock_backport() -> None:
+    assert "TB030" in _tb030("import mock\n")
+    assert "TB030" in _tb030("from mock import MagicMock\n")
+
+
+def test_tb030_catches_the_import_unittest_evasion() -> None:
+    # ``import unittest`` is legitimate (TestCase); the ban is on reaching
+    # ``unittest.mock`` through it.
+    src = "import unittest\n\n\ndef f() -> object:\n    return unittest.mock.patch('x')\n"
+    assert "TB030" in _tb030(src)
+
+
+def test_tb030_plain_import_unittest_alone_is_not_flagged() -> None:
+    assert "TB030" not in _tb030("import unittest\n")
+
+
+def test_tb030_bans_monkeypatch_in_every_shape() -> None:
+    # pytest.MonkeyPatch ; from pytest import MonkeyPatch ; a bare MonkeyPatch
+    # reference (MonkeyPatch.context()) ; and the monkeypatch fixture parameter.
+    assert "TB030" in _tb030("import pytest\n\n\ndef f() -> object:\n    return pytest.MonkeyPatch()\n")
+    assert "TB030" in _tb030("from pytest import MonkeyPatch\n")
+    assert "TB030" in _tb030("def f(mp: object) -> None:\n    with MonkeyPatch().context() as m:\n        pass\n")
+    assert "TB030" in _tb030("def test_x(monkeypatch: object) -> None:\n    monkeypatch.setenv('A', 'B')\n")
+
+
+def test_tb030_bans_the_mocker_fixture_parameter() -> None:
+    # pytest-mock injects its patcher as a fixture named ``mocker``.
+    assert "TB030" in _tb030("def test_x(mocker: object) -> None:\n    mocker.patch('a.b')\n")
+
+
+def test_tb030_fires_regardless_of_test_scope() -> None:
+    # Global scope: the fakes-only norm has no test exemption — domain and
+    # adapter code have no business importing a mock library either.
+    src = "from unittest.mock import MagicMock\n"
+    assert "TB030" in _tb030(src, is_test=True)
+    assert "TB030" in _tb030(src, is_test=False)
+
+
+def test_tb030_inline_suppression_clears_a_wiring_patch() -> None:
+    # A wiring test that must patch a process seam declares it.
+    clean = "def test_boot(monkeypatch: object) -> None:  # tessercheck:ignore\n    pass\n"
+    assert "TB030" not in _tb030(clean)
+    dirty = "def test_boot(monkeypatch: object) -> None:\n    pass\n"
+    assert "TB030" in _tb030(dirty)
+
+
+def test_tb030_leaves_a_hand_written_fake_alone() -> None:
+    src = (
+        "class FakeSender:\n"
+        "    def __init__(self) -> None:\n"
+        "        self._sent: list[str] = []\n"
+        "    def send(self, to: str) -> None:\n"
+        "        self._sent.append(to)\n"
+    )
+    assert "TB030" not in _tb030(src)
+
+
 def test_tb003_classvar_is_not_a_sanctioned_setattr_target() -> None:
     # ClassVar/InitVar annotations are not dataclass instance fields, so
     # writing one via object.__setattr__ in the spec-init is not the
