@@ -196,17 +196,19 @@ jobs:
         working-directory: .
         env:
           PYTHONPATH: tessercheck-py
-      # Comments-norm gate (TB020, skills/tesser-build/comments.md) for the
-      # remaining example tree: examples/python and examples/python-app are
-      # covered by their full gates above; errorspy gates on TB020 alone
-      # (its error-matrix classes are deliberately not domain-conformant).
       - name: tessercheck-py on examples/serdepy (explicit CLI gate)
         run: python -m tessercheck examples/serdepy
         working-directory: .
         env:
           PYTHONPATH: tessercheck-py
-      - name: tessercheck-py comments norm on examples/errorspy (--select TB020)
-        run: python -m tessercheck --select TB020 examples/errorspy
+      # errorspy joins the fully-gated trees: its DateWindow was swept to the
+      # serialization norm (spec construction, no compound dunder) so the repo
+      # no longer contains code that violates a check it ships. The raw-date
+      # bounds are conformant under the current primitive set; if date/datetime
+      # are ruled into it (TODOS.md), DateWindow's bounds get wrapped in the
+      # same change and this gate keeps it honest.
+      - name: tessercheck-py on examples/errorspy (explicit CLI gate)
+        run: python -m tessercheck examples/errorspy
         working-directory: .
         env:
           PYTHONPATH: tessercheck-py

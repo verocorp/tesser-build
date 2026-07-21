@@ -103,6 +103,13 @@ problem-and-solution-space *reasoning*, not a type you construct, so they have a
 concept-file rendering and a resolver route but no language mechanics to
 materialize. That is the honest-gap `—`, not an omission.
 
+The **presentation** row carries `—` in go.md/python.md/FAQ for a different
+honest reason: it is doctrine with no verified `examples/` impl yet
+(`map.md#presentation`), so it materializes as a concept-file section and a
+resolver route only. The anatomy-shaped guard already recognizes it (the
+`web/` app-level role in `examples/python-app/tests/discovery.py`); the language
+mechanics and a worked example land when the shape is built.
+
 | Rule | Concept file | go.md | python.md | FAQ | Resolver route (SKILL.md) |
 |---|---|---|---|---|---|
 | One validating constructor, single construction path | `value-objects.md#rules` | `go.md#value-objects` | `python.md#value-objects` | #5 | "writing or changing a constructor" |
@@ -131,6 +138,7 @@ materialize. That is the honest-gap `—`, not an omission.
 | Context wiring: coordinate-driven impl selection, config lives in the wiring, cross-context deps injected | `wiring.md#rules` | — | `python.md#the-composition-root` | — | "wiring a context's own construction / its config" |
 | Hosts: one per delivery mechanism; the host is the env edge; only the edge exits; one graph per process | `srv.md#rules` | — | `python.md#inbound-handlers-and-hosts` | — | "writing an entry point / server / CLI host" |
 | The map: four-role anatomy, adapter taxonomy, connection patterns, gap-survey procedure | `map.md#the-anatomy` | — (a map is a doc, not code) | — | — | "understanding how the pieces of an app fit together" |
+| Presentation: web / out-of-process clients live app-level (top-level `web/<app>`), not in a context; server-rendered HTML is an inbound handler; a static-bundle host is a `srv/` concern | `map.md#presentation` | — | — | — | "placing a web UI / frontend / where presentation code lives" |
 | Compound VO components are child value objects; cross-field invariants stay on the compound | `value-objects.md#shape` | — (Go mirror queued, `TODOS.md`) | `python.md#value-objects` | — | — |
 | Canonical exit: one conversion dunder per leaf, matching its backing primitive; round-trip law; display is a presentation concern | `serialization.md#the-norm` | — (Go mirror queued: TextMarshaler re-hinge) | `python.md#value-objects` | — | "serializing a domain object" |
 | Domain objects never serialize themselves; one decompose walk per context (parts, application layer); edges own their shape | `serialization.md#the-norm` | — | — (verified impl pending `examples/python-app`; pointer in `python.md#repositories`) | — | "serializing a domain object" |
@@ -217,6 +225,8 @@ classifier design
 | — no Go analyzer (reference-boundary check is Python-only today) | `TB012` reference-roots-by-id | an aggregate references another root by its ID value object, never by holding the root object; keyed on the whole-tree registry (a root is a reference-identity entity that embeds ≥1 entity — `is_aggregate_root`) | `tb012/{good,bad}.py` |
 | (construction) | `TB013` construct-through-spec | a structured domain object (entity/aggregate) constructs through `__init__(self, spec)`; no separate `from_spec` factory (the value-taking-ctor half is a deferred extension) | `tb013/{good,bad}.py` |
 | `comparability` / `equalitytest` | `TB014` equality-by-type | equality matches the stereotype: VO compares by value (never blocks); entity defines `__eq__`+`__hash__` together (by ID); aggregate root blocks equality (`__eq__ = None`/`__hash__ = None`) — keyed on the classifier | `tb014/{good,bad}.py` |
+| — no Go analyzer (the Go serialization mirror is a named gap — `TODOS.md`) | `TB015` public-decompiler | a domain object never serializes itself (`serialization.md` rules 1/3/5), in four shapes under one code: a public method returning a spec-classified type, an emit-a-sink method handing private fields to a parameter, a second or mismatched conversion dunder on a leaf, and any conversion dunder at all on a structured type (the zero-dunder contract, collection VOs included). Deeper laundering is declared out of contract | `tb015/{good,bad}.py` |
+| — no Go analyzer (same gap) | `TB016` value-object-primitives | what a value object may be built from (`serialization.md` rule 5's internal half; the 2026-07-20 R1 ruling + bool/complex amendment): a compound (≥2 fields) holds child value objects, not bare wrappable primitives; and `bool`/`complex` are not value-object material at all (a bool is atomic, complex has no wire form), so wrapping one is the violation regardless of field count. A single wrappable-primitive field is a leaf, untouched | `tb016/{good,bad}.py` |
 | `mustnew` | — dissolved | "No `Must*` twin is needed" | — |
 | `comments` | `TB020` no-comments | comments norm v0 (`comments.md`): zero comments and docstrings, machine directives exempt | `tb020/{good,bad}.py` |
 | (type-aware residual) | — deferred (P1) | primitive-obsession field resolution; identity-`__eq__` field | — |

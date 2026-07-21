@@ -44,8 +44,8 @@ class StorageCampaignRepository:
 def _to_record(campaign: Campaign) -> Record:
     return {
         "window": {
-            "start": campaign.window.start.isoformat(),
-            "end": campaign.window.end.isoformat(),
+            "start": str(campaign.window.start),
+            "end": str(campaign.window.end),
         },
         "links": [
             {"slug": str(link.slug), "target_url": str(link.target)}

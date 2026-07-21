@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 from datetime import date
 
-from errors import invalid
+from errors import DomainError, invalid, wrap
 
 _SLUG_PATTERN = re.compile(r"^[a-z0-9-]{4,20}$")
 
@@ -51,41 +51,54 @@ class DateWindowSpec:
     end: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
+class Day:
+
+    _value: date
+
+    def __init__(self, value: str) -> None:
+        try:
+            parsed = date.fromisoformat(value)
+        except ValueError as e:
+            raise invalid("bad_date", f"invalid date {value!r}") from e
+        object.__setattr__(self, "_value", parsed)
+
+    def __str__(self) -> str:
+        return self._value.isoformat()
+
+    def before(self, other: "Day") -> bool:
+        return self._value < other._value
+
+
+@dataclass(frozen=True, init=False)
 class DateWindow:
 
-    _start: date
-    _end: date
+    _start: Day
+    _end: Day
 
-    @classmethod
-    def from_spec(cls, spec: DateWindowSpec) -> "DateWindow":
-        start = _parse_date(spec.start, field="start")
-        end = _parse_date(spec.end, field="end")
-        return cls(_start=start, _end=end)
-
-    def __post_init__(self) -> None:
-        if self._start >= self._end:
+    def __init__(self, spec: DateWindowSpec) -> None:
+        start = _day(spec.start, field="start")
+        end = _day(spec.end, field="end")
+        if not start.before(end):
             raise invalid(
                 "window_order",
-                f"window start {self._start.isoformat()} must be before "
-                f"end {self._end.isoformat()}",
+                f"window start {start} must be before end {end}",
                 field="start",
             )
+        object.__setattr__(self, "_start", start)
+        object.__setattr__(self, "_end", end)
 
     @property
-    def start(self) -> date:
+    def start(self) -> Day:
         return self._start
 
     @property
-    def end(self) -> date:
+    def end(self) -> Day:
         return self._end
 
-    def __str__(self) -> str:
-        return f"[{self._start.isoformat()}, {self._end.isoformat()})"
 
-
-def _parse_date(value: str, *, field: str) -> date:
+def _day(value: str, *, field: str) -> Day:
     try:
-        return date.fromisoformat(value)
-    except ValueError as e:
-        raise invalid("bad_date", f"invalid {field} date {value!r}", field=field) from e
+        return Day(value)
+    except DomainError as e:
+        raise wrap(e, f"invalid {field} date {value!r}", field=field) from e.__cause__

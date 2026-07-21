@@ -30,13 +30,14 @@ def test_target_url_invalid_raises_validation() -> None:
 
 
 def test_date_window_valid() -> None:
-    w = DateWindow.from_spec(DateWindowSpec(start="2026-01-01", end="2026-02-01"))
-    assert str(w) == "[2026-01-01, 2026-02-01)"
+    w = DateWindow(DateWindowSpec(start="2026-01-01", end="2026-02-01"))
+    assert str(w.start) == "2026-01-01"
+    assert str(w.end) == "2026-02-01"
 
 
 def test_date_window_bad_date_wraps_cause_with_field() -> None:
     with pytest.raises(DomainError) as ei:
-        DateWindow.from_spec(DateWindowSpec(start="nope", end="2026-02-01"))
+        DateWindow(DateWindowSpec(start="nope", end="2026-02-01"))
     e = ei.value
     assert e.kind is DomainKind.VALIDATION
     assert e.code == "bad_date"
@@ -46,6 +47,6 @@ def test_date_window_bad_date_wraps_cause_with_field() -> None:
 
 def test_date_window_order_invariant() -> None:
     with pytest.raises(DomainError) as ei:
-        DateWindow.from_spec(DateWindowSpec(start="2026-02-01", end="2026-01-01"))
+        DateWindow(DateWindowSpec(start="2026-02-01", end="2026-01-01"))
     assert ei.value.kind is DomainKind.VALIDATION
     assert ei.value.code == "window_order"

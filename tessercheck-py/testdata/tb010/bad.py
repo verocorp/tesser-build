@@ -2,12 +2,12 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class Money:
-    _amount: str
-    currency: str
+class Currency:
+    value: str
 
-    def __str__(self) -> str:
-        return f"{self._amount} {self.currency}"
+    def __post_init__(self) -> None:
+        if len(self.value) != 3:
+            raise ValueError(self.value)
 
 
 @dataclass(frozen=True)

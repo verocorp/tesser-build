@@ -19,7 +19,7 @@ class Campaign:
 
     def __init__(self, id: str, spec: CampaignSpec) -> None:
         self._id = id
-        self._window = DateWindow.from_spec(spec.window)
+        self._window = DateWindow(spec.window)
         self._links: list[ShortLink] = []
         for i, link_spec in enumerate(spec.links):
             try:

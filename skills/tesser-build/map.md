@@ -32,12 +32,17 @@ the seam *is* the top of the context. A context is **discovered by its seam**:
 anything that exposes a `Client` is a context (the verified impl's discovery
 check keys on exactly this).
 
-**App-level, not per-context** — two things only:
+**App-level, not per-context** — three roles:
 
 - **`bootstrap`** — the composition root: `new(cfg) → App`, builds the graph
   once (`bootstrap.md`).
-- **`srv/`** — the hosts, one per delivery mechanism; the host is the env edge
-  (`srv.md`).
+- **`srv/`** — the hosts, one per *in-process* delivery mechanism; the host is
+  the env edge (`srv.md`).
+- **`web/`** — the *out-of-process* presentation deployables (an SPA, an admin
+  console, a native client): each a separately built, separately deployed
+  frontend that reaches the app only over a host's API. The `srv/`↔`web/` split
+  *is* the in-process↔out-of-process split. Anatomy and placement below
+  (`#presentation`); no verified impl yet — doctrine, imitate when built.
 
 **Boundary enforcement is optional, the boundary is not.** The public-vs-impl
 split stands on private fields + constructor-only construction; Go's
@@ -120,6 +125,53 @@ Which roles a context carries is decided by **application vs library**
   library ships the roles but no wiring and no hosts — the consumer supplies
   them; an app has `bootstrap` + `srv` too.
 
+## Presentation — web and other out-of-process clients {#presentation}
+
+A **presentation surface** — a web SPA, an admin console, an ops dashboard, a
+marketing site, a native mobile app — is a *driving actor*, the same category as
+a handler or a CLI: it sits to the left of the dependency arrow
+(`#how-contexts-connect`) and the domain never knows it exists. "Presentation"
+is a subset of the wider *inbound* category; being visual, or human-facing, is
+architecturally irrelevant. The one decision that fixes where its code lives is
+**in-process vs. out-of-process**:
+
+- **Server-rendered HTML** (templates, htmx, form posts) runs *in* the app
+  process, so it is an **inbound handler** — a `web.*` sibling of the JSON
+  handler in a context's `adapters/handlers` (`handlers.md`). It renders from
+  `Client` DTOs and never calls methods on domain objects (the presentation
+  twin of "no outward representation"). It does **not** get a top-level dir; it
+  is backend code and lives inside its context like any other handler.
+- **A client-side app** (SPA, native, desktop) is a **separate deployable**:
+  its own build, its own dependency graph, its own onion, reaching the app only
+  over a host's API. It is **not in the app's dependency graph** — so it lives
+  **app-level, at the top, never inside a context and never in Go `internal/`**.
+
+**Where the out-of-process clients live.** They are an app-level role beside
+`srv/`. One frontend → a flat `web/`. Several — `admin`, `ops`, `landingpage`,
+`app` — → one per subdir under the grouping dir: `web/admin`, `web/ops`,
+`web/landingpage`, `web/app`, each its own deployable. Don't build the grouping
+dir for a single occupant (promoting `web/` → `web/<app>/` later is a rename);
+do use it the moment a second frontend is real.
+
+- **Serving a built bundle** (if the app hosts the static files itself) is a
+  **`srv/` concern** — a static-file host beside the API host. The frontend
+  *source* lives in `web/<app>`; its compiled output is what a host serves.
+- **A view that composes two contexts for one screen** is a **cross-context
+  read**, so it is its own small context above both, not a fat frontend or a
+  fat handler (`#how-contexts-connect`). A backend-for-frontend is that pattern
+  wearing a UI-shaped name — reach for it only when one client needs a bespoke
+  aggregate shape.
+- **Monorepo vs. its own repo** is decided by shared API types and release
+  cadence, not by this anatomy. When `web/` is a sibling of the backend in one
+  repo the toolchains stay disjoint (Go/Python ignores `web/`, the JS build
+  owns it); a broader `clients/` grouping is the generalization once a
+  non-web deployable (an SDK, a bot) joins the web ones.
+
+**Status: doctrine, no verified impl yet.** Unlike the rest of this map, no
+`examples/` tree backs the `web/` shape — note the gap and imitate this section,
+don't invent a variant. The totality guard already recognizes `web/` as an
+app-level role (not a malformed, `Client`-less context).
+
 ## The gap survey — the decomposition procedure
 
 You arrive with a job ("hook up my database", "add an endpoint", "make these
@@ -152,5 +204,6 @@ two features talk"). Jobs are too many to catalog; decompose instead:
 | Context wiring | `wiring.md` | full |
 | bootstrap + app config + lifecycle | `bootstrap.md` | full |
 | srv hosts | `srv.md` | full |
+| Presentation: web / out-of-process clients | `map.md#presentation` | doctrine only; no verified impl yet |
 | Strategic design (subdomains, contexts, language) | `strategic-design.md` | full |
 | Language mechanics | `go.md`, `python.md` | full for the domain + seam concepts; app-level anatomy mechanics (wiring/bootstrap/handlers/hosts) in `python.md` only — the Go mirror is pending |
