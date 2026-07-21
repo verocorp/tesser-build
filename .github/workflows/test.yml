@@ -132,7 +132,7 @@ jobs:
       - name: examples/errorspy — mypy --strict + pytest
         working-directory: examples/errorspy
         run: |
-          MYPYPATH=. mypy --strict errors.py conftest.py domain app transport main.py tests
+          MYPYPATH=. mypy --strict errors.py serialization.py conftest.py domain app transport main.py tests
           pytest -q
 
   roadmap:

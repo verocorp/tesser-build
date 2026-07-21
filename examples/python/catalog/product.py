@@ -25,7 +25,7 @@ class Product:
             self._price = Money(spec.price)
         except ValueError as e:
             raise ValueError(f"invalid price: {e}") from e
-        self._labels = Labels.new(spec.labels)
+        self._labels = Labels(spec.labels)
 
     @property
     def sku(self) -> SKU:

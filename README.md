@@ -84,13 +84,14 @@ per-consumer config. Every repo has its own aggregates.
 The Python analog ([`tessercheck-py/`](tessercheck-py/)): a zero-dependency,
 stdlib-`ast` conformance analyzer for the frozen-dataclass conventions in
 [`skills/tesser-build/python.md`](skills/tesser-build/python.md). Syntactic
-checks (`TB001`–`TB004`), classification-aware checks (`TB010`–`TB016`) that
-distinguish value objects from identity objects and carry the serialization
-norm (a domain object never serializes itself; a compound holds child value
-objects, not bare primitives), and the tree-wide **norm checks** with no test
-exemption: zero comments (`TB020`) and fakes-only test doubles (`TB030` — no
-`unittest.mock`, no `mock` backport, no pytest-mock `mocker`, no
-`monkeypatch`). Run
+checks (`TB001`–`TB004`), classification-aware checks (`TB010`–`TB014`) that
+distinguish value objects from identity objects, serialization-norm checks
+(`TB015`–`TB018`) covering how a domain object is built and how its primitive
+leaves (it never serializes itself; a compound holds child value objects, not
+bare primitives; one construction door; one canonical exit per backing type),
+and the tree-wide **norm checks** with no test exemption: zero comments
+(`TB020`) and fakes-only test doubles (`TB030` — no `unittest.mock`, no `mock`
+backport, no pytest-mock `mocker`, no `monkeypatch`). Run
 `python -m tessercheck path/to/domain`; flake8-style output; suppress a single
 line with a trailing `# tessercheck:ignore`.
 
@@ -231,9 +232,10 @@ primitive accessors, and `Equal` where `==` is unavailable or unsafe) and the
 **comments norm** (`comments` analyzer: zero code comments, machine directives
 exempt — `skills/tesser-build/comments.md`). The Python side goes further:
 `tessercheck-py` adds classification-aware identity-taxonomy checks
-(TB010–TB014), the serialization norm (TB015–TB016 — a domain object never
-serializes itself; `skills/tesser-build/serialization.md`), the **testing
-norm** (TB030: a test double is a hand-written fake, never a mocking library —
+(TB010–TB014), the serialization norm (TB015–TB018 — a domain object never
+serializes itself, one construction door, one canonical exit;
+`skills/tesser-build/serialization.md`), the **testing norm** (TB030: a test
+double is a hand-written fake, never a mocking library —
 `skills/tesser-build/testing.md`), and whole-tree context discovery
 (`tessercheck-py/README.md`).
 The skill teaches the broader construction conventions — entities, aggregates,

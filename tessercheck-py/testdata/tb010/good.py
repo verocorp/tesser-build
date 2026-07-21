@@ -1,12 +1,16 @@
 from dataclasses import dataclass
 
 
+def canonical_str(value: str) -> str:
+    return value
+
+
 @dataclass(frozen=True)
 class Slug:
     _value: str
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)
 
 
 @dataclass(frozen=True)
@@ -19,7 +23,7 @@ class Amount:
     _value: str
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)
 
 
 @dataclass(frozen=True)

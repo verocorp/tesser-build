@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 
 
+def canonical_str(value: str) -> str:
+    return value
+
+
 @dataclass(frozen=True)
 class Slug:
 
@@ -11,7 +15,7 @@ class Slug:
             raise ValueError("invalid slug: must not be empty")
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)
 
 
 @dataclass(frozen=True)
@@ -24,7 +28,7 @@ class TargetURL:
             raise ValueError("invalid target url: must start with https://")
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)
 
 
 @dataclass(frozen=True)

@@ -47,7 +47,7 @@ bump `skill-version` in `skills/tesser-build/SKILL.md`.
 
 These three are the value-object core, not the whole enforced set. The Python
 analyzer also carries the identity taxonomy (`TB010`–`TB014`), the
-serialization norm (`TB015`–`TB016`), the comments norm (`TB020`, mirrored by
+serialization norm (`TB015`–`TB018`), the comments norm (`TB020`, mirrored by
 the Go `comments` analyzer), and the testing norm (`TB030` — a test double is a
 hand-written fake, never a mocking library; `skills/tesser-build/testing.md`).
 The full check list with per-code rules is `tessercheck-py/README.md`; which

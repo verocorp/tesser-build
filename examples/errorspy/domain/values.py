@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from errors import DomainError, invalid, wrap
+from serialization import canonical_str
 
 _SLUG_PATTERN = re.compile(r"^[a-z0-9-]{4,20}$")
 
@@ -24,7 +25,7 @@ class Slug:
             )
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)
 
 
 @dataclass(frozen=True)
@@ -41,7 +42,7 @@ class TargetURL:
             )
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)
 
 
 @dataclass(frozen=True)

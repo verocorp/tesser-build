@@ -89,7 +89,10 @@ with `__init__(self, spec)` assigning child VOs via `object.__setattr__`
 has (TB013), and the same shape as Go's `NewMoney(spec)` — one construction
 story across types and languages. There is **no `from_spec`** (a factory
 classmethod is a second public idiom for the same job) and no reliance on
-the dataclass auto-init. A leaf whose construction involves conversion
+the dataclass auto-init. On a value object this is machine-enforced and
+name-agnostic: **any** classmethod or staticmethod returning its own type is
+a second door (TB017) — `from_spec`, `parse`, `new`, `require`, `of` alike.
+A leaf whose construction involves conversion
 (str → Decimal) takes the **canonical form** at its one door and converts
 inside — no `parse` classmethod, no union-typed door (ruled 2026-07-20: a
 union adds special cases for what is only a performance benefit). The
@@ -188,24 +191,14 @@ Verified impl: `examples/python/catalog/money.py`.
 **Collection (wraps a dict/list):**
 
 ```python
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class Labels:
-    _values: tuple[tuple[str, str], ...] = ()   # immutable, hashable storage
+    _values: tuple[tuple[str, str], ...]        # immutable, hashable storage
 
-    def __post_init__(self) -> None:            # canonicalize on EVERY path
-        # dedupe keys (last wins) AND sort, so the raw constructor can't hold a
-        # non-canonical value even with duplicate keys.
-        object.__setattr__(self, "_values", tuple(sorted(dict(self._values).items())))
-
-    @classmethod
-    def new(cls, values: Mapping[str, str] | None = None) -> "Labels":
-        return cls(tuple((values or {}).items()))
-
-    @classmethod
-    def require(cls, values: Mapping[str, str] | None = None) -> "Labels":
-        if not values:                          # variant for a mandatory set
-            raise ValueError("labels must not be empty")
-        return cls.new(values)
+    def __init__(self, values: Mapping[str, str]) -> None:
+        # ONE door: the collection VO takes the collection, and canonicalizes
+        # (sort) on the only path in.
+        object.__setattr__(self, "_values", tuple(sorted(values.items())))
 
     def as_dict(self) -> dict[str, str]:        # copy out, never a reference
         return dict(self._values)
@@ -213,10 +206,16 @@ class Labels:
 
 Go wraps a `map` and must add `Equal` (a map-backed struct is non-comparable);
 Python stores an immutable, **sorted** tuple instead, so the frozen dataclass's
-default equality is content-based *and* the value is hashable. Sorting in
-`__post_init__` (not just in `new`) means every construction path is
-canonicalized. When callers need different nil-handling, add a variant
-(`require`) rather than pushing checks to parents.
+default equality is content-based *and* the value is hashable. `init=False`
+plus a hand-written `__init__` is what makes the canonicalization unskippable:
+there is exactly ONE way in, so no caller can hold a non-canonical value.
+Verified impl: `examples/python/catalog/labels.py`.
+
+**No `new`/`require` factory pair** (TB017). A second door is a second set of
+invariants: if `new` is permissive and `require` demands non-empty, what the
+type guarantees depends on which door the caller picked — so it guarantees
+nothing. When you genuinely need a stricter set, that is a *different type*
+with its own invariant, not a second factory on this one.
 
 **Rules of the section:**
 
@@ -258,7 +257,7 @@ canonicalized. When callers need different nil-handling, add a variant
   this). For a *value object* whose field would otherwise compare wrong (a
   case-insensitive code, say), prefer **normalizing on input** in
   `__post_init__` so the default field-wise equality stays correct (this is what
-  the collection VO above does — it sorts its entries in `__post_init__`). Reach
+  the collection VO above does — it sorts its entries at its one door). Reach
   for a hand-written `__eq__`/`__hash__` (with `eq=False`) only in the rare case
   where the original representation must be preserved *and* compared by a
   normalized form.

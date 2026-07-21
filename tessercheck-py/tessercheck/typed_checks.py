@@ -30,7 +30,7 @@ key on what a class *is* (``classify.ClassInfo``):
 import ast
 from typing import Callable
 
-from tessercheck.astutil import _annotation_base
+from tessercheck.astutil import _annotation_base, _name_of
 from tessercheck.classify import ClassInfo, Stereotype
 from tessercheck.finding import Finding
 
@@ -73,6 +73,11 @@ _MUTABLE_COLLECTION_BASES: frozenset[str] = frozenset(
     {"list", "List", "dict", "Dict", "set", "Set", "MutableSequence", "MutableMapping"}
 )
 
+# The decorators that make a method a *type-level* factory — a construction path
+# reachable without an instance. Both are doors: a staticmethod returning the own
+# type is the same second constructor as a classmethod, just spelled without cls.
+_FACTORY_DECORATORS: frozenset[str] = frozenset({"classmethod", "staticmethod"})
+
 _SUPPRESS_MARKER = "# tessercheck:ignore"
 
 # The conversion protocol — the only sanctioned primitive doors out of a leaf
@@ -98,6 +103,27 @@ _CANONICAL_EXIT: dict[str, str] = {
     "date": "__str__",
     "datetime": "__str__",
     "time": "__str__",
+}
+
+# Backing type -> the canonical-form policy helper its exit must delegate to
+# (serialization.md rule 3). Each policy gets exactly ONE implementation site, so
+# a consumer's tenth datetime value object cannot drift from the pinned format,
+# and every canonical exit announces itself at its definition (grep ``canonical_``
+# finds them all; a hand-rolled __str__ is visibly not one).
+#
+# A PROPER SUBSET of _CANONICAL_EXIT, and the gap is honest: ``date`` and ``time``
+# have a ruled exit (__str__, from the 2026-07-20 temporal ruling) but no ruled
+# canonical FORM yet — the time-type taxonomy is a named open decision (TODOS.md).
+# Their leaves are out of contract here rather than guessed at, exactly as UUID
+# and Enum are out of contract for stereotype classification. Rule the taxonomy
+# and this map grows to match _CANONICAL_EXIT's keys.
+_CANONICAL_HELPER: dict[str, str] = {
+    "str": "canonical_str",
+    "int": "canonical_int",
+    "float": "canonical_float",
+    "bytes": "canonical_bytes",
+    "Decimal": "canonical_decimal",
+    "datetime": "canonical_datetime",
 }
 
 
@@ -143,6 +169,40 @@ def _defined_conversion_dunders(node: ast.ClassDef) -> list[ast.FunctionDef]:
         for m in node.body
         if isinstance(m, ast.FunctionDef) and m.name in _CONVERSION_DUNDERS
     ]
+
+
+def _annotation_names(ann: ast.expr | None) -> set[str]:
+    """Every type name anywhere in an annotation, string forward references
+    resolved. ``"Slug"``, ``Slug | None`` and ``Optional["Slug"]`` all yield
+    ``Slug`` — a wrapper is not an escape hatch, and a quoted annotation is the
+    ordinary way to name your own class before it exists."""
+    if ann is None:
+        return set()
+    names: set[str] = set()
+    for sub in ast.walk(ann):
+        if isinstance(sub, ast.Name):
+            names.add(sub.id)
+        elif isinstance(sub, ast.Attribute):
+            names.add(sub.attr)
+        elif isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+            try:
+                names |= _annotation_names(ast.parse(sub.value, mode="eval").body)
+            except (SyntaxError, ValueError, MemoryError, RecursionError):
+                # A string annotation is never compiled by Python, so it can hold
+                # anything at all — including an expression deep enough that the
+                # parser overflows its stack (MemoryError, NOT SyntaxError) or
+                # recurses past the limit. Falling back to the raw text keeps one
+                # pathological source file from aborting the whole tree scan.
+                names.add(sub.value)
+    return names
+
+
+def _decorator_names(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    return {
+        name
+        for dec in fn.decorator_list
+        if (name := _name_of(dec.func if isinstance(dec, ast.Call) else dec)) is not None
+    }
 
 
 def _contains_primitive(ann: ast.expr | None) -> bool:
@@ -191,6 +251,8 @@ def check_typed(
         if info.stereotype is Stereotype.VALUE_OBJECT:
             findings.extend(_check_vo_exposure(stmt, path, suppressed))
             findings.extend(_check_compound_raw_primitive(stmt, path, suppressed))
+            findings.extend(_check_single_door(stmt, path, suppressed))
+            findings.extend(_check_canonical_routing(stmt, path, suppressed))
         elif info.stereotype is Stereotype.IDENTITY_OBJECT:
             findings.extend(_check_collection_leak(stmt, path, suppressed))
             findings.extend(_check_root_by_object(stmt, registry, path, suppressed))
@@ -415,8 +477,10 @@ def _check_construction(
     takes the primitive-leaf spec and builds the value objects. There is no
     separate ``from_spec`` factory — that second constructor is ungrounded (Go
     exposes one factory taking the spec, the value-taking construction kept
-    unexported). Value objects are exempt (they are not identity objects): the
-    compound-VO construction mechanism is a separate, unsettled question.
+    unexported). Value objects are handled by TB017
+    (:func:`_check_single_door`), which is the *stricter* rule: any own-type
+    factory, not just the ``from_spec`` name. The asymmetry is deliberate and
+    is about migration cost, not principle — see below.
 
     Scoped to the ``from_spec`` factory — the exact accreted second constructor.
     The stricter positive rule ("the constructor must *take* the spec, not the
@@ -439,6 +503,103 @@ def _check_construction(
                 f"{node.name!r} defines a from_spec factory; a structured domain "
                 "object constructs through its constructor instead — "
                 f"__init__(self, spec: {node.name}Spec) is the single path",
+            )
+        )
+    return findings
+
+
+def _constructs_own_type(
+    fn: ast.FunctionDef | ast.AsyncFunctionDef, class_name: str
+) -> bool:
+    """True when the body returns a direct call to ``cls`` or to the class
+    itself — the construction signature read from the body instead of the
+    signature.
+
+    The annotation is the primary signal, but it is optional Python: an
+    unannotated ``def parse(cls, raw): return cls(raw)`` is the same second
+    door, and a tree that does not run a strict type checker would otherwise
+    hide it.
+
+    Detection is on *construction anywhere in the body*, not on the shape of the
+    return statement, because the return statement is the easiest thing to vary:
+    ``built = cls(raw); return built``, ``return cls(a) if a else cls(b)`` and
+    ``return (out := cls(raw))`` are all the same door. It also catches
+    ``object.__new__(cls)``, which is the one that matters most — that door skips
+    ``__init__`` and every invariant it enforces.
+
+    The caller consults this ONLY when the return annotation is absent, so a
+    factory that is annotated to return some other type is taken at its word and
+    a helper that happens to build one internally is not swept in.
+    """
+    for node in ast.walk(fn):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if isinstance(func, ast.Name) and func.id in ("cls", class_name):
+            return True
+        if isinstance(func, ast.Attribute) and func.attr in ("cls", class_name):
+            return True
+        if isinstance(func, ast.Attribute) and func.attr == "__new__":
+            for arg in node.args:
+                if isinstance(arg, ast.Name) and arg.id in ("cls", class_name):
+                    return True
+    return False
+
+
+def _check_single_door(
+    node: ast.ClassDef,
+    path: str,
+    suppressed: "_Suppressed",
+) -> list[Finding]:
+    """TB018's sibling on the inbound side — TB017: a value object has ONE
+    construction door, its own ``__init__``.
+
+    A compound takes its spec; a leaf takes its canonical form and converts
+    inside; a collection value object takes the collection. Any
+    ``classmethod``/``staticmethod`` returning the own type is a *second* door,
+    and the name it goes by does not soften it: ``from_spec`` and ``parse`` are
+    the accreted-second-constructor smell, ``new``/``require`` the ergonomic
+    factory pair. The 2026-07-20 ruling swept all of them in uniformly, and the
+    collection value object — the shape the carve-out would have been for — is
+    the case that settled it: ``new`` (permissive) and ``require`` (non-empty)
+    enforce *different invariants on one type*, so what the type guarantees
+    depends on which door the caller picked. That is a stronger version of the
+    defect the one-door rule exists to prevent, not an exception to it.
+
+    Scoped to value objects. Entities and aggregates keep :func:`_check_construction`
+    (TB013), which is deliberately narrower — it flags the ``from_spec`` name
+    only, because the positive rule would fire on every not-yet-migrated entity.
+    A factory returning something *other* than the own type is not a door and is
+    left alone.
+    """
+    findings: list[Finding] = []
+    for member in node.body:
+        if not isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if not (_decorator_names(member) & _FACTORY_DECORATORS):
+            continue
+        returned = _annotation_names(member.returns)
+        names_own_type = bool({node.name, "Self"} & returned)
+        # The body is consulted only when the annotation tells us nothing we can
+        # trust — absent, empty, or unparseable text. An annotation that cleanly
+        # names some OTHER type is taken at its word, so a helper that builds one
+        # internally on the way to an int is not swept in.
+        unresolved = not returned or not all(n.isidentifier() for n in returned)
+        if not (names_own_type or (unresolved and _constructs_own_type(member, node.name))):
+            continue
+        if suppressed(member.lineno):
+            continue
+        findings.append(
+            Finding(
+                path,
+                member.lineno,
+                member.col_offset + 1,
+                "TB017",
+                f"value object {node.name!r} defines a second construction door "
+                f"{member.name!r}; a value object constructs through its own "
+                "__init__ and nothing else — a compound takes its spec, a leaf "
+                "its canonical form, a collection the collection. Two doors let "
+                "two callers build the same type under different invariants",
             )
         )
     return findings
@@ -539,6 +700,106 @@ def _check_public_decompiler(
                 "representations of the same value diverge, and a mismatched one "
                 "is a disguise",
             )
+    return findings
+
+
+def _delegated_call_name(fn: ast.FunctionDef) -> str | None:
+    """The name of the function a one-line ``return f(self._x)`` body delegates
+    to, or ``None`` when the body is anything else.
+
+    Both import idioms resolve to the same name: ``canonical_str(...)`` (from-import)
+    and ``serialization.canonical_str(...)`` (module-qualified) are the same
+    delegation, so the check must not push authors toward one spelling.
+
+    Deliberately strict about *bare* delegation, on both sides of the call:
+
+    * ``return canonical_str(x).upper()`` — the helper's output is post-processed,
+      so the emitted form is no longer the policy's. The outer call resolves to
+      ``upper``, which is not the expected helper, and the exit is flagged.
+    * ``return canonical_str(self._value.upper())`` — the helper's *input* is
+      pre-processed, which has exactly the same second author applied one step
+      earlier. The argument must be a bare load of ``self``'s own field.
+    """
+    if len(fn.body) != 1:
+        return None
+    stmt = fn.body[0]
+    if not isinstance(stmt, ast.Return) or not isinstance(stmt.value, ast.Call):
+        return None
+    call = stmt.value
+    if len(call.args) != 1 or call.keywords:
+        return None
+    arg = call.args[0]
+    if not (
+        isinstance(arg, ast.Attribute)
+        and isinstance(arg.value, ast.Name)
+        and arg.value.id == "self"
+    ):
+        return None
+    if isinstance(call.func, ast.Name):
+        return call.func.id
+    return call.func.attr if isinstance(call.func, ast.Attribute) else None
+
+
+def _check_canonical_routing(
+    node: ast.ClassDef,
+    path: str,
+    suppressed: "_Suppressed",
+) -> list[Finding]:
+    """TB018 — a leaf value object's conversion exit delegates to the
+    ``canonical_*`` policy helper for its backing type, in one line.
+
+    Rule 3 pins each canonical form once (``Decimal`` as a scientific string,
+    ``datetime`` as UTC-normalized ISO-8601 at microsecond precision) and routes
+    every exit through that single implementation. A hand-rolled
+    ``return self._value`` or ``return str(self._value)`` is a *second*
+    implementation of the same canonical form: it is correct on the day it is
+    written and drifts the day the policy changes, silently, because nothing
+    connects it to the policy. Changing a canonical form is a breaking change,
+    and it can only be made in one place if there IS one place.
+
+    Two shapes under one code: not a delegation at all, and delegation to the
+    wrong policy (a ``Decimal`` leaf exiting through ``canonical_str`` gets str's
+    identity instead of the pinned decimal text).
+
+    The *mismatched dunder* shape belongs to TB015, so a dunder that is not this
+    backing type's ruled exit is skipped here — one violation, one code.
+    """
+    backing = _leaf_backing(node)
+    if backing is None:
+        return []
+    helper = _CANONICAL_HELPER.get(backing)
+    if helper is None:
+        return []
+
+    findings: list[Finding] = []
+    for fn in _defined_conversion_dunders(node):
+        if fn.name != _CANONICAL_EXIT.get(backing):
+            continue
+        called = _delegated_call_name(fn)
+        if called == helper or suppressed(fn.lineno):
+            continue
+        if called is not None and called.startswith("canonical_"):
+            detail = (
+                f"delegates to {called} but is backed by {backing}; its canonical "
+                f"form is {helper}'s. Routing through another type's policy "
+                "produces a form nothing else in the system agrees on"
+            )
+        else:
+            detail = (
+                f"hand-rolls its canonical form; delegate to {helper} in one line "
+                f"(return {helper}(self._value)). A hand-rolled exit is a second "
+                "implementation of a pinned form — correct today, silently "
+                "drifted the day the policy changes"
+            )
+        findings.append(
+            Finding(
+                path,
+                fn.lineno,
+                fn.col_offset + 1,
+                "TB018",
+                f"value object {node.name!r} exit {fn.name} {detail}",
+            )
+        )
     return findings
 
 

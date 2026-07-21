@@ -1,12 +1,16 @@
 from dataclasses import dataclass
 
 
+def canonical_str(value: str) -> str:
+    return value
+
+
 @dataclass(frozen=True)
 class WarehouseID:
     _value: str
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)
 
 
 class Shelf:

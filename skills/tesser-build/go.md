@@ -82,8 +82,16 @@ func NewLabels(m map[string]string) Labels { // normalizes nil to empty
 ```
 
 Copy on the way in, copy on the way out — the backing collection never
-escapes. When callers need different nil-handling (optional vs required), add
-a constructor variant (`RequireLabels`) rather than pushing checks to parents.
+escapes.
+
+**ONE construction door per type**, here as in Python (ruled 2026-07-21). A
+second exported constructor — `RequireLabels` alongside `NewLabels` — is a
+second set of invariants on one type: what a `Labels` guarantees would depend
+on which door the caller picked, so it guarantees nothing. When you need a
+stricter set, that is a *different type* with its own invariant, not a second
+constructor on this one. Python enforces this as TB017; **the Go analyzer
+mirror is not built yet** (`TODOS.md`), so on the Go side this is
+review-enforced. Honest gap, stated.
 
 **Rules of the section:**
 

@@ -275,3 +275,109 @@ Deferred work with context. Each entry carries enough for a cold pickup.
     them; the meta-test already enforces pair existence.
   - **Why not now:** it IS now — this entry records the discipline so it
     outlives the wave.
+
+- [ ] **`date`/`time` have a ruled exit but no ruled canonical form**
+  (2026-07-21, wave C2)
+  - **What:** C1's temporal ruling put `date`/`datetime`/`time` in the
+    wrappable set, and `_CANONICAL_EXIT` gives all three `__str__`. But only
+    `datetime` has a *pinned form* (`canonical_datetime`). A `date`-backed leaf
+    exits as "canonical text" with no policy saying which text, and `time` is
+    worse (naive vs aware, precision). So `_CANONICAL_HELPER` is a proper
+    subset of `_CANONICAL_EXIT` and TB018 leaves those leaves out of contract.
+  - **Why it matters:** `examples/errorspy`'s `Day` is exactly this case — a
+    gated example tree shipping a hand-rolled `.isoformat()` exit that the norm
+    neither blesses nor flags. Every consumer with a date VO hits it.
+  - **Depends on / blocked by:** the time-type taxonomy decision (instant vs
+    date vs local time; per-precision types) already recorded above — `date`
+    is probably a one-line ruling (`value.isoformat()`), `time` is not, and
+    splitting them may be the answer.
+  - **Start at:** `_CANONICAL_HELPER` in `tessercheck-py/tessercheck/typed_checks.py`
+    (the gap is documented at the constant) and `serialization.md` rule 3.
+    Ruling the form means adding the helper to each tree's `serialization.py`,
+    routing `Day`, and the map grows to match `_CANONICAL_EXIT`'s keys.
+
+- [ ] **The Go single-door mirror (TB017's analog)** (2026-07-21, wave C2 review)
+  - **What:** the one-door ruling is language-independent, but only Python
+    enforces it. `go.md` now states the rule and names it review-enforced;
+    `examples/catalog/labels.go` still ships `NewLabels` + `RequireLabels` (with
+    `TestRequireLabels_RejectsEmpty` locking the banned shape in), so the Go
+    worked example contradicts the Go prose.
+  - **Why it matters:** a reader who copies the Go example gets the two-door
+    shape the norm bans. This is the code half of a rendering that was only
+    half-swept.
+  - **Start at:** `examples/catalog/labels.go:17` — collapse to one `NewLabels`
+    carrying the invariant, drop `RequireLabels` and its test; then the Go
+    analyzer check, which folds into the queued Go serialization umbrella.
+
+- [ ] **TB018 trusts the helper's NAME, with no provenance check**
+  (2026-07-21, wave C2 review)
+  - **What:** the check matches `canonical_*` by name. A module-local
+    `def canonical_str(v): return v.upper()`, or `from evil import shout as
+    canonical_str`, satisfies TB018 while the exit runs arbitrary non-policy
+    code — the exact second implementation the rule exists to prevent. Its
+    "grep `canonical_` finds them all" claim holds for the name, not the
+    behavior. Every swept fixture now defines a local no-op helper, so the
+    fixtures demonstrate the shape.
+  - **Why not now:** verifying provenance means resolving the binding to an
+    import from the tree's sanctioned serialization module — a real design step
+    (and AST alone cannot verify the target's contents). Deliberate limitation,
+    stated rather than silently held.
+  - **Start at:** `_check_canonical_routing` in `typed_checks.py`; collect
+    module-level def/assign bindings and `import ... as` aliases for names in
+    `_CANONICAL_HELPER` and flag a shadowed or aliased helper.
+
+- [ ] **`bad.py` fixtures assert the code SET, never the count or lines**
+  (2026-07-21, wave C2 review)
+  - **What:** `test_bad_fixture_trips_only_its_own_code` asserts
+    `{codes} == {code}`. `tb017/bad.py` carries 5 distinct violation shapes and
+    `tb018/bad.py` 6; all fire today, but a refactor could detect only one and
+    the fixture would still read as a passing multi-shape contract. Tree-scoped
+    checks get an explicit teeth assertion; file-scoped ones do not.
+  - **Start at:** `tests/test_checks.py:22` — assert a per-fixture finding count,
+    or adopt want-markers on each violating line and assert the flagged line set.
+
+- [ ] **`async def __str__` is invisible to TB015 and TB018** (2026-07-21)
+  - **What:** `_defined_conversion_dunders` filters on `ast.FunctionDef` only.
+    TB017 handles `AsyncFunctionDef` correctly, making this an inconsistency.
+    Low practical impact (an async conversion dunder does not work at runtime),
+    and it is pre-existing in TB015 rather than introduced here.
+  - **Start at:** `_defined_conversion_dunders` in `typed_checks.py`.
+
+- [ ] **Four byte-identical `serialization.py` copies, one of them untested**
+  (2026-07-21, wave C2 review)
+  - **What:** per-app ownership of the canonical-form policy is the norm's
+    design, but `examples/errorspy`'s copy has no test over it and 5 of its 6
+    functions are unused there — including `canonical_datetime`'s naive guard
+    and its pinned UTC/microsecond form. If the pinned form changes, errorspy
+    drifts silently. (`examples/python`'s copy is likewise untested in-tree.)
+  - **Start at:** add the pinned-policy assertions to errorspy's tests, or a
+    drift test asserting the copies agree.
+
+- [ ] **`_annotation_names` duplicates `classify._all_names`** (2026-07-21)
+  - **What:** near-identical bodies; the new one additionally resolves string
+    forward references. `astutil.py` exists for exactly this sharing. The
+    divergence is silent — the classifier still cannot see through a quoted
+    annotation.
+  - **Start at:** move the forward-ref-resolving version into `astutil.py` and
+    route both call sites through it.
+
+- [ ] **Suppression is a substring scan, and TB017/TB018 give it a natural
+  surface** (2026-07-21, wave C2 review)
+  - **What:** `# tessercheck:ignore` is resolved by scanning the raw source
+    line for the marker text, so a *string literal* containing it suppresses a
+    real violation with no directive present. TB017 and TB018 suppress on the
+    `def` line, where a string DEFAULT ARGUMENT carrying the marker is both
+    mypy-clean and natural-looking:
+    `def parse(cls, raw: str = "# tessercheck:ignore") -> "Slug"` suppresses
+    TB017 with no comment anywhere. Earlier codes suppressed on field or
+    statement lines, where a marker-bearing literal looks out of place.
+  - **Also:** the line table is built with `str.splitlines()`, which splits on
+    `\x0b`/`\x0c`/` ` that Python's tokenizer does not — shifting every
+    line number after such a character.
+  - **Fix:** derive suppressed lines by tokenizing and keeping only real
+    COMMENT tokens, failing closed on a tokenize error; cover TB017/TB018 in
+    its regression tests. This is systemic — `comments_check.py` (TB020),
+    `typed_checks.py` and `checks.py` all use the substring form.
+  - **Note:** a parallel branch (the testing-norm wave) already derives
+    suppression from COMMENT tokens in its own new check. Reconcile to ONE
+    shared implementation when both land rather than leaving two.

@@ -1,22 +1,30 @@
 from dataclasses import dataclass
-from typing import Protocol
-
-
-def canonical_int(value: int) -> int:
-    return value
+from datetime import date, datetime, timezone
+from decimal import Decimal
 
 
 def canonical_str(value: str) -> str:
     return value
 
 
-class Sink(Protocol):
-    def put(self, value: str) -> None: ...
+def canonical_int(value: int) -> int:
+    return value
 
 
-@dataclass(frozen=True)
-class SlugSpec:
-    value: str
+def canonical_float(value: float) -> float:
+    return value
+
+
+def canonical_bytes(value: bytes) -> bytes:
+    return value
+
+
+def canonical_decimal(value: Decimal) -> str:
+    return str(value)
+
+
+def canonical_datetime(value: datetime) -> str:
+    return value.astimezone(timezone.utc).isoformat(timespec="microseconds")
 
 
 @dataclass(frozen=True)
@@ -26,20 +34,6 @@ class Slug:
     def __str__(self) -> str:
         return canonical_str(self._value)
 
-    def to_spec(self) -> SlugSpec:
-        return SlugSpec(value=self._value)
-
-
-@dataclass(frozen=True)
-class Code:
-    _value: str
-
-    def __str__(self) -> str:
-        return canonical_str(self._value)
-
-    def emit(self, sink: Sink) -> None:
-        sink.put(self._value)
-
 
 @dataclass(frozen=True)
 class Count:
@@ -48,16 +42,45 @@ class Count:
     def __int__(self) -> int:
         return canonical_int(self._value)
 
-    def __str__(self) -> str:
-        return str(self._value)
+
+@dataclass(frozen=True)
+class Ratio:
+    _value: float
+
+    def __float__(self) -> float:
+        return canonical_float(self._value)
 
 
 @dataclass(frozen=True)
-class Weight:
-    _value: str
+class Digest:
+    _value: bytes
 
-    def __int__(self) -> int:
-        return int(self._value)
+    def __bytes__(self) -> bytes:
+        return canonical_bytes(self._value)
+
+
+@dataclass(frozen=True)
+class Price:
+    _value: Decimal
+
+    def __str__(self) -> str:
+        return canonical_decimal(self._value)
+
+
+@dataclass(frozen=True)
+class Occurred:
+    _value: datetime
+
+    def __str__(self) -> str:
+        return canonical_datetime(self._value)
+
+
+@dataclass(frozen=True)
+class Day:
+    _value: date
+
+    def __str__(self) -> str:
+        return self._value.isoformat()
 
 
 @dataclass(frozen=True)
@@ -98,22 +121,3 @@ class Money:
     @property
     def currency(self) -> Currency:
         return self._currency
-
-    def __str__(self) -> str:
-        return f"{self._amount} {self._currency}"
-
-
-@dataclass(frozen=True)
-class Label:
-    _value: str
-
-    def __str__(self) -> str:
-        return canonical_str(self._value)
-
-
-@dataclass(frozen=True)
-class Labels:
-    _values: tuple[Label, ...]
-
-    def __str__(self) -> str:
-        return ",".join(str(v) for v in self._values)

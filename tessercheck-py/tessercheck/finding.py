@@ -121,6 +121,22 @@ CHECKS: tuple[CheckMeta, ...] = (
         "enum), complex has no domain wire form",
     ),
     CheckMeta(
+        "TB017",
+        "single-construction-door",
+        "a value object has ONE construction door — its own __init__; a "
+        "classmethod or staticmethod returning its own type is a second door "
+        "(from_spec/parse/new/require alike), and two doors let two callers "
+        "build the same type under different invariants",
+    ),
+    CheckMeta(
+        "TB018",
+        "canonical-exit-routing",
+        "a leaf value object's conversion dunder is a one-line delegation to "
+        "the canonical_* policy helper matching its backing type; a "
+        "hand-rolled exit is a second implementation of a canonical form "
+        "(skills/tesser-build/serialization.md rule 3)",
+    ),
+    CheckMeta(
         "TB020",
         "no-comments",
         "the comments norm v0: no code comments and no docstrings — machine "

@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 
 
+def canonical_str(value: str) -> str:
+    return value
+
+
 @dataclass(frozen=True)
 class Slug:
     _value: str
@@ -18,7 +22,7 @@ class GivenName:
             raise ValueError("given name is required")
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)
 
 
 @dataclass(frozen=True)
@@ -30,7 +34,7 @@ class FamilyName:
             raise ValueError("family name is required")
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)
 
 
 @dataclass(frozen=True)

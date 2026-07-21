@@ -68,12 +68,14 @@ Identity-taxonomy checks (TB010–TB014), keyed on the classifier:
 | **TB013** | a structured domain object (entity/aggregate) constructs through its spec — `__init__(self, spec)`; no separate `from_spec` factory |
 | **TB014** | equality matches the stereotype: a VO compares by value; an entity defines `__eq__`+`__hash__` together (by ID); an aggregate root blocks accidental equality |
 
-Serialization-norm checks (TB015–TB016), also keyed on the classifier:
+Serialization-norm checks (TB015–TB018), also keyed on the classifier:
 
 | Code | Rule |
 |---|---|
-| **TB015** | a domain object never serializes itself ([`skills/tesser-build/serialization.md`](../skills/tesser-build/serialization.md) rules 1/3/5): no public method returning a spec-classified type, no emit-a-sink method handing private fields to a parameter, no second or mismatched conversion dunder on a leaf, and no conversion dunder at all on a compound/entity/aggregate |
+| **TB015** | a domain object never serializes itself ([`skills/tesser-build/serialization.md`](../skills/tesser-build/serialization.md) rules 1/3/5): no public method returning a spec-classified type, no emit-a-sink method handing private fields to a parameter, no second or mismatched conversion dunder on a leaf, and no conversion dunder at all on a compound/entity/aggregate (collection VOs included) |
 | **TB016** | what a value object may be built from (`serialization.md` rule 5's internal half): a compound (≥2 fields) holds child value objects, not bare wrappable primitives — a raw primitive strands its validation, behavior, and canonical exit at the compound; and `bool`/`complex` are not value-object material at any field count. A single wrappable-primitive field is a leaf, untouched |
+| **TB017** | a value object has ONE construction door — its own `__init__`. Any classmethod/staticmethod returning its own type is a second door, name-agnostic (`from_spec`/`parse`/`new`/`require`/`of`), because two doors mean two invariant sets on one type — what the type guarantees would depend on which door the caller picked |
+| **TB018** | a leaf's conversion dunder is a one-line delegation to the `canonical_*` policy helper for its backing type (`serialization.md` rule 3), so each canonical form has exactly ONE implementation site; a hand-rolled or wrong-policy exit is a second implementation. `date`/`time` leaves are out of contract until the time-type taxonomy is ruled |
 
 Norm checks:
 
@@ -82,7 +84,7 @@ Norm checks:
 | **TB020** | the comments norm v0 ([`skills/tesser-build/comments.md`](../skills/tesser-build/comments.md)): no code comments, docstrings, or bare string-literal statements — machine directives exempt; **no test exemption** |
 | **TB030** | the fakes-only test-double norm ([`skills/tesser-build/testing.md`](../skills/tesser-build/testing.md)): a test double is a hand-written fake. **Imports** of a mocking library (`unittest.mock` and submodules in any import shape, the `mock` backport, `pytest`/`_pytest.monkeypatch` → `MonkeyPatch`) are flagged **tree-wide, no test exemption**. The `monkeypatch`/`mocker` **fixture-parameter** rule is narrower: it fires only inside a pytest-shaped function (`test_*` or a `@fixture` factory), so a production parameter that happens to share the name stays clean. A test that must patch a seam it cannot inject through carries `# tessercheck:ignore` (matched as a real comment token, over the reported statement's whole line span) |
 
-Scope: TB001–TB003 and the classifier-keyed checks (TB010–TB016) apply to
+Scope: TB001–TB003 and the classifier-keyed checks (TB010–TB018) apply to
 non-test code — test files are exempt, because they legitimately construct and
 exercise domain objects; TB004, TB020, and TB030 fire everywhere. A file is
 "test code" when its name is a pytest module
