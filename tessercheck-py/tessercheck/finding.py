@@ -129,6 +129,16 @@ CHECKS: tuple[CheckMeta, ...] = (
         "carve-outs are added only from discovered evidence "
         "(skills/tesser-build/comments.md)",
     ),
+    CheckMeta(
+        "TB030",
+        "no-mock-libraries",
+        "the fakes-only test-double norm: a test double is a hand-written fake "
+        "implementing the collaborator's interface — mocking libraries "
+        "(unittest.mock in any import shape, the mock backport, pytest-mock's "
+        "mocker) and pytest's monkeypatch/MonkeyPatch are banned tree-wide; a "
+        "wiring test that must patch a process seam carries "
+        "'# tessercheck:ignore' (skills/tesser-build/testing.md)",
+    ),
 )
 
 

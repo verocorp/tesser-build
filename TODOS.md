@@ -18,6 +18,124 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 
 ## Toolkit
 
+- [ ] **TB031 construction-completeness checker** (contract landed 2026-07-20,
+  v0.0.5.0)
+  - **What:** the checker for `testing.md` rule 2. Its contract is already
+    fixed and reviewed as the fixture pair
+    `tessercheck-py/testdata/tb031/{good_tree,bad_tree}/`; only the
+    implementation is missing. Rule: for each spec-constructed type, **at least
+    one** test must construct it from a spec and assert **every** spec field.
+    Report the type plus the fields no single test covers.
+  - **How:** it is the first `scope: "tree"` check, so `run_paths` needs a
+    whole-tree phase after its per-file loop (the harness already supports tree
+    fixtures; no registered check has used it). Identify the completeness test
+    **structurally** (a `def test_*` that constructs the type), NOT via the
+    `is_test` flag — `test_meta.py`'s tree harness injects
+    `is_test=lambda _: False`, so a flag-keyed check would behave differently
+    in fixtures than in production. Register the `CheckMeta` in the same change;
+    that retires the interim
+    `test_tb031_fixture_pair_holds_its_contract_before_the_checker_ships` guard.
+  - **Teeth, already located:** `examples/running/campaign/short_link_test.go:26`
+    (`TestNewShortLink_Accepts` constructs from a valid spec and asserts only
+    `Active()`, never `Slug` or `TargetURL`) is a real in-repo violation.
+
+- [ ] **TB030's remaining evasion surface** (adversarial review 2026-07-20,
+  Claude + Codex agreed; deliberately deferred from v0.0.5.0)
+  - **What:** TB030 is syntactic and reports what one file's AST shows. Four
+    shapes get through, all documented in `doubles_check.py`'s module docstring
+    so they are declared rather than hidden:
+    1. **aliased module import** — `import unittest as u` → `u.mock.patch`, and
+       `import pytest as pt` → `pt.MonkeyPatch`. The attribute arms match the
+       literal module name. This is the highest-value one and Codex rated it
+       block-worthy.
+    2. **dynamic import** — `importlib.import_module("unittest.mock")`,
+       `__import__`, `getattr(unittest, "mock")`, `sys.modules[...]`.
+    3. **use-site fixture access** — `request.getfixturevalue("monkeypatch")`
+       takes no banned parameter, defeating the monkeypatch half of the rule.
+    4. **a suppressed import whitelists the module** — the library arms fire on
+       the import, not each use, so one marker clears every call site below.
+  - **How:** (1) needs an alias table built in a first pass over `Import`
+    nodes, then matching attribute roots against it — the natural next
+    increment. (2) is cheap for the literal-string cases (flag
+    `import_module`/`__import__` with a banned dotted-name argument). (3) and
+    (4) need a use-site pass, which is a real design step.
+  - **Why not now:** every one is a *self-service* bypass by an author who
+    could equally write the marker. tessercheck is a local debt-paydown tool,
+    not an enforcement gate, so the threat model is weak — but (1) is an
+    ordinary import style someone could hit by accident, so it should land
+    first.
+
+- [ ] **Analyzer robustness — three systemic issues across all checkers**
+  (adversarial review 2026-07-20; pre-existing, TB030 raised the stakes)
+  - **What:** none of these are TB030's, but whole-tree test scanning made them
+    matter more.
+    1. **The suppression line table is built with `str.splitlines()`**, which
+       splits on `\x0b \x0c \x1c \x1d \x1e \x85    ` — characters
+       Python's tokenizer does NOT treat as line breaks. One such character in
+       an earlier string literal shifts every subsequent line number, so a
+       marker can silently fail to suppress (red build on conformant code) or
+       silently suppress a violation on a different line. Shared by
+       `comments_check.py` (TB020) and the TB015/TB016 suppressors. TB030 now
+       tokenizes instead, so it is already immune — the others are not.
+    2. **One non-UTF-8 source file kills the whole run.** `run.py` opens with
+       `encoding="utf-8"` and catches only `OSError`; a legal PEP 263 latin-1
+       file raises an uncaught `UnicodeDecodeError`, so no findings print at
+       all and CI reads the traceback as an ordinary failure. Fix: catch
+       `(OSError, UnicodeDecodeError)` into the error list, or read bytes and
+       use `tokenize.detect_encoding`.
+    3. **Reported columns are byte offsets, not character offsets**
+       (`col_offset + 1`), so any non-ASCII earlier on the line shifts
+       editor/CI annotations.
+  - **Why not now:** all three span every checker; fixing them inside the
+    testing-norm wave would hide a cross-cutting change in a feature diff.
+
+- [ ] **Go mirror of the testing norm** (opened 2026-07-20 with TB030)
+  - **What:** `testing.md` and `TB030` are Python-only. `rationale/coverage.md`
+    names this gap in the TB030 row ("no Go analyzer — the Go testing mirror is
+    a named gap"), so that pointer is live until this ships. Go's equivalent
+    banned surface is `gomock`/`mockgen`-generated doubles and `testify/mock`.
+  - **Why not now:** same deferral pattern as the queued Go `primitiveaccessor`
+    mirror — Python is the pilot-consumer priority, and the norm should survive
+    contact there first.
+
+- [ ] **Give `bootstrap` an injectable builder so the wiring tests drop their
+  suppressions** (opened 2026-07-20, ship review, confidence 9)
+  - **What:** the three `# tessercheck:ignore` markers in
+    `examples/python-app/tests/test_cleanup.py` and `test_bootstrap_once.py`
+    are the norm's flagship example opting out of the norm. What they patch
+    (`monkeypatch.setattr(linkpolicy_wire, "build", fake_build)`) is an
+    in-process module attribute, not a process seam — they qualify only because
+    there is no injection point above the composition root.
+  - **Why it matters:** a consumer reading `examples/` learns the escape hatch
+    rather than the rule. `testing.md` says so explicitly and points here.
+  - **How:** let `bootstrap.new` take its per-context builders, so the tests
+    inject a hand-written double and the suppressions disappear.
+
+- [ ] **Hoist the suppression primitive out of four checkers** (2026-07-20 ship
+  review, confidence 9)
+  - **What:** `_SUPPRESS_MARKER` + a `suppressed(...)` helper is now duplicated
+    across `doubles_check.py`, `comments_check.py`, `typed_checks.py`, and
+    `checks.py`. The marker is load-bearing (it is also in `comments_check.py`'s
+    `_DIRECTIVE` regex and in the CLI's user-facing message), so changing or
+    scoping it means editing four sites.
+  - **How:** move the marker and a `suppressed_predicate(source)` into
+    `astutil.py` (`typed_checks.py` already documents this predicate shape).
+    Note TB030's variant scans a node's whole **line span** (so a wrapped import
+    can be suppressed) while the others are single-line — unify deliberately,
+    don't silently pick one.
+
+- [ ] **TB030 adds a 4th full-tree AST walk per file** (2026-07-20 ship review,
+  measured)
+  - **What:** measured on this repo's own corpus (146 files): 142.5 ms → 176.7 ms,
+    **+24%** wall clock for one check, ~0.23 ms/file. Real but small; a linter,
+    not a hot path.
+  - **How:** fold the TB030 dispatch into the existing `_Checker` NodeVisitor as
+    `visit_Import`/`visit_ImportFrom`/`visit_Attribute` + additions to the
+    existing function visitors, which makes it near-free on a pass that already
+    runs. Kept standalone for now to match `comments_check.py`'s established
+    module shape. Related: `check_comments` itself does two back-to-back
+    `ast.walk` passes that could be one — worth more than TB030 costs.
+
 - [ ] **Go-side `primitiveaccessor` analyzer** (norm strengthened 2026-07-19)
   - **What:** the accessor half of the no-primitive-exposure norm is enforced
     in Python only (TB010 flags a VO `@property`/method whose body is a bare

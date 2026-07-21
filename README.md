@@ -84,9 +84,13 @@ per-consumer config. Every repo has its own aggregates.
 The Python analog ([`tessercheck-py/`](tessercheck-py/)): a zero-dependency,
 stdlib-`ast` conformance analyzer for the frozen-dataclass conventions in
 [`skills/tesser-build/python.md`](skills/tesser-build/python.md). Syntactic
-checks (`TB001`–`TB004`), classification-aware checks (`TB010`–`TB014`)
-that distinguish value objects from identity objects, and a zero-comment
-check (`TB020`, no test exemption — the norm covers the whole tree). Run
+checks (`TB001`–`TB004`), classification-aware checks (`TB010`–`TB016`) that
+distinguish value objects from identity objects and carry the serialization
+norm (a domain object never serializes itself; a compound holds child value
+objects, not bare primitives), and the tree-wide **norm checks** with no test
+exemption: zero comments (`TB020`) and fakes-only test doubles (`TB030` — no
+`unittest.mock`, no `mock` backport, no pytest-mock `mocker`, no
+`monkeypatch`). Run
 `python -m tessercheck path/to/domain`; flake8-style output; suppress a single
 line with a trailing `# tessercheck:ignore`.
 
@@ -227,7 +231,11 @@ primitive accessors, and `Equal` where `==` is unavailable or unsafe) and the
 **comments norm** (`comments` analyzer: zero code comments, machine directives
 exempt — `skills/tesser-build/comments.md`). The Python side goes further:
 `tessercheck-py` adds classification-aware identity-taxonomy checks
-(TB010–TB014) and whole-tree context discovery (`tessercheck-py/README.md`).
+(TB010–TB014), the serialization norm (TB015–TB016 — a domain object never
+serializes itself; `skills/tesser-build/serialization.md`), the **testing
+norm** (TB030: a test double is a hand-written fake, never a mocking library —
+`skills/tesser-build/testing.md`), and whole-tree context discovery
+(`tessercheck-py/README.md`).
 The skill teaches the broader construction conventions — entities, aggregates,
 services, repositories, wiring, bootstrap, hosts — ahead of what the analyzers
 cover. The original three, briefly:
@@ -249,3 +257,5 @@ cover. The original three, briefly:
 The checkers originated in certus's `ci/` directory and now run on the `go/analysis` framework: `tessercheck` works as a standalone multichecker, a `go vet` tool, and a golangci-lint plugin. The three consumers above are the proving ground. (This repo was previously named `go-ddd` and the tool `ddd-vet`; renamed 2026-07 — the old name was wrong on both axes, since the toolkit is neither Go-only nor DDD-doctrine.)
 
 Two conventions are documented but not yet machine-enforced: every value object should also carry an explicit `Test*_Equality` and a `Test*_String`. The `equalitytest` checker that would enforce the first is parked; `comparability` ships in its place (it flags a value object that needs `Equal` because `==` is unavailable or unsafe). See [`docs/design-ddd-vet-migration.md`](docs/design-ddd-vet-migration.md).
+
+A third is ruled but not yet checked: the testing norm's construction-completeness rule (one test per spec-constructed type asserting every spec field round-tripped). Its `good_tree`/`bad_tree` fixture pair ships as the checker's specification; `TB031` lands next ([`skills/tesser-build/testing.md`](skills/tesser-build/testing.md)).

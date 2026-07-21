@@ -5,6 +5,42 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.5.0] - 2026-07-20
+
+### Added
+
+- **A testing norm.** `skills/tesser-build/testing.md` is the cross-cutting
+  layer the eleven per-component "Tests you must write" sections assumed but
+  never had: how a test is written, what it must prove, and what a test double
+  may be. Two rules carry teeth, six are guidance, and everything still
+  undecided (test layout, grouping, table tests, coverage stance) is listed as
+  open rather than smuggled in as prose.
+- **`TB030` — the fakes-only test-double check.** A test double is a
+  hand-written fake, so mocking libraries are out: `unittest.mock` and its
+  submodules in every import shape, the `mock` backport, pytest-mock's `mocker`,
+  and `MonkeyPatch` from either `pytest` or its private home. It catches the
+  `import unittest` → `unittest.mock.patch` reach-through too. Import detection
+  is tree-wide — domain code has no business importing a mock library either —
+  while the fixture-parameter rule fires only inside a pytest-shaped function,
+  so a production parameter that happens to be named `monkeypatch` stays clean.
+  A test that must patch a seam it cannot inject through declares it with
+  `# tessercheck:ignore`, matched as a real comment token (marker text inside a
+  string cannot silently suppress anything) and honoured across a
+  formatter-wrapped import's whole span. The syntactic holes it does not close —
+  aliased module imports, dynamic import, `request.getfixturevalue` — are
+  documented in the checker itself rather than left implied.
+- **The reviewed contract for `TB031` (construction completeness).** Every
+  spec-constructed type gets one test that builds a valid instance and asserts
+  every spec field round-tripped to its accessor — compared against the spec,
+  never a hardcoded literal, so a field added to the spec but never asserted
+  stops being a silent gap. The `good_tree`/`bad_tree` fixture pair lands
+  first, per the fixtures-first discipline; the checker follows.
+
+### Changed
+
+- The `norm-testing` row goes from the emptiest in the roadmap matrix (every
+  column ❌) to a documented norm with a live Python checker.
+
 ## [0.0.4.0] - 2026-07-19
 
 ### Added

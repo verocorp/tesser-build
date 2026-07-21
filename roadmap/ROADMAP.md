@@ -25,7 +25,7 @@ Legend: ✅ done · 🟡 partial · ❌ absent · — intentionally n/a.
 | The map | — | — | ✅ | — | ❌ |
 | Strategic design | — | — | ✅ | — | ❌ |
 | Norm: errors | ✅ | ❌ | ❌ | 🟡 in-example | ❌ the errorspy example matrix is the proof; no changeability arm |
-| Norm: testing | ❌ | ❌ | ❌ | — | ❌ |
+| Norm: testing | ❌ | ❌ | 🟡 partial | 🟡 Py only (TB030) | ❌ |
 | Norm: comments | ✅ | ✅ | ✅ | ✅ 1 Go + 1 Py | ❌ |
 
 ## Pay-now rules

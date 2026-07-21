@@ -4,7 +4,8 @@ This repo is an **application-construction toolkit** (DDD + hex/onion/clean as
 inspiration, chosen for changeability, enforced where mechanically decidable;
 the build-side member of the tesser family): the `go/analysis` analyzers in
 `cmd/tessercheck` (composed from `internal/analyzers.All`), a golangci-lint module
-plugin (`gclplugin/`), an executable rationale layer (`rationale/`), an agent
+plugin (`gclplugin/`), the Python analyzer (`tessercheck-py/` — the `TB0*`
+checks), an executable rationale layer (`rationale/`), an agent
 skill (`skills/tesser-build/` — Go + Python construction guidance, copy-in distributed
 to consumers), and human docs (`docs/start-here.md`, `docs/faq.md`). If you are
 writing or changing domain objects here — or in a consumer repo (certus, metron,
@@ -44,6 +45,14 @@ bump `skill-version` in `skills/tesser-build/SKILL.md`.
    Testing stringification inside a `Test*_String` test stays the convention, but
    (like rule 2) is not itself machine-enforced.
 
+These three are the value-object core, not the whole enforced set. The Python
+analyzer also carries the identity taxonomy (`TB010`–`TB014`), the
+serialization norm (`TB015`–`TB016`), the comments norm (`TB020`, mirrored by
+the Go `comments` analyzer), and the testing norm (`TB030` — a test double is a
+hand-written fake, never a mocking library; `skills/tesser-build/testing.md`).
+The full check list with per-code rules is `tessercheck-py/README.md`; which
+convention has a doc, an example, and a checker is `roadmap/ROADMAP.md`.
+
 Build a VO the canonical way: private fields, a single validating constructor as
 the only construction path, value equality (not representation equality), and no
 representation leak. **Consistency is the point** — a value object built a
@@ -76,6 +85,14 @@ semantic lookups across it.
 go test ./...                          # checkers + the rationale wins + the meta-test
 go test -bench=. -benchmem ./rationale/ # the honest cost (collection-VO copy tax)
 go vet ./... && gofmt -l .             # both must be clean
+```
+
+The Python half is not covered by `go test`. Run it too:
+
+```
+(cd tessercheck-py && mypy && pytest -q) # the TB0* checks + the fixture meta-test
+python3 roadmap/generate.py --check      # ROADMAP.md is generated — never hand-edit it
+(cd roadmap && pytest tests -q)          # the generator's own suite
 ```
 
 ## Git & shipping

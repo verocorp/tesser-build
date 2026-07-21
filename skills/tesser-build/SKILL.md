@@ -1,7 +1,7 @@
 ---
 name: tesser-build
 description: Application-construction entry point (DDD). Load whenever creating or modifying domain types OR the code around them — adding a field to a struct/class, creating a new type, modeling a new concept, writing a constructor, adding validation, comparing domain objects in tests, deciding between a value object/entity/aggregate, AND whenever writing a handler/endpoint, a use-case or application/domain service, or persistence/repository code (where to put business logic, how to load or save an aggregate, keeping domain math out of controllers), AND whenever wiring an application together — writing an entry point / `main` / composition root / host, exposing a component behind a public interface (a `Client` + DTOs), connecting two bounded contexts (a cross-context call or read), or placing a web UI / frontend / SPA (where presentation code lives), AND whenever reasoning about strategic design — subdomains, bounded contexts, or ubiquitous language. Routes the task through the decomposition procedure to the right component doc.
-skill-version: 15
+skill-version: 16
 source: https://github.com/verocorp/tesser-build (skills/tesser-build/)
 ---
 
@@ -112,6 +112,7 @@ Route on the task:
 | Business logic that "wants" to live in a service or handler | Read `application-services.md#domain-logic-leakage-checks` — move it onto the owning domain type |
 | Domain logic that fits no single object | Read `domain-services.md` — the rare case; confirm no missing type owns it first |
 | Serializing a domain object — a repo row, a wire payload, a workflow-engine payload, or "how do I get the value out of this VO?" | Read `serialization.md` — domain objects never serialize themselves; leaf VOs have one canonical conversion exit; compounds/entities/aggregates decompose through the context's parts module (application layer); edges own their shape |
+| Writing or changing a test — how to write it, what to assert, what a test double may be | Read `testing.md` — hand-written doubles only (never a mocking library), one completeness test per spec-constructed type, assert only what you set or what was computed, trust your layers |
 | Tempted to write a comment or docstring | Read `comments.md` — v0 is zero (machine directives exempt); the explanation moves to a name, type, test, commit, or doc, never inline |
 | Adding logging, or wanting a domain object to "print nicely" in a log | Read `logging.md` — a stub: don't invent a convention; `repr` is the interim debug surface (domain types define no display dunders) |
 | Unsure after the tests | Read `value-objects.md` first — it defines the default; identity is the exception |

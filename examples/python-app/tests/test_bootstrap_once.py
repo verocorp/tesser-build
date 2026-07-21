@@ -34,7 +34,7 @@ def test_graph_built_once_state_persists_across_calls() -> None:
         app.close()
 
 
-def test_constructor_runs_once_across_many_calls(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_constructor_runs_once_across_many_calls(monkeypatch: pytest.MonkeyPatch) -> None:  # tessercheck:ignore
     calls = {"n": 0}
 
     def counting(cfg: CampaignConfig, checker: TargetChecker) -> tuple[Client, Closeable]:

@@ -272,7 +272,10 @@
       "skill": "testing.md",
       "py_example": [],
       "go_example": [],
-      "rationale": []
+      "rationale": [],
+      "py_checks": [
+        "TB030"
+      ]
     },
     {
       "key": "norm-comments",
