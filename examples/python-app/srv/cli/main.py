@@ -4,11 +4,8 @@ import os
 import sys
 
 from bootstrap.bootstrap import new
-from bootstrap.config import Config
+from bootstrap.config import from_env
 from campaign.client import AddLinkRequest, CreateCampaignRequest, DeactivateLinkRequest
-from campaign.wiring.config import Config as CampaignConfig
-from linkpolicy.wiring.config import Config as LinkPolicyConfig
-from reports.wiring.config import Config as ReportsConfig
 
 _USAGE = (
     "usage: python -m srv.cli.main create-campaign <budget_amount> <currency>\n"
@@ -18,12 +15,7 @@ _USAGE = (
 
 
 def run(argv: list[str]) -> int:
-    cfg = Config(
-        campaign=CampaignConfig(storage=os.getenv("CAMPAIGN_STORAGE") or ""),
-        linkpolicy=LinkPolicyConfig(storage=os.getenv("LINKPOLICY_STORAGE") or ""),
-        reports=ReportsConfig(),
-    )
-    app = new(cfg)
+    app = new(from_env(os.getenv))
     try:
         if len(argv) == 3 and argv[0] == "create-campaign":
             view = app.campaign.create_campaign(
