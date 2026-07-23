@@ -95,3 +95,25 @@ def test_reports_closeable_is_on_the_cleanup_stack(monkeypatch: pytest.MonkeyPat
     )
     app.close()
     assert spy.closed, "reports' closeable was not on the cleanup stack"
+
+
+def test_app_close_surfaces_errors_instead_of_dropping(monkeypatch: pytest.MonkeyPatch) -> None:  # tessercheck:ignore
+    order: list[str] = []
+    failing = _Spy("reports", order, fail=True)
+
+    def fake_build(
+        cfg: ReportsConfig, campaign_client: campaign.Client, policy_client: Client
+    ) -> tuple[reports.Client, Closeable]:
+        return _DummyReports(), failing
+
+    monkeypatch.setattr(reports_wire, "build", fake_build)
+    app = new(
+        Config(
+            campaign=CampaignConfig("memory"),
+            linkpolicy=LinkPolicyConfig("memory"),
+            reports=ReportsConfig(),
+        )
+    )
+    app.close()
+    assert failing.closed
+    assert len(app.close_errors) == 1

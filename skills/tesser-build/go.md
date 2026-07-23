@@ -3,7 +3,7 @@
 Construction mechanics only — the concepts and the rules' whys live in the
 concept files (`value-objects.md`, `entities.md`, `aggregates.md`,
 `application-services.md`, `repositories.md`, `domain-services.md`). This file
-covers the domain building blocks *and* the seams that serve them (application
+covers the domain building blocks *and* the boundaries that serve them (application
 services, repositories) — application services and repositories are not domain
 objects, but their construction mechanics live here alongside the objects they
 orchestrate and persist. Section headings here are stable anchors; the resolver

@@ -34,7 +34,7 @@ behind an interface the calling context owns?* Yes → cross-context gateway.
 
 1. **The consumer owns the port.** The calling context declares the interface it
    needs (campaign's `TargetChecker`), in its own vocabulary, on its own side of
-   the seam. The peer never learns the caller exists.
+   the boundary. The peer never learns the caller exists.
 2. **The adapter lives in the caller's `adapters/gateways`.** It wraps the
    peer's `Client` and translates the peer's DTOs into the caller's own types —
    the peer's vocabulary never crosses inward. The composition root constructs

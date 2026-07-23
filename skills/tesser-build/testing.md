@@ -17,7 +17,7 @@ file says *how*, and it is the cross-cutting layer they assume.
 1. **Test doubles are hand-written.** Never a mocking library — not
    `unittest.mock`, not the `mock` backport, not `pytest-mock`'s `mocker`, and
    not pytest's `monkeypatch`/`MonkeyPatch` runtime patchers. Write a double
-   that implements the collaborator's interface and inject it through the seam.
+   that implements the collaborator's interface and inject it through the interface.
    Two tiers, both hand-written:
    - **isolated unit test** — a small hand-written double standing in for one
      collaborator;
@@ -120,14 +120,14 @@ file says *how*, and it is the cross-cutting layer they assume.
   pytest-shaped function (`test_*` or a `@fixture` factory), since a parameter
   with that name anywhere else is an ordinary identifier.
 
-  **The escape hatch, and its one honest use.** A test that must patch a seam it
+  **The escape hatch, and its one honest use.** A test that must patch a boundary it
   cannot inject through carries `# tessercheck:ignore` (suppression scans the
   reported statement's whole line span, so it works on a formatter-wrapped
   import). Today the only sanctioned uses are the composition-root wiring tests
   in `examples/python-app`, which patch a wiring module's own `build` function
   to force a partial-failure path — there is no injection point above the
   composition root, which is exactly why they qualify. Note this is a *narrower*
-  claim than "a process seam": giving `bootstrap` an injectable builder would
+  claim than "a process boundary": giving `bootstrap` an injectable builder would
   let those tests use a hand-written double and delete the suppressions
   entirely. That is tracked as a follow-up, not a blessed pattern to copy.
 - **`TB031` (construction-completeness)** — rule 2. **Not shipped yet:** its

@@ -11,7 +11,7 @@ judgment call made inline at write time (Chris ruling 2026-07-19).
 ## The norm
 
 1. **No code comments.** No line comments, no block comments, no doc
-   comments — in domain code, seams, adapters, wiring, hosts, and tests
+   comments — in domain code, boundaries, adapters, wiring, hosts, and tests
    alike. There is no test exemption: the norm covers the whole tree.
 2. **No docstrings, and no bare string-literal statements.** A Python
    docstring and a Go doc comment are the same thing under this norm: prose
@@ -105,6 +105,6 @@ recurs is a carve-out candidate to bring here, with its evidence.
   constraint living where nothing checks it. Encode the ordering (a type, an
   assertion, a test) or teach it (docs); the comment is the least reliable
   home it could have.
-- **Docstring-as-API-docs.** If a seam's contract needs prose, that is the
+- **Docstring-as-API-docs.** If a boundary's contract needs prose, that is the
   public interface doc's job (`public-interface.md`) or a future carve-out
   argued from evidence — not a default.

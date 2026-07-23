@@ -36,16 +36,16 @@ Yes → the context's wiring.
 1. **Each app context owns a `wiring` role.** Required for app contexts, absent
    for library contexts (`map.md#app-vs-library`) — a library exports types and
    is constructed by its caller; an app context must be buildable by
-   `bootstrap` through one uniform seam.
-2. **One uniform build seam: `build(cfg, <injected deps>) → (Client, Closeable)`.**
+   `bootstrap` through one uniform build contract.
+2. **One uniform build contract: `build(cfg, <injected deps>) → (Client, Closeable)`.**
    Every context exposes the same shape, so `bootstrap` composes contexts
    without special cases. A context with no resources still returns a no-op
    `Closeable` — uniformity is what keeps the root readable as the graph grows.
-3. **The context's `Config` lives in its wiring, never on the public seam.**
+3. **The context's `Config` lives in its wiring, never on the public interface.**
    `wiring/config` is spec-shaped: a frozen struct, primitive leaves, no
    methods, no constructor logic. The app `Config` nests the per-context ones
    (`bootstrap.md#app-config`); the public `Client` package never mentions
-   construction config — consumers of the seam must not see how it is built.
+   construction config — consumers of the interface must not see how it is built.
 4. **Impl selection is coordinate-driven and fail-fast.** The resource
    coordinate in the config (a DSN, a `"memory"` marker) selects the
    implementation. An **absent coordinate is an error**, never a silent fall
@@ -75,7 +75,7 @@ context swaps infrastructure. Construction mechanics:
 `python.md#the-composition-root`; verified impl:
 `examples/python-app/campaign/wiring/` (full case, with an injected
 cross-context port), `examples/python-app/reports/wiring/` (minimal case: no
-resources, empty config, uniform seam kept).
+resources, empty config, uniform build contract kept).
 
 ## Decisions you must make
 
@@ -86,7 +86,7 @@ resources, empty config, uniform seam kept).
 2. **What does the `Closeable` wrap?** Whatever the chosen implementation
    holds — a pool, a client, nothing. An in-memory repo can be its own
    near-no-op closeable; a context with no resources returns a named no-op
-   stand-in so the seam stays uniform (`bootstrap.md#lifecycle`).
+   stand-in so the build contract stays uniform (`bootstrap.md#lifecycle`).
 3. **Where do injected peer ports come from?** Always parameters of `build`,
    constructed by the composition root. If you are tempted to construct one in
    wiring "just for now", you are moving the two-contexts-at-once knowledge
@@ -96,7 +96,7 @@ resources, empty config, uniform seam kept).
 
 The `wiring/` role directory is part of the prescribed anatomy asserted by the
 verified impl's shape checks (`examples/python-app/tests/test_shape.py`), and
-context discovery is seam-driven (`tessercheck --app-root`, TB001).
+context discovery is interface-driven (`tessercheck --app-root`, TB001).
 Coordinate-driven selection and the fail-fast are locked by
 `examples/python-app/tests/test_impl_selection.py` (the `"memory"` coordinate
 builds; an absent coordinate errors at construction). The review-side tells:
@@ -104,7 +104,7 @@ builds; an absent coordinate errors at construction). The review-side tells:
   rule 4 bans;
 - a **peer import inside `wiring/`** — cross-context construction leaked out
   of the root;
-- **config on the public seam** — a construction `Config` exported next to
+- **config on the public interface** — a construction `Config` exported next to
   the `Client`.
 
 ## Tests you must write
@@ -129,16 +129,16 @@ builds; an absent coordinate errors at construction). The review-side tells:
   construct its own adapter — the root's two-contexts knowledge duplicated
   into a context; dependency-direction rot follows.
 - **A special-cased minimal context.** "reports has no resources, skip its
-  wiring" — now bootstrap grows an if-branch per context and the uniform seam
+  wiring" — now bootstrap grows an if-branch per context and the uniform build contract
   is gone. Keep the empty config + no-op closeable.
 
 ## Now build it
 
 <!-- tb-allow-missing: examples/app -->
 
-- Python: `python.md#the-composition-root` — the per-context `build` seam and
+- Python: `python.md#the-composition-root` — the per-context `build` contract and
   the root that calls it, backed by `examples/python-app/*/wiring/`.
 - Go: not yet materialized — the settled anatomy's Go mirror (`examples/app`)
   is pending; note the gap, don't invent a convention. Mirror the Python
-  arc's structure (same roles, same seam) with
+  arc's structure (same roles, same build contract) with
   `go.md#the-composition-root`'s interface mechanics.

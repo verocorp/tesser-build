@@ -32,55 +32,69 @@ Yes → a host.
 
 ## Rules
 
-1. **The host is the env edge.** Each `srv/*/main` populates the spec-shaped
-   app `Config` directly from the environment — including its **own launch
-   config** (the listen addr, the worker cadence) — and hands it to
-   `bootstrap.new`, which validates fail-fast. Nothing below the host reads
-   the environment (locked by
-   `examples/python-app/tests/test_enforcement.py`): a `getenv` below the
-   edge is a hidden deploy surface with a silent default. There is no shared
-   env-decoder module — each host's needs differ, and a shared decoder
-   becomes a second config authority.
+1. **The host is the env edge; it calls the one loader.** Each `srv/*/main`
+   passes its own `os.getenv` to the single `from_env(getenv)` loader
+   (`bootstrap/config.py`), which decodes the environment into the spec-shaped
+   app `Config` — app config **and** the host's own launch config (the listen
+   addr, the worker cadence) — and hands it to `bootstrap.new`, which validates
+   fail-fast. `from_env` is the **one place the app reads the environment**;
+   nothing below the host reads it (locked by
+   `examples/python-app/tests/test_enforcement.py`). It stays a pure function —
+   `getenv` is injected, and it is a module function, not a `Config` method — so
+   it is testable with a dict and never a second, hidden config authority. One
+   loader, called by every host, is what keeps the per-host `Config` literal
+   from drifting.
 2. **Only the edge exits.** Exit/fatal calls live in `srv/*/main`, nothing
    below (same enforcement test) — a library that exits takes the process
    away from the one place entitled to decide that.
-3. **One graph per process.** The host calls `bootstrap.new` once at startup
-   (locked by `examples/python-app/tests/test_bootstrap_once.py`) and owns
-   shutdown via `App.close()` — in a `finally`, so a crashing serve loop
-   still unwinds the graph.
+3. **One graph per process; the host owns the lifecycle.** The host calls
+   `bootstrap.new` once at startup (locked by
+   `examples/python-app/tests/test_bootstrap_once.py`) and runs its `Host`
+   (`run(stop)` — serve, then drain on stop) under a runner that installs
+   SIGINT/SIGTERM and calls `App.close()` in a `finally`
+   (`examples/python-app/srv/run.py`, `srv/http/host.py`). Installing the signal
+   handler is **load-bearing**: a bare `finally: app.close()` does *not* survive
+   the default SIGTERM (the process dies without unwinding), so a container stop
+   would leak the graph. Drain ordering, readiness, and health are the host's
+   fill-in above this minimum.
 4. **Two-layer transport split.** The per-context handler translates
    wire ↔ `Client` (`handlers.md`); the host mounts handlers and owns the
    server + middleware. Auth *policy*, logging, recovery, rate limits are
    host middleware, never inside a context's handler — a handler that
    imports another context to do auth has leaked a host concern into a
    context adapter.
-5. **Hosts share nothing but the app.** Two hosts are two processes; they
-   share the composition root and the contexts, not memory. A CLI host runs
-   against its *own* `App`; if two mechanisms must see one state, that state
-   lives behind a context's repository, not in a host.
+5. **One long-running thing per process — with one carve-out.** Two delivery
+   mechanisms are two processes; they share the composition root and the
+   contexts, not memory. A CLI host runs against its *own* `App`; if two
+   mechanisms must see one state, that state lives behind a context's
+   repository, not in a host. **The carve-out:** a health/metrics listener a
+   platform *requires* — a worker host that must answer an HTTP readiness probe
+   to run on its target — is not a second delivery mechanism; it is part of the
+   one host it reports on, owned by that host, not a reason to fold two
+   mechanisms into one process.
 
 ## Shape
 
 ```
 srv/
-  http/main.py       ← env → Config, new(cfg) once, mount handlers, serve, close
-  cli/main.py        ← env → Config, new(cfg) once, run command, close
+  run.py             ← run_until_signal(host, app): install SIGTERM, close in finally
+  http/host.py       ← HttpHost implements Host: serve in a thread, drain on stop
+  http/main.py       ← from_env(os.getenv), new(cfg) once, run the host
+  cli/main.py        ← from_env(os.getenv), new(cfg) once, run command, close
 
 def main() -> None:
-    cfg = Config(campaign=CampaignConfig(storage=os.getenv("CAMPAIGN_STORAGE") or ""), ...)
-    app = new(cfg)                      # once per process; validates fail-fast
-    server = make_server((host, port), app)   # mounts the contexts' handlers
-    try:
-        server.serve_forever()
-    finally:
-        app.close()
+    cfg = from_env(os.getenv)                 # the ONE loader; app + launch config
+    app = new(cfg)                            # once per process; validates fail-fast
+    host = HttpHost((cfg.http.host, cfg.http.port), app)
+    run_until_signal(host, app)               # SIGTERM installed; close() guaranteed
 ```
 
-A missing env var stays an empty coordinate and `bootstrap.new` fails fast on
-it — the host never invents a default for someone else's config; its own
-launch knobs (a listen port) may default locally. Construction mechanics:
-`python.md#inbound-handlers-and-hosts`; verified impl:
-`examples/python-app/srv/` (`http/main.py`, `cli/main.py`).
+A missing app-config var stays an empty coordinate and `bootstrap.new` fails
+fast on it — the host never invents a default for someone else's config; a
+host's own launch knobs (a listen port) may default locally, inside `from_env`.
+Construction mechanics: `python.md#inbound-handlers-and-hosts`; verified impl:
+`examples/python-app/srv/` (`run.py`, `http/host.py`, `http/main.py`,
+`cli/main.py`).
 
 ## Decisions you must make
 
@@ -91,10 +105,11 @@ launch knobs (a listen port) may default locally. Construction mechanics:
    (Vault/AWS/GCP) is a legitimate host-side, launch-time concern — it is
    part of env → `Config` decoding at the edge, never a lazy fetch below it.
    The template deliberately doesn't build the loader.
-3. **How much lifecycle?** The template mandates only build-once +
-   `close()` in `finally`. Graceful-shutdown ordering, drain, readiness are
-   the host's fill-in — do them properly at the edge when the service needs
-   them (see the ops-deferral notice in `SKILL.md`).
+3. **How much lifecycle?** The template mandates build-once, a `Host` with
+   `run(stop)`, and a runner that installs SIGTERM and closes in `finally`.
+   Graceful-shutdown *ordering*, drain, and readiness are the host's fill-in —
+   do them properly at the edge when the service needs them (see the
+   ops-deferral notice in `SKILL.md`).
 
 ## How the machine sees it
 
@@ -122,9 +137,10 @@ follow-on work, not yet shipped. Review-side tells:
 
 ## Common mistakes
 
-- **A shared env-decoder module.** `config/from_env.py` used by every host —
-  now there are two config authorities and the host is no longer the edge.
-  Each host populates the `Config` it needs, inline.
+- **A host that re-reads env instead of calling the loader.** An `os.getenv`
+  for app config inside a host body — or a `Config.from_env` classmethod — is a
+  second env authority. There is exactly one loader, the `from_env(getenv)`
+  module function, and every host calls it, passing its own `os.getenv`.
 - **Defaulting a peer's coordinate.** `os.getenv("CAMPAIGN_STORAGE") or
   "memory"` at the host — the silent volatile-storage fall, moved up a
   layer. Empty coordinate in, fail-fast in `bootstrap.new`.
@@ -132,8 +148,9 @@ follow-on work, not yet shipped. Review-side tells:
   policy is host middleware; the handler receives an authenticated request.
 - **Per-request construction.** Building the app (or a repository) inside
   the request path — once per process, at startup.
-- **The immortal serve loop.** No `finally: app.close()` — a crash leaks
-  every pool the graph holds.
+- **A serve loop with no signal handling.** `finally: app.close()` alone does
+  not survive SIGTERM — the container stop skips it and leaks every pool the
+  graph holds. Run the host through the runner that installs the handler.
 
 ## Now build it
 
@@ -143,5 +160,6 @@ follow-on work, not yet shipped. Review-side tells:
   backed by `examples/python-app/srv/`.
 - Go: not yet materialized — the settled anatomy's Go mirror
   (`examples/app`) is pending; note the gap, don't invent a convention.
-  Mirror the Python arc's structure (env edge, build once, mount, `defer
-  app.Close()`).
+  Mirror the Python arc's structure (one `FromEnv(getenv)` loader, build once,
+  a `Host` with `Run(ctx) error`, a runner over `signal.NotifyContext` that
+  `Close()`s the app).

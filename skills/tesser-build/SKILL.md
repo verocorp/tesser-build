@@ -1,7 +1,7 @@
 ---
 name: tesser-build
 description: Application-construction entry point (DDD). Load whenever creating or modifying domain types OR the code around them — adding a field to a struct/class, creating a new type, modeling a new concept, writing a constructor, adding validation, comparing domain objects in tests, deciding between a value object/entity/aggregate, AND whenever writing a handler/endpoint, a use-case or application/domain service, or persistence/repository code (where to put business logic, how to load or save an aggregate, keeping domain math out of controllers), AND whenever wiring an application together — writing an entry point / `main` / composition root / host, exposing a component behind a public interface (a `Client` + DTOs), connecting two bounded contexts (a cross-context call or read), or placing a web UI / frontend / SPA (where presentation code lives), AND whenever reasoning about strategic design — subdomains, bounded contexts, or ubiquitous language. Routes the task through the decomposition procedure to the right component doc.
-skill-version: 17
+skill-version: 18
 source: https://github.com/verocorp/tesser-build (skills/tesser-build/)
 ---
 
@@ -92,7 +92,7 @@ Route on the task:
 | Your task | Do this |
 |---|---|
 | Understanding how the pieces of an app fit together, or where a new piece belongs | Read `map.md` — the anatomy, the adapter taxonomy, how contexts connect, app vs library |
-| Deciding where a context boundary goes, whether two areas are one model or two, classifying a subdomain, or naming the domain language | Read `strategic-design.md` — subdomains (Core/Supporting/Generic), bounded contexts (own model, `Client` seam, integration patterns), ubiquitous language (one term, one meaning) |
+| Deciding where a context boundary goes, whether two areas are one model or two, classifying a subdomain, or naming the domain language | Read `strategic-design.md` — subdomains (Core/Supporting/Generic), bounded contexts (own model, `Client` interface, integration patterns), ubiquitous language (one term, one meaning) |
 | Modeling a brand-new concept | Run the taxonomy tests → read that concept file → then the language section it names |
 | Adding a primitive-typed field (string/int/time/...) to a domain type | Read `value-objects.md#is-this-what-im-building` and run the **primitive-obsession check**. Wrap only if the value is domain-meaningful; then follow the spec-leaf + constructor rules in your language file |
 | Adding a collection field (slice/map/list/dict) to a domain type | Read `aggregates.md#is-this-what-im-building` — re-evaluate whether the parent just became an aggregate |

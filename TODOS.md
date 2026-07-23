@@ -440,3 +440,57 @@ Deferred work with context. Each entry carries enough for a cold pickup.
     codes, 8 analyzers and 21 skill docs: real, modest, and no worse to do
     later than now (ruled 2026-07-21, weighed against writing `errors.md`,
     which ranked higher).
+
+## Bootstrap / host lifecycle (opened 2026-07-22, PR #31)
+
+Left open when the host-lifecycle + one-loader work shipped
+(`examples/python-app` + reconciled `srv.md`/`bootstrap.md`). None blocks that
+change; each waits for a real need.
+
+- [ ] **`APP_ENV` behavior-class validation — document or demonstrate?**
+  - **What:** impl selection is coordinate-driven (a resource coordinate, never
+    a magic env name — `bootstrap.md` rule 3). An `APP_ENV`, *if used at all*,
+    may only be a behavior **class**, never a resource selector. Open question:
+    does a behavior-class-only `APP_ENV` (an allowlist + a startup fingerprint
+    validating the name *against* the actual resources) deserve a worked
+    demonstration in `examples/python-app`, or only a paragraph of doctrine?
+  - **Why:** `bootstrap.md` already bans `APP_ENV` as a resource selector; it
+    says nothing about the legitimate behavior-class use. A reader has no
+    example of the safe form.
+  - **How:** if documented — a short "Decisions you must make" entry in
+    `bootstrap.md`/`srv.md`; if demonstrated — a validated check at the host
+    edge (inside `from_env`) that fails fast when the declared class disagrees
+    with the resources it was handed.
+  - **Why not now:** no consumer has hit it; premature to pick document-vs-build
+    without the friction.
+
+- [ ] **Secret-reference resolver (reference → DSN, at the edge)**
+  - **What:** when credentials arrive as a secret *reference* (a Vault path, an
+    AWS/GCP secret id) rather than an inline connection string, resolving the
+    reference to the real coordinate is a launch-time job at the host edge —
+    inside or just before `from_env` — never a lazy fetch below it. The example
+    builds no resolver.
+  - **Why:** the common production case injects a reference, not a raw secret;
+    the one-loader + env-edge rules must survive it, and today the doctrine only
+    names the case without showing the shape.
+  - **How:** a pure resolver the host calls before/within `from_env`; document
+    the shape in `srv.md`, optionally demonstrate with a fake resolver in
+    `examples/python-app` (no live secret manager in CI).
+  - **Depends on:** nothing hard; do it when a consumer needs reference-based
+    secrets.
+
+- [ ] **`Dsn` value object + a persisted context**
+  - **What:** the coordinate-value-object demonstration — a `Dsn` parsed at the
+    wiring construction door (scheme + host + database), validated, with a
+    `redacted()` exit so credentials never reach a log — needs a context that
+    actually persists to a real backend. Deferred: a SQL repository CI never
+    connects to is CI-unrun code, the same reason `srv/wrk` is omitted.
+  - **Why:** demonstrates coordinate VOs at the construction door and the
+    end-to-end credential flow in running code; the example currently keeps its
+    in-memory `storage` coordinate, so there is no DSN to wrap.
+  - **How:** when a context gains a genuine persistence need, add the `Dsn` VO in
+    that context's `repo_for`, and decide the CI story then (a real backend in
+    CI vs keeping the SQL path exercised some other way — do not ship an
+    unexercised repo).
+  - **Depends on:** a context that needs to persist. Until then, the
+    credential-flow story stays doctrine, not code.

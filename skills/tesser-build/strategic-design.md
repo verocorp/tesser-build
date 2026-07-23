@@ -103,7 +103,7 @@ bounded context.
 - **An aggregate** (`aggregates.md`) — a *consistency* boundary *inside* one context
   (a cluster that changes together under one root). A context contains many
   aggregates; it is not one.
-- **A component's public interface** (`public-interface.md`) — that is the *seam* a
+- **A component's public interface** (`public-interface.md`) — that is the *boundary* a
   context exposes, not the context itself. (See "How it connects" below.)
 
 ### Rules
@@ -114,7 +114,7 @@ bounded context.
 2. **Contexts talk through a deliberate contract, never internals.** Communication
    crosses the boundary as a **public `Client` interface + DTOs**
    (`public-interface.md`) — never by importing another context's
-   internal packages. The `Client` *is* the seam between contexts.
+   internal packages. The `Client` *is* the boundary between contexts.
 3. **Dependencies point one way.** If A imports B and B imports A, they are not
    separate contexts — a cycle means they cannot evolve, deploy, or test
    independently. Break it with an interface or merge them.
@@ -270,7 +270,7 @@ the first often marks a latent context boundary.
 ## How this connects to the tactical skill
 
 - The public **`Client` interface** (`public-interface.md`) is the
-  seam **between** contexts — a component's contract is the boundary another context
+  boundary **between** contexts — a component's contract is the boundary another context
   reaches through. The callers note in `public-interface.md` is this section.
 - An **aggregate** (`aggregates.md`) is a consistency boundary **within** one context,
   not a context boundary — a context holds many aggregates.

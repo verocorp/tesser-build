@@ -44,12 +44,13 @@ class App:
         self.reports = reports_client
         self._stack = stack
         self._closed = False
+        self.close_errors: tuple[Exception, ...] = ()
 
     def close(self) -> None:
         if self._closed:
             return
         self._closed = True
-        self._stack.close_all()
+        self.close_errors = tuple(self._stack.close_all())
 
 
 def new(cfg: Config) -> App:
