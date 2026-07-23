@@ -33,9 +33,9 @@ into every service cloned from it, so the example **enforces itself** (see below
    **its own (small) bounded context** — `reports` — sitting ABOVE both and
    composing their public `Client`s. There is no special "orchestrator role":
    reports has the same anatomy as its siblings (its domain owns the
-   join/ordering semantics; adapters are optional because it reaches peers only
-   through the injected `Client`s). The cycle is avoided by **dependency
-   direction** — reports reads both, nothing imports reports; putting the read
+   join/ordering semantics; it needs no gateways because it reaches peers only
+   through the injected `Client`s, and it owns a handler because the HTTP host
+   serves it). The cycle is avoided by **dependency direction** — reports reads both, nothing imports reports; putting the read
    in `linkpolicy` would force `linkpolicy → campaign` and close a cycle.
    Demonstrated **in-process** on one `App`.
 
@@ -51,10 +51,13 @@ linkpolicy ──▶ (nobody)
 Each context has the roles that define it — `domain`, `application`, `wiring`
 required; `adapters` (`handlers` inbound, `gateways` outbound) where the context
 touches the outside — with the public `Client` Protocol + primitive DTOs at its
-top level. `reports` shows the minimum: a context that reaches its peers only
-through injected `Client`s needs no adapters of its own. A context's own config
-lives in its `wiring`, never on the public seam (`reports/wiring/config.py` is
-an empty spec today — the uniform seam a real coordinate would land in).
+top level. `reports` shows the minimum: it reaches its peers only through
+injected `Client`s, so it needs **no gateways** — but the HTTP host serves it,
+so it owns a **handler** like any other exposed context. The two directions are
+independent: composing peers in-process says nothing about the inbound edge. A
+context's own config lives in its `wiring`, never on the public interface
+(`reports/wiring/config.py` is an empty spec today — the uniform shape a real
+coordinate would land in).
 
 App-level: **the host is the env edge** — each `srv/*/main` populates the
 spec-shaped application `Config` (`bootstrap/config.py`: frozen dataclass,
@@ -76,7 +79,7 @@ CAMPAIGN_STORAGE=memory LINKPOLICY_STORAGE=memory python -m srv.cli.main create-
 
 ```
 pip install -r requirements-dev.txt
-MYPYPATH=. mypy --strict errors.py lifecycle.py campaign linkpolicy reports bootstrap srv tests conftest.py
+MYPYPATH=. mypy --strict errors.py lifecycle.py serialization.py httpwire.py campaign linkpolicy reports bootstrap srv tests conftest.py
 pytest -q
 ```
 

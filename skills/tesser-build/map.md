@@ -95,9 +95,10 @@ peer outage fails the use case honestly. → `gateway-cross-context.md`
 
 **A cross-context READ** (a result composes data from two peers and belongs to
 neither): it becomes **its own small bounded context, above both**, composing
-their public `Client`s. Its domain owns the join/ordering semantics; its
-adapters are optional (it reaches peers only through injected `Client`s); no
-special "orchestrator" role exists — it has the same anatomy as its siblings.
+their public `Client`s. Its domain owns the join/ordering semantics; it needs
+no *gateways* (it reaches peers only through injected `Client`s) but owns a
+*handler* the moment a host serves it; no special "orchestrator" role exists —
+it has the same anatomy as its siblings.
 The guardrails that keep this honest:
 - A read that belongs to **one** peer stays *in* that peer — spawning a context
   is for composition that belongs to neither, not for every query.

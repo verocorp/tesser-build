@@ -5,6 +5,45 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.8.0] - 2026-07-23
+
+The reports context gets its inbound edge. `reports` was served over HTTP but
+owned no handler — the host built its response body inline — and the docs
+justified the gap with an argument about the *outbound* direction. The two
+directions are independent: composing peers through injected `Client`s says
+nothing about the inbound edge.
+
+### Added
+
+- **`reports/adapters/handlers/http.py`** in `examples/python-app`: the
+  cross-context read model translates its own `Client` DTOs to the wire, like
+  every other exposed context. The host now routes to it.
+- **`examples/python-app/httpwire.py`**: the HTTP mechanism's shared wire
+  vocabulary (`Response`, `BadRequest`, `problem`, `respond`), lifted out of
+  campaign's handler so a second context serving the same mechanism doesn't
+  import a sibling's adapter internals.
+- **Two AST checks** in `tests/test_enforcement.py`, replacing a hardcoded
+  name allowlist in `test_shape.py`: every context a host reaches owns a
+  handler role, and the HTTP host never calls a context `Client`. Both proven
+  on injected violations, including the aliased form (`reports = app.reports`)
+  that a naive attribute check misses — the exact shape of the defect fixed
+  here.
+
+### Changed
+
+- **`handlers.md`**: new rule 5 (a context a host exposes owns a handler —
+  `adapters` is optional only while a context has no edge) and decision 4
+  (where the shared wire vocabulary lives); "the host translates" added to
+  common mistakes.
+- **`srv.md`**: dropped the carve-out sanctioning a read-model rendered inline
+  instead of via a handler — it was written to describe this defect, not a
+  rule. The CLI's single-command inline dispatch (`handlers.md` decision 2)
+  is untouched and remains the one genuine carve-out.
+- **`map.md`, `python.md`, `examples/python-app/README.md`**: the
+  cross-context read model needs no *gateways*; it owns a *handler* the moment
+  a host serves it. `python.md`'s handler block now shows the shared
+  `httpwire` module it actually imports. skill-version 18 → 19.
+
 ## [0.0.7.0] - 2026-07-22
 
 The host-lifecycle wave: who owns starting the hosts, and how. Gives the

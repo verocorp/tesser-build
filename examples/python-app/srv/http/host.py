@@ -6,12 +6,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 from bootstrap.bootstrap import App
-from campaign.adapters.handlers.http import Handler, Response
+from campaign.adapters.handlers.http import Handler as CampaignHandler
+from httpwire import Response, problem
+from reports.adapters.handlers.http import Handler as ReportsHandler
 
 
 def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
-    campaign_handler = Handler(app.campaign)
-    reports = app.reports
+    campaign_handler = CampaignHandler(app.campaign)
+    reports_handler = ReportsHandler(app.reports)
 
     class _RequestHandler(BaseHTTPRequestHandler):
         def do_POST(self) -> None:
@@ -23,7 +25,7 @@ def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
             if self.path == "/links":
                 self._send(campaign_handler.add_link(raw))
                 return
-            self._send(Response(404, {"type": "/problems/not_found", "detail": "unknown route"}))
+            self._send(_not_found())
 
         def do_GET(self) -> None:
             if self.path.startswith("/campaigns/"):
@@ -32,14 +34,10 @@ def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
             if self.path.startswith("/r/"):
                 self._send(campaign_handler.resolve(self.path.removeprefix("/r/")))
                 return
-            if self.path != "/reports/links-by-verdict":
-                self._send(Response(404, {"type": "/problems/not_found", "detail": "unknown route"}))
+            if self.path == "/reports/links-by-verdict":
+                self._send(reports_handler.links_by_verdict())
                 return
-            rows = [
-                {"slug": r.slug, "target_url": r.target_url, "allowed": r.allowed, "reason": r.reason}
-                for r in reports.links_by_verdict()
-            ]
-            self._send(Response(200, {"links": rows}))
+            self._send(_not_found())
 
         def log_message(self, format: str, *args: Any) -> None:
             return
@@ -53,6 +51,10 @@ def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
             self.wfile.write(payload)
 
     return ThreadingHTTPServer(addr, _RequestHandler)
+
+
+def _not_found() -> Response:
+    return Response(404, problem("not_found", "unknown route"))
 
 
 class HttpHost:

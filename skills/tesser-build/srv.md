@@ -6,9 +6,8 @@ An app-wide directory of **hosts, one per delivery mechanism** (recommended
 subdirs `srv/{http,cli,wrk}`, not enforced). A host's `main` is the outermost
 edge of the app: it decodes the environment into the app `Config`, calls
 `bootstrap.new(cfg)` **once**, mounts *its* mechanism's inbound handlers for
-the contexts it exposes (a read-model context with a single read may be
-rendered inline rather than via a dedicated handler), applies cross-cutting
-middleware
+the contexts it exposes — every one of them, however small its surface
+(`handlers.md`, rule 5) — applies cross-cutting middleware
 (auth/logging/recovery), and owns the process lifecycle. Everything a host
 does is edge work — the moment logic appears in a host that isn't
 env-decoding, mounting, middleware, or lifecycle, it belongs somewhere below.
@@ -152,6 +151,11 @@ follow-on work, not yet shipped. Review-side tells:
   policy is host middleware; the handler receives an authenticated request.
 - **Per-request construction.** Building the app (or a repository) inside
   the request path — once per process, at startup.
+- **The host doing a context's translation.** Calling a `Client` from the
+  route and shaping the body inline because that context's surface is one
+  read — the host now owns a wire format it has no business knowing, and that
+  route skips the handler's `respond` path (`handlers.md`, rule 5). Mount a
+  handler; the host maps path → handler method and serializes the result.
 - **A serve loop with no signal handling.** `finally: app.close()` alone does
   not survive SIGTERM — the container stop skips it and leaks every pool the
   graph holds. Run the host through the runner that installs the handler.

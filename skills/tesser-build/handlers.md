@@ -45,7 +45,14 @@ Yes → handler.
    never deserialized straight into a DTO or domain type. That translation is
    the point of the layer: a wire rename touches the handler; the `Client`
    and everything below it never hear about it.
-5. **Errors map to the wire at the edge, exhaustively.** One `respond` path
+5. **A context a host exposes owns a handler.** `adapters` is optional only
+   while a context has no edge; the moment a host serves it, the wire
+   translation is that context's handler, not the host's inline code. A
+   context that composes peers through their `Client`s (a cross-context read
+   model) still gets a handler the moment it is routed — reaching peers
+   through injected `Client`s is an *outbound* property and says nothing about
+   the inbound edge.
+6. **Errors map to the wire at the edge, exhaustively.** One `respond` path
    catches: transport failures (unparseable/wrong-shape request) → 400 from
    the handler's own guard; domain errors → status via the one pure
    kind→status mapper (the closed `Kind` set, `errors.status_for`); infra
@@ -70,7 +77,9 @@ class Handler:
 One `Client` call per endpoint; a `Response` is a status + body the host
 serializes. Construction mechanics:
 `python.md#inbound-handlers-and-hosts`; verified impl:
-`examples/python-app/campaign/adapters/handlers/http.py`.
+`examples/python-app/campaign/adapters/handlers/http.py` (full case) and
+`examples/python-app/reports/adapters/handlers/http.py` (minimal case: one
+read endpoint over a cross-context read model).
 
 ## Decisions you must make
 
@@ -88,11 +97,23 @@ serializes. Construction mechanics:
    errors as a problem object (`type` + `detail`, RFC 9457-shaped) with the
    domain error's open `Code` as the type — decided once at the `respond`
    path for the whole mechanism.
+4. **Where does the shared wire vocabulary live?** The `Response` type, the
+   problem renderer, and the `respond` error table describe the *mechanism*,
+   not any one context — so once a second context serves the same mechanism
+   they belong in one app-level module both handlers import (verified impl:
+   `examples/python-app/httpwire.py`). Leaving them in the first context's
+   handler forces its peers to import a sibling's adapter internals, which is
+   a public-interface violation dressed up as reuse.
 
 ## How the machine sees it
 
-Not machine-checked in this cut — no shipped analyzer targets handlers; the
-enforcement is review plus the domain-logic leakage signal list
+No shipped analyzer targets handlers in this cut. What is machine-checked is
+the routing rule, and only in the verified impl's own tests
+(`examples/python-app/tests/test_enforcement.py`, AST): every context a host
+reaches owns a handler role, and the HTTP host never calls a context `Client`
+— proven on injected violations, including the aliased form
+(`reports = app.reports`) that a naive attribute check would miss. Everything
+else is review plus the domain-logic leakage signal list
 (`application-services.md#domain-logic-leakage-checks`). Review-side tells:
 - an import of a **repository or concrete service** in a handler module;
 - **domain arithmetic or a domain `for`-loop** between parse and `Client`
@@ -128,6 +149,12 @@ enforcement is review plus the domain-logic leakage signal list
 - **Handler builds its dependencies.** Constructing the service or fetching
   the `Client` from a registry — construction belongs to wiring/bootstrap;
   the handler receives.
+- **The host translates.** One context gets a proper handler and the next one
+  is answered by a few lines of body-building in the host, usually because it
+  looked too small to deserve a class. The rule it broke is rule 5, and the
+  cost is that the wire shape of that context now lives outside it: its DTO
+  rename is a host edit, and the two endpoints drift on error mapping because
+  only one of them goes through `respond`.
 
 ## Now build it
 
@@ -135,7 +162,8 @@ enforcement is review plus the domain-logic leakage signal list
 
 - Python: `python.md#inbound-handlers-and-hosts` — the `Handler` class, the
   transport guard, and the one `respond` path, backed by
-  `examples/python-app/campaign/adapters/handlers/http.py`.
+  `examples/python-app/campaign/adapters/handlers/http.py` and
+  `examples/python-app/reports/adapters/handlers/http.py`.
 - Go: not yet materialized — the settled anatomy's Go mirror
   (`examples/app`) is pending; note the gap, don't invent a convention. The
   same role split (handler translates, host mounts) applies; the v3

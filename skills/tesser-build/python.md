@@ -588,9 +588,9 @@ env edge — it calls the one `from_env` loader, builds the graph once, and runs
 under a runner that installs SIGTERM and closes the app.
 
 ```python
-# <context>/adapters/handlers/http.py
-class BadRequest(Exception):
-    """transport-level failure (unparseable/wrong-shape request) -> 400"""
+# httpwire.py — the mechanism's wire vocabulary, shared by every HTTP handler
+class BadRequest(Exception):                        # transport failure -> 400
+    pass
 
 
 @dataclass(frozen=True)
@@ -599,6 +599,24 @@ class Response:
     body: JSONObject
 
 
+def problem(code: str, detail: str) -> JSONObject:
+    return {"type": f"/problems/{code}", "detail": detail}
+
+
+def respond(run: Callable[[], Response]) -> Response:
+    try:
+        return run()
+    except BadRequest as e:
+        return Response(400, problem("malformed_request", str(e)))
+    except DomainError as e:
+        return Response(status_for(e.kind), problem(e.code, e.message))
+    except InfraError:
+        return Response(503, problem("unavailable", "a dependency is unavailable; please retry"))
+    except Exception:
+        return Response(500, problem("internal", "unexpected error"))
+
+
+# <context>/adapters/handlers/http.py
 class Handler:
     def __init__(self, client: Client) -> None:
         self._client = client                       # injected; never constructed
@@ -613,29 +631,22 @@ class Handler:
             )
             return Response(200, _campaign_body(view))  # DTO -> wire, the edge's own shape
 
-        return self._respond(run)
-
-    def _respond(self, run: Callable[[], Response]) -> Response:
-        try:
-            return run()
-        except BadRequest as e:
-            return Response(400, _problem("malformed_request", str(e)))
-        except DomainError as e:
-            return Response(status_for(e.kind), _problem(e.code, e.message))
-        except InfraError:
-            return Response(503, _problem("unavailable", "a dependency is unavailable; please retry"))
-        except Exception:
-            return Response(500, _problem("internal", "unexpected error"))
+        return respond(run)
 ```
 
 - **One `Client` call per endpoint method**; the method translates in, calls,
   translates out. `_parse`/`_str` raise `BadRequest` — the handler's own
   transport guard, distinct from domain validation.
-- **`_respond` is the whole error table for the mechanism**: transport → 400,
+- **`respond` is the whole error table for the mechanism**: transport → 400,
   domain kind → status through the one pure mapper (`status_for` over the
   closed `Kind` set), infra → 503, unexpected → 500 with a generic body.
-- **`_problem`** renders the RFC 9457-shaped problem object (`type` from the
+- **`problem`** renders the RFC 9457-shaped problem object (`type` from the
   open `Code`, `detail`) — decided once at this path.
+- **The wire vocabulary is app-level, not context-owned.** `Response`,
+  `problem`, and `respond` describe the *mechanism*, so they live in one
+  shared module every HTTP handler imports (`examples/python-app/httpwire.py`)
+  — never in whichever context happened to grow a handler first, which would
+  make its peers import a sibling's adapter internals to answer a request.
 
 ```python
 # srv/http/main.py — the host: env edge, build once, hand to the runner
@@ -654,10 +665,13 @@ def main() -> None:
   env-edge check still holds.
 - **`HttpHost` implements the `Host` contract** (`run(stop)`): it serves in a
   thread and drains on stop. `make_server` constructs each exposed context's
-  handler once from the single `App` — here the campaign `Handler(app.campaign)`,
-  with the `reports` read-model rendered inline as the host's one read endpoint
-  (the same inline-handler shape the CLI uses for a single operation) — no
-  per-request construction, and owns routing + middleware for its mechanism.
+  handler once from the single `App` — `CampaignHandler(app.campaign)` and
+  `ReportsHandler(app.reports)` — then routes to them; no per-request
+  construction, and it owns routing + middleware for its mechanism. **A context
+  the host exposes owns a handler**: the host maps a path to a handler method
+  and serializes what comes back, and never touches a `Client` itself
+  (`handlers.md`). Its own routing failures are the exception — an unmatched
+  path is the host's to answer, through the same `problem` shape.
 - **`run_until_signal` owns the process lifecycle**: it installs SIGINT/SIGTERM
   and calls `app.close()` in a `finally`. This is the lifecycle **minimum, and
   it is load-bearing** — a bare `finally: app.close()` does **not** survive

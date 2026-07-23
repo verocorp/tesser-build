@@ -11,6 +11,8 @@ from campaign.adapters.handlers.http import Handler
 from campaign.client import LinkView, ResolveResponse
 from campaign.wiring.config import Config as CampaignConfig
 from campaign.wiring.wire import build as build_campaign
+from errors import InfraError
+from reports.adapters.handlers.http import Handler as ReportsHandler
 from reports.client import LinkVerdictView
 from tests.discovery import discovered_contexts
 
@@ -21,8 +23,6 @@ def test_required_roles_present_per_context() -> None:
     for ctx in discovered_contexts():
         for role in ("domain", "application", "wiring"):
             assert (ROOT / ctx / role).is_dir(), f"{ctx}/{role} missing"
-    for ctx in ("campaign", "linkpolicy"):
-        assert (ROOT / ctx / "adapters").is_dir(), f"{ctx}/adapters missing"
 
 
 def test_public_seam_is_client_plus_dtos_at_top_level() -> None:
@@ -70,4 +70,38 @@ def test_handler_translates_wire_to_client_dtos() -> None:
         "campaign_id": campaign_id,
         "budget": {"amount": "100.00", "currency": "USD"},
         "links": [{"slug": "promo", "target_url": "https://ok.example/x", "active": True}],
+    }
+
+
+class _StubReports:
+    def links_by_verdict(self) -> tuple[LinkVerdictView, ...]:
+        return (LinkVerdictView("promo", "https://ok.example/x", False, "host blocked"),)
+
+
+class _FailingReports:
+    def links_by_verdict(self) -> tuple[LinkVerdictView, ...]:
+        raise InfraError("the campaign store is unreachable")
+
+
+def test_reports_handler_translates_client_dtos_to_wire() -> None:
+    resp = ReportsHandler(_StubReports()).links_by_verdict()
+    assert resp.status == 200
+    assert resp.body == {
+        "links": [
+            {
+                "slug": "promo",
+                "target_url": "https://ok.example/x",
+                "allowed": False,
+                "reason": "host blocked",
+            }
+        ]
+    }
+
+
+def test_reports_handler_maps_a_failure_to_a_problem_document() -> None:
+    resp = ReportsHandler(_FailingReports()).links_by_verdict()
+    assert resp.status == 503
+    assert resp.body == {
+        "type": "/problems/unavailable",
+        "detail": "a dependency is unavailable; please retry",
     }

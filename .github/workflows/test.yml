@@ -90,7 +90,7 @@ jobs:
       - name: examples/python-app — mypy --strict + pytest
         working-directory: examples/python-app
         run: |
-          MYPYPATH=. mypy --strict errors.py lifecycle.py serialization.py campaign linkpolicy reports bootstrap srv tests conftest.py
+          MYPYPATH=. mypy --strict errors.py lifecycle.py serialization.py httpwire.py campaign linkpolicy reports bootstrap srv tests conftest.py
           pytest -q
 
   serdepy-example:

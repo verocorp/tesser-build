@@ -59,6 +59,41 @@ def _import_time_side_effects(tree: ast.Module) -> list[int]:
     return hits
 
 
+_CONFIG_OWNERS = frozenset({"cfg", "config"})
+
+
+def _is_client_access(node: ast.Attribute, contexts: frozenset[str]) -> bool:
+    if node.attr not in contexts:
+        return False
+    return not (isinstance(node.value, ast.Name) and node.value.id in _CONFIG_OWNERS)
+
+
+def _clients_reached(tree: ast.Module, contexts: frozenset[str]) -> tuple[set[str], list[int]]:
+    reached: set[str] = set()
+    aliases: dict[str, str] = {}
+    called: list[int] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Attribute):
+            if _is_client_access(node.value, contexts):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        aliases[target.id] = node.value.attr
+        if isinstance(node, ast.Attribute) and _is_client_access(node, contexts):
+            reached.add(node.attr)
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            continue
+        owner = node.func.value
+        if isinstance(owner, ast.Attribute) and _is_client_access(owner, contexts):
+            called.append(node.lineno)
+        if isinstance(owner, ast.Name) and owner.id in aliases:
+            called.append(node.lineno)
+    return reached, called
+
+
+def _host_files(sub: str = "") -> list[pathlib.Path]:
+    return sorted((ROOT / "srv" / sub).rglob("*.py"))
+
+
 def _py_files(*, exclude: set[pathlib.Path]) -> list[pathlib.Path]:
     return [
         p
@@ -106,6 +141,39 @@ def test_no_import_time_side_effects_in_contexts_or_bootstrap() -> None:
             if lines:
                 offenders[str(path.relative_to(ROOT))] = lines
     assert not offenders, f"import-time side effect: {offenders}"
+
+
+def test_a_context_a_host_exposes_owns_a_handler() -> None:
+    contexts = frozenset(discovered_contexts())
+    exposed: set[str] = set()
+    for path in _host_files():
+        reached, _ = _clients_reached(_parse(path), contexts)
+        exposed |= reached
+    assert exposed, "no context is reachable from a host — the walk found nothing"
+    missing = sorted(ctx for ctx in exposed if not (ROOT / ctx / "adapters" / "handlers").is_dir())
+    assert not missing, f"a host exposes these contexts but they own no handler role: {missing}"
+
+
+def test_the_http_host_routes_and_never_translates() -> None:
+    contexts = frozenset(discovered_contexts())
+    offenders: dict[str, list[int]] = {}
+    for path in _host_files("http"):
+        _, called = _clients_reached(_parse(path), contexts)
+        if called:
+            offenders[str(path.relative_to(ROOT))] = called
+    assert not offenders, f"the http host calls a context Client instead of routing to a handler: {offenders}"
+
+
+def test_handler_routing_teeth() -> None:
+    contexts = frozenset({"campaign", "reports"})
+    direct = ast.parse("def f(app):\n    return app.reports.links_by_verdict()\n")
+    aliased = ast.parse("def f(app):\n    reports = app.reports\n    return reports.links_by_verdict()\n")
+    routed = ast.parse("def f(app):\n    return ReportsHandler(app.reports)\n")
+    configured = ast.parse("def f(cfg):\n    return cfg.reports\n")
+    assert _clients_reached(direct, contexts) == ({"reports"}, [2])
+    assert _clients_reached(aliased, contexts) == ({"reports"}, [3])
+    assert _clients_reached(routed, contexts) == ({"reports"}, [])
+    assert _clients_reached(configured, contexts) == (set(), [])
 
 
 def test_checkers_flag_injected_violations() -> None:
