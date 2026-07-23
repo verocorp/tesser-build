@@ -26,9 +26,9 @@ prescribed):
 | **adapters** | inbound `handlers` + outbound `gateways` (taxonomy below) | `handlers.md`, `repositories.md`, `gateway-cross-context.md` |
 | **wiring** | the context's own construction + its `Config` | `wiring.md` |
 
-The context's **top level is its public seam**: the `Client` interface +
+The context's **top level is its public interface**: the `Client` interface +
 primitive DTOs (`public-interface.md`). There is no separate "contract" role —
-the seam *is* the top of the context. A context is **discovered by its seam**:
+the public interface *is* the top of the context. A context is **discovered by its public interface**:
 anything that exposes a `Client` is a context (the verified impl's discovery
 check keys on exactly this).
 
@@ -37,7 +37,8 @@ check keys on exactly this).
 - **`bootstrap`** — the composition root: `new(cfg) → App`, builds the graph
   once (`bootstrap.md`).
 - **`srv/`** — the hosts, one per *in-process* delivery mechanism; the host is
-  the env edge (`srv.md`).
+  the env edge and owns the process lifecycle (`srv.md`). A platform-required
+  health/metrics listener is part of the host it reports on, not a second host.
 - **`web/`** — the *out-of-process* presentation deployables (an SPA, an admin
   console, a native client): each a separately built, separately deployed
   frontend that reaches the app only over a host's API. The `srv/`↔`web/` split
@@ -117,7 +118,7 @@ a wiring bug, not a cycle break.
 Which roles a context carries is decided by **application vs library**
 (settled ruling):
 
-- **domain + the public seam (`Client` + DTOs) — always required.** They define
+- **domain + the public interface (`Client` + DTOs) — always required.** They define
   a context and key discovery.
 - **application — required when the context has use cases.**
 - **adapters — optional** (present where the context touches the outside).
@@ -206,4 +207,4 @@ two features talk"). Jobs are too many to catalog; decompose instead:
 | srv hosts | `srv.md` | full |
 | Presentation: web / out-of-process clients | `map.md#presentation` | doctrine only; no verified impl yet |
 | Strategic design (subdomains, contexts, language) | `strategic-design.md` | full |
-| Language mechanics | `go.md`, `python.md` | full for the domain + seam concepts; app-level anatomy mechanics (wiring/bootstrap/handlers/hosts) in `python.md` only — the Go mirror is pending |
+| Language mechanics | `go.md`, `python.md` | full for the domain + interface concepts; app-level anatomy mechanics (wiring/bootstrap/handlers/hosts) in `python.md` only — the Go mirror is pending |

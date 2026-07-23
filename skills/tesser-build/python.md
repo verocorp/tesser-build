@@ -3,7 +3,7 @@
 Construction mechanics only — the concepts and the rules' whys live in the
 concept files (`value-objects.md`, `entities.md`, `aggregates.md`,
 `application-services.md`, `repositories.md`, `domain-services.md`). This file
-covers the domain building blocks *and* the seams that serve them (application
+covers the domain building blocks *and* the boundaries that serve them (application
 services, repositories) — not domain objects themselves, but their construction
 mechanics live here alongside the objects they orchestrate and persist. Section
 headings here are stable anchors; the resolver and the coverage matrix link to
@@ -11,7 +11,7 @@ them.
 
 > **Verification status — verified.** The patterns these examples exercise —
 > value objects (simple, compound, collection), the entity and aggregate
-> lifecycle, the application-service seam, the repository, and the composition
+> lifecycle, the application-service boundary, the repository, and the composition
 > root — are backed by runnable, type-checked worked examples under
 > `examples/python/`: the **running arc** (`campaign` value objects and
 > aggregate, `campaignapp` service + repository, and the
@@ -509,7 +509,7 @@ def new_client(svc: OrderService) -> Client:
 
 **The composition root — the settled app anatomy** (`bootstrap.md`,
 `wiring.md`; verified impl `examples/python-app/`). Each context owns a
-`wiring/` package (its spec-shaped `Config` + a `build` seam); the app-level
+`wiring/` package (its spec-shaped `Config` + a `build` contract); the app-level
 `bootstrap` nests the configs and calls each context's `build` in dependency
 order, onto a cleanup stack:
 
@@ -520,7 +520,7 @@ class Config:
     storage: str          # the resource coordinate; "memory" for in-process
 
 
-# <context>/wiring/wire.py — coordinate-driven, fail-fast, uniform seam
+# <context>/wiring/wire.py — coordinate-driven, fail-fast, uniform build contract
 def repo_for(cfg: Config) -> tuple[CampaignRepository, Closeable]:
     if cfg.storage == "memory":
         repo = InMemoryCampaignRepository()
@@ -559,7 +559,7 @@ def new(cfg: Config) -> App:
 
 - **`build` returns `(Client, Closeable)`** — the Protocol and a resource
   handle, never the concrete service or a domain type. A context with no
-  resources returns a named no-op closeable; the seam stays uniform.
+  resources returns a named no-op closeable; the build contract stays uniform.
 - **Each context gets only its slice** (`cfg.campaign`), and cross-context
   adapters are constructed in `new` and injected — only the root knows two
   contexts at once.
@@ -583,8 +583,9 @@ def new(cfg: Config) -> App:
 The two-layer transport split (`handlers.md`, `srv.md`; verified impl
 `examples/python-app/campaign/adapters/handlers/http.py` and
 `examples/python-app/srv/`). The per-context **handler** translates
-wire ↔ `Client` DTOs through one respond seam; the app-level **host** `main`
-is the env edge that builds the graph once and mounts the handlers.
+wire ↔ `Client` DTOs through one respond path; the app-level **host** is the
+env edge — it calls the one `from_env` loader, builds the graph once, and runs
+under a runner that installs SIGTERM and closes the app.
 
 ```python
 # <context>/adapters/handlers/http.py
@@ -634,36 +635,38 @@ class Handler:
   domain kind → status through the one pure mapper (`status_for` over the
   closed `Kind` set), infra → 503, unexpected → 500 with a generic body.
 - **`_problem`** renders the RFC 9457-shaped problem object (`type` from the
-  open `Code`, `detail`) — decided once at this seam.
+  open `Code`, `detail`) — decided once at this path.
 
 ```python
-# srv/http/main.py — the host: env edge, build once, mount, serve, close
+# srv/http/main.py — the host: env edge, build once, hand to the runner
 def main() -> None:
-    cfg = Config(
-        campaign=CampaignConfig(storage=os.getenv("CAMPAIGN_STORAGE") or ""),
-        linkpolicy=LinkPolicyConfig(storage=os.getenv("LINKPOLICY_STORAGE") or ""),
-    )
-    app = new(cfg)                      # ONCE per process; validates fail-fast
-    host = os.getenv("HTTP_HOST") or ""             # the host's OWN launch config
-    port = int(os.getenv("HTTP_PORT") or "8080")
-    server = make_server((host, port), app)         # mounts the contexts' handlers
-    try:
-        server.serve_forever()
-    finally:
-        app.close()
+    cfg = from_env(os.getenv)            # the ONE config loader (bootstrap/config)
+    app = new(cfg)                       # ONCE per process; validates fail-fast
+    host = HttpHost((cfg.http.host, cfg.http.port), app)  # implements Host: serve + drain
+    run_until_signal(host, app)          # installs SIGTERM, guarantees app.close()
 ```
 
-- **The host populates `Config` literally at the edge** — a missing peer
-  coordinate stays empty (never defaulted here) and `bootstrap.new` fails
-  fast on it; the host's own launch knobs may default locally.
-- **`make_server` constructs each context's `Handler(app.<context>)` once**
-  from the single `App` — no per-request construction — and owns routing +
-  middleware for its mechanism.
-- **A CLI host** is the same shape minus the server: env → `Config`,
-  `new(cfg)` once, dispatch the command to one `Client` call, render, and
-  `close()` in `finally` (`examples/python-app/srv/cli/main.py`); with one
-  command the handler role is played inline in the dispatch
-  (`handlers.md#decisions-you-must-make`).
+- **One loader, one env read.** The host passes its own `os.getenv` to
+  `from_env` (`bootstrap/config.py`) — the single place the app reads the
+  environment. `from_env` loads app config **and** the host's launch config
+  (`cfg.http`) into one `Config`; nothing below the host reads env. It stays a
+  pure function (`getenv` injected), so it's testable with a dict and the
+  env-edge check still holds.
+- **`HttpHost` implements the `Host` contract** (`run(stop)`): it serves in a
+  thread and drains on stop. `make_server` constructs each context's
+  `Handler(app.<context>)` once from the single `App` — no per-request
+  construction — and owns routing + middleware for its mechanism.
+- **`run_until_signal` owns the process lifecycle**: it installs SIGINT/SIGTERM
+  and calls `app.close()` in a `finally`. This is the lifecycle **minimum, and
+  it is load-bearing** — a bare `finally: app.close()` does **not** survive
+  Python's default SIGTERM (the process dies without unwinding), so the host
+  installs the handler. Drain ordering, readiness, and health stay the host's
+  fill-in (`examples/python-app/srv/run.py`, `srv/http/host.py`).
+- **A CLI host** is the same env edge minus the `Host`/runner (it is not
+  long-running): `new(from_env(os.getenv))`, dispatch the command to one
+  `Client` call, render, and `close()` in `finally`
+  (`examples/python-app/srv/cli/main.py`); with one command the handler role is
+  played inline in the dispatch (`handlers.md#decisions-you-must-make`).
 
 ## The Spec pattern
 

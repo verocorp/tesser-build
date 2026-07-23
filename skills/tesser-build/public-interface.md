@@ -11,7 +11,7 @@ dependency-direction discipline is the ported vero practice, genericized here; i
 strategic-design terms the `Client` + DTOs are the contract a bounded context
 exposes to its peers (`strategic-design.md#bounded-contexts`).
 
-Where this seam sits in a context's anatomy — the top level of the context, above
+Where this public interface sits in a context's anatomy — the top level of the context, above
 `domain` / `application` / `adapters` / `wiring` — is `map.md`'s subject.
 
 **Why an interface and not just a facade?** A package of exported functions over a
@@ -31,10 +31,10 @@ decoupling from a backend alone does not demand it.
 > client-facing contract," and define the term this way wherever you introduce it.
 
 **The callers.** The callers on the far side of this contract are other **bounded
-contexts** — a component's public interface is the seam *between* contexts
+contexts** — a component's public interface is the boundary *between* contexts
 (`strategic-design.md#bounded-contexts`). A peer reaches this contract through a
 cross-context gateway of its own (`gateway-cross-context.md`); it never imports
-what sits behind the seam.
+what sits behind the interface.
 
 ## Is this what I'm building?
 
@@ -117,7 +117,7 @@ future increment; the import-boundary side lives with the composition root,
 `bootstrap.md#how-the-machine-sees-it`). The tells a reviewer looks for:
 - a **domain type in a `Client` method signature** — a boundary leak;
 - a **forwarding method that reshapes nothing** — embedding already promoted it;
-- a **caller importing the impl package** instead of the public one — the seam
+- a **caller importing the impl package** instead of the public one — the boundary
   is being reached around.
 
 ## Tests you must write

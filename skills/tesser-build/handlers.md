@@ -45,7 +45,7 @@ Yes → handler.
    never deserialized straight into a DTO or domain type. That translation is
    the point of the layer: a wire rename touches the handler; the `Client`
    and everything below it never hear about it.
-5. **Errors map to the wire at the edge, exhaustively.** One `respond` seam
+5. **Errors map to the wire at the edge, exhaustively.** One `respond` path
    catches: transport failures (unparseable/wrong-shape request) → 400 from
    the handler's own guard; domain errors → status via the one pure
    kind→status mapper (the closed `Kind` set, `errors.status_for`); infra
@@ -57,7 +57,7 @@ Yes → handler.
 
 ```
 <context>/adapters/handlers/
-  http.py          ← Handler(client), one method per endpoint, one respond seam
+  http.py          ← Handler(client), one method per endpoint, one respond path
 
 class Handler:
     def __init__(self, client: Client) -> None: ...     # injected, held as the contract
@@ -87,7 +87,7 @@ serializes. Construction mechanics:
 3. **What is the problem-shape on the wire?** The verified impl renders
    errors as a problem object (`type` + `detail`, RFC 9457-shaped) with the
    domain error's open `Code` as the type — decided once at the `respond`
-   seam for the whole mechanism.
+   path for the whole mechanism.
 
 ## How the machine sees it
 
@@ -109,7 +109,7 @@ enforcement is review plus the domain-logic leakage signal list
 - **The error table, one row per class:** malformed wire → 400; each domain
   `Kind` → its mapped status through the shared mapper; infra → 503;
   unexpected → 500 with a generic body. The mapper itself is tested once,
-  exhaustively, at the errors layer — the handler test locks that the seam
+  exhaustively, at the errors layer — the handler test locks that the respond path
   *uses* it.
 - **No leak on the unexpected path:** the 500 body carries no exception
   text/stack.
@@ -134,7 +134,7 @@ enforcement is review plus the domain-logic leakage signal list
 <!-- tb-allow-missing: examples/app -->
 
 - Python: `python.md#inbound-handlers-and-hosts` — the `Handler` class, the
-  transport guard, and the one `respond` seam, backed by
+  transport guard, and the one `respond` path, backed by
   `examples/python-app/campaign/adapters/handlers/http.py`.
 - Go: not yet materialized — the settled anatomy's Go mirror
   (`examples/app`) is pending; note the gap, don't invent a convention. The

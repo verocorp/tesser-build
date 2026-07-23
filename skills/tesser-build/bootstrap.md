@@ -96,10 +96,13 @@ The conventions the nesting carries:
   `cfg.campaign` to campaign's wiring — never the whole `Config`. A context
   that receives the app config can grow a dependency on a sibling's
   coordinate without anyone choosing that.
-- **No shared env-decoder and no `from_env` constructor on `Config`.** The
-  host populates the struct literally at the edge (`srv.md`); a `from_env`
-  method would make `Config` a second env authority and hide the deploy
-  surface inside the type.
+- **One shared `from_env` loader, but no `from_env` *method* on `Config`.**
+  A single `from_env(getenv)` module function (`bootstrap/config.py`) decodes
+  env → `Config`, and every host calls it (`srv.md`); `Config` itself stays a
+  dumb spec. What's banned is a `from_env` *classmethod on `Config`* — that
+  would make the type a second env authority and hide the deploy surface inside
+  it. The loader is a pure function (`getenv` injected), not a method, so env is
+  read in exactly one place and the per-host `Config` literal never drifts.
 - **Validation lives in `new(cfg)`, not in `Config`.** The struct is dumb by
   design; `bootstrap.new` (via each wiring's fail-fast) is where an absent
   coordinate becomes a loud error. Two layers of validation drift apart.
@@ -110,12 +113,14 @@ The conventions the nesting carries:
 
 ## Lifecycle
 
-Deliberately minimal: the **only lifecycle contract the template mandates** is
-a `Closeable` shape (one `close()` method — `examples/python-app/lifecycle.py`)
-and an `App.close()` that tears the graph down. Health, readiness, graceful
-shutdown ordering, drain, and observability are the host's fill-in — the shape
-leaves room to do them *properly* without the template mandating them (see the
-ops-deferral notice in `SKILL.md`).
+Deliberately minimal, split across the two layers that own it: **bootstrap
+mandates** a `Closeable` shape (one `close()` method —
+`examples/python-app/lifecycle.py`) and an `App.close()` that tears the graph
+down; the **host mandates** a `Host` (`run(stop)`) run under a runner that
+installs SIGTERM and calls `App.close()` (`srv.md`). Health, readiness,
+graceful-shutdown *ordering*, drain, and observability are the host's fill-in
+above that minimum — the shape leaves room to do them *properly* without the
+template mandating them (see the ops-deferral notice in `SKILL.md`).
 
 What the mandated minimum requires:
 
@@ -124,8 +129,10 @@ What the mandated minimum requires:
   pops. Reverse order is the dependency order run backwards — a consumer
   closes before what it consumes.
 - **A close that raises must not orphan the rest.** The stack attempts every
-  close and collects errors; one leaky pool cannot leak the others (verified
-  impl: `CleanupStack.close_all`, locked by
+  close and collects errors; one leaky pool cannot leak the others. `App.close`
+  **retains** those errors on `App.close_errors` rather than dropping them, so a
+  host or test can see a partial teardown (verified impl:
+  `CleanupStack.close_all` + `App.close_errors`, locked by
   `examples/python-app/tests/test_cleanup.py`).
 - **Partial construction unwinds.** If a later context's build fails,
   `new(cfg)` closes what it already built before the error propagates — a
@@ -172,7 +179,7 @@ remain **review, not the compiler**. The tells a reviewer looks for:
 - a **handler holding a concrete field** instead of `Client` — coupling to
   internals (`handlers.md`).
 
-As with the other seams, layer and intent decide; a `New*` inside the
+As with the other boundaries, layer and intent decide; a `New*` inside the
 root/wiring is correct, the same call in a handler is the leak.
 
 ## Tests you must write
