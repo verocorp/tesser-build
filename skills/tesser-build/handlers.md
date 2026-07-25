@@ -40,11 +40,17 @@ Yes → handler.
    `self.path` parsing, no status line. It cannot reach transport state, so
    every case it must answer is in its argument, and it is unit-testable by
    constructing one value. **The corollary is the split with the host**: the
-   host owns the *serialization format* (bytes ↔ JSON, headers on the wire) and
-   the *URL* (which route, which path parameters); the handler owns the
-   *shape* (that dict ↔ these `Client` DTOs, field by field). A handler
-   deciding what a URL means, or a host deciding what a field is called, is
-   the line being crossed.
+   host owns the *transport* — raw bytes on the socket, framing (Content-Length,
+   the size cap, refusing a streaming body), routing (which endpoint, which path
+   parameters), and writing back the status + headers the handler produced. The
+   handler owns the *content* — `req.body` arrives as **raw `bytes`** and the
+   handler decodes it (`decode_body` for JSON, or reads it as an image), calls
+   the `Client`, and serializes the answer, choosing the representation and its
+   `Content-Type` (`json_response`, `redirect`, …). The host never parses or
+   serializes a body and never names a field; the handler never parses a URL.
+   That is why a `.png` upload or a redirect is expressible without touching the
+   host: the body is opaque bytes to it, and the content type is the handler's
+   call.
 3. **The `Client` is injected.** The handler is constructed with the `Client`
    (`bootstrap.md` wires it, via the host); it never builds or fetches one.
 4. **Cross-cutting concerns belong to the host, not the handler.** Auth
@@ -63,13 +69,17 @@ Yes → handler.
    model) still gets a handler the moment it is routed — reaching peers
    through injected `Client`s is an *outbound* property and says nothing about
    the inbound edge.
-7. **Errors map to the wire at the edge, exhaustively.** One `respond` path
-   catches: transport failures (unparseable/wrong-shape request) → 400 from
-   the handler's own guard; domain errors → status via the one pure
-   kind→status mapper (the closed `Kind` set, `errors.status_for`); infra
-   errors → 503; anything unexpected → 500 with no internals leaked. No
-   per-endpoint ad-hoc mapping — two endpoints must not disagree on what
-   `not_found` means.
+7. **Errors map to the wire at the edge, exhaustively — and the host uses the
+   same table.** One `respond` path catches: shape failures (malformed JSON,
+   wrong-typed field) → 400; domain errors → status via the one pure kind→status
+   mapper (the closed `Kind` set, `errors.status_for`); infra errors → 503;
+   anything unexpected → 500 with no internals leaked. The host's *transport*
+   rejections go through the **same** `respond`/`problem` vocabulary — an
+   oversized body → 413, a streaming body it can't buffer → 411, an unmatched
+   route → 404 — so a client sees one error format from the whole process, not
+   the framework's default HTML for the host's failures and problem-JSON for the
+   handler's. No per-endpoint ad-hoc mapping — two endpoints must not disagree on
+   what `not_found` means.
 
 ## Shape
 
@@ -80,21 +90,24 @@ Yes → handler.
 class Handler:
     def __init__(self, client: Client) -> None: ...     # injected, held as the contract
     def add_link(self, req: HttpRequest) -> Response:   # request DTO → Client → response DTO
+        body = decode_body(req.body)                     # raw bytes → JSON; the handler's call
         view = self._client.add_link(AddLinkRequest(
-            campaign_id=string_field(req.body.get("campaign_id")),   # shape guard → 400
-            slug=string_field(req.body.get("slug")),
-            target_url=string_field(req.body.get("target_url"))))
-        return Response(200, _campaign_body(view))      # DTO → wire, the edge's own shape
+            campaign_id=string_field(body.get("campaign_id")),   # shape guard → 400
+            slug=string_field(body.get("slug")),
+            target_url=string_field(body.get("target_url"))))
+        return json_response(200, _campaign_body(view))  # DTO → wire; sets Content-Type
 ```
 
 One `Client` call per endpoint; the same `(HttpRequest) -> Response` signature
 on every one, so the host can hold them as one `Endpoint` type and route by
-table. The request DTO carries what the transport already parsed —
-`path_params`, `query_params`, `headers`, a decoded `body` — and the response
-DTO carries `status_code`, `body`, `headers`; **the names deliberately mirror
-FastAPI/Starlette**, stripped to what a hand-written host needs, so the shape is
-recognizable and a later move onto a framework is mechanical. Construction
-mechanics: `python.md#inbound-handlers-and-hosts`; verified impl:
+table. The request DTO carries `method`, `path`, `path_params`, `query_params`,
+`headers`, and the **raw `bytes` body**; the response DTO carries `status_code`,
+the **raw `bytes` body**, and `headers`. **The names deliberately mirror
+FastAPI/Starlette** (`path_params`, `query_params`, `status_code`), stripped to
+what a hand-written host needs, so the shape is recognizable and a later move
+onto a framework is mechanical. The body is bytes on both sides precisely so the
+edge is content-type-agnostic — the handler decodes/encodes and owns the type.
+Construction mechanics: `python.md#inbound-handlers-and-hosts`; verified impl:
 `examples/python-app/campaign/adapters/handlers/http.py` (full case) and
 `examples/python-app/reports/adapters/handlers/http.py` (minimal case: one
 read endpoint over a cross-context read model).
@@ -132,6 +145,20 @@ read endpoint over a cross-context read model).
    The host declares `(method, pattern, endpoint)` and passes the extracted
    parameters in the request DTO; the handler never sees a URL
    (verified impl: `examples/python-app/srv/http/host.py:routes_for`).
+6. **Buffered body, or streamed?** The verified impl **buffers**: the host reads
+   a declared, finite, under-cap body into `bytes`, and refuses the rest — an
+   oversized body is a 413, a `Transfer-Encoding: chunked` body is a 411, both
+   decided from the framing headers before a handler runs. That covers JSON, a
+   form post, and a single bounded file. It does **not** cover a large upload or
+   a live audio feed: a streamed body isn't a value, so it can't ride in a
+   frozen request DTO — it needs a different shape (the request exposing a
+   pull-source, `stream()`, and the host de-chunking the wire), which is a
+   **documented boundary here, not built** — the same discipline as the deferred
+   worker host and SQL backend. The 411 is the honest in-code marker of that
+   line: the host says "I buffer; declare a length" rather than silently
+   mis-reading a stream. Reach for a framework (`srv.md`) when you actually need
+   streaming, multipart, or content negotiation — that is the point where the
+   hand-rolled host has earned its replacement.
 
 ## How the machine sees it
 
@@ -184,10 +211,16 @@ transform. Everything else is review plus the domain-logic leakage signal list
   the `Client` from a registry — construction belongs to wiring/bootstrap;
   the handler receives.
 - **The transport leaking into the signature.** A handler method taking the
-  framework's request object, a raw body string, or a loose `campaign_id: str`
-  pulled out of the URL by the host. Each one couples the transform to a
-  mechanism detail and makes the endpoint set non-uniform, so the host can no
-  longer route by table — it grows a branch per endpoint instead.
+  framework's request object, or a loose `campaign_id: str` and `raw: bytes`
+  passed alongside the request instead of *through* it. The whole request rides
+  in one `HttpRequest`; splitting a piece out (the body, a path param) makes the
+  endpoint set non-uniform, so the host can no longer route by table — it grows
+  a branch per endpoint instead.
+- **The host parsing the body.** `json.loads` in the host, or handing the
+  handler a decoded `dict` instead of raw `bytes`. Now the host is committed to
+  one content type — a `.png` or a plain-text body breaks it — and the decode
+  lives outside the layer whose job is translation. The host reads bytes; the
+  handler decodes.
 - **The host translates.** One context gets a proper handler and the next one
   is answered by a few lines of body-building in the host, usually because it
   looked too small to deserve a class. The rule it broke is rule 6, and the

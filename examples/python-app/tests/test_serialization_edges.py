@@ -17,6 +17,7 @@ from campaign.domain.short_link import ShortLinkSpec
 from campaign.domain.values import CampaignID
 from errors import DomainError
 from httpwire import HttpRequest
+from tests.wire import json_body
 
 _CAMPAIGN_ID = "0123456789abcdef"
 
@@ -53,7 +54,7 @@ def test_wire_golden_locks_the_campaign_payload() -> None:
     handler = Handler(CampaignService(repo, _AllowAll()))
     resp = handler.get_campaign(HttpRequest(path_params={"campaign_id": _CAMPAIGN_ID}))
     assert resp.status_code == 200
-    assert resp.body == {
+    assert json_body(resp) == {
         "campaign_id": _CAMPAIGN_ID,
         "budget": {"amount": "100.00", "currency": "USD"},
         "links": [{"slug": "promo", "target_url": "https://ok.example/x", "active": True}],
@@ -66,7 +67,7 @@ def test_wire_golden_locks_resolve_as_a_real_redirect() -> None:
     handler = Handler(CampaignService(repo, _AllowAll()))
     resp = handler.resolve(HttpRequest(path_params={"slug": "promo"}))
     assert resp.status_code == 302
-    assert resp.body == {}
+    assert resp.body == b""
     assert resp.headers == {"Location": "https://ok.example/x"}
 
 

@@ -61,15 +61,21 @@ coordinate would land in).
 
 **The host routes; the handler transforms.** `srv/http/host.py` holds the whole
 URL surface in one route table and does exactly four things per request: match
-`(method, path)`, fill an `HttpRequest` with what it parsed, call the endpoint,
-serialize the `Response`. Every endpoint has the same
-`(HttpRequest) -> Response` signature, so routing is a table rather than a
-branch per case, and no field name appears anywhere in the host. URL knowledge
-lives in `srv/http/router.py` alone; the wire vocabulary both sides share lives
-in `httpwire.py`, which neither owns — handlers never import from `srv/`, so a
-context stays constructible with no host in the process. The DTO names mirror
-FastAPI/Starlette (`path_params`, `query_params`, `status_code`) stripped to
-what a hand-written host needs.
+`(method, path)`, read the declared body **bytes** off the socket into an
+`HttpRequest`, call the endpoint, write back the `Response` bytes and headers.
+It never parses or serializes a body — `req.body` and `Response.body` are raw
+`bytes`, and the handler decodes (`decode_body(req.body)`) and encodes
+(`json_response(...)`), owning its `Content-Type`. That is why the host is
+content-type-agnostic: a `.png` in or out never touches it. Framing is the
+host's call from the headers — a body over the cap is a 413, a
+`Transfer-Encoding: chunked` body a 411 (streaming is a documented boundary,
+not built). Every endpoint has the same `(HttpRequest) -> Response` signature,
+so routing is a table rather than a branch per case, and no field name appears
+anywhere in the host. URL knowledge lives in `srv/http/router.py` alone; the
+wire vocabulary both sides share lives in `httpwire.py`, which neither owns —
+handlers never import from `srv/`, so a context stays constructible with no host
+in the process. The DTO names mirror FastAPI/Starlette (`path_params`,
+`query_params`, `status_code`) stripped to what a hand-written host needs.
 
 App-level: **the host is the env edge** — each `srv/*/main` populates the
 spec-shaped application `Config` (`bootstrap/config.py`: frozen dataclass,

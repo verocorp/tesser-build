@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from httpwire import HttpRequest, JSONObject, Response, respond
+from httpwire import HttpRequest, JSONObject, Response, json_response, respond
 from reports.client import Client, LinkVerdictView
 
 
@@ -11,7 +11,7 @@ class Handler:
     def links_by_verdict(self, req: HttpRequest) -> Response:
         def run() -> Response:
             rows = [_row(view) for view in self._client.links_by_verdict()]
-            return Response(200, {"links": rows})
+            return json_response(200, {"links": rows})
 
         return respond(run)
 

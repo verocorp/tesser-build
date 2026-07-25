@@ -8,8 +8,18 @@ from errors import DomainError, InfraError, status_for
 
 JSONObject = dict[str, object]
 
+MAX_BUFFERED_BODY = 1_048_576
+
 
 class BadRequest(Exception):
+    pass
+
+
+class PayloadTooLarge(Exception):
+    pass
+
+
+class StreamingUnsupported(Exception):
     pass
 
 
@@ -20,13 +30,13 @@ class HttpRequest:
     path_params: Mapping[str, str] = field(default_factory=dict)
     query_params: Mapping[str, str] = field(default_factory=dict)
     headers: Mapping[str, str] = field(default_factory=dict)
-    body: JSONObject = field(default_factory=dict)
+    body: bytes = b""
 
 
 @dataclass(frozen=True)
 class Response:
     status_code: int
-    body: JSONObject
+    body: bytes
     headers: Mapping[str, str] = field(default_factory=dict)
 
 
@@ -37,24 +47,46 @@ def problem(code: str, detail: str) -> JSONObject:
     return {"type": f"/problems/{code}", "detail": detail}
 
 
+def json_response(status_code: int, body: JSONObject, headers: Mapping[str, str] | None = None) -> Response:
+    payload = json.dumps(body).encode("utf-8")
+    return Response(status_code, payload, {"Content-Type": "application/json", **(headers or {})})
+
+
 def redirect(url: str, status_code: int = 302) -> Response:
-    return Response(status_code, {}, {"Location": url})
+    return Response(status_code, b"", {"Location": url})
 
 
 def respond(run: Callable[[], Response]) -> Response:
     try:
         return run()
     except BadRequest as e:
-        return Response(400, problem("malformed_request", str(e)))
+        return json_response(400, problem("malformed_request", str(e)))
+    except PayloadTooLarge as e:
+        return json_response(413, problem("payload_too_large", str(e)))
+    except StreamingUnsupported as e:
+        return json_response(411, problem("length_required", str(e)))
     except DomainError as e:
-        return Response(status_for(e.kind), problem(e.code, e.message))
+        return json_response(status_for(e.kind), problem(e.code, e.message))
     except InfraError:
-        return Response(503, problem("unavailable", "a dependency is unavailable; please retry"))
+        return json_response(503, problem("unavailable", "a dependency is unavailable; please retry"))
     except Exception:
-        return Response(500, problem("internal", "unexpected error"))
+        return json_response(500, problem("internal", "unexpected error"))
 
 
-def decode_body(raw: str) -> JSONObject:
+def content_length(headers: Mapping[str, str]) -> int:
+    if "chunked" in headers.get("Transfer-Encoding", "").lower():
+        raise StreamingUnsupported(
+            "this host buffers; declare a Content-Length (streaming bodies are a documented boundary)"
+        )
+    declared = int(headers.get("Content-Length") or "0")
+    if declared < 0:
+        raise BadRequest("negative Content-Length")
+    if declared > MAX_BUFFERED_BODY:
+        raise PayloadTooLarge(f"body exceeds the {MAX_BUFFERED_BODY}-byte buffer limit")
+    return declared
+
+
+def decode_body(raw: bytes) -> JSONObject:
     if not raw:
         return {}
     try:
