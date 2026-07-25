@@ -103,7 +103,7 @@ srv/
   http/router.py     ← Route(method, pattern, endpoint) + match(): URL knowledge, nothing else
   http/host.py       ← HttpHost implements Host: route table, server, raw-bytes read/write
   http/main.py       ← from_env(os.getenv), new(cfg) once, run the host
-  cli/main.py        ← from_env(os.getenv), new(cfg) once, run command, close
+  cli/main.py        ← from_env(os.getenv), new(cfg) once, route command → handler, print, exit
 
 def main() -> None:
     cfg = from_env(os.getenv)                 # the ONE loader; app + launch config
@@ -127,6 +127,17 @@ host's own launch knobs (a listen port) may default locally, inside `from_env`.
 Construction mechanics: `python.md#inbound-handlers-and-hosts`; verified impl:
 `examples/python-app/srv/` (`run.py`, `http/host.py`, `http/main.py`,
 `cli/main.py`).
+
+The same route-and-transform split holds per mechanism: the **HTTP** host maps
+`(method, path)` → handler and moves bytes; the **CLI** host maps a command name
+→ handler and moves argv/text. The CLI dispatcher is thinner — a command lookup
+in a dict, no pattern-matching module needed — but the shape is identical: a
+route table, one handler per command (`CliRequest → CliResponse`), the domain
+`Kind` set mapped to an exit code (`errors.exit_code_for`) as HTTP maps it to a
+status, and the host's own failures (unknown command → exit 2) rendered through
+the same `respond` vocabulary. Both hosts import only a context's
+`adapters.handlers`, never its `Client` — locked for all of `srv/` by
+`tests/test_enforcement.py`.
 
 ## Decisions you must make
 

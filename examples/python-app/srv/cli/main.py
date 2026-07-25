@@ -3,41 +3,44 @@ from __future__ import annotations
 import os
 import sys
 
-from bootstrap.bootstrap import new
+from bootstrap.bootstrap import App, new
 from bootstrap.config import from_env
-from campaign.client import AddLinkRequest, CreateCampaignRequest, DeactivateLinkRequest
+from campaign.adapters.handlers.cli import Handler as CampaignHandler
+from cliwire import CliRequest, CliResponse, Command
 
 _USAGE = (
-    "usage: python -m srv.cli.main create-campaign <budget_amount> <currency>\n"
-    "       python -m srv.cli.main add-link <campaign_id> <slug> <target_url>\n"
-    "       python -m srv.cli.main deactivate-link <campaign_id> <slug>"
+    "usage: python -m srv.cli.main <command> [args]\n"
+    "commands:\n"
+    "  create-campaign <budget_amount> <currency>\n"
+    "  add-link <campaign_id> <slug> <target_url>\n"
+    "  deactivate-link <campaign_id> <slug>"
 )
+
+
+def commands_for(app: App) -> dict[str, Command]:
+    campaign = CampaignHandler(app.campaign)
+    return {
+        "create-campaign": campaign.create_campaign,
+        "add-link": campaign.add_link,
+        "deactivate-link": campaign.deactivate_link,
+    }
+
+
+def dispatch(commands: dict[str, Command], argv: list[str]) -> CliResponse:
+    if not argv or argv[0] not in commands:
+        return CliResponse(2, stderr=_USAGE)
+    return commands[argv[0]](CliRequest(args=tuple(argv[1:])))
 
 
 def run(argv: list[str]) -> int:
     app = new(from_env(os.getenv))
     try:
-        if len(argv) == 3 and argv[0] == "create-campaign":
-            view = app.campaign.create_campaign(
-                CreateCampaignRequest(budget_amount=argv[1], budget_currency=argv[2])
-            )
-            print(f"created campaign {view.campaign_id} with budget {view.budget_amount} {view.budget_currency}")  # noqa: T201
-            return 0
-        if len(argv) == 4 and argv[0] == "add-link":
-            view = app.campaign.add_link(
-                AddLinkRequest(campaign_id=argv[1], slug=argv[2], target_url=argv[3])
-            )
-            print(f"campaign {view.campaign_id} now has {len(view.links)} link(s)")  # noqa: T201
-            return 0
-        if len(argv) == 3 and argv[0] == "deactivate-link":
-            view = app.campaign.deactivate_link(
-                DeactivateLinkRequest(campaign_id=argv[1], slug=argv[2])
-            )
-            active = sum(1 for link in view.links if link.active)
-            print(f"campaign {view.campaign_id} now has {active} active link(s)")  # noqa: T201
-            return 0
-        print(_USAGE)  # noqa: T201
-        return 2
+        resp = dispatch(commands_for(app), argv)
+        if resp.stdout:
+            print(resp.stdout)  # noqa: T201
+        if resp.stderr:
+            print(resp.stderr, file=sys.stderr)  # noqa: T201
+        return resp.exit_code
     finally:
         app.close()
 

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import pytest
+
 from campaign.domain.money import MoneyAmount, MoneyCurrency
 from campaign.domain.values import CampaignID, Slug, TargetURL
+from errors import DomainError
 
 
 def test_slug_roundtrip() -> None:
@@ -12,6 +15,11 @@ def test_slug_roundtrip() -> None:
 def test_target_url_roundtrip() -> None:
     t = TargetURL("https://ok.example/x")
     assert TargetURL(str(t)) == t
+
+
+def test_target_url_rejects_control_characters() -> None:
+    with pytest.raises(DomainError):
+        TargetURL("https://ok.example/\r\nX-Injected: yes")
 
 
 def test_campaign_id_roundtrip() -> None:

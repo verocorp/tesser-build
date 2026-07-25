@@ -756,14 +756,53 @@ def main() -> None:
   Python's default SIGTERM (the process dies without unwinding), so the host
   installs the handler. Drain ordering, readiness, and health stay the host's
   fill-in (`examples/python-app/srv/run.py`, `srv/http/host.py`).
-- **A CLI host** is the same env edge minus the `Host`/runner (it is not
-  long-running): `new(from_env(os.getenv))`, dispatch the command to one
-  `Client` call, render, and `close()` in `finally`
-  (`examples/python-app/srv/cli/main.py`). It has **not** been given the
-  router/transform treatment the HTTP host has — its commands still translate
-  inline (`handlers.md#decisions-you-must-make`, decision 2); whether a CLI
-  request/response DTO is the right shape is an open question, not a settled
-  convention to imitate.
+- **A CLI host** is the same split for a different mechanism — env edge minus
+  the `Host`/runner (it is not long-running). `srv/cli/main.py` routes a command
+  name through a table to a `(CliRequest) -> CliResponse` transform in
+  `campaign/adapters/handlers/cli.py`, then prints `stdout`/`stderr` and
+  `sys.exit`s the `exit_code`; the handler never touches `argv`, `print`, or the
+  process. The shared vocabulary is `cliwire.py` (`CliRequest`, `CliResponse`,
+  `respond`), the analog of `httpwire.py`, and the error table maps the closed
+  domain `Kind` to an exit code via `errors.exit_code_for` — the CLI's `status_for`.
+
+```python
+# cliwire.py — the CLI mechanism's shared vocabulary
+@dataclass(frozen=True)
+class CliRequest:
+    args: tuple[str, ...] = ()
+
+@dataclass(frozen=True)
+class CliResponse:
+    exit_code: int
+    stdout: str = ""
+    stderr: str = ""
+
+def respond(run: Callable[[], CliResponse]) -> CliResponse:
+    try:
+        return run()
+    except UsageError as e:                          # bad/missing args -> exit 2
+        return CliResponse(2, stderr=str(e))
+    except DomainError as e:                          # same Kind set, mapped to an exit code
+        return CliResponse(exit_code_for(e.kind), stderr=f"[{e.code}] {e.message}")
+    except InfraError:
+        return CliResponse(1, stderr="a dependency is unavailable; please retry")
+    except Exception:
+        return CliResponse(1, stderr="unexpected error")
+
+
+# srv/cli/main.py — the host: a command route table, dispatch, print, exit
+def dispatch(commands: dict[str, Command], argv: list[str]) -> CliResponse:
+    if not argv or argv[0] not in commands:
+        return CliResponse(2, stderr=_USAGE)         # the host's own failure, same vocabulary
+    return commands[argv[0]](CliRequest(args=tuple(argv[1:])))
+```
+
+  This resolves the earlier open question in the affirmative: the CLI
+  request/response DTO **is** the right shape, and a multi-command CLI gets the
+  handler split (a single-command CLI may still translate inline —
+  `handlers.md#decisions-you-must-make`, decision 2). Piped **stdin** would be
+  the CLI's "body" and reopens the same buffered-vs-stream question as HTTP; none
+  of these commands read it, so it stays a named boundary.
 
 ## The Spec pattern
 

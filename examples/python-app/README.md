@@ -90,14 +90,23 @@ calling `bootstrap.new` once.
 
 ```
 CAMPAIGN_STORAGE=memory LINKPOLICY_STORAGE=memory python -m srv.http.main
-CAMPAIGN_STORAGE=memory LINKPOLICY_STORAGE=memory python -m srv.cli.main create-link promo https://ok.example/x
+CAMPAIGN_STORAGE=memory LINKPOLICY_STORAGE=memory python -m srv.cli.main create-campaign 100.00 USD
 ```
+
+Both hosts are the same env edge over one `bootstrap.new`. The **HTTP** host
+routes `(method, path)` to a handler and moves bytes; the **CLI** host routes a
+command name to a handler and moves argv/text — the *same* router/transform
+split, one `srv/cli/adapters`-side `(CliRequest) -> CliResponse` transform per
+command, with the domain `Kind` set mapped to an **exit code** (`errors.exit_code_for`)
+exactly as the HTTP host maps it to a status. A bad argument or a domain
+rejection is a clean message on stderr and a meaningful exit code, not a
+traceback.
 
 ## Gate
 
 ```
 pip install -r requirements-dev.txt
-MYPYPATH=. mypy --strict errors.py lifecycle.py serialization.py httpwire.py campaign linkpolicy reports bootstrap srv tests conftest.py
+MYPYPATH=. mypy --strict errors.py lifecycle.py serialization.py httpwire.py cliwire.py campaign linkpolicy reports bootstrap srv tests conftest.py
 pytest -q
 ```
 

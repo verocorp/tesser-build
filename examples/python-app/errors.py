@@ -48,3 +48,14 @@ def status_for(kind: Kind) -> int:
         case Kind.CONFLICT:
             return 409
     assert_never(kind)
+
+
+def exit_code_for(kind: Kind) -> int:
+    match kind:
+        case Kind.VALIDATION:
+            return 2
+        case Kind.NOT_FOUND:
+            return 1
+        case Kind.CONFLICT:
+            return 1
+    assert_never(kind)

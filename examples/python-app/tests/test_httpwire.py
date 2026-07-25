@@ -44,11 +44,24 @@ def test_decode_body_reads_bytes_and_rejects_non_json() -> None:
         decode_body(b"not json")
     with pytest.raises(BadRequest):
         decode_body(b"[1, 2]")
+    with pytest.raises(BadRequest):
+        decode_body(b"\xff")
 
 
 def test_content_length_reads_a_declared_finite_size() -> None:
     assert content_length({"Content-Length": "42"}) == 42
     assert content_length({}) == 0
+
+
+def test_content_length_rejects_a_non_numeric_header_as_a_client_error() -> None:
+    with pytest.raises(BadRequest):
+        content_length({"Content-Length": "abc"})
+
+
+def test_content_length_is_case_insensitive_like_http_headers() -> None:
+    assert content_length({"content-length": "42"}) == 42
+    with pytest.raises(StreamingUnsupported):
+        content_length({"transfer-encoding": "chunked"})
 
 
 def test_content_length_refuses_a_streaming_body() -> None:

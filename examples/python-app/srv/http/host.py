@@ -39,7 +39,7 @@ def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
                 found = match(routes, method, self.path)
                 if found is None:
                     return json_response(404, problem("not_found", "unknown route"))
-                headers = {name: value for name, value in self.headers.items()}
+                headers = {name.lower(): value for name, value in self.headers.items()}
                 body = self.rfile.read(content_length(headers))
                 return found.endpoint(
                     HttpRequest(
