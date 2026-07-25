@@ -59,6 +59,18 @@ context's own config lives in its `wiring`, never on the public interface
 (`reports/wiring/config.py` is an empty spec today — the uniform shape a real
 coordinate would land in).
 
+**The host routes; the handler transforms.** `srv/http/host.py` holds the whole
+URL surface in one route table and does exactly four things per request: match
+`(method, path)`, fill an `HttpRequest` with what it parsed, call the endpoint,
+serialize the `Response`. Every endpoint has the same
+`(HttpRequest) -> Response` signature, so routing is a table rather than a
+branch per case, and no field name appears anywhere in the host. URL knowledge
+lives in `srv/http/router.py` alone; the wire vocabulary both sides share lives
+in `httpwire.py`, which neither owns — handlers never import from `srv/`, so a
+context stays constructible with no host in the process. The DTO names mirror
+FastAPI/Starlette (`path_params`, `query_params`, `status_code`) stripped to
+what a hand-written host needs.
+
 App-level: **the host is the env edge** — each `srv/*/main` populates the
 spec-shaped application `Config` (`bootstrap/config.py`: frozen dataclass,
 primitive leaves, no constructor logic, no methods) directly with `os.getenv`

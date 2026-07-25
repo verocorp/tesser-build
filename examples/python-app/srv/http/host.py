@@ -7,54 +7,72 @@ from typing import Any
 
 from bootstrap.bootstrap import App
 from campaign.adapters.handlers.http import Handler as CampaignHandler
-from httpwire import Response, problem
+from httpwire import HttpRequest, Response, decode_body, problem, respond
 from reports.adapters.handlers.http import Handler as ReportsHandler
+from srv.http.router import Route, match
+
+
+def routes_for(app: App) -> tuple[Route, ...]:
+    campaign = CampaignHandler(app.campaign)
+    reports = ReportsHandler(app.reports)
+    return (
+        Route("POST", "/campaigns", campaign.create_campaign),
+        Route("POST", "/links", campaign.add_link),
+        Route("POST", "/links/deactivate", campaign.deactivate_link),
+        Route("GET", "/campaigns/{campaign_id}", campaign.get_campaign),
+        Route("GET", "/r/{slug}", campaign.resolve),
+        Route("GET", "/reports/links-by-verdict", reports.links_by_verdict),
+    )
 
 
 def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
-    campaign_handler = CampaignHandler(app.campaign)
-    reports_handler = ReportsHandler(app.reports)
+    routes = routes_for(app)
 
     class _RequestHandler(BaseHTTPRequestHandler):
-        def do_POST(self) -> None:
-            length = int(self.headers.get("Content-Length") or "0")
-            raw = self.rfile.read(length).decode("utf-8")
-            if self.path == "/campaigns":
-                self._send(campaign_handler.create_campaign(raw))
-                return
-            if self.path == "/links":
-                self._send(campaign_handler.add_link(raw))
-                return
-            self._send(_not_found())
-
         def do_GET(self) -> None:
-            if self.path.startswith("/campaigns/"):
-                self._send(campaign_handler.get_campaign(self.path.removeprefix("/campaigns/")))
-                return
-            if self.path.startswith("/r/"):
-                self._send(campaign_handler.resolve(self.path.removeprefix("/r/")))
-                return
-            if self.path == "/reports/links-by-verdict":
-                self._send(reports_handler.links_by_verdict())
-                return
-            self._send(_not_found())
+            self._send(self._dispatch("GET"))
+
+        def do_POST(self) -> None:
+            self._send(self._dispatch("POST"))
+
+        def _dispatch(self, method: str) -> Response:
+            def run() -> Response:
+                found = match(routes, method, self.path)
+                if found is None:
+                    return Response(404, problem("not_found", "unknown route"))
+                return found.endpoint(
+                    HttpRequest(
+                        method=method,
+                        path=self.path,
+                        path_params=found.path_params,
+                        query_params=found.query_params,
+                        headers={name: value for name, value in self.headers.items()},
+                        body=decode_body(self._read_body()),
+                    )
+                )
+
+            return respond(run)
+
+        def _read_body(self) -> str:
+            length = int(self.headers.get("Content-Length") or "0")
+            if length <= 0:
+                return ""
+            return self.rfile.read(length).decode("utf-8")
 
         def log_message(self, format: str, *args: Any) -> None:
             return
 
         def _send(self, resp: Response) -> None:
             payload = json.dumps(resp.body).encode("utf-8")
-            self.send_response(resp.status)
+            self.send_response(resp.status_code)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(payload)))
+            for name, value in resp.headers.items():
+                self.send_header(name, value)
             self.end_headers()
             self.wfile.write(payload)
 
     return ThreadingHTTPServer(addr, _RequestHandler)
-
-
-def _not_found() -> Response:
-    return Response(404, problem("not_found", "unknown route"))
 
 
 class HttpHost:

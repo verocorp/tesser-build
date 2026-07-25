@@ -5,6 +5,58 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.9.0] - 2026-07-23
+
+The host↔handler responsibility split. `srv/*/host.py` is a router; a handler
+is a transform. Every endpoint is now `(HttpRequest) -> Response` — the host
+matches a route, fills the request DTO with what it parsed, calls the endpoint,
+and serializes what comes back, with nothing in between.
+
+### Added
+
+- **`HttpRequest` / `Response` DTOs** in `httpwire.py`, named after
+  FastAPI/Starlette and stripped to what a hand-written host needs:
+  `path_params`, `query_params`, `headers`, a decoded `body`; `status_code`,
+  `body`, `headers`. Plus `redirect()` (standing in for `RedirectResponse`),
+  `decode_body`, `path_param`, `object_field`, `string_field`.
+- **`srv/http/router.py`**: `Route(method, pattern, endpoint)` and `match()` —
+  path patterns, `{param}` extraction, percent-decoding, query parsing. The
+  only component that knows a URL has structure. Tested in `tests/test_router.py`.
+- **One route table** (`srv/http/host.py:routes_for`) naming the whole URL
+  surface, including `POST /links/deactivate` — a handler method that existed
+  with no route to reach it.
+- **A third AST check** (`tests/test_enforcement.py`): the HTTP host imports
+  nothing from a context except its `adapters.handlers`. A `client`,
+  `application`, or `domain` import in the host is the router reaching past
+  the transform.
+
+### Fixed
+
+- **`GET /r/{slug}` is a real redirect.** It returned `302` with the
+  destination as a JSON body field (`{"location": ...}`) and no `Location`
+  header, so nothing followed it. Response headers made the fix expressible;
+  `tests/test_serialization_edges.py` locks it.
+- **Malformed request bodies get a problem document.** JSON decoding moved to
+  the host (symmetric with the `json.dumps` it already did) and the host's
+  whole request path runs through the same `respond` table, so a bad body is a
+  400 problem object rather than a handler-specific guard.
+
+### Changed
+
+- **Handlers take a request DTO.** No raw body strings, no loose `campaign_id:
+  str` pulled from the URL by the host, no `self.path`. A handler can't reach
+  transport state, so its tests build one value and assert on another.
+- **`handlers.md`**: new rule 2 (total transform; the host owns format + URL,
+  the handler owns shape) and decision 5 (the route table belongs to the host);
+  rules renumbered 2-6 → 3-7 and cross-references updated.
+- **`srv.md`**: rule 4 restated as router-vs-transform with the host's exact
+  four-step request path; new rule 5 (one app-level route table).
+- **`python.md`, example README**: rewritten around the split. skill-version
+  19 → 20.
+- The CLI host is deliberately untouched — its commands still translate
+  inline, and `python.md` now says so explicitly rather than leaving a reader
+  to assume the HTTP shape applies.
+
 ## [0.0.8.0] - 2026-07-23
 
 The reports context gets its inbound edge. `reports` was served over HTTP but

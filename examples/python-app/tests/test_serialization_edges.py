@@ -16,6 +16,7 @@ from campaign.domain.money import MoneySpec
 from campaign.domain.short_link import ShortLinkSpec
 from campaign.domain.values import CampaignID
 from errors import DomainError
+from httpwire import HttpRequest
 
 _CAMPAIGN_ID = "0123456789abcdef"
 
@@ -50,8 +51,8 @@ def test_wire_golden_locks_the_campaign_payload() -> None:
     repo = InMemoryCampaignRepository()
     repo.save(_campaign())
     handler = Handler(CampaignService(repo, _AllowAll()))
-    resp = handler.get_campaign(_CAMPAIGN_ID)
-    assert resp.status == 200
+    resp = handler.get_campaign(HttpRequest(path_params={"campaign_id": _CAMPAIGN_ID}))
+    assert resp.status_code == 200
     assert resp.body == {
         "campaign_id": _CAMPAIGN_ID,
         "budget": {"amount": "100.00", "currency": "USD"},
@@ -59,13 +60,14 @@ def test_wire_golden_locks_the_campaign_payload() -> None:
     }
 
 
-def test_wire_golden_locks_the_resolve_payload() -> None:
+def test_wire_golden_locks_resolve_as_a_real_redirect() -> None:
     repo = InMemoryCampaignRepository()
     repo.save(_campaign())
     handler = Handler(CampaignService(repo, _AllowAll()))
-    resp = handler.resolve("promo")
-    assert resp.status == 302
-    assert resp.body == {"location": "https://ok.example/x"}
+    resp = handler.resolve(HttpRequest(path_params={"slug": "promo"}))
+    assert resp.status_code == 302
+    assert resp.body == {}
+    assert resp.headers == {"Location": "https://ok.example/x"}
 
 
 def test_load_reconstructs_value_equal_non_identical() -> None:

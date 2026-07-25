@@ -582,33 +582,40 @@ def new(cfg: Config) -> App:
 
 The two-layer transport split (`handlers.md`, `srv.md`; verified impl
 `examples/python-app/campaign/adapters/handlers/http.py` and
-`examples/python-app/srv/`). The per-context **handler** translates
-wire ↔ `Client` DTOs through one respond path; the app-level **host** is the
-env edge — it calls the one `from_env` loader, builds the graph once, and runs
-under a runner that installs SIGTERM and closes the app.
+`examples/python-app/srv/`). **The host routes; the handler transforms.** The
+host owns the mechanism — the socket, the route table, bytes ↔ JSON, headers —
+and is the env edge that calls the one `from_env` loader, builds the graph once,
+and runs under a runner that installs SIGTERM. The per-context handler owns the
+shape: request DTO in, response DTO out, through one respond path.
 
 ```python
-# httpwire.py — the mechanism's wire vocabulary, shared by every HTTP handler
-class BadRequest(Exception):                        # transport failure -> 400
-    pass
+# httpwire.py — the host↔handler contract: both sides import it, neither owns it
+@dataclass(frozen=True)
+class HttpRequest:                                  # what the transport already parsed
+    method: str = "GET"
+    path: str = "/"
+    path_params: Mapping[str, str] = field(default_factory=dict)
+    query_params: Mapping[str, str] = field(default_factory=dict)
+    headers: Mapping[str, str] = field(default_factory=dict)
+    body: JSONObject = field(default_factory=dict)  # decoded by the host, not the handler
 
 
 @dataclass(frozen=True)
 class Response:
-    status: int
+    status_code: int
     body: JSONObject
+    headers: Mapping[str, str] = field(default_factory=dict)
 
 
-def problem(code: str, detail: str) -> JSONObject:
-    return {"type": f"/problems/{code}", "detail": detail}
+Endpoint = Callable[[HttpRequest], Response]        # every endpoint, one type
 
 
 def respond(run: Callable[[], Response]) -> Response:
     try:
         return run()
-    except BadRequest as e:
+    except BadRequest as e:                         # wrong-shaped field -> 400
         return Response(400, problem("malformed_request", str(e)))
-    except DomainError as e:
+    except DomainError as e:                        # the one closed-Kind mapper
         return Response(status_for(e.kind), problem(e.code, e.message))
     except InfraError:
         return Response(503, problem("unavailable", "a dependency is unavailable; please retry"))
@@ -621,34 +628,74 @@ class Handler:
     def __init__(self, client: Client) -> None:
         self._client = client                       # injected; never constructed
 
-    def add_link(self, raw: str) -> Response:
+    def add_link(self, req: HttpRequest) -> Response:
         def run() -> Response:
-            body = _parse(raw)                      # wire guard, field by field
             view = self._client.add_link(
-                AddLinkRequest(campaign_id=_str(body.get("campaign_id")),
-                               slug=_str(body.get("slug")),
-                               target_url=_str(body.get("target_url")))
+                AddLinkRequest(campaign_id=string_field(req.body.get("campaign_id")),
+                               slug=string_field(req.body.get("slug")),
+                               target_url=string_field(req.body.get("target_url")))
             )
             return Response(200, _campaign_body(view))  # DTO -> wire, the edge's own shape
 
         return respond(run)
+
+    def resolve(self, req: HttpRequest) -> Response:
+        def run() -> Response:
+            resp = self._client.resolve(ResolveRequest(slug=path_param(req, "slug")))
+            return redirect(resp.target_url)        # 302 + Location, not a body field
+
+        return respond(run)
 ```
 
-- **One `Client` call per endpoint method**; the method translates in, calls,
-  translates out. `_parse`/`_str` raise `BadRequest` — the handler's own
-  transport guard, distinct from domain validation.
-- **`respond` is the whole error table for the mechanism**: transport → 400,
+- **The names mirror FastAPI/Starlette, stripped down** — `path_params`,
+  `query_params`, `headers`, `status_code` — so the shape is recognizable and
+  moving onto a real framework is mechanical rather than a rewrite. What is
+  *not* mirrored: no async, no `await request.json()` (the host decodes), no
+  media-type negotiation (JSON only), no `RedirectResponse` class (a `redirect`
+  helper instead).
+- **Every endpoint has the one signature** `(HttpRequest) -> Response`, so the
+  host can hold them all as `Endpoint` and route by table instead of growing a
+  branch per endpoint.
+- **The handler never sees transport.** No raw body string, no `self.path`, no
+  socket — it cannot reach anything outside its argument, so a test builds one
+  `HttpRequest` by hand and asserts on the returned `Response`.
+- **`respond` is the whole error table for the mechanism**: shape guard → 400,
   domain kind → status through the one pure mapper (`status_for` over the
   closed `Kind` set), infra → 503, unexpected → 500 with a generic body.
-- **`problem`** renders the RFC 9457-shaped problem object (`type` from the
-  open `Code`, `detail`) — decided once at this path.
-- **The wire vocabulary is app-level, not context-owned.** `Response`,
-  `problem`, and `respond` describe the *mechanism*, so they live in one
-  shared module every HTTP handler imports (`examples/python-app/httpwire.py`)
-  — never in whichever context happened to grow a handler first, which would
-  make its peers import a sibling's adapter internals to answer a request.
+  `problem` renders the RFC 9457-shaped object (`type` from the open `Code`,
+  `detail`) — decided once, at this path.
+- **Headers are part of the response DTO**, which is what lets a redirect be a
+  real redirect: `redirect(url)` sets `Location` and an empty body. A 302 whose
+  destination is a JSON field is not a redirect — no client follows it.
 
 ```python
+# srv/http/host.py — the route table: the whole URL surface, one place
+def routes_for(app: App) -> tuple[Route, ...]:
+    campaign = CampaignHandler(app.campaign)        # one handler per exposed context,
+    reports = ReportsHandler(app.reports)           # built once from the single App
+    return (
+        Route("POST", "/campaigns", campaign.create_campaign),
+        Route("GET", "/campaigns/{campaign_id}", campaign.get_campaign),
+        Route("GET", "/r/{slug}", campaign.resolve),
+        Route("GET", "/reports/links-by-verdict", reports.links_by_verdict),
+    )
+
+
+def _dispatch(self, method: str) -> Response:       # the host's entire request path
+    def run() -> Response:
+        found = match(routes, method, self.path)    # router: URL knowledge lives there
+        if found is None:
+            return Response(404, problem("not_found", "unknown route"))
+        return found.endpoint(HttpRequest(
+            method=method, path=self.path,
+            path_params=found.path_params, query_params=found.query_params,
+            headers={n: v for n, v in self.headers.items()},
+            body=decode_body(self._read_body()),    # bytes -> dict is the host's job
+        ))
+
+    return respond(run)                             # same error table; malformed JSON -> 400
+
+
 # srv/http/main.py — the host: env edge, build once, hand to the runner
 def main() -> None:
     cfg = from_env(os.getenv)            # the ONE config loader (bootstrap/config)
@@ -657,21 +704,25 @@ def main() -> None:
     run_until_signal(host, app)          # installs SIGTERM, guarantees app.close()
 ```
 
+- **Match, fill the request DTO, call, serialize — nothing between the steps.**
+  There is no field name anywhere in the host, no `Client` call, no business
+  branch. `_send` writes `status_code`, the JSON body, and any response headers;
+  that plus `decode_body` is the host's entire share of the wire format.
+- **The route table is app-level.** URLs are the app's decision, not a
+  context's: one table names every exposed endpoint, so a context can be
+  mounted, prefixed, or versioned without editing it. Pattern matching and
+  parameter extraction live in `srv/http/router.py` — the only component that
+  knows `/campaigns/{campaign_id}` has a parameter in it.
+- **The host's own failures use the same vocabulary.** An unmatched route is
+  the host's to answer (404), and malformed JSON never reaches a handler — both
+  render through `problem`, so a client sees one error format from the whole
+  process.
 - **One loader, one env read.** The host passes its own `os.getenv` to
   `from_env` (`bootstrap/config.py`) — the single place the app reads the
   environment. `from_env` loads app config **and** the host's launch config
   (`cfg.http`) into one `Config`; nothing below the host reads env. It stays a
   pure function (`getenv` injected), so it's testable with a dict and the
   env-edge check still holds.
-- **`HttpHost` implements the `Host` contract** (`run(stop)`): it serves in a
-  thread and drains on stop. `make_server` constructs each exposed context's
-  handler once from the single `App` — `CampaignHandler(app.campaign)` and
-  `ReportsHandler(app.reports)` — then routes to them; no per-request
-  construction, and it owns routing + middleware for its mechanism. **A context
-  the host exposes owns a handler**: the host maps a path to a handler method
-  and serializes what comes back, and never touches a `Client` itself
-  (`handlers.md`). Its own routing failures are the exception — an unmatched
-  path is the host's to answer, through the same `problem` shape.
 - **`run_until_signal` owns the process lifecycle**: it installs SIGINT/SIGTERM
   and calls `app.close()` in a `finally`. This is the lifecycle **minimum, and
   it is load-bearing** — a bare `finally: app.close()` does **not** survive
@@ -681,8 +732,11 @@ def main() -> None:
 - **A CLI host** is the same env edge minus the `Host`/runner (it is not
   long-running): `new(from_env(os.getenv))`, dispatch the command to one
   `Client` call, render, and `close()` in `finally`
-  (`examples/python-app/srv/cli/main.py`); with one command the handler role is
-  played inline in the dispatch (`handlers.md#decisions-you-must-make`).
+  (`examples/python-app/srv/cli/main.py`). It has **not** been given the
+  router/transform treatment the HTTP host has — its commands still translate
+  inline (`handlers.md#decisions-you-must-make`, decision 2); whether a CLI
+  request/response DTO is the right shape is an open question, not a settled
+  convention to imitate.
 
 ## The Spec pattern
 

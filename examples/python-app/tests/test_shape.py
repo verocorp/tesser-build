@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import dataclasses
-import json
 import pathlib
 
 import campaign
@@ -12,6 +11,7 @@ from campaign.client import LinkView, ResolveResponse
 from campaign.wiring.config import Config as CampaignConfig
 from campaign.wiring.wire import build as build_campaign
 from errors import InfraError
+from httpwire import HttpRequest
 from reports.adapters.handlers.http import Handler as ReportsHandler
 from reports.client import LinkVerdictView
 from tests.discovery import discovered_contexts
@@ -54,8 +54,10 @@ class _AllowAllChecker:
 def test_handler_translates_wire_to_client_dtos() -> None:
     client, _ = build_campaign(CampaignConfig("memory"), _AllowAllChecker())
     handler = Handler(client)
-    created = handler.create_campaign('{"budget": {"amount": "100.00", "currency": "USD"}}')
-    assert created.status == 201
+    created = handler.create_campaign(
+        HttpRequest(body={"budget": {"amount": "100.00", "currency": "USD"}})
+    )
+    assert created.status_code == 201
     campaign_id = created.body["campaign_id"]
     assert created.body == {
         "campaign_id": campaign_id,
@@ -63,9 +65,15 @@ def test_handler_translates_wire_to_client_dtos() -> None:
         "links": [],
     }
     added = handler.add_link(
-        json.dumps({"campaign_id": campaign_id, "slug": "promo", "target_url": "https://ok.example/x"})
+        HttpRequest(
+            body={
+                "campaign_id": campaign_id,
+                "slug": "promo",
+                "target_url": "https://ok.example/x",
+            }
+        )
     )
-    assert added.status == 200
+    assert added.status_code == 200
     assert added.body == {
         "campaign_id": campaign_id,
         "budget": {"amount": "100.00", "currency": "USD"},
@@ -84,8 +92,8 @@ class _FailingReports:
 
 
 def test_reports_handler_translates_client_dtos_to_wire() -> None:
-    resp = ReportsHandler(_StubReports()).links_by_verdict()
-    assert resp.status == 200
+    resp = ReportsHandler(_StubReports()).links_by_verdict(HttpRequest())
+    assert resp.status_code == 200
     assert resp.body == {
         "links": [
             {
@@ -99,8 +107,8 @@ def test_reports_handler_translates_client_dtos_to_wire() -> None:
 
 
 def test_reports_handler_maps_a_failure_to_a_problem_document() -> None:
-    resp = ReportsHandler(_FailingReports()).links_by_verdict()
-    assert resp.status == 503
+    resp = ReportsHandler(_FailingReports()).links_by_verdict(HttpRequest())
+    assert resp.status_code == 503
     assert resp.body == {
         "type": "/problems/unavailable",
         "detail": "a dependency is unavailable; please retry",

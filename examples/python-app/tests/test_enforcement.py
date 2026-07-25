@@ -164,6 +164,50 @@ def test_the_http_host_routes_and_never_translates() -> None:
     assert not offenders, f"the http host calls a context Client instead of routing to a handler: {offenders}"
 
 
+def _context_imports(tree: ast.Module, contexts: frozenset[str]) -> list[str]:
+    hits: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module is not None:
+            module = node.module
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.split(".")[0] in contexts:
+                    hits.append(alias.name)
+            continue
+        else:
+            continue
+        if module.split(".")[0] not in contexts:
+            continue
+        if ".adapters.handlers." in f"{module}.":
+            continue
+        hits.append(module)
+    return hits
+
+
+def test_the_http_host_imports_only_handlers_from_contexts() -> None:
+    contexts = frozenset(discovered_contexts())
+    offenders: dict[str, list[str]] = {}
+    for path in _host_files("http"):
+        hits = _context_imports(_parse(path), contexts)
+        if hits:
+            offenders[str(path.relative_to(ROOT))] = hits
+    assert not offenders, f"the http host reaches past a context's handlers: {offenders}"
+
+
+def test_host_import_teeth() -> None:
+    contexts = frozenset({"campaign", "reports"})
+    handler = ast.parse("from campaign.adapters.handlers.http import Handler\n")
+    dto = ast.parse("from campaign.client import AddLinkRequest\n")
+    service = ast.parse("from campaign.application.service import CampaignService\n")
+    whole = ast.parse("import reports\n")
+    unrelated = ast.parse("from httpwire import Response\n")
+    assert _context_imports(handler, contexts) == []
+    assert _context_imports(unrelated, contexts) == []
+    assert _context_imports(dto, contexts) == ["campaign.client"]
+    assert _context_imports(service, contexts) == ["campaign.application.service"]
+    assert _context_imports(whole, contexts) == ["reports"]
+
+
 def test_handler_routing_teeth() -> None:
     contexts = frozenset({"campaign", "reports"})
     direct = ast.parse("def f(app):\n    return app.reports.links_by_verdict()\n")

@@ -7,7 +7,7 @@ exactly one door per shape.** This norm is scoped to the domain data types —
 value objects, entities, aggregates — and to the two places that consume their
 serialized form: gateways (repositories, cross-context, vendor) and the
 application service's Respond step. Handlers never touch it: they translate
-wire ↔ `Client` DTOs and never see a domain object (`handlers.md` rule 4).
+wire ↔ `Client` DTOs and never see a domain object (`handlers.md` rule 5).
 Errors/testing/comments apply to everything; this norm applies to how domain
 data crosses an edge (maintainer rulings 2026-07-20).
 

@@ -158,7 +158,7 @@ do use it the moment a second frontend is real.
 - **Serving a built bundle** (if the app hosts the static files itself) is a
   **`srv/` concern** — served either as routes on the existing HTTP host, or by
   its own static-file host in its own process, never a second long-running
-  server folded into the API's process (`srv.md` rule 5). The frontend *source*
+  server folded into the API's process (`srv.md` rule 6). The frontend *source*
   lives in `web/<app>`; its compiled output is what a host serves.
 - **A view that composes two contexts for one screen** is a **cross-context
   read**, so it is its own small context above both, not a fat frontend or a
