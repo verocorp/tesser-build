@@ -40,6 +40,8 @@ class TargetURL:
     _value: str
 
     def __post_init__(self) -> None:
+        if any(ord(ch) < 0x20 for ch in self._value):
+            raise invalid("invalid_target_url", "target url must not contain control characters")
         parsed = urlparse(self._value)
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
             raise invalid("invalid_target_url", f"target url {self._value!r} must be http(s) with a host")

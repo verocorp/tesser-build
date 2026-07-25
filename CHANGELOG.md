@@ -52,12 +52,29 @@ host now forbids.
 
 ### Fixed
 
-- **A malformed `Content-Length` now returns 400, not 500.** A non-numeric
-  header (`Content-Length: abc`) raised `ValueError` from `int()`, which fell
-  through `respond`'s catch-all to a 500 — a client framing error reported as a
-  server fault. `content_length` now raises `BadRequest` on an unparseable
-  header (a review-cycle catch on #37's framing guard). `tests/test_httpwire.py`
-  locks it.
+Four review-cycle catches on the HTTP edge (`/ship` lightweight review +
+a Codex adversarial pass):
+
+- **Response-splitting via the redirect `Location` (security).** `TargetURL`
+  accepted a URL with embedded control characters (`urlparse` only checks
+  scheme + host), and `http.server`'s `send_header` does not sanitize CRLF, so a
+  stored `https://…/\r\nX-Injected: yes` target injected headers on
+  `GET /r/<slug>`. Fixed at the value object — `TargetURL` now rejects any
+  control character, closing it for every consumer, not just the redirect path.
+- **A malformed `Content-Length` returns 400, not 500.** A non-numeric header
+  (`Content-Length: abc`) raised `ValueError` from `int()`, caught only by
+  `respond`'s catch-all → a 500 for a client framing error. `content_length`
+  now raises `BadRequest`.
+- **An invalid-UTF-8 body returns 400, not 500.** `decode_body` caught
+  `json.JSONDecodeError` but not `UnicodeDecodeError` (`json.loads(b"\xff")`
+  raises the latter) → a 500. Now caught as `malformed_request`.
+- **Header framing is case-insensitive, as HTTP requires.** The host copied
+  headers into a case-sensitive dict, so a client sending lowercase
+  `content-length` / `transfer-encoding` defeated the body read and the 411
+  guard. The host now lowercases header keys and `content_length` matches
+  case-insensitively.
+
+All four locked by tests (`test_httpwire.py`, `test_roundtrip_law.py`).
 
 ### Boundary (documented, not built)
 

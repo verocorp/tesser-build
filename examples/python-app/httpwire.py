@@ -74,11 +74,12 @@ def respond(run: Callable[[], Response]) -> Response:
 
 
 def content_length(headers: Mapping[str, str]) -> int:
-    if "chunked" in headers.get("Transfer-Encoding", "").lower():
+    lowered = {name.lower(): value for name, value in headers.items()}
+    if "chunked" in lowered.get("transfer-encoding", "").lower():
         raise StreamingUnsupported(
             "this host buffers; declare a Content-Length (streaming bodies are a documented boundary)"
         )
-    raw = headers.get("Content-Length") or "0"
+    raw = lowered.get("content-length") or "0"
     try:
         declared = int(raw)
     except ValueError as e:
@@ -95,7 +96,7 @@ def decode_body(raw: bytes) -> JSONObject:
         return {}
     try:
         data = json.loads(raw)
-    except json.JSONDecodeError as e:
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
         raise BadRequest(f"malformed JSON: {e}") from e
     if not isinstance(data, dict):
         raise BadRequest("expected a JSON object")
