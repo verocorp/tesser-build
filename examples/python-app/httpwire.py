@@ -78,7 +78,11 @@ def content_length(headers: Mapping[str, str]) -> int:
         raise StreamingUnsupported(
             "this host buffers; declare a Content-Length (streaming bodies are a documented boundary)"
         )
-    declared = int(headers.get("Content-Length") or "0")
+    raw = headers.get("Content-Length") or "0"
+    try:
+        declared = int(raw)
+    except ValueError as e:
+        raise BadRequest(f"invalid Content-Length: {raw!r}") from e
     if declared < 0:
         raise BadRequest("negative Content-Length")
     if declared > MAX_BUFFERED_BODY:

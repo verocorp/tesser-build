@@ -51,6 +51,11 @@ def test_content_length_reads_a_declared_finite_size() -> None:
     assert content_length({}) == 0
 
 
+def test_content_length_rejects_a_non_numeric_header_as_a_client_error() -> None:
+    with pytest.raises(BadRequest):
+        content_length({"Content-Length": "abc"})
+
+
 def test_content_length_refuses_a_streaming_body() -> None:
     with pytest.raises(StreamingUnsupported):
         content_length({"Transfer-Encoding": "chunked"})

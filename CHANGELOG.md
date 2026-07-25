@@ -50,6 +50,15 @@ host now forbids.
   command) with a CLI-parallel paragraph; `rationale/coverage.md` row.
   skill-version 21 → 22.
 
+### Fixed
+
+- **A malformed `Content-Length` now returns 400, not 500.** A non-numeric
+  header (`Content-Length: abc`) raised `ValueError` from `int()`, which fell
+  through `respond`'s catch-all to a 500 — a client framing error reported as a
+  server fault. `content_length` now raises `BadRequest` on an unparseable
+  header (a review-cycle catch on #37's framing guard). `tests/test_httpwire.py`
+  locks it.
+
 ### Boundary (documented, not built)
 
 - Piped **stdin** is the CLI's "body" and reopens the buffered-vs-stream
