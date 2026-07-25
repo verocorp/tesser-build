@@ -5,6 +5,56 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.11.0] - 2026-07-25
+
+The CLI host gets the same router/transform split as HTTP — proving the anatomy
+is mechanism-independent, and fixing a real defect: the inline CLI had no error
+table, so a bad argument or a domain rejection printed a Python traceback and
+exited 1 instead of a clean message and a meaningful code. It also reached
+straight into a context's `Client` DTOs, the reach-past-the-handler the HTTP
+host now forbids.
+
+### Added
+
+- **`cliwire.py`** — the CLI mechanism's shared vocabulary, the analog of
+  `httpwire.py`: `CliRequest(args)`, `CliResponse(exit_code, stdout, stderr)`,
+  `respond()` (the error table), and `UsageError` / `arg` / `no_extra_args`
+  helpers.
+- **`campaign/adapters/handlers/cli.py`** — one `(CliRequest) -> CliResponse`
+  transform per command, sibling to the HTTP handler over the same `Client`. No
+  `argv`, no `print`, no `sys.exit`: unit-testable by constructing one value.
+- **`errors.exit_code_for(kind)`** — the CLI's error mapper: the same closed
+  domain `Kind` set mapped to an exit code (validation → 2, not_found/conflict →
+  1), exhaustive via `assert_never`, exactly as `status_for` maps it to an HTTP
+  status. One taxonomy, two total edge mappers.
+- **`tests/test_cli.py`** — the handler transforms (success, domain rejection →
+  exit 2 not a traceback, usage errors), the `respond` table per failure class
+  (incl. no-leak-on-unexpected), and the dispatcher's routing (known / unknown /
+  no command).
+
+### Changed
+
+- **`srv/cli/main.py` is now a dispatcher.** It builds a command route table
+  (`commands_for`), matches `argv[0]`, hands the rest to the handler as a
+  `CliRequest`, prints `stdout`/`stderr`, and `sys.exit`s the `exit_code`. It
+  imports only `campaign.adapters.handlers.cli`, never the context's `Client`.
+- **The host-boundary enforcement now covers every host, not just HTTP.**
+  `test_enforcement.py`'s "routes and never translates" and "imports only
+  handlers from contexts" checks were generalized from `srv/http` to all of
+  `srv/`, so the CLI host is held to the same rule.
+- **Docs**: `handlers.md` decision 2 rewritten (single-command inline stands;
+  multiple commands earn the split — the CLI shows the grown form); `srv.md`
+  shape + a mechanism-parallel note; `python.md` CLI section rewritten with the
+  `cliwire`/dispatch shape (resolving the prior "is a CLI DTO the right shape?"
+  open question); example README run-command fixed (`create-link` → a real
+  command) with a CLI-parallel paragraph; `rationale/coverage.md` row.
+  skill-version 21 → 22.
+
+### Boundary (documented, not built)
+
+- Piped **stdin** is the CLI's "body" and reopens the buffered-vs-stream
+  question; no command reads it, so it stays a named boundary.
+
 ## [0.0.10.0] - 2026-07-25
 
 The edge goes content-type-agnostic. The host stops parsing bodies: `req.body`

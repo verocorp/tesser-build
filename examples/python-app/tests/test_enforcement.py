@@ -154,14 +154,14 @@ def test_a_context_a_host_exposes_owns_a_handler() -> None:
     assert not missing, f"a host exposes these contexts but they own no handler role: {missing}"
 
 
-def test_the_http_host_routes_and_never_translates() -> None:
+def test_a_host_routes_and_never_translates() -> None:
     contexts = frozenset(discovered_contexts())
     offenders: dict[str, list[int]] = {}
-    for path in _host_files("http"):
+    for path in _host_files():
         _, called = _clients_reached(_parse(path), contexts)
         if called:
             offenders[str(path.relative_to(ROOT))] = called
-    assert not offenders, f"the http host calls a context Client instead of routing to a handler: {offenders}"
+    assert not offenders, f"a host calls a context Client instead of routing to a handler: {offenders}"
 
 
 def _context_imports(tree: ast.Module, contexts: frozenset[str]) -> list[str]:
@@ -184,14 +184,14 @@ def _context_imports(tree: ast.Module, contexts: frozenset[str]) -> list[str]:
     return hits
 
 
-def test_the_http_host_imports_only_handlers_from_contexts() -> None:
+def test_a_host_imports_only_handlers_from_contexts() -> None:
     contexts = frozenset(discovered_contexts())
     offenders: dict[str, list[str]] = {}
-    for path in _host_files("http"):
+    for path in _host_files():
         hits = _context_imports(_parse(path), contexts)
         if hits:
             offenders[str(path.relative_to(ROOT))] = hits
-    assert not offenders, f"the http host reaches past a context's handlers: {offenders}"
+    assert not offenders, f"a host reaches past a context's handlers: {offenders}"
 
 
 def test_host_import_teeth() -> None:

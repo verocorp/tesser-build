@@ -118,12 +118,20 @@ read endpoint over a cross-context read model).
    consumer's handler are siblings under `adapters/handlers/` — same `Client`,
    different wire. Don't fuse mechanisms into one class; their failure
    vocabularies differ.
-2. **Does a CLI need a handler class?** A CLI command's arg-parse → one
-   `Client` call can live in the CLI host's command dispatch
-   (`srv.md`) when that is the whole translation — the handler *role* is
-   still being played (translate, call, render), just inline. Grow it into a
-   class when commands multiply. It obeys the same rules: no domain math, no
-   repository.
+2. **Does a CLI need a handler class?** A genuinely *single-command* CLI can
+   translate inline in the host's dispatch — the handler *role* is still played
+   (translate, call, render), just not extracted. But the split is
+   mechanism-independent, and **multiple commands earn it**: the verified impl's
+   CLI is the same shape as its HTTP one — a per-command transform
+   `(CliRequest) -> CliResponse` in `campaign/adapters/handlers/cli.py`, a
+   `srv/cli` host that routes a command name to it, prints, and exits. The
+   `CliRequest` (positional `args`, and stdin/options if ever needed) and
+   `CliResponse` (`exit_code`, `stdout`, `stderr`) are the CLI's request/response
+   DTOs; `cliwire.py` is their shared vocabulary, the analog of `httpwire.py`.
+   The one CLI-specific piece is the error mapper: the same closed domain `Kind`
+   set maps to an **exit code** (`errors.exit_code_for`) exactly as HTTP maps it
+   to a status (`status_for`) — one taxonomy, two total edge mappers. It obeys
+   the same rules: no domain math, no repository, no transport in the signature.
 3. **What is the problem-shape on the wire?** The verified impl renders
    errors as a problem object (`type` + `detail`, RFC 9457-shaped) with the
    domain error's open `Code` as the type — decided once at the `respond`
