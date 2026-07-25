@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 from errors import InfraError, invalid
 from httpwire import (
     MAX_BUFFERED_BODY,
     BadRequest,
+    HttpRequest,
     PayloadTooLarge,
     Response,
     StreamingUnsupported,
@@ -16,6 +19,19 @@ from httpwire import (
     redirect,
     respond,
 )
+
+
+def test_httprequest_stays_a_faithful_http_request_object() -> None:
+    fields = {f.name: f.type for f in dataclasses.fields(HttpRequest)}
+    assert {"method", "path", "path_params", "query_params", "headers", "body"} <= set(fields)
+    assert fields["body"] in ("bytes", bytes), "request body must stay opaque bytes, not a decoded payload"
+
+
+def test_response_stays_a_faithful_http_response_object() -> None:
+    fields = {f.name: f.type for f in dataclasses.fields(Response)}
+    assert {"status_code", "body", "headers"} <= set(fields)
+    assert fields["status_code"] in ("int", int)
+    assert fields["body"] in ("bytes", bytes), "response body must stay opaque bytes, so any Content-Type is expressible"
 
 
 def test_json_response_serializes_to_bytes_and_owns_its_content_type() -> None:

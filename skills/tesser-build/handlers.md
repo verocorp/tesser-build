@@ -107,7 +107,15 @@ FastAPI/Starlette** (`path_params`, `query_params`, `status_code`), stripped to
 what a hand-written host needs, so the shape is recognizable and a later move
 onto a framework is mechanical. The body is bytes on both sides precisely so the
 edge is content-type-agnostic — the handler decodes/encodes and owns the type.
-Construction mechanics: `python.md#inbound-handlers-and-hosts`; verified impl:
+**Keep these DTOs faithful to HTTP's own request/response shape** — method /
+path / params / headers + an opaque byte body in, status + headers + an opaque
+byte body out. That fidelity is what lets a reader *derive* the cases this
+example doesn't ship (streaming via a `stream()` body, auth via a header,
+content negotiation via `Accept`) instead of being boxed in; collapsing the body
+back to a decoded `dict` for convenience is the regression that forecloses them.
+The shape is locked against that drift by
+`examples/python-app/tests/test_httpwire.py` (the request/response fidelity
+tests). Construction mechanics: `python.md#inbound-handlers-and-hosts`; verified impl:
 `examples/python-app/campaign/adapters/handlers/http.py` (full case) and
 `examples/python-app/reports/adapters/handlers/http.py` (minimal case: one
 read endpoint over a cross-context read model).
