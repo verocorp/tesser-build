@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 from bootstrap.bootstrap import App
 from campaign.adapters.handlers.http import Handler as CampaignHandler
-from httpwire import HttpRequest, Response, decode_body, problem, respond
+from httpwire import HttpRequest, Response, content_length, json_response, problem, respond
 from reports.adapters.handlers.http import Handler as ReportsHandler
 from srv.http.router import Route, match
 
@@ -39,38 +38,32 @@ def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
             def run() -> Response:
                 found = match(routes, method, self.path)
                 if found is None:
-                    return Response(404, problem("not_found", "unknown route"))
+                    return json_response(404, problem("not_found", "unknown route"))
+                headers = {name: value for name, value in self.headers.items()}
+                body = self.rfile.read(content_length(headers))
                 return found.endpoint(
                     HttpRequest(
                         method=method,
                         path=self.path,
                         path_params=found.path_params,
                         query_params=found.query_params,
-                        headers={name: value for name, value in self.headers.items()},
-                        body=decode_body(self._read_body()),
+                        headers=headers,
+                        body=body,
                     )
                 )
 
             return respond(run)
 
-        def _read_body(self) -> str:
-            length = int(self.headers.get("Content-Length") or "0")
-            if length <= 0:
-                return ""
-            return self.rfile.read(length).decode("utf-8")
-
         def log_message(self, format: str, *args: Any) -> None:
             return
 
         def _send(self, resp: Response) -> None:
-            payload = json.dumps(resp.body).encode("utf-8")
             self.send_response(resp.status_code)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Content-Length", str(len(resp.body)))
             for name, value in resp.headers.items():
                 self.send_header(name, value)
             self.end_headers()
-            self.wfile.write(payload)
+            self.wfile.write(resp.body)
 
     return ThreadingHTTPServer(addr, _RequestHandler)
 

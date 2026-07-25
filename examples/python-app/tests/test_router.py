@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from httpwire import HttpRequest, Response
+from httpwire import HttpRequest, Response, json_response
 from srv.http.router import Route, match, split
 
 
 def _ok(req: HttpRequest) -> Response:
-    return Response(200, {"seen": dict(req.path_params)})
+    return json_response(200, {"seen": dict(req.path_params)})
 
 
 def _other(req: HttpRequest) -> Response:
-    return Response(200, {})
+    return json_response(200, {})
 
 
 ROUTES = (

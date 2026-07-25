@@ -5,6 +5,57 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.10.0] - 2026-07-25
+
+The edge goes content-type-agnostic. The host stops parsing bodies: `req.body`
+and `Response.body` are raw `bytes`, the handler decodes and serializes and owns
+its `Content-Type`, and the host only moves bytes and copies headers. A `.png`
+in or out is now expressible without touching the host — the reason the parsing
+belonged in the handler all along.
+
+### Changed
+
+- **`HttpRequest.body` and `Response.body` are `bytes`.** The host reads the
+  declared body off the socket as raw bytes and writes the response bytes back;
+  it no longer calls `json.loads`/`json.dumps` or sets a hardcoded
+  `Content-Type`. Handlers call `decode_body(req.body)` for JSON and return
+  `json_response(...)` / `redirect(...)`, which serialize and set the type.
+- **`httpwire`**: `json_response()` (encode + `Content-Type: application/json`,
+  used by every handler and every problem doc), `content_length()` (the framing
+  guard, below), and `decode_body()` now takes `bytes`. `respond()` returns
+  `json_response`.
+
+### Added
+
+- **Framing guards at the host, decided from the headers before a handler runs:**
+  a body over a 1 MiB buffer cap → **413**; a `Transfer-Encoding: chunked`
+  (streaming) body the buffering host won't read → **411** with a message
+  pointing at the boundary. Both render through the same `respond`/`problem`
+  vocabulary as every other error, so the whole process speaks one error format.
+  `content_length()` is a pure function of the headers, unit-tested in
+  `tests/test_httpwire.py` (declared size reads; chunked → 411; over-cap → 413),
+  alongside `json_response`, `redirect`, `decode_body`, and the full `respond`
+  table.
+- **`tests/wire.py`** — `json_request(obj)` / `json_body(resp)` test helpers, now
+  that request and response bodies are bytes.
+
+### Boundary (documented, not built)
+
+- **Streaming and non-JSON payloads.** The impl buffers: fine for JSON, a form
+  post, or a single bounded file. A live/large stream isn't a value and can't
+  ride in a frozen request DTO — it needs the request to expose a `stream()`
+  pull-source and the host to de-chunk the wire, a different shape named in
+  `handlers.md` / `srv.md` and marked not-built (same discipline as the worker
+  host and SQL backend). The 411 is the honest in-code marker. The docs point at
+  a framework as the moment the hand-rolled host has earned its replacement.
+
+### Docs
+
+- `handlers.md` rule 2 (host owns transport, handler owns content) + decision 6
+  (buffered vs streamed) + mistakes ("the host parsing the body"); `srv.md` rule
+  4 restated with the bytes split + framing guards; `python.md` and the example
+  README rewritten; `rationale/coverage.md` row. skill-version 20 → 21.
+
 ## [0.0.9.0] - 2026-07-23
 
 The host↔handler responsibility split. `srv/*/host.py` is a router; a handler

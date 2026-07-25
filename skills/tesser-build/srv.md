@@ -61,18 +61,23 @@ Yes → a host.
    would leak the graph. Drain ordering, readiness, and health are the host's
    fill-in above this minimum.
 4. **Two-layer transport split: the host routes, the handler transforms.**
-   The host owns the *mechanism* — the socket, the route table, bytes ↔ JSON,
-   status lines and headers on the wire, and cross-cutting middleware. The
-   per-context handler owns the *shape* — request DTO ↔ `Client` DTOs
-   (`handlers.md`). Concretely, a host's request path is: match `(method,
-   path)` in the route table, put what it parsed into the request DTO
-   (`path_params`, `query_params`, `headers`, decoded `body`), call the
-   endpoint, serialize the response DTO it gets back. **Nothing between those
-   steps.** No field names, no `Client` call, no business branch — if the host
-   knows what a field is called, the split has already failed. Auth *policy*,
-   logging, recovery, and rate limits are host middleware, never inside a
-   context's handler — a handler that imports another context to do auth has
-   leaked a host concern into a context adapter.
+   The host owns the *transport* — the socket, the route table, reading/writing
+   raw body **bytes**, framing (Content-Length, the size cap, refusing a chunked
+   body), status lines and headers on the wire, and cross-cutting middleware.
+   The per-context handler owns the *content* — raw bytes ↔ `Client` DTOs, and
+   the response's `Content-Type` (`handlers.md`). Concretely, a host's request
+   path is: match `(method, path)` in the route table, read the declared body
+   bytes off the socket, put them plus what it routed into the request DTO
+   (`path_params`, `query_params`, `headers`, `body: bytes`), call the endpoint,
+   write back the response DTO's `status_code`, `body` bytes, and `headers`.
+   **Nothing between those steps.** No `json.loads`, no `json.dumps`, no
+   hardcoded `Content-Type`, no field names, no `Client` call — if the host
+   knows what a field is called *or what content type the answer is*, the split
+   has failed. The body is opaque bytes to the host, which is what lets a handler
+   accept or serve a `.png` without the host changing. Auth *policy*, logging,
+   recovery, and rate limits are host middleware, never inside a context's
+   handler — a handler that imports another context to do auth has leaked a host
+   concern into a context adapter.
 5. **The route table is the host's, and it is one table.** URLs are an
    app-level decision: the host declares `(method, pattern, endpoint)` for
    every exposed context in one place, so the whole URL surface is readable
@@ -96,7 +101,7 @@ Yes → a host.
 srv/
   run.py             ← run_until_signal(host, app): install SIGTERM, close in finally
   http/router.py     ← Route(method, pattern, endpoint) + match(): URL knowledge, nothing else
-  http/host.py       ← HttpHost implements Host: the route table, the server, (de)serialization
+  http/host.py       ← HttpHost implements Host: route table, server, raw-bytes read/write
   http/main.py       ← from_env(os.getenv), new(cfg) once, run the host
   cli/main.py        ← from_env(os.getenv), new(cfg) once, run command, close
 
@@ -155,7 +160,10 @@ follow-on work, not yet shipped. Review-side tells:
   `application`, or `domain` import means the router reached past the
   transform (locked for `srv/http` by `tests/test_enforcement.py`);
 - **a branch per endpoint** in the request path instead of a route table —
-  endpoints that don't share one signature, so they can't be routed uniformly.
+  endpoints that don't share one signature, so they can't be routed uniformly;
+- **`json.loads`/`json.dumps` or a hardcoded `Content-Type` in the host** — the
+  host committed to a content type; body encode/decode is the handler's, and the
+  host reads/writes opaque bytes and copies the handler's headers.
 
 ## Tests you must write
 
@@ -166,6 +174,11 @@ follow-on work, not yet shipped. Review-side tells:
 - **The graph is built once and closed** — a host-shaped test that calls
   `bootstrap.new` once, exercises a `Client`, and `close()`s (idempotently)
   (verified impl: `test_bootstrap_once.py`).
+- **The transport framing is guarded** — the length/framing decision is a pure
+  function of the headers, tested directly: a declared finite size reads, a
+  chunked body is refused (411), an over-cap body is refused (413) (verified
+  impl: `test_httpwire.py:content_length`). The response is content-type-agnostic
+  bytes: `json_response` serializes and sets the type, the host copies it.
 
 ## Common mistakes
 

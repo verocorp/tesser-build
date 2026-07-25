@@ -583,44 +583,55 @@ def new(cfg: Config) -> App:
 The two-layer transport split (`handlers.md`, `srv.md`; verified impl
 `examples/python-app/campaign/adapters/handlers/http.py` and
 `examples/python-app/srv/`). **The host routes; the handler transforms.** The
-host owns the mechanism — the socket, the route table, bytes ↔ JSON, headers —
-and is the env edge that calls the one `from_env` loader, builds the graph once,
-and runs under a runner that installs SIGTERM. The per-context handler owns the
-shape: request DTO in, response DTO out, through one respond path.
+host owns the transport — the socket, the route table, raw body **bytes**,
+framing, headers on the wire — and is the env edge that calls the one `from_env`
+loader, builds the graph once, and runs under a runner that installs SIGTERM. The
+per-context handler owns the content — raw bytes ↔ `Client` DTOs, and the
+response's `Content-Type` — through one respond path.
 
 ```python
 # httpwire.py — the host↔handler contract: both sides import it, neither owns it
 @dataclass(frozen=True)
-class HttpRequest:                                  # what the transport already parsed
+class HttpRequest:
     method: str = "GET"
     path: str = "/"
     path_params: Mapping[str, str] = field(default_factory=dict)
     query_params: Mapping[str, str] = field(default_factory=dict)
     headers: Mapping[str, str] = field(default_factory=dict)
-    body: JSONObject = field(default_factory=dict)  # decoded by the host, not the handler
+    body: bytes = b""                               # raw; the handler interprets it
 
 
 @dataclass(frozen=True)
 class Response:
     status_code: int
-    body: JSONObject
+    body: bytes                                     # raw; the handler serialized it
     headers: Mapping[str, str] = field(default_factory=dict)
 
 
 Endpoint = Callable[[HttpRequest], Response]        # every endpoint, one type
 
 
+def json_response(status_code: int, body: JSONObject,
+                  headers: Mapping[str, str] | None = None) -> Response:
+    payload = json.dumps(body).encode("utf-8")      # the handler encodes + owns the type
+    return Response(status_code, payload, {"Content-Type": "application/json", **(headers or {})})
+
+
 def respond(run: Callable[[], Response]) -> Response:
     try:
         return run()
-    except BadRequest as e:                         # wrong-shaped field -> 400
-        return Response(400, problem("malformed_request", str(e)))
-    except DomainError as e:                        # the one closed-Kind mapper
-        return Response(status_for(e.kind), problem(e.code, e.message))
+    except BadRequest as e:                          # malformed body / wrong-shaped field -> 400
+        return json_response(400, problem("malformed_request", str(e)))
+    except PayloadTooLarge as e:                     # framing guard, at the host -> 413
+        return json_response(413, problem("payload_too_large", str(e)))
+    except StreamingUnsupported as e:                # framing guard, at the host -> 411
+        return json_response(411, problem("length_required", str(e)))
+    except DomainError as e:                         # the one closed-Kind mapper
+        return json_response(status_for(e.kind), problem(e.code, e.message))
     except InfraError:
-        return Response(503, problem("unavailable", "a dependency is unavailable; please retry"))
+        return json_response(503, problem("unavailable", "a dependency is unavailable; please retry"))
     except Exception:
-        return Response(500, problem("internal", "unexpected error"))
+        return json_response(500, problem("internal", "unexpected error"))
 
 
 # <context>/adapters/handlers/http.py
@@ -630,19 +641,20 @@ class Handler:
 
     def add_link(self, req: HttpRequest) -> Response:
         def run() -> Response:
+            body = decode_body(req.body)            # raw bytes -> JSON; the handler's call
             view = self._client.add_link(
-                AddLinkRequest(campaign_id=string_field(req.body.get("campaign_id")),
-                               slug=string_field(req.body.get("slug")),
-                               target_url=string_field(req.body.get("target_url")))
+                AddLinkRequest(campaign_id=string_field(body.get("campaign_id")),
+                               slug=string_field(body.get("slug")),
+                               target_url=string_field(body.get("target_url")))
             )
-            return Response(200, _campaign_body(view))  # DTO -> wire, the edge's own shape
+            return json_response(200, _campaign_body(view))  # encode + set Content-Type
 
         return respond(run)
 
     def resolve(self, req: HttpRequest) -> Response:
         def run() -> Response:
             resp = self._client.resolve(ResolveRequest(slug=path_param(req, "slug")))
-            return redirect(resp.target_url)        # 302 + Location, not a body field
+            return redirect(resp.target_url)        # 302 + Location, empty body
 
         return respond(run)
 ```
@@ -650,18 +662,23 @@ class Handler:
 - **The names mirror FastAPI/Starlette, stripped down** — `path_params`,
   `query_params`, `headers`, `status_code` — so the shape is recognizable and
   moving onto a real framework is mechanical rather than a rewrite. What is
-  *not* mirrored: no async, no `await request.json()` (the host decodes), no
-  media-type negotiation (JSON only), no `RedirectResponse` class (a `redirect`
-  helper instead).
+  *not* mirrored: no async, no `await request.json()`, no media-type
+  negotiation, no `RedirectResponse` class (a `redirect` helper instead).
+- **The body is `bytes` on both sides**, so the edge is content-type-agnostic:
+  the handler calls `decode_body(req.body)` for JSON (or reads the bytes as an
+  image), and `json_response`/`redirect` serialize and set the `Content-Type`
+  on the way out. The host neither parses nor serializes — that is what makes a
+  `.png` in or out expressible without touching it.
 - **Every endpoint has the one signature** `(HttpRequest) -> Response`, so the
   host can hold them all as `Endpoint` and route by table instead of growing a
   branch per endpoint.
-- **The handler never sees transport.** No raw body string, no `self.path`, no
-  socket — it cannot reach anything outside its argument, so a test builds one
-  `HttpRequest` by hand and asserts on the returned `Response`.
+- **The handler never sees transport.** No socket, no `self.path`, no framework
+  request — everything it needs rides in the one `HttpRequest`, so a test builds
+  one by hand (bytes body included) and asserts on the returned `Response`.
 - **`respond` is the whole error table for the mechanism**: shape guard → 400,
   domain kind → status through the one pure mapper (`status_for` over the
-  closed `Kind` set), infra → 503, unexpected → 500 with a generic body.
+  closed `Kind` set), infra → 503, unexpected → 500 with a generic body — plus
+  the host's own framing rejections (413, 411) through the same table.
   `problem` renders the RFC 9457-shaped object (`type` from the open `Code`,
   `detail`) — decided once, at this path.
 - **Headers are part of the response DTO**, which is what lets a redirect be a
@@ -685,15 +702,16 @@ def _dispatch(self, method: str) -> Response:       # the host's entire request 
     def run() -> Response:
         found = match(routes, method, self.path)    # router: URL knowledge lives there
         if found is None:
-            return Response(404, problem("not_found", "unknown route"))
+            return json_response(404, problem("not_found", "unknown route"))
+        headers = {n: v for n, v in self.headers.items()}
+        body = self.rfile.read(content_length(headers))  # transport read; raises 413/411 on bad framing
         return found.endpoint(HttpRequest(
             method=method, path=self.path,
             path_params=found.path_params, query_params=found.query_params,
-            headers={n: v for n, v in self.headers.items()},
-            body=decode_body(self._read_body()),    # bytes -> dict is the host's job
+            headers=headers, body=body,             # raw bytes; the host never decodes
         ))
 
-    return respond(run)                             # same error table; malformed JSON -> 400
+    return respond(run)
 
 
 # srv/http/main.py — the host: env edge, build once, hand to the runner
@@ -704,19 +722,28 @@ def main() -> None:
     run_until_signal(host, app)          # installs SIGTERM, guarantees app.close()
 ```
 
-- **Match, fill the request DTO, call, serialize — nothing between the steps.**
-  There is no field name anywhere in the host, no `Client` call, no business
-  branch. `_send` writes `status_code`, the JSON body, and any response headers;
-  that plus `decode_body` is the host's entire share of the wire format.
+- **Route, read bytes, call, write bytes — nothing between the steps.** No
+  `json.loads`, no `json.dumps`, no hardcoded `Content-Type`, no field name, no
+  `Client` call. `content_length` decides the framing from the headers (finite
+  and under-cap → read it; chunked → 411; over cap → 413); `_send` writes the
+  `status_code`, the raw `body` bytes, and copies the handler's `headers`. That
+  is the host's entire share of the wire.
+- **Buffered, with the streaming boundary named.** `content_length` reads a
+  declared, bounded body and refuses a `Transfer-Encoding: chunked` one with a
+  411 — the honest in-code marker that a live/large stream needs a different
+  shape (the request exposing a `stream()` pull-source, the host de-chunking),
+  which is **documented, not built**. Reach for a framework when you need
+  streaming, multipart, or content negotiation.
 - **The route table is app-level.** URLs are the app's decision, not a
   context's: one table names every exposed endpoint, so a context can be
   mounted, prefixed, or versioned without editing it. Pattern matching and
   parameter extraction live in `srv/http/router.py` — the only component that
   knows `/campaigns/{campaign_id}` has a parameter in it.
-- **The host's own failures use the same vocabulary.** An unmatched route is
-  the host's to answer (404), and malformed JSON never reaches a handler — both
-  render through `problem`, so a client sees one error format from the whole
-  process.
+- **The host's own failures use the same vocabulary.** An unmatched route (404),
+  an oversized body (413), a streaming body it won't buffer (411) — all the
+  host's own rejections render through the same `respond`/`problem` path a
+  handler uses, so a client sees one error format from the whole process, not
+  the framework's default HTML for the host and problem-JSON for the handler.
 - **One loader, one env read.** The host passes its own `os.getenv` to
   `from_env` (`bootstrap/config.py`) — the single place the app reads the
   environment. `from_env` loads app config **and** the host's launch config

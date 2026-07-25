@@ -12,6 +12,7 @@ from campaign.wiring.config import Config as CampaignConfig
 from campaign.wiring.wire import build as build_campaign
 from errors import InfraError
 from httpwire import HttpRequest
+from tests.wire import json_body, json_request
 from reports.adapters.handlers.http import Handler as ReportsHandler
 from reports.client import LinkVerdictView
 from tests.discovery import discovered_contexts
@@ -55,26 +56,23 @@ def test_handler_translates_wire_to_client_dtos() -> None:
     client, _ = build_campaign(CampaignConfig("memory"), _AllowAllChecker())
     handler = Handler(client)
     created = handler.create_campaign(
-        HttpRequest(body={"budget": {"amount": "100.00", "currency": "USD"}})
+        json_request({"budget": {"amount": "100.00", "currency": "USD"}})
     )
     assert created.status_code == 201
-    campaign_id = created.body["campaign_id"]
-    assert created.body == {
+    created_body = json_body(created)
+    campaign_id = created_body["campaign_id"]
+    assert created_body == {
         "campaign_id": campaign_id,
         "budget": {"amount": "100.00", "currency": "USD"},
         "links": [],
     }
     added = handler.add_link(
-        HttpRequest(
-            body={
-                "campaign_id": campaign_id,
-                "slug": "promo",
-                "target_url": "https://ok.example/x",
-            }
+        json_request(
+            {"campaign_id": campaign_id, "slug": "promo", "target_url": "https://ok.example/x"}
         )
     )
     assert added.status_code == 200
-    assert added.body == {
+    assert json_body(added) == {
         "campaign_id": campaign_id,
         "budget": {"amount": "100.00", "currency": "USD"},
         "links": [{"slug": "promo", "target_url": "https://ok.example/x", "active": True}],
@@ -94,7 +92,7 @@ class _FailingReports:
 def test_reports_handler_translates_client_dtos_to_wire() -> None:
     resp = ReportsHandler(_StubReports()).links_by_verdict(HttpRequest())
     assert resp.status_code == 200
-    assert resp.body == {
+    assert json_body(resp) == {
         "links": [
             {
                 "slug": "promo",
@@ -109,7 +107,7 @@ def test_reports_handler_translates_client_dtos_to_wire() -> None:
 def test_reports_handler_maps_a_failure_to_a_problem_document() -> None:
     resp = ReportsHandler(_FailingReports()).links_by_verdict(HttpRequest())
     assert resp.status_code == 503
-    assert resp.body == {
+    assert json_body(resp) == {
         "type": "/problems/unavailable",
         "detail": "a dependency is unavailable; please retry",
     }

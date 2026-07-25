@@ -19,6 +19,7 @@ from campaign.domain.short_link import ShortLinkSpec
 from campaign.domain.values import CampaignID
 from errors import DomainError, Kind
 from httpwire import HttpRequest
+from tests.wire import json_body, json_request
 
 _CAMPAIGN_ID = "0123456789abcdef"
 
@@ -92,9 +93,9 @@ def test_deactivate_link_endpoint_returns_the_campaign_payload() -> None:
     svc = _service()
     id = _campaign_with_link(svc)
     handler = Handler(svc)
-    resp = handler.deactivate_link(HttpRequest(body={"campaign_id": id, "slug": "promo"}))
+    resp = handler.deactivate_link(json_request({"campaign_id": id, "slug": "promo"}))
     assert resp.status_code == 200
-    assert resp.body["links"] == [
+    assert json_body(resp)["links"] == [
         {"slug": "promo", "target_url": "https://ok.example/x", "active": False}
     ]
 
@@ -103,7 +104,7 @@ def test_deactivate_link_endpoint_maps_a_missing_link_to_404() -> None:
     svc = _service()
     id = _campaign_with_link(svc)
     handler = Handler(svc)
-    resp = handler.deactivate_link(HttpRequest(body={"campaign_id": id, "slug": "nosuch"}))
+    resp = handler.deactivate_link(json_request({"campaign_id": id, "slug": "nosuch"}))
     assert resp.status_code == 404
 
 
@@ -182,6 +183,6 @@ def test_campaign_wraps_an_invalid_link_with_its_index() -> None:
 
 def test_create_campaign_endpoint_rejects_a_non_object_budget() -> None:
     handler = Handler(_service())
-    resp = handler.create_campaign(HttpRequest(body={"budget": "100.00"}))
+    resp = handler.create_campaign(json_request({"budget": "100.00"}))
     assert resp.status_code == 400
-    assert resp.body["type"] == "/problems/malformed_request"
+    assert json_body(resp)["type"] == "/problems/malformed_request"
