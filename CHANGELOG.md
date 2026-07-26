@@ -5,6 +5,90 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.13.0] - 2026-07-26
+
+Agent-written tests come out over-DRY. Setup gets factored until the thing that
+makes each test *that* test is buried in shared machinery, and you can no longer
+read a test and know what it claims. That was named as a harness artifact, not a
+style preference: DRY reads as a virtue everywhere else, and nothing in the norm
+told anyone that test code inverts the trade. Production code pays repetition to
+buy a single point of change; a test's job is the opposite.
+
+So `testing.md` gains rule 9 — a helper builds a **spec or a DTO** and nothing
+else — and `TB032` enforces it. TB032 is the analyzer's first **totality** check,
+and the shape is the interesting part: every other check hunts a known-bad
+pattern and stays quiet otherwise, which is the wrong instrument when the failure
+mode is *variety*. There is no single bad helper to match. So this one inverts
+it: every module-level function in a test module must classify as something
+sanctioned, and everything else is reported. The output is a worklist, not an
+accusation — 23 functions across four example trees, all now conformant.
+
+`TB033` arrives from a question that got answered by rejecting its premise.
+The open question was whether the builtin-shadowing ban should target spec
+**field** names or helper **parameter** names. Running both cases settled it:
+a dataclass field named `id` costs nothing (the builtin stays callable in methods
+and `__post_init__`), while a parameter named `id` genuinely breaks. But no site
+in the repo had that bug, so a name-based ban would have taxed 12 sites to
+prevent something occurring at none of them — two of which are
+`BaseHTTPRequestHandler.log_message` overrides that cannot legally be renamed.
+TB033 therefore targets the **collision, not the name**: a builtin bound in a
+scope that the same scope then calls. Ruff's `A001`/`A002` already ship the name
+ban; nothing off the shelf checks the call shape.
+
+### Added
+- **`TB032` (test-helper-totality)** — every module-level function in a test
+  module must classify as a spec/DTO-returning helper or a `@pytest.fixture`.
+  What cannot be decided structurally declares itself with
+  `# tesser-category: <spec|dto|fixture>`, a closed set. Scope is deliberately
+  module-level: every non-test *method* on a class in a test file is a
+  hand-written double, which the fakes-only norm *requires*.
+- **`TB033` (shadowed-builtin-called)** — a builtin name bound in a scope
+  (parameter or local) that the same scope then calls. `TypeError` if the binding
+  runs first, `UnboundLocalError` if it does not; order carries no signal,
+  because Python scopes per function.
+- **`testing.md` rule 9**, with the four consequences derived rather than listed:
+  never return a constructed domain object, never call, defaults in keyword
+  arguments, and spec fields hold primitives or child specs.
+- A shared `# tesser-category:` marker vocabulary read by both the comments norm
+  and TB032 through one parser, so the two cannot disagree about what a marker is.
+
+### Changed
+- Test helpers across `examples/python`, `examples/python-app`,
+  `examples/serdepy` and `examples/errorspy` now conform. Three different fixes,
+  because "not a helper" has more than one cause: a helper returning a domain
+  object returns the spec instead and the test constructs at the call site; a
+  helper that *calls* something was never a helper and its work moves into the
+  test; a helper that is a pure rename is deleted.
+- `skill-version` 24 → 25.
+
+### Removed
+- `examples/python-app/tests/wire.py` — `json_body` was a pure alias for
+  `decode_body(resp.body)`, supplying no default and saving no reader anything.
+  Its 14 call sites now name `httpwire` directly.
+
+### Fixed
+Adversarial review found ten issues; eight were real and are fixed. Two were
+false positives, which is the expensive class for an analyzer that runs in other
+people's CI:
+- A forward-reference annotation (`-> "LinkSpec"`) carries no name node at all,
+  so a conformant spec helper was reported. Quoted annotations are ordinary
+  Python.
+- A parameter default is evaluated in the *enclosing* scope, so
+  `def f(len=len("ab"))` calls the builtin and must not be flagged.
+- A production class with a `test_*` method (`Client.test_connection`) made the
+  whole module a test module and dragged the production functions beside it into
+  TB032's scope. Detection now mirrors pytest's own collection rules, including
+  `unittest.TestCase` subclasses whatever they are named.
+- A decorated helper's trailing `# tesser-category:` marker was never read.
+- The comments norm exempted a bare category prefix, letting prose ride through
+  a directive as cover.
+- Lambda and class-body scopes were never judged by TB033 — the class-body case
+  executes at import time and breaks the module for every importer.
+- `except E as name` binds a name, but the alias is not a name node and was missed.
+- `global`/`nonlocal` rebinds are now left alone rather than flagged; which
+  target the call reaches depends on execution order, which one AST pass cannot
+  decide.
+
 ## [0.0.12.0] - 2026-07-26
 
 Four of the seven hand-written architecture detectors in `examples/python-app`

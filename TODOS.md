@@ -111,24 +111,34 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   - **How:** let `bootstrap.new` take its per-context builders, so the tests
     inject a hand-written double and the suppressions disappear.
 
-- [ ] **Hoist the suppression primitive out of four checkers** (2026-07-20 ship
-  review, confidence 9)
-  - **What:** `_SUPPRESS_MARKER` + a `suppressed(...)` helper is now duplicated
-    across `doubles_check.py`, `comments_check.py`, `typed_checks.py`, and
-    `checks.py`. The marker is load-bearing (it is also in `comments_check.py`'s
-    `_DIRECTIVE` regex and in the CLI's user-facing message), so changing or
-    scoping it means editing four sites.
+- [ ] **Hoist the suppression primitive out of SIX checkers** (2026-07-20 ship
+  review, confidence 9 — count corrected 2026-07-26)
+  - **What:** `_SUPPRESS_MARKER` + a `suppressed(...)` helper is duplicated
+    across `doubles_check.py`, `comments_check.py`, `typed_checks.py`,
+    `checks.py`, and — since the test-helper wave — `helpers_check.py` and
+    `shadowing_check.py`. **Six sites, not the four this entry used to claim.**
+    The marker is load-bearing (it is also in the CLI's user-facing message), so
+    changing or scoping it means editing all six.
+  - ⚠ **A recorded count goes stale as quietly as anything else.** This one was
+    wrong for five days because the wave that added two copies did not walk back
+    to the TODO that counts them. Re-count before quoting it.
   - **How:** move the marker and a `suppressed_predicate(source)` into
     `astutil.py` (`typed_checks.py` already documents this predicate shape).
     Note TB030's variant scans a node's whole **line span** (so a wrapped import
     can be suppressed) while the others are single-line — unify deliberately,
     don't silently pick one.
 
-- [ ] **TB030 adds a 4th full-tree AST walk per file** (2026-07-20 ship review,
-  measured)
-  - **What:** measured on this repo's own corpus (146 files): 142.5 ms → 176.7 ms,
-    **+24%** wall clock for one check, ~0.23 ms/file. Real but small; a linter,
-    not a hot path.
+- [ ] **The per-file walk count is now SIX, not four** (2026-07-20 ship review,
+  measured; count corrected 2026-07-26)
+  - **What:** measured on this repo's own corpus (146 files) when TB030 landed as
+    the 4th walk: 142.5 ms → 176.7 ms, **+24%** wall clock for one check,
+    ~0.23 ms/file. Real but small; a linter, not a hot path. **The test-helper
+    wave added two more** — `helpers_check` and `shadowing_check` — so the
+    original measurement no longer describes the tree. Re-measure before acting.
+  - **Additional cost the old entry does not account for:** `helpers_check` calls
+    `classify_trees({path: tree})` for **every test file it judges**, so each
+    test file pays a whole-tree classifier pass of its own. That is a different
+    shape of cost from one more walk and should be measured separately.
   - **How:** fold the TB030 dispatch into the existing `_Checker` NodeVisitor as
     `visit_Import`/`visit_ImportFrom`/`visit_Attribute` + additions to the
     existing function visitors, which makes it near-free on a pass that already
@@ -358,13 +368,21 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   - **Start at:** add the pinned-policy assertions to errorspy's tests, or a
     drift test asserting the copies agree.
 
-- [ ] **`_annotation_names` duplicates `classify._all_names`** (2026-07-21)
-  - **What:** near-identical bodies; the new one additionally resolves string
-    forward references. `astutil.py` exists for exactly this sharing. The
-    divergence is silent — the classifier still cannot see through a quoted
-    annotation.
+- [ ] **THREE copies of the annotation-name walk, and they have now diverged**
+  (2026-07-21; sharpened 2026-07-26)
+  - **What:** `classify._all_names`, `typed_checks._annotation_names`, and — since
+    the test-helper wave — `helpers_check._annotation_names`. `astutil.py` exists
+    for exactly this sharing.
+  - **The divergence is no longer cosmetic.** Only the `helpers_check` copy
+    resolves string forward references and refuses to credit a name inside
+    `type[X]` / `Callable[..., X]`. Both behaviors were added because adversarial
+    review proved their absence was a false positive and a false negative
+    respectively. **The classifier still cannot see through a quoted annotation**,
+    which means every classifier-keyed check (TB010–TB018) has the false positive
+    that TB032 just fixed.
   - **Start at:** move the forward-ref-resolving version into `astutil.py` and
-    route both call sites through it.
+    route all three call sites through it — then re-run the gates, because the
+    classifier seeing more types may change what the typed checks report.
 
 - [ ] **Suppression is a substring scan, and TB017/TB018 give it a natural
   surface** (2026-07-21, wave C2 review)
@@ -496,6 +514,38 @@ change; each waits for a real need.
     credential-flow story stays doctrine, not code.
 
 ## Testing norm — helper wave follow-ups (opened 2026-07-26, eng review)
+
+- [ ] **TB033: three more binding forms Python treats as bindings**
+  (adversarial review 2026-07-26, deferred deliberately)
+  - **What:** TB033 counts parameters, assignment targets, `for` targets, walrus,
+    `with ... as`, and `except ... as`. It does **not** count:
+    - **`match` capture patterns** — `case len:` then `len(x)` calls the captured
+      value. Confirmed by two independent reviewers.
+    - **comprehension targets** — `[len(x) for len in fns]`. A comprehension has
+      its own scope in Python 3, so this needs comprehension scopes added, not
+      just another binding form.
+    - **`import` bindings** — `from m import len` then `len(xs)`. Arguably NOT a
+      bug: you deliberately imported something called `len` and calling it is
+      what you meant. Rule the intent before building it.
+  - **Why deferred:** every one is a false NEGATIVE, not a false positive, so
+    nothing breaks in a consumer while they wait. They were found during a ship
+    review and rushing them in behind a release is how the P1 in that same
+    review got introduced.
+  - **Start at:** `_bound_names` in `tessercheck-py/tessercheck/shadowing_check.py`,
+    and the `scopes` list in `check_shadowing` for the comprehension case.
+
+- [ ] **TB032's structural blind spot is wider than first recorded**
+  (adversarial review 2026-07-26)
+  - **What:** a module defining no test pytest would collect is never judged. The
+    known case was a helper-only module or `conftest.py`. Also uncollected, and
+    therefore unjudged: tests generated by assignment
+    (`test_x = make_case(...)`), and a project that redefines pytest's
+    `python_functions` / `python_classes` in its own config.
+  - **Why it matters:** `conftest.py` is where shared helpers actually go, so the
+    totality check is blind in the file most likely to need it.
+  - **Depends on:** deciding what makes a *non-test* module part of the test
+    tree — a scoping question this check does not answer today. Wants a ruling
+    before code.
 
 - [ ] **Relocate the architecture detectors out of `tests/`**
   - **What:** the ~15 AST-analysis functions in
