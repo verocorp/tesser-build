@@ -5,6 +5,69 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.12.0] - 2026-07-26
+
+Four of the seven hand-written architecture detectors in `examples/python-app`
+were re-deriving what two off-the-shelf tools already decide. They are now
+config. The split is by **who can decide the rule**, not by taste: ruff and
+import-linter take the generic import and API hygiene, and the three rules that
+encode this toolkit's own doctrine stay hand-written, because no tool covers
+them.
+
+The interesting residue is which three survived — no import-time side effects,
+host-routes-never-translates, and context discovery. Those are exactly the rules
+`srv.md` and `handlers.md` are named after. Generic architecture hygiene has
+tools; doctrine does not.
+
+One config decision is load-bearing and worth stealing: import-linter's
+`forbidden` contract is **transitive by default**, so
+`srv.http.main -> bootstrap.bootstrap -> linkpolicy` reads as a violation when
+it is precisely what a composition root is for. Every contract sets
+`allow_indirect_imports = true`. Without it the contracts are unusably red.
+
+### Added
+
+- **`examples/python-app/ruff.toml`** — the environment is read only in
+  `srv/*/main.py` and only the edge exits, as `TID251` banned-api plus
+  `per-file-ignores`; bare `exit`/`quit` via `PLR1722`, never lifted; and `F401`
+  so the tree consumers copy carries no dead imports. Ruff is strictly stronger
+  than the detector it replaced: it also catches `from os import getenv`, which
+  an attribute-only walk missed.
+- **`examples/python-app/.importlinter`** — three `forbidden` contracts: a host
+  reaches a context only through its `adapters.handlers`, linkpolicy imports no
+  peer, campaign never imports reports.
+- **`tests/test_architecture_teeth.py`** — a config is code, so it gets teeth.
+  Injects violations, runs each linter, asserts it still fails. Drilled against
+  five rot vectors (a deleted ban, `per-file-ignores` widened to `srv/**`, a
+  handler ignore widened to `campaign.**`, `allow_indirect_imports` removed,
+  `PLR1722` deselected) — each fails the test that owns it. Without this, any of
+  the five disables a rule with the suite green.
+- **A totality guard over the contracts** (`tests/test_discovery.py`): the
+  `.importlinter` *enumerates* contexts while this app *discovers* them, so a new
+  context would have been silently unguarded. The guard asserts every discovered
+  context appears in `root_packages` and in the host contract's
+  `forbidden_modules`, with teeth for an omission from either.
+- Two CI steps and two dev dependencies (`ruff`, `import-linter`). The analyzer
+  in `tessercheck-py` stays zero-dependency; these gate the example.
+
+### Changed
+
+- `bootstrap.md`, `srv.md`, `handlers.md`, `gateway-cross-context.md`, and
+  `map.md` cite the config that now enforces each rule.
+  `srv.md#tests-you-must-write` says to **declare** the env and exit rules in
+  ruff and then test the config, rather than to hand-write the AST walk.
+  skill-version 23 → 24.
+- `roadmap/registry.json`: four component rows and the dependency-direction rule
+  row point at what actually enforces them.
+
+### Removed
+
+- `tests/test_direction.py` entirely, and `_env_reads`, `_exits`,
+  `_env_offenders`, `_is_env_edge`, `_context_imports`, `_py_files` plus their
+  tests from `tests/test_enforcement.py`.
+- Two dead imports the new `F401` rule surfaced (`cliwire.py`,
+  `tests/test_canonical.py`).
+
 ## [0.0.11.1] - 2026-07-25
 
 A regression guard, not a feature. Streaming is deliberately **not** on the

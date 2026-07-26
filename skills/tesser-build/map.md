@@ -87,6 +87,12 @@ bootstrap ──▶ each context's wiring          (constructs, never the revers
 gateways ──implement──▶ ports the domain/application own
 ```
 
+Declare this, don't review it. The direction is a `forbidden` contract per edge
+in import-linter — verified in-example at `examples/python-app/.importlinter`,
+including the one config decision that matters: `allow_indirect_imports = true`,
+because the default is transitive and a composition root legitimately reaches
+every context. The same file holds the host to a context's `adapters.handlers`.
+
 **A cross-context CALL** (one context needs a peer's answer, synchronously):
 the caller owns a port in its own vocabulary; a gateway in the caller's
 `adapters/gateways` adapts the peer's `Client` to it; the composition root

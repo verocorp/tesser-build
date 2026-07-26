@@ -167,9 +167,11 @@ What the mandated minimum requires:
 ## How the machine sees it
 
 **Partially machine-checked.** The env-edge rule is enforced in the verified
-impl: `examples/python-app/tests/test_enforcement.py` fails on an environment
-read outside `srv/*/main` and on a non-edge exit; a generalized `tessercheck`
-check is scheduled follow-on work, not yet shipped. The wiring-boundary rules
+impl by a linter config, not a bespoke walk: `examples/python-app/ruff.toml`
+bans `os.getenv`/`os.environ` (and `sys.exit`/`os._exit`) as `TID251`
+banned-api, lifted by `per-file-ignores` only for `srv/*/main.py`. Ruff catches
+the `from os import getenv` alias form an attribute-only check would miss. A
+generalized `tessercheck` check is scheduled follow-on work, not yet shipped. The wiring-boundary rules
 remain **review, not the compiler**. The tells a reviewer looks for:
 - an **`os.getenv` / `os.Getenv` inside `bootstrap` or below** — the env edge
   has leaked inward (`srv.md`);
@@ -193,10 +195,10 @@ root/wiring is correct, the same call in a handler is the leak.
   in-memory-vs-real doctrine.
 - **Bootstrap never reads the environment:** `bootstrap.new` builds from a
   `Config` it is handed; env decoding is `bootstrap.config.from_env(getenv)`,
-  which consumes an *injected* getter and never calls `os.getenv` itself. An
-  enforcement test fails on `os.getenv`/`os.environ` access outside the hosts'
-  `main` modules (verified impl:
-  `examples/python-app/tests/test_enforcement.py`).
+  which consumes an *injected* getter and never calls `os.getenv` itself. The
+  gate fails on `os.getenv`/`os.environ` access outside the hosts' `main`
+  modules (verified impl: `examples/python-app/ruff.toml`, with
+  injected-violation teeth in `tests/test_architecture_teeth.py`).
 - **The graph is built once:** a host calls `bootstrap.new` exactly once
   (verified impl: `examples/python-app/tests/test_bootstrap_once.py`).
 

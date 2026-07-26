@@ -1,0 +1,62 @@
+# The import-direction rules, as contracts instead of an AST walk. Replaces
+# `_context_imports` in tests/test_enforcement.py and all of
+# tests/test_direction.py.
+#
+# `allow_indirect_imports = true` on every contract is load-bearing: import-linter's
+# default `forbidden` is transitive, so `srv.http.main -> bootstrap.bootstrap ->
+# linkpolicy` reads as a violation when it is exactly what a composition root is
+# for. These rules are about what a module *writes in its own import block*.
+#
+# Teeth: tests/test_architecture_teeth.py injects a service-layer import into a
+# host and a peer import into linkpolicy, and asserts both contracts break.
+
+[importlinter]
+root_packages =
+    campaign
+    linkpolicy
+    reports
+    srv
+    bootstrap
+include_external_packages = False
+unmatched_ignore_imports_alerting = error
+
+# A host reaches a context only through that context's handlers — never its
+# service, domain, client, or wiring. The wildcard is deliberate: it says "the
+# handlers role", so a context adding a subpackage does not open a hole, and a
+# new legal handler import needs no config edit. linkpolicy is listed with no
+# ignore because it owns no handler — no host may reach it at all.
+[importlinter:contract:host-reaches-only-handlers]
+name = a host reaches a context only through its handlers
+type = forbidden
+allow_indirect_imports = true
+source_modules =
+    srv
+forbidden_modules =
+    campaign
+    linkpolicy
+    reports
+ignore_imports =
+    srv.** -> campaign.adapters.handlers.**
+    srv.** -> reports.adapters.handlers.**
+
+# linkpolicy is the context campaign calls, so the dependency is one-way: campaign
+# owns the port, linkpolicy knows nothing of its caller.
+[importlinter:contract:linkpolicy-imports-no-peer]
+name = linkpolicy never imports a peer context
+type = forbidden
+allow_indirect_imports = true
+source_modules =
+    linkpolicy
+forbidden_modules =
+    campaign
+    reports
+
+# reports reads across contexts through their Clients; nothing reads back into it.
+[importlinter:contract:campaign-imports-no-reports]
+name = campaign never imports reports
+type = forbidden
+allow_indirect_imports = true
+source_modules =
+    campaign
+forbidden_modules =
+    reports

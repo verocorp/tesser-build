@@ -179,12 +179,14 @@ read endpoint over a cross-context read model).
 ## How the machine sees it
 
 No shipped analyzer targets handlers in this cut. What is machine-checked is
-the host↔handler boundary, and only in the verified impl's own tests
-(`examples/python-app/tests/test_enforcement.py`, AST): every context a host
-reaches owns a handler role; the HTTP host never calls a context `Client`
-(proven on injected violations, including the aliased form
-`reports = app.reports` that a naive attribute check would miss); and the host
-imports nothing from a context except its `adapters.handlers` — a `client`,
+the host↔handler boundary, in the verified impl only. Two halves:
+`examples/python-app/tests/test_enforcement.py` (AST) checks that every context
+a host reaches owns a handler role, and that the HTTP host never *calls* a
+context `Client` — proven on injected violations, including the aliased form
+`reports = app.reports` that a naive attribute check would miss. That one is
+reach-but-never-call, not an import rule, so no linter covers it. The import
+half is a `forbidden` contract in `examples/python-app/.importlinter`: the host
+imports nothing from a context except its `adapters.handlers`, so a `client`,
 `application`, or `domain` import in the host is the router reaching past the
 transform. Everything else is review plus the domain-logic leakage signal list
 (`application-services.md#domain-logic-leakage-checks`). Review-side tells:

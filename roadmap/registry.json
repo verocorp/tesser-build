@@ -144,7 +144,8 @@
       "go_analyzers": [],
       "py_checks": [],
       "enforcement_tests": [
-        "examples/python-app/tests/test_enforcement.py"
+        "examples/python-app/tests/test_enforcement.py",
+        "examples/python-app/tests/test_architecture_teeth.py"
       ],
       "rationale": []
     },
@@ -177,7 +178,7 @@
       "go_analyzers": [],
       "py_checks": [],
       "enforcement_tests": [
-        "examples/python-app/tests/test_direction.py",
+        "examples/python-app/tests/test_architecture_teeth.py",
         "examples/python-app/tests/test_call_fail_closed.py"
       ],
       "rationale": []
@@ -223,6 +224,7 @@
       "py_checks": [],
       "enforcement_tests": [
         "examples/python-app/tests/test_enforcement.py",
+        "examples/python-app/tests/test_architecture_teeth.py",
         "examples/python-app/tests/test_bootstrap_once.py",
         "examples/python-app/tests/test_cleanup.py"
       ],
@@ -241,7 +243,8 @@
       "go_analyzers": [],
       "py_checks": [],
       "enforcement_tests": [
-        "examples/python-app/tests/test_enforcement.py"
+        "examples/python-app/tests/test_enforcement.py",
+        "examples/python-app/tests/test_architecture_teeth.py"
       ],
       "rationale": []
     },
@@ -353,7 +356,7 @@
       "title": "Dependency direction (acyclic, inward)",
       "kind": "rule",
       "taught_in": "skills/tesser-build/map.md#how-contexts-connect",
-      "enforced_by": "import-linter \u2014 consumer-side declared layers/forbidden contracts (eng review 2A; a tessercheck-native direction check is deferred with this as its named standing enforcement)"
+      "enforced_by": "import-linter \u2014 forbidden contracts, verified in-example at examples/python-app/.importlinter (teeth: tests/test_architecture_teeth.py) and declared consumer-side (eng review 2A; a tessercheck-native direction check is deferred with this as its named standing enforcement)"
     }
   ]
 }

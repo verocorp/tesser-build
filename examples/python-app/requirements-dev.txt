@@ -1,6 +1,10 @@
-# Tooling for the wiring worked example — the type checker and test runner that
-# gate it. Everything the app itself imports is the Python standard library
-# (dataclasses, typing.Protocol, enum, http.server, json); these two are
-# dev-only.
+# Tooling for the wiring worked example — the type checker, the test runner, and
+# the two linters that own the architecture rules this app is gated on
+# (ruff.toml, .importlinter). Everything the app itself imports is the Python
+# standard library (dataclasses, typing.Protocol, enum, http.server, json);
+# these four are dev-only. The analyzer in tessercheck-py stays zero-dependency
+# — these gate the example, not the toolkit.
 mypy>=1.8
 pytest>=8.0
+ruff>=0.16
+import-linter>=2.13

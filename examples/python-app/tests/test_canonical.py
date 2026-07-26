@@ -8,7 +8,7 @@ from decimal import Decimal
 import pytest
 
 from campaign.domain.campaign import Campaign
-from campaign.domain.money import Money, MoneySpec
+from campaign.domain.money import Money
 from campaign.domain.short_link import ShortLink
 from serialization import canonical_datetime, canonical_decimal, canonical_str
 

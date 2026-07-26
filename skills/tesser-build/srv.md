@@ -41,7 +41,7 @@ Yes → a host.
    fail-fast. The host's `os.getenv` is the **only environment reference**, and
    `from_env` is the **one decoder that consumes it** — nothing else below the
    host calls `os.getenv`/`os.environ` (locked by
-   `examples/python-app/tests/test_enforcement.py`). It stays a pure function —
+   `examples/python-app/ruff.toml`). It stays a pure function —
    `getenv` is injected, and it is a module function, not a `Config` method — so
    it is testable with a dict and never a second, hidden config authority. One
    loader, called by every host, is what keeps the per-host `Config` literal
@@ -136,8 +136,8 @@ route table, one handler per command (`CliRequest → CliResponse`), the domain
 `Kind` set mapped to an exit code (`errors.exit_code_for`) as HTTP maps it to a
 status, and the host's own failures (unknown command → exit 2) rendered through
 the same `respond` vocabulary. Both hosts import only a context's
-`adapters.handlers`, never its `Client` — locked for all of `srv/` by
-`tests/test_enforcement.py`.
+`adapters.handlers`, never its `Client` — locked for all of `srv/` by a
+`forbidden` contract in `.importlinter`.
 
 ## Decisions you must make
 
@@ -156,10 +156,14 @@ the same `respond` vocabulary. Both hosts import only a context's
 
 ## How the machine sees it
 
-Machine-checked in the verified impl (`tests/test_enforcement.py`, real `ast`
-checks with injected-violation teeth): env reads (`os.getenv`/`os.environ`)
-only in `srv/*/main`; exits only in `srv/*/main`; no import-time side
-effects in contexts or bootstrap. Build-once is locked by
+Machine-checked in the verified impl, each rule by whatever can decide it:
+`ruff.toml` bans env reads (`os.getenv`/`os.environ`) and exits
+(`sys.exit`/`os._exit`, plus bare `exit`/`quit`) outside `srv/*/main`;
+`.importlinter` holds the host to a context's `adapters.handlers`;
+`tests/test_enforcement.py` keeps the `ast` check no tool covers — no
+import-time side effects in contexts or bootstrap. Both linter configs have
+injected-violation teeth in `tests/test_architecture_teeth.py`. Build-once is
+locked by
 `tests/test_bootstrap_once.py`. A generalized tessercheck check is scheduled
 follow-on work, not yet shipped. Review-side tells:
 - an **env read anywhere below `srv/`** — the deploy surface went invisible;
@@ -169,7 +173,7 @@ follow-on work, not yet shipped. Review-side tells:
   `for`-loop over domain objects here belongs in an application service;
 - a **context import in the host that isn't `adapters.handlers`** — a `client`,
   `application`, or `domain` import means the router reached past the
-  transform (locked for `srv/http` by `tests/test_enforcement.py`);
+  transform (locked for all of `srv/` by `.importlinter`);
 - **a branch per endpoint** in the request path instead of a route table —
   endpoints that don't share one signature, so they can't be routed uniformly;
 - **`json.loads`/`json.dumps` or a hardcoded `Content-Type` in the host** — the
@@ -178,10 +182,15 @@ follow-on work, not yet shipped. Review-side tells:
 
 ## Tests you must write
 
-- **Env reads only at the edge** — an enforcement test that walks the tree
-  and fails on `getenv`/`environ` outside `srv/*/main` (verified impl:
-  `test_enforcement.py`; prove it has teeth on an injected violation).
-- **Exits only at the edge** — same walk, `sys.exit`/`os._exit`.
+- **Env reads only at the edge** — don't hand-write this one. Ban
+  `os.getenv`/`os.environ` with ruff's `TID251` banned-api and lift it for
+  `srv/*/main.py` alone via `per-file-ignores` (verified impl: `ruff.toml`).
+- **Exits only at the edge** — same config: `TID251` on `sys.exit`/`os._exit`,
+  and `PLR1722` for bare `exit`/`quit`, which is never lifted.
+- **The linter config has teeth** — a config is code, and a widened
+  `per-file-ignores` disables a rule with the suite still green. Write the test
+  that injects a violation, runs the linter, and asserts it fails (verified
+  impl: `test_architecture_teeth.py`).
 - **The graph is built once and closed** — a host-shaped test that calls
   `bootstrap.new` once, exercises a `Client`, and `close()`s (idempotently)
   (verified impl: `test_bootstrap_once.py`).
