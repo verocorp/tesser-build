@@ -117,11 +117,17 @@ def _annotation_base(ann: ast.expr, depth: int = 0) -> str | None:
 _NOT_THE_VALUE: frozenset[str] = frozenset({"type", "Type", "Callable"})
 
 
-def _annotation_name_refs(
+def _annotation_refs(
     ann: ast.expr | None, *, returned_only: bool = False
-) -> "Iterator[tuple[str, ast.expr]]":
+) -> Iterator[tuple[str | None, ast.expr]]:
     """Yield ``(name, position_carrier)`` for every type name an annotation
-    names, string forward references resolved.
+    names, string forward references resolved. A ``None`` name marks a string
+    the walk treated as a forward reference and could not parse — the signal
+    that the annotation cannot be taken at its word. Keeping that signal inside
+    the one traversal is deliberate: an earlier cut computed it with a second
+    independent ``ast.walk``, which disagreed with this walk on both nested
+    quotes (garbage one quote deep went unseen) and Literal/Annotated strings
+    (values were parsed as types here and skipped there).
 
     The carrier is the node a report should point at: the ``Name``/``Attribute``
     itself, or — for a name found inside a string annotation — the outermost
@@ -132,7 +138,9 @@ def _annotation_name_refs(
     review caught both firing on conformant code): the values of a
     ``Literal[...]`` — ``Literal["Warehouse"]`` is a discriminator holding a
     string, not the type it happens to spell — and the metadata arguments of
-    ``Annotated[X, ...]``, where only ``X`` is the type.
+    ``Annotated[X, ...]``, where only ``X`` is the type. The skip is keyed on
+    the spelled base name, so an import alias (``Literal as L``) defeats it —
+    the alias-disguise class this analyzer scopes out everywhere.
 
     Iterative on an explicit stack: the deleted copies used ``ast.walk``, which
     no annotation could blow the interpreter stack on, and this walk must not
@@ -149,6 +157,8 @@ def _annotation_name_refs(
             parsed = _parse_forward_ref(node.value)
             if parsed is not None:
                 stack.append((parsed, string_depth + 1, carrier or node))
+            else:
+                yield None, (carrier if carrier is not None else node)
             continue
         if isinstance(node, ast.Subscript):
             base = _annotation_base(node.value)
@@ -196,24 +206,21 @@ def _annotation_names(ann: ast.expr | None, *, returned_only: bool = False) -> f
     net, the classifier's field census) must stay wide.
     """
     return frozenset(
-        name for name, _ in _annotation_name_refs(ann, returned_only=returned_only)
+        name
+        for name, _ in _annotation_refs(ann, returned_only=returned_only)
+        if name is not None
     )
 
 
 def _has_unparseable_forward_ref(ann: ast.expr | None) -> bool:
-    """True when any string in the annotation fails to parse as a forward
-    reference — the signal that the annotation as a whole cannot be taken at
-    its word, so a caller should fall back to inspecting the body. ``not
+    """True when any string the walk treats as a forward reference fails to
+    parse — the signal that the annotation as a whole cannot be taken at its
+    word, so a caller should fall back to inspecting the body. ``not
     _annotation_names(...)`` alone is not that signal: ``tuple["int", "not (("]``
-    credits ``tuple`` and ``int`` while silently dropping the garbage part."""
-    if ann is None:
-        return False
-    return any(
-        isinstance(node, ast.Constant)
-        and isinstance(node.value, str)
-        and _parse_forward_ref(node.value) is None
-        for node in ast.walk(ann)
-    )
+    credits ``tuple`` and ``int`` while silently dropping the garbage part.
+    Same traversal as the names, so nested quotes are seen through and a
+    Literal value / Annotated metadata string is never mistaken for garbage."""
+    return any(name is None for name, _ in _annotation_refs(ann))
 
 
 def _is_str_call(node: ast.expr) -> bool:

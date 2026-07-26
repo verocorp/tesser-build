@@ -32,8 +32,8 @@ from typing import Callable
 
 from tessercheck.astutil import (
     _annotation_base,
-    _annotation_name_refs,
     _annotation_names,
+    _annotation_refs,
     _has_unparseable_forward_ref,
     _name_of,
 )
@@ -896,7 +896,9 @@ def _held_type_refs(node: ast.ClassDef) -> list[tuple[str, int, int]]:
     seen: set[tuple[str, int, int]] = set()
 
     def collect(annotation: ast.expr) -> None:
-        for name, carrier in _annotation_name_refs(annotation):
+        for name, carrier in _annotation_refs(annotation):
+            if name is None:
+                continue
             key = (name, carrier.lineno, carrier.col_offset)
             if key not in seen:
                 seen.add(key)

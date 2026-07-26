@@ -2323,3 +2323,32 @@ def test_tb017_a_factory_returning_the_class_object_is_not_a_door() -> None:
             "        return cls\n"
         )
         assert "TB017" not in _codes(src), ann
+
+
+def test_tb017_garbage_nested_one_quote_deep_still_consults_the_body() -> None:
+    # The trust signal shares the walk's traversal, so it sees through a quote:
+    # "tuple[int, 'not valid (']" hides its garbage one string level down, and
+    # a signal computed by a separate flat ast.walk read it as trustworthy —
+    # quoting must not change the answer, in either direction.
+    src = _LEAF + (
+        "    @classmethod\n"
+        "    def parse(cls, raw: str) -> \"tuple[int, 'not valid (']\":\n"
+        "        return cls(raw)\n"
+    )
+    assert "TB017" in _codes(src)
+
+
+def test_tb017_multiword_literal_values_are_not_garbage() -> None:
+    # The inverse: Literal["percent off"] holds a VALUE with a space in it. The
+    # walk skips Literal values as non-types, so the trust signal must not
+    # parse them either — reading one as an unparseable forward reference sent
+    # a factory returning a multi-word Literal to body inspection and a TB017
+    # false positive.
+    src = _LEAF + (
+        "    @classmethod\n"
+        "    def describe(cls, raw: str) -> Literal['percent off', 'flat amount']:\n"
+        "        made = cls(raw)\n"
+        "        return 'percent off' if made else 'flat amount'\n"
+    )
+    src = "from typing import Literal\n" + src
+    assert "TB017" not in _codes(src)

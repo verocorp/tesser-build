@@ -383,6 +383,23 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   - **Start at:** add the pinned-policy assertions to errorspy's tests, or a
     drift test asserting the copies agree.
 
+- [ ] **The Literal/Annotated skip is keyed on the SPELLING, so an import
+  alias restores the false positive it fixed** (adversarial review 2026-07-26,
+  filed with a verified repro)
+  - **What:** `astutil._annotation_refs` skips a `Literal[...]` slice and
+    `Annotated`'s metadata by base name. `from typing import Literal as L` plus
+    `L["Warehouse"]` defeats the skip and the full Literal-as-forward-ref false
+    positive returns (TB012 + TB014 on a conformant discriminator field —
+    reproduced). A *type alias* (`Kind = Literal["Warehouse"]`) is safe.
+  - **Why not fixed now:** seeing through an import alias needs module-level
+    import context threaded into a pure expression walk — the alias-disguise
+    class this analyzer scopes out everywhere (classify's docstring: alias /
+    NewType / cross-module are the optional mypy plugin's job). This entry
+    exists because here the failure mode is the analyzer's own P1, not a
+    missed detection.
+  - **Start at:** decide whether checks get module import context as a general
+    capability; a one-off for Literal would be the fourth diverged walk.
+
 - [ ] **`ClassInfo.collection_element_names` is computed and never consumed**
   (2026-07-26, found while unifying the annotation-name walk)
   - **What:** `classify._collection_element_names` feeds a `ClassInfo` field with
