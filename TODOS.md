@@ -494,3 +494,78 @@ change; each waits for a real need.
     unexercised repo).
   - **Depends on:** a context that needs to persist. Until then, the
     credential-flow story stays doctrine, not code.
+
+## Testing norm — helper wave follow-ups (opened 2026-07-26, eng review)
+
+- [ ] **Relocate the architecture detectors out of `tests/`**
+  - **What:** the ~15 AST-analysis functions in
+    `examples/python-app/tests/{test_enforcement.py,discovery.py,test_direction.py}`
+    are real logic, not test scaffolding. Move them into a module outside the
+    test tree and hold them to the toolkit's own conventions.
+  - **Why:** `tests/` is an amnesty zone for **12 of the 14 shipped checks** —
+    TB001/TB002/TB003 are gated at `checks.py:110,125,205` and all of
+    TB010–TB018 at `checks.py:283 (if not is_test)`. Only TB020 and TB030
+    survive. The detectors sit inside that amnesty and it shows:
+    `_env_offenders(files: list[tuple[str, ast.Module]]) -> dict[str, list[int]]`,
+    `_clients_reached(...) -> tuple[set[str], list[int]]`,
+    `classify(root) -> tuple[list[str], list[str]]`. None would survive TB010
+    anywhere else in the repo. Chris named it: *"domain logic coupled with
+    testing interfaces"* — they should be built outside the example app and
+    follow tesser-build guidelines and checks themselves.
+  - **Same class as** the 10/10 learning `never-name-tessercheck-module-test-prefix`
+    — that one reached the amnesty by filename, this one by directory.
+  - **How:** ruff + import-linter adoption (Chris, parallel session) removes 4 of
+    the 7 detector groups first. Redesign only what survives:
+    `_import_time_side_effects`, `_clients_reached`, and `discovery.*` — the three
+    that encode tesser-build's own doctrine and have no off-the-shelf equivalent.
+  - **Cost warning:** outside the amnesty, TB001–TB018 apply, so the AST-analysis
+    domain needs real value objects instead of primitive-collection tuples. Wave-sized.
+  - **Depends on:** the ruff/import-linter work landing, so the surviving set is known.
+    Wants `/office-hours` before a plan.
+
+- [ ] **Test-argument pruning harness** (design refuted and repaired 2026-07-26)
+  - **What:** find arguments a test passes to a helper that do not affect the
+    outcome. Static tier: a kwarg whose literal equals the helper's declared
+    default is provably redundant (AST-only, free). Dynamic tier: delete a kwarg,
+    re-run that nodeid, still green means inert.
+  - **Why:** the norm says a test passes only the one or two arguments that
+    matter. Nothing checks it.
+  - **⚠️ The dynamic tier is unsafe without a contrast pre-pass.** Verified on
+    `examples/python`: pruning reduces `test_equality_is_identity_by_slug` to two
+    IDENTICAL constructions and the suite stays green; a regression in `__eq__`
+    then goes undetected where the unpruned test caught it (unpruned FAILED,
+    pruned 4 passed). It does the same to a well-factored single-claim test, so
+    this is **not** a test-quality problem — "the test still passes" is simply the
+    wrong oracle. An argument can be inert for an assertion's truth value while
+    being essential to its meaning.
+  - **Mutation testing does NOT rescue it.** Measured with mutmut 3.6.0:
+    byte-identical results before and after the damage (6 mutants, 3 killed,
+    2 survived, 1 no-tests). mutmut generates exactly two mutants for that
+    `__eq__` — `and`→`or` and `==`→`!=` — and both are killed by an assertion
+    pruning never touches. Operators substitute; they cannot synthesize a missing
+    input. **The "prune + mutate compose into a complete pair" hypothesis is dead;
+    do not rebuild it.**
+  - **The fix:** a contrast pre-pass. An argument that differs between two calls
+    to the same helper within one test is that test's comparison axis and is never
+    prunable. It must run BEFORE both tiers — in the verified repro the *static*
+    tier struck first.
+  - **Landscape (searched 2026-07-26):** nothing off the shelf. DSpot / AmPyfier /
+    Small-Amp are the same machinery pointed the other way (amplify, not reduce);
+    delta debugging / cause reduction is the right algorithm with no pytest
+    implementation; pytest-deadfixtures is a different granularity.
+  - **Depends on:** the helper norm landing — nothing to prune until helpers have
+    defaults.
+
+- [ ] **TB033 checker — rule its target first**
+  - **What:** the fixtures ship this wave; the checker does not. Unresolved:
+    does the builtin-shadowing ban target spec/DTO **field** names or helper
+    **parameter** names?
+  - **Why it matters:** a dataclass field named `id` shadows nothing — `id()`
+    stays callable. A function *parameter* named `id` genuinely shadows the
+    builtin inside that function's body. So the failure the ban prevents exists
+    only in the parameter case.
+  - **Measured blast radius (weak evidence — this is one repo of example code,
+    per Chris; do not weigh it heavily):** field-name target hits 4 spec/DTO
+    definitions and 13 reference sites; parameter target hits 1
+    (`examples/python/tests/test_repository.py:9`).
+  - **Depends on:** T7's fixtures landing, which encode whichever contract is chosen.
