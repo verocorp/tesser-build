@@ -178,7 +178,16 @@ def _annotation_names(ann: ast.expr) -> frozenset[str]:
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
             try:
                 parsed = ast.parse(node.value, mode="eval").body
-            except SyntaxError:
+            except (SyntaxError, ValueError, RecursionError, MemoryError):
+                # The string's CONTENT is arbitrary — this is the one place the
+                # checker parses text the outer file never had to parse, so it
+                # is the one place a legal file can defeat the parser. A long
+                # flat expression exhausts CPython's parser recursion, and
+                # RecursionError is not a SyntaxError: catching only that aborted
+                # the entire run on a file that parsed fine. The ``depth`` cap
+                # below cannot help, because the recursion is inside the parser,
+                # not inside visit(). Failing closed credits no name, so the
+                # helper reports as unclassified — the safe direction.
                 return
             visit(parsed, depth + 1)
             return

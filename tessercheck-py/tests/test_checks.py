@@ -2035,3 +2035,41 @@ def test_tb032_judges_a_unittest_testcase_whatever_it_is_named(declaration: str)
         "\n    def test_it(self) -> None:\n        assert _detect(1) == 1\n"
     )
     assert [f.line for f in _tb032(src)] == [1]
+
+
+def test_tb032_needs_a_collectible_test_not_merely_a_collectible_class() -> None:
+    # The class arm requires BOTH halves: a class pytest would collect AND a
+    # test_* method on it. A Test*-named class holding only helpers yields no
+    # tests, so the module is not a test module — the same known hole as a
+    # helper-only file, reached by a different route. Treating the class name
+    # alone as proof would judge a module pytest collects nothing from.
+    src = (
+        "def _detect(x: int) -> int:\n"
+        "    return x\n"
+        "class TestHelpers:\n"
+        "    def helper(self) -> int:\n"
+        "        return 1\n"
+    )
+    assert _tb032(src) == []
+
+
+def test_tb032_survives_an_annotation_that_defeats_the_parser() -> None:
+    # A fix-induced crash, caught by adversarial review before it shipped. The
+    # forward-reference repair parses the CONTENT of a string annotation — the
+    # one place this checker parses text the outer file never had to parse, and
+    # therefore the one place a legal file can defeat the parser. A long flat
+    # expression exhausts CPython's parser recursion, and RecursionError is not
+    # a SyntaxError, so catching only that aborted the ENTIRE run: every other
+    # file in the tree went unchecked because of one file.
+    #
+    # Failing closed means crediting no name, so the helper reports as
+    # unclassified rather than being waved through.
+    bomb = "a+" * 40000 + "b"
+    src = (
+        f'def _spec() -> "{bomb}":\n'
+        "    return 1\n"
+        "def test_it() -> None:\n"
+        "    assert _spec()\n"
+    )
+    findings = _tb032(src)
+    assert [f.line for f in findings] == [1]

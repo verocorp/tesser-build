@@ -384,6 +384,40 @@ Deferred work with context. Each entry carries enough for a cold pickup.
     route all three call sites through it — then re-run the gates, because the
     classifier seeing more types may change what the typed checks report.
 
+- [ ] **Suppression is a substring scan on the OLD checkers — now with a
+  verified repro** (2026-07-21; proven 2026-07-26)
+  - **Confirmed by running it, both directions:**
+    - `@dataclass(repr=("# tessercheck:ignore"))` silences **TB001**
+      (control fires TB001; spoofed returns nothing).
+    - `x = "# tessercheck:ignore"  # banned prose` silences **TB020**.
+    - The two checkers this wave ADDED resist it — TB032's `_comment_lines` and
+      TB033's `_suppressed_lines` both filter `token.type == tokenize.COMMENT`,
+      and a marker appearing only inside a string does NOT suppress them.
+  - **So the house pattern is already written, twice, in the new code.** What is
+    left is `checks.py:_suppressed` (TB001–TB004) and `comments_check.suppressed`
+    (TB020) still reading raw line text. Hoisting the tokenize-based reader into
+    `astutil.py` fixes both and collapses the `_SUPPRESS_MARKER` duplication
+    tracked above.
+  - **Honest bound:** an author who can edit the file can equally write a real
+    ignore comment, so this is an inconsistency and an audit-grep blind spot,
+    not a privilege boundary. That is why it is not a P1 — but it IS the kind of
+    thing that makes a `grep -c 'tessercheck:ignore'` audit lie.
+
+- [ ] **`@anything.fixture` exempts a function from TB032 with no declared fact**
+  (found independently by two reviewers, 2026-07-26)
+  - **What:** `_is_fixture` matches any decorator whose attribute is `fixture`,
+    so a decorator that has nothing to do with pytest waves a function through
+    the totality check — no marker, no record that anything was exempted.
+    Verified: returns no findings.
+  - **Why not fixed with the rest:** tightening to a pytest-rooted decorator
+    risks a FALSE POSITIVE on legitimate re-exports (`from conftest import
+    fixture`), and this wave already shipped one overcorrection that had to be
+    walked back. A self-service bypass by an author who could equally write the
+    marker is the cheaper failure.
+  - **Start at:** `helpers_check._is_fixture`. Decide first whether the rule is
+    "rooted at pytest" or "records the exemption somewhere", since those give
+    different designs.
+
 - [ ] **Suppression is a substring scan, and TB017/TB018 give it a natural
   surface** (2026-07-21, wave C2 review)
   - **What:** `# tessercheck:ignore` is resolved by scanning the raw source
