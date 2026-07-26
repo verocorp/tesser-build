@@ -2352,3 +2352,19 @@ def test_tb017_multiword_literal_values_are_not_garbage() -> None:
     )
     src = "from typing import Literal\n" + src
     assert "TB017" not in _codes(src)
+
+
+def test_tb017_garbage_inside_an_excluded_slot_does_not_discredit_the_annotation() -> None:
+    # The trust signal takes the same returned_only the name set beside it was
+    # computed with: `tuple[int, Callable[[], "junk ("]]` cleanly names types
+    # in returned position, and the garbage sits inside a Callable slot that is
+    # not the returned value — so the annotation is taken at its word and the
+    # constructing body is never consulted.
+    src = _LEAF + (
+        "    @classmethod\n"
+        "    def pair(cls, raw: str) -> tuple[int, Callable[[], 'junk (']]:\n"
+        "        made = cls(raw)\n"
+        "        return (1, lambda: made)\n"
+    )
+    src = "from typing import Callable\n" + src
+    assert "TB017" not in _codes(src)

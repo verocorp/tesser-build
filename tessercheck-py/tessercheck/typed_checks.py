@@ -559,7 +559,9 @@ def _check_single_door(
         # name" alone is not trust). An annotation that cleanly names some
         # OTHER type is taken at its word, so a helper that builds one
         # internally on the way to an int is not swept in.
-        unresolved = not returned or _has_unparseable_forward_ref(member.returns)
+        unresolved = not returned or _has_unparseable_forward_ref(
+            member.returns, returned_only=True
+        )
         if not (names_own_type or (unresolved and _constructs_own_type(member, node.name))):
             continue
         if suppressed(member.lineno):

@@ -212,15 +212,20 @@ def _annotation_names(ann: ast.expr | None, *, returned_only: bool = False) -> f
     )
 
 
-def _has_unparseable_forward_ref(ann: ast.expr | None) -> bool:
+def _has_unparseable_forward_ref(ann: ast.expr | None, *, returned_only: bool = False) -> bool:
     """True when any string the walk treats as a forward reference fails to
     parse — the signal that the annotation as a whole cannot be taken at its
     word, so a caller should fall back to inspecting the body. ``not
     _annotation_names(...)`` alone is not that signal: ``tuple["int", "not (("]``
     credits ``tuple`` and ``int`` while silently dropping the garbage part.
-    Same traversal as the names, so nested quotes are seen through and a
-    Literal value / Annotated metadata string is never mistaken for garbage."""
-    return any(name is None for name, _ in _annotation_refs(ann))
+    Same traversal as the names — pass the same ``returned_only`` the name set
+    was computed with — so nested quotes are seen through, a Literal value /
+    Annotated metadata string is never mistaken for garbage, and garbage inside
+    an excluded ``type[...]``/``Callable[...]`` slot cannot discredit an
+    annotation whose returned value reads cleanly."""
+    return any(
+        name is None for name, _ in _annotation_refs(ann, returned_only=returned_only)
+    )
 
 
 def _is_str_call(node: ast.expr) -> bool:
