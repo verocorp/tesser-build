@@ -141,8 +141,8 @@ CHECKS: tuple[CheckMeta, ...] = (
         "no-comments",
         "the comments norm v0: no code comments and no docstrings — machine "
         "directives (shebang, coding, type: ignore, noqa, tessercheck:ignore, "
-        "tb-* markers, pragma, formatter/linter controls) are exempt; "
-        "carve-outs are added only from discovered evidence "
+        "tb-* markers, tesser-category:, pragma, formatter/linter controls) "
+        "are exempt; carve-outs are added only from discovered evidence "
         "(skills/tesser-build/comments.md)",
     ),
     CheckMeta(

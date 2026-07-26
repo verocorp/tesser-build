@@ -313,12 +313,25 @@ def test_tb020_flags_class_and_async_function_docstrings() -> None:
         "# tb-" + "cell: value-objects py-example",
         "# tb-" + "status: green",
         "# tb-" + "allow-missing: some/path",
+        "# tesser-category: spec",
     ],
 )
 def test_tb020_directive_ledger_entries_are_exempt(comment: str) -> None:
     # The fixture proves only shebang/noqa/type:/pragma. These remaining ledger
     # entries live inside the directive regex, invisible to branch coverage —
     # dropping an alternation would pass every other test.
+    assert _tb020(f"x = 1  {comment}\n") == []
+
+
+@pytest.mark.parametrize(
+    "comment",
+    ["# tesser-category: spce", "# tesser-category:", "# tesser-category: dtoo"],
+)
+def test_tb020_exempts_a_malformed_category_marker_too(comment: str) -> None:
+    # The exemption is on the PREFIX, deliberately. A typo'd or empty category
+    # is TB032's finding to report; if TB020 also fired, the author would be
+    # told they wrote a banned comment when what they wrote was a misspelled
+    # directive — and the comments-norm diagnosis is the misleading one.
     assert _tb020(f"x = 1  {comment}\n") == []
 
 

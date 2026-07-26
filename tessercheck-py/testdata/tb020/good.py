@@ -26,3 +26,13 @@ def ruff_controlled(x: int) -> int:
 # tb-allow-missing: examples/app
 def marked(x: int) -> int:
     return x
+
+
+# tesser-category: spec
+def categorized(x: int) -> int:
+    return x
+
+
+# tesser-category: spce
+def misspelled(x: int) -> int:
+    return x

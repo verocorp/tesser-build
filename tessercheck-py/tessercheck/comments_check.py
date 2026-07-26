@@ -5,10 +5,16 @@ are exempt (instructions to tools, not prose): shebang, PEP 263 coding
 declarations (lines 1-2 only — an unanchored "coding" exemption let prose
 containing the word escape), ``type: ignore``, ``noqa``,
 ``tessercheck:ignore``, the tb-cell/tb-status/tb-allow-missing roadmap
-marker grammar, ``pragma``, and formatter/linter control lines. The
-exemption ledger grows only from discovered evidence — extend it in
-``comments.md`` and here in the same change. Applies to test files too
-(the norm has no test scope).
+marker grammar, the ``tesser-category:`` helper marker, ``pragma``, and
+formatter/linter control lines. The exemption ledger grows only from
+discovered evidence — extend it in ``comments.md`` and here in the same
+change. Applies to test files too (the norm has no test scope).
+
+The ``tesser-category:`` exemption matches the marker's PREFIX, not a valid
+category name: an unknown name is TB032's finding to report, and reporting it
+here as well would tell the author they wrote a banned comment when what they
+wrote was a typo'd directive. :mod:`tessercheck.markers` owns the vocabulary
+both checks read.
 """
 
 import ast
@@ -18,9 +24,11 @@ import tokenize
 from typing import TypeGuard
 
 from tessercheck.finding import Finding
+from tessercheck.markers import CATEGORY_DIRECTIVE_PATTERN
 
 _DIRECTIVE = re.compile(
     r"^#\s*(!|type:|noqa|tessercheck:ignore|tb-(?:cell|status|allow-missing):"
+    rf"|{CATEGORY_DIRECTIVE_PATTERN}"
     r"|pragma|fmt:|isort:|ruff:)"
 )
 _CODING_DECL = re.compile(r"^#.*?coding[:=]\s*[-\w.]+")
