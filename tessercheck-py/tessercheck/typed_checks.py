@@ -30,7 +30,12 @@ key on what a class *is* (``classify.ClassInfo``):
 import ast
 from typing import Callable
 
-from tessercheck.astutil import _annotation_base, _name_of
+from tessercheck.astutil import (
+    _annotation_base,
+    _annotation_names,
+    _name_of,
+    _parse_forward_ref,
+)
 from tessercheck.classify import ClassInfo, Stereotype
 from tessercheck.finding import Finding
 
@@ -171,32 +176,6 @@ def _defined_conversion_dunders(node: ast.ClassDef) -> list[ast.FunctionDef]:
     ]
 
 
-def _annotation_names(ann: ast.expr | None) -> set[str]:
-    """Every type name anywhere in an annotation, string forward references
-    resolved. ``"Slug"``, ``Slug | None`` and ``Optional["Slug"]`` all yield
-    ``Slug`` — a wrapper is not an escape hatch, and a quoted annotation is the
-    ordinary way to name your own class before it exists."""
-    if ann is None:
-        return set()
-    names: set[str] = set()
-    for sub in ast.walk(ann):
-        if isinstance(sub, ast.Name):
-            names.add(sub.id)
-        elif isinstance(sub, ast.Attribute):
-            names.add(sub.attr)
-        elif isinstance(sub, ast.Constant) and isinstance(sub.value, str):
-            try:
-                names |= _annotation_names(ast.parse(sub.value, mode="eval").body)
-            except (SyntaxError, ValueError, MemoryError, RecursionError):
-                # A string annotation is never compiled by Python, so it can hold
-                # anything at all — including an expression deep enough that the
-                # parser overflows its stack (MemoryError, NOT SyntaxError) or
-                # recurses past the limit. Falling back to the raw text keeps one
-                # pathological source file from aborting the whole tree scan.
-                names.add(sub.value)
-    return names
-
-
 def _decorator_names(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
     return {
         name
@@ -207,20 +186,10 @@ def _decorator_names(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
 
 def _contains_primitive(ann: ast.expr | None) -> bool:
     """True when any name anywhere in the annotation is a banned primitive —
-    so ``str | None``, ``Optional[str]``, and a container of primitives all
-    count, not just a bare ``str`` (a union wrapper is not an escape hatch)."""
-    if ann is None:
-        return False
-    for sub in ast.walk(ann):
-        if isinstance(sub, ast.Name):
-            name: str | None = sub.id
-        elif isinstance(sub, ast.Attribute):
-            name = sub.attr
-        else:
-            continue
-        if name in _PRIMITIVE_TYPES:
-            return True
-    return False
+    so ``str | None``, ``Optional[str]``, ``"str"`` quoted, and a container of
+    primitives all count, not just a bare ``str`` (neither a union wrapper nor
+    a forward-reference quote is an escape hatch)."""
+    return bool(_annotation_names(ann) & _PRIMITIVE_TYPES)
 
 
 def check_typed(
@@ -581,10 +550,11 @@ def _check_single_door(
         returned = _annotation_names(member.returns)
         names_own_type = bool({node.name, "Self"} & returned)
         # The body is consulted only when the annotation tells us nothing we can
-        # trust — absent, empty, or unparseable text. An annotation that cleanly
-        # names some OTHER type is taken at its word, so a helper that builds one
-        # internally on the way to an int is not swept in.
-        unresolved = not returned or not all(n.isidentifier() for n in returned)
+        # trust — absent, or text no parse could credit a name from. An
+        # annotation that cleanly names some OTHER type is taken at its word, so
+        # a helper that builds one internally on the way to an int is not swept
+        # in.
+        unresolved = not returned
         if not (names_own_type or (unresolved and _constructs_own_type(member, node.name))):
             continue
         if suppressed(member.lineno):
@@ -911,12 +881,27 @@ def _held_type_refs(node: ast.ClassDef) -> list[tuple[str, int, int]]:
     (dataclass-style). ``list[Warehouse]`` yields both ``list`` and ``Warehouse``
     — the caller resolves each against the registry, so container names simply
     don't match. De-duplicated by (name, line, col).
+
+    A string forward reference is read through — ``other: "Warehouse"`` holds a
+    Warehouse exactly as the unquoted form does, so quoting must not be an
+    escape hatch from TB012. Names found inside the string carry the string's
+    own position (the content has no position of its own in the outer file).
     """
     refs: list[tuple[str, int, int]] = []
     seen: set[tuple[str, int, int]] = set()
 
     def collect(annotation: ast.expr) -> None:
         for sub in ast.walk(annotation):
+            if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+                parsed = _parse_forward_ref(sub.value)
+                if parsed is None:
+                    continue
+                for name in _annotation_names(parsed):
+                    key = (name, sub.lineno, sub.col_offset)
+                    if key not in seen:
+                        seen.add(key)
+                        refs.append(key)
+                continue
             if isinstance(sub, ast.Name):
                 key = (sub.id, sub.lineno, sub.col_offset)
             elif isinstance(sub, ast.Attribute):

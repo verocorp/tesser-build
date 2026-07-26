@@ -383,21 +383,17 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   - **Start at:** add the pinned-policy assertions to errorspy's tests, or a
     drift test asserting the copies agree.
 
-- [ ] **THREE copies of the annotation-name walk, and they have now diverged**
-  (2026-07-21; sharpened 2026-07-26)
-  - **What:** `classify._all_names`, `typed_checks._annotation_names`, and — since
-    the test-helper wave — `helpers_check._annotation_names`. `astutil.py` exists
-    for exactly this sharing.
-  - **The divergence is no longer cosmetic.** Only the `helpers_check` copy
-    resolves string forward references and refuses to credit a name inside
-    `type[X]` / `Callable[..., X]`. Both behaviors were added because adversarial
-    review proved their absence was a false positive and a false negative
-    respectively. **The classifier still cannot see through a quoted annotation**,
-    which means every classifier-keyed check (TB010–TB018) has the false positive
-    that TB032 just fixed.
-  - **Start at:** move the forward-ref-resolving version into `astutil.py` and
-    route all three call sites through it — then re-run the gates, because the
-    classifier seeing more types may change what the typed checks report.
+- [ ] **`ClassInfo.collection_element_names` is computed and never consumed**
+  (2026-07-26, found while unifying the annotation-name walk)
+  - **What:** `classify._collection_element_names` feeds a `ClassInfo` field with
+    zero readers outside `classify.py` (verified by grep across `tessercheck/`
+    and `tests/`). It also still misses a *fully*-quoted collection annotation
+    (`links: "tuple[ShortLink, ...]"` is a `Constant`, not a `Subscript`, so the
+    collection test fails before the elements are read) — inert only because
+    nothing consumes the field.
+  - **Start at:** decide whether a check will ever key on "collection of X"
+    separately from `field_type_names`; if not, delete the field, and if so,
+    unquote the annotation before the `Subscript` test in the same change.
 
 - [ ] **Suppression is a substring scan on the OLD checkers — now with a
   verified repro** (2026-07-21; proven 2026-07-26)

@@ -2073,3 +2073,125 @@ def test_tb032_survives_an_annotation_that_defeats_the_parser() -> None:
     )
     findings = _tb032(src)
     assert [f.line for f in findings] == [1]
+
+
+# --- quoted annotations are not an escape hatch, anywhere ---------------------
+#
+# The annotation-name walk existed as three diverged copies, and only the
+# newest (TB032's) resolved string forward references. Every check keyed on the
+# classifier therefore false-positived on conformant quoted-annotation code
+# (TB015 fired on every leaf VO in all four example trees under quoting), while
+# the checks reading annotations directly false-negatived (a quote hid a
+# primitive from TB010 and a held root from TB012). One shared walk in astutil
+# now serves every reader; these lock each formerly-divergent behavior.
+
+
+def test_classifier_reads_quoted_annotations_identically() -> None:
+    from tessercheck.classify import classify_sources
+
+    src = (
+        "from dataclasses import dataclass\n"
+        "@dataclass(frozen=True)\n"
+        "class LinkSpec:\n"
+        "    slug: str\n"
+        "class ShortLink:\n"
+        "    def __init__(self, spec: {q}LinkSpec{q}) -> None:\n"
+        "        self._slug = spec.slug\n"
+        "    def __eq__(self, other: object) -> bool:\n"
+        "        return isinstance(other, ShortLink) and other._slug == self._slug\n"
+        "class Campaign:\n"
+        "    def __init__(self) -> None:\n"
+        "        self._links: {q}tuple[ShortLink, ...]{q} = ()\n"
+        "    def __eq__(self, other: object) -> bool:\n"
+        "        return other is self\n"
+        "    @property\n"
+        "    def links(self) -> {q}tuple[ShortLink, ...]{q}:\n"
+        "        return self._links\n"
+    )
+    plain = classify_sources({"m.py": src.replace("{q}", "")})
+    quoted = classify_sources({"m.py": src.replace("{q}", "'")})
+    for name in plain:
+        assert quoted[name].stereotype is plain[name].stereotype, name
+        assert quoted[name].embeds_entity == plain[name].embeds_entity, name
+        assert quoted[name].is_member == plain[name].is_member, name
+        assert quoted[name].field_type_names == plain[name].field_type_names, name
+    assert plain["Campaign"].is_aggregate_root
+
+
+def test_tb015_quoted_leaf_annotation_is_still_a_leaf() -> None:
+    # The false positive that made the divergence a live bug: a quoted backing
+    # field read as "not a scalar", the leaf became structured, and its one
+    # legitimate exit was flagged as an illegal dunder — on every leaf VO in
+    # all four example trees.
+    src = (
+        "from dataclasses import dataclass\n"
+        "@dataclass(frozen=True)\n"
+        "class Slug:\n"
+        "    _value: 'str'\n"
+        "    def __str__(self) -> 'str':\n"
+        "        return self._value\n"
+    )
+    assert "TB015" not in _codes(src)
+
+
+def test_tb010_quoted_primitive_return_is_not_an_escape_hatch() -> None:
+    # The mirror-image false negative: the direct annotation readers had NO
+    # forward-reference resolution, so quoting a primitive hid it from the
+    # accessor ban.
+    src = (
+        "from dataclasses import dataclass\n"
+        "@dataclass(frozen=True)\n"
+        "class Slot:\n"
+        "    _key: str\n"
+        "    def key(self) -> 'str':\n"
+        "        return self._key\n"
+    )
+    assert "TB010" in _codes(src)
+
+
+def test_tb012_quoted_held_root_is_not_an_escape_hatch() -> None:
+    base = (
+        "class Shelf:\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self._id = id\n"
+        "    def __eq__(self, other: object) -> bool:\n"
+        "        return isinstance(other, Shelf) and other._id == self._id\n"
+        "class Warehouse:\n"
+        "    def __init__(self, id: str, shelves: list[Shelf]) -> None:\n"
+        "        self._id = id\n"
+        "        self._shelves = list(shelves)\n"
+        "    __eq__ = None  # type: ignore[assignment]\n"
+        "class Order:\n"
+        "    def __init__(self, id: str, warehouse: {ann}) -> None:\n"
+        "        self._id = id\n"
+        "        self._warehouse = warehouse\n"
+        "    __eq__ = None  # type: ignore[assignment]\n"
+    )
+    plain = {f.code for f in check_source("t.py", base.replace("{ann}", "Warehouse"), is_test=False)}
+    quoted_findings = check_source("t.py", base.replace("{ann}", "'Warehouse'"), is_test=False)
+    quoted = {f.code for f in quoted_findings}
+    assert "TB012" in plain
+    assert "TB012" in quoted
+    held = [f for f in quoted_findings if f.code == "TB012"]
+    assert held[0].line == 12
+
+
+def test_classifier_survives_an_annotation_that_defeats_the_parser() -> None:
+    # Same bomb as TB032's regression above, aimed at the classifier and the
+    # typed checks now that they parse string annotations too: one pathological
+    # field annotation must not abort the file, and failing closed means the
+    # quoted name credits nothing.
+    bomb = "a+" * 40000 + "b"
+    src = (
+        "from dataclasses import dataclass\n"
+        "@dataclass(frozen=True)\n"
+        "class Slug:\n"
+        f"    _value: '{bomb}'\n"
+        "    def __str__(self) -> str:\n"
+        "        return self._value\n"
+        "class Held:\n"
+        f"    def __init__(self, x: '{bomb}') -> None:\n"
+        "        self._x = x\n"
+        "    __eq__ = None  # type: ignore[assignment]\n"
+    )
+    check_source("t.py", src, is_test=False)

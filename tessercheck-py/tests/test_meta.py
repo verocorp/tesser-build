@@ -142,3 +142,57 @@ def test_analyzer_passes_its_own_checks() -> None:
     findings = [f for f in findings if f.code != "TB020"]
     assert findings == [], "\n".join(f.render() for f in findings)
     assert errors == [], "\n".join(errors)
+
+
+class _QuoteAnnotations(ast.NodeTransformer):
+    """Rewrite every annotation into its string-forward-reference form."""
+
+    def _quote(self, ann: ast.expr | None) -> ast.expr | None:
+        if ann is None or (isinstance(ann, ast.Constant) and isinstance(ann.value, str)):
+            return ann
+        return ast.copy_location(ast.Constant(value=ast.unparse(ann)), ann)
+
+    def visit_arg(self, node: ast.arg) -> ast.arg:
+        self.generic_visit(node)
+        node.annotation = self._quote(node.annotation)
+        return node
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
+        self.generic_visit(node)
+        node.returns = self._quote(node.returns)
+        return node
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AsyncFunctionDef:
+        self.generic_visit(node)
+        node.returns = self._quote(node.returns)
+        return node
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> ast.AnnAssign:
+        self.generic_visit(node)
+        annotation = self._quote(node.annotation)
+        assert annotation is not None
+        node.annotation = annotation
+        return node
+
+
+def test_quoting_every_annotation_changes_no_finding() -> None:
+    # Metamorphic invariance over the acceptance-gate tree: a string annotation
+    # is the same annotation, so quoting every one of them must not change a
+    # single finding. This is the whole-analyzer guard against the walk
+    # re-diverging — when it had, this exact sweep produced TB015 on every leaf
+    # value object in all four example trees. Both sides are ast.unparse'd so
+    # comment-carried markers (# tesser-category:) are stripped equally and
+    # line numbers stay comparable.
+    for path in sorted(_EXAMPLES.rglob("*.py")):
+        src = path.read_text(encoding="utf-8")
+        base = ast.unparse(ast.parse(src))
+        quoted_tree = _QuoteAnnotations().visit(ast.parse(src))
+        quoted = ast.unparse(ast.fix_missing_locations(quoted_tree))
+        is_test = path.name.startswith("test_")
+        base_findings = {(f.code, f.line) for f in check_source(str(path), base, is_test=is_test)}
+        quoted_findings = {(f.code, f.line) for f in check_source(str(path), quoted, is_test=is_test)}
+        assert base_findings == quoted_findings, (
+            f"{path}: quoting annotations changed findings — "
+            f"added {sorted(quoted_findings - base_findings)}, "
+            f"lost {sorted(base_findings - quoted_findings)}"
+        )

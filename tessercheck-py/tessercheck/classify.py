@@ -20,7 +20,12 @@ import os
 from dataclasses import dataclass
 from enum import Enum
 
-from tessercheck.astutil import _annotation_base, _dataclass_frozen, _name_of
+from tessercheck.astutil import (
+    _annotation_base,
+    _annotation_names,
+    _dataclass_frozen,
+    _name_of,
+)
 
 # Annotation bases that denote a *collection of* their element type. Owning a
 # collection of domain objects is the structural signal of an aggregate role.
@@ -85,22 +90,11 @@ def _is_property(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     return any(_name_of(dec) == "property" for dec in fn.decorator_list)
 
 
-def _all_names(node: ast.expr) -> frozenset[str]:
-    """Every ``Name``/``Attribute`` identifier anywhere in an annotation."""
-    names: set[str] = set()
-    for child in ast.walk(node):
-        if isinstance(child, ast.Name):
-            names.add(child.id)
-        elif isinstance(child, ast.Attribute):
-            names.add(child.attr)
-    return frozenset(names)
-
-
 def _collection_element_names(ann: ast.expr) -> frozenset[str]:
     """Element type names of a collection annotation (``list[ShortLink]`` ->
     ``{ShortLink}``); empty for a non-collection annotation."""
     if isinstance(ann, ast.Subscript) and _annotation_base(ann.value) in _COLLECTION_BASES:
-        return _all_names(ann.slice)
+        return _annotation_names(ann.slice)
     return frozenset()
 
 
@@ -142,7 +136,7 @@ def _scan_class(node: ast.ClassDef, module: str) -> _Scan:
                 for arg in params:
                     if arg.arg == "self" or arg.annotation is None:
                         continue
-                    field_types |= _all_names(arg.annotation)
+                    field_types |= _annotation_names(arg.annotation)
                     collection_elems |= _collection_element_names(arg.annotation)
             elif _is_property(stmt) and stmt.returns is not None:
                 # A plain-class entity declares its composition through its
@@ -150,13 +144,13 @@ def _scan_class(node: ast.ClassDef, module: str) -> _Scan:
                 # field's type (``links -> tuple[ShortLink, ...]`` embeds
                 # ShortLink). This is the reliable signal now that construction
                 # takes the spec, not the already-built value objects.
-                field_types |= _all_names(stmt.returns)
+                field_types |= _annotation_names(stmt.returns)
                 collection_elems |= _collection_element_names(stmt.returns)
         elif isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
             fname = stmt.target.id
             if fname.startswith("_"):
                 has_underscore_field = True
-            field_types |= _all_names(stmt.annotation)
+            field_types |= _annotation_names(stmt.annotation)
             collection_elems |= _collection_element_names(stmt.annotation)
         elif isinstance(stmt, ast.Assign):
             # ``__eq__ = None`` — the non-comparable identity-object marker.
