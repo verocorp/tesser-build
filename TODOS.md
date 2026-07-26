@@ -569,3 +569,27 @@ change; each waits for a real need.
     definitions and 13 reference sites; parameter target hits 1
     (`examples/python/tests/test_repository.py:9`).
   - **Depends on:** T7's fixtures landing, which encode whichever contract is chosen.
+
+- [ ] **Revisit the inlined e2e HTTP client in `examples/python/tests/test_wiring.py`**
+  - **What:** T4c of the helper wave inlines `_request(method, url, body=None)` at its 6
+    call sites, per Chris's 2026-07-26 ruling. Revisit at the end of this gstack
+    workstream, or later, once the marker mechanism has shipped.
+  - **Why it was ruled that way:** `_request` fails the helper rule unambiguously — it has
+    required params, a ternary, a `try/except`, and calls into `urllib.request` and `json`.
+    That is logic, not defaults. Inlining is the reading of the rule that needs no new
+    machinery, so it is the one that ships first.
+  - **The cost that makes it worth revisiting:** ~54 lines of urllib boilerplate replace 6
+    calls, inside `examples/python` — the canonical worked example consumers read. The rule
+    is served and the example gets harder to read. That trade was made knowingly.
+  - **The two alternatives, both still open and both cheaper *after* this wave than before:**
+    1. Move it out of `tests/` as a small test-support HTTP client held to the toolkit's
+       conventions — folds into the detector-relocation TODO above, which has the same shape
+       (real logic living inside the `tests/` amnesty zone).
+    2. Rule "hand-written client for an e2e test" a permitted category and annotate it with
+       the `# tesser-category:` marker TB032 introduces. This is what the annotation
+       mechanism exists for, but it needs a category name, and naming the vocabulary before
+       the mechanism ships is backwards.
+  - **Decide it with:** whether a second instance of this shape shows up. One e2e HTTP
+    client is an anecdote; two is a category worth naming.
+  - **Depends on:** T4c landing (the inline), and TB032's marker mechanism existing (for
+    option 2).
