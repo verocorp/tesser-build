@@ -40,4 +40,4 @@ here honestly instead of bending the component columns.
 
 | Rule | Taught in | Enforced by | Status |
 |---|---|---|---|
-| Dependency direction (acyclic, inward) | `skills/tesser-build/map.md#how-contexts-connect` | import-linter — consumer-side declared layers/forbidden contracts (eng review 2A; a tessercheck-native direction check is deferred with this as its named standing enforcement) | ✅ taught + enforcer declared |
+| Dependency direction (acyclic, inward) | `skills/tesser-build/map.md#how-contexts-connect` | import-linter — forbidden contracts, verified in-example at examples/python-app/.importlinter (teeth: tests/test_architecture_teeth.py) and declared consumer-side (eng review 2A; a tessercheck-native direction check is deferred with this as its named standing enforcement) | ✅ taught + enforcer declared |

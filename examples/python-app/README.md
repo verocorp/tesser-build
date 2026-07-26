@@ -106,15 +106,32 @@ traceback.
 
 ```
 pip install -r requirements-dev.txt
+ruff check .
+PYTHONPATH=. lint-imports
 MYPYPATH=. mypy --strict errors.py lifecycle.py serialization.py httpwire.py cliwire.py campaign linkpolicy reports bootstrap srv tests conftest.py
 pytest -q
 ```
 
-`mypy --strict` + `pytest` are the same bar the other examples meet. The
-`tests/test_enforcement.py` checks (env calls only in `srv/*/main`; only the edge
-exits; no import-time side effects) and `tests/test_direction.py` (linkpolicy never
-imports campaign) are **executable spec** — they fail on the violations the template
-exists to prevent, and a clone inherits them by copying the tree. Contexts are
+`mypy --strict` + `pytest` are the same bar the other examples meet. On top of
+them, the architecture rules are **executable spec** — they fail on the violations
+this anatomy exists to prevent, and a clone inherits them by copying the tree.
+They are split by who can decide them:
+
+| Rule | Enforced by |
+|---|---|
+| the environment is read only in `srv/*/main.py` | `ruff.toml` — `TID251` banned-api + `per-file-ignores` |
+| only the edge exits | `ruff.toml` — `TID251` on `sys.exit`/`os._exit`, `PLR1722` on bare `exit`/`quit` |
+| a host reaches a context only through its handlers | `.importlinter` — `forbidden` contract |
+| no peer imports between contexts | `.importlinter` — `forbidden` contracts |
+| no import-time side effects | `tests/test_enforcement.py` (AST) |
+| a host routes and never translates | `tests/test_enforcement.py` (AST) |
+
+The three rules with no off-the-shelf enforcer are the ones encoding doctrine
+rather than generic import hygiene, so they stay hand-written. Both linter configs
+are themselves held to the repo's teeth standard by
+`tests/test_architecture_teeth.py`, which injects violations and asserts the
+configs still fail on them — a widened `per-file-ignores` or a flipped
+`allow_indirect_imports` would otherwise disable a rule with CI green. Contexts are
 **discovered, not enumerated** (`tests/discovery.py`: any root package exposing a
 `Client`), so a new context is checked by construction; the totality guard fails
 on any root package that classifies as neither an app-level piece nor a

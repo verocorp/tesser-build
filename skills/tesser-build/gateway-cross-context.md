@@ -41,8 +41,9 @@ behind an interface the calling context owns?* Yes → cross-context gateway.
    the adapter (it is the one place allowed to know both contexts) and injects
    it (`bootstrap.md`).
 3. **Dependencies run one way.** campaign → linkpolicy means linkpolicy never
-   imports campaign — locked by a direction test in the verified impl
-   (`examples/python-app/tests/test_direction.py`). A would-be cycle is a
+   imports campaign — locked by a `forbidden` contract in the verified impl
+   (`examples/python-app/.importlinter`, with injected-violation teeth in
+   `tests/test_architecture_teeth.py`). A would-be cycle is a
    boundary error, not a wiring problem (`strategic-design.md#bounded-contexts`).
 4. **Synchronous calls are fail-closed.** A policy rejection *or* a peer outage
    fails the use case honestly — the gateway propagates the peer's infra error,
