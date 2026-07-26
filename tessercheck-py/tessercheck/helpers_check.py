@@ -63,6 +63,7 @@ import ast
 import io
 import tokenize
 
+from tessercheck.astutil import _annotation_base
 from tessercheck.classify import ClassInfo, Stereotype, classify_trees
 from tessercheck.finding import Finding
 from tessercheck.markers import (
@@ -99,7 +100,45 @@ def _is_test_function(node: ast.AST) -> bool:
 
 
 def _defines_a_test(tree: ast.Module) -> bool:
-    return any(_is_test_function(node) for node in ast.walk(tree))
+    """A module pytest would actually collect tests from.
+
+    Deliberately NOT "any ``test_*`` anywhere in the tree". A walk that loose
+    reads a production ``Client.test_connection()`` as proof the file is a test
+    module and subjects every module-level function beside it to TB032 — a
+    false positive in ordinary production code, in someone else's CI.
+
+    So mirror pytest's own collection: a module-level ``test_*`` function, or a
+    ``test_*`` method on a class named ``Test*`` (pytest's default
+    ``python_classes``). That keeps the class-based style covered — which is the
+    whole reason this walks past ``tree.body`` — while a class named anything
+    else is just a class.
+    """
+    for node in tree.body:
+        if _is_test_function(node):
+            return True
+        if isinstance(node, ast.ClassDef) and _is_test_class(node):
+            if any(_is_test_function(m) for m in node.body):
+                return True
+    return False
+
+
+def _is_test_class(node: ast.ClassDef) -> bool:
+    """A class pytest collects tests from: named ``Test*``, or a
+    ``unittest.TestCase`` subclass.
+
+    The TestCase arm is not decoration. pytest collects a TestCase subclass
+    whatever it is called, so ``class CampaignCase(unittest.TestCase)`` holds
+    real tests — and without this arm the whole module's helpers go unjudged,
+    which is a silent coverage loss in the most standard test style there is.
+    """
+    if node.name.startswith("Test"):
+        return True
+    for base in node.bases:
+        if isinstance(base, ast.Name) and base.id == "TestCase":
+            return True
+        if isinstance(base, ast.Attribute) and base.attr == "TestCase":
+            return True
+    return False
 
 
 def _is_fixture(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
@@ -112,13 +151,63 @@ def _is_fixture(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     return False
 
 
+# Subscript bases whose contents are NOT the returned value. A helper returning
+# ``type[LinkSpec]`` returns the CLASS, and one returning ``Callable[[], LinkSpec]``
+# returns a factory — neither is a built spec, so crediting the name inside them
+# would bless a function that does something else entirely.
+_NOT_THE_VALUE: frozenset[str] = frozenset({"type", "Type", "Callable"})
+
+
 def _annotation_names(ann: ast.expr) -> frozenset[str]:
+    """Every type name the annotation actually RETURNS.
+
+    Two things this has to get right, both found by adversarial review:
+
+    * A **string annotation** is a forward reference — ``-> "LinkSpec"`` and
+      ``-> list["LinkSpec"]`` carry no ``ast.Name`` at all, so a plain walk saw
+      nothing and reported a conformant helper. Idiomatic Python, and this
+      analyzer runs in other people's CI, so the false positive is the expensive
+      kind. Parse the string and recurse.
+    * ``type[X]`` / ``Callable[..., X]`` mention X without returning one.
+    """
     names: set[str] = set()
-    for child in ast.walk(ann):
-        if isinstance(child, ast.Name):
-            names.add(child.id)
-        elif isinstance(child, ast.Attribute):
-            names.add(child.attr)
+
+    def visit(node: ast.expr, depth: int = 0) -> None:
+        if depth > 8:
+            return
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            try:
+                parsed = ast.parse(node.value, mode="eval").body
+            except (SyntaxError, ValueError, RecursionError, MemoryError):
+                # The string's CONTENT is arbitrary — this is the one place the
+                # checker parses text the outer file never had to parse, so it
+                # is the one place a legal file can defeat the parser. A long
+                # flat expression exhausts CPython's parser recursion, and
+                # RecursionError is not a SyntaxError: catching only that aborted
+                # the entire run on a file that parsed fine. The ``depth`` cap
+                # below cannot help, because the recursion is inside the parser,
+                # not inside visit(). Failing closed credits no name, so the
+                # helper reports as unclassified — the safe direction.
+                return
+            visit(parsed, depth + 1)
+            return
+        if isinstance(node, ast.Subscript):
+            if _annotation_base(node.value) in _NOT_THE_VALUE:
+                return
+            visit(node.value, depth + 1)
+            visit(node.slice, depth + 1)
+            return
+        if isinstance(node, ast.Name):
+            names.add(node.id)
+            return
+        if isinstance(node, ast.Attribute):
+            names.add(node.attr)
+            return
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.expr):
+                visit(child, depth + 1)
+
+    visit(ann)
     return frozenset(names)
 
 
@@ -168,9 +257,12 @@ def _declared_on(
     instead.
     """
     anchor = _anchor_line(node)
-    if (trailing := comments.get(anchor)) is not None:
-        if (name := declared_category(trailing)) is not None:
-            return name
+    # Both the decorator line and the ``def`` line, because they differ for a
+    # decorated helper and the documented form is "trailing its def".
+    for line in {anchor, node.lineno}:
+        if (trailing := comments.get(line)) is not None:
+            if (name := declared_category(trailing)) is not None:
+                return name
     line = anchor - 1
     while (comment := comments.get(line)) is not None:
         if (name := declared_category(comment)) is not None:

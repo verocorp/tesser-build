@@ -111,24 +111,49 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   - **How:** let `bootstrap.new` take its per-context builders, so the tests
     inject a hand-written double and the suppressions disappear.
 
-- [ ] **Hoist the suppression primitive out of four checkers** (2026-07-20 ship
-  review, confidence 9)
-  - **What:** `_SUPPRESS_MARKER` + a `suppressed(...)` helper is now duplicated
-    across `doubles_check.py`, `comments_check.py`, `typed_checks.py`, and
-    `checks.py`. The marker is load-bearing (it is also in `comments_check.py`'s
-    `_DIRECTIVE` regex and in the CLI's user-facing message), so changing or
-    scoping it means editing four sites.
+- [ ] **Hoist the suppression primitive out of SIX checkers** (2026-07-20 ship
+  review, confidence 9 — count corrected 2026-07-26)
+  - **What:** `_SUPPRESS_MARKER` + a `suppressed(...)` helper is duplicated
+    across `doubles_check.py`, `comments_check.py`, `typed_checks.py`,
+    `checks.py`, and — since the test-helper wave — `helpers_check.py` and
+    `shadowing_check.py`. **Six sites, not the four this entry used to claim.**
+    The marker is load-bearing (it is also in the CLI's user-facing message), so
+    changing or scoping it means editing all six.
+  - ⚠ **A recorded count goes stale as quietly as anything else.** This one was
+    wrong for five days because the wave that added two copies did not walk back
+    to the TODO that counts them. Re-count before quoting it.
   - **How:** move the marker and a `suppressed_predicate(source)` into
     `astutil.py` (`typed_checks.py` already documents this predicate shape).
     Note TB030's variant scans a node's whole **line span** (so a wrapped import
     can be suppressed) while the others are single-line — unify deliberately,
     don't silently pick one.
 
-- [ ] **TB030 adds a 4th full-tree AST walk per file** (2026-07-20 ship review,
-  measured)
-  - **What:** measured on this repo's own corpus (146 files): 142.5 ms → 176.7 ms,
-    **+24%** wall clock for one check, ~0.23 ms/file. Real but small; a linter,
-    not a hot path.
+- [ ] **Fold the standalone checkers into the existing `_Checker` NodeVisitor**
+  (2026-07-20 ship review; **re-measured 2026-07-26, and my own correction to
+  this entry was wrong too — see below**)
+  - **Measured composition, not a checker count** (Python 3.12.5, HEAD `79c3a1a`,
+    tree-equivalent traversals per file):
+    | source | tree-equiv | note |
+    |---|---|---|
+    | `_Checker` NodeVisitor | 1.00x | the pass everything else could ride |
+    | `comments_check` | 2.00x | two back-to-back `ast.walk` |
+    | `doubles_check` | 1.00x | |
+    | **`shadowing_check`** | **2.73x** | the largest single consumer |
+    | `helpers_check` | **0.00x** | |
+    | `typed_checks` | ~0 | iterates `tree.body`; walks only class bodies |
+    | **total** | **~6.73x** | plus 4 tokenize passes on a test module |
+  - ⚠ **Two things I asserted in this entry on 2026-07-26 were wrong**, and both
+    were wrong in the direction of blaming the newest code:
+    - `helpers_check` contributes **zero** walks. `_defines_a_test` was rewritten
+      to iterate `tree.body` (pytest's collection rules), so the module contains
+      no `ast.walk` at all. I wrote "the wave added two more walks" without
+      re-reading the code I had just changed.
+    - `classify_trees` per test file is **not** "a whole-tree classifier pass of
+      its own" and does not need measuring separately — it iterates `tree.body`
+      for top-level classes only. **Measured: 0.219 ms for all 50 test modules
+      repo-wide, ~4 µs/file.** It is the cheapest thing in the checker.
+  - **The biggest win is now TB033, not TB030** — which inverts what this entry
+    used to say. See the `_bound_names` double-walk below.
   - **How:** fold the TB030 dispatch into the existing `_Checker` NodeVisitor as
     `visit_Import`/`visit_ImportFrom`/`visit_Attribute` + additions to the
     existing function visitors, which makes it near-free on a pass that already
@@ -358,13 +383,55 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   - **Start at:** add the pinned-policy assertions to errorspy's tests, or a
     drift test asserting the copies agree.
 
-- [ ] **`_annotation_names` duplicates `classify._all_names`** (2026-07-21)
-  - **What:** near-identical bodies; the new one additionally resolves string
-    forward references. `astutil.py` exists for exactly this sharing. The
-    divergence is silent — the classifier still cannot see through a quoted
-    annotation.
+- [ ] **THREE copies of the annotation-name walk, and they have now diverged**
+  (2026-07-21; sharpened 2026-07-26)
+  - **What:** `classify._all_names`, `typed_checks._annotation_names`, and — since
+    the test-helper wave — `helpers_check._annotation_names`. `astutil.py` exists
+    for exactly this sharing.
+  - **The divergence is no longer cosmetic.** Only the `helpers_check` copy
+    resolves string forward references and refuses to credit a name inside
+    `type[X]` / `Callable[..., X]`. Both behaviors were added because adversarial
+    review proved their absence was a false positive and a false negative
+    respectively. **The classifier still cannot see through a quoted annotation**,
+    which means every classifier-keyed check (TB010–TB018) has the false positive
+    that TB032 just fixed.
   - **Start at:** move the forward-ref-resolving version into `astutil.py` and
-    route both call sites through it.
+    route all three call sites through it — then re-run the gates, because the
+    classifier seeing more types may change what the typed checks report.
+
+- [ ] **Suppression is a substring scan on the OLD checkers — now with a
+  verified repro** (2026-07-21; proven 2026-07-26)
+  - **Confirmed by running it, both directions:**
+    - `@dataclass(repr=("# tessercheck:ignore"))` silences **TB001**
+      (control fires TB001; spoofed returns nothing).
+    - `x = "# tessercheck:ignore"  # banned prose` silences **TB020**.
+    - The two checkers this wave ADDED resist it — TB032's `_comment_lines` and
+      TB033's `_suppressed_lines` both filter `token.type == tokenize.COMMENT`,
+      and a marker appearing only inside a string does NOT suppress them.
+  - **So the house pattern is already written, twice, in the new code.** What is
+    left is `checks.py:_suppressed` (TB001–TB004) and `comments_check.suppressed`
+    (TB020) still reading raw line text. Hoisting the tokenize-based reader into
+    `astutil.py` fixes both and collapses the `_SUPPRESS_MARKER` duplication
+    tracked above.
+  - **Honest bound:** an author who can edit the file can equally write a real
+    ignore comment, so this is an inconsistency and an audit-grep blind spot,
+    not a privilege boundary. That is why it is not a P1 — but it IS the kind of
+    thing that makes a `grep -c 'tessercheck:ignore'` audit lie.
+
+- [ ] **`@anything.fixture` exempts a function from TB032 with no declared fact**
+  (found independently by two reviewers, 2026-07-26)
+  - **What:** `_is_fixture` matches any decorator whose attribute is `fixture`,
+    so a decorator that has nothing to do with pytest waves a function through
+    the totality check — no marker, no record that anything was exempted.
+    Verified: returns no findings.
+  - **Why not fixed with the rest:** tightening to a pytest-rooted decorator
+    risks a FALSE POSITIVE on legitimate re-exports (`from conftest import
+    fixture`), and this wave already shipped one overcorrection that had to be
+    walked back. A self-service bypass by an author who could equally write the
+    marker is the cheaper failure.
+  - **Start at:** `helpers_check._is_fixture`. Decide first whether the rule is
+    "rooted at pytest" or "records the exemption somewhere", since those give
+    different designs.
 
 - [ ] **Suppression is a substring scan, and TB017/TB018 give it a natural
   surface** (2026-07-21, wave C2 review)
@@ -497,6 +564,86 @@ change; each waits for a real need.
 
 ## Testing norm — helper wave follow-ups (opened 2026-07-26, eng review)
 
+- [ ] **TB033 walks each scope twice, for a measured 20% of its own cost**
+  (performance review 2026-07-26, prototyped)
+  - **What:** `_bound_names` materializes `_own_scope(node)` **twice** per scope —
+    once for the `Global`/`Nonlocal`/`ExceptHandler` loop and again for the
+    assignment-target loop. That is 1.71x tree of node touches where 0.85x would
+    do, and it is why TB033 is now the most expensive checker in the analyzer
+    (199.6 ms repo-wide vs TB020's 131.5 ms).
+  - **The fix is a loop merge and it was prototyped:** 199.4 → 159.7 ms
+    repo-wide, **byte-identical findings**. Beyond that, `_own_scope` re-derives
+    per scope the same partition the scope-collecting `ast.walk` already visited;
+    one traversal yielding each scope together with its own-scope nodes would take
+    TB033 to roughly a single tree pass.
+  - **Why not done on the way out:** it is a refactor of the exact function that
+    produced three of this wave's defects, for a linter that runs in 0.3 s on the
+    largest example tree. Three separate defects in this wave were introduced by
+    fixes made under ship pressure. This one has no user-visible symptom, so it
+    waits for a change window where it can be the only thing moving.
+
+- [ ] **Every file is tokenized 3-4 times to build near-identical ignore sets**
+  (performance review 2026-07-26, measured)
+  - **What:** `comments_check`, `doubles_check`, `shadowing_check` and (on a test
+    module) `helpers_check` each run their own `tokenize.generate_tokens` pass.
+    **Measured: ~106 ms of a 584 ms repo run is redundant re-tokenization**; this
+    wave added two of the four.
+  - **One fix closes two entries:** tokenize once in `check_tree` and pass the
+    suppressed-line set down. That collapses this cost AND the behavioral
+    divergence in the six-checkers suppression entry above — the old checkers
+    read raw line text, the new ones read COMMENT tokens, and a single shared
+    reader makes them agree by construction.
+
+- [ ] **TB033: three more binding forms Python treats as bindings**
+  (adversarial review 2026-07-26, deferred deliberately)
+  - **What:** TB033 counts parameters, assignment targets, `for` targets, walrus,
+    `with ... as`, and `except ... as`. It does **not** count:
+    - **`match` capture patterns** — `case len:` then `len(x)` calls the captured
+      value. Confirmed by two independent reviewers.
+    - **comprehension targets** — `[len(x) for len in fns]`. A comprehension has
+      its own scope in Python 3, so this needs comprehension scopes added, not
+      just another binding form.
+    - **`import` bindings** — `from m import len` then `len(xs)`. Arguably NOT a
+      bug: you deliberately imported something called `len` and calling it is
+      what you meant. Rule the intent before building it.
+  - **Why deferred:** every one is a false NEGATIVE, not a false positive, so
+    nothing breaks in a consumer while they wait. They were found during a ship
+    review and rushing them in behind a release is how the P1 in that same
+    review got introduced.
+  - **Start at:** `_bound_names` in `tessercheck-py/tessercheck/shadowing_check.py`,
+    and the `scopes` list in `check_shadowing` for the comprehension case.
+
+- [ ] **TB032 misses two more collectible-test shapes** (coverage review
+  2026-07-26; both false NEGATIVES, neither locked into a test)
+  - **A nested `Test*` class holding the tests.** `class TestOuter:` containing
+    `class TestInner:` with the `test_*` methods — pytest collects
+    `TestOuter::TestInner::test_it`, but `_defines_a_test` scans one level of
+    `tree.body` for methods and never for a nested class. The module's helpers go
+    unjudged.
+  - **An indirect `unittest.TestCase` subclass.** `class Base(TestCase)` then
+    `class CampaignCase(Base)` — pytest collects it; `_is_test_class` only matches
+    a direct `TestCase` base. Decidable within one file, which makes it narrower
+    than it sounds.
+  - **Same shape as the bug the adversarial pass caught in TB033:** a walk got
+    tightened to kill a false positive and took real detection with it. Both fail
+    toward silence rather than noise, and there are no in-tree instances.
+  - **Deliberately not locked into a test.** A test asserting current behavior
+    here would ratchet the bug in place — which is exactly what happened once
+    already this wave with the lambda blind spot.
+
+- [ ] **TB032's structural blind spot is wider than first recorded**
+  (adversarial review 2026-07-26)
+  - **What:** a module defining no test pytest would collect is never judged. The
+    known case was a helper-only module or `conftest.py`. Also uncollected, and
+    therefore unjudged: tests generated by assignment
+    (`test_x = make_case(...)`), and a project that redefines pytest's
+    `python_functions` / `python_classes` in its own config.
+  - **Why it matters:** `conftest.py` is where shared helpers actually go, so the
+    totality check is blind in the file most likely to need it.
+  - **Depends on:** deciding what makes a *non-test* module part of the test
+    tree — a scoping question this check does not answer today. Wants a ruling
+    before code.
+
 - [ ] **Relocate the architecture detectors out of `tests/`**
   - **What:** the ~15 AST-analysis functions in
     `examples/python-app/tests/{test_enforcement.py,discovery.py,test_direction.py}`
@@ -565,19 +712,27 @@ change; each waits for a real need.
   - **Depends on:** the helper norm landing — nothing to prune until helpers have
     defaults.
 
-- [ ] **TB033 checker — rule its target first**
-  - **What:** the fixtures ship this wave; the checker does not. Unresolved:
-    does the builtin-shadowing ban target spec/DTO **field** names or helper
-    **parameter** names?
-  - **Why it matters:** a dataclass field named `id` shadows nothing — `id()`
-    stays callable. A function *parameter* named `id` genuinely shadows the
-    builtin inside that function's body. So the failure the ban prevents exists
-    only in the parameter case.
-  - **Measured blast radius (weak evidence — this is one repo of example code,
-    per Chris; do not weigh it heavily):** field-name target hits 4 spec/DTO
-    definitions and 13 reference sites; parameter target hits 1
-    (`examples/python/tests/test_repository.py:9`).
-  - **Depends on:** T7's fixtures landing, which encode whichever contract is chosen.
+- [x] **TB033 — RULED AND SHIPPED 2026-07-26.** Neither framing won: the check
+  targets the **collision, not the name** — a builtin bound in a scope that the
+  same scope then *calls*.
+  - **What settled it:** running both cases. A dataclass field named `id` costs
+    nothing (the builtin stays callable in methods and `__post_init__`), while a
+    parameter named `id` breaks — `id(object())` raises
+    `TypeError: 'str' object is not callable`. So the field framing protects
+    against nothing, and the name-based parameter framing taxes 12 sites to
+    prevent a bug that occurred in none of them.
+  - **The blast-radius figures recorded here were wrong** and are kept as a
+    caution: "parameter target hits 1" counted only test helpers and predated
+    the restyle. The real spread was 4 fields and **12** parameters, most of them
+    production code — and two of the twelve
+    (`BaseHTTPRequestHandler.log_message(self, format, *args)` overrides) cannot
+    legally be renamed at all. Re-measure before weighing a stale count.
+  - **Off the shelf was checked first** (the PR #40 precedent): ruff `A001`/`A002`
+    already ships the name-based ban, flags those illegal-to-rename overrides
+    here, and has no call-aware variant. That is what justified writing one.
+  - **Shipped as a registered check, not fixtures-only** — under this ruling
+    there is no rename cascade (zero findings repo-wide), and registration earns
+    the standard meta-tests instead of a bespoke interim guard.
 
 - [ ] **Revisit the inlined e2e HTTP client in `examples/python/tests/test_wiring.py`**
   - **What:** T4c of the helper wave inlines `_request(method, url, body=None)` at its 6

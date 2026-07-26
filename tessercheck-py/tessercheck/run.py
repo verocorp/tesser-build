@@ -131,8 +131,17 @@ def run_paths(
 
     findings: list[Finding] = []
     for path, tree in trees.items():
-        findings.extend(
-            check_tree(path, sources[path], tree, scoping(path), registry)
-        )
+        try:
+            findings.extend(
+                check_tree(path, sources[path], tree, scoping(path), registry)
+            )
+        except RecursionError as e:
+            # Defense in depth, and the lesson of a crash that shipped: ONE file
+            # must never be able to abort a whole-tree run. A checker that dies
+            # on a crafted or merely unusual file used to take every other file
+            # down with it, including the ones that were fine. Degrade to an
+            # error on that path and keep going; the CLI already surfaces errors
+            # loudly (exit 2), so this is not silence.
+            errors.append(f"{path}: check aborted: {type(e).__name__}: {e}")
     findings.sort(key=lambda f: (f.path, f.line, f.col, f.code))
     return findings, errors

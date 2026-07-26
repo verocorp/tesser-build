@@ -38,6 +38,7 @@ from tessercheck.comments_check import check_comments
 from tessercheck.finding import Finding
 from tessercheck.doubles_check import check_test_doubles
 from tessercheck.helpers_check import check_helpers
+from tessercheck.shadowing_check import check_shadowing
 from tessercheck.typed_checks import check_typed
 
 # Annotation base names that make a frozen dataclass unhashable at runtime
@@ -293,6 +294,9 @@ def check_tree(
     # not from is_test — same reason as TB030: the flag would make the fixture
     # unprovable, since the meta-test checks bad.py with is_test=False.
     findings.extend(check_helpers(path, source, tree, registry))
+    # TB033 is global: a shadowed-and-called builtin is a bug in domain code
+    # and test code alike, and has nothing to do with the DDD taxonomy.
+    findings.extend(check_shadowing(path, source, tree))
     return sorted(findings, key=lambda f: (f.line, f.col, f.code))
 
 

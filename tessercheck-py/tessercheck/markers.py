@@ -5,15 +5,19 @@ with ``# tesser-category: <name>``. Two checkers read that marker and they must
 not disagree, which is why the vocabulary lives here rather than in either of
 them:
 
-* :mod:`tessercheck.comments_check` (TB020) exempts the marker's **prefix** —
-  every ``# tesser-category: ...`` line is a machine directive, not prose;
-* :mod:`tessercheck.helpers_check` (TB032) validates the **name** against
+* :mod:`tessercheck.comments_check` (TB020) exempts anything :func:`declared_category`
+  recognizes as a marker — the SHAPE, not a valid name;
+* :mod:`tessercheck.helpers_check` (TB032) validates that name against
   :data:`CATEGORIES` and reports a typo itself.
 
-Splitting the responsibility that way is deliberate. If TB020 exempted only
-*valid* names, ``# tesser-category: spce`` would report twice — once as a banned
-comment and once as an unknown category — and the comments-norm finding would be
-the misleading one, pointing an author at prose they did not write.
+Both go through :func:`declared_category`, so they cannot disagree about what a
+marker is. Splitting shape from name is deliberate, in both directions. If TB020
+exempted only *valid* names, ``# tesser-category: spce`` would report twice —
+once as a banned comment and once as an unknown category — and the comments-norm
+finding would be the misleading one, pointing an author at prose they did not
+write. If instead TB020 exempted a bare *prefix*, then
+``# tesser-category: spec because it builds one`` would be ordinary prose using a
+directive as cover, and the comments norm would have a hole in it.
 
 The set is closed and small on purpose. TB032 is a totality check: every
 function in a test file must classify, and what does not classify is flagged.
@@ -36,10 +40,6 @@ CATEGORIES: frozenset[str] = frozenset({"spec", "dto", "fixture"})
 _CATEGORY_MARKER = re.compile(
     rf"^#\s*{re.escape(CATEGORY_PREFIX)}\s*(?P<name>\S*)\s*$"
 )
-
-# The fragment TB020's directive regex embeds, so the exemption and the
-# vocabulary can never drift apart.
-CATEGORY_DIRECTIVE_PATTERN = re.escape(CATEGORY_PREFIX)
 
 
 def declared_category(comment: str) -> str | None:

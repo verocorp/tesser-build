@@ -1,12 +1,12 @@
 {
-  "_comment": "The canonical row registry for the roadmap matrix (eng review D11b): the row taxonomy lives HERE, never as constants inside the generator \u2014 adding a component is a registry edit, not a code edit. Columns are DERIVED by roadmap/generate.py: this file declares where each row's artifacts live (or will live); it never carries a status symbol. Judgment cells are annotated at the source they describe with tb-cell markers (schema: docs/skill-authoring.md).",
+  "_comment": "The canonical row registry for the roadmap matrix (eng review D11b): the row taxonomy lives HERE, never as constants inside the generator — adding a component is a registry edit, not a code edit. Columns are DERIVED by roadmap/generate.py: this file declares where each row's artifacts live (or will live); it never carries a status symbol. Judgment cells are annotated at the source they describe with tb-cell markers (schema: docs/skill-authoring.md).",
   "_row_kinds": "Typed rows (eng review 5A): absent 'kind' = component (the matrix above); 'kind': 'rule' = one pay-now rule, rendered in the second 'Pay-now rules' table (rule / taught in / enforced by / status) so external enforcers render honestly. Rule-row keys (narrow v1): taught_in = repo path (optional #anchor) where the rule is taught, existence-checked; enforced_by = free text naming the enforcer (external tools like import-linter live here; listing check codes on rule rows lands with the fused anatomy checks). A malformed kind is a named file:line error.",
   "_column_semantics": {
-    "skill": "component-doc filename under skills/tesser-build/; absent key = n/a (\u2014); named-but-missing file = \u274c; present file's tb-status marker decides \u2705 (full) vs \ud83d\udfe1 (partial/stub)",
-    "py_example, go_example": "candidate paths relative to repo root; absent key = n/a (\u2014); any path exists = \u2705; none exist = \u274c",
-    "go_analyzers, py_checks": "names in internal/analyzers.All / codes in tessercheck.finding.CHECKS; a listed name missing from the live registry is a loud error (drift). Rendering: \u2705 requires BOTH lists non-empty; only one populated caps the cell at \ud83d\udfe1 ('Py only'/'Go only'); neither populated falls back to enforcement_tests (\ud83d\udfe1 in-example) and then \u274c. Absent key = n/a (\u2014), present-but-empty [] = \u274c planned-but-absent \u2014 the two are deliberately different",
-    "enforcement_tests": "in-example enforcement test paths; these alone cap the checker cell at \ud83d\udfe1 in-example",
-    "rationale": "glob patterns for executable-rationale test files; absent key = n/a (\u2014); no match = \u274c"
+    "skill": "component-doc filename under skills/tesser-build/; absent key = n/a (—); named-but-missing file = ❌; present file's tb-status marker decides ✅ (full) vs 🟡 (partial/stub)",
+    "py_example, go_example": "candidate paths relative to repo root; absent key = n/a (—); any path exists = ✅; none exist = ❌",
+    "go_analyzers, py_checks": "names in internal/analyzers.All / codes in tessercheck.finding.CHECKS; a listed name missing from the live registry is a loud error (drift). Rendering: ✅ requires BOTH lists non-empty; only one populated caps the cell at 🟡 ('Py only'/'Go only'); neither populated falls back to enforcement_tests (🟡 in-example) and then ❌. Absent key = n/a (—), present-but-empty [] = ❌ planned-but-absent — the two are deliberately different",
+    "enforcement_tests": "in-example enforcement test paths; these alone cap the checker cell at 🟡 in-example",
+    "rationale": "glob patterns for executable-rationale test files; absent key = n/a (—); no match = ❌"
   },
   "_unrowed_semantics": "The totality guard (2026-07-21) inverts each enumerable universe — skill docs under skills/tesser-build/*.md, tessercheck-py CHECKS codes, internal/analyzers.All names — and fails when a member is claimed by no row. Every other check runs registry → repo ('what a row names exists'); this one runs repo → registry ('what exists is claimed'), the direction that let serialization.md, logging.md, TB015 and TB016 ship with no row at all. A member that genuinely belongs to no row goes here BY NAME WITH A REASON. An exemption that is also claimed by a row, or that names something no longer present, is a loud error — the exemption list must not become the new stale thing.",
   "_unrowed": {
@@ -14,6 +14,9 @@
       "SKILL.md": "the skill's router/front door, not a component — it indexes the rows rather than being one",
       "go.md": "language guide (Go rendering of every component), cross-cutting by construction — no single row owns it",
       "python.md": "language guide (Python rendering of every component), cross-cutting by construction — no single row owns it"
+    },
+    "py_checks": {
+      "TB033": "language-level correctness, not a construction convention — it flags a builtin name bound and CALLED in one scope, which is a latent TypeError/UnboundLocalError rather than a rule anyone is taught. It has no skill doc because there is no convention to teach beyond 'do not write a crash', and no component or norm row owns it: the same bug is equally wrong in a value object, a handler, and a test. Ruled 2026-07-26 as the collision shape specifically, NOT the name-based ban (ruff A001/A002 already does that one, and on this repo it flags a BaseHTTPRequestHandler.log_message override whose signature the stdlib fixes)."
     }
   },
   "rows": [
@@ -357,7 +360,7 @@
       "title": "Dependency direction (acyclic, inward)",
       "kind": "rule",
       "taught_in": "skills/tesser-build/map.md#how-contexts-connect",
-      "enforced_by": "import-linter \u2014 forbidden contracts, verified in-example at examples/python-app/.importlinter (teeth: tests/test_architecture_teeth.py) and declared consumer-side (eng review 2A; a tessercheck-native direction check is deferred with this as its named standing enforcement)"
+      "enforced_by": "import-linter — forbidden contracts, verified in-example at examples/python-app/.importlinter (teeth: tests/test_architecture_teeth.py) and declared consumer-side (eng review 2A; a tessercheck-native direction check is deferred with this as its named standing enforcement)"
     }
   ]
 }
