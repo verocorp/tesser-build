@@ -15,13 +15,8 @@ _VALID_CREATE = json.dumps(
 )
 
 
-def _handler(*, down: bool = False) -> Handler:
-    repo = StorageCampaignRepository(FakeStorage(down=down))
-    return Handler(CampaignService(repo))
-
-
 def test_create_valid_is_201() -> None:
-    assert _handler().create_campaign("c1", _VALID_CREATE).status == 201
+    assert Handler(CampaignService(StorageCampaignRepository(FakeStorage()))).create_campaign("c1", _VALID_CREATE).status == 201
 
 
 def test_validation_is_422_with_rfc9457_body() -> None:
@@ -31,7 +26,7 @@ def test_validation_is_422_with_rfc9457_body() -> None:
             "links": [{"slug": "BAD", "target_url": "https://x.com"}],
         }
     )
-    resp = _handler().create_campaign("c1", bad)
+    resp = Handler(CampaignService(StorageCampaignRepository(FakeStorage()))).create_campaign("c1", bad)
     assert resp.status == 422
     assert resp.body["type"] == "/problems/bad_slug"
     assert resp.body["status"] == 422
@@ -39,13 +34,13 @@ def test_validation_is_422_with_rfc9457_body() -> None:
 
 
 def test_not_found_is_404() -> None:
-    resp = _handler().get_campaign("nope")
+    resp = Handler(CampaignService(StorageCampaignRepository(FakeStorage()))).get_campaign("nope")
     assert resp.status == 404
     assert resp.body["type"] == "/problems/campaign_missing"
 
 
 def test_conflict_is_409() -> None:
-    h = _handler()
+    h = Handler(CampaignService(StorageCampaignRepository(FakeStorage())))
     h.create_campaign("c1", _VALID_CREATE)
     dup = json.dumps({"slug": "spring-sale", "target_url": "https://y.com"})
     resp = h.add_link("c1", dup)
@@ -54,13 +49,13 @@ def test_conflict_is_409() -> None:
 
 
 def test_malformed_json_is_400_not_422() -> None:
-    resp = _handler().create_campaign("c1", "{not json")
+    resp = Handler(CampaignService(StorageCampaignRepository(FakeStorage()))).create_campaign("c1", "{not json")
     assert resp.status == 400
     assert resp.body["type"] == "/problems/malformed_request"
 
 
 def test_aggregated_validation_lists_all_invalid_params() -> None:
-    h = _handler()
+    h = Handler(CampaignService(StorageCampaignRepository(FakeStorage())))
     h.create_campaign("c1", _VALID_CREATE)
     both_bad = json.dumps({"slug": "BAD", "target_url": "ftp://nope"})
     resp = h.add_link("c1", both_bad)
@@ -73,6 +68,6 @@ def test_aggregated_validation_lists_all_invalid_params() -> None:
 
 
 def test_infra_is_503() -> None:
-    resp = _handler(down=True).get_campaign("c1")
+    resp = Handler(CampaignService(StorageCampaignRepository(FakeStorage(down=True)))).get_campaign("c1")
     assert resp.status == 503
     assert resp.body["type"] == "/problems/unavailable"

@@ -18,13 +18,9 @@ class _AllowAllChecker:
         return campaign.CheckOutcome(True, "ok")
 
 
-def _handler() -> Handler:
-    client, _ = build_campaign(CampaignConfig("memory"), _AllowAllChecker())
-    return Handler(client)
-
-
 def test_create_campaign_transforms_args_to_a_success_line() -> None:
-    resp = _handler().create_campaign(CliRequest(("100.00", "USD")))
+    client, _ = build_campaign(CampaignConfig("memory"), _AllowAllChecker())
+    resp = Handler(client).create_campaign(CliRequest(("100.00", "USD")))
     assert resp.exit_code == 0
     assert resp.stdout.startswith("created campaign ")
     assert "budget 100.00 USD" in resp.stdout
@@ -32,20 +28,23 @@ def test_create_campaign_transforms_args_to_a_success_line() -> None:
 
 
 def test_a_domain_rejection_becomes_an_exit_code_not_a_traceback() -> None:
-    resp = _handler().create_campaign(CliRequest(("-5", "USD")))
+    client, _ = build_campaign(CampaignConfig("memory"), _AllowAllChecker())
+    resp = Handler(client).create_campaign(CliRequest(("-5", "USD")))
     assert resp.exit_code == 2
     assert resp.stdout == ""
     assert resp.stderr.startswith("[")
 
 
 def test_a_missing_argument_is_a_usage_error() -> None:
-    resp = _handler().create_campaign(CliRequest(("100.00",)))
+    client, _ = build_campaign(CampaignConfig("memory"), _AllowAllChecker())
+    resp = Handler(client).create_campaign(CliRequest(("100.00",)))
     assert resp.exit_code == 2
     assert "usage: create-campaign" in resp.stderr
 
 
 def test_extra_arguments_are_a_usage_error() -> None:
-    resp = _handler().create_campaign(CliRequest(("100.00", "USD", "surplus")))
+    client, _ = build_campaign(CampaignConfig("memory"), _AllowAllChecker())
+    resp = Handler(client).create_campaign(CliRequest(("100.00", "USD", "surplus")))
     assert resp.exit_code == 2
     assert "usage: create-campaign" in resp.stderr
 

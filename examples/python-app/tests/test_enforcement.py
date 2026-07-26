@@ -8,11 +8,11 @@ from tests.discovery import discovered_contexts
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
-def _parse(path: pathlib.Path) -> ast.Module:
+def _parse(path: pathlib.Path) -> ast.Module:  # tessercheck:ignore
     return ast.parse(path.read_text(encoding="utf-8"))
 
 
-def _import_time_side_effects(tree: ast.Module) -> list[int]:
+def _import_time_side_effects(tree: ast.Module) -> list[int]:  # tessercheck:ignore
     hits: list[int] = []
     for stmt in tree.body:
         if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
@@ -23,13 +23,13 @@ def _import_time_side_effects(tree: ast.Module) -> list[int]:
 _CONFIG_OWNERS = frozenset({"cfg", "config"})
 
 
-def _is_client_access(node: ast.Attribute, contexts: frozenset[str]) -> bool:
+def _is_client_access(node: ast.Attribute, contexts: frozenset[str]) -> bool:  # tessercheck:ignore
     if node.attr not in contexts:
         return False
     return not (isinstance(node.value, ast.Name) and node.value.id in _CONFIG_OWNERS)
 
 
-def _clients_reached(tree: ast.Module, contexts: frozenset[str]) -> tuple[set[str], list[int]]:
+def _clients_reached(tree: ast.Module, contexts: frozenset[str]) -> tuple[set[str], list[int]]:  # tessercheck:ignore
     reached: set[str] = set()
     aliases: dict[str, str] = {}
     called: list[int] = []
@@ -51,7 +51,7 @@ def _clients_reached(tree: ast.Module, contexts: frozenset[str]) -> tuple[set[st
     return reached, called
 
 
-def _host_files(sub: str = "") -> list[pathlib.Path]:
+def _host_files(sub: str = "") -> list[pathlib.Path]:  # tessercheck:ignore
     return sorted((ROOT / "srv" / sub).rglob("*.py"))
 
 

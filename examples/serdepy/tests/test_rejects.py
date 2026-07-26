@@ -61,26 +61,24 @@ def test_scanned_at_rejects_a_naive_timestamp() -> None:
         ScannedAt("2026-07-20T12:00:00")
 
 
-def _parcel(weight_kg: float) -> Parcel:
-    return Parcel(
-        ParcelSpec(
-            code="ABC-123",
-            items=2,
-            weight_kg=weight_kg,
-            label_digest=_DIGEST,
-            declared_value="99.95",
-            scanned_at="2026-07-20T12:00:00+00:00",
-        )
+def _spec(weight_kg: float = 20.5) -> ParcelSpec:
+    return ParcelSpec(
+        code="ABC-123",
+        items=2,
+        weight_kg=weight_kg,
+        label_digest=_DIGEST,
+        declared_value="99.95",
+        scanned_at="2026-07-20T12:00:00+00:00",
     )
 
 
 def test_is_heavy_is_true_above_the_threshold() -> None:
-    assert _parcel(20.5).is_heavy()
+    assert Parcel(_spec(20.5)).is_heavy()
 
 
 def test_is_heavy_is_false_at_and_below_the_threshold() -> None:
-    assert not _parcel(20.0).is_heavy()
-    assert not _parcel(0.5).is_heavy()
+    assert not Parcel(_spec(20.0)).is_heavy()
+    assert not Parcel(_spec(0.5)).is_heavy()
 
 
 def test_the_compound_propagates_a_child_rejection() -> None:

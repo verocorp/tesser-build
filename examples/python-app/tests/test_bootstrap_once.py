@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 import campaign.wiring.wire as campaign_wire
-from bootstrap.bootstrap import App, new
+from bootstrap.bootstrap import new
 from bootstrap.config import Config
 from campaign.client import AddLinkRequest, Client, CreateCampaignRequest, TargetChecker
 from campaign.wiring.config import Config as CampaignConfig
@@ -13,18 +13,16 @@ from linkpolicy.wiring.config import Config as LinkPolicyConfig
 from reports.wiring.config import Config as ReportsConfig
 
 
-def _mem() -> App:
-    return new(
-        Config(
-            campaign=CampaignConfig("memory"),
-            linkpolicy=LinkPolicyConfig("memory"),
-            reports=ReportsConfig(),
-        )
+def _config() -> Config:
+    return Config(
+        campaign=CampaignConfig("memory"),
+        linkpolicy=LinkPolicyConfig("memory"),
+        reports=ReportsConfig(),
     )
 
 
 def test_graph_built_once_state_persists_across_calls() -> None:
-    app = _mem()
+    app = new(_config())
     try:
         view = app.campaign.create_campaign(CreateCampaignRequest("100.00", "USD"))
         app.campaign.add_link(AddLinkRequest(view.campaign_id, "a", "https://ok.example/a"))
@@ -42,7 +40,7 @@ def test_constructor_runs_once_across_many_calls(monkeypatch: pytest.MonkeyPatch
         return real_campaign_build(cfg, checker)
 
     monkeypatch.setattr(campaign_wire, "build", counting)
-    app = _mem()
+    app = new(_config())
     try:
         for _ in range(5):
             app.campaign.list_links()
@@ -52,6 +50,6 @@ def test_constructor_runs_once_across_many_calls(monkeypatch: pytest.MonkeyPatch
 
 
 def test_close_is_idempotent() -> None:
-    app = _mem()
+    app = new(_config())
     app.close()
     app.close()

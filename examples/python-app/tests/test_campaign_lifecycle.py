@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import pytest
 
 from campaign.adapters.gateways.repo_memory import InMemoryCampaignRepository
@@ -18,8 +19,7 @@ from campaign.domain.money import Money, MoneyAmount, MoneyCurrency, MoneySpec
 from campaign.domain.short_link import ShortLinkSpec
 from campaign.domain.values import CampaignID
 from errors import DomainError, Kind
-from httpwire import HttpRequest
-from tests.wire import json_body, json_request
+from httpwire import HttpRequest, decode_body
 
 _CAMPAIGN_ID = "0123456789abcdef"
 
@@ -29,38 +29,39 @@ class _AllowAll:
         return CheckOutcome(True, "ok")
 
 
-def _service() -> CampaignService:
-    return CampaignService(InMemoryCampaignRepository(), _AllowAll())
+def _create_request(
+    amount: str = "100.00", currency: str = "USD"
+) -> CreateCampaignRequest:
+    return CreateCampaignRequest(budget_amount=amount, budget_currency=currency)
 
 
-def _campaign_with_link(svc: CampaignService) -> str:
-    view = svc.create_campaign(CreateCampaignRequest(budget_amount="100.00", budget_currency="USD"))
-    svc.add_link(
-        AddLinkRequest(
-            campaign_id=view.campaign_id, slug="promo", target_url="https://ok.example/x"
-        )
+def _add_link_request(campaign_id: str, slug: str = "promo") -> AddLinkRequest:
+    return AddLinkRequest(
+        campaign_id=campaign_id, slug=slug, target_url="https://ok.example/x"
     )
-    return view.campaign_id
 
 
 def test_deactivate_link_flips_the_link_inactive() -> None:
-    svc = _service()
-    id = _campaign_with_link(svc)
+    svc = CampaignService(InMemoryCampaignRepository(), _AllowAll())
+    id = svc.create_campaign(_create_request()).campaign_id
+    svc.add_link(_add_link_request(id))
     view = svc.deactivate_link(DeactivateLinkRequest(campaign_id=id, slug="promo"))
     assert [link.active for link in view.links] == [False]
 
 
 def test_deactivate_link_survives_a_reload() -> None:
-    svc = _service()
-    id = _campaign_with_link(svc)
+    svc = CampaignService(InMemoryCampaignRepository(), _AllowAll())
+    id = svc.create_campaign(_create_request()).campaign_id
+    svc.add_link(_add_link_request(id))
     svc.deactivate_link(DeactivateLinkRequest(campaign_id=id, slug="promo"))
     view = svc.get_campaign(GetCampaignRequest(campaign_id=id))
     assert [link.active for link in view.links] == [False]
 
 
 def test_resolve_refuses_a_deactivated_link() -> None:
-    svc = _service()
-    id = _campaign_with_link(svc)
+    svc = CampaignService(InMemoryCampaignRepository(), _AllowAll())
+    id = svc.create_campaign(_create_request()).campaign_id
+    svc.add_link(_add_link_request(id))
     assert svc.resolve(ResolveRequest(slug="promo")).target_url == "https://ok.example/x"
     svc.deactivate_link(DeactivateLinkRequest(campaign_id=id, slug="promo"))
     with pytest.raises(DomainError) as e:
@@ -70,8 +71,9 @@ def test_resolve_refuses_a_deactivated_link() -> None:
 
 
 def test_deactivate_link_rejects_an_unknown_slug() -> None:
-    svc = _service()
-    id = _campaign_with_link(svc)
+    svc = CampaignService(InMemoryCampaignRepository(), _AllowAll())
+    id = svc.create_campaign(_create_request()).campaign_id
+    svc.add_link(_add_link_request(id))
     with pytest.raises(DomainError) as e:
         svc.deactivate_link(DeactivateLinkRequest(campaign_id=id, slug="nosuch"))
     assert e.value.kind is Kind.NOT_FOUND
@@ -79,8 +81,9 @@ def test_deactivate_link_rejects_an_unknown_slug() -> None:
 
 
 def test_deactivate_link_rejects_an_unknown_campaign() -> None:
-    svc = _service()
-    _campaign_with_link(svc)
+    svc = CampaignService(InMemoryCampaignRepository(), _AllowAll())
+    id = svc.create_campaign(_create_request()).campaign_id
+    svc.add_link(_add_link_request(id))
     with pytest.raises(DomainError) as e:
         svc.deactivate_link(
             DeactivateLinkRequest(campaign_id="fedcba9876543210", slug="promo")
@@ -90,27 +93,34 @@ def test_deactivate_link_rejects_an_unknown_campaign() -> None:
 
 
 def test_deactivate_link_endpoint_returns_the_campaign_payload() -> None:
-    svc = _service()
-    id = _campaign_with_link(svc)
+    svc = CampaignService(InMemoryCampaignRepository(), _AllowAll())
+    id = svc.create_campaign(_create_request()).campaign_id
+    svc.add_link(_add_link_request(id))
     handler = Handler(svc)
-    resp = handler.deactivate_link(json_request({"campaign_id": id, "slug": "promo"}))
+    resp = handler.deactivate_link(
+        HttpRequest(body=json.dumps({"campaign_id": id, "slug": "promo"}).encode("utf-8"))
+    )
     assert resp.status_code == 200
-    assert json_body(resp)["links"] == [
+    assert decode_body(resp.body)["links"] == [
         {"slug": "promo", "target_url": "https://ok.example/x", "active": False}
     ]
 
 
 def test_deactivate_link_endpoint_maps_a_missing_link_to_404() -> None:
-    svc = _service()
-    id = _campaign_with_link(svc)
+    svc = CampaignService(InMemoryCampaignRepository(), _AllowAll())
+    id = svc.create_campaign(_create_request()).campaign_id
+    svc.add_link(_add_link_request(id))
     handler = Handler(svc)
-    resp = handler.deactivate_link(json_request({"campaign_id": id, "slug": "nosuch"}))
+    resp = handler.deactivate_link(
+        HttpRequest(body=json.dumps({"campaign_id": id, "slug": "nosuch"}).encode("utf-8"))
+    )
     assert resp.status_code == 404
 
 
 def test_resolve_endpoint_maps_a_deactivated_link_to_404() -> None:
-    svc = _service()
-    id = _campaign_with_link(svc)
+    svc = CampaignService(InMemoryCampaignRepository(), _AllowAll())
+    id = svc.create_campaign(_create_request()).campaign_id
+    svc.add_link(_add_link_request(id))
     handler = Handler(svc)
     svc.deactivate_link(DeactivateLinkRequest(campaign_id=id, slug="promo"))
     assert handler.resolve(HttpRequest(path_params={"slug": "promo"})).status_code == 404
@@ -182,7 +192,9 @@ def test_campaign_wraps_an_invalid_link_with_its_index() -> None:
 
 
 def test_create_campaign_endpoint_rejects_a_non_object_budget() -> None:
-    handler = Handler(_service())
-    resp = handler.create_campaign(json_request({"budget": "100.00"}))
+    handler = Handler(CampaignService(InMemoryCampaignRepository(), _AllowAll()))
+    resp = handler.create_campaign(
+        HttpRequest(body=json.dumps({"budget": "100.00"}).encode("utf-8"))
+    )
     assert resp.status_code == 400
-    assert json_body(resp)["type"] == "/problems/malformed_request"
+    assert decode_body(resp.body)["type"] == "/problems/malformed_request"

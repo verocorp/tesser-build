@@ -12,19 +12,16 @@ from errors import DomainError, DomainKind, InfraError
 _WINDOW = DateWindowSpec(start="2026-01-01", end="2026-02-01")
 
 
-def _campaign() -> Campaign:
-    return Campaign(
-        "c1",
-        CampaignSpec(
-            window=_WINDOW,
-            links=(ShortLinkSpec(slug="spring-sale", target_url="https://x.com"),),
-        ),
+def _spec(slug: str = "spring-sale") -> CampaignSpec:
+    return CampaignSpec(
+        window=_WINDOW,
+        links=(ShortLinkSpec(slug=slug, target_url="https://x.com"),),
     )
 
 
 def test_save_then_get_roundtrip() -> None:
     repo = StorageCampaignRepository(FakeStorage())
-    repo.save(_campaign())
+    repo.save(Campaign("c1", _spec()))
     got = repo.get("c1")
     assert got.id == "c1"
     assert str(got.links[0].slug) == "spring-sale"
