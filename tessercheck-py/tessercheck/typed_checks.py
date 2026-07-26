@@ -150,7 +150,8 @@ def _leaf_backing(node: ast.ClassDef) -> str | None:
     structured.
 
     A leaf is the mechanically crisp case: exactly one field, annotated with a
-    bare scalar name. Anything else — two or more fields (a compound), a
+    scalar name (quoted or bare — a forward reference is the same annotation).
+    Anything else — two or more fields (a compound), a
     collection field (a collection value object), a field typed as another
     domain object — is structured, and structured types have no primitive exit
     at all. This is the discriminator the norm's "a leaf has exactly one
@@ -497,9 +498,11 @@ def _constructs_own_type(
     ``object.__new__(cls)``, which is the one that matters most — that door skips
     ``__init__`` and every invariant it enforces.
 
-    The caller consults this ONLY when the return annotation is absent, so a
-    factory that is annotated to return some other type is taken at its word and
-    a helper that happens to build one internally is not swept in.
+    The caller consults this only when the return annotation cannot be taken
+    at its word — absent, crediting no name, or carrying an unparseable
+    forward reference — so a factory cleanly annotated to return some other
+    type is trusted and a helper that happens to build one internally is not
+    swept in.
     """
     for node in ast.walk(fn):
         if not isinstance(node, ast.Call):

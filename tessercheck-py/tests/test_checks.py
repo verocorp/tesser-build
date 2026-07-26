@@ -2115,11 +2115,22 @@ def test_classifier_reads_quoted_annotations_identically() -> None:
     )
     plain = classify_sources({"m.py": src.replace("{q}", "")})
     quoted = classify_sources({"m.py": src.replace("{q}", "'")})
+    # Every ClassInfo field, discovered rather than enumerated — a field added
+    # later is compared by default instead of silently ignored. The one known
+    # divergence is excluded BY NAME: a fully-quoted collection annotation is a
+    # Constant, not a Subscript, so collection_element_names misses it — inert
+    # because the field has no consumers (TODOS.md carries the entry).
+    known_divergent = {"collection_element_names"}
+    import dataclasses
+
+    from tessercheck.classify import ClassInfo
+
+    compared = {f.name for f in dataclasses.fields(ClassInfo)} - known_divergent
     for name in plain:
-        assert quoted[name].stereotype is plain[name].stereotype, name
-        assert quoted[name].embeds_entity == plain[name].embeds_entity, name
-        assert quoted[name].is_member == plain[name].is_member, name
-        assert quoted[name].field_type_names == plain[name].field_type_names, name
+        for field_name in sorted(compared):
+            assert getattr(quoted[name], field_name) == getattr(plain[name], field_name), (
+                f"{name}.{field_name}"
+            )
     assert plain["Campaign"].is_aggregate_root
 
 
@@ -2184,8 +2195,13 @@ def test_tb012_quoted_held_root_is_not_an_escape_hatch() -> None:
 def test_classifier_survives_an_annotation_that_defeats_the_parser() -> None:
     # Same bomb as TB032's regression above, aimed at the classifier and the
     # typed checks now that they parse string annotations too: one pathological
-    # field annotation must not abort the file, and failing closed means the
-    # quoted name credits nothing.
+    # field annotation must not abort the file. The findings are pinned exactly
+    # (a first cut of this test called check_source and discarded the result —
+    # a vacuous pass, caught by review): failing closed credits no name, so the
+    # bomb-backed Slug reads as STRUCTURED and its __str__ reports as an
+    # illegal exit. That TB015 is the accepted fail-closed cost — an analyzer
+    # that cannot read an annotation reports rather than waves through — and
+    # Held's bomb parameter correctly produces nothing.
     bomb = "a+" * 40000 + "b"
     src = (
         "from dataclasses import dataclass\n"
@@ -2199,7 +2215,8 @@ def test_classifier_survives_an_annotation_that_defeats_the_parser() -> None:
         "        self._x = x\n"
         "    __eq__ = None  # type: ignore[assignment]\n"
     )
-    check_source("t.py", src, is_test=False)
+    findings = check_source("t.py", src, is_test=False)
+    assert [(f.code, f.line) for f in findings] == [("TB015", 5)]
 
 
 def test_literal_values_are_not_forward_references() -> None:
@@ -2368,3 +2385,154 @@ def test_tb017_garbage_inside_an_excluded_slot_does_not_discredit_the_annotation
     )
     src = "from typing import Callable\n" + src
     assert "TB017" not in _codes(src)
+
+
+_HELD_ROOT = (
+    "class Shelf:\n"
+    "    def __init__(self, id: str) -> None:\n"
+    "        self._id = id\n"
+    "    def __eq__(self, other: object) -> bool:\n"
+    "        return isinstance(other, Shelf) and other._id == self._id\n"
+    "class Warehouse:\n"
+    "    def __init__(self, id: str, shelves: list[Shelf]) -> None:\n"
+    "        self._id = id\n"
+    "        self._shelves = list(shelves)\n"
+    "    __eq__ = None  # type: ignore[assignment]\n"
+)
+
+
+def test_annotated_carrying_a_lone_argument_still_names_its_type() -> None:
+    # ``Annotated[X]`` is a type error — Annotated wants metadata — but it
+    # parses, so the walk meets it. The metadata skip reads the FIRST element
+    # of a tuple slice, and a lone argument is no tuple at all; taking the
+    # slice whole is what keeps X credited instead of silently dropping the
+    # only type the annotation names.
+    src = "from typing import Annotated\n" + _HELD_ROOT + (
+        "class Order:\n"
+        "    def __init__(self, id: str, w: Annotated[Warehouse]) -> None:\n"
+        "        self._id = id\n"
+        "        self._w = w\n"
+        "    __eq__ = None  # type: ignore[assignment]\n"
+    )
+    assert "TB012" in _codes(src)
+
+
+def test_tb012_reads_a_dataclass_style_field_annotation_too() -> None:
+    # The held-reference walk feeds on two idioms and only the ``__init__``
+    # parameter one was proven through the shared walk. A class-level
+    # ``AnnAssign`` field is the other door into the same collect(), so a quote
+    # must not be an escape hatch there either.
+    body = (
+        "class Order:\n"
+        "    _warehouse: {ann}\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self._id = id\n"
+        "    __eq__ = None  # type: ignore[assignment]\n"
+    )
+    for ann in ("Warehouse", "'Warehouse'"):
+        findings = check_source(
+            "t.py", _HELD_ROOT + body.format(ann=ann), is_test=False
+        )
+        held = [f for f in findings if f.code == "TB012"]
+        assert [(f.line, f.col) for f in held] == [(12, 17)], ann
+
+
+def test_tb012_resolves_a_quoted_dotted_annotation() -> None:
+    # A dotted name yields its attribute (``wh.Warehouse`` -> ``Warehouse``),
+    # and inside a string it has no position of its own — so it reports at the
+    # string's position, exactly where the bare ``Attribute`` would have.
+    body = (
+        "class Order:\n"
+        "    def __init__(self, id: str, w: {ann}) -> None:\n"
+        "        self._id = id\n"
+        "        self._w = w\n"
+        "    __eq__ = None  # type: ignore[assignment]\n"
+    )
+    plain = check_source(
+        "t.py", _HELD_ROOT + body.format(ann="wh.Warehouse"), is_test=False
+    )
+    quoted = check_source(
+        "t.py", _HELD_ROOT + body.format(ann="'wh.Warehouse'"), is_test=False
+    )
+    positions = [
+        [(f.line, f.col) for f in fs if f.code == "TB012"] for fs in (plain, quoted)
+    ]
+    assert positions == [[(12, 36)], [(12, 36)]]
+
+
+def test_a_field_annotation_quoted_past_the_cap_degrades_without_raising() -> None:
+    # Past the re-entry cap the base-name resolver hands back None, and every
+    # reader of it treats that as "no base I can name" — a field that is not a
+    # ClassVar, not a mutable collection, not a wrappable scalar. Nothing about
+    # a string nested ten deep is a type, so the analyzer is only obliged not
+    # to raise; what it reports there is not a contract worth pinning.
+    deep = "Warehouse"
+    for _ in range(10):
+        deep = repr(deep)
+    src = _HELD_ROOT + (
+        "class Order:\n"
+        f"    _warehouse: {deep}\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self._id = id\n"
+        "    __eq__ = None  # type: ignore[assignment]\n"
+    )
+    check_source("t.py", src, is_test=False)
+
+
+def test_a_projects_own_literal_class_is_still_walked() -> None:
+    # The collision direction of the Literal handling, found by review: a
+    # codebase with its OWN class named Literal (query builders, SQL ASTs)
+    # must not lose the accessor ban on every annotation wrapped in it. The
+    # walk leaves STRINGS inside a Literal alone but walks everything else
+    # exactly as the pre-unification copies did — so Literal[str] still
+    # credits str, whoever Literal is.
+    src = (
+        "from dataclasses import dataclass\n"
+        "from myquery.expr import Literal\n"
+        "@dataclass(frozen=True)\n"
+        "class Slot:\n"
+        "    _key: str\n"
+        "    def key(self) -> Literal[str]:\n"
+        "        return self._key\n"
+    )
+    assert "TB010" in _codes(src)
+
+
+def test_the_shared_walk_contract() -> None:
+    # The one shared annotation walk, pinned directly — four modules consume
+    # it, so its contract deserves a table, not only whatever each check
+    # happens to surface. Columns: names (wide), names (returned_only), and
+    # whether the annotation carries an unparseable forward reference.
+    from tessercheck.astutil import _annotation_names, _has_unparseable_forward_ref
+
+    table = [
+        ("Slug", {"Slug"}, {"Slug"}, False),
+        ("'Slug'", {"Slug"}, {"Slug"}, False),
+        ("Slug | None", {"Slug"}, {"Slug"}, False),
+        ("Optional['Slug']", {"Optional", "Slug"}, {"Optional", "Slug"}, False),
+        ("mod.Slug", {"Slug"}, {"Slug"}, False),
+        ("'wh.Warehouse'", {"Warehouse"}, {"Warehouse"}, False),
+        ("type[Slug]", {"type", "Slug"}, set(), False),
+        ("Callable[[], Slug]", {"Callable", "Slug"}, set(), False),
+        ("'type[Slug]'", {"type", "Slug"}, set(), False),
+        ("Literal['Warehouse']", {"Literal"}, {"Literal"}, False),
+        ("Literal['not ((']", {"Literal"}, {"Literal"}, False),
+        ("Literal[str]", {"Literal", "str"}, {"Literal", "str"}, False),
+        ("Annotated[Slug, 'metadata words']", {"Annotated", "Slug"}, {"Annotated", "Slug"}, False),
+        ("Annotated['Slug', 'metadata words']", {"Annotated", "Slug"}, {"Annotated", "Slug"}, False),
+        ("Annotated[int, Field(gt=0)]", {"Annotated", "int", "Field"}, {"Annotated", "int", "Field"}, False),
+        ("Annotated[Slug]", {"Annotated", "Slug"}, {"Annotated", "Slug"}, False),
+        ("tuple['int', 'not valid (']", {"tuple", "int"}, {"tuple", "int"}, True),
+        ("\"tuple[int, 'not valid (']\"", {"tuple", "int"}, {"tuple", "int"}, True),
+        ("'garbage ('", set(), set(), True),
+        ("''", set(), set(), True),
+    ]
+    for text, wide, returned, unparseable in table:
+        ann = ast.parse(f"x: {text}").body[0]
+        assert isinstance(ann, ast.AnnAssign)
+        got_wide = set(_annotation_names(ann.annotation))
+        got_returned = set(_annotation_names(ann.annotation, returned_only=True))
+        got_unp = _has_unparseable_forward_ref(ann.annotation, returned_only=False)
+        assert got_wide == wide, f"{text}: wide {got_wide}"
+        assert got_returned == returned, f"{text}: returned_only {got_returned}"
+        assert got_unp is unparseable, f"{text}: unparseable {got_unp}"

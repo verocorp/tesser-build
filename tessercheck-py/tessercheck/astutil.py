@@ -5,6 +5,7 @@ without depending on each other.
 """
 
 import ast
+import functools
 from collections.abc import Iterator
 
 
@@ -74,16 +75,25 @@ def _dataclass_init_false(decorators: list[ast.expr]) -> bool:
 # closed (crediting no name) is the safe direction everywhere this is used.
 _FORWARD_REF_PARSE_FAILURES = (SyntaxError, ValueError, RecursionError, MemoryError)
 
-# Bounds RE-ENTRY through parsed string annotations only — a string whose
-# content is itself a quoted string, eight quotes deep, is nobody's type.
-# Plain AST descent is NOT depth-capped: a ban keyed on "any name anywhere"
-# must stay wide, and capping ordinary generic nesting silently turned
-# ``dict[str, dict[str, ...]]`` five levels deep into an escape hatch from
-# TB010 (adversarial review of the first cut of this module).
+# Bounds RE-ENTRY through parsed string annotations, in ``_annotation_refs``'s
+# quote-in-quote nesting and ``_annotation_base``'s recursion alike — a string
+# whose content is itself a quoted string, eight quotes deep, is nobody's
+# type. (``_annotation_base`` spends the same budget on plain subscript
+# descent, as its recursion frame guard; the WALK does not — a ban keyed on
+# "any name anywhere" must stay wide, and capping ordinary generic nesting
+# silently turned ``dict[str, dict[str, ...]]`` five levels deep into an
+# escape hatch from TB010 (adversarial review of the first cut).)
 _MAX_FORWARD_REF_DEPTH = 8
 
 
+@functools.lru_cache(maxsize=4096)
 def _parse_forward_ref(text: str) -> ast.expr | None:
+    # Memoized because the walk consults _annotation_base per Subscript, so a
+    # nested quoted annotation was re-parsed per visiting level — a measured
+    # 12–33x wall-clock amplification on quote-dense input, all duplicate
+    # parses of identical short strings. Safe to cache: a parsed node is never
+    # a position carrier (the outer string Constant is), so the shared nodes'
+    # positions are never read.
     try:
         return ast.parse(text, mode="eval").body
     except _FORWARD_REF_PARSE_FAILURES:
@@ -134,13 +144,18 @@ def _annotation_refs(
     string ``Constant``, since the string's content has no position of its own
     in the outer file.
 
-    Two string contexts are NOT forward references and are skipped (adversarial
-    review caught both firing on conformant code): the values of a
-    ``Literal[...]`` — ``Literal["Warehouse"]`` is a discriminator holding a
-    string, not the type it happens to spell — and the metadata arguments of
-    ``Annotated[X, ...]``, where only ``X`` is the type. The skip is keyed on
-    the spelled base name, so an import alias (``Literal as L``) defeats it —
-    the alias-disguise class this analyzer scopes out everywhere.
+    Two string contexts are NOT forward references (adversarial review caught
+    both firing on conformant code): the values of a ``Literal[...]`` —
+    ``Literal["Warehouse"]`` is a discriminator holding a string, not the type
+    it happens to spell — and the metadata arguments of ``Annotated[X, ...]``,
+    where only ``X`` is the type. Inside those regions strings are left alone
+    but everything else is walked exactly as the pre-unification copies did —
+    an earlier cut skipped the whole subtree, and a codebase with its OWN class
+    named ``Literal`` silently lost the accessor ban on every annotation
+    wrapped in it, with no suppression marker left behind. (The remaining
+    exposure is the import alias, ``Literal as L``: strings under the alias
+    are parsed as forward refs again — the alias-disguise class this analyzer
+    scopes out everywhere, and a false positive rather than a silent pass.)
 
     Iterative on an explicit stack: the deleted copies used ``ast.walk``, which
     no annotation could blow the interpreter stack on, and this walk must not
@@ -148,15 +163,17 @@ def _annotation_refs(
     """
     if ann is None:
         return
-    stack: list[tuple[ast.expr, int, ast.expr | None]] = [(ann, 0, None)]
+    stack: list[tuple[ast.expr, int, ast.expr | None, bool]] = [(ann, 0, None, True)]
     while stack:
-        node, string_depth, carrier = stack.pop()
+        node, string_depth, carrier, parse_strings = stack.pop()
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if not parse_strings:
+                continue
             if string_depth >= _MAX_FORWARD_REF_DEPTH:
                 continue
             parsed = _parse_forward_ref(node.value)
             if parsed is not None:
-                stack.append((parsed, string_depth + 1, carrier or node))
+                stack.append((parsed, string_depth + 1, carrier or node, True))
             else:
                 yield None, (carrier if carrier is not None else node)
             continue
@@ -165,17 +182,20 @@ def _annotation_refs(
             if returned_only and base in _NOT_THE_VALUE:
                 continue
             if base == "Literal":
-                stack.append((node.value, string_depth, carrier))
+                stack.append((node.value, string_depth, carrier, parse_strings))
+                stack.append((node.slice, string_depth, carrier, False))
                 continue
             if base == "Annotated":
-                stack.append((node.value, string_depth, carrier))
+                stack.append((node.value, string_depth, carrier, parse_strings))
                 if isinstance(node.slice, ast.Tuple) and node.slice.elts:
-                    stack.append((node.slice.elts[0], string_depth, carrier))
+                    stack.append((node.slice.elts[0], string_depth, carrier, parse_strings))
+                    for meta in node.slice.elts[1:]:
+                        stack.append((meta, string_depth, carrier, False))
                 else:
-                    stack.append((node.slice, string_depth, carrier))
+                    stack.append((node.slice, string_depth, carrier, parse_strings))
                 continue
-            stack.append((node.value, string_depth, carrier))
-            stack.append((node.slice, string_depth, carrier))
+            stack.append((node.value, string_depth, carrier, parse_strings))
+            stack.append((node.slice, string_depth, carrier, parse_strings))
             continue
         if isinstance(node, ast.Name):
             yield node.id, (carrier if carrier is not None else node)
@@ -185,7 +205,7 @@ def _annotation_refs(
             continue
         for child in ast.iter_child_nodes(node):
             if isinstance(child, ast.expr):
-                stack.append((child, string_depth, carrier))
+                stack.append((child, string_depth, carrier, parse_strings))
 
 
 def _annotation_names(ann: ast.expr | None, *, returned_only: bool = False) -> frozenset[str]:
@@ -212,7 +232,7 @@ def _annotation_names(ann: ast.expr | None, *, returned_only: bool = False) -> f
     )
 
 
-def _has_unparseable_forward_ref(ann: ast.expr | None, *, returned_only: bool = False) -> bool:
+def _has_unparseable_forward_ref(ann: ast.expr | None, *, returned_only: bool) -> bool:
     """True when any string the walk treats as a forward reference fails to
     parse — the signal that the annotation as a whole cannot be taken at its
     word, so a caller should fall back to inspecting the body. ``not

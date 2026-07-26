@@ -222,8 +222,8 @@ def check_helpers(
     tree: ast.Module,
     registry: dict[str, ClassInfo],
 ) -> list[Finding]:
-    """Every TB032 finding for one file. Silent unless the module defines a
-    ``test_*`` function somewhere in it."""
+    """Every TB032 finding for one file. Silent unless pytest would collect a
+    test from the module (:func:`_defines_a_test`)."""
     if not _defines_a_test(tree):
         return []
 

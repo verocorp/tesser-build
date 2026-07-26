@@ -176,20 +176,32 @@ class _QuoteAnnotations(ast.NodeTransformer):
 
 
 def test_quoting_every_annotation_changes_no_finding() -> None:
-    # Metamorphic invariance over all four Python example trees: a string
-    # annotation is the same annotation, so quoting every one of them must not
-    # change a single finding. This is the whole-analyzer guard against the
-    # walk re-diverging — when it had, this exact sweep produced TB015 on every
-    # leaf value object in all four trees. Both sides are ast.unparse'd so
-    # comment-carried markers (# tesser-category:) are stripped equally and
-    # line numbers stay comparable. The comparison is a SET of (code, line) by
+    # Metamorphic invariance: a string annotation is the same annotation, so
+    # quoting every one of them must not change a single finding. This is the
+    # whole-analyzer guard against the walk re-diverging — when it had, this
+    # exact sweep produced TB015 on every leaf value object in all four
+    # example trees. Two corpora, because each has power in one direction:
+    # the example trees are conformant by construction, so they catch a
+    # finding APPEARING (the false-positive direction); testdata/'s bad
+    # fixtures carry findings across every registered code, so they catch a
+    # finding DISAPPEARING (quoting as an escape hatch — reviewed as vacuous
+    # on the examples alone). Python trees are DISCOVERED, not enumerated —
+    # an example tree added later is swept by default.
+    #
+    # Both sides are ast.unparse'd so comment-carried markers
+    # (# tesser-category:, # tessercheck:ignore) are stripped equally and line
+    # numbers stay comparable. The comparison is a SET of (code, line) by
     # design: names inside one string share the string's position, so quoting
     # can merge two same-line reports of one reference into one — a position
-    # artifact, not a lost finding. What the set contract does promise is that
-    # no finding appears or disappears.
-    trees = [_EXAMPLES, *(_ROOT / "examples" / t for t in ("python-app", "serdepy", "errorspy"))]
+    # artifact, not a lost finding.
+    trees = sorted(
+        d for d in (_ROOT / "examples").iterdir() if d.is_dir() and any(d.rglob("*.py"))
+    )
+    assert trees, "no Python example trees found; the sweep's discovery is broken"
+    for tree in trees:
+        assert any(tree.rglob("*.py")), f"{tree} has no Python files"
     paths = [p for tree in trees for p in sorted(tree.rglob("*.py"))]
-    assert len(paths) > 100, "example trees have moved; fix the sweep's roots"
+    paths += sorted(_TESTDATA.rglob("*.py"))
     for path in paths:
         src = path.read_text(encoding="utf-8")
         base = ast.unparse(ast.parse(src))

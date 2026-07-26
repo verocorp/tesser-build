@@ -400,6 +400,28 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   - **Start at:** decide whether checks get module import context as a general
     capability; a one-off for Literal would be the fourth diverged walk.
 
+- [ ] **The wide walk credits names inside `type[X]` / `Callable[..., X]`, and
+  no test pins whether that is intended** (coverage audit 2026-07-26)
+  - **What:** with `returned_only=False`, `_contains_primitive` credits names
+    inside those slots, so a VO field `kind: type[str]` or an accessor
+    `-> Callable[[], str]` trips TB010 even though neither holds a `str`
+    (verified with a non-primitive backing field). Pre-existing — the deleted
+    flat `ast.walk` did the same — but `astutil._annotation_names`'s docstring
+    now states the wide default as a deliberate promise.
+  - **Start at:** decide whether "any name anywhere" should exclude
+    not-the-value slots for the BAN checks too, then pin the answer with a
+    test either way. The machinery (`returned_only`) already exists.
+
+- [ ] **No example tree contains an `async def`, so async annotation handling
+  is unproven end-to-end** (coverage audit 2026-07-26)
+  - **What:** the metamorphic sweep's `visit_AsyncFunctionDef` arm and every
+    checker's `AsyncFunctionDef` branch run only on synthetic unit fixtures —
+    the four example trees have zero async code. The sweep looks like it
+    covers async return annotations and does not.
+  - **Start at:** this is a curriculum question first (should an example teach
+    an async handler?), a coverage question second. If no example earns async
+    on its own merits, add an async fixture pair under `testdata/` instead.
+
 - [ ] **`ClassInfo.collection_element_names` is computed and never consumed**
   (2026-07-26, found while unifying the annotation-name walk)
   - **What:** `classify._collection_element_names` feeds a `ClassInfo` field with
