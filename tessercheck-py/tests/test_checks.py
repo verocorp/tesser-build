@@ -8,7 +8,9 @@ import pytest
 from tessercheck.checks import check_source
 from tessercheck.comments_check import check_comments
 from tessercheck.finding import CHECKS, Finding
+from tessercheck.helpers_check import _comment_lines
 from tessercheck.run import run_source
+from tessercheck.shadowing_check import _suppressed_lines
 
 _TESTDATA = Path(__file__).resolve().parents[1] / "testdata"
 
@@ -1602,5 +1604,308 @@ def test_tb033_honors_the_ignore_hatch() -> None:
     src = (
         "def apply(filter: object, xs: list[str]) -> object:\n"
         "    return filter(xs)  # tessercheck:ignore\n"
+    )
+    assert _tb033(src) == []
+
+
+def test_tb032_comment_read_fails_closed_when_the_source_will_not_tokenize() -> None:
+    # The fail-closed contract, stated in _comment_lines and otherwise unproven:
+    # with no comments read, NO marker is honored, so every undeclarable
+    # function reports. A marker that silently stops working — turning the
+    # totality check into a no-op — is the failure worth avoiding, and the
+    # opposite default (fail open) would do exactly that.
+    assert _comment_lines("x = (  # tesser-category: dto\n") == {}
+    assert _comment_lines("x = 1  # tesser-category: dto\n") == {
+        1: "# tesser-category: dto"
+    }
+
+
+def test_tb032_flags_a_helper_with_no_return_annotation() -> None:
+    # `node.returns is None` is the first gate in _returns_a_spec. An
+    # unannotated helper cannot be shown to build a spec, so it must report
+    # rather than slip through the structural arm on an absent signal.
+    src = (
+        "def _helper(x=1):\n"
+        "    return x\n"
+        "def test_it() -> None:\n"
+        "    assert _helper()\n"
+    )
+    assert [f.line for f in _tb032(src)] == [1]
+
+
+def test_tb032_resolves_a_dotted_return_annotation() -> None:
+    # _annotation_names collects Attribute.attr as well as Name.id, so a helper
+    # annotated `-> wire.LinkSpec` classifies exactly like `-> LinkSpec`. Without
+    # the Attribute arm, every helper in a module that imports its spec by
+    # module name would need a marker to say what the code already says.
+    src = _SPEC_DEF + (
+        "import wire\n"
+        "def _spec() -> wire.LinkSpec:\n"
+        "    return wire.LinkSpec(slug='a')\n"
+        "def test_it() -> None:\n"
+        "    assert _spec()\n"
+    )
+    assert _tb032(src) == []
+
+
+def test_tb032_flags_a_helper_returning_a_domain_object_not_a_spec() -> None:
+    # The rule's actual teeth, and the one path where registry AND local both
+    # resolve the name yet the answer is still "no": the annotation names a
+    # classified type that is not a SPEC. A helper returns a spec or a DTO — a
+    # constructed domain object is built at the call site, in the test.
+    src = (
+        "class Campaign:\n"
+        "    def __init__(self, name: str) -> None:\n"
+        "        self._name = name\n"
+        "def _campaign() -> Campaign:\n"
+        "    return Campaign('a')\n"
+        "def test_it() -> None:\n"
+        "    assert _campaign()\n"
+    )
+    assert [f.line for f in _tb032(src)] == [4]
+
+
+def test_tb032_marker_reaches_up_through_a_contiguous_comment_block() -> None:
+    # _declared_on walks UP line by line, not just one line. A marker under a
+    # note (or over one) still attaches, because a comment block above a
+    # definition is one block — stopping at the first line would make the
+    # marker's placement inside it load-bearing for no reason a reader could
+    # guess.
+    below_a_note = (
+        "# tessercheck:" + "ignore is not what this says\n"
+        "# tesser-category: dto\n"
+        "def _view() -> dict[str, str]:\n"
+        "    return {}\n"
+        "def test_it() -> None:\n"
+        "    assert _view() == {}\n"
+    )
+    above_a_note = (
+        "# tesser-category: dto\n"
+        "# and here is why\n"
+        "def _view() -> dict[str, str]:\n"
+        "    return {}\n"
+        "def test_it() -> None:\n"
+        "    assert _view() == {}\n"
+    )
+    assert _tb032(below_a_note) == []
+    assert _tb032(above_a_note) == []
+
+
+def test_tb032_falls_back_to_the_block_above_a_non_marker_trailing_comment() -> None:
+    # A trailing comment that is not a category marker must not consume the
+    # lookup: the def line carries `# noqa`, the marker sits above, and the
+    # helper is declared. Returning early on any trailing comment would drop it.
+    src = (
+        "# tesser-category: dto\n"
+        "def _view() -> dict[str, str]:  # noqa\n"
+        "    return {}\n"
+        "def test_it() -> None:\n"
+        "    assert _view() == {}\n"
+    )
+    assert _tb032(src) == []
+
+
+def test_tb032_judges_a_helper_carrying_a_decorator_that_is_not_a_fixture() -> None:
+    # _is_fixture scans the WHOLE decorator list and falls through when none
+    # matches. A decorated non-fixture must not be exempted by the mere presence
+    # of a decorator, and the finding must point at the def, not the decorator.
+    src = (
+        "import functools\n"
+        "@functools.cache\n"
+        "def _detect(x: int) -> int:\n"
+        "    return x\n"
+        "def test_it() -> None:\n"
+        "    assert _detect(1) == 1\n"
+    )
+    assert [f.line for f in _tb032(src)] == [3]
+
+
+def test_tb033_suppression_read_fails_closed_when_the_source_will_not_tokenize() -> None:
+    # Fail closed in the OPPOSITE direction from _comment_lines, and for the
+    # same reason: an unreadable source yields no suppressions, so findings are
+    # reported rather than silently swallowed by a hatch nobody can see.
+    assert _suppressed_lines("x = (  # tessercheck:ignore\n") == frozenset()
+    assert _suppressed_lines("x = 1  # tessercheck:ignore\n") == frozenset({1})
+
+
+@pytest.mark.parametrize(
+    ("label", "src", "line"),
+    [
+        ("vararg", "def f(*len: int) -> int:\n    return len(len)\n", 2),
+        ("kwarg", "def f(**dict: int) -> object:\n    return dict(x=1)\n", 2),
+        (
+            "augassign",
+            "def f(xs: list[str]) -> int:\n    sum = 0\n    sum += 1\n    return sum(xs)\n",
+            4,
+        ),
+        (
+            "for",
+            "def f(xs: list[str]) -> object:\n    for id in xs:\n        pass\n    return id(xs)\n",
+            4,
+        ),
+        (
+            "async for",
+            "async def f(xs: object) -> object:\n    async for id in xs:\n        pass\n"
+            "    return id(xs)\n",
+            4,
+        ),
+        (
+            "walrus",
+            "def f(xs: list[str]) -> int:\n    if (len := 0):\n        pass\n    return len(xs)\n",
+            4,
+        ),
+        (
+            "with",
+            "def f(xs: list[str]) -> object:\n    with open('p') as vars:\n        pass\n"
+            "    return vars(xs)\n",
+            4,
+        ),
+        (
+            "annassign",
+            "def f(xs: list[str]) -> int:\n    len: int = 0\n    return len(xs)\n",
+            3,
+        ),
+        (
+            "tuple unpack",
+            "def f(xs: list[str]) -> int:\n    len, other = 0, 1\n    return len(xs)\n",
+            3,
+        ),
+    ],
+)
+def test_tb033_sees_every_binding_form(label: str, src: str, line: int) -> None:
+    # Python binds a name in a dozen syntactic shapes and the bug is identical
+    # in all of them — `for id in xs` breaks a later id() call exactly as
+    # `id = 1` does. Enumerating them here is what stops the check from
+    # quietly covering only the Assign case its fixture happens to use.
+    assert [f.line for f in _tb033(src)] == [line], label
+
+
+def test_tb033_judges_a_lambda_in_its_own_scope_not_the_enclosing_one() -> None:
+    # Two claims. The lambda's parameter binds in ITS scope, so the ENCLOSING
+    # function is innocent — nothing is reported against `f`. But the lambda is
+    # itself a scope, so `id(1)` inside it IS reported, at the lambda's line.
+    # (This started life as a test locking the blind spot; adversarial review
+    # showed the blind spot was a real false negative, so it now locks the fix.)
+    src = "def f() -> object:\n    g = lambda id: id(1)\n    return g\n"
+    assert [x.line for x in _tb033(src)] == [2]
+
+
+def test_tb033_does_not_read_a_nested_class_body_as_the_enclosing_scope() -> None:
+    # _own_scope prunes ClassDef for the same reason: `id = 1` in a class body
+    # is a class attribute, not a local of the enclosing function, so the
+    # function's own id() call still reaches the builtin.
+    src = (
+        "def f(x: object) -> object:\n"
+        "    class C:\n"
+        "        id = 1\n"
+        "    return id(x)\n"
+    )
+    assert _tb033(src) == []
+
+
+def test_tb033_analyzes_module_scope_too() -> None:
+    # `scopes` seeds with the module itself. A module-level `id = 1` followed by
+    # a module-level id() call is the same bug with no function in sight, and a
+    # function-only walk would miss it entirely.
+    assert [f.line for f in _tb033("id = 1\nprint(id(2))\n")] == [2]
+    assert _tb033("x = 1\nprint(len('a'))\n") == []
+
+
+def test_tb033_leaves_a_nested_function_reading_a_closure_alone() -> None:
+    # The documented known hole: `inner` calling a name its ENCLOSING function
+    # bound sees the closure variable, not the builtin. Each scope is analyzed
+    # on its own, so this is not reported. Pinned so the hole is a decision
+    # rather than a surprise.
+    src = (
+        "def outer(x: object) -> object:\n"
+        "    id = 1\n"
+        "    def inner(y: object) -> object:\n"
+        "        return id(y)\n"
+        "    return inner\n"
+    )
+    assert _tb033(src) == []
+
+
+# Adversarial-review regressions (Codex, 2026-07-26). Each of these reproduced
+# against the shipped checker before the fix; they are the expensive class for an
+# analyzer that runs in other people's CI.
+
+def test_tb032_accepts_a_forward_reference_annotation() -> None:
+    # `-> "LinkSpec"` carries no ast.Name at all, so a plain walk saw nothing and
+    # reported a conformant spec helper. Quoted annotations are idiomatic, and a
+    # false positive here reddens a consumer's build.
+    src = _SPEC_DEF + (
+        'def _spec() -> "LinkSpec":\n'
+        "    return LinkSpec(slug='a')\n"
+        "def test_it() -> None:\n"
+        "    assert _spec()\n"
+    )
+    assert _tb032(src) == []
+
+
+def test_tb032_accepts_a_forward_reference_inside_a_collection() -> None:
+    src = _SPEC_DEF + (
+        'def _specs() -> list["LinkSpec"]:\n'
+        "    return []\n"
+        "def test_it() -> None:\n"
+        "    assert _specs() == []\n"
+    )
+    assert _tb032(src) == []
+
+
+def test_tb032_does_not_credit_a_spec_named_inside_type_or_callable() -> None:
+    # `type[LinkSpec]` returns the CLASS and `Callable[[], LinkSpec]` returns a
+    # factory. Neither is a built spec, so neither may bless the helper.
+    for annotation in ("type[LinkSpec]", "Callable[[], LinkSpec]"):
+        src = _SPEC_DEF + (
+            "from typing import Callable\n"
+            f"def _f() -> {annotation}:\n"
+            "    return LinkSpec\n"
+            "def test_it() -> None:\n"
+            "    assert _f()\n"
+        )
+        assert _tb032(src), f"{annotation} was wrongly accepted as spec-returning"
+
+
+def test_tb033_ignores_a_call_in_a_parameter_default() -> None:
+    # A default is evaluated in the ENCLOSING scope at definition time, where the
+    # parameter does not exist yet — so this calls the builtin and is correct.
+    assert _tb033('def f(len=len("ab")) -> int:\n    return len\n') == []
+
+
+def test_tb033_judges_a_lambda_scope() -> None:
+    assert [f.line for f in _tb033("g = lambda len: len(1)\n")] == [1]
+
+
+def test_tb033_judges_a_class_body() -> None:
+    # A class body executes at IMPORT time, so this breaks the module for every
+    # importer — the worst case to be blind to.
+    src = "class C:\n    len = 0\n    x = len('a')\n"
+    assert [f.line for f in _tb033(src)] == [3]
+
+
+def test_tb033_counts_an_except_alias_as_a_binding() -> None:
+    # `except E as name` binds name for the handler body, but the alias is a
+    # plain str on the handler, not a Name node, so the target walk never saw it.
+    src = (
+        "def f(xs: list) -> None:\n"
+        "    try:\n"
+        "        pass\n"
+        "    except ValueError as len:\n"
+        "        print(len(xs))\n"
+    )
+    assert [f.line for f in _tb033(src)] == [5]
+
+
+def test_tb033_declines_to_judge_a_global_or_nonlocal_rebind() -> None:
+    # `global len` means the binding is not local, so which target the call
+    # reaches depends on execution order — undecidable from one AST pass.
+    # Reporting it would be a false positive; silence is the honest answer.
+    src = (
+        "def f(xs: list) -> int:\n"
+        "    global len\n"
+        "    n = len(xs)\n"
+        "    len = 0\n"
+        "    return n\n"
     )
     assert _tb033(src) == []

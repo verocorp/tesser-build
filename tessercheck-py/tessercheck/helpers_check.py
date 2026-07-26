@@ -63,6 +63,7 @@ import ast
 import io
 import tokenize
 
+from tessercheck.astutil import _annotation_base
 from tessercheck.classify import ClassInfo, Stereotype, classify_trees
 from tessercheck.finding import Finding
 from tessercheck.markers import (
@@ -112,13 +113,54 @@ def _is_fixture(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     return False
 
 
+# Subscript bases whose contents are NOT the returned value. A helper returning
+# ``type[LinkSpec]`` returns the CLASS, and one returning ``Callable[[], LinkSpec]``
+# returns a factory — neither is a built spec, so crediting the name inside them
+# would bless a function that does something else entirely.
+_NOT_THE_VALUE: frozenset[str] = frozenset({"type", "Type", "Callable"})
+
+
 def _annotation_names(ann: ast.expr) -> frozenset[str]:
+    """Every type name the annotation actually RETURNS.
+
+    Two things this has to get right, both found by adversarial review:
+
+    * A **string annotation** is a forward reference — ``-> "LinkSpec"`` and
+      ``-> list["LinkSpec"]`` carry no ``ast.Name`` at all, so a plain walk saw
+      nothing and reported a conformant helper. Idiomatic Python, and this
+      analyzer runs in other people's CI, so the false positive is the expensive
+      kind. Parse the string and recurse.
+    * ``type[X]`` / ``Callable[..., X]`` mention X without returning one.
+    """
     names: set[str] = set()
-    for child in ast.walk(ann):
-        if isinstance(child, ast.Name):
-            names.add(child.id)
-        elif isinstance(child, ast.Attribute):
-            names.add(child.attr)
+
+    def visit(node: ast.expr, depth: int = 0) -> None:
+        if depth > 8:
+            return
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            try:
+                parsed = ast.parse(node.value, mode="eval").body
+            except SyntaxError:
+                return
+            visit(parsed, depth + 1)
+            return
+        if isinstance(node, ast.Subscript):
+            if _annotation_base(node.value) in _NOT_THE_VALUE:
+                return
+            visit(node.value, depth + 1)
+            visit(node.slice, depth + 1)
+            return
+        if isinstance(node, ast.Name):
+            names.add(node.id)
+            return
+        if isinstance(node, ast.Attribute):
+            names.add(node.attr)
+            return
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.expr):
+                visit(child, depth + 1)
+
+    visit(ann)
     return frozenset(names)
 
 

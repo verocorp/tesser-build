@@ -80,7 +80,7 @@ def _bound_names(node: ast.AST) -> set[str]:
     """Builtin names this scope binds: parameters, and every assignment target
     that is a plain name. Nested scopes are excluded — they bind their own."""
     bound: set[str] = set()
-    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
         args = node.args
         for arg in (*args.posonlyargs, *args.args, *args.kwonlyargs):
             if arg.arg in _BUILTINS:
@@ -88,6 +88,19 @@ def _bound_names(node: ast.AST) -> set[str]:
         for extra in (args.vararg, args.kwarg):
             if extra is not None and extra.arg in _BUILTINS:
                 bound.add(extra.arg)
+
+    declared_elsewhere: set[str] = set()
+    for child in _own_scope(node):
+        # ``global x`` / ``nonlocal x`` mean the binding is NOT local, so the
+        # call's target depends on execution order the way a module-level
+        # rebind does — undecidable here. Drop the name rather than report it.
+        if isinstance(child, (ast.Global, ast.Nonlocal)):
+            declared_elsewhere.update(child.names)
+        # ``except E as name`` binds ``name`` for the handler body. The alias is
+        # a plain str on the handler, not a Name node, so the target walk below
+        # never sees it.
+        if isinstance(child, ast.ExceptHandler) and child.name in _BUILTINS:
+            bound.add(child.name)
 
     for child in _own_scope(node):
         targets: list[ast.expr] = []
@@ -115,14 +128,32 @@ def _bound_names(node: ast.AST) -> set[str]:
                     and name.id in _BUILTINS
                 ):
                     bound.add(name.id)
-    return bound
+    return bound - declared_elsewhere
+
+
+def _scope_roots(node: ast.AST) -> list[ast.AST]:
+    """The expressions that actually EXECUTE inside ``node``'s scope.
+
+    For a function this is its body and nothing else. A parameter default, a
+    decorator, and an annotation are evaluated in the ENCLOSING scope, at
+    definition time, where the parameter does not exist yet — so
+    ``def f(len=len("ab"))`` calls the builtin and must not be reported. Walking
+    ``iter_child_nodes`` swept those in and produced exactly that false positive.
+    """
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        return list(node.body)
+    if isinstance(node, ast.Lambda):
+        return [node.body]
+    if isinstance(node, ast.Module):
+        return list(node.body)
+    return list(ast.iter_child_nodes(node))
 
 
 def _own_scope(node: ast.AST) -> list[ast.AST]:
     """Every descendant belonging to ``node``'s own scope — nested function and
     class bodies are pruned, because their names resolve separately."""
     out: list[ast.AST] = []
-    stack: list[ast.AST] = list(ast.iter_child_nodes(node))
+    stack: list[ast.AST] = list(_scope_roots(node))
     while stack:
         child = stack.pop()
         if isinstance(
@@ -151,7 +182,12 @@ def check_shadowing(path: str, source: str, tree: ast.Module) -> list[Finding]:
     scopes.extend(
         node
         for node in ast.walk(tree)
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        # A lambda and a class body are scopes too. A class body in particular
+        # executes at IMPORT time, so ``len = 0`` followed by ``len("a")`` there
+        # breaks the module for every importer.
+        if isinstance(
+            node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
+        )
     )
 
     for scope in scopes:
