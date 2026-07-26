@@ -32,9 +32,10 @@ from typing import Callable
 
 from tessercheck.astutil import (
     _annotation_base,
+    _annotation_name_refs,
     _annotation_names,
+    _has_unparseable_forward_ref,
     _name_of,
-    _parse_forward_ref,
 )
 from tessercheck.classify import ClassInfo, Stereotype
 from tessercheck.finding import Finding
@@ -547,14 +548,18 @@ def _check_single_door(
             continue
         if not (_decorator_names(member) & _FACTORY_DECORATORS):
             continue
-        returned = _annotation_names(member.returns)
+        # returned_only: a factory annotated ``-> type[Slug]`` returns the
+        # CLASS, not a constructed Slug — crediting the name inside would call
+        # every ``kind_of``-style classmethod a second construction door.
+        returned = _annotation_names(member.returns, returned_only=True)
         names_own_type = bool({node.name, "Self"} & returned)
-        # The body is consulted only when the annotation tells us nothing we can
-        # trust — absent, or text no parse could credit a name from. An
-        # annotation that cleanly names some OTHER type is taken at its word, so
-        # a helper that builds one internally on the way to an int is not swept
-        # in.
-        unresolved = not returned
+        # The body is consulted only when the annotation cannot be taken at its
+        # word — absent, crediting no name, or carrying a string no parse can
+        # read (a PART can be garbage while the rest parses, so "credits some
+        # name" alone is not trust). An annotation that cleanly names some
+        # OTHER type is taken at its word, so a helper that builds one
+        # internally on the way to an int is not swept in.
+        unresolved = not returned or _has_unparseable_forward_ref(member.returns)
         if not (names_own_type or (unresolved and _constructs_own_type(member, node.name))):
             continue
         if suppressed(member.lineno):
@@ -891,23 +896,8 @@ def _held_type_refs(node: ast.ClassDef) -> list[tuple[str, int, int]]:
     seen: set[tuple[str, int, int]] = set()
 
     def collect(annotation: ast.expr) -> None:
-        for sub in ast.walk(annotation):
-            if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
-                parsed = _parse_forward_ref(sub.value)
-                if parsed is None:
-                    continue
-                for name in _annotation_names(parsed):
-                    key = (name, sub.lineno, sub.col_offset)
-                    if key not in seen:
-                        seen.add(key)
-                        refs.append(key)
-                continue
-            if isinstance(sub, ast.Name):
-                key = (sub.id, sub.lineno, sub.col_offset)
-            elif isinstance(sub, ast.Attribute):
-                key = (sub.attr, sub.lineno, sub.col_offset)
-            else:
-                continue
+        for name, carrier in _annotation_name_refs(annotation):
+            key = (name, carrier.lineno, carrier.col_offset)
             if key not in seen:
                 seen.add(key)
                 refs.append(key)

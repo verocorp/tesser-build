@@ -5,6 +5,7 @@ without depending on each other.
 """
 
 import ast
+from collections.abc import Iterator
 
 
 def _name_of(node: ast.expr) -> str | None:
@@ -73,7 +74,13 @@ def _dataclass_init_false(decorators: list[ast.expr]) -> bool:
 # closed (crediting no name) is the safe direction everywhere this is used.
 _FORWARD_REF_PARSE_FAILURES = (SyntaxError, ValueError, RecursionError, MemoryError)
 
-_MAX_ANNOTATION_DEPTH = 8
+# Bounds RE-ENTRY through parsed string annotations only — a string whose
+# content is itself a quoted string, eight quotes deep, is nobody's type.
+# Plain AST descent is NOT depth-capped: a ban keyed on "any name anywhere"
+# must stay wide, and capping ordinary generic nesting silently turned
+# ``dict[str, dict[str, ...]]`` five levels deep into an escape hatch from
+# TB010 (adversarial review of the first cut of this module).
+_MAX_FORWARD_REF_DEPTH = 8
 
 
 def _parse_forward_ref(text: str) -> ast.expr | None:
@@ -89,7 +96,7 @@ def _annotation_base(ann: ast.expr, depth: int = 0) -> str | None:
     A string annotation is a forward reference — ``"list[X]"`` has the same base
     as ``list[X]``. A quoted annotation is the ordinary way to name a type
     before it exists, not an escape hatch from any check keyed on this base."""
-    if depth > _MAX_ANNOTATION_DEPTH:
+    if depth > _MAX_FORWARD_REF_DEPTH:
         return None
     if isinstance(ann, ast.Name):
         return ann.id
@@ -110,6 +117,67 @@ def _annotation_base(ann: ast.expr, depth: int = 0) -> str | None:
 _NOT_THE_VALUE: frozenset[str] = frozenset({"type", "Type", "Callable"})
 
 
+def _annotation_name_refs(
+    ann: ast.expr | None, *, returned_only: bool = False
+) -> "Iterator[tuple[str, ast.expr]]":
+    """Yield ``(name, position_carrier)`` for every type name an annotation
+    names, string forward references resolved.
+
+    The carrier is the node a report should point at: the ``Name``/``Attribute``
+    itself, or — for a name found inside a string annotation — the outermost
+    string ``Constant``, since the string's content has no position of its own
+    in the outer file.
+
+    Two string contexts are NOT forward references and are skipped (adversarial
+    review caught both firing on conformant code): the values of a
+    ``Literal[...]`` — ``Literal["Warehouse"]`` is a discriminator holding a
+    string, not the type it happens to spell — and the metadata arguments of
+    ``Annotated[X, ...]``, where only ``X`` is the type.
+
+    Iterative on an explicit stack: the deleted copies used ``ast.walk``, which
+    no annotation could blow the interpreter stack on, and this walk must not
+    be weaker.
+    """
+    if ann is None:
+        return
+    stack: list[tuple[ast.expr, int, ast.expr | None]] = [(ann, 0, None)]
+    while stack:
+        node, string_depth, carrier = stack.pop()
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if string_depth >= _MAX_FORWARD_REF_DEPTH:
+                continue
+            parsed = _parse_forward_ref(node.value)
+            if parsed is not None:
+                stack.append((parsed, string_depth + 1, carrier or node))
+            continue
+        if isinstance(node, ast.Subscript):
+            base = _annotation_base(node.value)
+            if returned_only and base in _NOT_THE_VALUE:
+                continue
+            if base == "Literal":
+                stack.append((node.value, string_depth, carrier))
+                continue
+            if base == "Annotated":
+                stack.append((node.value, string_depth, carrier))
+                if isinstance(node.slice, ast.Tuple) and node.slice.elts:
+                    stack.append((node.slice.elts[0], string_depth, carrier))
+                else:
+                    stack.append((node.slice, string_depth, carrier))
+                continue
+            stack.append((node.value, string_depth, carrier))
+            stack.append((node.slice, string_depth, carrier))
+            continue
+        if isinstance(node, ast.Name):
+            yield node.id, (carrier if carrier is not None else node)
+            continue
+        if isinstance(node, ast.Attribute):
+            yield node.attr, (carrier if carrier is not None else node)
+            continue
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.expr):
+                stack.append((child, string_depth, carrier))
+
+
 def _annotation_names(ann: ast.expr | None, *, returned_only: bool = False) -> frozenset[str]:
     """Every type name in an annotation, string forward references resolved.
 
@@ -127,36 +195,25 @@ def _annotation_names(ann: ast.expr | None, *, returned_only: bool = False) -> f
     default keeps them: a ban keyed on "any name anywhere" (the accessor-primitive
     net, the classifier's field census) must stay wide.
     """
+    return frozenset(
+        name for name, _ in _annotation_name_refs(ann, returned_only=returned_only)
+    )
+
+
+def _has_unparseable_forward_ref(ann: ast.expr | None) -> bool:
+    """True when any string in the annotation fails to parse as a forward
+    reference — the signal that the annotation as a whole cannot be taken at
+    its word, so a caller should fall back to inspecting the body. ``not
+    _annotation_names(...)`` alone is not that signal: ``tuple["int", "not (("]``
+    credits ``tuple`` and ``int`` while silently dropping the garbage part."""
     if ann is None:
-        return frozenset()
-    names: set[str] = set()
-
-    def visit(node: ast.expr, depth: int = 0) -> None:
-        if depth > _MAX_ANNOTATION_DEPTH:
-            return
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            parsed = _parse_forward_ref(node.value)
-            if parsed is not None:
-                visit(parsed, depth + 1)
-            return
-        if isinstance(node, ast.Subscript):
-            if returned_only and _annotation_base(node.value) in _NOT_THE_VALUE:
-                return
-            visit(node.value, depth + 1)
-            visit(node.slice, depth + 1)
-            return
-        if isinstance(node, ast.Name):
-            names.add(node.id)
-            return
-        if isinstance(node, ast.Attribute):
-            names.add(node.attr)
-            return
-        for child in ast.iter_child_nodes(node):
-            if isinstance(child, ast.expr):
-                visit(child, depth + 1)
-
-    visit(ann)
-    return frozenset(names)
+        return False
+    return any(
+        isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and _parse_forward_ref(node.value) is None
+        for node in ast.walk(ann)
+    )
 
 
 def _is_str_call(node: ast.expr) -> bool:

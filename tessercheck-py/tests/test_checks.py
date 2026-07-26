@@ -1911,24 +1911,29 @@ def test_tb033_declines_to_judge_a_global_or_nonlocal_rebind() -> None:
     assert _tb033(src) == []
 
 
-def test_tb032_resolves_a_realistically_nested_annotation_and_stops_below_absurd() -> None:
-    # The recursion guard in _annotation_names, which nothing else reaches. A
-    # generous-but-finite ceiling is the right trade for a function that now
-    # PARSES strings: a forward reference can nest arbitrarily, and unbounded
-    # recursion in an analyzer other people run in CI is worse than a report.
-    # Eight levels of collection nesting still resolves — no realistic
-    # annotation goes deeper — and past the ceiling the helper degrades to a
-    # finding rather than raising.
-    realistic = "list[" * 8 + "LinkSpec" + "]" * 8
-    absurd = "list[" * 12 + "LinkSpec" + "]" * 12
+def test_tb032_depth_cap_bounds_quote_nesting_not_plain_nesting() -> None:
+    # The recursion guard in _annotation_names bounds RE-ENTRY through parsed
+    # string annotations only. An earlier cut capped ordinary AST descent too,
+    # and adversarial review proved that an escape hatch: five levels of
+    # generic nesting hid a primitive from the "any name anywhere" ban. So:
+    # plain nesting resolves at ANY depth (the deleted ast.walk copies had no
+    # cap, and the shared walk must not be weaker), while a string quoted
+    # inside a string past eight parses is nobody's type and degrades to a
+    # finding rather than recursing without bound.
+    deep_plain = "list[" * 12 + "LinkSpec" + "]" * 12
+    realistic_quoted = repr(repr("list[LinkSpec]"))
+    absurd_quoted = "list[LinkSpec]"
+    for _ in range(10):
+        absurd_quoted = repr(absurd_quoted)
     body = (
         "def _specs() -> {ann}:\n"
         "    return []\n"
         "def test_it() -> None:\n"
         "    assert _specs() == []\n"
     )
-    assert _tb032(_SPEC_DEF + body.format(ann=realistic)) == []
-    assert [f.line for f in _tb032(_SPEC_DEF + body.format(ann=absurd))] == [5]
+    assert _tb032(_SPEC_DEF + body.format(ann=deep_plain)) == []
+    assert _tb032(_SPEC_DEF + body.format(ann=realistic_quoted)) == []
+    assert [f.line for f in _tb032(_SPEC_DEF + body.format(ann=absurd_quoted))] == [5]
 
 
 def test_tb032_survives_a_forward_reference_that_will_not_parse() -> None:
@@ -2195,3 +2200,126 @@ def test_classifier_survives_an_annotation_that_defeats_the_parser() -> None:
         "    __eq__ = None  # type: ignore[assignment]\n"
     )
     check_source("t.py", src, is_test=False)
+
+
+def test_literal_values_are_not_forward_references() -> None:
+    # Adversarial review of the shared walk's first cut: Literal["Warehouse"]
+    # is a discriminator holding a STRING, not the type it happens to spell.
+    # Reading it as a forward reference made the classifier see an embedded
+    # root (TB014 flipped the entity rule to the aggregate-root rule) and
+    # TB012 report a held root that is not held.
+    src = (
+        "from typing import Literal\n"
+        "class Shelf:\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self._id = id\n"
+        "    def __eq__(self, other: object) -> bool:\n"
+        "        return isinstance(other, Shelf) and other._id == self._id\n"
+        "    def __hash__(self) -> int:\n"
+        "        return hash(self._id)\n"
+        "class Warehouse:\n"
+        "    def __init__(self, id: str, shelves: list[Shelf]) -> None:\n"
+        "        self._id = id\n"
+        "        self._shelves = list(shelves)\n"
+        "    __eq__ = None  # type: ignore[assignment]\n"
+        "    __hash__ = None  # type: ignore[assignment]\n"
+        "class AuditEntry:\n"
+        "    def __init__(self, id: str, subject_kind: Literal['Warehouse']) -> None:\n"
+        "        self._id = id\n"
+        "        self._subject_kind = subject_kind\n"
+        "    def __eq__(self, other: object) -> bool:\n"
+        "        return isinstance(other, AuditEntry) and other._id == self._id\n"
+        "    def __hash__(self) -> int:\n"
+        "        return hash(self._id)\n"
+    )
+    assert _codes(src) == set()
+
+
+def test_literal_of_primitive_spellings_is_not_a_primitive() -> None:
+    # Literal["str", "int"] holds the words, not the types — the accessor ban
+    # must not key on a literal's CONTENT (Literal["percent"] was clean while
+    # the identical shape spelling a type name fired).
+    src = (
+        "from dataclasses import dataclass\n"
+        "from typing import Literal\n"
+        "@dataclass(frozen=True)\n"
+        "class Slug:\n"
+        "    _value: str\n"
+        "    def kind(self) -> Literal['str', 'int', 'bool']:\n"
+        "        return 'str'\n"
+        "    def __str__(self) -> str:\n"
+        "        return self._value\n"
+    )
+    assert "TB010" not in _codes(src)
+
+
+def test_annotated_metadata_is_not_a_forward_reference() -> None:
+    # Only Annotated's FIRST argument is the type; the rest is metadata, and a
+    # docstring-ish "Warehouse" there must not read as holding the root. The
+    # first argument itself still resolves — quoted or not.
+    src = (
+        "from typing import Annotated\n"
+        "class Shelf:\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self._id = id\n"
+        "    def __eq__(self, other: object) -> bool:\n"
+        "        return isinstance(other, Shelf) and other._id == self._id\n"
+        "class Warehouse:\n"
+        "    def __init__(self, id: str, shelves: list[Shelf]) -> None:\n"
+        "        self._id = id\n"
+        "        self._shelves = list(shelves)\n"
+        "    __eq__ = None  # type: ignore[assignment]\n"
+        "class Order:\n"
+        "    def __init__(self, id: str, note: Annotated[str, 'Warehouse']) -> None:\n"
+        "        self._id = id\n"
+        "        self._note = note\n"
+        "    __eq__ = None  # type: ignore[assignment]\n"
+    )
+    assert "TB012" not in _codes(src)
+    held = src.replace(
+        "note: Annotated[str, 'Warehouse']", "w: Annotated['Warehouse', 'doc']"
+    )
+    assert "TB012" in _codes(held)
+
+
+def test_deep_generic_nesting_is_not_an_escape_hatch_from_the_primitive_ban() -> None:
+    # The P2 from the same review: capping plain AST descent at 8 silently
+    # bounded "any name anywhere" at five levels of generic nesting, so a
+    # deep-enough dict hid its primitive from TB010.
+    deep = "dict[str, " * 6 + "int" + "]" * 6
+    src = (
+        "from dataclasses import dataclass\n"
+        "@dataclass(frozen=True)\n"
+        "class Ledger:\n"
+        "    _rows: tuple\n"
+        f"    def rows(self) -> {deep}:\n"
+        "        return self._rows\n"
+    )
+    assert "TB010" in _codes(src)
+
+
+def test_tb017_partially_garbage_annotation_still_consults_the_body() -> None:
+    # tuple["int", "not (("] credits `tuple` and `int` while silently dropping
+    # the garbage part — "credits some name" alone is not trust. The old copy
+    # got this via its raw-text fallback; the shared walk gets it via an
+    # explicit any-string-unparseable signal.
+    src = _LEAF + (
+        "    @classmethod\n"
+        "    def parse(cls, raw: str) -> tuple['int', 'not valid syntax (']:\n"
+        "        return cls(raw)\n"
+    )
+    assert "TB017" in _codes(src)
+
+
+def test_tb017_a_factory_returning_the_class_object_is_not_a_door() -> None:
+    # `-> type[Slug]` returns the CLASS, not a constructed Slug. Crediting the
+    # name inside called every kind_of-style classmethod a second construction
+    # door; with returned_only the annotation credits nothing and the
+    # non-constructing body settles it.
+    for ann in ("type[Slug]", "type['Slug']"):
+        src = _LEAF + (
+            "    @classmethod\n"
+            f"    def kind_of(cls) -> {ann}:\n"
+            "        return cls\n"
+        )
+        assert "TB017" not in _codes(src), ann

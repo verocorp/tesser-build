@@ -176,14 +176,21 @@ class _QuoteAnnotations(ast.NodeTransformer):
 
 
 def test_quoting_every_annotation_changes_no_finding() -> None:
-    # Metamorphic invariance over the acceptance-gate tree: a string annotation
-    # is the same annotation, so quoting every one of them must not change a
-    # single finding. This is the whole-analyzer guard against the walk
-    # re-diverging — when it had, this exact sweep produced TB015 on every leaf
-    # value object in all four example trees. Both sides are ast.unparse'd so
+    # Metamorphic invariance over all four Python example trees: a string
+    # annotation is the same annotation, so quoting every one of them must not
+    # change a single finding. This is the whole-analyzer guard against the
+    # walk re-diverging — when it had, this exact sweep produced TB015 on every
+    # leaf value object in all four trees. Both sides are ast.unparse'd so
     # comment-carried markers (# tesser-category:) are stripped equally and
-    # line numbers stay comparable.
-    for path in sorted(_EXAMPLES.rglob("*.py")):
+    # line numbers stay comparable. The comparison is a SET of (code, line) by
+    # design: names inside one string share the string's position, so quoting
+    # can merge two same-line reports of one reference into one — a position
+    # artifact, not a lost finding. What the set contract does promise is that
+    # no finding appears or disappears.
+    trees = [_EXAMPLES, *(_ROOT / "examples" / t for t in ("python-app", "serdepy", "errorspy"))]
+    paths = [p for tree in trees for p in sorted(tree.rglob("*.py"))]
+    assert len(paths) > 100, "example trees have moved; fix the sweep's roots"
+    for path in paths:
         src = path.read_text(encoding="utf-8")
         base = ast.unparse(ast.parse(src))
         quoted_tree = _QuoteAnnotations().visit(ast.parse(src))
