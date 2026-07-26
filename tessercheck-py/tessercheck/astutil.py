@@ -86,14 +86,35 @@ _FORWARD_REF_PARSE_FAILURES = (SyntaxError, ValueError, RecursionError, MemoryEr
 _MAX_FORWARD_REF_DEPTH = 8
 
 
-@functools.lru_cache(maxsize=4096)
+# Only short strings are memoized: real forward references are short (the
+# whole example + fixture corpus produces three distinct parses), while the
+# cache holds parsed ASTs for the process lifetime — entry-count-bounded but
+# byte-unbounded, a red-teamed 7.5 MB file of long quoted annotations drove
+# peak RSS to 7x the pre-cache figure. Long strings just re-parse.
+_MAX_MEMOIZED_FORWARD_REF_LEN = 512
+
+
 def _parse_forward_ref(text: str) -> ast.expr | None:
     # Memoized because the walk consults _annotation_base per Subscript, so a
     # nested quoted annotation was re-parsed per visiting level — a measured
     # 12–33x wall-clock amplification on quote-dense input, all duplicate
     # parses of identical short strings. Safe to cache: a parsed node is never
     # a position carrier (the outer string Constant is), so the shared nodes'
-    # positions are never read.
+    # positions are never read. maxsize must stay large — a string's repeat
+    # accesses straddle the whole classify pass and the whole check pass, so a
+    # small LRU evicts every entry before its second use and runs SLOWER than
+    # no cache (measured).
+    if len(text) > _MAX_MEMOIZED_FORWARD_REF_LEN:
+        return _parse_forward_ref_uncached(text)
+    return _parse_forward_ref_cached(text)
+
+
+@functools.lru_cache(maxsize=4096)
+def _parse_forward_ref_cached(text: str) -> ast.expr | None:
+    return _parse_forward_ref_uncached(text)
+
+
+def _parse_forward_ref_uncached(text: str) -> ast.expr | None:
     try:
         return ast.parse(text, mode="eval").body
     except _FORWARD_REF_PARSE_FAILURES:

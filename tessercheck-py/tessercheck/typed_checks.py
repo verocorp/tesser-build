@@ -559,10 +559,16 @@ def _check_single_door(
         # The body is consulted only when the annotation cannot be taken at its
         # word — absent, crediting no name, or carrying a string no parse can
         # read (a PART can be garbage while the rest parses, so "credits some
-        # name" alone is not trust). An annotation that cleanly names some
-        # OTHER type is taken at its word, so a helper that builds one
-        # internally on the way to an int is not swept in.
-        unresolved = not returned or _has_unparseable_forward_ref(
+        # name" alone is not trust). Readability is judged on the WIDE set:
+        # ``-> type[Registry]`` credits nothing in returned position yet is a
+        # perfectly readable annotation naming another type, so it is taken at
+        # its word — conflating "names no returned value" with "could not be
+        # read" sent such factories to body inspection and flagged an
+        # incidental own-type construction as a door (red-team review). An
+        # annotation that cleanly names some OTHER type is trusted, so a
+        # helper that builds one internally on the way to an int is not swept
+        # in.
+        unresolved = not _annotation_names(member.returns) or _has_unparseable_forward_ref(
             member.returns, returned_only=True
         )
         if not (names_own_type or (unresolved and _constructs_own_type(member, node.name))):

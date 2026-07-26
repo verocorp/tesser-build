@@ -2536,3 +2536,23 @@ def test_the_shared_walk_contract() -> None:
         assert got_wide == wide, f"{text}: wide {got_wide}"
         assert got_returned == returned, f"{text}: returned_only {got_returned}"
         assert got_unp is unparseable, f"{text}: unparseable {got_unp}"
+
+
+def test_tb017_readable_type_annotation_is_trusted_despite_an_incidental_construction() -> None:
+    # Red-team catch on the returned_only trust computation: `-> type[Registry]`
+    # credits nothing in returned position, and judging readability on that
+    # SAME set conflated "names no returned value" with "could not be read" —
+    # the body got consulted and an incidental own-type construction inside a
+    # kind_of-style classmethod reported as a second door. Readability is
+    # judged on the wide set; this factory's annotation cleanly names another
+    # type and is taken at its word.
+    src = _LEAF + (
+        "    @classmethod\n"
+        "    def registry_for(cls) -> type[Registry]:\n"
+        "        _sentinel = cls('sentinel')\n"
+        "        assert _sentinel\n"
+        "        return Registry\n"
+        "class Registry:\n"
+        "    pass\n"
+    )
+    assert "TB017" not in _codes(src)

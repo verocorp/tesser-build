@@ -215,3 +215,47 @@ def test_quoting_every_annotation_changes_no_finding() -> None:
             f"added {sorted(quoted_findings - base_findings)}, "
             f"lost {sorted(base_findings - quoted_findings)}"
         )
+
+
+def test_quoting_every_annotation_changes_no_finding_tree_wide() -> None:
+    # The per-file sweep above classifies each file in isolation; the
+    # cross-file embeds_entity / is_member resolution that motivated the walk
+    # unification is built by run_paths' whole-tree registry and never enters
+    # that guard (red-team review). This arm materializes each corpus quoted
+    # and compares whole-tree output, so the registry direction is inside the
+    # invariance too.
+    import tempfile
+
+    trees = sorted(
+        d for d in (_ROOT / "examples").iterdir() if d.is_dir() and any(d.rglob("*.py"))
+    )
+    trees.append(_TESTDATA)
+    for tree in trees:
+        with tempfile.TemporaryDirectory() as tmp:
+            base_dir = Path(tmp) / "base"
+            quoted_dir = Path(tmp) / "quoted"
+            for p in tree.rglob("*.py"):
+                rel = p.relative_to(tree)
+                src = p.read_text(encoding="utf-8")
+                base_out = ast.unparse(ast.parse(src))
+                quoted_tree = _QuoteAnnotations().visit(ast.parse(src))
+                quoted_out = ast.unparse(ast.fix_missing_locations(quoted_tree))
+                for root_dir, out in ((base_dir, base_out), (quoted_dir, quoted_out)):
+                    dest = root_dir / rel
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    dest.write_text(out, encoding="utf-8")
+            base_findings, base_errors = run_paths([str(base_dir)])
+            quoted_findings, quoted_errors = run_paths([str(quoted_dir)])
+            assert base_errors == [], f"{tree}: {base_errors}"
+            assert quoted_errors == [], f"{tree}: {quoted_errors}"
+            base_set = {
+                (f.code, str(Path(f.path).relative_to(base_dir)), f.line) for f in base_findings
+            }
+            quoted_set = {
+                (f.code, str(Path(f.path).relative_to(quoted_dir)), f.line)
+                for f in quoted_findings
+            }
+            assert base_set == quoted_set, (
+                f"{tree}: whole-tree quoting changed findings — "
+                f"added {sorted(quoted_set - base_set)}, lost {sorted(base_set - quoted_set)}"
+            )
