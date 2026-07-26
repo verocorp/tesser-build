@@ -29,10 +29,12 @@ judgment call made inline at write time (Chris ruling 2026-07-19).
      `testing.md`), `# pragma...`, and formatter/linter controls
      (`# fmt:`, `# isort:`, `# ruff:`).
 
-     The `tesser-category:` exemption is on the **prefix**, not on a valid
-     name. A typo'd category is TB032's finding to report; reporting it here
-     too would tell you that you wrote a banned comment when what you wrote
-     was a misspelled directive.
+     The `tesser-category:` exemption is on the marker's **shape**, not on a
+     valid name — a typo'd category is TB032's finding to report, and flagging
+     it here too would tell you that you wrote a banned comment when what you
+     wrote was a misspelled directive. Prose trailing the marker
+     (`# tesser-category: spec because it builds one`) is *not* a marker and
+     stays banned; a directive is not cover for a sentence.
    - Go: `//go:` directives, build constraints (`// +build`), `//line`,
      `//nolint...`, `//export` / `//extern` / `//sys`, the roadmap marker
      grammar (same three, `//`-wrapped), the cgo preamble attached to an

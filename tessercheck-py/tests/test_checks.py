@@ -10,7 +10,7 @@ from tessercheck.comments_check import check_comments
 from tessercheck.finding import CHECKS, Finding
 from tessercheck.helpers_check import _comment_lines
 from tessercheck.run import run_source
-from tessercheck.shadowing_check import _suppressed_lines
+from tessercheck.shadowing_check import _scope_roots, _suppressed_lines
 
 _TESTDATA = Path(__file__).resolve().parents[1] / "testdata"
 
@@ -1909,3 +1909,111 @@ def test_tb033_declines_to_judge_a_global_or_nonlocal_rebind() -> None:
         "    return n\n"
     )
     assert _tb033(src) == []
+
+
+def test_tb032_resolves_a_realistically_nested_annotation_and_stops_below_absurd() -> None:
+    # The recursion guard in _annotation_names, which nothing else reaches. A
+    # generous-but-finite ceiling is the right trade for a function that now
+    # PARSES strings: a forward reference can nest arbitrarily, and unbounded
+    # recursion in an analyzer other people run in CI is worse than a report.
+    # Eight levels of collection nesting still resolves — no realistic
+    # annotation goes deeper — and past the ceiling the helper degrades to a
+    # finding rather than raising.
+    realistic = "list[" * 8 + "LinkSpec" + "]" * 8
+    absurd = "list[" * 12 + "LinkSpec" + "]" * 12
+    body = (
+        "def _specs() -> {ann}:\n"
+        "    return []\n"
+        "def test_it() -> None:\n"
+        "    assert _specs() == []\n"
+    )
+    assert _tb032(_SPEC_DEF + body.format(ann=realistic)) == []
+    assert [f.line for f in _tb032(_SPEC_DEF + body.format(ann=absurd))] == [5]
+
+
+def test_tb032_survives_a_forward_reference_that_will_not_parse() -> None:
+    # A string annotation is arbitrary text, so ast.parse on it can raise where
+    # the module's own parse succeeded. The analyzer must not crash on source
+    # its host tool accepted — it degrades to "no names resolved", which reports
+    # the helper. Fail closed, same posture as the tokenize handlers.
+    src = _SPEC_DEF + (
+        'def _spec() -> "LinkSpec[":\n'
+        "    return LinkSpec(slug='a')\n"
+        "def test_it() -> None:\n"
+        "    assert _spec()\n"
+    )
+    assert [f.line for f in _tb032(src)] == [5]
+
+
+def test_tb033_scope_roots_excludes_what_the_enclosing_scope_evaluates() -> None:
+    # _scope_roots is the fix for the parameter-default false positive, and its
+    # contract is worth pinning directly: for a def, ONLY the body executes in
+    # the new scope — a default, a decorator, and an annotation are all
+    # evaluated at definition time in the enclosing one. The final fallback is
+    # unreachable through check_shadowing (every scope root is a Module,
+    # Function, Lambda or ClassDef today) and exists so a non-scope node
+    # degrades to its children rather than silently yielding nothing.
+    fn = ast.parse("@deco\ndef f(len=len('ab')) -> len:\n    return 1\n").body[0]
+    assert [type(n).__name__ for n in _scope_roots(fn)] == ["Return"]
+    lam = ast.parse("lambda id: id(1)", mode="eval").body
+    assert [type(n).__name__ for n in _scope_roots(lam)] == ["Call"]
+    branch = ast.parse("if x:\n    y = 1\n").body[0]
+    assert [type(n).__name__ for n in _scope_roots(branch)] == ["Name", "Assign"]
+
+
+def test_tb032_ignores_a_production_class_with_a_test_prefixed_method() -> None:
+    # The P1 from the structured review, and the flip side of walking past
+    # tree.body: a production `Client.test_connection()` must not make the whole
+    # module a test module and drag `build_url` into TB032's scope. Detection
+    # mirrors pytest's own collection — module-level test_*, or test_* on a
+    # class named Test*.
+    src = (
+        "def build_url(host: str, port: int) -> str:\n"
+        '    return f"{host}:{port}"\n'
+        "class Client:\n"
+        "    def test_connection(self) -> bool:\n"
+        "        return True\n"
+    )
+    assert _tb032(src) == []
+
+
+def test_tb032_still_judges_a_class_named_test_something() -> None:
+    # The other half of the same predicate: narrowing to pytest's rules must not
+    # undo the class-based-tests fix.
+    src = (
+        "def _detect(x: int) -> int:\n"
+        "    return x\n"
+        "class TestThing:\n"
+        "    def test_it(self) -> None:\n"
+        "        assert _detect(1) == 1\n"
+    )
+    assert [f.line for f in _tb032(src)] == [1]
+
+
+def test_tb032_reads_a_trailing_marker_on_a_decorated_helpers_def_line() -> None:
+    # `_anchor_line` is the DECORATOR line for a decorated function, so the
+    # documented "trailing its def" form was never read and produced a false
+    # positive on a correctly-annotated helper.
+    src = (
+        "from contextlib import contextmanager\n"
+        "@contextmanager\n"
+        "def _payload():  # tesser-category: dto\n"
+        "    yield {}\n"
+        "def test_it() -> None:\n"
+        "    assert _payload\n"
+    )
+    assert _tb032(src) == []
+
+
+def test_tb020_flags_prose_riding_a_category_prefix() -> None:
+    # The exemption is on the marker's SHAPE, not a bare prefix. Prose after the
+    # prefix is not a marker, so it stays a banned comment instead of using a
+    # directive as cover.
+    assert _tb020("x = 1  # tesser-category: spec because it builds one\n")
+
+
+def test_tb020_still_exempts_a_typod_category_name() -> None:
+    # ...while a misspelled name DOES parse as a marker and stays exempt here,
+    # so the author gets one finding from TB032 with the right diagnosis rather
+    # than two with the wrong one leading.
+    assert _tb020("x = 1  # tesser-category: spce\n") == []

@@ -1,10 +1,12 @@
-"""The ``# tesser-category:`` vocabulary — the one constant TB020 and TB032
-both read, and the reason the split between them is prefix-vs-name.
+"""The ``# tesser-category:`` vocabulary — the one parser TB020 and TB032
+both read, and the reason the split between them is shape-vs-name.
 """
+
+import ast
 
 import pytest
 
-from tessercheck.comments_check import _DIRECTIVE
+from tessercheck.comments_check import check_comments
 from tessercheck.markers import (
     CATEGORIES,
     CATEGORY_PREFIX,
@@ -12,6 +14,10 @@ from tessercheck.markers import (
     declared_category,
     is_known_category,
 )
+
+
+def _tb020(src: str) -> list[str]:
+    return [f.code for f in check_comments("m.py", src, ast.parse(src))]
 
 
 @pytest.mark.parametrize(
@@ -70,9 +76,10 @@ def test_category_list_renders_the_closed_set_sorted() -> None:
         assert name in category_list()
 
 
-def test_tb020_directive_regex_derives_from_the_shared_prefix() -> None:
-    # The coupling T1 exists to create: TB020's exemption is built from
-    # CATEGORY_PREFIX, so renaming the marker in one place cannot leave the
-    # other checker honoring the old spelling.
-    assert _DIRECTIVE.match(f"# {CATEGORY_PREFIX} spec")
-    assert not _DIRECTIVE.match("# tesser-categorized: spec")
+def test_tb020_exemption_runs_through_the_same_parser_tb032_uses() -> None:
+    # The coupling this module exists to create. TB020 does not pattern-match the
+    # marker itself — it asks declared_category, the same function TB032 asks —
+    # so the two can never disagree about what a marker is, and renaming the
+    # marker in one place cannot leave the other honoring the old spelling.
+    assert _tb020(f"x = 1  # {CATEGORY_PREFIX} spec\n") == []
+    assert _tb020("x = 1  # tesser-categorized: spec\n") == ["TB020"]

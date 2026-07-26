@@ -100,7 +100,26 @@ def _is_test_function(node: ast.AST) -> bool:
 
 
 def _defines_a_test(tree: ast.Module) -> bool:
-    return any(_is_test_function(node) for node in ast.walk(tree))
+    """A module pytest would actually collect tests from.
+
+    Deliberately NOT "any ``test_*`` anywhere in the tree". A walk that loose
+    reads a production ``Client.test_connection()`` as proof the file is a test
+    module and subjects every module-level function beside it to TB032 — a
+    false positive in ordinary production code, in someone else's CI.
+
+    So mirror pytest's own collection: a module-level ``test_*`` function, or a
+    ``test_*`` method on a class named ``Test*`` (pytest's default
+    ``python_classes``). That keeps the class-based style covered — which is the
+    whole reason this walks past ``tree.body`` — while a class named anything
+    else is just a class.
+    """
+    for node in tree.body:
+        if _is_test_function(node):
+            return True
+        if isinstance(node, ast.ClassDef) and node.name.startswith("Test"):
+            if any(_is_test_function(m) for m in node.body):
+                return True
+    return False
 
 
 def _is_fixture(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
@@ -210,9 +229,12 @@ def _declared_on(
     instead.
     """
     anchor = _anchor_line(node)
-    if (trailing := comments.get(anchor)) is not None:
-        if (name := declared_category(trailing)) is not None:
-            return name
+    # Both the decorator line and the ``def`` line, because they differ for a
+    # decorated helper and the documented form is "trailing its def".
+    for line in {anchor, node.lineno}:
+        if (trailing := comments.get(line)) is not None:
+            if (name := declared_category(trailing)) is not None:
+                return name
     line = anchor - 1
     while (comment := comments.get(line)) is not None:
         if (name := declared_category(comment)) is not None:

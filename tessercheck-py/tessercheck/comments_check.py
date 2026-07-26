@@ -10,11 +10,15 @@ formatter/linter control lines. The exemption ledger grows only from
 discovered evidence — extend it in ``comments.md`` and here in the same
 change. Applies to test files too (the norm has no test scope).
 
-The ``tesser-category:`` exemption matches the marker's PREFIX, not a valid
-category name: an unknown name is TB032's finding to report, and reporting it
-here as well would tell the author they wrote a banned comment when what they
-wrote was a typo'd directive. :mod:`tessercheck.markers` owns the vocabulary
-both checks read.
+The ``tesser-category:`` exemption matches the marker's SHAPE, not a valid
+category name, and it uses the same parser TB032 uses so the two can never
+disagree about what a marker is. A typo'd name still parses as a marker and
+stays exempt here — an unknown name is TB032's finding, and reporting it here
+too would tell the author they wrote a banned comment when what they wrote was
+a misspelled directive. Prose trailing the prefix does NOT parse as a marker
+(``# tesser-category: spec because it builds one``), so it stays a banned
+comment rather than riding through as a directive. :mod:`tessercheck.markers`
+owns the vocabulary both checks read.
 """
 
 import ast
@@ -24,11 +28,10 @@ import tokenize
 from typing import TypeGuard
 
 from tessercheck.finding import Finding
-from tessercheck.markers import CATEGORY_DIRECTIVE_PATTERN
+from tessercheck.markers import declared_category
 
 _DIRECTIVE = re.compile(
     r"^#\s*(!|type:|noqa|tessercheck:ignore|tb-(?:cell|status|allow-missing):"
-    rf"|{CATEGORY_DIRECTIVE_PATTERN}"
     r"|pragma|fmt:|isort:|ruff:)"
 )
 _CODING_DECL = re.compile(r"^#.*?coding[:=]\s*[-\w.]+")
@@ -60,6 +63,13 @@ def check_comments(path: str, source: str, tree: ast.Module) -> list[Finding]:
 
     def exempt(tok: tokenize.TokenInfo) -> bool:
         if _DIRECTIVE.match(tok.string):
+            return True
+        # The category marker is exempted on its SHAPE, via the same parser
+        # TB032 uses, not on a bare prefix. A typo'd name still parses as a
+        # marker and stays exempt here (TB032 reports the typo, with the right
+        # diagnosis). Prose trailing the prefix does NOT parse as a marker, so
+        # it stays a banned comment instead of riding through as a directive.
+        if declared_category(tok.string) is not None:
             return True
         # PEP 263 coding declarations are only meaningful on lines 1-2;
         # anywhere else, "coding" in a comment is just prose.
