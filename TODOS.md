@@ -128,17 +128,32 @@ Deferred work with context. Each entry carries enough for a cold pickup.
     can be suppressed) while the others are single-line — unify deliberately,
     don't silently pick one.
 
-- [ ] **The per-file walk count is now SIX, not four** (2026-07-20 ship review,
-  measured; count corrected 2026-07-26)
-  - **What:** measured on this repo's own corpus (146 files) when TB030 landed as
-    the 4th walk: 142.5 ms → 176.7 ms, **+24%** wall clock for one check,
-    ~0.23 ms/file. Real but small; a linter, not a hot path. **The test-helper
-    wave added two more** — `helpers_check` and `shadowing_check` — so the
-    original measurement no longer describes the tree. Re-measure before acting.
-  - **Additional cost the old entry does not account for:** `helpers_check` calls
-    `classify_trees({path: tree})` for **every test file it judges**, so each
-    test file pays a whole-tree classifier pass of its own. That is a different
-    shape of cost from one more walk and should be measured separately.
+- [ ] **Fold the standalone checkers into the existing `_Checker` NodeVisitor**
+  (2026-07-20 ship review; **re-measured 2026-07-26, and my own correction to
+  this entry was wrong too — see below**)
+  - **Measured composition, not a checker count** (Python 3.12.5, HEAD `79c3a1a`,
+    tree-equivalent traversals per file):
+    | source | tree-equiv | note |
+    |---|---|---|
+    | `_Checker` NodeVisitor | 1.00x | the pass everything else could ride |
+    | `comments_check` | 2.00x | two back-to-back `ast.walk` |
+    | `doubles_check` | 1.00x | |
+    | **`shadowing_check`** | **2.73x** | the largest single consumer |
+    | `helpers_check` | **0.00x** | |
+    | `typed_checks` | ~0 | iterates `tree.body`; walks only class bodies |
+    | **total** | **~6.73x** | plus 4 tokenize passes on a test module |
+  - ⚠ **Two things I asserted in this entry on 2026-07-26 were wrong**, and both
+    were wrong in the direction of blaming the newest code:
+    - `helpers_check` contributes **zero** walks. `_defines_a_test` was rewritten
+      to iterate `tree.body` (pytest's collection rules), so the module contains
+      no `ast.walk` at all. I wrote "the wave added two more walks" without
+      re-reading the code I had just changed.
+    - `classify_trees` per test file is **not** "a whole-tree classifier pass of
+      its own" and does not need measuring separately — it iterates `tree.body`
+      for top-level classes only. **Measured: 0.219 ms for all 50 test modules
+      repo-wide, ~4 µs/file.** It is the cheapest thing in the checker.
+  - **The biggest win is now TB033, not TB030** — which inverts what this entry
+    used to say. See the `_bound_names` double-walk below.
   - **How:** fold the TB030 dispatch into the existing `_Checker` NodeVisitor as
     `visit_Import`/`visit_ImportFrom`/`visit_Attribute` + additions to the
     existing function visitors, which makes it near-free on a pass that already
@@ -549,6 +564,36 @@ change; each waits for a real need.
 
 ## Testing norm — helper wave follow-ups (opened 2026-07-26, eng review)
 
+- [ ] **TB033 walks each scope twice, for a measured 20% of its own cost**
+  (performance review 2026-07-26, prototyped)
+  - **What:** `_bound_names` materializes `_own_scope(node)` **twice** per scope —
+    once for the `Global`/`Nonlocal`/`ExceptHandler` loop and again for the
+    assignment-target loop. That is 1.71x tree of node touches where 0.85x would
+    do, and it is why TB033 is now the most expensive checker in the analyzer
+    (199.6 ms repo-wide vs TB020's 131.5 ms).
+  - **The fix is a loop merge and it was prototyped:** 199.4 → 159.7 ms
+    repo-wide, **byte-identical findings**. Beyond that, `_own_scope` re-derives
+    per scope the same partition the scope-collecting `ast.walk` already visited;
+    one traversal yielding each scope together with its own-scope nodes would take
+    TB033 to roughly a single tree pass.
+  - **Why not done on the way out:** it is a refactor of the exact function that
+    produced three of this wave's defects, for a linter that runs in 0.3 s on the
+    largest example tree. Three separate defects in this wave were introduced by
+    fixes made under ship pressure. This one has no user-visible symptom, so it
+    waits for a change window where it can be the only thing moving.
+
+- [ ] **Every file is tokenized 3-4 times to build near-identical ignore sets**
+  (performance review 2026-07-26, measured)
+  - **What:** `comments_check`, `doubles_check`, `shadowing_check` and (on a test
+    module) `helpers_check` each run their own `tokenize.generate_tokens` pass.
+    **Measured: ~106 ms of a 584 ms repo run is redundant re-tokenization**; this
+    wave added two of the four.
+  - **One fix closes two entries:** tokenize once in `check_tree` and pass the
+    suppressed-line set down. That collapses this cost AND the behavioral
+    divergence in the six-checkers suppression entry above — the old checkers
+    read raw line text, the new ones read COMMENT tokens, and a single shared
+    reader makes them agree by construction.
+
 - [ ] **TB033: three more binding forms Python treats as bindings**
   (adversarial review 2026-07-26, deferred deliberately)
   - **What:** TB033 counts parameters, assignment targets, `for` targets, walrus,
@@ -567,6 +612,24 @@ change; each waits for a real need.
     review got introduced.
   - **Start at:** `_bound_names` in `tessercheck-py/tessercheck/shadowing_check.py`,
     and the `scopes` list in `check_shadowing` for the comprehension case.
+
+- [ ] **TB032 misses two more collectible-test shapes** (coverage review
+  2026-07-26; both false NEGATIVES, neither locked into a test)
+  - **A nested `Test*` class holding the tests.** `class TestOuter:` containing
+    `class TestInner:` with the `test_*` methods — pytest collects
+    `TestOuter::TestInner::test_it`, but `_defines_a_test` scans one level of
+    `tree.body` for methods and never for a nested class. The module's helpers go
+    unjudged.
+  - **An indirect `unittest.TestCase` subclass.** `class Base(TestCase)` then
+    `class CampaignCase(Base)` — pytest collects it; `_is_test_class` only matches
+    a direct `TestCase` base. Decidable within one file, which makes it narrower
+    than it sounds.
+  - **Same shape as the bug the adversarial pass caught in TB033:** a walk got
+    tightened to kill a false positive and took real detection with it. Both fail
+    toward silence rather than noise, and there are no in-tree instances.
+  - **Deliberately not locked into a test.** A test asserting current behavior
+    here would ratchet the bug in place — which is exactly what happened once
+    already this wave with the lambda blind spot.
 
 - [ ] **TB032's structural blind spot is wider than first recorded**
   (adversarial review 2026-07-26)
