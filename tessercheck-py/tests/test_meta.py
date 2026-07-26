@@ -90,13 +90,40 @@ def test_no_unregistered_code_is_emitted() -> None:
             assert f.code in registered, f"{bad} emitted unregistered {f.code}"
 
 
+# TB032 ships ahead of the example restyle that makes the examples conform to
+# it — the adoption ratchet in docs/design-ddd-vet-migration.md. Until that
+# restyle lands, the gate below tolerates TB032 and TB032 only, and
+# test_the_tb032_ratchet_still_has_a_reason_to_exist forces the tolerance out
+# again the moment it stops being needed.
+_RATCHETED: frozenset[str] = frozenset({"TB032"})
+
+
 def test_acceptance_gate_examples_python_is_clean() -> None:
     # The examples are the canonical conformant tree — the analyzer must pass
     # clean on them, exactly as tessercheck gates examples/ddd on the Go side.
     assert _EXAMPLES.is_dir(), f"examples tree not found at {_EXAMPLES}"
     findings, errors = run_paths([str(_EXAMPLES)])
+    findings = [f for f in findings if f.code not in _RATCHETED]
     assert findings == [], "\n".join(f.render() for f in findings)
     assert errors == [], "\n".join(errors)
+
+
+def test_the_tb032_ratchet_still_has_a_reason_to_exist() -> None:
+    """The ratchet's expiry, not its excuse.
+
+    A tolerance added "until the restyle lands" outlives the restyle unless
+    something fails when it becomes unnecessary. So: while TB032 is ratcheted,
+    the examples must still violate it. When the restyle lands and the tree
+    goes clean, THIS test fails — and the fix is to delete `_RATCHETED` and
+    this test, restoring a gate with no exemptions.
+    """
+    findings, _ = run_paths([str(_EXAMPLES)])
+    ratcheted = sorted({f.code for f in findings} & _RATCHETED)
+    assert ratcheted == sorted(_RATCHETED), (
+        f"{sorted(set(_RATCHETED) - set(ratcheted))} no longer fires on "
+        f"{_EXAMPLES.name} — the ratchet has done its job. Delete _RATCHETED "
+        "and this test so the acceptance gate has no exemptions again."
+    )
 
 
 def test_analyzer_passes_its_own_checks() -> None:

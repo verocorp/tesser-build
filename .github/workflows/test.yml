@@ -191,8 +191,19 @@ jobs:
         run: |
           mypy
           pytest -q
+      # --ignore TB032 is the adoption ratchet, not a permanent exemption. The
+      # test-helper totality check ships ahead of the example restyle that makes
+      # these trees conform to it; tessercheck-py's
+      # test_the_tb032_ratchet_still_has_a_reason_to_exist fails the moment the
+      # restyle lands, and removing these flags is part of that change.
+      #
+      # It rides on ALL FOUR python gates, including serdepy and errorspy. The
+      # plan recorded those two as "not tessercheck-gated" — they are, right
+      # here, with the full check set. Design ruling R6 scoped them out of the
+      # TESTING NORM, which is not the same thing: a new global check still
+      # reaches every tree CI runs the analyzer over.
       - name: tessercheck-py on examples/python (explicit CLI gate)
-        run: python -m tessercheck examples/python
+        run: python -m tessercheck --ignore TB032 examples/python
         working-directory: .
         env:
           PYTHONPATH: tessercheck-py
@@ -202,12 +213,12 @@ jobs:
       # python-app's former TB010 nonconformance (Slug/TargetURL public
       # `value`) is fixed, so nothing is scoped out anymore.
       - name: tessercheck-py full gate on examples/python-app (--app-root)
-        run: python -m tessercheck --app-root examples/python-app
+        run: python -m tessercheck --ignore TB032 --app-root examples/python-app
         working-directory: .
         env:
           PYTHONPATH: tessercheck-py
       - name: tessercheck-py on examples/serdepy (explicit CLI gate)
-        run: python -m tessercheck examples/serdepy
+        run: python -m tessercheck --ignore TB032 examples/serdepy
         working-directory: .
         env:
           PYTHONPATH: tessercheck-py
@@ -218,7 +229,7 @@ jobs:
       # are ruled into it (TODOS.md), DateWindow's bounds get wrapped in the
       # same change and this gate keeps it honest.
       - name: tessercheck-py on examples/errorspy (explicit CLI gate)
-        run: python -m tessercheck examples/errorspy
+        run: python -m tessercheck --ignore TB032 examples/errorspy
         working-directory: .
         env:
           PYTHONPATH: tessercheck-py

@@ -37,6 +37,7 @@ from tessercheck.classify import ClassInfo, Stereotype, classify_trees
 from tessercheck.comments_check import check_comments
 from tessercheck.finding import Finding
 from tessercheck.doubles_check import check_test_doubles
+from tessercheck.helpers_check import check_helpers
 from tessercheck.typed_checks import check_typed
 
 # Annotation base names that make a frozen dataclass unhashable at runtime
@@ -288,6 +289,10 @@ def check_tree(
     # code and test code alike, and global scope keeps the bad.py fixture
     # provable with is_test=False.
     findings.extend(check_test_doubles(path, source, tree))
+    # TB032 scopes itself STRUCTURALLY (a module defining a test_* function),
+    # not from is_test — same reason as TB030: the flag would make the fixture
+    # unprovable, since the meta-test checks bad.py with is_test=False.
+    findings.extend(check_helpers(path, source, tree, registry))
     return sorted(findings, key=lambda f: (f.line, f.col, f.code))
 
 

@@ -155,6 +155,16 @@ CHECKS: tuple[CheckMeta, ...] = (
         "wiring test that must patch a process seam carries "
         "'# tessercheck:ignore' (skills/tesser-build/testing.md)",
     ),
+    CheckMeta(
+        "TB032",
+        "test-helper-totality",
+        "every module-level function in a test module must classify as a test "
+        "helper: one that builds a spec or DTO (never a constructed domain "
+        "object), or a @pytest.fixture. What cannot be decided structurally "
+        "declares itself with '# tesser-category:' from a closed set; what is "
+        "neither is logic wearing a helper's clothes and belongs outside the "
+        "test tree (skills/tesser-build/testing.md)",
+    ),
 )
 
 

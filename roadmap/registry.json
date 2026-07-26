@@ -285,7 +285,8 @@
       "go_example": [],
       "rationale": [],
       "py_checks": [
-        "TB030"
+        "TB030",
+        "TB032"
       ]
     },
     {
