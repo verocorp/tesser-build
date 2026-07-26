@@ -3,9 +3,9 @@
 <!-- tb-status: partial -->
 
 **v0 of the testing norm covers how a test is written and what it must
-prove — not how the suite is laid out.** Rule 1 is machine-checked today; rule
-2 is ruled doctrine whose checker is specified by its fixture pair and lands
-next; the rest is guidance enforced by review. What is genuinely undecided is
+prove — not how the suite is laid out.** Rules 1 and 9 are machine-checked
+today; rule 2 is ruled doctrine whose checker is specified by its fixture pair
+and lands next; the rest is guidance enforced by review. What is genuinely undecided is
 listed as open at the bottom rather than smuggled in as prose (Chris ruling
 2026-07-20).
 
@@ -100,6 +100,57 @@ file says *how*, and it is the cross-cutting layer they assume.
    not `test_duplicate` or `test_1`. The name is what a failure report shows;
    it should say what broke without opening the file.
 
+9. **A test helper builds a spec or a DTO. Nothing else.** A helper's entire job
+   is to hold the values a test does not care about, so the test can state only
+   the one or two that make it *that* test. It never returns a constructed
+   domain object, and it never calls anything.
+
+   ```python
+   def _spec(slug: str = "spring-sale", active: bool = True) -> ShortLinkSpec:
+       return ShortLinkSpec(slug=slug, target_url="https://a.example", active=active)
+
+
+   def test_deactivate_is_guarded() -> None:
+       link = ShortLink(_spec(active=False))
+       ...
+   ```
+
+   The construction stays in the test, where the reader can see it. `active=False`
+   is the whole reason this test exists, and it is the only argument written.
+
+   Four consequences, each of which is the rule doing its work:
+
+   - **Never return a constructed domain object.** `_money(...) -> Money` hides
+     the construction the test is about; `_spec(...) -> MoneySpec` and
+     `Money(_spec(...))` at the call site does not. If a helper returns an
+     aggregate, the test that "sets up a campaign" no longer shows what a
+     campaign is.
+   - **Never call.** A helper that invokes a service, a builder, or a
+     composition root is not holding defaults, it is performing the arrangement
+     — and the arrangement is what the test needs to show. `_campaign_with_link(svc)`
+     reads as one line and hides two service calls; write them out. This is the
+     same defect as a helper that is a pure rename of the thing it wraps.
+   - **Defaults go in keyword arguments, not functional options.** Functional
+     options exist to work around Go's lack of keyword arguments; Python has
+     them. The ported form declares every field three times (draft class,
+     per-field `with_` function, final mapping) — 63 lines against 26 — nested
+     specs compose worse because names flatten to positional, and a field
+     nobody wrote an option for is silently unreachable.
+   - **A spec field holds a primitive or another spec, never a converted type.**
+     This is what keeps the rule above achievable: building a child spec needs
+     no parsing, so every override is a plain assignment. A converted field
+     (a `Decimal`, a parsed timestamp) forces the helper to parse and handle
+     failure, and a helper with error handling in it is logic.
+
+   **Threshold: two fields or more.** A single-field type is constructed
+   directly — `MoneyAmount("1.5")` needs no helper and a helper would only
+   hide it. Two or more fields earns one, because that is where the defaults
+   start costing the reader.
+
+   **Assertion helpers are out of scope**, deliberately. A helper that asserts
+   is a different tool with different trade-offs; a library can provide those.
+   This rule is about construction.
+
 ## Where the norm applies
 
 - **Constructed-app code** — the tests the skill routes you to write in a
@@ -137,6 +188,34 @@ file says *how*, and it is the cross-cutting layer they assume.
   spec-constructed type's field set against the fields asserted in its
   completeness test and flag the difference. Until then rule 2 is enforced by
   review.
+- **`TB032` (test-helper-totality)** — rule 9, and the analyzer's first
+  **totality** check. Every other check hunts a known-bad shape and stays quiet
+  otherwise. That is the wrong instrument here, because the failure mode is
+  *variety* — there is no single bad helper to match, and new ways to smuggle
+  logic into a test module arrive with every feature. So this one inverts it:
+  **every module-level function in a test module must classify**, and what does
+  not is reported. Read the output as a worklist, not an accusation.
+
+  Two categories are decided for you, so conformant code needs no annotation: a
+  function whose return type is a **spec** (resolved against the whole tree
+  *and* the file's own classes, so a DTO declared beside its tests is fine), and
+  a function decorated **`@pytest.fixture`**. Anything else declares itself with
+  `# tesser-category: <spec|dto|fixture>` on the line above the definition or
+  trailing its `def`. The category set is closed and small on purpose: a
+  category added to silence a flag converts a true report into a permanent
+  blind spot.
+
+  Two scope facts worth knowing before you argue with a finding:
+  **methods are not judged** — every non-test method on a class in a test file
+  is a hand-written double, which rule 1 *requires*, so judging them would
+  report the norm's own mandated shape as a violation. And **a test module is
+  one that defines a `test_*` function anywhere**, including on a `Test*` class,
+  never one merely living under `tests/`.
+
+  **Known hole:** a module that defines no test at all — a helper-only module
+  beside the tests, or a `conftest.py` — is never judged. Putting helpers there
+  is not a sanctioned way around the rule; it is a gap we have not closed.
+
 - Rules 3-8 are **guidance, not checked.** Each is either a semantic judgment
   (3, 4, 5) or not mechanically decidable in a way worth the false positives
   (6, 7, 8). That is deliberate: semantic correctness is test territory,
@@ -181,3 +260,12 @@ is ruled.
 - **The partial completeness test.** Constructing from a full spec and
   asserting one field. That is a behavior test wearing the completeness test's
   name; the other fields are unproven.
+- **The helper that arranges.** `id = _campaign_with_link(svc)` reads as one
+  line and performs two service calls. Eight tests shared that line and not one
+  of them showed what it was arranging.
+- **The rename in helper's clothing.** `def json_body(resp): return decode_body(resp.body)`
+  supplies no default and saves no reader anything — it just adds a name they
+  have to learn. If a helper has no default in it, it is not a helper.
+- **The over-supplied call.** `_spec(slug="spring-sale")` when `"spring-sale"`
+  is already the default. The argument reads as significant and is not; it
+  buries the one that is.

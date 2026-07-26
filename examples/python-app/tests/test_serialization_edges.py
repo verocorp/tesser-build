@@ -16,19 +16,16 @@ from campaign.domain.money import MoneySpec
 from campaign.domain.short_link import ShortLinkSpec
 from campaign.domain.values import CampaignID
 from errors import DomainError
-from httpwire import HttpRequest
-from tests.wire import json_body
+from httpwire import HttpRequest, decode_body
 
 _CAMPAIGN_ID = "0123456789abcdef"
 
 
-def _campaign() -> Campaign:
-    return Campaign(
-        CampaignSpec(
-            id=_CAMPAIGN_ID,
-            budget=MoneySpec(amount="100.00", currency="USD"),
-            links=(ShortLinkSpec(slug="promo", target_url="https://ok.example/x", active=True),),
-        )
+def _spec(slug: str = "promo") -> CampaignSpec:
+    return CampaignSpec(
+        id=_CAMPAIGN_ID,
+        budget=MoneySpec(amount="100.00", currency="USD"),
+        links=(ShortLinkSpec(slug=slug, target_url="https://ok.example/x", active=True),),
     )
 
 
@@ -39,7 +36,7 @@ class _AllowAll:
 
 def test_row_golden_locks_the_storage_shape() -> None:
     repo = InMemoryCampaignRepository()
-    repo.save(_campaign())
+    repo.save(Campaign(_spec()))
     assert dataclasses.asdict(repo._rows[_CAMPAIGN_ID]) == {
         "campaign_id": _CAMPAIGN_ID,
         "budget_amount": "100.00",
@@ -50,11 +47,11 @@ def test_row_golden_locks_the_storage_shape() -> None:
 
 def test_wire_golden_locks_the_campaign_payload() -> None:
     repo = InMemoryCampaignRepository()
-    repo.save(_campaign())
+    repo.save(Campaign(_spec()))
     handler = Handler(CampaignService(repo, _AllowAll()))
     resp = handler.get_campaign(HttpRequest(path_params={"campaign_id": _CAMPAIGN_ID}))
     assert resp.status_code == 200
-    assert json_body(resp) == {
+    assert decode_body(resp.body) == {
         "campaign_id": _CAMPAIGN_ID,
         "budget": {"amount": "100.00", "currency": "USD"},
         "links": [{"slug": "promo", "target_url": "https://ok.example/x", "active": True}],
@@ -63,7 +60,7 @@ def test_wire_golden_locks_the_campaign_payload() -> None:
 
 def test_wire_golden_locks_resolve_as_a_real_redirect() -> None:
     repo = InMemoryCampaignRepository()
-    repo.save(_campaign())
+    repo.save(Campaign(_spec()))
     handler = Handler(CampaignService(repo, _AllowAll()))
     resp = handler.resolve(HttpRequest(path_params={"slug": "promo"}))
     assert resp.status_code == 302
@@ -73,7 +70,7 @@ def test_wire_golden_locks_resolve_as_a_real_redirect() -> None:
 
 def test_load_reconstructs_value_equal_non_identical() -> None:
     repo = InMemoryCampaignRepository()
-    original = _campaign()
+    original = Campaign(_spec())
     repo.save(original)
     loaded = repo.find(CampaignID(_CAMPAIGN_ID))
     assert loaded is not None
@@ -83,7 +80,7 @@ def test_load_reconstructs_value_equal_non_identical() -> None:
 
 def test_store_holds_rows_not_live_objects() -> None:
     repo = InMemoryCampaignRepository()
-    original = _campaign()
+    original = Campaign(_spec())
     repo.save(original)
     loaded = repo.find(CampaignID(_CAMPAIGN_ID))
     assert loaded is not None
@@ -117,7 +114,7 @@ def test_parts_module_never_touches_specs() -> None:
 
 def test_load_reruns_invariants_on_stale_rows() -> None:
     repo = InMemoryCampaignRepository()
-    repo.save(_campaign())
+    repo.save(Campaign(_spec()))
     row = repo._rows[_CAMPAIGN_ID]
     repo._rows[_CAMPAIGN_ID] = dataclasses.replace(row, budget_amount="-5")
     with pytest.raises(DomainError):

@@ -28,67 +28,92 @@ def base_url() -> Iterator[str]:
         thread.join()
 
 
-def _request(
-    method: str, url: str, body: dict[str, Any] | None = None
-) -> tuple[int, dict[str, Any]]:
-    data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(
-        url, data=data, method=method, headers={"Content-Type": "application/json"}
-    )
-    try:
-        with urllib.request.urlopen(req) as resp:
-            return resp.status, json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        return e.code, json.loads(e.read())
-
-
 def test_end_to_end_create_get_add_deactivate(base_url: str) -> None:
-    status, created = _request(
-        "POST",
+    create = urllib.request.Request(
         f"{base_url}/campaigns",
-        {"name": "Spring", "links": [{"slug": "spring-sale", "target_url": "https://a.example"}]},
+        data=json.dumps(
+            {
+                "name": "Spring",
+                "links": [{"slug": "spring-sale", "target_url": "https://a.example"}],
+            }
+        ).encode(),
+        method="POST",
+        headers={"Content-Type": "application/json"},
     )
-    assert status == 201
+    with urllib.request.urlopen(create) as resp:
+        assert resp.status == 201
+        created = json.loads(resp.read())
     cid = created["campaign_id"]
     assert created["name"] == "Spring"
 
-    status, got = _request("GET", f"{base_url}/campaigns/{cid}")
-    assert status == 200
+    get = urllib.request.Request(
+        f"{base_url}/campaigns/{cid}",
+        method="GET",
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(get) as resp:
+        assert resp.status == 200
+        got = json.loads(resp.read())
     assert {l["slug"] for l in got["links"]} == {"spring-sale"}
 
-    status, added = _request(
-        "POST",
+    add = urllib.request.Request(
         f"{base_url}/campaigns/{cid}/links",
-        {"slug": "autumn-sale", "target_url": "https://b.example"},
+        data=json.dumps(
+            {"slug": "autumn-sale", "target_url": "https://b.example"}
+        ).encode(),
+        method="POST",
+        headers={"Content-Type": "application/json"},
     )
-    assert status == 200
+    with urllib.request.urlopen(add) as resp:
+        assert resp.status == 200
+        added = json.loads(resp.read())
     assert {l["slug"] for l in added["links"]} == {"spring-sale", "autumn-sale"}
 
-    status, deactivated = _request(
-        "POST", f"{base_url}/campaigns/{cid}/links/spring-sale/deactivate"
+    deactivate = urllib.request.Request(
+        f"{base_url}/campaigns/{cid}/links/spring-sale/deactivate",
+        method="POST",
+        headers={"Content-Type": "application/json"},
     )
-    assert status == 200
+    with urllib.request.urlopen(deactivate) as resp:
+        assert resp.status == 200
+        deactivated = json.loads(resp.read())
     by_slug = {l["slug"]: l for l in deactivated["links"]}
     assert by_slug["spring-sale"]["active"] is False
     assert by_slug["autumn-sale"]["active"] is True
 
 
 def test_domain_rule_rejected_end_to_end(base_url: str) -> None:
-    status, err = _request(
-        "POST",
+    request = urllib.request.Request(
         f"{base_url}/campaigns",
-        {"name": "Spring", "links": [{"slug": "X", "target_url": "https://a.example"}]},
+        data=json.dumps(
+            {
+                "name": "Spring",
+                "links": [{"slug": "X", "target_url": "https://a.example"}],
+            }
+        ).encode(),
+        method="POST",
+        headers={"Content-Type": "application/json"},
     )
-    assert status == 422
-    assert "invalid" in err["error"]
+    with pytest.raises(urllib.error.HTTPError) as caught:
+        urllib.request.urlopen(request)
+    assert caught.value.code == 422
+    assert "invalid" in json.loads(caught.value.read())["error"]
 
 
 def test_no_domain_object_leaks_across_the_boundary(base_url: str) -> None:
-    _, created = _request(
-        "POST",
+    request = urllib.request.Request(
         f"{base_url}/campaigns",
-        {"name": "Spring", "links": [{"slug": "spring-sale", "target_url": "https://a.example"}]},
+        data=json.dumps(
+            {
+                "name": "Spring",
+                "links": [{"slug": "spring-sale", "target_url": "https://a.example"}],
+            }
+        ).encode(),
+        method="POST",
+        headers={"Content-Type": "application/json"},
     )
+    with urllib.request.urlopen(request) as resp:
+        created = json.loads(resp.read())
     assert set(created.keys()) == {"campaign_id", "name", "links"}
     for view in created["links"]:
         assert set(view.keys()) == {"slug", "target_url", "active"}

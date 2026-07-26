@@ -520,8 +520,17 @@ change; each waits for a real need.
     that encode tesser-build's own doctrine and have no off-the-shelf equivalent.
   - **Cost warning:** outside the amnesty, TB001–TB018 apply, so the AST-analysis
     domain needs real value objects instead of primitive-collection tuples. Wave-sized.
-  - **Depends on:** the ruff/import-linter work landing, so the surviving set is known.
-    Wants `/office-hours` before a plan.
+  - **Depends on:** ~~the ruff/import-linter work landing~~ — landed as v0.0.12.0
+    (PR #40). The surviving set is now known and is exactly the five functions
+    named above. Wants `/office-hours` before a plan.
+  - **State as of the TB032 wave:** all five carry `# tessercheck:ignore` in
+    `tests/test_enforcement.py`. That was chosen over a rushed redesign so the
+    check could go live without a permanent exemption anywhere else — the debt is
+    now named at the exact five lines rather than hidden behind a checker flag.
+    **Deleting those five markers is the acceptance test for this TODO.**
+  - **Related, unclosed:** `tests/discovery.py` defines no `test_*`, so TB032
+    never judges it at all — it sits in the structural blind spot rather than
+    under a marker. Relocating the detectors closes that too.
 
 - [ ] **Test-argument pruning harness** (design refuted and repaired 2026-07-26)
   - **What:** find arguments a test passes to a helper that do not affect the

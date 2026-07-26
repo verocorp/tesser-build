@@ -3,17 +3,17 @@ import pytest
 from catalog.money import Money, MoneyAmount, MoneyCurrency, MoneySpec
 
 
-def _money(amount: str, currency: str = "USD") -> Money:
-    return Money(MoneySpec(amount=amount, currency=currency))
+def _spec(amount: str, currency: str = "USD") -> MoneySpec:
+    return MoneySpec(amount=amount, currency=currency)
 
 
 def test_equality_across_representations() -> None:
-    a = _money("1.5")
-    b = _money("1.50")
+    a = Money(_spec("1.5"))
+    b = Money(_spec("1.50"))
     assert a == b
     assert hash(a) == hash(b)
-    assert a != _money("1.5", "EUR")
-    assert a != _money("2.0")
+    assert a != Money(_spec("1.5", "EUR"))
+    assert a != Money(_spec("2.0"))
 
 
 def test_amount_equality_across_representations() -> None:
@@ -23,15 +23,15 @@ def test_amount_equality_across_representations() -> None:
 
 def test_rejects_invalid() -> None:
     with pytest.raises(ValueError, match="currency is required"):
-        _money("1.00", "")
+        Money(_spec("1.00", ""))
     with pytest.raises(ValueError, match="invalid amount"):
-        _money("abc")
+        Money(_spec("abc"))
     with pytest.raises(ValueError, match="must not be negative"):
-        _money("-1.00")
+        Money(_spec("-1.00"))
 
 
 def test_components_are_value_objects() -> None:
-    m = _money("1.50")
+    m = Money(_spec("1.50"))
     assert m.amount == MoneyAmount("1.50")
     assert m.currency == MoneyCurrency("USD")
 
@@ -47,12 +47,12 @@ def test_currency_canonical_round_trip() -> None:
 
 
 def test_add_same_currency() -> None:
-    assert _money("1.50").add(_money("2.25")) == _money("3.75")
+    assert Money(_spec("1.50")).add(Money(_spec("2.25"))) == Money(_spec("3.75"))
 
 
 def test_add_rejects_currency_mismatch() -> None:
     with pytest.raises(ValueError, match="cannot add"):
-        _money("1.00", "USD").add(_money("1.00", "EUR"))
+        Money(_spec("1.00", "USD")).add(Money(_spec("1.00", "EUR")))
 
 
 def test_compound_has_no_conversion_dunders() -> None:

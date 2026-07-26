@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from bootstrap.bootstrap import App, new
+from bootstrap.bootstrap import new
 from bootstrap.config import Config
 from campaign.client import AddLinkRequest, CreateCampaignRequest
 from campaign.wiring.config import Config as CampaignConfig
@@ -10,18 +10,16 @@ from reports.domain.report import Link, RecordedVerdict, join_links_with_verdict
 from reports.wiring.config import Config as ReportsConfig
 
 
-def _mem() -> App:
-    return new(
-        Config(
-            campaign=CampaignConfig("memory"),
-            linkpolicy=LinkPolicyConfig("memory"),
-            reports=ReportsConfig(),
-        )
+def _config() -> Config:
+    return Config(
+        campaign=CampaignConfig("memory"),
+        linkpolicy=LinkPolicyConfig("memory"),
+        reports=ReportsConfig(),
     )
 
 
 def test_report_reads_both_contexts_in_process() -> None:
-    app = _mem()
+    app = new(_config())
     try:
         view = app.campaign.create_campaign(CreateCampaignRequest("100.00", "USD"))
         app.campaign.add_link(AddLinkRequest(view.campaign_id, "a", "https://ok.example/a"))
@@ -34,7 +32,7 @@ def test_report_reads_both_contexts_in_process() -> None:
 
 
 def test_blocked_destination_never_becomes_a_link() -> None:
-    app = _mem()
+    app = new(_config())
     try:
         view = app.campaign.create_campaign(CreateCampaignRequest("100.00", "USD"))
         try:

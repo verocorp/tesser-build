@@ -12,15 +12,15 @@ from errors import DomainError, InfraError, Kind
 _CAMPAIGN_ID = "0123456789abcdef"
 
 
-def _campaign() -> Campaign:
-    return Campaign(
-        CampaignSpec(id=_CAMPAIGN_ID, budget=MoneySpec(amount="100.00", currency="USD"), links=())
+def _spec(campaign_id: str = _CAMPAIGN_ID) -> CampaignSpec:
+    return CampaignSpec(
+        id=campaign_id, budget=MoneySpec(amount="100.00", currency="USD"), links=()
     )
 
 
 class _RecordingRepo:
     def __init__(self) -> None:
-        self._campaign = _campaign()
+        self._campaign = Campaign(_spec())
         self.saved: list[Campaign] = []
 
     def save(self, c: Campaign) -> None:

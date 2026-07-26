@@ -6,12 +6,12 @@ from domain.short_link import ShortLink, ShortLinkSpec
 from errors import DomainError, DomainKind
 
 
-def _valid() -> ShortLink:
-    return ShortLink(ShortLinkSpec(slug="spring-sale", target_url="https://x.com"))
+def _spec(slug: str = "spring-sale") -> ShortLinkSpec:
+    return ShortLinkSpec(slug=slug, target_url="https://x.com")
 
 
 def test_short_link_valid() -> None:
-    link = _valid()
+    link = ShortLink(_spec())
     assert str(link.slug) == "spring-sale"
     assert link.active is True
 
@@ -26,7 +26,7 @@ def test_child_error_propagates_unchanged() -> None:
 
 
 def test_deactivate_then_deactivate_is_conflict() -> None:
-    link = _valid()
+    link = ShortLink(_spec())
     link.deactivate()
     assert link.active is False
     with pytest.raises(DomainError) as ei:
@@ -36,7 +36,7 @@ def test_deactivate_then_deactivate_is_conflict() -> None:
 
 
 def test_identity_equality_by_slug() -> None:
-    a = _valid()
+    a = ShortLink(_spec())
     b = ShortLink(ShortLinkSpec(slug="spring-sale", target_url="https://y.com"))
     assert a == b
     assert hash(a) == hash(b)

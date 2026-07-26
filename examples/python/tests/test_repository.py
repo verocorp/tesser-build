@@ -6,19 +6,17 @@ from campaign.short_link import ShortLinkSpec
 from linkcampaignimpl import InMemoryCampaignRepository
 
 
-def _campaign(id: str = "c1") -> Campaign:
-    return Campaign(
-        CampaignSpec(
-            id=id,
-            name="Spring",
-            links=(ShortLinkSpec(slug="spring-sale", target_url="https://a.example", active=True),),
-        )
+def _spec(id: str = "c1") -> CampaignSpec:
+    return CampaignSpec(
+        id=id,
+        name="Spring",
+        links=(ShortLinkSpec(slug="spring-sale", target_url="https://a.example", active=True),),
     )
 
 
 def test_save_then_load_reconstructs_the_aggregate() -> None:
     repo = InMemoryCampaignRepository()
-    repo.save(_campaign("c1"))
+    repo.save(Campaign(_spec("c1")))
 
     loaded = repo.load(CampaignID("c1"))
     assert str(loaded.id) == "c1"
@@ -28,7 +26,7 @@ def test_save_then_load_reconstructs_the_aggregate() -> None:
 
 def test_load_reruns_invariants_through_the_constructor() -> None:
     repo = InMemoryCampaignRepository()
-    repo.save(_campaign("c1"))
+    repo.save(Campaign(_spec("c1")))
     loaded = repo.load(CampaignID("c1"))
     with pytest.raises(ValueError, match="duplicate slug"):
         loaded.add_short_link(

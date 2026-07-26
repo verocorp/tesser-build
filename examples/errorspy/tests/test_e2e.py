@@ -15,12 +15,8 @@ _CREATE = json.dumps(
 )
 
 
-def _handler() -> Handler:
-    return Handler(CampaignService(StorageCampaignRepository(FakeStorage())))
-
-
 def test_happy_path_create_get_add_deactivate() -> None:
-    h = _handler()
+    h = Handler(CampaignService(StorageCampaignRepository(FakeStorage())))
     assert h.create_campaign("c1", _CREATE).status == 201
 
     got = h.get_campaign("c1")
@@ -29,14 +25,16 @@ def test_happy_path_create_get_add_deactivate() -> None:
 
     added = h.add_link("c1", json.dumps({"slug": "summer-sale", "target_url": "https://y.com"}))
     assert added.status == 200
-    assert sorted(_links(h, "c1")) == ["spring-sale", "summer-sale"]
+    links = h.get_campaign("c1").body["links"]
+    assert isinstance(links, list)
+    assert sorted(str(x) for x in links) == ["spring-sale", "summer-sale"]
 
     off = h.deactivate_link("c1", "summer-sale")
     assert off.status == 200
 
 
 def test_every_status_is_reachable_with_a_problem_body() -> None:
-    h = _handler()
+    h = Handler(CampaignService(StorageCampaignRepository(FakeStorage())))
     h.create_campaign("c1", _CREATE)
 
     seen: dict[int, str] = {}
@@ -53,9 +51,3 @@ def test_every_status_is_reachable_with_a_problem_body() -> None:
 
     assert set(seen) == {400, 404, 409, 422, 503}
     assert all(t.startswith("/problems/") for t in seen.values())
-
-
-def _links(h: Handler, campaign_id: str) -> list[str]:
-    body = h.get_campaign(campaign_id).body["links"]
-    assert isinstance(body, list)
-    return [str(x) for x in body]
