@@ -2,6 +2,7 @@
 ``TestNoUnregisteredAnalyzer``, plus the acceptance gate on ``examples/python``.
 """
 
+import ast
 from pathlib import Path
 
 from tessercheck.checks import check_source
@@ -76,6 +77,39 @@ def test_tb031_fixture_pair_holds_its_contract_before_the_checker_ships() -> Non
         findings, errors = run_paths([str(d / name)], is_test=as_domain)
         assert errors == [], f"{name}: {errors}"
         assert findings == [], f"{name}: " + "\n".join(f.render() for f in findings)
+
+
+def test_tb032_bad_fixture_keeps_proving_the_class_based_walk() -> None:
+    """The tb032 pair carries a second claim beyond good/bad, and nothing else
+    would notice if it were lost.
+
+    bad.py puts every one of its tests on a ``Test*`` class, so its module body
+    holds no ``def test_*``. That is what makes it proof that TB032's test
+    detection WALKS: a checker scanning ``tree.body`` would see no tests, exempt
+    the file, and emit nothing — and the good/bad meta-tests would fail loudly.
+    Adding a module-level ``def test_*`` to bad.py would keep every existing
+    assertion green while silently retiring that proof, so pin the shape here.
+    """
+    bad = ast.parse((_TESTDATA / "tb032" / "bad.py").read_text(encoding="utf-8"))
+    module_level = [
+        n.name
+        for n in bad.body
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and n.name.startswith("test_")
+    ]
+    assert module_level == [], (
+        f"tb032/bad.py grew module-level tests {module_level} — it no longer "
+        "proves that test detection walks past a Test* class"
+    )
+    in_class = [
+        m.name
+        for c in bad.body
+        if isinstance(c, ast.ClassDef)
+        for m in c.body
+        if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and m.name.startswith("test_")
+    ]
+    assert in_class, "tb032/bad.py has no class-based tests left to walk to"
 
 
 def test_registry_codes_are_unique() -> None:
