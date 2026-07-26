@@ -313,12 +313,25 @@ def test_tb020_flags_class_and_async_function_docstrings() -> None:
         "# tb-" + "cell: value-objects py-example",
         "# tb-" + "status: green",
         "# tb-" + "allow-missing: some/path",
+        "# tesser-category: spec",
     ],
 )
 def test_tb020_directive_ledger_entries_are_exempt(comment: str) -> None:
     # The fixture proves only shebang/noqa/type:/pragma. These remaining ledger
     # entries live inside the directive regex, invisible to branch coverage —
     # dropping an alternation would pass every other test.
+    assert _tb020(f"x = 1  {comment}\n") == []
+
+
+@pytest.mark.parametrize(
+    "comment",
+    ["# tesser-category: spce", "# tesser-category:", "# tesser-category: dtoo"],
+)
+def test_tb020_exempts_a_malformed_category_marker_too(comment: str) -> None:
+    # The exemption is on the PREFIX, deliberately. A typo'd or empty category
+    # is TB032's finding to report; if TB020 also fired, the author would be
+    # told they wrote a banned comment when what they wrote was a misspelled
+    # directive — and the comments-norm diagnosis is the misleading one.
     assert _tb020(f"x = 1  {comment}\n") == []
 
 
@@ -1308,3 +1321,205 @@ def test_tb018_flags_a_pre_processed_helper_argument() -> None:
         "        return canonical_str(self._value.upper())\n"
     )
     assert "TB018" in _codes(src)
+
+
+_SPEC_DEF = (
+    "from dataclasses import dataclass\n"
+    "@dataclass(frozen=True)\n"
+    "class LinkSpec:\n"
+    "    slug: str\n"
+)
+
+
+def _tb032(src: str, is_test: bool = False) -> list[Finding]:
+    return [f for f in check_source("t.py", src, is_test=is_test) if f.code == "TB032"]
+
+
+def test_tb032_judges_a_module_whose_tests_live_on_a_class() -> None:
+    # The reason detection WALKS instead of scanning tree.body. pytest's class
+    # style puts every test on a Test* class, so a module-level scan sees no
+    # tests, exempts the whole file, and takes its helpers with it.
+    # examples/python/tests/test_short_link.py is exactly this shape.
+    src = (
+        "def _detect(x: int) -> int:\n"
+        "    return x\n"
+        "class TestThing:\n"
+        "    def test_it(self) -> None:\n"
+        "        assert _detect(1) == 1\n"
+    )
+    assert [f.line for f in _tb032(src)] == [1]
+
+
+def test_tb032_is_silent_in_a_module_that_defines_no_test() -> None:
+    # The known hole, locked deliberately rather than left to drift: a
+    # helper-only module beside the tests is never judged. Closing it means
+    # deciding what makes a non-test module part of the test tree.
+    src = "def json_request(body: str) -> bytes:\n    return body.encode()\n"
+    assert _tb032(src) == []
+    # ...and the is_test FLAG must not be what turns the check on, or the
+    # bad.py fixture (checked with is_test=False) could not prove it.
+    assert _tb032(src, is_test=True) == []
+
+
+def test_tb032_leaves_the_methods_of_a_fake_alone() -> None:
+    # Every non-test method on a class in the two gated example trees is a
+    # hand-written fake implementing a collaborator's interface — the shape
+    # TB030 REQUIRES. Judging methods would report the norm's own mandated
+    # construct as a violation.
+    src = (
+        "class FakeRepo:\n"
+        "    def __init__(self) -> None:\n"
+        "        self.saved: list[str] = []\n"
+        "    def save(self, x: str) -> None:\n"
+        "        self.saved.append(x)\n"
+        "def test_it() -> None:\n"
+        "    FakeRepo().save('x')\n"
+    )
+    assert _tb032(src) == []
+
+
+def test_tb032_leaves_a_function_nested_inside_a_test_alone() -> None:
+    # A closure inside a test is local to it, not a shared helper.
+    src = (
+        "def test_it() -> None:\n"
+        "    def inner(x: int) -> int:\n"
+        "        return x\n"
+        "    assert inner(1) == 1\n"
+    )
+    assert _tb032(src) == []
+
+
+def test_tb032_accepts_a_spec_returning_helper_declared_in_the_file() -> None:
+    # The shared registry excludes test files so a fake cannot shadow a domain
+    # type tree-wide. That is a rule about shadowing, not a reason to deny this
+    # check local knowledge: a helper returning a spec is conformant wherever
+    # the spec is declared.
+    src = _SPEC_DEF + (
+        "def _spec(slug: str = 'a') -> LinkSpec:\n"
+        "    return LinkSpec(slug=slug)\n"
+        "def test_it() -> None:\n"
+        "    assert _spec().slug == 'a'\n"
+    )
+    assert _tb032(src) == []
+
+
+def test_tb032_accepts_a_spec_inside_a_collection_annotation() -> None:
+    src = _SPEC_DEF + (
+        "def _specs(n: int = 1) -> tuple[LinkSpec, ...]:\n"
+        "    return tuple(LinkSpec(slug='a') for _ in range(n))\n"
+        "def test_it() -> None:\n"
+        "    assert len(_specs()) == 1\n"
+    )
+    assert _tb032(src) == []
+
+
+@pytest.mark.parametrize(
+    "decorator", ["@pytest.fixture", "@pytest.fixture()", "@fixture", "@fixture()"]
+)
+def test_tb032_accepts_a_fixture_in_every_decorator_shape(decorator: str) -> None:
+    src = (
+        f"{decorator}\n"
+        "def base_url() -> str:\n"
+        "    return 'http://127.0.0.1'\n"
+        "def test_it(base_url: str) -> None:\n"
+        "    assert base_url\n"
+    )
+    assert _tb032(src) == []
+
+
+def test_tb032_judges_an_async_helper() -> None:
+    # An AsyncFunctionDef is a definition like any other; a FunctionDef-only
+    # walk would exempt it, and there are zero in-tree instances to catch that.
+    src = (
+        "async def _fetch(url: str) -> bytes:\n"
+        "    return url.encode()\n"
+        "def test_it() -> None:\n"
+        "    assert _fetch\n"
+    )
+    assert [f.line for f in _tb032(src)] == [1]
+
+
+def test_tb032_marker_attaches_from_the_line_above_and_from_the_def_line() -> None:
+    above = (
+        "# tesser-category: dto\n"
+        "def _view() -> dict[str, str]:\n"
+        "    return {}\n"
+        "def test_it() -> None:\n"
+        "    assert _view() == {}\n"
+    )
+    trailing = (
+        "def _view() -> dict[str, str]:  # tesser-category: dto\n"
+        "    return {}\n"
+        "def test_it() -> None:\n"
+        "    assert _view() == {}\n"
+    )
+    assert _tb032(above) == []
+    assert _tb032(trailing) == []
+
+
+def test_tb032_marker_reaches_past_a_decorator_to_the_block_above_it() -> None:
+    # The marker sits above the whole definition, decorators included — asking
+    # an author to wedge it between a decorator and its def would be absurd.
+    src = (
+        "# tesser-category: dto\n"
+        "@staticmethod\n"
+        "def _view() -> dict[str, str]:\n"
+        "    return {}\n"
+        "def test_it() -> None:\n"
+        "    assert _view\n"
+    )
+    assert _tb032(src) == []
+
+
+def test_tb032_marker_does_not_attach_across_a_blank_line() -> None:
+    # Contiguous on purpose. A marker separated from its definition attaches to
+    # nothing in particular, and walking up through blanks would let it reach
+    # the previous function's trailing comment instead.
+    src = (
+        "# tesser-category: dto\n"
+        "\n"
+        "def _view() -> dict[str, str]:\n"
+        "    return {}\n"
+        "def test_it() -> None:\n"
+        "    assert _view() == {}\n"
+    )
+    assert [f.line for f in _tb032(src)] == [3]
+
+
+def test_tb032_reports_an_unknown_category_as_a_typo_not_as_a_bad_helper() -> None:
+    # The two findings are different diagnoses and must not be confused: this
+    # author wrote a marker, they just misspelled it. Telling them their helper
+    # "does not classify" would send them to rewrite conformant code.
+    src = _SPEC_DEF + (
+        "# tesser-category: builder\n"
+        "def _spec() -> LinkSpec:\n"
+        "    return LinkSpec(slug='a')\n"
+        "def test_it() -> None:\n"
+        "    assert _spec()\n"
+    )
+    findings = _tb032(src)
+    assert len(findings) == 1
+    assert "unknown test-helper category 'builder'" in findings[0].message
+
+
+def test_tb032_marker_must_be_a_real_comment_not_a_string_literal() -> None:
+    # Same spoof resistance as TB030's marker: a string that merely CONTAINS
+    # the marker text is data, not a directive.
+    src = (
+        "SRC = '# tesser-category: dto'\n"
+        "def _view() -> dict[str, str]:\n"
+        "    return {}\n"
+        "def test_it() -> None:\n"
+        "    assert _view() == {}\n"
+    )
+    assert [f.line for f in _tb032(src)] == [2]
+
+
+def test_tb032_honors_the_tessercheck_ignore_hatch() -> None:
+    src = (
+        "def _detect(x: int) -> int:  # tessercheck:ignore\n"
+        "    return x\n"
+        "def test_it() -> None:\n"
+        "    assert _detect(1) == 1\n"
+    )
+    assert _tb032(src) == []

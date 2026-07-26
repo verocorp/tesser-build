@@ -84,9 +84,13 @@ Norm checks:
 | **TB020** | the comments norm v0 ([`skills/tesser-build/comments.md`](../skills/tesser-build/comments.md)): no code comments, docstrings, or bare string-literal statements — machine directives exempt; **no test exemption** |
 | **TB030** | the fakes-only test-double norm ([`skills/tesser-build/testing.md`](../skills/tesser-build/testing.md)): a test double is a hand-written fake. **Imports** of a mocking library (`unittest.mock` and submodules in any import shape, the `mock` backport, `pytest`/`_pytest.monkeypatch` → `MonkeyPatch`) are flagged **tree-wide, no test exemption**. The `monkeypatch`/`mocker` **fixture-parameter** rule is narrower: it fires only inside a pytest-shaped function (`test_*` or a `@fixture` factory), so a production parameter that happens to share the name stays clean. A test that must patch a seam it cannot inject through carries `# tessercheck:ignore` (matched as a real comment token, over the reported statement's whole line span) |
 
+| **TB032** | the test-helper norm ([`skills/tesser-build/testing.md`](../skills/tesser-build/testing.md)): a helper in a test module builds a **spec or a DTO** and nothing else — a constructed domain object is built at the call site, in the test. This is a **totality** check, the first in the analyzer: rather than hunting a known-bad shape it requires every **module-level function** in a test module to classify, and reports what does not. Two categories are decided structurally — a return annotation naming a spec (resolved against the whole-tree registry **and** the file's own classes, so a DTO declared beside its tests needs no annotation) and a `@pytest.fixture` decorator. Anything else declares itself with `# tesser-category: <spec\|dto\|fixture>`, on the line above the definition or trailing its `def`. Scope is deliberately module-level: every non-test **method** on a class in the gated example trees is a hand-written fake implementing a collaborator's interface, which is the shape TB030 *requires*. Test detection is **structural and walks the module** — pytest's class style puts every test on a `Test*` class, where a `tree.body` scan would see none and exempt the file. **Known hole:** a module defining no `test_*` anywhere (a helper-only module beside the tests, or `conftest.py`) is never judged |
+
 Scope: TB001–TB003 and the classifier-keyed checks (TB010–TB018) apply to
 non-test code — test files are exempt, because they legitimately construct and
-exercise domain objects; TB004, TB020, and TB030 fire everywhere. A file is
+exercise domain objects; TB004, TB020, and TB030 fire everywhere. TB032 scopes
+itself structurally (any module defining a `test_*` function), not from the
+test-path flag. A file is
 "test code" when its name is a pytest module
 (`test_*.py` / `*_test.py` / `conftest.py`) or any path component is
 `tests`/`testdata`. The classifier runs over the **whole tree** in one pass,

@@ -141,8 +141,8 @@ CHECKS: tuple[CheckMeta, ...] = (
         "no-comments",
         "the comments norm v0: no code comments and no docstrings — machine "
         "directives (shebang, coding, type: ignore, noqa, tessercheck:ignore, "
-        "tb-* markers, pragma, formatter/linter controls) are exempt; "
-        "carve-outs are added only from discovered evidence "
+        "tb-* markers, tesser-category:, pragma, formatter/linter controls) "
+        "are exempt; carve-outs are added only from discovered evidence "
         "(skills/tesser-build/comments.md)",
     ),
     CheckMeta(
@@ -154,6 +154,16 @@ CHECKS: tuple[CheckMeta, ...] = (
         "mocker) and pytest's monkeypatch/MonkeyPatch are banned tree-wide; a "
         "wiring test that must patch a process seam carries "
         "'# tessercheck:ignore' (skills/tesser-build/testing.md)",
+    ),
+    CheckMeta(
+        "TB032",
+        "test-helper-totality",
+        "every module-level function in a test module must classify as a test "
+        "helper: one that builds a spec or DTO (never a constructed domain "
+        "object), or a @pytest.fixture. What cannot be decided structurally "
+        "declares itself with '# tesser-category:' from a closed set; what is "
+        "neither is logic wearing a helper's clothes and belongs outside the "
+        "test tree (skills/tesser-build/testing.md)",
     ),
 )
 

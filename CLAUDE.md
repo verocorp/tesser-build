@@ -49,7 +49,10 @@ These three are the value-object core, not the whole enforced set. The Python
 analyzer also carries the identity taxonomy (`TB010`–`TB014`), the
 serialization norm (`TB015`–`TB018`), the comments norm (`TB020`, mirrored by
 the Go `comments` analyzer), and the testing norm (`TB030` — a test double is a
-hand-written fake, never a mocking library; `skills/tesser-build/testing.md`).
+hand-written fake, never a mocking library; `TB032` — a test helper builds a
+spec or DTO and nothing else, and is the analyzer's first *totality* check:
+every module-level function in a test module must classify or declare itself
+with `# tesser-category:`; `skills/tesser-build/testing.md`).
 The full check list with per-code rules is `tessercheck-py/README.md`; which
 convention has a doc, an example, and a checker is `roadmap/ROADMAP.md`.
 

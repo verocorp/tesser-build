@@ -2,6 +2,7 @@
 ``TestNoUnregisteredAnalyzer``, plus the acceptance gate on ``examples/python``.
 """
 
+import ast
 from pathlib import Path
 
 from tessercheck.checks import check_source
@@ -78,6 +79,39 @@ def test_tb031_fixture_pair_holds_its_contract_before_the_checker_ships() -> Non
         assert findings == [], f"{name}: " + "\n".join(f.render() for f in findings)
 
 
+def test_tb032_bad_fixture_keeps_proving_the_class_based_walk() -> None:
+    """The tb032 pair carries a second claim beyond good/bad, and nothing else
+    would notice if it were lost.
+
+    bad.py puts every one of its tests on a ``Test*`` class, so its module body
+    holds no ``def test_*``. That is what makes it proof that TB032's test
+    detection WALKS: a checker scanning ``tree.body`` would see no tests, exempt
+    the file, and emit nothing — and the good/bad meta-tests would fail loudly.
+    Adding a module-level ``def test_*`` to bad.py would keep every existing
+    assertion green while silently retiring that proof, so pin the shape here.
+    """
+    bad = ast.parse((_TESTDATA / "tb032" / "bad.py").read_text(encoding="utf-8"))
+    module_level = [
+        n.name
+        for n in bad.body
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and n.name.startswith("test_")
+    ]
+    assert module_level == [], (
+        f"tb032/bad.py grew module-level tests {module_level} — it no longer "
+        "proves that test detection walks past a Test* class"
+    )
+    in_class = [
+        m.name
+        for c in bad.body
+        if isinstance(c, ast.ClassDef)
+        for m in c.body
+        if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and m.name.startswith("test_")
+    ]
+    assert in_class, "tb032/bad.py has no class-based tests left to walk to"
+
+
 def test_registry_codes_are_unique() -> None:
     seen = [c.code for c in CHECKS]
     assert len(seen) == len(set(seen))
@@ -90,13 +124,40 @@ def test_no_unregistered_code_is_emitted() -> None:
             assert f.code in registered, f"{bad} emitted unregistered {f.code}"
 
 
+# TB032 ships ahead of the example restyle that makes the examples conform to
+# it — the adoption ratchet in docs/design-ddd-vet-migration.md. Until that
+# restyle lands, the gate below tolerates TB032 and TB032 only, and
+# test_the_tb032_ratchet_still_has_a_reason_to_exist forces the tolerance out
+# again the moment it stops being needed.
+_RATCHETED: frozenset[str] = frozenset({"TB032"})
+
+
 def test_acceptance_gate_examples_python_is_clean() -> None:
     # The examples are the canonical conformant tree — the analyzer must pass
     # clean on them, exactly as tessercheck gates examples/ddd on the Go side.
     assert _EXAMPLES.is_dir(), f"examples tree not found at {_EXAMPLES}"
     findings, errors = run_paths([str(_EXAMPLES)])
+    findings = [f for f in findings if f.code not in _RATCHETED]
     assert findings == [], "\n".join(f.render() for f in findings)
     assert errors == [], "\n".join(errors)
+
+
+def test_the_tb032_ratchet_still_has_a_reason_to_exist() -> None:
+    """The ratchet's expiry, not its excuse.
+
+    A tolerance added "until the restyle lands" outlives the restyle unless
+    something fails when it becomes unnecessary. So: while TB032 is ratcheted,
+    the examples must still violate it. When the restyle lands and the tree
+    goes clean, THIS test fails — and the fix is to delete `_RATCHETED` and
+    this test, restoring a gate with no exemptions.
+    """
+    findings, _ = run_paths([str(_EXAMPLES)])
+    ratcheted = sorted({f.code for f in findings} & _RATCHETED)
+    assert ratcheted == sorted(_RATCHETED), (
+        f"{sorted(set(_RATCHETED) - set(ratcheted))} no longer fires on "
+        f"{_EXAMPLES.name} — the ratchet has done its job. Delete _RATCHETED "
+        "and this test so the acceptance gate has no exemptions again."
+    )
 
 
 def test_analyzer_passes_its_own_checks() -> None:

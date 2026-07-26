@@ -24,8 +24,15 @@ judgment call made inline at write time (Chris ruling 2026-07-19).
      `# type: ...` (mypy),
      `# noqa...` (a reason may ride the directive), `# tessercheck:ignore`,
      the roadmap marker grammar (`tb-cell` / `tb-status` /
-     `tb-allow-missing` lines, `docs/skill-authoring.md`), `# pragma...`, and formatter/linter controls
+     `tb-allow-missing` lines, `docs/skill-authoring.md`),
+     `# tesser-category: <name>` (the test-helper marker TB032 reads,
+     `testing.md`), `# pragma...`, and formatter/linter controls
      (`# fmt:`, `# isort:`, `# ruff:`).
+
+     The `tesser-category:` exemption is on the **prefix**, not on a valid
+     name. A typo'd category is TB032's finding to report; reporting it here
+     too would tell you that you wrote a banned comment when what you wrote
+     was a misspelled directive.
    - Go: `//go:` directives, build constraints (`// +build`), `//line`,
      `//nolint...`, `//export` / `//extern` / `//sys`, the roadmap marker
      grammar (same three, `//`-wrapped), the cgo preamble attached to an
