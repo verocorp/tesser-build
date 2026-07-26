@@ -116,9 +116,28 @@ def _defines_a_test(tree: ast.Module) -> bool:
     for node in tree.body:
         if _is_test_function(node):
             return True
-        if isinstance(node, ast.ClassDef) and node.name.startswith("Test"):
+        if isinstance(node, ast.ClassDef) and _is_test_class(node):
             if any(_is_test_function(m) for m in node.body):
                 return True
+    return False
+
+
+def _is_test_class(node: ast.ClassDef) -> bool:
+    """A class pytest collects tests from: named ``Test*``, or a
+    ``unittest.TestCase`` subclass.
+
+    The TestCase arm is not decoration. pytest collects a TestCase subclass
+    whatever it is called, so ``class CampaignCase(unittest.TestCase)`` holds
+    real tests — and without this arm the whole module's helpers go unjudged,
+    which is a silent coverage loss in the most standard test style there is.
+    """
+    if node.name.startswith("Test"):
+        return True
+    for base in node.bases:
+        if isinstance(base, ast.Name) and base.id == "TestCase":
+            return True
+        if isinstance(base, ast.Attribute) and base.attr == "TestCase":
+            return True
     return False
 
 

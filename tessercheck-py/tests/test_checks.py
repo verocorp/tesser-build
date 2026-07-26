@@ -2017,3 +2017,21 @@ def test_tb020_still_exempts_a_typod_category_name() -> None:
     # so the author gets one finding from TB032 with the right diagnosis rather
     # than two with the wrong one leading.
     assert _tb020("x = 1  # tesser-category: spce\n") == []
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        "import unittest\nclass CampaignCase(unittest.TestCase):",
+        "from unittest import TestCase\nclass CampaignCase(TestCase):",
+    ],
+)
+def test_tb032_judges_a_unittest_testcase_whatever_it_is_named(declaration: str) -> None:
+    # pytest collects a TestCase subclass regardless of its name, so narrowing
+    # detection to `Test*` classes silently skipped every helper in a module
+    # written in the most standard test style there is. A false negative, and
+    # the kind that looks like a clean report.
+    src = "def _detect(x: int) -> int:\n    return x\n" + declaration + (
+        "\n    def test_it(self) -> None:\n        assert _detect(1) == 1\n"
+    )
+    assert [f.line for f in _tb032(src)] == [1]
