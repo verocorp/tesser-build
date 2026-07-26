@@ -5,6 +5,23 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.11.1] - 2026-07-25
+
+A regression guard, not a feature. Streaming is deliberately **not** on the
+roadmap — the example teaches enough that a reader can derive it (and auth,
+content negotiation, …) from the existing DTOs. What matters is that those DTOs
+stay faithful HTTP request/response objects so that remains true.
+
+### Added
+
+- **HTTP-DTO fidelity tests** (`tests/test_httpwire.py`): lock that `HttpRequest`
+  keeps method / path / params / headers + an **opaque `bytes` body**, and
+  `Response` keeps `status_code` / headers + an **opaque `bytes` body**. The
+  guard exists to catch the one drift that would foreclose deriving streaming
+  and friends — collapsing the body back to a decoded `dict` for convenience.
+- `handlers.md` states the fidelity contract explicitly and points at the lock.
+  skill-version 22 → 23.
+
 ## [0.0.11.0] - 2026-07-25
 
 The CLI host gets the same router/transform split as HTTP — proving the anatomy
