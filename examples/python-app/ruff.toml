@@ -1,12 +1,15 @@
-# The two architecture rules ruff already enforces better than a hand-written
-# AST walk could: the environment is read only at the host edge, and only the
-# edge exits. Narrow on purpose — ruff is an architecture-rule engine here, not
-# a style gate. Nothing in the default rule set is selected, so adding a style
-# rule is a deliberate, separate decision.
+# The architecture rules ruff already enforces better than a hand-written AST
+# walk could — the environment is read only at the host edge, and only the edge
+# exits — plus dead imports, which the example tree should not teach. Selected
+# explicitly, one code at a time: nothing in ruff's default set is on, so every
+# rule here is a decision someone made on purpose.
 #
 # `banned-api` matches attribute access AND the `from os import getenv` alias
 # form, which is why it replaced `_env_reads` in tests/test_enforcement.py: the
 # hand-written detector only saw `os.getenv(...)`.
+#
+# `target-version` is the permissive floor (3.11), not CI's interpreter (3.12).
+# Neither TID251 nor PLR1722 is version-gated, and consumers copy this tree.
 #
 # Teeth: tests/test_architecture_teeth.py injects violations and asserts this
 # config still fails on them. A widened `per-file-ignores` is otherwise a
@@ -15,7 +18,7 @@
 target-version = "py311"
 
 [lint]
-select = ["TID251", "PLR1722"]
+select = ["TID251", "PLR1722", "F401"]
 
 [lint.flake8-tidy-imports.banned-api]
 "os.getenv" = { msg = "read the environment only in srv/*/main.py — pass values inward as a Config (skills/tesser-build/bootstrap.md)" }

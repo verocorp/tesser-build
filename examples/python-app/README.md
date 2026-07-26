@@ -123,6 +123,8 @@ They are split by who can decide them:
 | only the edge exits | `ruff.toml` — `TID251` on `sys.exit`/`os._exit`, `PLR1722` on bare `exit`/`quit` |
 | a host reaches a context only through its handlers | `.importlinter` — `forbidden` contract |
 | no peer imports between contexts | `.importlinter` — `forbidden` contracts |
+| every context is named by the import contracts | `tests/test_discovery.py` — totality guard over `.importlinter` |
+| no dead imports | `ruff.toml` — `F401` |
 | no import-time side effects | `tests/test_enforcement.py` (AST) |
 | a host routes and never translates | `tests/test_enforcement.py` (AST) |
 

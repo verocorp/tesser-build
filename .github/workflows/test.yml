@@ -89,7 +89,7 @@ jobs:
           python-version: '3.12'
       - name: Install dev tooling
         run: pip install -r examples/python-app/requirements-dev.txt
-      - name: examples/python-app — ruff (env edge + exit edge)
+      - name: examples/python-app — ruff (env edge + exit edge + dead imports)
         working-directory: examples/python-app
         run: ruff check .
       - name: examples/python-app — import-linter (import direction)
