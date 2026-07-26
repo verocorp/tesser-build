@@ -565,19 +565,27 @@ change; each waits for a real need.
   - **Depends on:** the helper norm landing — nothing to prune until helpers have
     defaults.
 
-- [ ] **TB033 checker — rule its target first**
-  - **What:** the fixtures ship this wave; the checker does not. Unresolved:
-    does the builtin-shadowing ban target spec/DTO **field** names or helper
-    **parameter** names?
-  - **Why it matters:** a dataclass field named `id` shadows nothing — `id()`
-    stays callable. A function *parameter* named `id` genuinely shadows the
-    builtin inside that function's body. So the failure the ban prevents exists
-    only in the parameter case.
-  - **Measured blast radius (weak evidence — this is one repo of example code,
-    per Chris; do not weigh it heavily):** field-name target hits 4 spec/DTO
-    definitions and 13 reference sites; parameter target hits 1
-    (`examples/python/tests/test_repository.py:9`).
-  - **Depends on:** T7's fixtures landing, which encode whichever contract is chosen.
+- [x] **TB033 — RULED AND SHIPPED 2026-07-26.** Neither framing won: the check
+  targets the **collision, not the name** — a builtin bound in a scope that the
+  same scope then *calls*.
+  - **What settled it:** running both cases. A dataclass field named `id` costs
+    nothing (the builtin stays callable in methods and `__post_init__`), while a
+    parameter named `id` breaks — `id(object())` raises
+    `TypeError: 'str' object is not callable`. So the field framing protects
+    against nothing, and the name-based parameter framing taxes 12 sites to
+    prevent a bug that occurred in none of them.
+  - **The blast-radius figures recorded here were wrong** and are kept as a
+    caution: "parameter target hits 1" counted only test helpers and predated
+    the restyle. The real spread was 4 fields and **12** parameters, most of them
+    production code — and two of the twelve
+    (`BaseHTTPRequestHandler.log_message(self, format, *args)` overrides) cannot
+    legally be renamed at all. Re-measure before weighing a stale count.
+  - **Off the shelf was checked first** (the PR #40 precedent): ruff `A001`/`A002`
+    already ships the name-based ban, flags those illegal-to-rename overrides
+    here, and has no call-aware variant. That is what justified writing one.
+  - **Shipped as a registered check, not fixtures-only** — under this ruling
+    there is no rename cascade (zero findings repo-wide), and registration earns
+    the standard meta-tests instead of a bespoke interim guard.
 
 - [ ] **Revisit the inlined e2e HTTP client in `examples/python/tests/test_wiring.py`**
   - **What:** T4c of the helper wave inlines `_request(method, url, body=None)` at its 6
