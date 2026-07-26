@@ -165,6 +165,15 @@ CHECKS: tuple[CheckMeta, ...] = (
         "neither is logic wearing a helper's clothes and belongs outside the "
         "test tree (skills/tesser-build/testing.md)",
     ),
+    CheckMeta(
+        "TB033",
+        "shadowed-builtin-called",
+        "a builtin name bound in a scope (parameter or local) that the same "
+        "scope then CALLS — TypeError if the binding runs first, "
+        "UnboundLocalError if it does not. Targets the collision, not the "
+        "name: a field or parameter merely named id is fine, which is what "
+        "separates this from ruff A001/A002",
+    ),
 )
 
 

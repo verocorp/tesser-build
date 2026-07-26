@@ -1523,3 +1523,84 @@ def test_tb032_honors_the_tessercheck_ignore_hatch() -> None:
         "    assert _detect(1) == 1\n"
     )
     assert _tb032(src) == []
+
+
+def _tb033(src: str) -> list[Finding]:
+    return [f for f in check_source("t.py", src, is_test=False) if f.code == "TB033"]
+
+
+def test_tb033_ignores_a_builtin_name_that_is_never_called() -> None:
+    # The whole ruling: the name is not the problem. A parameter or field named
+    # `id` leaves id() working everywhere a human writes code, so a name-based
+    # ban (ruff A001/A002) would flag conformant code here.
+    src = (
+        "def load(self, id: str) -> str:\n"
+        "    return self._store[id]\n"
+    )
+    assert _tb033(src) == []
+
+
+def test_tb033_flags_a_parameter_that_is_also_called() -> None:
+    src = "def f(id: str) -> str:\n    return str(id(object()))\n"
+    assert [f.line for f in _tb033(src)] == [2]
+
+
+def test_tb033_flags_a_local_binding_the_same_scope_calls() -> None:
+    # Same bug one line away from the parameter case. Excluding locals would
+    # leave `len = 0` then `len(name)` uncaught.
+    src = "def widest(names: list[str]) -> int:\n    len = 0\n    return len(names)\n"
+    assert [f.line for f in _tb033(src)] == [3]
+
+
+def test_tb033_does_not_depend_on_the_binding_coming_first() -> None:
+    # Python scopes per FUNCTION, not per statement: any assignment makes the
+    # name local for the whole body, so a call placed EARLIER raises
+    # UnboundLocalError rather than reaching the builtin. Verified by running
+    # both orders; either way the code is broken, so order carries no signal.
+    src = "def f(x: object) -> object:\n    n = id(x)\n    id = n\n    return id\n"
+    assert [f.line for f in _tb033(src)] == [2]
+
+
+def test_tb033_does_not_read_a_subscript_index_as_a_binding() -> None:
+    # Regression: `self._by_id[str(c.id)] = rec` binds nothing, but walking the
+    # assignment target descends into the index expression. This produced 4
+    # false positives on the example trees. The Subscript carries the Store;
+    # names inside the index are Loads.
+    src = (
+        "class Repo:\n"
+        "    def save(self, c: object) -> None:\n"
+        "        self._by_id[str(c)] = c\n"
+    )
+    assert _tb033(src) == []
+
+
+def test_tb033_leaves_an_unshadowed_builtin_call_alone() -> None:
+    src = "def size(items: list[str]) -> int:\n    return len(items)\n"
+    assert _tb033(src) == []
+
+
+def test_tb033_scopes_per_function_not_per_module() -> None:
+    # A binding in one function must not implicate a call in its sibling.
+    src = (
+        "def binder() -> None:\n"
+        "    id = 1\n"
+        "    return None\n"
+        "def caller(x: object) -> int:\n"
+        "    return id(x)\n"
+    )
+    assert _tb033(src) == []
+
+
+def test_tb033_flags_an_async_function_too() -> None:
+    src = "async def f(hash: str) -> int:\n    return hash(hash)\n"
+    assert [f.line for f in _tb033(src)] == [2]
+
+
+def test_tb033_honors_the_ignore_hatch() -> None:
+    # The documented escape for a callable binding legitimately called —
+    # `def apply(filter, xs): return filter(xs)`.
+    src = (
+        "def apply(filter: object, xs: list[str]) -> object:\n"
+        "    return filter(xs)  # tessercheck:ignore\n"
+    )
+    assert _tb033(src) == []
