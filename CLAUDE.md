@@ -5,7 +5,10 @@ inspiration, chosen for changeability, enforced where mechanically decidable;
 the build-side member of the tesser family): the `go/analysis` analyzers in
 `cmd/tessercheck` (composed from `internal/analyzers.All`), a golangci-lint module
 plugin (`gclplugin/`), the Python analyzer (`tessercheck-py/` — the `TB0*`
-checks), an executable rationale layer (`rationale/`), an agent
+checks), a Python runtime library (`tesser-py/` — `tesser.domain.ValueObject`,
+the repo's first shipped runtime dependency rather than a build-time checker;
+candidate mutation-testable VO base, see `examples/vobase/`), an executable
+rationale layer (`rationale/`), an agent
 skill (`skills/tesser-build/` — Go + Python construction guidance, copy-in distributed
 to consumers), and human docs (`docs/start-here.md`, `docs/faq.md`). If you are
 writing or changing domain objects here — or in a consumer repo (certus, metron,

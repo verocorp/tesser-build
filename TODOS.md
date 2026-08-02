@@ -18,6 +18,30 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 
 ## Toolkit
 
+- [ ] **ValueObject-shape adoption decision + classifier support** (shipped as
+  experiment 2026-08-01, `tesser-py/` + `examples/vobase/`)
+  - **What:** decide whether `tesser.domain.ValueObject` (the mutmut-visible
+    VO base) supersedes the frozen-dataclass idiom. If adopted:
+    (1) teach `tessercheck-py`'s classifier to recognize `ts.ValueObject`
+    subclasses as value objects — today TB003/TB010–TB014 are blind to the
+    shape (red-team verified: a raw-primitive accessor that TB010 catches on a
+    frozen dataclass passes silently on a ValueObject subclass);
+    (2) add the `python -m tessercheck examples/vobase` CI gate — the
+    `vobase-example` job in `.github/workflows/test.yml` deliberately omits
+    tessercheck until then; TB032 also
+    misfires on `tests/test_money.py`'s `_spec` helper under the new shape;
+    (3) walk the affected rows in `rationale/coverage.md` and re-render
+    `skills/tesser-build/python.md`, bumping skill-version.
+  - **Also found in that review, independent of the decision:**
+    `examples/python/catalog/money.py` shares the bugs the vobase port fixed —
+    `MoneyAmount("NaN")` raises `decimal.InvalidOperation` (not ValueError,
+    from `parsed < 0` outside the try), `"Infinity"` is accepted, and `add`
+    silently rounds past 28 significant digits. Fix the catalog original (and
+    check `examples/python-app`'s VOs for the same class of gap).
+  - **Context:** decision frame = (a)+cosmic-ray vs (e)+mutmut, measured
+    2026-07-29; five-way prototype data in the session memory
+    `go-ddd-mutmut-vo-stance` and `~/.tesser/digests/github.com/boxed/mutmut@*`.
+
 - [ ] **TB031 construction-completeness checker** (contract landed 2026-07-20,
   v0.0.5.0)
   - **What:** the checker for `testing.md` rule 2. Its contract is already

@@ -5,6 +5,43 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.14.0] - 2026-08-01
+
+mutmut silently skips any class that carries any decorator — the whole body,
+methods included — so the frozen-dataclass value-object idiom yields zero
+mutants: mutation testing is blind to exactly the code the conventions care
+most about. Measured on a Money example, the dataclass rendering produced no
+mutants in its own module while an undecorated rendering produced over a
+hundred, nearly all in real validation and domain logic.
+
+So the repo grows its first runtime artifact: `tesser-py/`, shipping
+`tesser.domain.ValueObject`. Subclasses get type-exact `__dict__` equality, a
+derived hash, a generic repr, and a frozen guard; every stored field joins
+equality automatically, so adding a field stays a one-site edit and the
+dropped-field equality defect is not expressible per class. The base defends
+its own contract: `__init_subclass__` rejects `__slots__` anywhere in the MRO
+(a slotted co-base silently collapses every instance into one equality class)
+and rejects `__eq__`/`__hash__`/`__setattr__`/`__delattr__` overrides.
+`examples/vobase/` is the worked example — catalog's Money ported to
+`class Money(ts.ValueObject)` — and both trees are CI-gated at mypy --strict
++ pytest and carry mutmut configs that run clean (the one surviving mutant is
+a verified-equivalent Decimal format flag).
+
+The port is deliberately harder than the original, because four adversarial
+review rounds attacked it and every round found something mutation testing
+could not: amounts are plain ASCII decimal strings within ±40 orders of
+magnitude with one canonical zero, `add` runs in a pinned decimal context and
+raises rather than silently rounding, currency codes are exactly three
+uppercase letters, and the canonical decimal exit bounds its output instead
+of amplifying an 11-character exponent into a 50MB string. The catalog
+original still carries the gaps this port closed — that follow-up, plus
+teaching the analyzer to classify the new shape, is queued in TODOS.md.
+
+This is a candidate successor shape under evaluation, not the taught
+convention: the skill and `examples/python` still render the frozen-dataclass
+idiom, and `examples/vobase` is deliberately not tessercheck-gated until the
+classifier learns the shape.
+
 ## [0.0.13.1] - 2026-07-26
 
 A quoted annotation is the same annotation — `_value: "str"` names `str`
