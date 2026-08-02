@@ -2,7 +2,7 @@ import ast
 
 import tesser.domain as ts
 
-SEED_KINDS: dict[tuple[str, str], str] = {
+TESSER_BASE_BLOCKS: dict[tuple[str, str], str] = {
     ("tesser.application", "ApplicationService"): "service",
     ("tesser.context", "Request"): "request",
     ("tesser.context", "Response"): "response",
@@ -10,7 +10,7 @@ SEED_KINDS: dict[tuple[str, str], str] = {
     ("tesser.domain", "Spec"): "spec",
 }
 
-KIND_NAMES: dict[str, str] = {
+TS_NAME_BY_BLOCK: dict[str, str] = {
     "request": "ts.Request",
     "response": "ts.Response",
     "spec": "ts.Spec",
@@ -89,14 +89,14 @@ class Codebase(ts.AggregateRoot):
         self._modules = modules
 
     def violations(self) -> tuple[Violation, ...]:
-        kinds = self._classify()
+        blocks = self._classify()
         found: list[Violation] = []
         for module in self._modules:
             for cls in module.class_defs():
-                kind = kinds.get((module.name(), cls.name))
-                if kind == "aggregate":
-                    found.extend(self._constructor_violations(module, cls, kinds))
-                if kind != "service":
+                block = blocks.get((module.name(), cls.name))
+                if block == "aggregate":
+                    found.extend(self._constructor_violations(module, cls, blocks))
+                if block != "service":
                     continue
                 for item in cls.body:
                     if not isinstance(item, ast.FunctionDef):
@@ -105,7 +105,7 @@ class Codebase(ts.AggregateRoot):
                         continue
                     where = f"{module.name()}.{cls.name}.{item.name}:{item.lineno}"
                     found.extend(
-                        self._signature_violations(module, where, item, "request", "response", "a service method", kinds)
+                        self._signature_violations(module, where, item, "request", "response", "a service method", blocks)
                     )
         return tuple(found)
 
@@ -113,7 +113,7 @@ class Codebase(ts.AggregateRoot):
         self,
         module: Module,
         cls: ast.ClassDef,
-        kinds: dict[tuple[str, str], str],
+        blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         init = next(
             (
@@ -131,37 +131,37 @@ class Codebase(ts.AggregateRoot):
                 ),
             )
         where = f"{module.name()}.{cls.name}.__init__:{init.lineno}"
-        return self._signature_violations(module, where, init, "spec", None, "an aggregate constructor", kinds)
+        return self._signature_violations(module, where, init, "spec", None, "an aggregate constructor", blocks)
 
     def _classify(self) -> dict[tuple[str, str], str]:
-        kinds = dict(SEED_KINDS)
+        blocks = dict(TESSER_BASE_BLOCKS)
         changed = True
         while changed:
             changed = False
             for module in self._modules:
                 for cls in module.class_defs():
                     key = (module.name(), cls.name)
-                    if key in kinds:
+                    if key in blocks:
                         continue
                     for base in cls.bases:
                         base_key = module.resolve(base)
-                        if base_key is not None and base_key in kinds:
-                            kinds[key] = kinds[base_key]
+                        if base_key is not None and base_key in blocks:
+                            blocks[key] = blocks[base_key]
                             changed = True
                             break
-        return kinds
+        return blocks
 
     def _signature_violations(
         self,
         module: Module,
         where: str,
         fn: ast.FunctionDef,
-        param_kind: str,
-        return_kind: str | None,
-        label: str,
-        kinds: dict[tuple[str, str], str],
+        param_block: str,
+        return_block: str | None,
+        subject: str,
+        blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
-        expected = KIND_NAMES[param_kind]
+        expected = TS_NAME_BY_BLOCK[param_block]
         found: list[Violation] = []
         params = [
             arg
@@ -169,25 +169,25 @@ class Codebase(ts.AggregateRoot):
             if arg.arg != "self"
         ]
         if fn.args.vararg is not None or fn.args.kwarg is not None:
-            found.append(Violation(f"{where} uses *args/**kwargs; {label} takes exactly one {expected}"))
+            found.append(Violation(f"{where} uses *args/**kwargs; {subject} takes exactly one {expected}"))
         if len(params) != 1:
-            found.append(Violation(f"{where} takes {len(params)} parameters; {label} takes exactly one {expected}"))
+            found.append(Violation(f"{where} takes {len(params)} parameters; {subject} takes exactly one {expected}"))
         for arg in params:
-            if self._annotation_kind(module, arg.annotation, kinds) != param_kind:
+            if self._annotation_block(module, arg.annotation, blocks) != param_block:
                 found.append(Violation(f"{where} parameter {arg.arg!r} is not a {expected}"))
-        if return_kind is not None and self._annotation_kind(module, fn.returns, kinds) != return_kind:
-            found.append(Violation(f"{where} does not return a {KIND_NAMES[return_kind]}"))
+        if return_block is not None and self._annotation_block(module, fn.returns, blocks) != return_block:
+            found.append(Violation(f"{where} does not return a {TS_NAME_BY_BLOCK[return_block]}"))
         return tuple(found)
 
-    def _annotation_kind(
+    def _annotation_block(
         self,
         module: Module,
         node: ast.expr | None,
-        kinds: dict[tuple[str, str], str],
+        blocks: dict[tuple[str, str], str],
     ) -> str | None:
         if node is None:
             return None
         key = module.resolve(node)
         if key is None:
             return None
-        return kinds.get(key)
+        return blocks.get(key)

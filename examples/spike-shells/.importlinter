@@ -6,7 +6,7 @@ root_packages =
 include_external_packages = False
 unmatched_ignore_imports_alerting = error
 
-[importlinter:contract:domain-is-a-leaf]
+[importlinter:contract:domain-imports-only-tesser-domain]
 name = domain imports only tesser.domain
 type = forbidden
 allow_indirect_imports = true
@@ -24,7 +24,7 @@ forbidden_modules =
     tesser.adapters
     tesser.context
 
-[importlinter:contract:client-is-a-leaf]
+[importlinter:contract:client-imports-only-tesser-context]
 name = the client DTOs import only tesser.context
 type = forbidden
 allow_indirect_imports = true
