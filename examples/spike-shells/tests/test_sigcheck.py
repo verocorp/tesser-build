@@ -106,13 +106,13 @@ def test_aggregate_constructor_violations_are_flagged(tmp_path: Path) -> None:
         "class Two(ts.AggregateRoot):\n"
         "    def __init__(self, a: ThingSpec, b: ThingSpec) -> None:\n"
         "        self.a = a\n"
-        "class Doorless(ts.AggregateRoot):\n"
+        "class NoConstructor(ts.AggregateRoot):\n"
         "    pass\n",
     )
     findings = _check(tmp_path)
     assert any("Primitive.__init__" in f and "parameter 'text' is not a ts.Spec" in f for f in findings)
     assert any("Two.__init__" in f and "takes 2 parameters" in f for f in findings)
-    assert any("Doorless" in f and "defines no __init__" in f for f in findings)
+    assert any("NoConstructor" in f and "defines no __init__" in f for f in findings)
 
 
 def test_indirect_subclass_still_classifies(tmp_path: Path) -> None:
