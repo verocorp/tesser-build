@@ -2,8 +2,8 @@ import pytest
 
 from spike.client import CreateNoteRequest, CreateNoteResponse
 from spike.domain import Note
-from spike.memory_repo import MemoryNoteRepository
-from spike.service import NoteService
+from spike.adapters import MemoryNoteRepository
+from spike.application import NoteService
 
 
 def test_create_builds_the_aggregate_and_saves_it() -> None:
