@@ -13,3 +13,6 @@ class Note(ts.AggregateRoot):
         if not spec.text:
             raise ValueError("text must be non-empty")
         self._text = spec.text
+
+    def text(self) -> str:
+        return self._text

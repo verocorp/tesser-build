@@ -1,12 +1,12 @@
 import tesser.adapters as ts
 
-from spike.domain import Note
+from spike.application import NoteParts
 
 
 class MemoryNoteRepository(ts.Repository):
 
     def __init__(self) -> None:
-        self.saved: list[Note] = []
+        self.saved: list[NoteParts] = []
 
-    def save(self, note: Note) -> None:
-        self.saved.append(note)
+    def save(self, parts: NoteParts) -> None:
+        self.saved.append(parts)

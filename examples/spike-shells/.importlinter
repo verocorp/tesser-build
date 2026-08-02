@@ -56,16 +56,16 @@ forbidden_modules =
     tesser.adapters
     tesser.context
 
-[importlinter:contract:adapters-reach-only-domain]
-name = an adapter imports domain, never application or client
+[importlinter:contract:adapters-never-import-domain]
+name = an adapter imports parts from application, never domain or client
 type = forbidden
 allow_indirect_imports = true
 source_modules =
     **.adapters
     **.adapters.**
 forbidden_modules =
-    **.application
-    **.application.**
+    **.domain
+    **.domain.**
     **.client
     **.client.**
     tesser.domain
