@@ -24,6 +24,8 @@ class MoneyAmount(ts.ValueObject):
             parsed = Decimal(value)
         except InvalidOperation as e:
             raise ValueError(f"invalid amount: {value!r}") from e
+        if not parsed.is_finite():
+            raise ValueError(f"amount must be finite: {value!r}")
         if parsed < 0:
             raise ValueError(f"amount must not be negative: {parsed}")
         object.__setattr__(self, "_value", parsed)
@@ -40,7 +42,7 @@ class MoneyCurrency(ts.ValueObject):
     _value: str
 
     def __init__(self, value: str) -> None:
-        if not value:
+        if not value.strip():
             raise ValueError("currency is required")
         object.__setattr__(self, "_value", value)
 

@@ -18,6 +18,17 @@ and `__str__`; fields are written with `object.__setattr__` in `__init__` and
 every stored field participates in equality and hash automatically — adding a
 field is a one-site edit, as in the dataclass idiom.
 
+One deliberate API difference from the catalog original: `Money.amount()` /
+`Money.currency()` are plain methods, not `@property` accessors. mutmut skips
+any decorated function (only a lone `@staticmethod`/`@classmethod` is exempt),
+so a `@property` accessor would be invisible to mutation testing — the same
+blindness this shape exists to escape.
+
+The port also hardens two validation gaps review found here (non-finite
+amounts like `"NaN"`/`"Infinity"`, whitespace-only currency) that the catalog
+original still has — a missing guard is missing code, which no mutation
+operator can surface.
+
 ## Why this shape exists
 
 mutmut (3.x) silently skips any class that carries any decorator — the whole

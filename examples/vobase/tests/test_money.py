@@ -31,10 +31,23 @@ def test_zero_amount_is_valid() -> None:
 def test_rejects_invalid() -> None:
     with pytest.raises(ValueError, match=r"^currency is required$"):
         Money(_spec("1.00", ""))
+    with pytest.raises(ValueError, match=r"^currency is required$"):
+        Money(_spec("1.00", " "))
     with pytest.raises(ValueError, match="invalid amount"):
         Money(_spec("abc"))
     with pytest.raises(ValueError, match="must not be negative"):
         Money(_spec("-1.00"))
+
+
+def test_rejects_non_finite_amounts() -> None:
+    with pytest.raises(ValueError, match=r"amount must be finite: 'NaN'"):
+        MoneyAmount("NaN")
+    with pytest.raises(ValueError, match=r"amount must be finite: 'sNaN'"):
+        MoneyAmount("sNaN")
+    with pytest.raises(ValueError, match=r"amount must be finite: 'Infinity'"):
+        MoneyAmount("Infinity")
+    with pytest.raises(ValueError, match=r"amount must be finite: '-Infinity'"):
+        MoneyAmount("-Infinity")
 
 
 def test_components_are_value_objects() -> None:
