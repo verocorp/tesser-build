@@ -3,10 +3,15 @@ from decimal import Decimal, Rounded, localcontext
 
 import tesser.domain as ts
 
-from vobase.serialization import canonical_decimal, canonical_str
+from vobase.serialization import (
+    CANONICAL_DECIMAL_MAX_ADJUSTED,
+    canonical_decimal,
+    canonical_str,
+)
 
-_AMOUNT_PATTERN = re.compile(r"-?\d+(\.\d+)?")
+_AMOUNT_PATTERN = re.compile(r"-?[0-9]+(\.[0-9]+)?")
 _CURRENCY_PATTERN = re.compile(r"[A-Z]{3}")
+_AMOUNT_PRECISION = 28
 
 
 class MoneySpec(ts.ValueObject):
@@ -31,10 +36,13 @@ class MoneyAmount(ts.ValueObject):
             raise ValueError(f"amount must not be negative: {parsed}")
         if parsed == 0:
             parsed = Decimal(0)
+        if abs(parsed.adjusted()) > CANONICAL_DECIMAL_MAX_ADJUSTED:
+            raise ValueError(f"amount out of range: {value!r}")
         object.__setattr__(self, "_value", parsed)
 
     def add(self, other: "MoneyAmount") -> "MoneyAmount":
         with localcontext() as ctx:
+            ctx.prec = _AMOUNT_PRECISION
             ctx.traps[Rounded] = True
             try:
                 total = self._value + other._value

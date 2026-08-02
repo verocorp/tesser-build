@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, localcontext
 
 import pytest
 
@@ -46,9 +46,17 @@ def test_rejects_invalid() -> None:
 
 
 def test_rejects_non_plain_decimal_forms() -> None:
-    for bad in ("NaN", "sNaN", "Infinity", "-Infinity", "1_000", " 1.5 ", "+5", "1e2", "1E+2", ".5", "1."):
+    for bad in ("NaN", "sNaN", "Infinity", "-Infinity", "1_000", " 1.5 ", "+5", "1e2", "1E+2", ".5", "1.", "٣٤", "１２"):
         with pytest.raises(ValueError, match="invalid amount"):
             MoneyAmount(bad)
+
+
+def test_rejects_out_of_range_amounts() -> None:
+    assert str(MoneyAmount("1" + "0" * 40)) == "1" + "0" * 40
+    with pytest.raises(ValueError, match="amount out of range"):
+        MoneyAmount("1" + "0" * 41)
+    with pytest.raises(ValueError, match="amount out of range"):
+        MoneyAmount("0." + "0" * 41 + "1")
 
 
 def test_add_never_silently_rounds() -> None:
@@ -61,6 +69,17 @@ def test_add_never_silently_rounds() -> None:
     long_zeros = MoneyAmount("1." + "0" * 30)
     with pytest.raises(ValueError, match=r"^amount arithmetic exceeds supported precision$"):
         long_zeros.add(MoneyAmount("0"))
+    exactly_28 = MoneyAmount("1" * 28)
+    assert exactly_28.add(MoneyAmount("0")) == exactly_28
+    exactly_29 = MoneyAmount("1" * 29)
+    with pytest.raises(ValueError, match=r"^amount arithmetic exceeds supported precision$"):
+        exactly_29.add(MoneyAmount("0"))
+
+
+def test_add_ignores_ambient_decimal_context() -> None:
+    with localcontext() as ctx:
+        ctx.prec = 4
+        assert Money(_spec("123.45")).add(Money(_spec("0.01"))) == Money(_spec("123.46"))
 
 
 def test_currency_is_stored_normalized() -> None:

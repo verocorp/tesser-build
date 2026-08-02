@@ -26,10 +26,12 @@ blindness this shape exists to escape.
 
 The port also hardens validation gaps review found here that the catalog
 original still has — a missing guard is missing code, which no mutation
-operator can surface: amounts must be plain decimal strings (`-?\d+(\.\d+)?`,
-so `"NaN"`, `"Infinity"`, `"1_000"`, `" 1.5 "`, `"+5"`, and `"1e2"` are all
-rejected), zero has one canonical form, `add` raises instead of silently
-rounding past 28 significant digits, and currency codes are stored stripped.
+operator can surface: amounts must be plain ASCII decimal strings
+(`-?[0-9]+(\.[0-9]+)?`, so `"NaN"`, `"Infinity"`, `"1_000"`, `" 1.5 "`,
+`"+5"`, `"1e2"`, and non-ASCII digits are all rejected) within ±40 orders of
+magnitude, zero has one canonical form, `add` runs in a pinned decimal
+context and raises instead of silently rounding past 28 significant digits,
+and currency codes are exactly three uppercase ASCII letters.
 
 ## Why this shape exists
 

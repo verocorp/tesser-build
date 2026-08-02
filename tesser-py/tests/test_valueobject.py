@@ -66,11 +66,51 @@ def test_repr_names_type_and_fields() -> None:
 def test_slots_subclass_is_rejected() -> None:
     with pytest.raises(
         TypeError,
-        match=r"^Slotted must not define __slots__: ValueObject equality and hash read __dict__$",
+        match=r"^Slotted must not define or inherit __slots__: ValueObject equality and hash read __dict__$",
     ):
 
         class Slotted(ts.ValueObject):
             __slots__ = ("_x",)
+
+
+def test_slotted_co_base_is_rejected() -> None:
+    class SlottedBase:
+        __slots__ = ("_v",)
+
+    with pytest.raises(
+        TypeError,
+        match=r"^Sneaky must not define or inherit __slots__: ValueObject equality and hash read __dict__$",
+    ):
+
+        class Sneaky(ts.ValueObject, SlottedBase):
+            pass
+
+
+def test_empty_slots_co_base_is_allowed() -> None:
+    class EmptySlots:
+        __slots__ = ()
+
+    class Fine(ts.ValueObject, EmptySlots):
+        _v: int
+
+        def __init__(self, v: int) -> None:
+            object.__setattr__(self, "_v", v)
+
+    assert Fine(1) != Fine(2)
+
+
+def test_cooperative_class_kwargs_pass_through() -> None:
+    class Registry:
+        seen: str = ""
+
+        def __init_subclass__(cls, tag: str = "", **kwargs: object) -> None:
+            super().__init_subclass__(**kwargs)
+            Registry.seen = tag
+
+    class Tagged(ts.ValueObject, Registry, tag="money"):
+        pass
+
+    assert Registry.seen == "money"
 
 
 def test_identity_dunder_overrides_are_rejected() -> None:

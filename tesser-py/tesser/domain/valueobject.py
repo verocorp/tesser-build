@@ -1,12 +1,13 @@
 class ValueObject:
 
-    def __init_subclass__(cls) -> None:
-        super().__init_subclass__()
-        if "__slots__" in cls.__dict__:
-            raise TypeError(
-                f"{cls.__name__} must not define __slots__: "
-                "ValueObject equality and hash read __dict__"
-            )
+    def __init_subclass__(cls, **kwargs: object) -> None:
+        super().__init_subclass__(**kwargs)
+        for base in cls.__mro__:
+            if base.__dict__.get("__slots__"):
+                raise TypeError(
+                    f"{cls.__name__} must not define or inherit __slots__: "
+                    "ValueObject equality and hash read __dict__"
+                )
         for name in ("__eq__", "__hash__", "__setattr__", "__delattr__"):
             if name in cls.__dict__:
                 raise TypeError(

@@ -100,7 +100,10 @@ line with a trailing `# tessercheck:ignore`.
 The repo's first runtime artifact ([`tesser-py/`](tesser-py/)):
 `tesser.domain.ValueObject`, an undecorated base class giving value objects
 type-exact `__dict__` equality, a derived hash, a generic repr, and a frozen
-guard. It exists because mutmut skips any decorated class wholesale, so the
+guard. As with frozen dataclasses, the frozen guard blocks rebinding only —
+fields must themselves be immutable values (value objects, not lists or
+dicts), or equality silently changes after construction. It exists because
+mutmut skips any decorated class wholesale, so the
 frozen-dataclass idiom is invisible to mutation testing. Candidate successor
 shape under evaluation — the taught convention is still the frozen dataclass;
 the worked example is [`examples/vobase/`](examples/vobase/), which is
