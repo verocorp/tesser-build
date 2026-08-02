@@ -10,6 +10,12 @@ SEED_KINDS: dict[tuple[str, str], str] = {
     ("tesser.domain", "Spec"): "spec",
 }
 
+KIND_NAMES: dict[str, str] = {
+    "request": "ts.Request",
+    "response": "ts.Response",
+    "spec": "ts.Spec",
+}
+
 
 class Violation(ts.ValueObject):
 
@@ -97,7 +103,10 @@ class Codebase(ts.AggregateRoot):
                         continue
                     if item.name.startswith("_"):
                         continue
-                    found.extend(self._method_violations(module, cls, item, kinds))
+                    where = f"{module.name()}.{cls.name}.{item.name}:{item.lineno}"
+                    found.extend(
+                        self._door_violations(module, where, item, "request", "response", "a service method", kinds)
+                    )
         return tuple(found)
 
     def _constructor_violations(
@@ -122,20 +131,7 @@ class Codebase(ts.AggregateRoot):
                 ),
             )
         where = f"{module.name()}.{cls.name}.__init__:{init.lineno}"
-        found: list[Violation] = []
-        params = [
-            arg
-            for arg in init.args.posonlyargs + init.args.args + init.args.kwonlyargs
-            if arg.arg != "self"
-        ]
-        if init.args.vararg is not None or init.args.kwarg is not None:
-            found.append(Violation(f"{where} uses *args/**kwargs; an aggregate constructor takes exactly one ts.Spec"))
-        if len(params) != 1:
-            found.append(Violation(f"{where} takes {len(params)} parameters; an aggregate constructor takes exactly one ts.Spec"))
-        for arg in params:
-            if self._annotation_kind(module, arg.annotation, kinds) != "spec":
-                found.append(Violation(f"{where} parameter {arg.arg!r} is not a ts.Spec"))
-        return tuple(found)
+        return self._door_violations(module, where, init, "spec", None, "an aggregate constructor", kinds)
 
     def _classify(self) -> dict[tuple[str, str], str]:
         kinds = dict(SEED_KINDS)
@@ -155,29 +151,32 @@ class Codebase(ts.AggregateRoot):
                             break
         return kinds
 
-    def _method_violations(
+    def _door_violations(
         self,
         module: Module,
-        cls: ast.ClassDef,
-        item: ast.FunctionDef,
+        where: str,
+        door: ast.FunctionDef,
+        param_kind: str,
+        return_kind: str | None,
+        label: str,
         kinds: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
-        where = f"{module.name()}.{cls.name}.{item.name}:{item.lineno}"
+        expected = KIND_NAMES[param_kind]
         found: list[Violation] = []
         params = [
             arg
-            for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
+            for arg in door.args.posonlyargs + door.args.args + door.args.kwonlyargs
             if arg.arg != "self"
         ]
-        if item.args.vararg is not None or item.args.kwarg is not None:
-            found.append(Violation(f"{where} uses *args/**kwargs; a service method takes exactly one ts.Request"))
+        if door.args.vararg is not None or door.args.kwarg is not None:
+            found.append(Violation(f"{where} uses *args/**kwargs; {label} takes exactly one {expected}"))
         if len(params) != 1:
-            found.append(Violation(f"{where} takes {len(params)} parameters; a service method takes exactly one ts.Request"))
+            found.append(Violation(f"{where} takes {len(params)} parameters; {label} takes exactly one {expected}"))
         for arg in params:
-            if self._annotation_kind(module, arg.annotation, kinds) != "request":
-                found.append(Violation(f"{where} parameter {arg.arg!r} is not a ts.Request"))
-        if self._annotation_kind(module, item.returns, kinds) != "response":
-            found.append(Violation(f"{where} does not return a ts.Response"))
+            if self._annotation_kind(module, arg.annotation, kinds) != param_kind:
+                found.append(Violation(f"{where} parameter {arg.arg!r} is not a {expected}"))
+        if return_kind is not None and self._annotation_kind(module, door.returns, kinds) != return_kind:
+            found.append(Violation(f"{where} does not return a {KIND_NAMES[return_kind]}"))
         return tuple(found)
 
     def _annotation_kind(
