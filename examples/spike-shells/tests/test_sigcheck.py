@@ -115,6 +115,57 @@ def test_aggregate_constructor_violations_are_flagged(tmp_path: Path) -> None:
     assert any("NoConstructor" in f and "defines no __init__" in f for f in findings)
 
 
+def test_service_body_rules_are_flagged(tmp_path: Path) -> None:
+    _conforming(tmp_path)
+    _write(
+        tmp_path,
+        "app/busy.py",
+        "import tesser.application as ts\n"
+        "from app.client import AskRequest, AskResponse\n"
+        "class BusyService(ts.ApplicationService):\n"
+        "    def long(self, request: AskRequest) -> AskResponse:\n"
+        + "".join(f"        step_{i} = request.text\n" for i in range(11))
+        + "        return AskResponse(text=step_0)\n"
+        "    def nested(self, request: AskRequest) -> AskResponse:\n"
+        "        if request.ping():\n"
+        "            if request.pong():\n"
+        "                return AskResponse(text='')\n"
+        "        return AskResponse(text='')\n"
+        "    def compares(self, request: AskRequest) -> AskResponse:\n"
+        "        if request.text == 'x':\n"
+        "            return AskResponse(text='')\n"
+        "        return AskResponse(text='')\n"
+        "    def combines(self, request: AskRequest) -> AskResponse:\n"
+        "        if request.ready() and request.good():\n"
+        "            return AskResponse(text='')\n"
+        "        return AskResponse(text='')\n",
+    )
+    findings = _check(tmp_path)
+    assert any("BusyService.long" in f and "body spans 12 source lines" in f for f in findings)
+    assert any("BusyService.nested" in f and "nests a conditional" in f for f in findings)
+    assert any("BusyService.compares" in f and "not a single call" in f for f in findings)
+    assert any("BusyService.combines" in f and "not a single call" in f for f in findings)
+
+
+def test_elif_chain_is_one_level(tmp_path: Path) -> None:
+    _conforming(tmp_path)
+    _write(
+        tmp_path,
+        "app/chained.py",
+        "import tesser.application as ts\n"
+        "from app.client import AskRequest, AskResponse\n"
+        "class ChainService(ts.ApplicationService):\n"
+        "    def pick(self, request: AskRequest) -> AskResponse:\n"
+        "        if request.ready():\n"
+        "            return AskResponse(text='a')\n"
+        "        elif request.good():\n"
+        "            return AskResponse(text='b')\n"
+        "        return AskResponse(text='c')\n",
+    )
+    findings = _check(tmp_path)
+    assert not any("ChainService" in f and "nests a conditional" in f for f in findings)
+
+
 def test_indirect_subclass_still_classifies(tmp_path: Path) -> None:
     _conforming(tmp_path)
     _write(

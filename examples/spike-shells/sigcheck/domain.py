@@ -107,6 +107,7 @@ class Codebase(ts.AggregateRoot):
                     found.extend(
                         self._signature_violations(module, where, item, "request", "response", "a service method", blocks)
                     )
+                    found.extend(self._body_violations(where, item))
         return tuple(found)
 
     def _constructor_violations(
@@ -178,6 +179,46 @@ class Codebase(ts.AggregateRoot):
         if return_block is not None and self._annotation_block(module, fn.returns, blocks) != return_block:
             found.append(Violation(f"{where} does not return a {TS_NAME_BY_BLOCK[return_block]}"))
         return tuple(found)
+
+    def _body_violations(self, where: str, fn: ast.FunctionDef) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        first = fn.body[0].lineno
+        last = fn.body[-1].end_lineno or fn.body[-1].lineno
+        span = last - first + 1
+        if span > 10:
+            found.append(Violation(f"{where} body spans {span} source lines; a service method body is at most 10"))
+        for node in ast.walk(fn):
+            if isinstance(node, ast.If):
+                if not isinstance(node.test, ast.Call):
+                    found.append(Violation(f"{where} if condition at line {node.lineno} is not a single call; satisfy it with one domain call"))
+                if self._contains_conditional(self._governed_stmts(node)):
+                    found.append(Violation(f"{where} nests a conditional at line {node.lineno}; a service method branches one level deep"))
+            elif isinstance(node, ast.Match):
+                if not isinstance(node.subject, ast.Call):
+                    found.append(Violation(f"{where} match subject at line {node.lineno} is not a single call; satisfy it with one domain call"))
+                if self._contains_conditional([stmt for case in node.cases for stmt in case.body]):
+                    found.append(Violation(f"{where} nests a conditional at line {node.lineno}; a service method branches one level deep"))
+        return tuple(found)
+
+    @staticmethod
+    def _governed_stmts(node: ast.If) -> list[ast.stmt]:
+        stmts = list(node.body)
+        is_elif_chain = (
+            len(node.orelse) == 1
+            and isinstance(node.orelse[0], ast.If)
+            and node.orelse[0].col_offset == node.col_offset
+        )
+        if not is_elif_chain:
+            stmts.extend(node.orelse)
+        return stmts
+
+    @staticmethod
+    def _contains_conditional(stmts: list[ast.stmt]) -> bool:
+        return any(
+            isinstance(sub, (ast.If, ast.Match))
+            for stmt in stmts
+            for sub in ast.walk(stmt)
+        )
 
     def _annotation_block(
         self,
