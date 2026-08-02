@@ -142,3 +142,120 @@ def test_analyzer_passes_its_own_checks() -> None:
     findings = [f for f in findings if f.code != "TB020"]
     assert findings == [], "\n".join(f.render() for f in findings)
     assert errors == [], "\n".join(errors)
+
+
+class _QuoteAnnotations(ast.NodeTransformer):
+    """Rewrite every annotation into its string-forward-reference form."""
+
+    def _quote(self, ann: ast.expr | None) -> ast.expr | None:
+        if ann is None or (isinstance(ann, ast.Constant) and isinstance(ann.value, str)):
+            return ann
+        return ast.copy_location(ast.Constant(value=ast.unparse(ann)), ann)
+
+    def visit_arg(self, node: ast.arg) -> ast.arg:
+        self.generic_visit(node)
+        node.annotation = self._quote(node.annotation)
+        return node
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
+        self.generic_visit(node)
+        node.returns = self._quote(node.returns)
+        return node
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AsyncFunctionDef:
+        self.generic_visit(node)
+        node.returns = self._quote(node.returns)
+        return node
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> ast.AnnAssign:
+        self.generic_visit(node)
+        annotation = self._quote(node.annotation)
+        assert annotation is not None
+        node.annotation = annotation
+        return node
+
+
+def test_quoting_every_annotation_changes_no_finding() -> None:
+    # Metamorphic invariance: a string annotation is the same annotation, so
+    # quoting every one of them must not change a single finding. This is the
+    # whole-analyzer guard against the walk re-diverging — when it had, this
+    # exact sweep produced TB015 on every leaf value object in all four
+    # example trees. Two corpora, because each has power in one direction:
+    # the example trees are conformant by construction, so they catch a
+    # finding APPEARING (the false-positive direction); testdata/'s bad
+    # fixtures carry findings across every registered code, so they catch a
+    # finding DISAPPEARING (quoting as an escape hatch — reviewed as vacuous
+    # on the examples alone). Python trees are DISCOVERED, not enumerated —
+    # an example tree added later is swept by default.
+    #
+    # Both sides are ast.unparse'd so comment-carried markers
+    # (# tesser-category:, # tessercheck:ignore) are stripped equally and line
+    # numbers stay comparable. The comparison is a SET of (code, line) by
+    # design: names inside one string share the string's position, so quoting
+    # can merge two same-line reports of one reference into one — a position
+    # artifact, not a lost finding.
+    trees = sorted(
+        d for d in (_ROOT / "examples").iterdir() if d.is_dir() and any(d.rglob("*.py"))
+    )
+    assert trees, "no Python example trees found; the sweep's discovery is broken"
+    for tree in trees:
+        assert any(tree.rglob("*.py")), f"{tree} has no Python files"
+    paths = [p for tree in trees for p in sorted(tree.rglob("*.py"))]
+    paths += sorted(_TESTDATA.rglob("*.py"))
+    for path in paths:
+        src = path.read_text(encoding="utf-8")
+        base = ast.unparse(ast.parse(src))
+        quoted_tree = _QuoteAnnotations().visit(ast.parse(src))
+        quoted = ast.unparse(ast.fix_missing_locations(quoted_tree))
+        is_test = path.name.startswith("test_")
+        base_findings = {(f.code, f.line) for f in check_source(str(path), base, is_test=is_test)}
+        quoted_findings = {(f.code, f.line) for f in check_source(str(path), quoted, is_test=is_test)}
+        assert base_findings == quoted_findings, (
+            f"{path}: quoting annotations changed findings — "
+            f"added {sorted(quoted_findings - base_findings)}, "
+            f"lost {sorted(base_findings - quoted_findings)}"
+        )
+
+
+def test_quoting_every_annotation_changes_no_finding_tree_wide() -> None:
+    # The per-file sweep above classifies each file in isolation; the
+    # cross-file embeds_entity / is_member resolution that motivated the walk
+    # unification is built by run_paths' whole-tree registry and never enters
+    # that guard (red-team review). This arm materializes each corpus quoted
+    # and compares whole-tree output, so the registry direction is inside the
+    # invariance too.
+    import tempfile
+
+    trees = sorted(
+        d for d in (_ROOT / "examples").iterdir() if d.is_dir() and any(d.rglob("*.py"))
+    )
+    trees.append(_TESTDATA)
+    for tree in trees:
+        with tempfile.TemporaryDirectory() as tmp:
+            base_dir = Path(tmp) / "base"
+            quoted_dir = Path(tmp) / "quoted"
+            for p in tree.rglob("*.py"):
+                rel = p.relative_to(tree)
+                src = p.read_text(encoding="utf-8")
+                base_out = ast.unparse(ast.parse(src))
+                quoted_tree = _QuoteAnnotations().visit(ast.parse(src))
+                quoted_out = ast.unparse(ast.fix_missing_locations(quoted_tree))
+                for root_dir, out in ((base_dir, base_out), (quoted_dir, quoted_out)):
+                    dest = root_dir / rel
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    dest.write_text(out, encoding="utf-8")
+            base_findings, base_errors = run_paths([str(base_dir)])
+            quoted_findings, quoted_errors = run_paths([str(quoted_dir)])
+            assert base_errors == [], f"{tree}: {base_errors}"
+            assert quoted_errors == [], f"{tree}: {quoted_errors}"
+            base_set = {
+                (f.code, str(Path(f.path).relative_to(base_dir)), f.line) for f in base_findings
+            }
+            quoted_set = {
+                (f.code, str(Path(f.path).relative_to(quoted_dir)), f.line)
+                for f in quoted_findings
+            }
+            assert base_set == quoted_set, (
+                f"{tree}: whole-tree quoting changed findings — "
+                f"added {sorted(quoted_set - base_set)}, lost {sorted(base_set - quoted_set)}"
+            )

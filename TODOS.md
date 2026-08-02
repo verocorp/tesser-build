@@ -383,21 +383,56 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   - **Start at:** add the pinned-policy assertions to errorspy's tests, or a
     drift test asserting the copies agree.
 
-- [ ] **THREE copies of the annotation-name walk, and they have now diverged**
-  (2026-07-21; sharpened 2026-07-26)
-  - **What:** `classify._all_names`, `typed_checks._annotation_names`, and — since
-    the test-helper wave — `helpers_check._annotation_names`. `astutil.py` exists
-    for exactly this sharing.
-  - **The divergence is no longer cosmetic.** Only the `helpers_check` copy
-    resolves string forward references and refuses to credit a name inside
-    `type[X]` / `Callable[..., X]`. Both behaviors were added because adversarial
-    review proved their absence was a false positive and a false negative
-    respectively. **The classifier still cannot see through a quoted annotation**,
-    which means every classifier-keyed check (TB010–TB018) has the false positive
-    that TB032 just fixed.
-  - **Start at:** move the forward-ref-resolving version into `astutil.py` and
-    route all three call sites through it — then re-run the gates, because the
-    classifier seeing more types may change what the typed checks report.
+- [ ] **The Literal/Annotated skip is keyed on the SPELLING, so an import
+  alias restores the false positive it fixed** (adversarial review 2026-07-26,
+  filed with a verified repro)
+  - **What:** `astutil._annotation_refs` skips a `Literal[...]` slice and
+    `Annotated`'s metadata by base name. `from typing import Literal as L` plus
+    `L["Warehouse"]` defeats the skip and the full Literal-as-forward-ref false
+    positive returns (TB012 + TB014 on a conformant discriminator field —
+    reproduced). A *type alias* (`Kind = Literal["Warehouse"]`) is safe.
+  - **Why not fixed now:** seeing through an import alias needs module-level
+    import context threaded into a pure expression walk — the alias-disguise
+    class this analyzer scopes out everywhere (classify's docstring: alias /
+    NewType / cross-module are the optional mypy plugin's job). This entry
+    exists because here the failure mode is the analyzer's own P1, not a
+    missed detection.
+  - **Start at:** decide whether checks get module import context as a general
+    capability; a one-off for Literal would be the fourth diverged walk.
+
+- [ ] **The wide walk credits names inside `type[X]` / `Callable[..., X]`, and
+  no test pins whether that is intended** (coverage audit 2026-07-26)
+  - **What:** with `returned_only=False`, `_contains_primitive` credits names
+    inside those slots, so a VO field `kind: type[str]` or an accessor
+    `-> Callable[[], str]` trips TB010 even though neither holds a `str`
+    (verified with a non-primitive backing field). Pre-existing — the deleted
+    flat `ast.walk` did the same — but `astutil._annotation_names`'s docstring
+    now states the wide default as a deliberate promise.
+  - **Start at:** decide whether "any name anywhere" should exclude
+    not-the-value slots for the BAN checks too, then pin the answer with a
+    test either way. The machinery (`returned_only`) already exists.
+
+- [ ] **No example tree contains an `async def`, so async annotation handling
+  is unproven end-to-end** (coverage audit 2026-07-26)
+  - **What:** the metamorphic sweep's `visit_AsyncFunctionDef` arm and every
+    checker's `AsyncFunctionDef` branch run only on synthetic unit fixtures —
+    the four example trees have zero async code. The sweep looks like it
+    covers async return annotations and does not.
+  - **Start at:** this is a curriculum question first (should an example teach
+    an async handler?), a coverage question second. If no example earns async
+    on its own merits, add an async fixture pair under `testdata/` instead.
+
+- [ ] **`ClassInfo.collection_element_names` is computed and never consumed**
+  (2026-07-26, found while unifying the annotation-name walk)
+  - **What:** `classify._collection_element_names` feeds a `ClassInfo` field with
+    zero readers outside `classify.py` (verified by grep across `tessercheck/`
+    and `tests/`). It also still misses a *fully*-quoted collection annotation
+    (`links: "tuple[ShortLink, ...]"` is a `Constant`, not a `Subscript`, so the
+    collection test fails before the elements are read) — inert only because
+    nothing consumes the field.
+  - **Start at:** decide whether a check will ever key on "collection of X"
+    separately from `field_type_names`; if not, delete the field, and if so,
+    unquote the annotation before the `Subscript` test in the same change.
 
 - [ ] **Suppression is a substring scan on the OLD checkers — now with a
   verified repro** (2026-07-21; proven 2026-07-26)

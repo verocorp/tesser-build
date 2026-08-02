@@ -43,14 +43,15 @@ a repository fake, ``check`` on a policy fake. That is the shape TB030
 mandated construct, so the check would be reporting the right answer as a
 violation.
 
-**Test detection is structural, and it WALKS.** A module is a test module when
-it defines a ``test_*`` function *at any depth* — never by the ``is_test`` path
-flag, which would make the fixtures unprovable. The depth matters: pytest's
-class style puts every test on a ``Test*`` class, so a scan of ``tree.body``
-alone sees no tests, exempts the whole file, and takes its module-level helpers
-with it. That is not hypothetical — ``examples/python/tests/test_short_link.py``
-is exactly this shape, and its ``_spec`` helper is precisely what TB032 exists
-to judge.
+**Test detection is structural, mirroring pytest's collection rules** — never
+the ``is_test`` path flag, which would make the fixtures unprovable. A module
+is a test module when pytest would collect a test from it: a module-level
+``test_*`` function, or a ``test_*`` method on a collectible class
+(:func:`_defines_a_test`). Not a walk — a production ``Client.test_connection``
+must not make its file a test module — and not a bare ``tree.body`` scan for
+functions either, because pytest's class style puts every test on a ``Test*``
+class and a scan that missed those exempted whole files
+(``examples/python/tests/test_short_link.py`` was exactly that shape).
 
 **Known hole.** A module with no ``test_*`` function anywhere — a helper-only
 module beside the tests, or a ``conftest.py`` — is never judged at all. Closing
@@ -63,7 +64,7 @@ import ast
 import io
 import tokenize
 
-from tessercheck.astutil import _annotation_base
+from tessercheck.astutil import _annotation_names
 from tessercheck.classify import ClassInfo, Stereotype, classify_trees
 from tessercheck.finding import Finding
 from tessercheck.markers import (
@@ -151,77 +152,21 @@ def _is_fixture(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     return False
 
 
-# Subscript bases whose contents are NOT the returned value. A helper returning
-# ``type[LinkSpec]`` returns the CLASS, and one returning ``Callable[[], LinkSpec]``
-# returns a factory — neither is a built spec, so crediting the name inside them
-# would bless a function that does something else entirely.
-_NOT_THE_VALUE: frozenset[str] = frozenset({"type", "Type", "Callable"})
-
-
-def _annotation_names(ann: ast.expr) -> frozenset[str]:
-    """Every type name the annotation actually RETURNS.
-
-    Two things this has to get right, both found by adversarial review:
-
-    * A **string annotation** is a forward reference — ``-> "LinkSpec"`` and
-      ``-> list["LinkSpec"]`` carry no ``ast.Name`` at all, so a plain walk saw
-      nothing and reported a conformant helper. Idiomatic Python, and this
-      analyzer runs in other people's CI, so the false positive is the expensive
-      kind. Parse the string and recurse.
-    * ``type[X]`` / ``Callable[..., X]`` mention X without returning one.
-    """
-    names: set[str] = set()
-
-    def visit(node: ast.expr, depth: int = 0) -> None:
-        if depth > 8:
-            return
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            try:
-                parsed = ast.parse(node.value, mode="eval").body
-            except (SyntaxError, ValueError, RecursionError, MemoryError):
-                # The string's CONTENT is arbitrary — this is the one place the
-                # checker parses text the outer file never had to parse, so it
-                # is the one place a legal file can defeat the parser. A long
-                # flat expression exhausts CPython's parser recursion, and
-                # RecursionError is not a SyntaxError: catching only that aborted
-                # the entire run on a file that parsed fine. The ``depth`` cap
-                # below cannot help, because the recursion is inside the parser,
-                # not inside visit(). Failing closed credits no name, so the
-                # helper reports as unclassified — the safe direction.
-                return
-            visit(parsed, depth + 1)
-            return
-        if isinstance(node, ast.Subscript):
-            if _annotation_base(node.value) in _NOT_THE_VALUE:
-                return
-            visit(node.value, depth + 1)
-            visit(node.slice, depth + 1)
-            return
-        if isinstance(node, ast.Name):
-            names.add(node.id)
-            return
-        if isinstance(node, ast.Attribute):
-            names.add(node.attr)
-            return
-        for child in ast.iter_child_nodes(node):
-            if isinstance(child, ast.expr):
-                visit(child, depth + 1)
-
-    visit(ann)
-    return frozenset(names)
-
-
 def _returns_a_spec(
     node: ast.FunctionDef | ast.AsyncFunctionDef,
     registry: dict[str, ClassInfo],
     local: dict[str, ClassInfo],
 ) -> bool:
+    # returned_only: a helper annotated ``-> type[LinkSpec]`` returns the CLASS
+    # and ``-> Callable[[], LinkSpec]`` a factory — neither is a built spec, so
+    # crediting the names inside them would bless a function that does
+    # something else entirely.
     if node.returns is None:
         return False
     return any(
         (info := registry.get(name) or local.get(name)) is not None
         and info.stereotype is Stereotype.SPEC
-        for name in _annotation_names(node.returns)
+        for name in _annotation_names(node.returns, returned_only=True)
     )
 
 
@@ -277,8 +222,8 @@ def check_helpers(
     tree: ast.Module,
     registry: dict[str, ClassInfo],
 ) -> list[Finding]:
-    """Every TB032 finding for one file. Silent unless the module defines a
-    ``test_*`` function somewhere in it."""
+    """Every TB032 finding for one file. Silent unless pytest would collect a
+    test from the module (:func:`_defines_a_test`)."""
     if not _defines_a_test(tree):
         return []
 

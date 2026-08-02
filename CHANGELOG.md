@@ -5,6 +5,48 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.13.1] - 2026-07-26
+
+A quoted annotation is the same annotation — `_value: "str"` names `str`
+exactly as the bare form does — but the analyzer read the two differently,
+because the annotation-name walk existed as five diverged copies and only the
+newest resolved string forward references. The divergence cut both ways on
+conformant code: quoting a leaf's backing field made every leaf value object
+in every example tree misread as *structured* and its one legitimate `__str__`
+exit flag as an illegal dunder (TB015), while the same quote *hid* a primitive
+from the accessor ban (TB010) and a held aggregate root from the boundary rule
+(TB012). A trap for conformant code and an escape hatch for non-conformant
+code, from one missing behavior.
+
+### Fixed
+
+- One shared walk in `astutil` now serves the classifier and every
+  annotation-reading check: forward references resolve everywhere, fail closed
+  on unparseable content (crediting no name), and are depth-capped only on
+  quote-in-quote re-entry — plain generic nesting resolves at any depth.
+- `Literal["Warehouse"]` values and `Annotated[X, ...]` metadata are values,
+  not forward references — a tagged-union discriminator no longer reads as
+  holding the type its string happens to spell. Strings there are left alone
+  while everything else is walked, so a codebase with its *own* `Literal`
+  class keeps its checks.
+- TB017 no longer calls a `-> type[Slug]` classmethod a second construction
+  door, and an annotation that cleanly names another type is taken at its
+  word even when a `type[...]`/`Callable[...]` slot beside it holds garbage.
+- Nested quoted annotations no longer re-parse per visiting level — the
+  forward-reference parse is memoized, removing a measured 12–33x wall-clock
+  amplification on quote-dense input. On ordinary code the unified walk is
+  about twice as fast per annotation as the copies it replaced.
+
+### Added
+
+- A metamorphic guard: quoting every annotation in every Python example tree
+  and every check fixture must change no finding. The example trees catch a
+  finding appearing (the false-positive direction); the fixture corpus, which
+  carries findings across every registered code, catches one disappearing
+  (quoting as an escape hatch). Trees are discovered, not enumerated.
+- A direct contract table pinning the shared walk across twenty annotation
+  shapes, and regression tests for every behavior above.
+
 ## [0.0.13.0] - 2026-07-26
 
 Agent-written tests come out over-DRY. Setup gets factored until the thing that
