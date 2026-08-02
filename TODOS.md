@@ -26,8 +26,9 @@ Deferred work with context. Each entry carries enough for a cold pickup.
     subclasses as value objects — today TB003/TB010–TB014 are blind to the
     shape (red-team verified: a raw-primitive accessor that TB010 catches on a
     frozen dataclass passes silently on a ValueObject subclass);
-    (2) add the `python -m tessercheck examples/vobase` CI gate (deliberate
-    exemption comment sits in `.github/workflows/test.yml`); TB032 also
+    (2) add the `python -m tessercheck examples/vobase` CI gate — the
+    `vobase-example` job in `.github/workflows/test.yml` deliberately omits
+    tessercheck until then; TB032 also
     misfires on `tests/test_money.py`'s `_spec` helper under the new shape;
     (3) walk the affected rows in `rationale/coverage.md` and re-render
     `skills/tesser-build/python.md`, bumping skill-version.
