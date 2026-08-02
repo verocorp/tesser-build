@@ -1,9 +1,15 @@
 import tesser.domain as ts
 
 
-class Note(ts.AggregateRoot):
+class NoteSpec(ts.Spec):
 
     def __init__(self, text: str) -> None:
-        if not text:
+        self.text = text
+
+
+class Note(ts.AggregateRoot):
+
+    def __init__(self, spec: NoteSpec) -> None:
+        if not spec.text:
             raise ValueError("text must be non-empty")
-        self._text = text
+        self._text = spec.text

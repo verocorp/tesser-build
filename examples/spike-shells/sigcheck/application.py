@@ -3,12 +3,12 @@ from typing import Protocol
 import tesser.application as ts
 
 from sigcheck.client import CheckRequest, CheckResponse
-from sigcheck.domain import Codebase, Module
+from sigcheck.domain import Codebase, CodebaseSpec
 
 
 class SourceReader(ts.Port, Protocol):
 
-    def modules(self, root: str) -> tuple[Module, ...]: ...
+    def sources(self, root: str) -> tuple[tuple[str, str], ...]: ...
 
 
 class SigcheckService(ts.ApplicationService):
@@ -17,5 +17,5 @@ class SigcheckService(ts.ApplicationService):
         self._reader = reader
 
     def check(self, request: CheckRequest) -> CheckResponse:
-        codebase = Codebase(self._reader.modules(request.root))
+        codebase = Codebase(CodebaseSpec(sources=self._reader.sources(request.root)))
         return CheckResponse(findings=tuple(str(violation) for violation in codebase.violations()))

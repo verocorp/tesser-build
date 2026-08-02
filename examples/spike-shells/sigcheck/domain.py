@@ -6,6 +6,8 @@ SEED_KINDS: dict[tuple[str, str], str] = {
     ("tesser.application", "ApplicationService"): "service",
     ("tesser.context", "Request"): "request",
     ("tesser.context", "Response"): "response",
+    ("tesser.domain", "AggregateRoot"): "aggregate",
+    ("tesser.domain", "Spec"): "spec",
 }
 
 
@@ -65,9 +67,16 @@ class Module(ts.Entity):
         return None
 
 
+class CodebaseSpec(ts.Spec):
+
+    def __init__(self, sources: tuple[tuple[str, str], ...]) -> None:
+        self.sources = sources
+
+
 class Codebase(ts.AggregateRoot):
 
-    def __init__(self, modules: tuple[Module, ...]) -> None:
+    def __init__(self, spec: CodebaseSpec) -> None:
+        modules = tuple(Module(name, source) for name, source in spec.sources)
         names = [module.name() for module in modules]
         if len(names) != len(set(names)):
             raise ValueError("module names must be unique")
@@ -78,7 +87,10 @@ class Codebase(ts.AggregateRoot):
         found: list[Violation] = []
         for module in self._modules:
             for cls in module.class_defs():
-                if kinds.get((module.name(), cls.name)) != "service":
+                kind = kinds.get((module.name(), cls.name))
+                if kind == "aggregate":
+                    found.extend(self._constructor_violations(module, cls, kinds))
+                if kind != "service":
                     continue
                 for item in cls.body:
                     if not isinstance(item, ast.FunctionDef):
@@ -86,6 +98,43 @@ class Codebase(ts.AggregateRoot):
                     if item.name.startswith("_"):
                         continue
                     found.extend(self._method_violations(module, cls, item, kinds))
+        return tuple(found)
+
+    def _constructor_violations(
+        self,
+        module: Module,
+        cls: ast.ClassDef,
+        kinds: dict[tuple[str, str], str],
+    ) -> tuple[Violation, ...]:
+        init = next(
+            (
+                item
+                for item in cls.body
+                if isinstance(item, ast.FunctionDef) and item.name == "__init__"
+            ),
+            None,
+        )
+        if init is None:
+            return (
+                Violation(
+                    f"{module.name()}.{cls.name}:{cls.lineno} defines no __init__; "
+                    "an aggregate constructs from exactly one ts.Spec"
+                ),
+            )
+        where = f"{module.name()}.{cls.name}.__init__:{init.lineno}"
+        found: list[Violation] = []
+        params = [
+            arg
+            for arg in init.args.posonlyargs + init.args.args + init.args.kwonlyargs
+            if arg.arg != "self"
+        ]
+        if init.args.vararg is not None or init.args.kwarg is not None:
+            found.append(Violation(f"{where} uses *args/**kwargs; an aggregate constructor takes exactly one ts.Spec"))
+        if len(params) != 1:
+            found.append(Violation(f"{where} takes {len(params)} parameters; an aggregate constructor takes exactly one ts.Spec"))
+        for arg in params:
+            if self._annotation_kind(module, arg.annotation, kinds) != "spec":
+                found.append(Violation(f"{where} parameter {arg.arg!r} is not a ts.Spec"))
         return tuple(found)
 
     def _classify(self) -> dict[tuple[str, str], str]:

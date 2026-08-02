@@ -19,6 +19,17 @@ def _write(root: Path, rel: str, source: str) -> None:
 def _conforming(root: Path) -> None:
     _write(
         root,
+        "app/domain.py",
+        "import tesser.domain as ts\n"
+        "class ThingSpec(ts.Spec):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n"
+        "class Thing(ts.AggregateRoot):\n"
+        "    def __init__(self, spec: ThingSpec) -> None:\n"
+        "        self.text = spec.text\n",
+    )
+    _write(
+        root,
         "app/client.py",
         "import tesser.context as ts\n"
         "class AskRequest(ts.Request):\n"
@@ -80,6 +91,28 @@ def test_arity_and_missing_annotations_are_flagged(tmp_path: Path) -> None:
     assert any("takes 2 parameters" in f for f in findings)
     assert any("parameter 'request' is not a ts.Request" in f for f in findings)
     assert any("uses *args/**kwargs" in f for f in findings)
+
+
+def test_aggregate_constructor_violations_are_flagged(tmp_path: Path) -> None:
+    _conforming(tmp_path)
+    _write(
+        tmp_path,
+        "app/badroots.py",
+        "import tesser.domain as ts\n"
+        "from app.domain import ThingSpec\n"
+        "class Primitive(ts.AggregateRoot):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n"
+        "class Two(ts.AggregateRoot):\n"
+        "    def __init__(self, a: ThingSpec, b: ThingSpec) -> None:\n"
+        "        self.a = a\n"
+        "class Doorless(ts.AggregateRoot):\n"
+        "    pass\n",
+    )
+    findings = _check(tmp_path)
+    assert any("Primitive.__init__" in f and "parameter 'text' is not a ts.Spec" in f for f in findings)
+    assert any("Two.__init__" in f and "takes 2 parameters" in f for f in findings)
+    assert any("Doorless" in f and "defines no __init__" in f for f in findings)
 
 
 def test_indirect_subclass_still_classifies(tmp_path: Path) -> None:
