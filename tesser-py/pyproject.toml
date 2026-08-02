@@ -10,7 +10,13 @@ requires-python = ">=3.10"
 dependencies = []
 
 [tool.setuptools]
-packages = ["tesser", "tesser.domain"]
+packages = [
+    "tesser",
+    "tesser.adapters",
+    "tesser.application",
+    "tesser.context",
+    "tesser.domain",
+]
 
 [tool.setuptools.package-data]
 tesser = ["py.typed"]
