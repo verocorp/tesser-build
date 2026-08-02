@@ -1,0 +1,59 @@
+[importlinter]
+root_packages =
+    spike
+    tesser
+include_external_packages = False
+unmatched_ignore_imports_alerting = error
+
+[importlinter:contract:domain-is-a-leaf]
+name = domain imports only tesser.domain
+type = forbidden
+allow_indirect_imports = true
+source_modules =
+    spike.domain
+forbidden_modules =
+    spike.client
+    spike.service
+    spike.memory_repo
+    tesser.application
+    tesser.adapters
+    tesser.context
+
+[importlinter:contract:client-is-a-leaf]
+name = the client DTOs import only tesser.context
+type = forbidden
+allow_indirect_imports = true
+source_modules =
+    spike.client
+forbidden_modules =
+    spike.domain
+    spike.service
+    spike.memory_repo
+    tesser.domain
+    tesser.application
+    tesser.adapters
+
+[importlinter:contract:service-never-reaches-adapters]
+name = the application service imports domain and client, never an adapter
+type = forbidden
+allow_indirect_imports = true
+source_modules =
+    spike.service
+forbidden_modules =
+    spike.memory_repo
+    tesser.domain
+    tesser.adapters
+    tesser.context
+
+[importlinter:contract:adapter-reaches-only-domain]
+name = the repository adapter imports domain, never the service or client
+type = forbidden
+allow_indirect_imports = true
+source_modules =
+    spike.memory_repo
+forbidden_modules =
+    spike.service
+    spike.client
+    tesser.domain
+    tesser.application
+    tesser.context
