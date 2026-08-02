@@ -6,6 +6,7 @@ import tesser.domain as ts
 from vobase.serialization import canonical_decimal, canonical_str
 
 _AMOUNT_PATTERN = re.compile(r"-?\d+(\.\d+)?")
+_CURRENCY_PATTERN = re.compile(r"[A-Z]{3}")
 
 
 class MoneySpec(ts.ValueObject):
@@ -53,6 +54,8 @@ class MoneyCurrency(ts.ValueObject):
         stripped = value.strip()
         if not stripped:
             raise ValueError("currency is required")
+        if _CURRENCY_PATTERN.fullmatch(stripped) is None:
+            raise ValueError(f"currency must be 3 uppercase letters: {value!r}")
         object.__setattr__(self, "_value", stripped)
 
     def __str__(self) -> str:

@@ -68,6 +68,19 @@ def test_currency_is_stored_normalized() -> None:
     assert str(MoneyCurrency(" USD ")) == "USD"
 
 
+def test_currency_must_be_three_uppercase_letters() -> None:
+    for bad in ("usd", "US$", "USDX", "US", "USD\nEUR", "US D"):
+        with pytest.raises(ValueError, match="currency must be 3 uppercase letters"):
+            MoneyCurrency(bad)
+
+
+def test_tiny_amount_round_trips_through_add() -> None:
+    tiny = MoneyAmount("0.0000001")
+    assert str(tiny) == "0.0000001"
+    assert tiny.add(MoneyAmount("0")) == tiny
+    assert MoneyAmount(str(tiny)) == tiny
+
+
 def test_components_are_value_objects() -> None:
     m = Money(_spec("1.50"))
     assert m.amount() == MoneyAmount("1.50")

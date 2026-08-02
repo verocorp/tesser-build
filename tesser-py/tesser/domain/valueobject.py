@@ -7,6 +7,12 @@ class ValueObject:
                 f"{cls.__name__} must not define __slots__: "
                 "ValueObject equality and hash read __dict__"
             )
+        for name in ("__eq__", "__hash__", "__setattr__", "__delattr__"):
+            if name in cls.__dict__:
+                raise TypeError(
+                    f"{cls.__name__} must not override {name}: "
+                    "ValueObject owns the identity contract"
+                )
 
     def __eq__(self, other: object) -> bool:
         if type(self) is not type(other):

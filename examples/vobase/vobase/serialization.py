@@ -6,4 +6,4 @@ def canonical_str(value: str) -> str:
 
 
 def canonical_decimal(value: Decimal) -> str:
-    return str(value)
+    return format(value, "f")

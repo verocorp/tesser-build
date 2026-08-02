@@ -73,6 +73,18 @@ def test_slots_subclass_is_rejected() -> None:
             __slots__ = ("_x",)
 
 
+def test_identity_dunder_overrides_are_rejected() -> None:
+    def boom(*args: object) -> None:
+        return None
+
+    for name in ("__eq__", "__hash__", "__setattr__", "__delattr__"):
+        with pytest.raises(
+            TypeError,
+            match=f"^Custom must not override {name}: ValueObject owns the identity contract$",
+        ):
+            type("Custom", (ts.ValueObject,), {name: boom})
+
+
 def test_unhashable_field_value_raises_on_hash() -> None:
     class Bag(ts.ValueObject):
         _items: list[str]
