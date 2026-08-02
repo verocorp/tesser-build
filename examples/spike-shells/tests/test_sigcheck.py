@@ -1,6 +1,13 @@
 from pathlib import Path
 
-from sigcheck import check
+from sigcheck.adapters import FilesystemSourceReader
+from sigcheck.application import SigcheckService
+from sigcheck.client import CheckRequest
+
+
+def _check(root: Path) -> tuple[str, ...]:
+    service = SigcheckService(FilesystemSourceReader())
+    return service.check(CheckRequest(root=str(root))).findings
 
 
 def _write(root: Path, rel: str, source: str) -> None:
@@ -36,7 +43,7 @@ def _conforming(root: Path) -> None:
 
 def test_conforming_tree_is_clean(tmp_path: Path) -> None:
     _conforming(tmp_path)
-    assert check(tmp_path) == []
+    assert _check(tmp_path) == ()
 
 
 def test_primitive_parameter_and_return_are_flagged(tmp_path: Path) -> None:
@@ -49,7 +56,7 @@ def test_primitive_parameter_and_return_are_flagged(tmp_path: Path) -> None:
         "    def ask(self, text: str) -> str:\n"
         "        return text\n",
     )
-    findings = check(tmp_path)
+    findings = _check(tmp_path)
     assert any("parameter 'text' is not a ts.Request" in f for f in findings)
     assert any("does not return a ts.Response" in f for f in findings)
 
@@ -69,7 +76,7 @@ def test_arity_and_missing_annotations_are_flagged(tmp_path: Path) -> None:
         "    def spread(self, *args: object) -> AskResponse:\n"
         "        return AskResponse(text='')\n",
     )
-    findings = check(tmp_path)
+    findings = _check(tmp_path)
     assert any("takes 2 parameters" in f for f in findings)
     assert any("parameter 'request' is not a ts.Request" in f for f in findings)
     assert any("uses *args/**kwargs" in f for f in findings)
@@ -86,5 +93,5 @@ def test_indirect_subclass_still_classifies(tmp_path: Path) -> None:
         "    def again(self, request: AskRequest) -> AskRequest:\n"
         "        return request\n",
     )
-    findings = check(tmp_path)
+    findings = _check(tmp_path)
     assert any("DerivedService.again" in f and "does not return a ts.Response" in f for f in findings)

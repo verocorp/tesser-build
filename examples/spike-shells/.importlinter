@@ -1,6 +1,7 @@
 [importlinter]
 root_packages =
     spike
+    sigcheck
     tesser
 include_external_packages = False
 unmatched_ignore_imports_alerting = error
