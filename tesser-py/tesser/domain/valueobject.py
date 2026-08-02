@@ -1,5 +1,13 @@
 class ValueObject:
 
+    def __init_subclass__(cls) -> None:
+        super().__init_subclass__()
+        if "__slots__" in cls.__dict__:
+            raise TypeError(
+                f"{cls.__name__} must not define __slots__: "
+                "ValueObject equality and hash read __dict__"
+            )
+
     def __eq__(self, other: object) -> bool:
         if type(self) is not type(other):
             return NotImplemented

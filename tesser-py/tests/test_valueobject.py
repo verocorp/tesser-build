@@ -61,3 +61,37 @@ def test_immutable_after_construction() -> None:
 def test_repr_names_type_and_fields() -> None:
     assert repr(Color("red")) == "Color(_name='red')"
     assert repr(Point(1, 2)) == "Point(_x=1, _y=2)"
+
+
+def test_slots_subclass_is_rejected() -> None:
+    with pytest.raises(
+        TypeError,
+        match=r"^Slotted must not define __slots__: ValueObject equality and hash read __dict__$",
+    ):
+
+        class Slotted(ts.ValueObject):
+            __slots__ = ("_x",)
+
+
+def test_unhashable_field_value_raises_on_hash() -> None:
+    class Bag(ts.ValueObject):
+        _items: list[str]
+
+        def __init__(self, items: list[str]) -> None:
+            object.__setattr__(self, "_items", items)
+
+    assert Bag(["a"]) == Bag(["a"])
+    with pytest.raises(TypeError):
+        hash(Bag(["a"]))
+
+
+def test_hash_tolerates_unorderable_field_values() -> None:
+    class Pair(ts.ValueObject):
+        _a: Point
+        _b: Point
+
+        def __init__(self, a: Point, b: Point) -> None:
+            object.__setattr__(self, "_a", a)
+            object.__setattr__(self, "_b", b)
+
+    assert hash(Pair(Point(1, 2), Point(3, 4))) == hash(Pair(Point(1, 2), Point(3, 4)))

@@ -168,6 +168,11 @@ jobs:
     # compatible VO shape, candidate successor to the dataclass idiom) at the
     # same bar: mypy --strict + pytest. Mutation runs stay local (mutmut exits
     # 0 even with survivors, so its exit code cannot gate).
+    # DELIBERATE EXEMPTION: unlike every other Python example, this tree is
+    # NOT tessercheck-gated — the analyzer's identity taxonomy (TB003,
+    # TB010-TB014) does not classify ts.ValueObject subclasses yet, so the
+    # gate would fail on the shape itself, not on defects. The classifier
+    # work is queued in TODOS.md and lands with the adoption decision.
     name: vobase example (mypy --strict + pytest)
     runs-on: ubuntu-latest
     steps:

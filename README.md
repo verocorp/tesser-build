@@ -95,6 +95,17 @@ backport, no pytest-mock `mocker`, no `monkeypatch`). Run
 `python -m tessercheck path/to/domain`; flake8-style output; suppress a single
 line with a trailing `# tessercheck:ignore`.
 
+### `tesser-py`: the Python runtime library (experimental)
+
+The repo's first runtime artifact ([`tesser-py/`](tesser-py/)):
+`tesser.domain.ValueObject`, an undecorated base class giving value objects
+type-exact `__dict__` equality, a derived hash, a generic repr, and a frozen
+guard. It exists because mutmut skips any decorated class wholesale, so the
+frozen-dataclass idiom is invisible to mutation testing. Candidate successor
+shape under evaluation — the taught convention is still the frozen dataclass;
+the worked example is [`examples/vobase/`](examples/vobase/), which is
+deliberately not tessercheck-gated until the analyzer classifies this shape.
+
 ### Using it in CI: the `go tool` directive
 
 tesser-build ships a tool, not a CI pipeline. You pin `tessercheck` in your own

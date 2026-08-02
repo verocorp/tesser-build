@@ -1,8 +1,11 @@
-from decimal import Decimal, InvalidOperation
+import re
+from decimal import Decimal, Rounded, localcontext
 
 import tesser.domain as ts
 
 from vobase.serialization import canonical_decimal, canonical_str
+
+_AMOUNT_PATTERN = re.compile(r"-?\d+(\.\d+)?")
 
 
 class MoneySpec(ts.ValueObject):
@@ -20,18 +23,23 @@ class MoneyAmount(ts.ValueObject):
     _value: Decimal
 
     def __init__(self, value: str) -> None:
-        try:
-            parsed = Decimal(value)
-        except InvalidOperation as e:
-            raise ValueError(f"invalid amount: {value!r}") from e
-        if not parsed.is_finite():
-            raise ValueError(f"amount must be finite: {value!r}")
+        if _AMOUNT_PATTERN.fullmatch(value) is None:
+            raise ValueError(f"invalid amount: {value!r}")
+        parsed = Decimal(value)
         if parsed < 0:
             raise ValueError(f"amount must not be negative: {parsed}")
+        if parsed == 0:
+            parsed = Decimal(0)
         object.__setattr__(self, "_value", parsed)
 
     def add(self, other: "MoneyAmount") -> "MoneyAmount":
-        return MoneyAmount(canonical_decimal(self._value + other._value))
+        with localcontext() as ctx:
+            ctx.traps[Rounded] = True
+            try:
+                total = self._value + other._value
+            except ArithmeticError as e:
+                raise ValueError("amount arithmetic exceeds supported precision") from e
+        return MoneyAmount(canonical_decimal(total))
 
     def __str__(self) -> str:
         return canonical_decimal(self._value)
@@ -42,9 +50,10 @@ class MoneyCurrency(ts.ValueObject):
     _value: str
 
     def __init__(self, value: str) -> None:
-        if not value.strip():
+        stripped = value.strip()
+        if not stripped:
             raise ValueError("currency is required")
-        object.__setattr__(self, "_value", value)
+        object.__setattr__(self, "_value", stripped)
 
     def __str__(self) -> str:
         return canonical_str(self._value)

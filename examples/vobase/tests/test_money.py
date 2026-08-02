@@ -28,6 +28,12 @@ def test_zero_amount_is_valid() -> None:
     assert MoneyAmount("0.50") == MoneyAmount("0.5")
 
 
+def test_zero_has_one_canonical_form() -> None:
+    assert MoneyAmount("-0") == MoneyAmount("0")
+    assert str(MoneyAmount("-0")) == "0"
+    assert str(MoneyAmount("0.00")) == "0"
+
+
 def test_rejects_invalid() -> None:
     with pytest.raises(ValueError, match=r"^currency is required$"):
         Money(_spec("1.00", ""))
@@ -39,15 +45,27 @@ def test_rejects_invalid() -> None:
         Money(_spec("-1.00"))
 
 
-def test_rejects_non_finite_amounts() -> None:
-    with pytest.raises(ValueError, match=r"amount must be finite: 'NaN'"):
-        MoneyAmount("NaN")
-    with pytest.raises(ValueError, match=r"amount must be finite: 'sNaN'"):
-        MoneyAmount("sNaN")
-    with pytest.raises(ValueError, match=r"amount must be finite: 'Infinity'"):
-        MoneyAmount("Infinity")
-    with pytest.raises(ValueError, match=r"amount must be finite: '-Infinity'"):
-        MoneyAmount("-Infinity")
+def test_rejects_non_plain_decimal_forms() -> None:
+    for bad in ("NaN", "sNaN", "Infinity", "-Infinity", "1_000", " 1.5 ", "+5", "1e2", "1E+2", ".5", "1."):
+        with pytest.raises(ValueError, match="invalid amount"):
+            MoneyAmount(bad)
+
+
+def test_add_never_silently_rounds() -> None:
+    a = MoneyAmount("1.50")
+    assert a.add(MoneyAmount("0")) == a
+    assert str(a.add(MoneyAmount("0"))) == "1.50"
+    big = MoneyAmount("1234567890123456789012345678.99")
+    with pytest.raises(ValueError, match=r"^amount arithmetic exceeds supported precision$"):
+        big.add(MoneyAmount("0"))
+    long_zeros = MoneyAmount("1." + "0" * 30)
+    with pytest.raises(ValueError, match=r"^amount arithmetic exceeds supported precision$"):
+        long_zeros.add(MoneyAmount("0"))
+
+
+def test_currency_is_stored_normalized() -> None:
+    assert MoneyCurrency(" USD ") == MoneyCurrency("USD")
+    assert str(MoneyCurrency(" USD ")) == "USD"
 
 
 def test_components_are_value_objects() -> None:
