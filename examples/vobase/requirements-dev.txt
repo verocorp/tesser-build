@@ -1,0 +1,6 @@
+# Tooling for the ValueObject-base worked example — the type checker and test
+# runner that gate it, plus mutmut for local mutation runs (CI does not gate
+# on mutation score; mutmut's exit code is 0 even with survivors).
+mypy>=1.8
+pytest>=8.0
+mutmut>=3.6

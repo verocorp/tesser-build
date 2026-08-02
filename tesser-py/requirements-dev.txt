@@ -1,0 +1,7 @@
+# Tooling for the tesser runtime library — the type checker and test runner
+# that gate it, plus mutmut for local mutation runs (CI does not gate on
+# mutation score; mutmut's exit code is 0 even with survivors). The library
+# itself has zero dependencies.
+mypy>=1.8
+pytest>=8.0
+mutmut>=3.6
