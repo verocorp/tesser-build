@@ -144,10 +144,6 @@ jobs:
           pytest -q
 
   tesser-py:
-    # Gates the Python runtime library (tesser.domain.ValueObject) at the same
-    # bar as the analyzers: mypy --strict + pytest. The library exists so value
-    # objects can drop the @dataclass decorator (mutmut skips any decorated
-    # class wholesale); its tests pin the equality/hash/frozen/repr contract.
     name: tesser-py runtime library (mypy --strict + pytest)
     runs-on: ubuntu-latest
     steps:
@@ -164,15 +160,6 @@ jobs:
           pytest -q
 
   vobase-example:
-    # Gates the ValueObject-base worked example (the mutation-testing-
-    # compatible VO shape, candidate successor to the dataclass idiom) at the
-    # same bar: mypy --strict + pytest. Mutation runs stay local (mutmut exits
-    # 0 even with survivors, so its exit code cannot gate).
-    # DELIBERATE EXEMPTION: unlike every other Python example, this tree is
-    # NOT tessercheck-gated — the analyzer's identity taxonomy (TB003,
-    # TB010-TB014) does not classify ts.ValueObject subclasses yet, so the
-    # gate would fail on the shape itself, not on defects. The classifier
-    # work is queued in TODOS.md and lands with the adoption decision.
     name: vobase example (mypy --strict + pytest)
     runs-on: ubuntu-latest
     steps:
