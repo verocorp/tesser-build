@@ -50,12 +50,18 @@ class Module(ts.Entity):
             elif isinstance(node, ast.ImportFrom) and node.module:
                 for alias in node.names:
                     self._imported[alias.asname or alias.name] = (node.module, alias.name)
+        self._functions: set[str] = set()
         for node in tree.body:
             if isinstance(node, ast.ClassDef):
                 self._classes[node.name] = node
+            elif isinstance(node, ast.FunctionDef):
+                self._functions.add(node.name)
 
     def name(self) -> str:
         return self._name
+
+    def function_names(self) -> frozenset[str]:
+        return frozenset(self._functions)
 
     def class_defs(self) -> tuple[ast.ClassDef, ...]:
         return tuple(self._classes.values())
@@ -98,12 +104,13 @@ class Codebase(ts.AggregateRoot):
                     found.extend(self._constructor_violations(module, cls, blocks))
                 if block != "service":
                     continue
-                for item in cls.body:
-                    if not isinstance(item, ast.FunctionDef):
-                        continue
+                methods = [item for item in cls.body if isinstance(item, ast.FunctionDef)]
+                method_names = frozenset(method.name for method in methods)
+                for item in methods:
+                    where = f"{module.name()}.{cls.name}.{item.name}:{item.lineno}"
+                    found.extend(self._delegation_violations(module, method_names, where, item))
                     if item.name.startswith("_"):
                         continue
-                    where = f"{module.name()}.{cls.name}.{item.name}:{item.lineno}"
                     found.extend(
                         self._signature_violations(module, where, item, "request", "response", "a service method", blocks)
                     )
@@ -178,6 +185,29 @@ class Codebase(ts.AggregateRoot):
                 found.append(Violation(f"{where} parameter {arg.arg!r} is not a {expected}"))
         if return_block is not None and self._annotation_block(module, fn.returns, blocks) != return_block:
             found.append(Violation(f"{where} does not return a {TS_NAME_BY_BLOCK[return_block]}"))
+        return tuple(found)
+
+    def _delegation_violations(
+        self,
+        module: Module,
+        method_names: frozenset[str],
+        where: str,
+        fn: ast.FunctionDef,
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for node in ast.walk(fn):
+            if not isinstance(node, ast.Call):
+                continue
+            callee = node.func
+            if (
+                isinstance(callee, ast.Attribute)
+                and isinstance(callee.value, ast.Name)
+                and callee.value.id == "self"
+                and callee.attr in method_names
+            ):
+                found.append(Violation(f"{where} delegates to self.{callee.attr} at line {node.lineno}; a service inlines its logic"))
+            elif isinstance(callee, ast.Name) and callee.id in module.function_names():
+                found.append(Violation(f"{where} delegates to {callee.id} at line {node.lineno}; a service inlines its logic"))
         return tuple(found)
 
     def _body_violations(self, where: str, fn: ast.FunctionDef) -> tuple[Violation, ...]:

@@ -147,6 +147,26 @@ def test_service_body_rules_are_flagged(tmp_path: Path) -> None:
     assert any("BusyService.combines" in f and "not a single call" in f for f in findings)
 
 
+def test_service_delegation_is_flagged(tmp_path: Path) -> None:
+    _conforming(tmp_path)
+    _write(
+        tmp_path,
+        "app/helped.py",
+        "import tesser.application as ts\n"
+        "from app.client import AskRequest, AskResponse\n"
+        "def shape(text: str) -> str:\n"
+        "    return text\n"
+        "class HelpedService(ts.ApplicationService):\n"
+        "    def ask(self, request: AskRequest) -> AskResponse:\n"
+        "        return self._prep(request)\n"
+        "    def _prep(self, request: AskRequest) -> AskResponse:\n"
+        "        return AskResponse(text=shape(request.text))\n",
+    )
+    findings = _check(tmp_path)
+    assert any("HelpedService.ask" in f and "delegates to self._prep" in f for f in findings)
+    assert any("HelpedService._prep" in f and "delegates to shape" in f for f in findings)
+
+
 def test_elif_chain_is_one_level(tmp_path: Path) -> None:
     _conforming(tmp_path)
     _write(

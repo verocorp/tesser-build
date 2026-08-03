@@ -12,10 +12,6 @@ class NoteParts(ts.Parts):
         self.text = text
 
 
-def note_parts(note: Note) -> NoteParts:
-    return NoteParts(text=note.text())
-
-
 class NoteRepository(ts.Port, Protocol):
 
     def save(self, parts: NoteParts) -> None: ...
@@ -28,5 +24,5 @@ class NoteService(ts.ApplicationService):
 
     def create(self, request: CreateNoteRequest) -> CreateNoteResponse:
         note = Note(NoteSpec(text=request.text))
-        self._repository.save(note_parts(note))
+        self._repository.save(NoteParts(text=note.text()))
         return CreateNoteResponse(text=request.text)
