@@ -301,7 +301,7 @@ def test_import_matrix_is_flagged(tmp_path: Path) -> None:
     )
     assert any(
         "two.application" in f
-        and "a context reaches another context only through its client, and only from adapters and wiring" in f
+        and "a context reaches another context only through its client, and only from gateways and wiring" in f
         for f in findings
     )
     assert not any("two.adapters" in f and "imports app.client" in f for f in findings)
@@ -542,7 +542,7 @@ def test_wiring_is_a_role(tmp_path: Path) -> None:
     assert not any("app.wiring.AskWiring" in f and "a kind lives only in its role module" in f for f in findings)
     assert any(
         "app.wiring" in f and "imports two.domain" in f
-        and "a context reaches another context only through its client, and only from adapters and wiring" in f
+        and "a context reaches another context only through its client, and only from gateways and wiring" in f
         for f in findings
     )
 
@@ -551,9 +551,32 @@ def test_srv_and_bootstrap_import_rows(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
         tmp_path,
+        "app/adapters.py",
+        "import tesser.adapters as ts\n"
+        "class HttpHandler(ts.Handler):\n"
+        "    pass\n",
+    )
+    write_module(
+        tmp_path,
+        "two/client.py",
+        "import tesser.context as ts\n"
+        "class PingRequest(ts.Request):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    write_module(
+        tmp_path,
+        "two/adapters.py",
+        "import tesser.adapters as ts\n"
+        "class Bridge(ts.Gateway):\n"
+        "    pass\n",
+    )
+    write_module(
+        tmp_path,
         "srv/http.py",
         "import app.application\n"
         "import app.adapters\n"
+        "import two.adapters\n"
         "import bootstrap.wire\n",
     )
     write_module(
@@ -567,7 +590,12 @@ def test_srv_and_bootstrap_import_rows(tmp_path: Path) -> None:
     findings = check_tree(tmp_path)
     assert any(
         "srv.http" in f and "imports app.application" in f
-        and "a host reaches a context only through its adapters" in f
+        and "a host reaches a context only through its handlers" in f
+        for f in findings
+    )
+    assert any(
+        "srv.http" in f and "imports two.adapters" in f
+        and "a host reaches a context only through its handlers" in f
         for f in findings
     )
     assert not any("srv.http" in f and "imports app.adapters" in f for f in findings)
@@ -618,5 +646,49 @@ def test_only_a_handler_imports_its_own_client(tmp_path: Path) -> None:
     assert any(
         "two.adapters" in f and "imports two.client" in f
         and "only a handler imports its own context's client" in f
+        for f in findings
+    )
+
+
+def test_only_a_gateway_reaches_a_foreign_client(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "two/client.py",
+        "import tesser.context as ts\n"
+        "class PingRequest(ts.Request):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    write_module(
+        tmp_path,
+        "app/adapters.py",
+        "import tesser.adapters as ts\n"
+        "import two.client\n"
+        "class HttpHandler(ts.Handler):\n"
+        "    pass\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "app.adapters" in f and "imports two.client" in f
+        and "a context reaches another context only through its client, and only from gateways and wiring" in f
+        for f in findings
+    )
+
+
+def test_an_adapters_module_holds_one_kind(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/adapters.py",
+        "import tesser.adapters as ts\n"
+        "class HttpHandler(ts.Handler):\n"
+        "    pass\n"
+        "class SideGateway(ts.Gateway):\n"
+        "    pass\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "app.adapters mixes adapter kinds" in f and "an adapters module holds one adapter kind" in f
         for f in findings
     )

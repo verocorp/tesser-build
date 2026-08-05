@@ -237,7 +237,7 @@ class Codebase(ts.AggregateRoot):
         if basename.startswith("test_"):
             return self._test_module_violations(module, blocks)
         if parts[0] in APP_PACKAGES:
-            return self._app_import_violations(module, parts[0], contexts)
+            return self._app_import_violations(module, parts[0], contexts, blocks)
         if parts[0] not in contexts:
             return ()
         if len(parts) == 1:
@@ -314,6 +314,14 @@ class Codebase(ts.AggregateRoot):
                         "holds only imports, classes, declared functions, and Final constants"
                     )
                 )
+        if role == "adapters":
+            kinds = {
+                blocks.get((module.name(), cls.name)) for cls in module.class_defs()
+            } & {"handler", "gateway", "repository"}
+            if len(kinds) > 1:
+                found.append(
+                    Violation(f"{module.name()} mixes adapter kinds; an adapters module holds one adapter kind")
+                )
         return tuple(found)
 
     def _import_violations(
@@ -325,9 +333,8 @@ class Codebase(ts.AggregateRoot):
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        holds_handler = any(
-            blocks.get((module.name(), cls.name)) == "handler" for cls in module.class_defs()
-        )
+        holds_handler = self._holds_kind(module, blocks, "handler")
+        holds_gateway = self._holds_kind(module, blocks, "gateway")
         for target, lineno in module.import_edges():
             pieces = target.split(".")
             if pieces[0] == "tesser":
@@ -357,11 +364,11 @@ class Codebase(ts.AggregateRoot):
                                 "application, wiring to application, adapters, and client"
                             )
                         )
-                elif role not in ("adapters", "wiring") or tail != "client":
+                elif tail != "client" or not (role == "wiring" or (role == "adapters" and holds_gateway)):
                     found.append(
                         Violation(
                             f"{module.name()}:{lineno} imports {target}; a context reaches another context "
-                            "only through its client, and only from adapters and wiring"
+                            "only through its client, and only from gateways and wiring"
                         )
                     )
         return tuple(found)
@@ -371,17 +378,20 @@ class Codebase(ts.AggregateRoot):
         module: Module,
         package: str,
         contexts: frozenset[str],
+        blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for target, lineno in module.import_edges():
             pieces = target.split(".")
             tail = pieces[1] if len(pieces) > 1 else ""
             if pieces[0] in contexts:
-                if package == "srv" and tail != "adapters":
+                if package == "srv" and not (
+                    tail == "adapters" and self._holds_kind(self._module_named(target), blocks, "handler")
+                ):
                     found.append(
                         Violation(
                             f"{module.name()}:{lineno} imports {target}; "
-                            "a host reaches a context only through its adapters"
+                            "a host reaches a context only through its handlers"
                         )
                     )
                 elif package == "bootstrap" and tail not in ("wiring", "client", "adapters"):
@@ -775,6 +785,15 @@ class Codebase(ts.AggregateRoot):
             ),
             None,
         )
+
+    def _module_named(self, name: str) -> Module | None:
+        return next((module for module in self._modules if module.name() == name), None)
+
+    @staticmethod
+    def _holds_kind(module: Module | None, blocks: dict[tuple[str, str], str], kind: str) -> bool:
+        if module is None:
+            return False
+        return any(blocks.get((module.name(), cls.name)) == kind for cls in module.class_defs())
 
     @staticmethod
     def _declared(module: Module, node: ast.ClassDef | ast.FunctionDef, kind: str) -> bool:
