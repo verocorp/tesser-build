@@ -1,0 +1,73 @@
+[importlinter]
+root_packages =
+    spike
+    sigcheck
+    tesser
+include_external_packages = False
+unmatched_ignore_imports_alerting = error
+
+[importlinter:contract:domain-imports-only-tesser-domain]
+name = domain imports only tesser.domain
+type = forbidden
+allow_indirect_imports = true
+source_modules =
+    **.domain
+    **.domain.**
+forbidden_modules =
+    **.application
+    **.application.**
+    **.adapters
+    **.adapters.**
+    **.client
+    **.client.**
+    tesser.application
+    tesser.adapters
+    tesser.context
+
+[importlinter:contract:client-imports-only-tesser-context]
+name = the client DTOs import only tesser.context
+type = forbidden
+allow_indirect_imports = true
+source_modules =
+    **.client
+    **.client.**
+forbidden_modules =
+    **.domain
+    **.domain.**
+    **.application
+    **.application.**
+    **.adapters
+    **.adapters.**
+    tesser.domain
+    tesser.application
+    tesser.adapters
+
+[importlinter:contract:application-never-reaches-adapters]
+name = application imports domain and client, never an adapter
+type = forbidden
+allow_indirect_imports = true
+source_modules =
+    **.application
+    **.application.**
+forbidden_modules =
+    **.adapters
+    **.adapters.**
+    tesser.domain
+    tesser.adapters
+    tesser.context
+
+[importlinter:contract:adapters-never-import-domain]
+name = an adapter imports parts from application, never domain or client
+type = forbidden
+allow_indirect_imports = true
+source_modules =
+    **.adapters
+    **.adapters.**
+forbidden_modules =
+    **.domain
+    **.domain.**
+    **.client
+    **.client.**
+    tesser.domain
+    tesser.application
+    tesser.context

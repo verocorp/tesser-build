@@ -5,6 +5,44 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.15.0] - 2026-08-05
+
+The declare-then-verify spike: `examples/spike-shells` explores the
+totality/superclasses direction as running code. `tesser-py` grows shell
+packages (`tesser.context`, `tesser.application`, `tesser.adapters`, and
+companions to `tesser.domain`) whose classes — `Request`, `Response`,
+`Spec`, `Entity`, `AggregateRoot`, `ApplicationService`, `Parts`, `Port`,
+`Repository` — carry no behavior:
+subclassing one is a *declaration* of what a class is, and everything else
+verifies against that declaration. The spike app (`spike/`) is a note
+service wired entirely through the shells, and `sigcheck` is the verifier —
+itself written in the declared idiom it checks, and run over its own tree.
+
+What sigcheck enforces, each rule ruled in-session and landed with fixtures
+plus a live violation-injection run: an aggregate constructs from exactly
+one `ts.Spec`; a public service method takes exactly one request DTO and
+returns a response DTO; a service method body is at most 10 source lines,
+branches one level deep (an `elif` chain is one level, distinguished from a
+nested `else: if` by column offset), and satisfies every if-condition and
+match-subject with one domain call — no comparisons, no boolean
+composition, no attribute tests; and a service inlines its logic — no
+delegation to sibling methods or same-module functions, any prefix, checked
+in every method including privates. Import direction is contracts, not an
+AST walk: four generic import-linter contracts (domain → tesser.domain
+only; client DTOs → tesser.context only; application never reaches
+adapters; adapters read parts, never domain).
+
+The spike documents itself: `rules.py` derives `RULES.md` from the
+implementation — one row per normative clause (the tail every violation
+message must end with, a convention the generator itself enforces), holes
+rendered as reader names via a totality-guarded map, parameterized messages
+instantiated from their call-site literals, and fixture coverage computed
+as an exact clause-containment join rather than a heuristic. A drift test
+makes a stale RULES.md a suite failure. Deliberately spike-scoped: no CI
+job, no analyzer integration, and the open rulings (lines vs statements,
+negated single calls, ternary/comprehension evasions, the Go `err != nil`
+rendering) stay open — this lands the exploration, not the norm.
+
 ## [0.0.14.0] - 2026-08-01
 
 mutmut silently skips any class that carries any decorator — the whole body,
