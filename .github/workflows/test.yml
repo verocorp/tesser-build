@@ -71,6 +71,31 @@ jobs:
           MYPYPATH=. mypy --strict campaign catalog serialization.py tests conftest.py
           pytest -q
 
+  spike-shells:
+    name: spike-shells (sigcheck self-check + RULES.md drift + mypy --strict + pytest + import-linter)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dev tooling
+        run: pip install -r examples/spike-shells/requirements-dev.txt
+      - name: examples/spike-shells — sigcheck over its own tree
+        working-directory: examples/spike-shells
+        run: PYTHONPATH=.:../../tesser-py python3 -m sigcheck .
+      - name: examples/spike-shells — RULES.md drift gate
+        working-directory: examples/spike-shells
+        run: python3 rules.py --check
+      - name: examples/spike-shells — mypy --strict + pytest
+        working-directory: examples/spike-shells
+        run: |
+          MYPYPATH=.:../../tesser-py mypy --strict spike sigcheck digest tests rules.py
+          pytest -q
+      - name: examples/spike-shells — import contracts
+        working-directory: examples/spike-shells
+        run: PYTHONPATH=.:../../tesser-py lint-imports --no-cache
+
   python-app-example:
     # Gates the composition-root / wiring worked example (Python) at the same bar:
     # mypy --strict + pytest, now with the two linters that own its architecture
