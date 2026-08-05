@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import campaign
-import linkpolicy
+import campaign.client
+import linkpolicy.client
 from reports.client import LinkVerdictView
 from reports.domain.report import Link, RecordedVerdict, join_links_with_verdicts
 
 
 class ReportsService:
-    def __init__(self, campaign_client: campaign.Client, policy_client: linkpolicy.Client) -> None:
+    def __init__(self, campaign_client: campaign.client.Client, policy_client: linkpolicy.client.Client) -> None:
         self._campaign = campaign_client
         self._policy = policy_client
 

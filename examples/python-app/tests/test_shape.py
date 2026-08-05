@@ -4,9 +4,9 @@ import dataclasses
 import json
 import pathlib
 
-import campaign
-import linkpolicy
-import reports
+import campaign.client
+import linkpolicy.client
+import reports.client
 from campaign.adapters.handlers.http import Handler
 from campaign.client import LinkView, ResolveResponse
 from campaign.wiring.config import Config as CampaignConfig
@@ -26,10 +26,13 @@ def test_required_roles_present_per_context() -> None:
             assert (ROOT / ctx / role).is_dir(), f"{ctx}/{role} missing"
 
 
-def test_public_seam_is_client_plus_dtos_at_top_level() -> None:
-    assert hasattr(campaign, "Client")
-    assert hasattr(linkpolicy, "Client")
-    assert hasattr(reports, "Client")
+def test_public_interface_is_client_plus_dtos_in_the_client_module() -> None:
+    assert hasattr(campaign.client, "Client")
+    assert hasattr(linkpolicy.client, "Client")
+    assert hasattr(reports.client, "Client")
+    for ctx in discovered_contexts():
+        init_source = (ROOT / ctx / "__init__.py").read_text()
+        assert init_source == "", f"{ctx}/__init__.py must be empty; the interface lives in client.py"
     assert dataclasses.is_dataclass(ResolveResponse)
     for field in dataclasses.fields(ResolveResponse):
         assert field.type in ("str", str), field
@@ -48,8 +51,8 @@ def test_config_lives_in_wiring_not_on_public_top_level() -> None:
 
 
 class _AllowAllChecker:
-    def check(self, target_url: str) -> campaign.CheckOutcome:
-        return campaign.CheckOutcome(True, "ok")
+    def check(self, target_url: str) -> campaign.client.CheckOutcome:
+        return campaign.client.CheckOutcome(True, "ok")
 
 
 def test_handler_translates_wire_to_client_dtos() -> None:
