@@ -296,7 +296,7 @@ def test_import_matrix_is_flagged(tmp_path: Path) -> None:
     findings = check_tree(tmp_path)
     assert any(
         "two.domain" in f
-        and "the same-context matrix is a role to itself, application to domain and client, adapters to application and client, wiring to application, adapters, and client" in f
+        and "the same-context matrix is a role to itself, application to domain and client, adapters to application, wiring to application, adapters, and client" in f
         for f in findings
     )
     assert any(
@@ -582,5 +582,41 @@ def test_srv_and_bootstrap_import_rows(tmp_path: Path) -> None:
     assert any(
         "bootstrap.wire" in f and "imports srv.http" in f
         and "the composition root never imports a host" in f
+        for f in findings
+    )
+
+
+def test_only_a_handler_imports_its_own_client(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/adapters.py",
+        "import tesser.adapters as ts\n"
+        "import app.client\n"
+        "class HttpHandler(ts.Handler):\n"
+        "    def ask(self, body: str) -> str:\n"
+        "        return app.client.AskRequest(text=body).text\n",
+    )
+    write_module(
+        tmp_path,
+        "two/client.py",
+        "import tesser.context as ts\n"
+        "class PingRequest(ts.Request):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    write_module(
+        tmp_path,
+        "two/adapters.py",
+        "import tesser.adapters as ts\n"
+        "import two.client\n"
+        "class SneakyGateway(ts.Gateway):\n"
+        "    pass\n",
+    )
+    findings = check_tree(tmp_path)
+    assert not any("app.adapters" in f and "imports app.client" in f for f in findings)
+    assert any(
+        "two.adapters" in f and "imports two.client" in f
+        and "only a handler imports its own context's client" in f
         for f in findings
     )

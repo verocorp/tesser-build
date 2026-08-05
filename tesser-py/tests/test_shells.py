@@ -80,5 +80,8 @@ def test_shells_classify_subclasses() -> None:
     class Wire(tesser.context.Wiring):
         pass
 
-    for cls in (Root, RootSpec, Service, Repo, Ask, Reply, Wire):
+    class Inbound(tesser.adapters.Handler):
+        pass
+
+    for cls in (Root, RootSpec, Service, Repo, Ask, Reply, Wire, Inbound):
         assert cls()

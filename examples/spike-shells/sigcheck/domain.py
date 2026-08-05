@@ -16,6 +16,7 @@ TESSER_BASE_BLOCKS: Final[dict[tuple[str, str], str]] = {
     ("tesser.domain", "Spec"): "spec",
     ("tesser.adapters", "Repository"): "repository",
     ("tesser.adapters", "Gateway"): "gateway",
+    ("tesser.adapters", "Handler"): "handler",
     ("tesser.context", "Wiring"): "wiring",
 }
 
@@ -51,6 +52,7 @@ KIND_ROLE: Final[dict[str, str]] = {
     "client": "client",
     "repository": "adapters",
     "gateway": "adapters",
+    "handler": "adapters",
     "wiring": "wiring",
 }
 
@@ -67,6 +69,7 @@ KIND_NAME: Final[dict[str, str]] = {
     "client": "a client",
     "repository": "a repository adapter",
     "gateway": "a gateway adapter",
+    "handler": "an inbound handler",
     "wiring": "a wiring assembly",
 }
 
@@ -82,7 +85,7 @@ SAME_CONTEXT_IMPORTS: Final[dict[str, tuple[str, ...]]] = {
     "domain": (),
     "client": (),
     "application": ("domain", "client"),
-    "adapters": ("application", "client"),
+    "adapters": ("application",),
     "wiring": ("application", "adapters", "client"),
 }
 
@@ -205,7 +208,7 @@ class Codebase(ts.AggregateRoot):
                     found.extend(self._dto_violations(module, cls, blocks))
                 elif block == "client":
                     found.extend(self._client_violations(module, cls, blocks))
-                elif block in ("repository", "gateway"):
+                elif block in ("repository", "gateway", "handler"):
                     found.extend(self._record_signature_violations(module, cls, blocks, "an adapter"))
                 elif block == "port":
                     found.extend(self._record_signature_violations(module, cls, blocks, "a port"))
@@ -243,7 +246,7 @@ class Codebase(ts.AggregateRoot):
             return ()
         if len(parts) >= 2 and parts[1] in ROLES:
             return self._role_module_violations(module, parts[1], blocks) + self._import_violations(
-                module, parts[0], parts[1], contexts
+                module, parts[0], parts[1], contexts, blocks
             )
         return (
             Violation(
@@ -319,8 +322,12 @@ class Codebase(ts.AggregateRoot):
         context: str,
         role: str,
         contexts: frozenset[str],
+        blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
+        holds_handler = any(
+            blocks.get((module.name(), cls.name)) == "handler" for cls in module.class_defs()
+        )
         for target, lineno in module.import_edges():
             pieces = target.split(".")
             if pieces[0] == "tesser":
@@ -334,12 +341,20 @@ class Codebase(ts.AggregateRoot):
             elif pieces[0] in contexts:
                 tail = pieces[1] if len(pieces) > 1 else ""
                 if pieces[0] == context:
-                    if tail != role and tail not in SAME_CONTEXT_IMPORTS[role]:
+                    if role == "adapters" and tail == "client":
+                        if not holds_handler:
+                            found.append(
+                                Violation(
+                                    f"{module.name()}:{lineno} imports {target}; "
+                                    "only a handler imports its own context's client"
+                                )
+                            )
+                    elif tail != role and tail not in SAME_CONTEXT_IMPORTS[role]:
                         found.append(
                             Violation(
                                 f"{module.name()}:{lineno} imports {target}; the same-context matrix is "
                                 "a role to itself, application to domain and client, adapters to "
-                                "application and client, wiring to application, adapters, and client"
+                                "application, wiring to application, adapters, and client"
                             )
                         )
                 elif role not in ("adapters", "wiring") or tail != "client":
