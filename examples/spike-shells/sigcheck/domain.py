@@ -182,9 +182,14 @@ class Codebase(ts.AggregateRoot):
             found.append(Violation(f"{where} takes {len(params)} parameters; {subject} takes exactly one {expected}"))
         for arg in params:
             if self._annotation_block(module, arg.annotation, blocks) != param_block:
-                found.append(Violation(f"{where} parameter {arg.arg!r} is not a {expected}"))
+                found.append(Violation(f"{where} parameter {arg.arg!r} is not a {expected}; {subject} takes exactly one {expected}"))
         if return_block is not None and self._annotation_block(module, fn.returns, blocks) != return_block:
-            found.append(Violation(f"{where} does not return a {TS_NAME_BY_BLOCK[return_block]}"))
+            found.append(
+                Violation(
+                    f"{where} does not return a {TS_NAME_BY_BLOCK[return_block]}; "
+                    f"{subject} returns a {TS_NAME_BY_BLOCK[return_block]}"
+                )
+            )
         return tuple(found)
 
     def _delegation_violations(
@@ -216,16 +221,16 @@ class Codebase(ts.AggregateRoot):
         last = fn.body[-1].end_lineno or fn.body[-1].lineno
         span = last - first + 1
         if span > 10:
-            found.append(Violation(f"{where} body spans {span} source lines; a service method body is at most 10"))
+            found.append(Violation(f"{where} body spans {span} source lines; a service method body is at most 10 source lines"))
         for node in ast.walk(fn):
             if isinstance(node, ast.If):
                 if not isinstance(node.test, ast.Call):
-                    found.append(Violation(f"{where} if condition at line {node.lineno} is not a single call; satisfy it with one domain call"))
+                    found.append(Violation(f"{where} if condition at line {node.lineno} is not a single call; a service method satisfies a condition with one domain call"))
                 if self._contains_conditional(self._governed_stmts(node)):
                     found.append(Violation(f"{where} nests a conditional at line {node.lineno}; a service method branches one level deep"))
             elif isinstance(node, ast.Match):
                 if not isinstance(node.subject, ast.Call):
-                    found.append(Violation(f"{where} match subject at line {node.lineno} is not a single call; satisfy it with one domain call"))
+                    found.append(Violation(f"{where} match subject at line {node.lineno} is not a single call; a service method satisfies a condition with one domain call"))
                 if self._contains_conditional([stmt for case in node.cases for stmt in case.body]):
                     found.append(Violation(f"{where} nests a conditional at line {node.lineno}; a service method branches one level deep"))
         return tuple(found)

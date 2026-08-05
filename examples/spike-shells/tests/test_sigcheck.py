@@ -68,8 +68,8 @@ def test_primitive_parameter_and_return_are_flagged(tmp_path: Path) -> None:
         "        return text\n",
     )
     findings = _check(tmp_path)
-    assert any("parameter 'text' is not a ts.Request" in f for f in findings)
-    assert any("does not return a ts.Response" in f for f in findings)
+    assert any("parameter 'text' is not a ts.Request; a service method takes exactly one ts.Request" in f for f in findings)
+    assert any("does not return a ts.Response; a service method returns a ts.Response" in f for f in findings)
 
 
 def test_arity_and_missing_annotations_are_flagged(tmp_path: Path) -> None:
@@ -88,9 +88,9 @@ def test_arity_and_missing_annotations_are_flagged(tmp_path: Path) -> None:
         "        return AskResponse(text='')\n",
     )
     findings = _check(tmp_path)
-    assert any("takes 2 parameters" in f for f in findings)
-    assert any("parameter 'request' is not a ts.Request" in f for f in findings)
-    assert any("uses *args/**kwargs" in f for f in findings)
+    assert any("takes 2 parameters; a service method takes exactly one ts.Request" in f for f in findings)
+    assert any("parameter 'request' is not a ts.Request; a service method takes exactly one ts.Request" in f for f in findings)
+    assert any("uses *args/**kwargs; a service method takes exactly one ts.Request" in f for f in findings)
 
 
 def test_aggregate_constructor_violations_are_flagged(tmp_path: Path) -> None:
@@ -110,9 +110,21 @@ def test_aggregate_constructor_violations_are_flagged(tmp_path: Path) -> None:
         "    pass\n",
     )
     findings = _check(tmp_path)
-    assert any("Primitive.__init__" in f and "parameter 'text' is not a ts.Spec" in f for f in findings)
-    assert any("Two.__init__" in f and "takes 2 parameters" in f for f in findings)
-    assert any("NoConstructor" in f and "defines no __init__" in f for f in findings)
+    assert any(
+        "Primitive.__init__" in f
+        and "parameter 'text' is not a ts.Spec; an aggregate constructor takes exactly one ts.Spec" in f
+        for f in findings
+    )
+    assert any(
+        "Two.__init__" in f
+        and "takes 2 parameters; an aggregate constructor takes exactly one ts.Spec" in f
+        for f in findings
+    )
+    assert any(
+        "NoConstructor" in f
+        and "defines no __init__; an aggregate constructs from exactly one ts.Spec" in f
+        for f in findings
+    )
 
 
 def test_service_body_rules_are_flagged(tmp_path: Path) -> None:
@@ -141,10 +153,27 @@ def test_service_body_rules_are_flagged(tmp_path: Path) -> None:
         "        return AskResponse(text='')\n",
     )
     findings = _check(tmp_path)
-    assert any("BusyService.long" in f and "body spans 12 source lines" in f for f in findings)
-    assert any("BusyService.nested" in f and "nests a conditional" in f for f in findings)
-    assert any("BusyService.compares" in f and "not a single call" in f for f in findings)
-    assert any("BusyService.combines" in f and "not a single call" in f for f in findings)
+    assert any(
+        "BusyService.long" in f
+        and "body spans 12 source lines; a service method body is at most 10 source lines" in f
+        for f in findings
+    )
+    assert any(
+        "BusyService.nested" in f
+        and "nests a conditional" in f
+        and "a service method branches one level deep" in f
+        for f in findings
+    )
+    assert any(
+        "BusyService.compares" in f
+        and "is not a single call; a service method satisfies a condition with one domain call" in f
+        for f in findings
+    )
+    assert any(
+        "BusyService.combines" in f
+        and "is not a single call; a service method satisfies a condition with one domain call" in f
+        for f in findings
+    )
 
 
 def test_service_delegation_is_flagged(tmp_path: Path) -> None:
@@ -163,8 +192,18 @@ def test_service_delegation_is_flagged(tmp_path: Path) -> None:
         "        return AskResponse(text=shape(request.text))\n",
     )
     findings = _check(tmp_path)
-    assert any("HelpedService.ask" in f and "delegates to self._prep" in f for f in findings)
-    assert any("HelpedService._prep" in f and "delegates to shape" in f for f in findings)
+    assert any(
+        "HelpedService.ask" in f
+        and "delegates to self._prep" in f
+        and "a service inlines its logic" in f
+        for f in findings
+    )
+    assert any(
+        "HelpedService._prep" in f
+        and "delegates to shape" in f
+        and "a service inlines its logic" in f
+        for f in findings
+    )
 
 
 def test_elif_chain_is_one_level(tmp_path: Path) -> None:
@@ -183,7 +222,7 @@ def test_elif_chain_is_one_level(tmp_path: Path) -> None:
         "        return AskResponse(text='c')\n",
     )
     findings = _check(tmp_path)
-    assert not any("ChainService" in f and "nests a conditional" in f for f in findings)
+    assert not any("ChainService" in f and "a service method branches one level deep" in f for f in findings)
 
 
 def test_indirect_subclass_still_classifies(tmp_path: Path) -> None:
@@ -198,4 +237,8 @@ def test_indirect_subclass_still_classifies(tmp_path: Path) -> None:
         "        return request\n",
     )
     findings = _check(tmp_path)
-    assert any("DerivedService.again" in f and "does not return a ts.Response" in f for f in findings)
+    assert any(
+        "DerivedService.again" in f
+        and "does not return a ts.Response; a service method returns a ts.Response" in f
+        for f in findings
+    )

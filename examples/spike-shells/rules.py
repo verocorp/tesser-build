@@ -8,40 +8,199 @@ DOMAIN = ROOT / "sigcheck" / "domain.py"
 TESTS = ROOT / "tests" / "test_sigcheck.py"
 CONTRACTS = ROOT / ".importlinter"
 OUTPUT = ROOT / "RULES.md"
-MATCH_THRESHOLD = 0.6
+
+HOLE_NAMES: dict[str, str] = {
+    "where": "⟨module.Class.method:line⟩",
+    "module.name()": "⟨module⟩",
+    "cls.name": "⟨class⟩",
+    "cls.lineno": "⟨line⟩",
+    "node.lineno": "⟨line⟩",
+    "callee.attr": "⟨method⟩",
+    "callee.id": "⟨function⟩",
+    "len(params)": "⟨count⟩",
+    "arg.arg": "⟨name⟩",
+    "span": "⟨count⟩",
+}
+
+APPLIES_TO: dict[str, str] = {
+    "a service method": "public service method",
+    "an aggregate constructor": "aggregate `__init__`",
+    "Codebase._constructor_violations": "aggregate class",
+    "Codebase._delegation_violations": "every service method, including private",
+    "Codebase._body_violations": "public service method",
+}
+
+WHERE_PREFIX = re.compile(r"^(?:⟨[^⟩]+⟩[.:]*)+\s*")
 
 
-def flatten_template(node: ast.expr) -> str | None:
+class RuleRow:
+
+    def __init__(self, clause: str, applies_to: str) -> None:
+        self.clause = clause
+        self.applies_to = applies_to
+        self.shapes: list[str] = []
+        self.linenos: list[int] = []
+
+    def add(self, shape: str, lineno: int) -> None:
+        if shape not in self.shapes:
+            self.shapes.append(shape)
+        if lineno not in self.linenos:
+            self.linenos.append(lineno)
+
+
+def ts_name_map(tree: ast.Module) -> dict[str, str]:
+    for node in tree.body:
+        if (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == "TS_NAME_BY_BLOCK"
+            and isinstance(node.value, ast.Dict)
+        ):
+            out: dict[str, str] = {}
+            for key, value in zip(node.value.keys, node.value.values):
+                if (
+                    isinstance(key, ast.Constant)
+                    and isinstance(key.value, str)
+                    and isinstance(value, ast.Constant)
+                    and isinstance(value.value, str)
+                ):
+                    out[key.value] = value.value
+            return out
+    raise RuntimeError("TS_NAME_BY_BLOCK not found in domain.py")
+
+
+def instantiations(tree: ast.Module, method: ast.FunctionDef) -> list[dict[str, str | None]]:
+    params = [arg.arg for arg in method.args.args if arg.arg != "self"]
+    found: list[dict[str, str | None]] = []
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == method.name
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "self"
+        ):
+            binding: dict[str, str | None] = {}
+            for name, arg in zip(params, node.args):
+                if isinstance(arg, ast.Constant) and (arg.value is None or isinstance(arg.value, str)):
+                    binding[name] = arg.value
+            if binding not in found:
+                found.append(binding)
+    return found or [{}]
+
+
+def local_aliases(method: ast.FunctionDef) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for node in method.body:
+        if (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and isinstance(node.value, ast.Subscript)
+            and isinstance(node.value.value, ast.Name)
+            and node.value.value.id == "TS_NAME_BY_BLOCK"
+            and isinstance(node.value.slice, ast.Name)
+        ):
+            out[node.targets[0].id] = node.value.slice.id
+    return out
+
+
+def fill_hole(
+    expr: ast.expr,
+    binding: dict[str, str | None],
+    aliases: dict[str, str],
+    ts_map: dict[str, str],
+    lineno: int,
+) -> str | None:
+    text = ast.unparse(expr)
+    if text in HOLE_NAMES:
+        return HOLE_NAMES[text]
+    param: str | None = None
+    if isinstance(expr, ast.Name) and expr.id in aliases:
+        param = aliases[expr.id]
+    elif (
+        isinstance(expr, ast.Subscript)
+        and isinstance(expr.value, ast.Name)
+        and expr.value.id == "TS_NAME_BY_BLOCK"
+        and isinstance(expr.slice, ast.Name)
+    ):
+        param = expr.slice.id
+    if param is not None:
+        if param not in binding:
+            raise RuntimeError(
+                f"domain.py:{lineno}: hole {{{text}}} depends on caller argument {param!r} that is not a literal"
+            )
+        block = binding[param]
+        if block is None:
+            return None
+        return ts_map[block]
+    if isinstance(expr, ast.Name) and expr.id in binding:
+        bound = binding[expr.id]
+        if bound is None:
+            return None
+        return bound
+    raise RuntimeError(f"domain.py:{lineno}: no reader name for message hole {{{text}}}; extend HOLE_NAMES")
+
+
+def render_message(
+    node: ast.expr,
+    binding: dict[str, str | None],
+    aliases: dict[str, str],
+    ts_map: dict[str, str],
+    lineno: int,
+) -> str | None:
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return node.value
-    if isinstance(node, ast.JoinedStr):
-        parts: list[str] = []
-        for value in node.values:
-            if isinstance(value, ast.Constant) and isinstance(value.value, str):
-                parts.append(value.value)
-            else:
-                parts.append("{…}")
-        return "".join(parts)
-    return None
+    if not isinstance(node, ast.JoinedStr):
+        raise RuntimeError(f"domain.py:{lineno}: violation message is not a literal or f-string")
+    parts: list[str] = []
+    for value in node.values:
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            parts.append(value.value)
+            continue
+        assert isinstance(value, ast.FormattedValue)
+        filled = fill_hole(value.value, binding, aliases, ts_map, lineno)
+        if filled is None:
+            return None
+        parts.append(filled)
+    return "".join(parts)
 
 
-def violation_templates() -> list[tuple[str, int, str]]:
+def rule_rows() -> list[RuleRow]:
     tree = ast.parse(DOMAIN.read_text())
-    found: list[tuple[str, int, str]] = []
+    ts_map = ts_name_map(tree)
+    rows: dict[str, RuleRow] = {}
     for cls in (n for n in tree.body if isinstance(n, ast.ClassDef)):
         for method in (n for n in cls.body if isinstance(n, ast.FunctionDef)):
-            for node in ast.walk(method):
-                if (
-                    isinstance(node, ast.Call)
-                    and isinstance(node.func, ast.Name)
-                    and node.func.id == "Violation"
-                    and node.args
-                ):
-                    template = flatten_template(node.args[0])
-                    found.append(
-                        (f"{cls.name}.{method.name}", node.lineno, template or "(unparsed message)")
-                    )
-    return found
+            calls = [
+                node
+                for node in ast.walk(method)
+                if isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "Violation"
+                and node.args
+            ]
+            if not calls:
+                continue
+            aliases = local_aliases(method)
+            for binding in instantiations(tree, method):
+                for call in calls:
+                    message = render_message(call.args[0], binding, aliases, ts_map, call.lineno)
+                    if message is None:
+                        continue
+                    if "; " not in message:
+                        raise RuntimeError(
+                            f"domain.py:{call.lineno}: violation message lacks a '; <normative clause>' tail"
+                        )
+                    head, clause = message.rsplit("; ", 1)
+                    shape = WHERE_PREFIX.sub("", head)
+                    subject = binding.get("subject")
+                    key = subject if isinstance(subject, str) else f"{cls.name}.{method.name}"
+                    if key not in APPLIES_TO:
+                        raise RuntimeError(f"no APPLIES_TO entry for {key!r}; extend the map")
+                    row = rows.setdefault(clause, RuleRow(clause, APPLIES_TO[key]))
+                    row.add(shape, call.lineno)
+    return list(rows.values())
 
 
 def test_assertions() -> dict[str, list[str]]:
@@ -60,24 +219,8 @@ def test_assertions() -> dict[str, list[str]]:
     return out
 
 
-def tokens(text: str) -> list[str]:
-    text = re.sub(r"'[^']*'", " ", text)
-    return re.sub(r"[^a-z]+", " ", text.lower()).split()
-
-
-def covering_tests(template: str, assertions: dict[str, list[str]]) -> list[str]:
-    template_tokens = set(tokens(template))
-    names: list[str] = []
-    for name, literals in assertions.items():
-        for literal in literals:
-            literal_tokens = tokens(literal)
-            if not literal_tokens:
-                continue
-            hit = sum(1 for t in literal_tokens if t in template_tokens)
-            if hit / len(literal_tokens) >= MATCH_THRESHOLD:
-                names.append(name)
-                break
-    return names
+def covering_tests(clause: str, assertions: dict[str, list[str]]) -> list[str]:
+    return [name for name, literals in assertions.items() if any(clause in literal for literal in literals)]
 
 
 def contracts() -> list[tuple[str, str]]:
@@ -102,18 +245,21 @@ def render() -> str:
         "",
         "Generated from the implementation by `rules.py` — never hand-edit.",
         "`python3 rules.py --check` fails when this file drifts from the code.",
-        "Fixture coverage is a token-overlap heuristic over test assertion strings.",
+        "One row per rule: the normative clause every violation message ends",
+        "with. ⟨…⟩ marks a value filled in per violation. Fixture coverage is",
+        "exact: a test covers a rule when an assert literal contains the clause.",
         "",
         "## sigcheck rules (from the violation messages in sigcheck/domain.py)",
         "",
-        "| Family | Message template | Source line | Fixture coverage |",
-        "|---|---|---|---|",
+        "| The rule | Applies to | Fires when | Source | Fixtures |",
+        "|---|---|---|---|---|",
     ]
-    for family, lineno, template in violation_templates():
-        covered = covering_tests(template, assertions)
+    for row in rule_rows():
+        covered = covering_tests(row.clause, assertions)
         coverage = ", ".join(covered) if covered else "NONE"
-        shown = template.replace("|", "\\|")
-        lines.append(f"| {family} | {shown} | domain.py:{lineno} | {coverage} |")
+        shapes = " · ".join(row.shapes).replace("|", "\\|")
+        source = "domain.py:" + ",".join(str(n) for n in sorted(row.linenos))
+        lines.append(f"| {row.clause} | {row.applies_to} | {shapes} | {source} | {coverage} |")
     lines += [
         "",
         "## Import contracts (from .importlinter)",

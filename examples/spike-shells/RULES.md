@@ -2,24 +2,22 @@
 
 Generated from the implementation by `rules.py` — never hand-edit.
 `python3 rules.py --check` fails when this file drifts from the code.
-Fixture coverage is a token-overlap heuristic over test assertion strings.
+One row per rule: the normative clause every violation message ends
+with. ⟨…⟩ marks a value filled in per violation. Fixture coverage is
+exact: a test covers a rule when an assert literal contains the clause.
 
 ## sigcheck rules (from the violation messages in sigcheck/domain.py)
 
-| Family | Message template | Source line | Fixture coverage |
-|---|---|---|---|
-| Codebase._constructor_violations | {…}.{…}:{…} defines no __init__; an aggregate constructs from exactly one ts.Spec | domain.py:136 | test_aggregate_constructor_violations_are_flagged |
-| Codebase._signature_violations | {…} uses *args/**kwargs; {…} takes exactly one {…} | domain.py:180 | test_arity_and_missing_annotations_are_flagged |
-| Codebase._signature_violations | {…} takes {…} parameters; {…} takes exactly one {…} | domain.py:182 | test_arity_and_missing_annotations_are_flagged, test_aggregate_constructor_violations_are_flagged |
-| Codebase._signature_violations | {…} does not return a {…} | domain.py:187 | test_primitive_parameter_and_return_are_flagged, test_indirect_subclass_still_classifies |
-| Codebase._signature_violations | {…} parameter {…} is not a {…} | domain.py:185 | test_primitive_parameter_and_return_are_flagged, test_arity_and_missing_annotations_are_flagged, test_aggregate_constructor_violations_are_flagged |
-| Codebase._delegation_violations | {…} delegates to self.{…} at line {…}; a service inlines its logic | domain.py:208 | test_service_delegation_is_flagged |
-| Codebase._delegation_violations | {…} delegates to {…} at line {…}; a service inlines its logic | domain.py:210 | test_service_delegation_is_flagged |
-| Codebase._body_violations | {…} body spans {…} source lines; a service method body is at most 10 | domain.py:219 | test_service_body_rules_are_flagged |
-| Codebase._body_violations | {…} if condition at line {…} is not a single call; satisfy it with one domain call | domain.py:223 | test_service_body_rules_are_flagged |
-| Codebase._body_violations | {…} nests a conditional at line {…}; a service method branches one level deep | domain.py:225 | test_service_body_rules_are_flagged, test_elif_chain_is_one_level |
-| Codebase._body_violations | {…} match subject at line {…} is not a single call; satisfy it with one domain call | domain.py:228 | test_service_body_rules_are_flagged |
-| Codebase._body_violations | {…} nests a conditional at line {…}; a service method branches one level deep | domain.py:230 | test_service_body_rules_are_flagged, test_elif_chain_is_one_level |
+| The rule | Applies to | Fires when | Source | Fixtures |
+|---|---|---|---|---|
+| an aggregate constructs from exactly one ts.Spec | aggregate class | defines no __init__ | domain.py:136 | test_aggregate_constructor_violations_are_flagged |
+| an aggregate constructor takes exactly one ts.Spec | aggregate `__init__` | uses *args/**kwargs · takes ⟨count⟩ parameters · parameter ⟨name⟩ is not a ts.Spec | domain.py:180,182,185 | test_aggregate_constructor_violations_are_flagged |
+| a service method takes exactly one ts.Request | public service method | uses *args/**kwargs · takes ⟨count⟩ parameters · parameter ⟨name⟩ is not a ts.Request | domain.py:180,182,185 | test_primitive_parameter_and_return_are_flagged, test_arity_and_missing_annotations_are_flagged |
+| a service method returns a ts.Response | public service method | does not return a ts.Response | domain.py:188 | test_primitive_parameter_and_return_are_flagged, test_indirect_subclass_still_classifies |
+| a service inlines its logic | every service method, including private | delegates to self.⟨method⟩ at line ⟨line⟩ · delegates to ⟨function⟩ at line ⟨line⟩ | domain.py:213,215 | test_service_delegation_is_flagged |
+| a service method body is at most 10 source lines | public service method | body spans ⟨count⟩ source lines | domain.py:224 | test_service_body_rules_are_flagged |
+| a service method satisfies a condition with one domain call | public service method | if condition at line ⟨line⟩ is not a single call · match subject at line ⟨line⟩ is not a single call | domain.py:228,233 | test_service_body_rules_are_flagged |
+| a service method branches one level deep | public service method | nests a conditional at line ⟨line⟩ | domain.py:230,235 | test_service_body_rules_are_flagged, test_elif_chain_is_one_level |
 
 ## Import contracts (from .importlinter)
 
