@@ -13,12 +13,12 @@ exact: a test covers a rule when an assert literal contains the clause.
 | a context holds only domain, application, client, and adapters modules | context package | is not a context module | domain.py:240 | test_non_context_module_and_nonempty_init_are_flagged |
 | a context __init__ is empty | context `__init__` | __init__ declares code at line ⟨line⟩ | domain.py:248 | test_non_context_module_and_nonempty_init_are_flagged |
 | every context class declares its block | context role module | declares no ts.* base | domain.py:266 | test_placement_totality_is_flagged |
-| a kind lives only in its role module | context role module | is ⟨kind⟩, whose home is ⟨role⟩.py | domain.py:269 | test_placement_totality_is_flagged |
+| a kind lives only in its role module | context role module | is ⟨kind⟩, whose home is ⟨role⟩.py | domain.py:269 | test_placement_totality_is_flagged, test_a_role_may_be_a_package |
 | a module function declares itself with @ts.function | context role module | is an undeclared module function | domain.py:278 | test_placement_totality_is_flagged |
 | a module constant is Final | context role module | declares a module constant without Final | domain.py:286,293 | test_placement_totality_is_flagged, test_declared_function_and_final_constant_pass |
 | a context module holds only imports, classes, declared functions, and Final constants | context role module | has a loose module-level statement | domain.py:300 | test_placement_totality_is_flagged |
-| a role module imports only its own tesser package | context role module | imports ⟨import⟩ | domain.py:320 | test_placement_totality_is_flagged |
-| the same-context matrix is application to domain and client, adapters to application | context role module | imports ⟨import⟩ | domain.py:330 | test_import_matrix_is_flagged |
+| a role module imports only its own tesser package | context role module | imports ⟨import⟩ | domain.py:320 | test_placement_totality_is_flagged, test_a_role_may_be_a_package |
+| the same-context matrix is a role to itself, application to domain and client, adapters to application | context role module | imports ⟨import⟩ | domain.py:330 | test_import_matrix_is_flagged |
 | a context reaches another context only through its client, and only from adapters | context role module | imports ⟨import⟩ | domain.py:337 | test_import_matrix_is_flagged |
 | a test module holds tests, @ts.helper builders, and @ts.fake doubles | test module | is neither a test nor a declared helper | domain.py:361 | test_test_module_totality_is_flagged |
 | a test module holds only imports, tests, helpers, and fakes | test module | has a loose module-level statement | domain.py:378 | test_test_module_totality_is_flagged |

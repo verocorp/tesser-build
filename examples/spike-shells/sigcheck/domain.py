@@ -210,7 +210,7 @@ class Codebase(ts.AggregateRoot):
         found: set[str] = set()
         for module in self._modules:
             parts = module.name().split(".")
-            if len(parts) == 2 and parts[1] in ROLES:
+            if len(parts) >= 2 and parts[1] in ROLES:
                 found.add(parts[0])
         return frozenset(found)
 
@@ -232,9 +232,9 @@ class Codebase(ts.AggregateRoot):
             return self._context_init_violations(module)
         if basename == "__main__":
             return ()
-        if len(parts) == 2 and basename in ROLES:
-            return self._role_module_violations(module, basename, blocks) + self._import_violations(
-                module, parts[0], basename, contexts
+        if len(parts) >= 2 and parts[1] in ROLES:
+            return self._role_module_violations(module, parts[1], blocks) + self._import_violations(
+                module, parts[0], parts[1], contexts
             )
         return (
             Violation(
@@ -325,11 +325,11 @@ class Codebase(ts.AggregateRoot):
             elif pieces[0] in contexts:
                 tail = pieces[1] if len(pieces) > 1 else ""
                 if pieces[0] == context:
-                    if tail not in SAME_CONTEXT_IMPORTS[role]:
+                    if tail != role and tail not in SAME_CONTEXT_IMPORTS[role]:
                         found.append(
                             Violation(
                                 f"{module.name()}:{lineno} imports {target}; the same-context matrix is "
-                                "application to domain and client, adapters to application"
+                                "a role to itself, application to domain and client, adapters to application"
                             )
                         )
                 elif role != "adapters" or tail != "client":

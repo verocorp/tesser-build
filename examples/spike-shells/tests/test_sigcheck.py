@@ -296,7 +296,7 @@ def test_import_matrix_is_flagged(tmp_path: Path) -> None:
     findings = check_tree(tmp_path)
     assert any(
         "two.domain" in f
-        and "the same-context matrix is application to domain and client, adapters to application" in f
+        and "the same-context matrix is a role to itself, application to domain and client, adapters to application" in f
         for f in findings
     )
     assert any(
@@ -466,3 +466,49 @@ def test_domain_field_rules_are_flagged(tmp_path: Path) -> None:
         for f in findings
     )
     assert any("WireRequest.validate" in f and "a DTO carries data and nothing else" in f for f in findings)
+
+
+def test_a_role_may_be_a_package(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "deep/domain/__init__.py",
+        "from deep.domain.money import Money\n",
+    )
+    write_module(
+        tmp_path,
+        "deep/domain/money.py",
+        "import tesser.domain as ts\n"
+        "from deep.domain.currency import Currency\n"
+        "class Money(ts.ValueObject):\n"
+        "    def __init__(self, amount: str, currency: Currency) -> None:\n"
+        "        object.__setattr__(self, '_amount', amount)\n"
+        "        object.__setattr__(self, '_currency', currency)\n",
+    )
+    write_module(
+        tmp_path,
+        "deep/domain/currency.py",
+        "import tesser.domain as ts\n"
+        "class Currency(ts.ValueObject):\n"
+        "    def __init__(self, code: str) -> None:\n"
+        "        object.__setattr__(self, '_code', code)\n",
+    )
+    write_module(
+        tmp_path,
+        "deep/domain/svc.py",
+        "import tesser.application as ts\n"
+        "class SneakyService(ts.ApplicationService):\n"
+        "    pass\n",
+    )
+    findings = check_tree(tmp_path)
+    assert not any("deep.domain.money" in f and "not a context module" in f for f in findings)
+    assert not any("deep.domain.money" in f and "the same-context matrix" in f for f in findings)
+    assert any(
+        "deep.domain.svc.SneakyService" in f and "a kind lives only in its role module" in f
+        for f in findings
+    )
+    assert any(
+        "deep.domain.svc" in f and "imports tesser.application" in f
+        and "a role module imports only its own tesser package" in f
+        for f in findings
+    )
