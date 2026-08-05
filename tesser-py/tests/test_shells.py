@@ -4,6 +4,11 @@ import tesser.adapters
 import tesser.application
 import tesser.context
 import tesser.domain
+import tesser.testing
+
+
+class _AskThings(tesser.context.Client, Protocol):
+    def ask(self, question: object) -> object: ...
 
 
 class _SaveThings(tesser.application.Port, Protocol):
@@ -31,6 +36,26 @@ def test_structural_implementation_needs_no_marker() -> None:
     saver: _SaveThings = _StructuralSaver()
     saver.save("x")
     assert tesser.application.Port not in type(saver).__mro__
+
+
+def test_client_subclass_stays_a_protocol() -> None:
+    assert getattr(_AskThings, "_is_protocol", False)
+    assert tesser.context.Client in _AskThings.__mro__
+
+
+def test_declaration_decorators_return_their_target_unchanged() -> None:
+    def build() -> str:
+        return "built"
+
+    class Double:
+        pass
+
+    assert tesser.domain.function(build) is build
+    assert tesser.application.function(build) is build
+    assert tesser.adapters.function(build) is build
+    assert tesser.context.function(build) is build
+    assert tesser.testing.helper(build) is build
+    assert tesser.testing.fake(Double) is Double
 
 
 def test_shells_classify_subclasses() -> None:

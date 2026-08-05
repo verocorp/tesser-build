@@ -1,1 +1,3 @@
+from tesser.adapters.gateway import Gateway as Gateway
 from tesser.adapters.repository import Repository as Repository
+from tesser.declared import function as function
