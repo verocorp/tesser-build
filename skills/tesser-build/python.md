@@ -12,16 +12,17 @@ them.
 > **Verification status — verified.** The patterns these examples exercise —
 > value objects (simple, compound, collection), the entity and aggregate
 > lifecycle, the application-service boundary, the repository, and the composition
-> root — are backed by runnable, type-checked worked examples under
-> `examples/python/`: the **running arc** (`campaign` value objects and
-> aggregate, `campaignapp` service + repository, and the
-> `linkcampaign`/`linkcampaignimpl`/`main` composition root, wired into a live
-> HTTP service) and the **`catalog`** package (the compound value object `Money`
-> backed by `decimal.Decimal`, and the collection value object `Labels`). The
-> whole tree passes `mypy --strict` and `pytest` in CI, the same bar the Go
-> mechanics meet. The app-level anatomy — `bootstrap` + per-context `wiring` +
-> `srv` hosts + inbound handlers — is backed the same way by
-> `examples/python-app/` (multi-context, self-enforcing tests). A few variants are stated below for completeness but shown for
+> root — are backed by runnable, type-checked worked examples. The domain
+> mechanics live under `examples/python/` (`campaign` value objects, entity, and
+> aggregate; the **`catalog`** package with the compound value object `Money`
+> backed by `decimal.Decimal` and the collection value object `Labels`). The
+> service, repository, public-interface, and composition-root mechanics — and the
+> app-level anatomy of `bootstrap` + per-context `client.py`/`wiring` + `srv`
+> hosts + inbound handlers — are backed by `examples/python-app/` (multi-context,
+> self-enforcing tests). Both trees pass `mypy --strict` and `pytest` in CI, the
+> same bar the Go mechanics meet. (The earlier two-package
+> interface/implementation rendering of the public contract was dropped as
+> superseded by per-context `client.py`.) A few variants are stated below for completeness but shown for
 > shape only — the examples here are all *lifecycle* and *1:1*, so they do not
 > exercise a **fact** aggregate/entity that returns a new instance on change, an
 > explicit **reshaping** `Client`, or a hand-written `__eq__`/`__hash__`; each is

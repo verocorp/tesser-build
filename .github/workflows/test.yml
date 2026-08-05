@@ -68,7 +68,7 @@ jobs:
       - name: examples/python — mypy --strict + pytest
         working-directory: examples/python
         run: |
-          MYPYPATH=. mypy --strict campaign campaignapp linkcampaign linkcampaignimpl transport catalog serialization.py main.py tests conftest.py
+          MYPYPATH=. mypy --strict campaign catalog serialization.py tests conftest.py
           pytest -q
 
   python-app-example:
