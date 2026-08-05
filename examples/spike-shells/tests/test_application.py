@@ -1,8 +1,18 @@
 import pytest
+import tesser.testing as ts
 
+from spike.application import NoteParts, NoteRepository, NoteService
 from spike.client import CreateNoteRequest, CreateNoteResponse
-from spike.adapters import MemoryNoteRepository
-from spike.application import NoteParts, NoteService
+
+
+@ts.fake
+class MemoryNoteRepository(NoteRepository):
+
+    def __init__(self) -> None:
+        self.saved: list[NoteParts] = []
+
+    def save(self, parts: NoteParts) -> None:
+        self.saved.append(parts)
 
 
 def test_create_builds_the_aggregate_and_saves_its_parts() -> None:
