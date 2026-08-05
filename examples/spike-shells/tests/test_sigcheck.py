@@ -254,7 +254,7 @@ def test_non_context_module_and_nonempty_init_are_flagged(tmp_path: Path) -> Non
     write_module(tmp_path, "app/__init__.py", "X = 1\n")
     findings = check_tree(tmp_path)
     assert any(
-        "app.util" in f and "a context holds only domain, application, client, and adapters modules" in f
+        "app.util" in f and "a context holds only domain, application, client, adapters, and wiring modules" in f
         for f in findings
     )
     assert any("app" in f and "a context __init__ is empty" in f for f in findings)
@@ -296,12 +296,12 @@ def test_import_matrix_is_flagged(tmp_path: Path) -> None:
     findings = check_tree(tmp_path)
     assert any(
         "two.domain" in f
-        and "the same-context matrix is a role to itself, application to domain and client, adapters to application" in f
+        and "the same-context matrix is a role to itself, application to domain and client, adapters to application and client, wiring to application, adapters, and client" in f
         for f in findings
     )
     assert any(
         "two.application" in f
-        and "a context reaches another context only through its client, and only from adapters" in f
+        and "a context reaches another context only through its client, and only from adapters and wiring" in f
         for f in findings
     )
     assert not any("two.adapters" in f and "imports app.client" in f for f in findings)
@@ -510,5 +510,77 @@ def test_a_role_may_be_a_package(tmp_path: Path) -> None:
     assert any(
         "deep.domain.svc" in f and "imports tesser.application" in f
         and "a role module imports only its own tesser package" in f
+        for f in findings
+    )
+
+
+def test_wiring_is_a_role(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "two/client.py",
+        "import tesser.context as ts\n"
+        "class PingRequest(ts.Request):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    write_module(
+        tmp_path,
+        "app/wiring.py",
+        "import tesser.context as ts\n"
+        "import app.application\n"
+        "import app.client\n"
+        "import two.client\n"
+        "import two.domain\n"
+        "class AskWiring(ts.Wiring):\n"
+        "    pass\n",
+    )
+    findings = check_tree(tmp_path)
+    assert not any("app.wiring" in f and "not a context module" in f for f in findings)
+    assert not any("app.wiring" in f and "imports app.application" in f for f in findings)
+    assert not any("app.wiring" in f and "imports two.client" in f for f in findings)
+    assert not any("app.wiring.AskWiring" in f and "a kind lives only in its role module" in f for f in findings)
+    assert any(
+        "app.wiring" in f and "imports two.domain" in f
+        and "a context reaches another context only through its client, and only from adapters and wiring" in f
+        for f in findings
+    )
+
+
+def test_srv_and_bootstrap_import_rows(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "srv/http.py",
+        "import app.application\n"
+        "import app.adapters\n"
+        "import bootstrap.wire\n",
+    )
+    write_module(
+        tmp_path,
+        "bootstrap/wire.py",
+        "import app.domain\n"
+        "import app.wiring\n"
+        "import app.client\n"
+        "import srv.http\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "srv.http" in f and "imports app.application" in f
+        and "a host reaches a context only through its adapters" in f
+        for f in findings
+    )
+    assert not any("srv.http" in f and "imports app.adapters" in f for f in findings)
+    assert not any("srv.http" in f and "imports bootstrap.wire" in f for f in findings)
+    assert any(
+        "bootstrap.wire" in f and "imports app.domain" in f
+        and "bootstrap builds from wiring, clients, and adapters, never domain or application" in f
+        for f in findings
+    )
+    assert not any("bootstrap.wire" in f and "imports app.wiring" in f for f in findings)
+    assert not any("bootstrap.wire" in f and "imports app.client" in f for f in findings)
+    assert any(
+        "bootstrap.wire" in f and "imports srv.http" in f
+        and "the composition root never imports a host" in f
         for f in findings
     )

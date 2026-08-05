@@ -42,6 +42,7 @@ APPLIES_TO: dict[str, str] = {
     "Codebase._context_init_violations": "context `__init__`",
     "Codebase._role_module_violations": "context role module",
     "Codebase._import_violations": "context role module",
+    "Codebase._app_import_violations": "srv / bootstrap module",
     "Codebase._test_module_violations": "test module",
     "Codebase._helper_violations": "@ts.helper function",
     "Codebase._dependency_violations": "service `__init__`",

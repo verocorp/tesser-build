@@ -16,6 +16,7 @@ TESSER_BASE_BLOCKS: Final[dict[tuple[str, str], str]] = {
     ("tesser.domain", "Spec"): "spec",
     ("tesser.adapters", "Repository"): "repository",
     ("tesser.adapters", "Gateway"): "gateway",
+    ("tesser.context", "Wiring"): "wiring",
 }
 
 TESSER_DECORATORS: Final[dict[tuple[str, str], str]] = {
@@ -33,7 +34,9 @@ TS_NAME_BY_BLOCK: Final[dict[str, str]] = {
     "spec": "ts.Spec",
 }
 
-ROLES: Final[tuple[str, ...]] = ("domain", "application", "client", "adapters")
+ROLES: Final[tuple[str, ...]] = ("domain", "application", "client", "adapters", "wiring")
+
+APP_PACKAGES: Final[tuple[str, ...]] = ("srv", "bootstrap")
 
 KIND_ROLE: Final[dict[str, str]] = {
     "aggregate": "domain",
@@ -48,6 +51,7 @@ KIND_ROLE: Final[dict[str, str]] = {
     "client": "client",
     "repository": "adapters",
     "gateway": "adapters",
+    "wiring": "wiring",
 }
 
 KIND_NAME: Final[dict[str, str]] = {
@@ -63,6 +67,7 @@ KIND_NAME: Final[dict[str, str]] = {
     "client": "a client",
     "repository": "a repository adapter",
     "gateway": "a gateway adapter",
+    "wiring": "a wiring assembly",
 }
 
 ROLE_TESSER_PACKAGE: Final[dict[str, str]] = {
@@ -70,13 +75,15 @@ ROLE_TESSER_PACKAGE: Final[dict[str, str]] = {
     "application": "tesser.application",
     "client": "tesser.context",
     "adapters": "tesser.adapters",
+    "wiring": "tesser.context",
 }
 
 SAME_CONTEXT_IMPORTS: Final[dict[str, tuple[str, ...]]] = {
     "domain": (),
     "client": (),
     "application": ("domain", "client"),
-    "adapters": ("application",),
+    "adapters": ("application", "client"),
+    "wiring": ("application", "adapters", "client"),
 }
 
 PRIMITIVES: Final[frozenset[str]] = frozenset({"str", "int", "float", "bool"})
@@ -226,6 +233,8 @@ class Codebase(ts.AggregateRoot):
             return ()
         if basename.startswith("test_"):
             return self._test_module_violations(module, blocks)
+        if parts[0] in APP_PACKAGES:
+            return self._app_import_violations(module, parts[0], contexts)
         if parts[0] not in contexts:
             return ()
         if len(parts) == 1:
@@ -239,7 +248,7 @@ class Codebase(ts.AggregateRoot):
         return (
             Violation(
                 f"{module.name()} is not a context module; "
-                "a context holds only domain, application, client, and adapters modules"
+                "a context holds only domain, application, client, adapters, and wiring modules"
             ),
         )
 
@@ -329,16 +338,50 @@ class Codebase(ts.AggregateRoot):
                         found.append(
                             Violation(
                                 f"{module.name()}:{lineno} imports {target}; the same-context matrix is "
-                                "a role to itself, application to domain and client, adapters to application"
+                                "a role to itself, application to domain and client, adapters to "
+                                "application and client, wiring to application, adapters, and client"
                             )
                         )
-                elif role != "adapters" or tail != "client":
+                elif role not in ("adapters", "wiring") or tail != "client":
                     found.append(
                         Violation(
                             f"{module.name()}:{lineno} imports {target}; a context reaches another context "
-                            "only through its client, and only from adapters"
+                            "only through its client, and only from adapters and wiring"
                         )
                     )
+        return tuple(found)
+
+    def _app_import_violations(
+        self,
+        module: Module,
+        package: str,
+        contexts: frozenset[str],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for target, lineno in module.import_edges():
+            pieces = target.split(".")
+            tail = pieces[1] if len(pieces) > 1 else ""
+            if pieces[0] in contexts:
+                if package == "srv" and tail != "adapters":
+                    found.append(
+                        Violation(
+                            f"{module.name()}:{lineno} imports {target}; "
+                            "a host reaches a context only through its adapters"
+                        )
+                    )
+                elif package == "bootstrap" and tail not in ("wiring", "client", "adapters"):
+                    found.append(
+                        Violation(
+                            f"{module.name()}:{lineno} imports {target}; bootstrap builds from "
+                            "wiring, clients, and adapters, never domain or application"
+                        )
+                    )
+            elif package == "bootstrap" and pieces[0] == "srv":
+                found.append(
+                    Violation(
+                        f"{module.name()}:{lineno} imports {target}; the composition root never imports a host"
+                    )
+                )
         return tuple(found)
 
     def _test_module_violations(

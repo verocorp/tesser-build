@@ -1,0 +1,2 @@
+class Wiring:
+    pass

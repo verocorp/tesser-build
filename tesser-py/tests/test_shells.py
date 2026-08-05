@@ -77,5 +77,8 @@ def test_shells_classify_subclasses() -> None:
     class Reply(tesser.context.Response):
         pass
 
-    for cls in (Root, RootSpec, Service, Repo, Ask, Reply):
+    class Wire(tesser.context.Wiring):
+        pass
+
+    for cls in (Root, RootSpec, Service, Repo, Ask, Reply, Wire):
         assert cls()
