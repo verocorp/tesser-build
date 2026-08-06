@@ -21,15 +21,18 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 - [ ] **python-app conformance + remove the sigcheck CI ratchet.** The wave's
   rules (tesser exactly-once-as-ts, whole-tree totality, pure-core allowlist,
   module-only aliased context imports) fire 173 findings on the freshly
-  migrated tree, so the zero-findings CI step became a count ratchet
-  (`examples/python-app/sigcheck-ratchet`, may only shrink).
+  migrated tree, so the zero-findings CI step became a ratchet
+  (`examples/python-app/sigcheck-ratchet` — the accepted-debt baseline as a
+  normalized finding set, not a scalar count: any finding outside the baseline
+  fails even at an equal total, and an analyzer crash fails closed).
   - **Mechanical (~145):** 123 import-form conversions (`from x.client import Y`
     → `import x.client as client`), 13 `@ts.function` declarations + 7
     `import tesser.context as ts` in srv/bootstrap, 2 Final constants.
   - **Blocked on the rulings below:** 9 srv/bootstrap classes, 5 homeless
     modules, several pure-core hits.
-  - **Then:** lower the ratchet per fix; at zero delete `sigcheck-ratchet` and
-    restore the plain zero-findings step.
+  - **Then:** regenerate the baseline per fix (the sed|sort pipeline in
+    test.yml); at zero findings delete `sigcheck-ratchet` and restore the plain
+    zero-findings step.
 - [ ] **Host-class vocabulary.** A class in srv/bootstrap always flags — no
   shell exists for `Route`, `Match`, `HttpHost`, `CleanupStack`, `App`,
   `HttpConfig`, `Config`. Decide: `tesser.srv` (Host/Request/Response) +
