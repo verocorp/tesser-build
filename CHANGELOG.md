@@ -49,6 +49,11 @@ and tooling modules are visible carve-outs now, not silent ones — and a
 rule can no longer ship without a fixture: an uncovered clause is a
 suite failure, not a NONE cell.
 
+Also in this release (landed on main by the python-app migration, PR
+#50, between versions): the tessercheck-py analyzer's TB003 now treats
+a `tesser.domain.ValueObject` subclass `__init__` as a sanctioned
+construction site, alongside the frozen-dataclass forms.
+
 ## [0.0.15.0] - 2026-08-05
 
 The declare-then-verify spike: `examples/spike-shells` explores the

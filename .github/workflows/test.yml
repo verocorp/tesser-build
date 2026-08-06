@@ -105,7 +105,7 @@ jobs:
     # the import direction, and the example's own AST tests keep what no tool
     # covers (import-time side effects, host-routes-never-translates, context
     # discovery). A Go mirror (examples/app) is planned, not yet built.
-    name: python-app example (ruff + import-linter + mypy --strict + pytest)
+    name: python-app example (ruff + import-linter + mypy --strict + pytest + sigcheck ratchet)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
