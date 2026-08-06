@@ -97,11 +97,12 @@ jobs:
         run: PYTHONPATH=.:../../tesser-py lint-imports --no-cache
 
   spike-llmport:
-    # Gates the LLM tool-call port spike: the pure core (domain, tools,
-    # application, llm) plus its tests. livekit_wiring.py is deliberately
-    # outside the file list — it imports livekit-agents, which is not
-    # installed in CI; the spike README records that boundary.
-    name: spike-llmport (mypy --strict + pytest)
+    # Gates the LLM tool-call port spike at the spike-shells bar: sigcheck
+    # over the whole tree, then mypy --strict + pytest on the pure modules.
+    # adapters/livekit.py is in sigcheck's walk (pure AST) but outside the
+    # mypy file list — it imports livekit-agents, which is not installed in
+    # CI; the spike README records that boundary.
+    name: spike-llmport (sigcheck + mypy --strict + pytest)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -110,10 +111,12 @@ jobs:
           python-version: '3.12'
       - name: Install dev tooling
         run: pip install -r examples/spike-llmport/requirements-dev.txt
+      - name: examples/spike-llmport — sigcheck
+        run: PYTHONPATH=examples/spike-shells:tesser-py python3 -m sigcheck examples/spike-llmport
       - name: examples/spike-llmport — mypy --strict + pytest
         working-directory: examples/spike-llmport
         run: |
-          MYPYPATH=.:../../tesser-py mypy --strict scheduling/domain.py scheduling/tools.py scheduling/application.py scheduling/llm.py tests
+          MYPYPATH=.:../../tesser-py mypy --strict scheduling/domain.py scheduling/client.py scheduling/application.py scheduling/adapters/handlers.py tests
           pytest -q
 
   python-app-example:

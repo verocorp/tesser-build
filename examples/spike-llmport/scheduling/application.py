@@ -1,41 +1,44 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Protocol, assert_never
+from typing import Protocol
 
 import tesser.application as ts
 
-from scheduling.domain import (
-    Booking,
-    BookingSpec,
-    ChooseSlot,
-    ConfirmBooking,
-    CustomerName,
-    DomainError,
-    DomainKind,
-    ProvideName,
-    Slot,
+from scheduling.client import (
+    BeginBookingRequest,
+    BookingStateResponse,
+    ChooseSlotRequest,
+    ConfirmBookingRequest,
+    ProvideNameRequest,
+    ReofferRequest,
+    StatusRequest,
 )
-from scheduling.tools import ToolName, allowed_tools, parse, schema_for
+from scheduling.domain import COLLECT_NAME, Booking, BookingSpec, CustomerName, Slot
 
 
 class BookingParts(ts.Parts):
 
-    def __init__(self, name: str, slot: str) -> None:
+    def __init__(
+        self, step: str, name: str, chosen: str, offered: tuple[str, ...]
+    ) -> None:
+        self.step = step
         self.name = name
-        self.slot = slot
+        self.chosen = chosen
+        self.offered = offered
 
 
 class SlotDirectory(ts.Port, Protocol):
 
-    def available(self) -> tuple[Slot, ...]: ...
+    def available(self) -> tuple[str, ...]: ...
 
-    def reserve(self, slot: Slot, name: CustomerName) -> None: ...
+    def reserve(self, slot: str, name: str) -> None: ...
 
 
 class BookingRepository(ts.Port, Protocol):
 
-    def save(self, parts: BookingParts) -> None: ...
+    def get(self, booking_id: str) -> BookingParts: ...
+
+    def save(self, booking_id: str, parts: BookingParts) -> None: ...
 
 
 class BookingService(ts.ApplicationService):
@@ -44,48 +47,52 @@ class BookingService(ts.ApplicationService):
         self._directory = directory
         self._repository = repository
 
-    def begin(self) -> Booking:
-        return Booking(BookingSpec())
+    def begin(self, request: BeginBookingRequest) -> BookingStateResponse:
+        booking = Booking(BookingSpec(step=COLLECT_NAME, name="", chosen="", offered=()))
+        self._repository.save(request.booking_id, BookingParts(step=booking.step_label(),
+            name=booking.name_label(), chosen=booking.slot_label(), offered=booking.offered_labels()))
+        return BookingStateResponse(step=booking.step_label(),
+            offered_slots=booking.offered_labels(), reply="ask the caller for their name")
 
-    def llm_tools(self, booking: Booking) -> dict[ToolName, dict[str, object]]:
-        return {
-            name: schema_for(name, booking) for name in allowed_tools(booking.step())
-        }
+    def provide_name(self, request: ProvideNameRequest) -> BookingStateResponse:
+        parts = self._repository.get(request.booking_id)
+        booking = Booking(BookingSpec(step=parts.step, name=parts.name, chosen=parts.chosen, offered=parts.offered))
+        booking.provide_name(CustomerName(request.name), tuple(Slot(s) for s in self._directory.available()))
+        self._repository.save(request.booking_id, BookingParts(step=booking.step_label(),
+            name=booking.name_label(), chosen=booking.slot_label(), offered=booking.offered_labels()))
+        return BookingStateResponse(step=booking.step_label(),
+            offered_slots=booking.offered_labels(), reply="offer the caller the available slots")
 
-    def execute(
-        self, booking: Booking, name: ToolName, raw_arguments: Mapping[str, object]
-    ) -> str:
-        command = parse(name, raw_arguments)
-        match command:
-            case ProvideName():
-                booking.provide_name(command.name(), self._directory.available())
-                offered = ", ".join(str(s) for s in booking.offered_slots())
-                return f"name recorded; available slots: {offered}"
-            case ChooseSlot():
-                booking.choose_slot(command.slot())
-                return f"slot {booking.chosen_slot()} selected; awaiting confirmation"
-            case ConfirmBooking():
-                self._reserve(booking)
-                booking.confirm()
-                self._repository.save(
-                    BookingParts(
-                        name=str(booking.customer_name()),
-                        slot=str(booking.chosen_slot()),
-                    )
-                )
-                return f"booked {booking.chosen_slot()} for {booking.customer_name()}"
-        assert_never(command)
+    def choose_slot(self, request: ChooseSlotRequest) -> BookingStateResponse:
+        parts = self._repository.get(request.booking_id)
+        booking = Booking(BookingSpec(step=parts.step, name=parts.name, chosen=parts.chosen, offered=parts.offered))
+        booking.choose_slot(Slot(request.slot))
+        self._repository.save(request.booking_id, BookingParts(step=booking.step_label(),
+            name=booking.name_label(), chosen=booking.slot_label(), offered=booking.offered_labels()))
+        return BookingStateResponse(step=booking.step_label(), offered_slots=booking.offered_labels(),
+            reply=f"slot {booking.slot_label()} selected; ask the caller to confirm")
 
-    def _reserve(self, booking: Booking) -> None:
-        try:
-            self._directory.reserve(booking.chosen_slot(), booking.customer_name())
-        except DomainError as err:
-            if err.kind is not DomainKind.CONFLICT:
-                raise
-            booking.reoffer(self._directory.available())
-            offered = ", ".join(str(s) for s in booking.offered_slots())
-            raise DomainError(
-                DomainKind.CONFLICT,
-                err.code,
-                f"{err.message}; now available: {offered}",
-            ) from err
+    def confirm(self, request: ConfirmBookingRequest) -> BookingStateResponse:
+        parts = self._repository.get(request.booking_id)
+        booking = Booking(BookingSpec(step=parts.step, name=parts.name, chosen=parts.chosen, offered=parts.offered))
+        booking.confirm()
+        self._directory.reserve(booking.slot_label(), booking.name_label())
+        self._repository.save(request.booking_id, BookingParts(step=booking.step_label(),
+            name=booking.name_label(), chosen=booking.slot_label(), offered=booking.offered_labels()))
+        return BookingStateResponse(step=booking.step_label(), offered_slots=booking.offered_labels(),
+            reply=f"booked {booking.slot_label()} for {booking.name_label()}")
+
+    def reoffer(self, request: ReofferRequest) -> BookingStateResponse:
+        parts = self._repository.get(request.booking_id)
+        booking = Booking(BookingSpec(step=parts.step, name=parts.name, chosen=parts.chosen, offered=parts.offered))
+        booking.reoffer(tuple(Slot(s) for s in self._directory.available()))
+        self._repository.save(request.booking_id, BookingParts(step=booking.step_label(),
+            name=booking.name_label(), chosen=booking.slot_label(), offered=booking.offered_labels()))
+        return BookingStateResponse(step=booking.step_label(),
+            offered_slots=booking.offered_labels(), reply="offer the caller the updated slots")
+
+    def status(self, request: StatusRequest) -> BookingStateResponse:
+        parts = self._repository.get(request.booking_id)
+        booking = Booking(BookingSpec(step=parts.step, name=parts.name, chosen=parts.chosen, offered=parts.offered))
+        return BookingStateResponse(step=booking.step_label(),
+            offered_slots=booking.offered_labels(), reply="continue the booking")

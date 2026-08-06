@@ -1,98 +1,98 @@
 import pytest
 
 from scheduling.application import BookingService
-from scheduling.domain import (
-    CustomerName,
-    DomainError,
-    DomainKind,
-    InfraError,
-    Slot,
-    Step,
+from scheduling.client import (
+    BeginBookingRequest,
+    BookingStateResponse,
+    ChooseSlotRequest,
+    ConfirmBookingRequest,
+    ProvideNameRequest,
+    ReofferRequest,
+    StatusRequest,
 )
-from scheduling.tools import ToolName
 from tests.fakes import DownSlotDirectory, MemoryBookingRepository, MemorySlotDirectory
 
 
-def test_the_full_booking_flow_through_the_tool_surface() -> None:
-    directory = MemorySlotDirectory((Slot("mon-9am"), Slot("tue-2pm")))
+def test_the_full_booking_flow_through_the_client_surface() -> None:
+    directory = MemorySlotDirectory(("mon-9am", "tue-2pm"))
     repository = MemoryBookingRepository()
     service = BookingService(directory, repository)
-    booking = service.begin()
 
-    assert set(service.llm_tools(booking)) == {ToolName.PROVIDE_NAME}
+    state = service.begin(BeginBookingRequest(booking_id="b1"))
+    assert isinstance(state, BookingStateResponse)
+    assert state.step == "collect_name"
 
-    reply = service.execute(booking, ToolName.PROVIDE_NAME, {"name": "Ada Lovelace"})
-    assert "mon-9am" in reply
-    assert set(service.llm_tools(booking)) == {ToolName.CHOOSE_SLOT}
+    state = service.provide_name(ProvideNameRequest(booking_id="b1", name="Ada Lovelace"))
+    assert state.step == "choose_slot"
+    assert state.offered_slots == ("mon-9am", "tue-2pm")
 
-    service.execute(booking, ToolName.CHOOSE_SLOT, {"slot": "mon-9am"})
-    assert ToolName.CONFIRM_BOOKING in service.llm_tools(booking)
+    state = service.choose_slot(ChooseSlotRequest(booking_id="b1", slot="mon-9am"))
+    assert state.step == "confirm"
 
-    reply = service.execute(booking, ToolName.CONFIRM_BOOKING, {})
-    assert "booked" in reply
-    assert booking.step() is Step.BOOKED
-    assert service.llm_tools(booking) == {}
-    assert len(repository.saved) == 1
-    assert repository.saved[0].name == "Ada Lovelace"
-    assert repository.saved[0].slot == "mon-9am"
-    assert directory.reserved == [(Slot("mon-9am"), CustomerName("Ada Lovelace"))]
+    state = service.confirm(ConfirmBookingRequest(booking_id="b1"))
+    assert state.step == "booked"
+    assert "mon-9am" in state.reply
+    assert directory.reserved == [("mon-9am", "Ada Lovelace")]
+    assert repository.stored["b1"].step == "booked"
+    assert repository.stored["b1"].name == "Ada Lovelace"
+    assert repository.stored["b1"].chosen == "mon-9am"
 
 
-def test_a_slot_taken_between_choice_and_confirm_reoffers_fresh_slots() -> None:
-    directory = MemorySlotDirectory((Slot("mon-9am"), Slot("tue-2pm")))
+def test_a_rejected_transition_persists_nothing() -> None:
+    directory = MemorySlotDirectory(("mon-9am",))
     repository = MemoryBookingRepository()
     service = BookingService(directory, repository)
-    booking = service.begin()
-    service.execute(booking, ToolName.PROVIDE_NAME, {"name": "Ada"})
-    service.execute(booking, ToolName.CHOOSE_SLOT, {"slot": "mon-9am"})
+    service.begin(BeginBookingRequest(booking_id="b1"))
+    service.provide_name(ProvideNameRequest(booking_id="b1", name="Ada"))
 
-    directory.slots.remove(Slot("mon-9am"))
-    with pytest.raises(DomainError) as excinfo:
-        service.execute(booking, ToolName.CONFIRM_BOOKING, {})
+    with pytest.raises(ValueError):
+        service.choose_slot(ChooseSlotRequest(booking_id="b1", slot="wed-4pm"))
 
-    assert excinfo.value.kind is DomainKind.CONFLICT
-    assert "tue-2pm" in excinfo.value.message
-    assert booking.step() is Step.CHOOSE_SLOT
-    assert booking.offered_slots() == (Slot("tue-2pm"),)
-    assert repository.saved == []
-
-    service.execute(booking, ToolName.CHOOSE_SLOT, {"slot": "tue-2pm"})
-    service.execute(booking, ToolName.CONFIRM_BOOKING, {})
-    assert booking.step() is Step.BOOKED
+    assert repository.stored["b1"].step == "choose_slot"
+    assert repository.stored["b1"].chosen == ""
 
 
-def test_a_conflict_with_no_remaining_slots_is_not_found() -> None:
-    directory = MemorySlotDirectory((Slot("mon-9am"),))
+def test_a_slot_taken_between_choice_and_confirm_surfaces_and_reoffer_recovers() -> None:
+    directory = MemorySlotDirectory(("mon-9am", "tue-2pm"))
     repository = MemoryBookingRepository()
     service = BookingService(directory, repository)
-    booking = service.begin()
-    service.execute(booking, ToolName.PROVIDE_NAME, {"name": "Ada"})
-    service.execute(booking, ToolName.CHOOSE_SLOT, {"slot": "mon-9am"})
+    service.begin(BeginBookingRequest(booking_id="b1"))
+    service.provide_name(ProvideNameRequest(booking_id="b1", name="Ada"))
+    service.choose_slot(ChooseSlotRequest(booking_id="b1", slot="mon-9am"))
 
-    directory.slots.remove(Slot("mon-9am"))
-    with pytest.raises(DomainError) as excinfo:
-        service.execute(booking, ToolName.CONFIRM_BOOKING, {})
+    directory.slots.remove("mon-9am")
+    with pytest.raises(ValueError) as excinfo:
+        service.confirm(ConfirmBookingRequest(booking_id="b1"))
 
-    assert excinfo.value.kind is DomainKind.NOT_FOUND
-    assert repository.saved == []
+    assert "taken" in str(excinfo.value)
+    assert repository.stored["b1"].step == "confirm"
+
+    state = service.reoffer(ReofferRequest(booking_id="b1"))
+    assert state.step == "choose_slot"
+    assert state.offered_slots == ("tue-2pm",)
+
+    service.choose_slot(ChooseSlotRequest(booking_id="b1", slot="tue-2pm"))
+    state = service.confirm(ConfirmBookingRequest(booking_id="b1"))
+    assert state.step == "booked"
 
 
-def test_a_tool_at_the_wrong_step_is_a_validation_error() -> None:
-    directory = MemorySlotDirectory((Slot("mon-9am"),))
+def test_status_reads_without_mutating() -> None:
+    directory = MemorySlotDirectory(("mon-9am",))
     repository = MemoryBookingRepository()
     service = BookingService(directory, repository)
-    booking = service.begin()
+    service.begin(BeginBookingRequest(booking_id="b1"))
+    service.provide_name(ProvideNameRequest(booking_id="b1", name="Ada"))
 
-    with pytest.raises(DomainError) as excinfo:
-        service.execute(booking, ToolName.CONFIRM_BOOKING, {})
+    state = service.status(StatusRequest(booking_id="b1"))
 
-    assert excinfo.value.kind is DomainKind.VALIDATION
-    assert repository.saved == []
+    assert state.step == "choose_slot"
+    assert state.offered_slots == ("mon-9am",)
+    assert repository.stored["b1"].step == "choose_slot"
 
 
 def test_an_infrastructure_failure_passes_through_untranslated() -> None:
     service = BookingService(DownSlotDirectory(), MemoryBookingRepository())
-    booking = service.begin()
+    service.begin(BeginBookingRequest(booking_id="b1"))
 
-    with pytest.raises(InfraError):
-        service.execute(booking, ToolName.PROVIDE_NAME, {"name": "Ada"})
+    with pytest.raises(RuntimeError):
+        service.provide_name(ProvideNameRequest(booking_id="b1", name="Ada"))

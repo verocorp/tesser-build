@@ -1,66 +1,81 @@
-# spike-llmport — the LLM tool-call port, single-sourced and total
+# spike-llmport — the LLM tool-call edge as a conformant bounded context
 
-A workflow application service whose next step is decided by an LLM tool
-call, built so that the tool surface is **data owned by the application**,
-not code owned by the adapter. One worked context (`scheduling/`, an
-appointment-booking flow) in the `ts.*` shell idiom, plus a LiveKit Agents
-translation kept deliberately thin.
+A workflow whose next step is decided by an LLM tool call, built as a real
+`scheduling` context in the `ts.*` shell idiom and held to the spike-shells
+bar: **sigcheck reports zero findings over this tree**, mypy --strict and
+pytest gate the pure modules in CI.
 
-## The design points, each locked by a test
+## The shape
 
-- **One generic port operation, tools as values.** The LLM surface is
-  `llm_tools(booking)` — the allowed tool names for the current workflow
-  step, each with its schema. The adapter has zero per-tool code; the
-  question "does the adapter implement all N tools?" dissolves.
-- **Totality, three ways.** `allowed_tools` is an exhaustive match over
-  `Step`; `schema_for` and `parse` are exhaustive matches over `ToolName`;
-  the service's command dispatch is an exhaustive match over the command
-  union. All four end in `assert_never`, so mypy --strict proves an
-  unhandled case at type-check time (`test_tools.py` re-proves it at
-  runtime by iterating the enums).
-- **Invocation-time values, constrained twice from one source.** The slots
-  a caller may choose exist only at request-build time. `schema_for` embeds
-  them as a JSON-schema `enum` (constraining generation), and the aggregate
-  re-validates on execution (authoritative — state can move between schema
-  build and tool execution). Both derive from `booking.offered_slots()`, so
-  they cannot drift (`test_the_choose_slot_schema_offers_exactly_the_current_slots`,
-  `test_a_slot_taken_between_choice_and_confirm_reoffers_fresh_slots`).
-- **Three-way error mapping.** Model-correctable kinds (`validation`,
-  `not_found`, `conflict`) map to an LLM-visible message via the exhaustive
-  `llm_visible_message`; `InfraError` passes through untranslated — the
-  wiring halts the session explicitly, because the framework would
-  otherwise feed the model an opaque error and keep going.
+```
+scheduling/
+  client.py       requests/responses (primitive DTOs) + SchedulingClient
+  domain.py       Step/CustomerName/Slot VOs, Booking aggregate, step constants
+  application.py  BookingParts, SlotDirectory + BookingRepository ports, BookingService
+  adapters/
+    handlers.py   LlmToolHandler — the LLM wire: tool vocabulary, schemas, dispatch
+    livekit.py    SchedulingAgent — the LiveKit translation over the handler
+tests/            fakes (ports doubled by hand) + domain/application/handler tests
+```
 
-## The LiveKit translation (`scheduling/livekit_wiring.py`)
+The division of labor the checkers enforce:
 
-Not CI-checked and not covered by these tests — it needs `livekit-agents`
-installed and a real session to exercise. It leans on four behaviors read
-in the LiveKit Agents source (August 2026), not yet exercised here:
+- **The service speaks only Requests and Responses** — one `ts.Request` in,
+  one `ts.Response` out, per use case (`begin`, `provide_name`, `choose_slot`,
+  `confirm`, `reoffer`, `status`), each body inline and under ten lines. The
+  booking is loaded from parts, driven through one guarded transition, and
+  decomposed back to parts; a rejected transition persists nothing.
+- **Ports speak records, never domain objects** — `SlotDirectory` and
+  `BookingRepository` carry strings and `BookingParts` only.
+- **The LLM wire lives entirely in the adapter.** `handlers.py` owns the tool
+  names, the JSON schemas (the choose-slot schema embeds the *current* offered
+  slots as an enum, rebuilt from every response), the raw-argument parsing,
+  and the tool→use-case dispatch. The context below it never hears the word
+  "tool".
+- **The conflict choreography is edge behavior.** A confirm that fails
+  because the slot was taken makes the adapter call the `reoffer` use case and
+  re-raise with the fresh slots in the message — the model sees what is now
+  bookable; the service stays four-step.
+- **`adapters/livekit.py`** translates the handler onto LiveKit Agents:
+  `function_tool(raw_schema=...)` per schema, one shim, `ToolError` for
+  `ValueError` (model-correctable, with a tools rebind), halt on anything
+  else. It is in sigcheck's walk (pure AST) but outside the mypy/pytest gate —
+  it needs `livekit-agents` installed and a real session to exercise.
 
-- `function_tool(handler, raw_schema=...)` builds a tool from a plain dict,
-  so the tool list is generated from `llm_tools()` in a loop; the handler
-  receives the whole `raw_arguments` dict unbound.
-- Raising `ToolError(message)` feeds the message back to the model, which
-  gets another turn — that is the auto-retry. Any other exception is
-  sanitized to a generic error and the loop continues, which is why the
-  wiring handles `InfraError` explicitly.
-- `Agent.update_tools(...)` swaps the tool list mid-session; the shim
-  rebinds after every execution so schemas always reflect current state.
-- The LLM plugin's `chat(chat_ctx=, tools=)` runs without a session — the
-  right surface for adapter-tier evals (single decisions; no retry loop
-  there).
+## What conformance cost — the collisions worth knowing
+
+Restructuring to zero findings surfaced three places where the rulebook and
+the original design genuinely collided:
+
+- **The error-kind taxonomy is not expressible.** The settled error norm
+  (closed kind set, `DomainError` with kind-as-field, exhaustive
+  `status_for`-style mappers) has no shell: an exception class or an enum in a
+  role module is "declares no ts.* base". This tree does what spike-shells
+  does — the domain raises `ValueError` — and the edge rule collapses to
+  "`ValueError` is model-correctable, anything else halts". The
+  validation/not-found/conflict distinction is gone from the types; an errors
+  block for the rulebook is the open gap.
+- **`assert_never` totality became test totality.** Closed sets are `Final`
+  string constants, so the exhaustive-match proofs over steps and tool names
+  moved from mypy to tests (`test_the_tool_map_covers_exactly_the_domain_steps`
+  iterates both sets).
+- **Step literals exist twice.** The domain owns its step constants; the
+  adapter keys `TOOLS_FOR_STEP` on the strings that cross in DTOs, and the
+  import matrix forbids it from importing the domain's constants. The same
+  totality test is the drift tripwire.
 
 ## Run it
 
 ```sh
+PYTHONPATH=examples/spike-shells:tesser-py python3 -m sigcheck examples/spike-llmport
 cd examples/spike-llmport
-MYPYPATH=.:../../tesser-py mypy --strict scheduling/domain.py scheduling/tools.py \
-  scheduling/application.py scheduling/llm.py tests
+MYPYPATH=.:../../tesser-py mypy --strict scheduling/domain.py scheduling/client.py \
+  scheduling/application.py scheduling/adapters/handlers.py tests
 pytest -q
 ```
 
 ## Non-goals
 
-This spike is about the port shape. It does not carry a `client/` surface,
-sigcheck conformance, or evals; the eval tiers this design supports are the
-subject of the test-structure ruling, not this code.
+No wiring module (no concrete gateways exist to select — the precedent is
+spike-shells' contexts), no srv/bootstrap, no evals. The eval tiers this
+design supports are the subject of the test-structure ruling, not this code.
