@@ -99,9 +99,10 @@ jobs:
   spike-llmport:
     # Gates the LLM tool-call port spike at the spike-shells bar: sigcheck
     # over the whole tree, then mypy --strict + pytest on the pure modules.
-    # adapters/livekit.py is in sigcheck's walk (pure AST) but outside the
-    # mypy file list — it imports livekit-agents, which is not installed in
-    # CI; the spike README records that boundary.
+    # Modules importing livekit-agents (scheduling/adapters/livekit.py and
+    # srv/voice/agent.py) are in sigcheck's walk (pure AST) but excluded
+    # from the mypy crawl — livekit-agents is not installed in CI; the
+    # spike README records that boundary.
     name: spike-llmport (sigcheck + mypy --strict + pytest)
     runs-on: ubuntu-latest
     steps:
@@ -111,16 +112,26 @@ jobs:
           python-version: '3.12'
       - name: Install dev tooling
         run: pip install -r examples/spike-llmport/requirements-dev.txt
-      - name: examples/spike-llmport — sigcheck (ratcheted on the host-vocabulary gap)
-        # srv/voice/agent.py is the option-B evidence for the agentic
-        # host/handler question: its three class findings are the exact
-        # host-vocabulary gap the ruling must fill (README "The host/handler
-        # split"). Ratcheted like python-app's gate: baseline entries are the
-        # accepted evidence, anything new fails, a crash fails closed. At a
-        # host-vocabulary ruling, burn the baseline and restore the plain step.
+      - name: examples/spike-llmport — sigcheck (ratcheted on the two named gaps)
+        # The ratchet carries exactly one finding per open ruling this spike
+        # evidences: srv.voice.agent.ToolAgent is a class (the host-vocabulary
+        # gap) and voicewire belongs to no governed package (the root-module-
+        # homes gap) — see README "The host/handler split". Ratcheted like
+        # python-app's gate: baseline entries are the accepted evidence,
+        # anything new fails, a stale entry fails, a crash or unexpected exit
+        # fails closed. When the rulings land, burn the baseline and restore
+        # the plain zero-findings step.
         working-directory: examples/spike-llmport
         run: |
-          PYTHONPATH=../spike-shells:../../tesser-py python3 -m sigcheck . > findings.txt 2> sigcheck-stderr.txt || true
+          set +e
+          PYTHONPATH=../spike-shells:../../tesser-py python3 -m sigcheck . > findings.txt 2> sigcheck-stderr.txt
+          _SIGCHECK_EXIT=$?
+          set -e
+          if [ "$_SIGCHECK_EXIT" -gt 1 ]; then
+            cat sigcheck-stderr.txt
+            echo "sigcheck exited $_SIGCHECK_EXIT — failing closed"
+            exit 1
+          fi
           if [ -s sigcheck-stderr.txt ]; then
             cat sigcheck-stderr.txt
             if grep -q "Traceback" sigcheck-stderr.txt; then
@@ -146,7 +157,7 @@ jobs:
       - name: examples/spike-llmport — mypy --strict + pytest
         working-directory: examples/spike-llmport
         run: |
-          MYPYPATH=.:../../tesser-py mypy --strict voicewire.py scheduling/domain.py scheduling/client.py scheduling/application.py scheduling/adapters/handlers.py tests
+          MYPYPATH=.:../../tesser-py mypy --strict --exclude 'scheduling/adapters/livekit\.py' scheduling voicewire.py tests
           pytest -q
 
   python-app-example:

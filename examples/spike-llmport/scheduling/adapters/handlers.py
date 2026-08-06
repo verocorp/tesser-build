@@ -64,8 +64,16 @@ class LlmToolHandler(ts.Handler):
                 client.ConfirmBookingRequest(booking_id=self._booking_id)
             )
         except ValueError as err:
-            state = self._client.reoffer(client.ReofferRequest(booking_id=self._booking_id))
-            offered = ", ".join(state.offered_slots)
+            state = self._client.status(client.StatusRequest(booking_id=self._booking_id))
+            if state.step != "confirm":
+                raise
+            try:
+                fresh = self._client.reoffer(
+                    client.ReofferRequest(booking_id=self._booking_id)
+                )
+            except ValueError as exhausted:
+                raise ValueError(f"{err}; {exhausted}") from err
+            offered = ", ".join(fresh.offered_slots)
             raise ValueError(f"{err}; now available: {offered}") from err
 
     def _schema(self, tool: str, state: client.BookingStateResponse) -> dict[str, object]:
@@ -93,15 +101,17 @@ class LlmToolHandler(ts.Handler):
                     "additionalProperties": False,
                 },
             }
-        return {
-            "name": tool,
-            "description": "Book the chosen slot after the caller confirms.",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "additionalProperties": False,
-            },
-        }
+        if tool == CONFIRM_BOOKING:
+            return {
+                "name": tool,
+                "description": "Book the chosen slot after the caller confirms.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": False,
+                },
+            }
+        raise ValueError(f"unknown tool {tool!r}")
 
 
 @ts.function

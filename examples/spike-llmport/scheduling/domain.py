@@ -31,6 +31,8 @@ class CustomerName(ts.ValueObject):
     def __init__(self, value: str) -> None:
         if not value.strip():
             raise ValueError("name must be non-empty")
+        if len(value.strip()) > 200:
+            raise ValueError("name is too long")
         object.__setattr__(self, "_value", value.strip())
 
     def __str__(self) -> str:
@@ -44,6 +46,8 @@ class Slot(ts.ValueObject):
     def __init__(self, label: str) -> None:
         if not label.strip():
             raise ValueError("slot label must be non-empty")
+        if len(label.strip()) > 100:
+            raise ValueError("slot label is too long")
         object.__setattr__(self, "_label", label.strip())
 
     def __str__(self) -> str:
@@ -68,6 +72,18 @@ class Booking(ts.AggregateRoot):
         self._name = CustomerName(spec.name) if spec.name else None
         self._chosen = Slot(spec.chosen) if spec.chosen else None
         self._offered = tuple(Slot(label) for label in spec.offered)
+        if spec.step != COLLECT_NAME and self._name is None:
+            raise ValueError(f"step {spec.step} requires a name")
+        if spec.step == COLLECT_NAME and (self._name or self._chosen or self._offered):
+            raise ValueError("step collect_name carries no name, slot, or offers")
+        if spec.step in (CHOOSE_SLOT, CONFIRM) and not self._offered:
+            raise ValueError(f"step {spec.step} requires offered slots")
+        if spec.step == CHOOSE_SLOT and self._chosen is not None:
+            raise ValueError("step choose_slot carries no chosen slot")
+        if spec.step in (CONFIRM, BOOKED) and self._chosen is None:
+            raise ValueError(f"step {spec.step} requires a chosen slot")
+        if self._chosen is not None and self._chosen not in self._offered:
+            raise ValueError("the chosen slot must be among the offered slots")
 
     def step_label(self) -> str:
         return str(self._step)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable
 
 import tesser.adapters as ts
@@ -17,9 +18,14 @@ class SchedulingAgent(Agent, ts.Handler):
         super().__init__(instructions=handler.instructions())
         self._handler = handler
         self._halt = halt
+        self._lock = asyncio.Lock()
 
     async def on_enter(self) -> None:
-        await self._rebind(self._handler.begin())
+        try:
+            await self._rebind(self._handler.begin())
+        except Exception:
+            await self._halt()
+            raise
 
     async def _rebind(self, state: client.BookingStateResponse) -> None:
         await self.update_tools(
@@ -31,15 +37,24 @@ class SchedulingAgent(Agent, ts.Handler):
 
     def _shim(self, schema: dict[str, object]) -> Callable[..., Awaitable[str]]:
         async def call(raw_arguments: dict[str, object]) -> str:
-            try:
-                state = self._handler.dispatch(str(schema["name"]), raw_arguments)
-            except ValueError as err:
-                await self._rebind(self._handler.status())
-                raise ToolError(str(err)) from err
-            except Exception:
-                await self._halt()
-                raise
-            await self._rebind(state)
-            return state.reply
+            async with self._lock:
+                try:
+                    state = self._handler.dispatch(str(schema["name"]), raw_arguments)
+                except ValueError as err:
+                    try:
+                        await self._rebind(self._handler.status())
+                    except Exception:
+                        await self._halt()
+                        raise
+                    raise ToolError(str(err)) from err
+                except Exception:
+                    await self._halt()
+                    raise
+                try:
+                    await self._rebind(state)
+                except Exception:
+                    await self._halt()
+                    raise
+                return state.reply
 
         return call

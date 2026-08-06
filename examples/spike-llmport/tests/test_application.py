@@ -28,6 +28,9 @@ class MemoryBookingRepository(application.BookingRepository):
     def __init__(self) -> None:
         self.stored: dict[str, application.BookingParts] = {}
 
+    def has(self, booking_id: str) -> bool:
+        return booking_id in self.stored
+
     def get(self, booking_id: str) -> application.BookingParts:
         return self.stored[booking_id]
 
@@ -130,3 +133,43 @@ def test_an_infrastructure_failure_passes_through_untranslated() -> None:
 
     with pytest.raises(RuntimeError):
         service.provide_name(client.ProvideNameRequest(booking_id="b1", name="Ada"))
+
+
+def test_begin_resumes_an_in_flight_booking() -> None:
+    directory = MemorySlotDirectory(("mon-9am",))
+    repository = MemoryBookingRepository()
+    service = application.BookingService(directory, repository)
+    service.begin(client.BeginBookingRequest(booking_id="b1"))
+    service.provide_name(client.ProvideNameRequest(booking_id="b1", name="Ada"))
+
+    state = service.begin(client.BeginBookingRequest(booking_id="b1"))
+
+    assert state.step == "choose_slot"
+    assert state.offered_slots == ("mon-9am",)
+    assert state.reply == "continue the booking"
+    assert repository.stored["b1"].name == "Ada"
+
+
+def test_begin_resumes_a_booked_booking_without_touching_it() -> None:
+    directory = MemorySlotDirectory(("mon-9am",))
+    repository = MemoryBookingRepository()
+    service = application.BookingService(directory, repository)
+    service.begin(client.BeginBookingRequest(booking_id="b1"))
+    service.provide_name(client.ProvideNameRequest(booking_id="b1", name="Ada"))
+    service.choose_slot(client.ChooseSlotRequest(booking_id="b1", slot="mon-9am"))
+    service.confirm(client.ConfirmBookingRequest(booking_id="b1"))
+
+    state = service.begin(client.BeginBookingRequest(booking_id="b1"))
+
+    assert state.step == "booked"
+    assert repository.stored["b1"].step == "booked"
+    assert directory.reserved == [("mon-9am", "Ada")]
+
+
+def test_an_unknown_booking_id_is_not_a_domain_rejection() -> None:
+    service = application.BookingService(
+        MemorySlotDirectory(("mon-9am",)), MemoryBookingRepository()
+    )
+
+    with pytest.raises(KeyError):
+        service.status(client.StatusRequest(booking_id="ghost"))

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Protocol
+from typing import Protocol, TypeVar
 
 
 class ToolState(Protocol):
@@ -9,16 +9,17 @@ class ToolState(Protocol):
     reply: str
 
 
-class ToolHandler(Protocol):
+S = TypeVar("S", bound=ToolState)
+
+
+class ToolHandler(Protocol[S]):
 
     def instructions(self) -> str: ...
 
-    def begin(self) -> ToolState: ...
+    def begin(self) -> S: ...
 
-    def status(self) -> ToolState: ...
+    def status(self) -> S: ...
 
-    def tools(self, state: ToolState) -> tuple[dict[str, object], ...]: ...
+    def tools(self, state: S) -> tuple[dict[str, object], ...]: ...
 
-    def dispatch(
-        self, tool: str, raw_arguments: Mapping[str, object]
-    ) -> ToolState: ...
+    def dispatch(self, tool: str, raw_arguments: Mapping[str, object]) -> S: ...

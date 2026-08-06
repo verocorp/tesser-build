@@ -28,6 +28,8 @@ class SlotDirectory(ts.Port, Protocol):
 
 class BookingRepository(ts.Port, Protocol):
 
+    def has(self, booking_id: str) -> bool: ...
+
     def get(self, booking_id: str) -> BookingParts: ...
 
     def save(self, booking_id: str, parts: BookingParts) -> None: ...
@@ -40,6 +42,11 @@ class BookingService(ts.ApplicationService):
         self._repository = repository
 
     def begin(self, request: client.BeginBookingRequest) -> client.BookingStateResponse:
+        if self._repository.has(request.booking_id):
+            parts = self._repository.get(request.booking_id)
+            booking = domain.Booking(domain.BookingSpec(step=parts.step, name=parts.name, chosen=parts.chosen, offered=parts.offered))
+            return client.BookingStateResponse(step=booking.step_label(),
+                offered_slots=booking.offered_labels(), reply="continue the booking")
         booking = domain.Booking(domain.BookingSpec(step=domain.COLLECT_NAME, name="", chosen="", offered=()))
         self._repository.save(request.booking_id, BookingParts(step=booking.step_label(),
             name=booking.name_label(), chosen=booking.slot_label(), offered=booking.offered_labels()))

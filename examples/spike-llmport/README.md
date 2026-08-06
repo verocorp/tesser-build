@@ -3,10 +3,11 @@
 A workflow whose next step is decided by an LLM tool call, built as a real
 `scheduling` context in the `ts.*` shell idiom and held to the spike-shells
 bar. The `scheduling` context is sigcheck-clean; the tree carries exactly
-three accepted findings, all in `srv/voice/agent.py` — deliberate evidence
-for the host-vocabulary ruling (see "The host/handler split" below),
-ratcheted in CI so nothing new can hide behind them. mypy --strict and
-pytest gate the pure modules.
+two accepted findings — one in `srv/voice/agent.py` (a class in srv: the
+host-vocabulary gap) and one for `voicewire.py` (no governed package: the
+root-module-homes gap) — deliberate evidence for those two rulings (see
+"The host/handler split" below), ratcheted in CI so nothing new can hide
+behind them. mypy --strict and pytest gate the pure modules.
 
 ## The shape
 
@@ -111,10 +112,52 @@ CI step comes back.
 ```sh
 PYTHONPATH=examples/spike-shells:tesser-py python3 -m sigcheck examples/spike-llmport
 cd examples/spike-llmport
-MYPYPATH=.:../../tesser-py mypy --strict scheduling/domain.py scheduling/client.py \
-  scheduling/application.py scheduling/adapters/handlers.py tests
+MYPYPATH=.:../../tesser-py mypy --strict --exclude 'scheduling/adapters/livekit\.py' \
+  scheduling voicewire.py tests
 pytest -q
 ```
+
+## Documented production boundaries
+
+This is teaching code; five simplifications are deliberate, named here so
+they are copied knowingly or not at all:
+
+- **The wire contract is synchronous.** `voicewire.ToolHandler` and every
+  port below it are sync; the hosts call `dispatch` inside the event loop.
+  A real implementation with real IO must either make the contract async or
+  have the host absorb the hop (`await asyncio.to_thread(...)` at the three
+  handler call sites). The per-session `asyncio.Lock` in both agents
+  serializes tool calls; it does not unblock the loop.
+- **Ports must not raise `ValueError` for infrastructure faults.** The
+  edge's whole classification is "`ValueError` is model-correctable,
+  anything else halts" (the collapsed error-kind taxonomy). A repository or
+  directory that raises `ValueError` on a driver fault would be misrouted
+  to the model as correctable. The error-shell ruling (`ts.Error`) replaces
+  this contract-by-convention with types.
+- **`confirm` reserves before it saves.** A `save` failure after a
+  successful `reserve` leaves the reservation held with the booking at
+  `confirm` — an operator-recoverable window, not silent loss, but real.
+  The outbox/idempotency-key answer is out of scope here.
+- **`save` carries no concurrency token.** Concurrent tool calls could
+  interleave read-modify-write. The agents serialize per session with a
+  lock; cross-session writers need an expected-version parameter on the
+  port.
+- **A slot's label is its identity.** Two distinct resources with equal
+  labels would collide; a production directory needs an opaque slot id
+  beside the display label. Likewise `booked` is terminal (no cancel, no
+  name correction) and an exhausted directory surfaces as a combined
+  "taken; no slots are available" error rather than a terminal state —
+  state-machine growth left for a consumer with real requirements.
+
+`scheduling/adapters/livekit.py` (option A) is a frozen mirror of
+`srv/voice/agent.py` (option B): edit B, mirror A, delete A when the
+host-vocabulary ruling lands.
+
+One more rulebook collision surfaced by this tree: sigcheck requires
+`import tesser.context as ts` in every srv module, but `srv/voice/agent.py`
+never uses `ts`, so the repo's own ruff charter (F401) would flag the
+import the rulebook mandates. The host-vocabulary ruling needs to resolve
+the pair.
 
 ## Non-goals
 
