@@ -24,6 +24,15 @@ def _pkg(root: pathlib.Path, name: str, init: str = "") -> pathlib.Path:
     return d
 
 
+CLIENT = "from typing import Protocol\n\nclass Client(Protocol):\n    def ping(self) -> None: ...\n"
+
+
+def _ctx(root: pathlib.Path, name: str, client: str = CLIENT) -> pathlib.Path:
+    d = _pkg(root, name)
+    (d / "client.py").write_text(client, encoding="utf-8")
+    return d
+
+
 def test_totality_guard_teeth_flags_clientless_context(tmp_path: pathlib.Path) -> None:
     _pkg(tmp_path, "billing", '"""a context that forgot its Client"""\n')
     d = classify_root(tmp_path)
@@ -32,23 +41,28 @@ def test_totality_guard_teeth_flags_clientless_context(tmp_path: pathlib.Path) -
 
 
 def test_discovery_teeth_finds_client_bearing_context(tmp_path: pathlib.Path) -> None:
-    _pkg(tmp_path, "billing", "from billing.client import Client\n")
+    _ctx(tmp_path, "billing")
     d = classify_root(tmp_path)
     assert d.contexts == ("billing",)
     assert d.unclassified == ()
 
 
 def test_exposes_client_detects_direct_definition(tmp_path: pathlib.Path) -> None:
-    _pkg(
-        tmp_path,
-        "billing",
-        "from typing import Protocol\n\nclass Client(Protocol):\n    def ping(self) -> None: ...\n",
+    _ctx(tmp_path, "billing")
+    assert exposes_client(tmp_path / "billing")
+
+
+def test_exposes_client_detects_a_client_package(tmp_path: pathlib.Path) -> None:
+    d = _pkg(tmp_path, "billing")
+    (d / "client").mkdir()
+    (d / "client" / "__init__.py").write_text(
+        "from billing.client.iface import Client\n", encoding="utf-8"
     )
     assert exposes_client(tmp_path / "billing")
 
 
 def test_exposes_client_detects_asname_reexport(tmp_path: pathlib.Path) -> None:
-    _pkg(tmp_path, "billing", "from billing.impl import ApiClient as Client\n")
+    _ctx(tmp_path, "billing", "from billing.impl import ApiClient as Client\n")
     assert exposes_client(tmp_path / "billing")
 
 
@@ -79,8 +93,8 @@ def test_namespace_package_cannot_hide(tmp_path: pathlib.Path) -> None:
     assert d.unclassified == ("billing",)
 
 
-def test_broken_init_cannot_hide(tmp_path: pathlib.Path) -> None:
-    _pkg(tmp_path, "billing", "def broken(:\n")
+def test_broken_client_module_cannot_hide(tmp_path: pathlib.Path) -> None:
+    _ctx(tmp_path, "billing", "def broken(:\n")
     d = classify_root(tmp_path)
     assert d.unclassified == ("billing",)
 
@@ -95,23 +109,23 @@ def test_extended_app_level_set(tmp_path: pathlib.Path) -> None:
 def test_dead_conditional_client_binding_does_not_count(tmp_path: pathlib.Path) -> None:
     """A dead import cannot smuggle a package past the totality guard
     (cumulative review F2/C1: ast.walk over-matched nested bindings)."""
-    _pkg(tmp_path, "billing", "if False:\n    from billing.client import Client\n")
+    _ctx(tmp_path, "billing", "if False:\n    from billing.impl import ApiClient as Client\n")
     assert not exposes_client(tmp_path / "billing")
     assert classify_root(tmp_path).unclassified == ("billing",)
 
 
 def test_type_checking_only_import_does_not_count(tmp_path: pathlib.Path) -> None:
-    _pkg(
+    _ctx(
         tmp_path,
         "billing",
         "from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n"
-        "    from billing.client import Client\n",
+        "    from billing.impl import ApiClient as Client\n",
     )
     assert not exposes_client(tmp_path / "billing")
 
 
 def test_nested_class_client_does_not_count(tmp_path: pathlib.Path) -> None:
-    _pkg(tmp_path, "billing", "class Outer:\n    class Client:\n        pass\n")
+    _ctx(tmp_path, "billing", "class Outer:\n    class Client:\n        pass\n")
     assert not exposes_client(tmp_path / "billing")
 
 
@@ -123,7 +137,7 @@ def test_absolute_root_under_hidden_ancestor_still_discovers(
     discover normally (cumulative review F1: p.parts included ancestors)."""
     root = tmp_path / ".hidden" / "app"
     root.mkdir(parents=True)
-    _pkg(root, "billing", "from billing.client import Client\n")
+    _ctx(root, "billing")
     _pkg(root, "reports", '"""forgot its Client"""\n')
     d = classify_root(root.resolve())
     assert d.contexts == ("billing",)
@@ -141,8 +155,8 @@ def test_vendored_tree_inside_root_dir_is_pruned(tmp_path: pathlib.Path) -> None
 
 
 def test_multiple_packages_classify_sorted(tmp_path: pathlib.Path) -> None:
-    _pkg(tmp_path, "widgets", "from widgets.client import Client\n")
-    _pkg(tmp_path, "billing", "from billing.client import Client\n")
+    _ctx(tmp_path, "widgets")
+    _ctx(tmp_path, "billing")
     _pkg(tmp_path, "reports", "x = 1\n")
     _pkg(tmp_path, "alerts", "x = 1\n")
     d = classify_root(tmp_path)
@@ -175,7 +189,7 @@ def test_totality_errors_name_package_and_fix(tmp_path: pathlib.Path) -> None:
     errors = totality_errors(tmp_path, classify_root(tmp_path))
     assert len(errors) == 1
     assert "reports" in errors[0]
-    assert "Client" in errors[0] and "__init__.py" in errors[0]
+    assert "Client" in errors[0] and "client.py" in errors[0]
     assert "--app-level" in errors[0]
 
 
@@ -187,11 +201,7 @@ def test_totality_errors_flag_empty_app_root(tmp_path: pathlib.Path) -> None:
 
 
 def _good_tree(tmp_path: pathlib.Path) -> pathlib.Path:
-    _pkg(tmp_path, "billing", "from billing.client import Client\n")
-    (tmp_path / "billing" / "client.py").write_text(
-        "from typing import Protocol\n\nclass Client(Protocol):\n    def ping(self) -> None: ...\n",
-        encoding="utf-8",
-    )
+    _ctx(tmp_path, "billing")
     _pkg(tmp_path, "bootstrap", "x = 1\n")
     return tmp_path
 
@@ -257,28 +267,24 @@ def test_cli_explicit_paths_scope_checks_but_discovery_still_total(
     assert "reports" in err
 
 
-def test_totality_error_distinguishes_unexported_client(
+def test_totality_error_distinguishes_clientless_client_module(
     tmp_path: pathlib.Path,
 ) -> None:
-    """A context whose client.py exists but is not re-exported gets the
-    precise three-line fix, not the generic "unclassified" message —
-    "you have no seam" and "your seam isn't surfaced" are different defects."""
-    _pkg(tmp_path, "clinical", "")
-    (tmp_path / "clinical" / "client.py").write_text(
-        "from typing import Protocol\n\nclass Client(Protocol):\n    def ping(self) -> None: ...\n",
-        encoding="utf-8",
-    )
+    """A context whose client.py exists but exposes no Client gets the
+    precise fix, not the generic "unclassified" message — "you have no
+    public interface" and "your client module doesn't surface it" are
+    different defects."""
+    _ctx(tmp_path, "clinical", "class ReportView:\n    pass\n")
     errors = totality_errors(tmp_path, classify_root(tmp_path))
     assert len(errors) == 1
-    assert "does not re-export Client" in errors[0]
-    assert "from clinical.client import Client" in errors[0]
+    assert "client.py exists but does not expose Client" in errors[0]
     assert "unclassified" not in errors[0]
 
 
 def test_classify_root_exclude_skips_declared_packages(
     tmp_path: pathlib.Path,
 ) -> None:
-    _pkg(tmp_path, "billing", "from billing.client import Client\n")
+    _ctx(tmp_path, "billing")
     _pkg(tmp_path, "spikes", "x = 1\n")
     _pkg(tmp_path, "demo_api", "x = 1\n")
     assert classify_root(tmp_path).unclassified == ("demo_api", "spikes")
@@ -292,7 +298,7 @@ def test_classify_root_exclude_skips_even_a_client_bearing_package(
 ) -> None:
     """An exclusion is total: an excluded package never counts as a context,
     so excluding your only context trips the no-contexts failure loudly."""
-    _pkg(tmp_path, "billing", "from billing.client import Client\n")
+    _ctx(tmp_path, "billing")
     d = classify_root(tmp_path, exclude=frozenset({"billing"}))
     assert d.contexts == () and d.unclassified == ()
     errors = totality_errors(tmp_path, d)

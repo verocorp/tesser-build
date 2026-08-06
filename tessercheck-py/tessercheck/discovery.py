@@ -1,10 +1,13 @@
 """Context discovery + the totality guard — the classify-then-check move,
 ported from the verified impl (``examples/python-app/tests/discovery.py``).
 
-A bounded context is ANY root-level package whose ``__init__.py`` exposes a
-``Client`` (defined there or re-exported) — contexts are *discovered by their
-seam*, never declared and never inferred (settled: eng review 2026-07-19,
-architecture 3). The totality guard makes discovery fail-safe: every
+A bounded context is ANY root-level package whose client module
+(``client.py``, or ``client/__init__.py`` as it grows) exposes a ``Client``
+(defined there or re-exported) — contexts are *discovered by their public
+interface*, never declared and never inferred (settled: eng review
+2026-07-19, architecture 3; client-module placement: Chris ruling
+2026-08-05, superseding the ``__init__.py`` re-export marker — a context's
+``__init__.py`` is empty). The totality guard makes discovery fail-safe: every
 root-level package must classify as a known app-level piece or a
 Client-bearing context; anything else is "unclassified" and fails loudly, so
 a context that forgot its ``Client`` (the ``reports/`` defect class) cannot
@@ -54,30 +57,30 @@ class Discovery:
 
 
 def exposes_client(pkg_dir: pathlib.Path) -> bool:
-    """The discovery key: does the package's top level expose a ``Client``?
+    """The discovery key: does the package's client module expose a ``Client``?
 
-    True for a ``class Client`` defined in ``__init__.py`` or any
-    ``from ... import`` that binds the name ``Client`` (directly or via
-    ``as Client``) — **as a top-level statement only**. A binding nested in
-    a function, class, or conditional (``if False:``, ``if TYPE_CHECKING:``)
-    is not a public package attribute at runtime and does not count — a
-    dead import cannot smuggle a package past the totality guard. Missing
-    or unparsable ``__init__.py`` is False — the caller classifies the
-    package as unclassified, never exempt.
+    True for a ``class Client`` defined in ``client.py`` (or
+    ``client/__init__.py``) or any ``from ... import`` there that binds the
+    name ``Client`` (directly or via ``as Client``) — **as a top-level
+    statement only**. A binding nested in a function, class, or conditional
+    (``if False:``, ``if TYPE_CHECKING:``) is not a public module attribute
+    at runtime and does not count — a dead import cannot smuggle a package
+    past the totality guard. Missing or unparsable client module is False —
+    the caller classifies the package as unclassified, never exempt.
     """
-    init = pkg_dir / "__init__.py"
-    if not init.is_file():
-        return False
-    try:
-        tree = ast.parse(init.read_text(encoding="utf-8"))
-    except (SyntaxError, ValueError):
-        return False
-    for node in tree.body:
-        if isinstance(node, ast.ImportFrom):
-            if any((alias.asname or alias.name) == "Client" for alias in node.names):
+    for candidate in (pkg_dir / "client.py", pkg_dir / "client" / "__init__.py"):
+        if not candidate.is_file():
+            continue
+        try:
+            tree = ast.parse(candidate.read_text(encoding="utf-8"))
+        except (SyntaxError, ValueError):
+            continue
+        for node in tree.body:
+            if isinstance(node, ast.ImportFrom):
+                if any((alias.asname or alias.name) == "Client" for alias in node.names):
+                    return True
+            if isinstance(node, ast.ClassDef) and node.name == "Client":
                 return True
-        if isinstance(node, ast.ClassDef) and node.name == "Client":
-            return True
     return False
 
 
@@ -147,16 +150,15 @@ def totality_errors(
     for name in discovery.unclassified:
         if (root / name / "client.py").is_file():
             errors.append(
-                f"{root / name}: {name}/client.py exists but "
-                f"{name}/__init__.py does not re-export Client — add "
-                f"'from {name}.client import Client' to {name}/__init__.py "
-                "(skills/tesser-build/public-interface.md); the seam is "
-                "discovered through the package top level only"
+                f"{root / name}: {name}/client.py exists but does not expose "
+                f"Client — define 'class Client' (or re-export it) at the top "
+                f"level of {name}/client.py "
+                "(skills/tesser-build/public-interface.md)"
             )
         else:
             errors.append(
                 f"{root / name}: unclassified root-level package — a bounded "
-                f"context must expose Client from {name}/__init__.py "
+                f"context must expose Client from {name}/client.py "
                 "(skills/tesser-build/public-interface.md); app-level "
                 f"plumbing must be one of {', '.join(sorted(app_level))} "
                 "(extend with --app-level); a package that is not a context "
