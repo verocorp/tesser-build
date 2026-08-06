@@ -43,6 +43,8 @@ the exhaustion, and the README records the five deliberate production
 boundaries plus a newly surfaced rulebook collision (sigcheck mandates a
 srv shell import that ruff's F401 forbids).
 
+## [0.0.16.0] - 2026-08-06
+
 The import-totality wave: sigcheck's rulebook grows from 41 to 57 rules
 so that every `.py` file in a governed tree answers for its imports —
 what it may import, in what form, and whether it has a home at all.

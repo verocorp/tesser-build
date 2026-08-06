@@ -117,6 +117,11 @@ MYPYPATH=.:../../tesser-py mypy --strict --exclude 'scheduling/adapters/livekit\
 pytest -q
 ```
 
+The sigcheck run prints the two accepted findings and exits 1 — that is the
+expected state, not a break. CI compares the output against
+`sigcheck-ratchet` and fails only on a finding outside the baseline (or a
+baseline entry that has stopped firing).
+
 ## Documented production boundaries
 
 This is teaching code; five simplifications are deliberate, named here so
