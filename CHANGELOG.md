@@ -9,12 +9,13 @@ carries the analyzer package's own version — separate streams.)
 
 The LLM tool-call port spike: `examples/spike-llmport`, a `scheduling`
 bounded context whose next workflow step is decided by an LLM tool call,
-built in the `ts.*` shell idiom, sigcheck-conformant under the
-import-totality rulebook, and shaped to answer three standing questions
-with running code.
+built in the `ts.*` shell idiom under the import-totality rulebook (the
+`scheduling` context sigcheck-clean, the tree ratcheted at two accepted
+findings), and shaped to answer three standing questions with running
+code.
 
-The design: the tool surface is data owned by the application, not code
-owned by the adapter. The service exposes one-Request-one-Response use
+The design: the tool surface is data, not decorated host functions — and
+the context's edge owns all of it. The service exposes one-Request-one-Response use
 cases (`begin`/`provide_name`/`choose_slot`/`confirm`/`reoffer`/`status`);
 the LLM wire — tool vocabulary, JSON schemas with the offered slots
 embedded as a live enum, raw-argument parsing, tool-to-use-case dispatch,
