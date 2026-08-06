@@ -16,6 +16,45 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   - **Risk of waiting:** path-keyed state keeps accumulating; the move gets
     costlier.
 
+## Import-totality wave followups (2026-08-06, branch `worktree-io-import-restrictions`)
+
+- [ ] **python-app conformance + remove the sigcheck CI ratchet.** The wave's
+  rules (tesser exactly-once-as-ts, whole-tree totality, pure-core allowlist,
+  module-only aliased context imports) fire 173 findings on the freshly
+  migrated tree, so the zero-findings CI step became a count ratchet
+  (`examples/python-app/sigcheck-ratchet`, may only shrink).
+  - **Mechanical (~145):** 123 import-form conversions (`from x.client import Y`
+    → `import x.client as client`), 13 `@ts.function` declarations + 7
+    `import tesser.context as ts` in srv/bootstrap, 2 Final constants.
+  - **Blocked on the rulings below:** 9 srv/bootstrap classes, 5 homeless
+    modules, several pure-core hits.
+  - **Then:** lower the ratchet per fix; at zero delete `sigcheck-ratchet` and
+    restore the plain zero-findings step.
+- [ ] **Host-class vocabulary.** A class in srv/bootstrap always flags — no
+  shell exists for `Route`, `Match`, `HttpHost`, `CleanupStack`, `App`,
+  `HttpConfig`, `Config`. Decide: `tesser.srv` (Host/Request/Response) +
+  `tesser.app` (App/Config) shells per the 2026-08-02 package map, or relocate
+  the classes.
+- [ ] **Homeless root modules.** `errors`, `serialization`, `lifecycle`,
+  `cliwire`, `httpwire` belong to no governed package; ruling needed on where
+  app-level shared modules live. Same ruling resolves the pure-core hits where
+  domain imports `errors`/`serialization`.
+- [ ] **Pure-core allowlist candidates (from dogfood evidence only):**
+  `urllib.parse` in `campaign.domain.values` / `linkpolicy.domain.policy`
+  (pure parsing — likely admit), `copy` in `campaign.domain.short_link`
+  (pure — likely admit), `secrets` in `campaign.application.service` (ambient
+  entropy — likely inject through a port instead of admitting).
+- [ ] **Make rules.py conformant** (Chris 2026-08-06). The generator is
+  currently exempt via `TOOLING_MODULES` in the whole-tree totality rule;
+  make it conform (or rule where tooling lives) and shrink the exemption.
+- [ ] **conftest governance** (Chris 2026-08-06). The exemption is now named in
+  RULES.md; discuss governing conftest alongside the test-organization work.
+  Related: `tests.discovery` / `tests.support` fire the tests-package rule in
+  python-app, and `tests.test_shape` imports `tesser.context` — the same
+  test-organization pass should settle all three.
+- [ ] **Test-module annotation.** When tests declare themselves, flip
+  "a test module imports tesser.testing at most once, as ts" to exactly-once.
+
 ## Toolkit
 
 - [ ] **ValueObject-shape adoption decision + classifier support** (shipped as
