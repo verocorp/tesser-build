@@ -93,6 +93,14 @@ PRIMITIVES: Final[frozenset[str]] = frozenset({"str", "int", "float", "bool"})
 
 TOOLING_MODULES: Final[frozenset[str]] = frozenset({"rules"})
 
+CORE_ROLES: Final[frozenset[str]] = frozenset({"domain", "client", "application"})
+
+CORE_STDLIB: Final[dict[str, frozenset[str]]] = {
+    "domain": frozenset({"typing", "enum", "decimal", "fractions", "datetime", "math", "re", "ast"}),
+    "client": frozenset({"typing"}),
+    "application": frozenset({"typing"}),
+}
+
 DOMAIN_BLOCKS: Final[frozenset[str]] = frozenset({"aggregate", "entity", "valueobject"})
 
 
@@ -550,6 +558,13 @@ class Codebase(ts.AggregateRoot):
                             "only through its client, and only from gateways and wiring"
                         )
                     )
+            elif role in CORE_ROLES and pieces[0] not in CORE_STDLIB[role]:
+                found.append(
+                    Violation(
+                        f"{module.name()}:{lineno} imports {target}; domain, client, and application "
+                        "import only their context, their tesser package, and the pure stdlib"
+                    )
+                )
         return tuple(found)
 
     def _app_import_violations(

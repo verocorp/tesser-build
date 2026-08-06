@@ -915,6 +915,50 @@ def test_srv_and_bootstrap_statement_totality(tmp_path: Path) -> None:
     )
 
 
+def test_pure_core_stdlib_allowlist(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "io1/domain.py",
+        "import os\n"
+        "import datetime\n"
+        "import tesser.domain as ts\n"
+        "class StampSpec(ts.Spec):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    write_module(
+        tmp_path,
+        "io1/client.py",
+        "import datetime\n"
+        "import tesser.context as ts\n"
+        "class StampRequest(ts.Request):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    write_module(
+        tmp_path,
+        "io1/adapters.py",
+        "from pathlib import Path\n"
+        "import tesser.adapters as ts\n"
+        "class DiskRepository(ts.Repository):\n"
+        "    def load(self, key: str) -> str: ...\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "io1.domain:1 imports os; domain, client, and application "
+        "import only their context, their tesser package, and the pure stdlib" in f
+        for f in findings
+    )
+    assert not any("io1.domain:2 imports datetime" in f for f in findings)
+    assert any(
+        "io1.client:1 imports datetime; domain, client, and application "
+        "import only their context, their tesser package, and the pure stdlib" in f
+        for f in findings
+    )
+    assert not any("io1.adapters" in f and "the pure stdlib" in f for f in findings)
+
+
 def test_an_adapters_module_holds_one_kind(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
