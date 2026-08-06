@@ -5,6 +5,55 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.16.0] - 2026-08-06
+
+The import-totality wave: sigcheck's rulebook grows from 41 to 57 rules
+so that every `.py` file in a governed tree answers for its imports —
+what it may import, in what form, and whether it has a home at all.
+
+Four new rule families, each ruled in-session and landed with exact
+fixture coverage. The tesser shell import is exactly once, as `ts`: a
+role module imports precisely its role's shell package in the
+`import tesser.<role> as ts` form — no duplicates, no other alias, no
+member imports — and a test module imports only `tesser.testing`, at
+most once (exactly-once arrives when tests declare themselves).
+Whole-tree totality: a module whose top-level package is not a context,
+`srv`, `bootstrap`, or `tests` is homeless; a tests package holds only
+test modules and conftest; srv and bootstrap gain statement totality
+(declared functions, Final constants, `tesser.context` as their shell —
+a class there flags, surfacing the still-open host-vocabulary
+question); a role `__init__` only re-exports from its own role. The
+pure-core allowlist: domain, client, and application import only their
+context, their shell, and a small pure-stdlib set (exact dotted entries
+supported), so ambient IO — filesystem, network, environment, entropy —
+is a violation by default rather than by enumeration; adapters, wiring,
+and the hosts stay free. Module-only imports: a context module is
+imported as an aliased module, never its members — the alias
+requirement is what keeps qualified access classifiable — with
+stdlib from-imports untouched and direction-illegal edges never
+double-flagged for form.
+
+The ship reviews made the walker honest before landing: relative
+imports now resolve against the module's package (previously invisible
+to every import rule — a relative domain import could walk a domain
+object through an adapter signature unseen), and classification is
+module-level-only, so a function-local import neither satisfies
+presence nor shadows the alias table. The live spike, digest, and
+sigcheck trees practice the idiom they enforce; `sigcheck` itself runs
+over its own tree in CI, and a new gate on `examples/python-app` holds
+its 173-finding conformance bill as a fail-closed, self-tightening
+finding-set ratchet (new findings fail even at an equal count; entries
+that stop firing fail as stale) until the conformance wave burns it
+down. RULES.md gains a Named exemptions section — conftest, `__main__`,
+and tooling modules are visible carve-outs now, not silent ones — and a
+rule can no longer ship without a fixture: an uncovered clause is a
+suite failure, not a NONE cell.
+
+Also in this release (landed on main by the python-app migration, PR
+#50, between versions): the tessercheck-py analyzer's TB003 now treats
+a `tesser.domain.ValueObject` subclass `__init__` as a sanctioned
+construction site, alongside the frozen-dataclass forms.
+
 ## [0.0.15.0] - 2026-08-05
 
 The declare-then-verify spike: `examples/spike-shells` explores the

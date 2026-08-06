@@ -1,23 +1,23 @@
 import tesser.testing as ts
 
-from digest.adapters import NoteGateway
-from digest.application import DigestService
-from digest.client import DigestRequest, DigestResponse
-from spike.application import NoteParts, NoteRepository, NoteService
+import digest.adapters as adapters
+import digest.application as application
+import digest.client as client
+import spike.application as spike_application
 
 
 @ts.fake
-class DroppedNotes(NoteRepository):
+class DroppedNotes(spike_application.NoteRepository):
 
-    def save(self, parts: NoteParts) -> None:
+    def save(self, parts: spike_application.NoteParts) -> None:
         return None
 
 
 def test_digest_reaches_spike_only_through_its_client() -> None:
-    gateway = NoteGateway(NoteService(DroppedNotes()))
-    service = DigestService(gateway)
+    gateway = adapters.NoteGateway(spike_application.NoteService(DroppedNotes()))
+    service = application.DigestService(gateway)
 
-    response = service.digest(DigestRequest(text="ship the rulebook"))
+    response = service.digest(client.DigestRequest(text="ship the rulebook"))
 
-    assert isinstance(response, DigestResponse)
+    assert isinstance(response, client.DigestResponse)
     assert response.headline == "SHIP THE RULEBOOK"

@@ -105,7 +105,7 @@ jobs:
     # the import direction, and the example's own AST tests keep what no tool
     # covers (import-time side effects, host-routes-never-translates, context
     # discovery). A Go mirror (examples/app) is planned, not yet built.
-    name: python-app example (ruff + import-linter + mypy --strict + pytest)
+    name: python-app example (ruff + import-linter + mypy --strict + pytest + sigcheck ratchet)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -125,9 +125,43 @@ jobs:
         run: |
           MYPYPATH=.:../../tesser-py mypy --strict errors.py lifecycle.py serialization.py httpwire.py cliwire.py campaign linkpolicy reports bootstrap srv tests conftest.py
           pytest -q
-      - name: examples/python-app — sigcheck (totality rulebook, zero findings)
+      - name: examples/python-app — sigcheck (totality rulebook, ratcheted)
+        # The import-totality wave (exactly-once-as-ts, whole-tree totality,
+        # pure-core allowlist, module-only imports) landed after this tree
+        # reached zero findings, so the gate is a ratchet until the conformance
+        # wave burns the bill down (TODOS.md "Import-totality wave followups").
+        # sigcheck-ratchet is the accepted-debt baseline: the current findings
+        # with line numbers stripped, LC_ALL=C sorted. Any finding not in the
+        # baseline fails, even at an equal total — a fix cannot buy a fresh
+        # violation. An analyzer crash fails closed (stderr is a failure, not
+        # an empty pass). After fixing findings, regenerate the baseline with
+        # the sed|sort pipeline below; at zero findings, delete sigcheck-ratchet
+        # and restore the plain zero-findings step.
         working-directory: examples/python-app
-        run: PYTHONPATH=../spike-shells:../../tesser-py python3 -m sigcheck .
+        run: |
+          PYTHONPATH=../spike-shells:../../tesser-py python3 -m sigcheck . > findings.txt 2> sigcheck-stderr.txt || true
+          if [ -s sigcheck-stderr.txt ]; then
+            cat sigcheck-stderr.txt
+            if grep -q "Traceback" sigcheck-stderr.txt; then
+              echo "sigcheck crashed — failing closed"
+              exit 1
+            fi
+          fi
+          sed -E 's/:[0-9]+//g' findings.txt | LC_ALL=C sort > findings-normalized.txt
+          LC_ALL=C sort sigcheck-ratchet > baseline-normalized.txt
+          echo "sigcheck findings: $(wc -l < findings.txt | tr -d ' ') (baseline: $(wc -l < sigcheck-ratchet | tr -d ' '))"
+          new=$(LC_ALL=C comm -13 baseline-normalized.txt findings-normalized.txt)
+          if [ -n "$new" ]; then
+            echo "findings not in the ratchet baseline:"
+            echo "$new"
+            exit 1
+          fi
+          stale=$(LC_ALL=C comm -23 baseline-normalized.txt findings-normalized.txt)
+          if [ -n "$stale" ]; then
+            echo "sigcheck-ratchet is stale — these baseline entries no longer fire; regenerate the file:"
+            echo "$stale"
+            exit 1
+          fi
 
   serdepy-example:
     # Gates the serialization-norm worked example (Python) at the same bar:

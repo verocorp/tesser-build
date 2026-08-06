@@ -55,7 +55,7 @@ Shape checks (TB001–TB004):
 |---|---|
 | **TB001** | every `@dataclass` must be `frozen=True` — domain values for immutability + value equality; specs/DTOs too, because frozen costs them nothing and a non-frozen dataclass is invisible to the VO classifier (deliberately total; inline-ignore a boundary shape that must mutate) |
 | **TB002** | a frozen **value object's** field must not be a mutable collection (`list`/`dict`/`set`) — its `__hash__` raises; use a `tuple`/`frozenset` (classification-aware: a spec/persistence row is exempt) |
-| **TB003** | `object.__setattr__`/`__delattr__` must not bypass immutability outside the **construction sites**: `__post_init__` (canonicalization), or `__init__` of a `@dataclass(frozen=True, init=False)` assigning its declared fields (the spec-taking shape has no other way in) |
+| **TB003** | `object.__setattr__`/`__delattr__` must not bypass immutability outside the **construction sites**: `__post_init__` (canonicalization), `__init__` of a `@dataclass(frozen=True, init=False)` assigning its declared fields (the spec-taking shape has no other way in), or `__init__` of a `tesser.domain.ValueObject` subclass (same shape, declared by its base rather than by a decorator; the base is recognized through the module's own import of `tesser.domain`, alias included) |
 | **TB004** | compare value objects by value, not by `str()` representation (fires only when **both** sides are `str()`/`__str__()` calls) |
 
 Identity-taxonomy checks (TB010–TB014), keyed on the classifier:

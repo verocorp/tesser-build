@@ -2,8 +2,8 @@ from typing import Protocol
 
 import tesser.application as ts
 
-from spike.client import CreateNoteRequest, CreateNoteResponse
-from spike.domain import Note, NoteSpec
+import spike.client as client
+import spike.domain as domain
 
 
 class NoteParts(ts.Parts):
@@ -22,7 +22,7 @@ class NoteService(ts.ApplicationService):
     def __init__(self, repository: NoteRepository) -> None:
         self._repository = repository
 
-    def create(self, request: CreateNoteRequest) -> CreateNoteResponse:
-        note = Note(NoteSpec(text=request.text))
+    def create(self, request: client.CreateNoteRequest) -> client.CreateNoteResponse:
+        note = domain.Note(domain.NoteSpec(text=request.text))
         self._repository.save(NoteParts(text=note.text()))
-        return CreateNoteResponse(text=request.text)
+        return client.CreateNoteResponse(text=request.text)

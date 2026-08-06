@@ -274,7 +274,7 @@ def test_import_matrix_is_flagged(tmp_path: Path) -> None:
         tmp_path,
         "two/adapters.py",
         "import tesser.adapters as ts\n"
-        "import app.client\n"
+        "import app.client as app_client\n"
         "class Bridge(ts.Gateway):\n"
         "    pass\n",
     )
@@ -479,11 +479,11 @@ def test_a_role_may_be_a_package(tmp_path: Path) -> None:
         tmp_path,
         "deep/domain/money.py",
         "import tesser.domain as ts\n"
-        "from deep.domain.currency import Currency\n"
+        "import deep.domain.currency as currency\n"
         "class Money(ts.ValueObject):\n"
-        "    def __init__(self, amount: str, currency: Currency) -> None:\n"
+        "    def __init__(self, amount: str, unit: currency.Currency) -> None:\n"
         "        object.__setattr__(self, '_amount', amount)\n"
-        "        object.__setattr__(self, '_currency', currency)\n",
+        "        object.__setattr__(self, '_unit', unit)\n",
     )
     write_module(
         tmp_path,
@@ -528,9 +528,9 @@ def test_wiring_is_a_role(tmp_path: Path) -> None:
         tmp_path,
         "app/wiring.py",
         "import tesser.context as ts\n"
-        "import app.application\n"
-        "import app.client\n"
-        "import two.client\n"
+        "import app.application as application\n"
+        "import app.client as client\n"
+        "import two.client as two_client\n"
         "import two.domain\n"
         "class AskWiring(ts.Wiring):\n"
         "    pass\n",
@@ -575,7 +575,7 @@ def test_srv_and_bootstrap_import_rows(tmp_path: Path) -> None:
         tmp_path,
         "srv/http.py",
         "import app.application\n"
-        "import app.adapters\n"
+        "import app.adapters as app_adapters\n"
         "import two.adapters\n"
         "import bootstrap.wire\n",
     )
@@ -583,8 +583,8 @@ def test_srv_and_bootstrap_import_rows(tmp_path: Path) -> None:
         tmp_path,
         "bootstrap/wire.py",
         "import app.domain\n"
-        "import app.wiring\n"
-        "import app.client\n"
+        "import app.wiring as wiring\n"
+        "import app.client as app_client\n"
         "import srv.http\n",
     )
     findings = check_tree(tmp_path)
@@ -620,10 +620,10 @@ def test_only_a_handler_imports_its_own_client(tmp_path: Path) -> None:
         tmp_path,
         "app/adapters.py",
         "import tesser.adapters as ts\n"
-        "import app.client\n"
+        "import app.client as app_client\n"
         "class HttpHandler(ts.Handler):\n"
         "    def ask(self, body: str) -> str:\n"
-        "        return app.client.AskRequest(text=body).text\n",
+        "        return app_client.AskRequest(text=body).text\n",
     )
     write_module(
         tmp_path,
@@ -674,6 +674,620 @@ def test_only_a_gateway_reaches_a_foreign_client(tmp_path: Path) -> None:
         and "a context reaches another context only through its client, and only from gateways and wiring" in f
         for f in findings
     )
+
+
+def test_role_module_tesser_import_is_exactly_once_as_ts(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "lone/domain.py",
+        "class Bare:\n"
+        "    pass\n",
+    )
+    write_module(
+        tmp_path,
+        "noalias/domain.py",
+        "import tesser.domain as td\n"
+        "class ThingSpec(td.Spec):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    write_module(
+        tmp_path,
+        "fromform/domain.py",
+        "from tesser.domain import Spec\n"
+        "class OtherSpec(Spec):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    write_module(
+        tmp_path,
+        "dup/domain.py",
+        "import tesser.domain as ts\n"
+        "import tesser.domain as ts\n"
+        "class DupSpec(ts.Spec):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "lone.domain never imports tesser.domain; "
+        "a role module imports its tesser package exactly once, as ts" in f
+        for f in findings
+    )
+    assert any(
+        "noalias.domain:1 imports tesser.domain without the ts alias; "
+        "a role module imports its tesser package exactly once, as ts" in f
+        for f in findings
+    )
+    assert any(
+        "fromform.domain:1 imports names from tesser.domain; "
+        "a role module imports its tesser package exactly once, as ts" in f
+        for f in findings
+    )
+    assert any(
+        "dup.domain:2 imports tesser.domain again; "
+        "a role module imports its tesser package exactly once, as ts" in f
+        for f in findings
+    )
+
+
+def test_reexport_only_role_init_needs_no_tesser_import(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "deep/domain/__init__.py",
+        "from deep.domain.money import Money\n",
+    )
+    write_module(
+        tmp_path,
+        "deep/domain/money.py",
+        "import tesser.domain as ts\n"
+        "class Money(ts.ValueObject):\n"
+        "    def __init__(self, amount: str) -> None:\n"
+        "        object.__setattr__(self, '_amount', amount)\n",
+    )
+    findings = check_tree(tmp_path)
+    assert not any("deep.domain" in f and "exactly once, as ts" in f for f in findings)
+
+
+def test_test_module_tesser_import_rules(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/test_imports.py",
+        "import tesser.domain as ts\n"
+        "import tesser.testing as th\n"
+        "import tesser.testing as ts2\n"
+        "def test_nothing() -> None:\n"
+        "    assert True\n",
+    )
+    write_module(
+        tmp_path,
+        "app/test_fromform.py",
+        "from tesser.testing import fake\n"
+        "def test_nothing() -> None:\n"
+        "    assert fake is not None\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "app.test_imports:1 imports tesser.domain; a test module imports only tesser.testing" in f
+        for f in findings
+    )
+    assert any(
+        "app.test_imports:2 imports tesser.testing without the ts alias; "
+        "a test module imports tesser.testing at most once, as ts" in f
+        for f in findings
+    )
+    assert any(
+        "app.test_imports:3 imports tesser.testing again; "
+        "a test module imports tesser.testing at most once, as ts" in f
+        for f in findings
+    )
+    assert any(
+        "app.test_fromform:1 imports names from tesser.testing; "
+        "a test module imports tesser.testing at most once, as ts" in f
+        for f in findings
+    )
+
+
+def test_homeless_modules_are_flagged(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(tmp_path, "loose.py", "def anything() -> None:\n    return None\n")
+    write_module(tmp_path, "stray/util.py", "def anything() -> None:\n    return None\n")
+    write_module(tmp_path, "rules.py", "def anything() -> None:\n    return None\n")
+    findings = check_tree(tmp_path)
+    assert any(
+        "loose belongs to no governed package; "
+        "every module belongs to a context, srv, bootstrap, or tests" in f
+        for f in findings
+    )
+    assert any(
+        "stray.util belongs to no governed package; "
+        "every module belongs to a context, srv, bootstrap, or tests" in f
+        for f in findings
+    )
+    assert not any("rules belongs to no governed package" in f for f in findings)
+
+
+def test_tests_package_totality_is_flagged(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(tmp_path, "tests/__init__.py", "X = 1\n")
+    write_module(tmp_path, "tests/util.py", "def anything() -> None:\n    return None\n")
+    write_module(tmp_path, "tests/test_ok.py", "def test_ok() -> None:\n    assert True\n")
+    findings = check_tree(tmp_path)
+    assert any(
+        "tests __init__ declares code at line 1; "
+        "a tests package holds only test modules and conftest" in f
+        for f in findings
+    )
+    assert any(
+        "tests.util is neither a test module nor conftest; "
+        "a tests package holds only test modules and conftest" in f
+        for f in findings
+    )
+    assert not any("tests.test_ok" in f and "a tests package holds" in f for f in findings)
+
+
+def test_role_init_only_reexports_its_own_role(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "pkg/domain/__init__.py",
+        "import tesser.domain as ts\n"
+        "from pkg.domain.vo import Tag\n"
+        "LIMIT = 3\n",
+    )
+    write_module(
+        tmp_path,
+        "pkg/domain/vo.py",
+        "import tesser.domain as ts\n"
+        "class Tag(ts.ValueObject):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        object.__setattr__(self, '_text', text)\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "pkg.domain:1 imports tesser.domain; a role __init__ only re-exports from its own role" in f
+        for f in findings
+    )
+    assert any(
+        "pkg.domain __init__ declares code at line 3; "
+        "a role __init__ only re-exports from its own role" in f
+        for f in findings
+    )
+    assert not any("imports pkg.domain.vo" in f for f in findings)
+
+
+def test_srv_and_bootstrap_statement_totality(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "srv/box.py",
+        "import tesser.context as ts\n"
+        "import tesser.domain as td\n"
+        "@ts.function\n"
+        "def fine() -> None:\n"
+        "    return None\n"
+        "def stray() -> None:\n"
+        "    return None\n"
+        "class Box:\n"
+        "    pass\n"
+        "LIMIT = 3\n"
+        "print('hi')\n",
+    )
+    write_module(
+        tmp_path,
+        "bootstrap/wire.py",
+        "def build() -> None:\n"
+        "    return None\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "srv.box:2 imports tesser.domain; a srv or bootstrap module imports only tesser.context" in f
+        for f in findings
+    )
+    assert any(
+        "srv.box.stray" in f
+        and "a srv or bootstrap function declares itself with @ts.function" in f
+        for f in findings
+    )
+    assert not any("srv.box.fine" in f for f in findings)
+    assert any(
+        "srv.box.Box" in f
+        and "is a class; a srv or bootstrap module holds only imports, declared functions, "
+        "and Final constants" in f
+        for f in findings
+    )
+    assert any(
+        "declares a module constant without Final; a srv or bootstrap constant is Final" in f
+        for f in findings
+    )
+    assert any(
+        "has a loose module-level statement; a srv or bootstrap module holds only imports, "
+        "declared functions, and Final constants" in f
+        for f in findings
+    )
+    assert any(
+        "bootstrap.wire never imports tesser.context; "
+        "a srv or bootstrap module imports tesser.context exactly once, as ts" in f
+        for f in findings
+    )
+
+
+def test_pure_core_stdlib_allowlist(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "io1/domain.py",
+        "import os\n"
+        "import datetime\n"
+        "import tesser.domain as ts\n"
+        "class StampSpec(ts.Spec):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    write_module(
+        tmp_path,
+        "io1/client.py",
+        "from __future__ import annotations\n"
+        "import datetime\n"
+        "import tesser.context as ts\n"
+        "class StampRequest(ts.Request):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    write_module(
+        tmp_path,
+        "io1/adapters.py",
+        "from pathlib import Path\n"
+        "import tesser.adapters as ts\n"
+        "class DiskRepository(ts.Repository):\n"
+        "    def load(self, key: str) -> str: ...\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "io1.domain:1 imports os; domain, client, and application "
+        "import only their context, their tesser package, and the pure stdlib" in f
+        for f in findings
+    )
+    assert not any("io1.domain:2 imports datetime" in f for f in findings)
+    assert any(
+        "io1.client:2 imports datetime; domain, client, and application "
+        "import only their context, their tesser package, and the pure stdlib" in f
+        for f in findings
+    )
+    assert not any("imports __future__" in f for f in findings)
+    assert not any("io1.adapters" in f and "the pure stdlib" in f for f in findings)
+
+
+def test_context_module_import_form(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "form/client.py",
+        "import tesser.context as ts\n"
+        "class PingRequest(ts.Request):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    write_module(
+        tmp_path,
+        "form/application.py",
+        "import tesser.application as ts\n"
+        "from form.client import PingRequest\n",
+    )
+    write_module(
+        tmp_path,
+        "form/wiring.py",
+        "import tesser.context as ts\n"
+        "import form.application\n"
+        "class PingWiring(ts.Wiring):\n"
+        "    pass\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "form.application:2 imports names from form.client; "
+        "a context module is imported as an aliased module, never its members" in f
+        for f in findings
+    )
+    assert any(
+        "form.wiring:2 imports form.application without an alias; "
+        "a context module is imported as an aliased module, never its members" in f
+        for f in findings
+    )
+
+
+def test_relative_imports_resolve_against_the_package(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "rel/domain/__init__.py",
+        "from .money import Money\n",
+    )
+    write_module(
+        tmp_path,
+        "rel/domain/money.py",
+        "import tesser.domain as ts\n"
+        "class Money(ts.ValueObject):\n"
+        "    def __init__(self, amount: str) -> None:\n"
+        "        object.__setattr__(self, '_amount', amount)\n",
+    )
+    write_module(
+        tmp_path,
+        "rel/client.py",
+        "import tesser.context as ts\n"
+        "class RelRequest(ts.Request):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    write_module(
+        tmp_path,
+        "rel/wiring.py",
+        "import tesser.context as ts\n"
+        "from . import client\n"
+        "class RelWiring(ts.Wiring):\n"
+        "    pass\n",
+    )
+    write_module(
+        tmp_path,
+        "rel/adapters/repo.py",
+        "import tesser.adapters as ts\n"
+        "from ..domain.money import Money\n"
+        "class LoadingRepo(ts.Repository):\n"
+        "    def load(self, key: str) -> Money: ...\n",
+    )
+    write_module(
+        tmp_path,
+        "rel/adapters/beyond.py",
+        "import tesser.adapters as ts\n"
+        "from ...domain.money import Money\n"
+        "class BeyondRepo(ts.Repository):\n"
+        "    pass\n",
+    )
+    findings = check_tree(tmp_path)
+    assert not any("rel.domain" in f and "a role __init__ only re-exports from its own role" in f for f in findings)
+    assert any(
+        "rel.adapters.beyond:2 imports ...domain.money beyond the package root; "
+        "a relative import resolves inside the tree" in f
+        for f in findings
+    )
+    assert any(
+        "rel.wiring:2 imports names from rel.client; "
+        "a context module is imported as an aliased module, never its members" in f
+        for f in findings
+    )
+    assert any(
+        "rel.adapters.repo:2 imports rel.domain.money; the same-context matrix" in f
+        for f in findings
+    )
+    assert any(
+        "LoadingRepo.load" in f and "an adapter speaks records, never domain objects" in f
+        for f in findings
+    )
+
+
+def test_nested_imports_neither_classify_nor_satisfy_presence(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "lazy/domain.py",
+        "class HiddenSpec(ts.Spec):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        import tesser.domain as ts\n"
+        "        self.text = text\n",
+    )
+    write_module(
+        tmp_path,
+        "lazy2/domain.py",
+        "import tesser.domain as ts\n"
+        "class LazySpec(ts.Spec):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        import os\n"
+        "        self.text = text\n",
+    )
+    write_module(
+        tmp_path,
+        "lazy3/domain.py",
+        "import tesser.domain as ts\n"
+        "class GoodSpec(ts.Spec):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        import tesser.context as tc\n"
+        "        self.text = text\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "lazy.domain never imports tesser.domain; "
+        "a role module imports its tesser package exactly once, as ts" in f
+        for f in findings
+    )
+    assert any(
+        "lazy.domain.HiddenSpec" in f and "declares no ts.* base" in f for f in findings
+    )
+    assert any(
+        "lazy2.domain:4 imports os; domain, client, and application "
+        "import only their context, their tesser package, and the pure stdlib" in f
+        for f in findings
+    )
+    assert any(
+        "lazy3.domain:4 imports tesser.context inside a function; "
+        "a tesser import is module-level" in f
+        for f in findings
+    )
+
+
+def test_srv_and_bootstrap_tesser_form_modes(tmp_path: Path) -> None:
+    write_module(
+        tmp_path,
+        "srv/dup.py",
+        "import tesser.context as ts\n"
+        "import tesser.context as ts\n"
+        "@ts.function\n"
+        "def go() -> None:\n"
+        "    return None\n",
+    )
+    write_module(
+        tmp_path,
+        "srv/alias.py",
+        "import tesser.context as tc\n"
+        "@tc.function\n"
+        "def go() -> None:\n"
+        "    return None\n",
+    )
+    write_module(
+        tmp_path,
+        "bootstrap/fromform.py",
+        "from tesser.context import function\n"
+        "@function\n"
+        "def go() -> None:\n"
+        "    return None\n",
+    )
+    write_module(
+        tmp_path,
+        "srv/consts.py",
+        "from typing import Final\n"
+        "LIMIT: Final[int] = 3\n",
+    )
+    write_module(
+        tmp_path,
+        "srv/annconst.py",
+        "LIMIT: int = 3\n",
+    )
+    write_module(
+        tmp_path,
+        "srv/tfinal.py",
+        "import tesser.context as ts\n"
+        "import typing\n"
+        "LIMIT: typing.Final[int] = 3\n",
+    )
+    write_module(tmp_path, "srv/__init__.py", "X = 1\n")
+    write_module(tmp_path, "bootstrap/__init__.py", "")
+    write_module(
+        tmp_path,
+        "konst/domain.py",
+        "from typing import Final\n"
+        "LIMIT: Final[int] = 3\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "srv.dup:2 imports tesser.context again; "
+        "a srv or bootstrap module imports tesser.context exactly once, as ts" in f
+        for f in findings
+    )
+    assert any(
+        "srv.alias:1 imports tesser.context without the ts alias; "
+        "a srv or bootstrap module imports tesser.context exactly once, as ts" in f
+        for f in findings
+    )
+    assert any(
+        "bootstrap.fromform:1 imports names from tesser.context; "
+        "a srv or bootstrap module imports tesser.context exactly once, as ts" in f
+        for f in findings
+    )
+    assert any(
+        "srv.consts never imports tesser.context; "
+        "a srv or bootstrap module imports tesser.context exactly once, as ts" in f
+        for f in findings
+    )
+    assert any(
+        "srv.annconst:1 declares a module constant without Final; "
+        "a srv or bootstrap constant is Final" in f
+        for f in findings
+    )
+    assert not any("srv.tfinal" in f for f in findings)
+    assert any(
+        "konst.domain never imports tesser.domain; "
+        "a role module imports its tesser package exactly once, as ts" in f
+        for f in findings
+    )
+    assert any(
+        "srv __init__ declares code at line 1; a srv or bootstrap __init__ is empty" in f
+        for f in findings
+    )
+    assert not any("bootstrap __init__ declares code" in f for f in findings)
+
+
+def test_form_rule_fires_in_tests_and_srv_and_skips_illegal_edges(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/test_forms.py",
+        "from app.domain import Thing\n"
+        "def test_thing() -> None:\n"
+        "    assert Thing\n",
+    )
+    write_module(
+        tmp_path,
+        "app/adapters.py",
+        "import tesser.adapters as ts\n"
+        "class HttpHandler(ts.Handler):\n"
+        "    pass\n",
+    )
+    write_module(
+        tmp_path,
+        "srv/http.py",
+        "from app.adapters import HttpHandler\n",
+    )
+    write_module(
+        tmp_path,
+        "skipctx/domain.py",
+        "import tesser.domain as ts\n"
+        "from app.client import AskRequest\n"
+        "class SkipSpec(ts.Spec):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "app.test_forms:1 imports names from app.domain; "
+        "a context module is imported as an aliased module, never its members" in f
+        for f in findings
+    )
+    assert any(
+        "srv.http:1 imports names from app.adapters; "
+        "a context module is imported as an aliased module, never its members" in f
+        for f in findings
+    )
+    assert any(
+        "skipctx.domain:2 imports app.client; a context reaches another context "
+        "only through its client, and only from gateways and wiring" in f
+        for f in findings
+    )
+    assert not any(
+        "skipctx.domain" in f and "a context module is imported as an aliased module" in f
+        for f in findings
+    )
+
+
+def test_pure_core_allowlist_covers_application_and_domain_future(tmp_path: Path) -> None:
+    write_module(
+        tmp_path,
+        "io2/domain.py",
+        "from __future__ import annotations\n"
+        "import tesser.domain as ts\n"
+        "class DSpec(ts.Spec):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    write_module(
+        tmp_path,
+        "io2/application.py",
+        "from __future__ import annotations\n"
+        "import typing\n"
+        "import socket\n"
+        "import tesser.application as ts\n"
+        "class NopService(ts.ApplicationService):\n"
+        "    pass\n",
+    )
+    findings = check_tree(tmp_path)
+    assert not any("io2.domain" in f and "the pure stdlib" in f for f in findings)
+    assert any(
+        "io2.application:3 imports socket; domain, client, and application "
+        "import only their context, their tesser package, and the pure stdlib" in f
+        for f in findings
+    )
+    assert not any("io2.application:1" in f for f in findings)
+    assert not any("io2.application:2" in f for f in findings)
 
 
 def test_an_adapters_module_holds_one_kind(tmp_path: Path) -> None:

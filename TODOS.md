@@ -16,6 +16,114 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   - **Risk of waiting:** path-keyed state keeps accumulating; the move gets
     costlier.
 
+## Import-totality wave followups (2026-08-06, branch `worktree-io-import-restrictions`)
+
+- [ ] **python-app conformance + remove the sigcheck CI ratchet.** The wave's
+  rules (tesser exactly-once-as-ts, whole-tree totality, pure-core allowlist,
+  module-only aliased context imports) fire 173 findings on the freshly
+  migrated tree, so the zero-findings CI step became a ratchet
+  (`examples/python-app/sigcheck-ratchet` — the accepted-debt baseline as a
+  normalized finding set, not a scalar count: any finding outside the baseline
+  fails even at an equal total, and an analyzer crash fails closed).
+  - **Mechanical (~145):** 123 import-form conversions (`from x.client import Y`
+    → `import x.client as client`), 13 `@ts.function` declarations + 7
+    `import tesser.context as ts` in srv/bootstrap, 2 Final constants.
+  - **Blocked on the rulings below:** 9 srv/bootstrap classes, 5 homeless
+    modules, several pure-core hits.
+  - **Then:** regenerate the baseline per fix (the sed|sort pipeline in
+    test.yml); at zero findings delete `sigcheck-ratchet` and restore the plain
+    zero-findings step.
+- [ ] **Host-class vocabulary.** A class in srv/bootstrap always flags — no
+  shell exists for `Route`, `Match`, `HttpHost`, `CleanupStack`, `App`,
+  `HttpConfig`, `Config`. Decide: `tesser.srv` (Host/Request/Response) +
+  `tesser.app` (App/Config) shells per the 2026-08-02 package map, or relocate
+  the classes.
+- [ ] **Homeless root modules.** `errors`, `serialization`, `lifecycle`,
+  `cliwire`, `httpwire` belong to no governed package; ruling needed on where
+  app-level shared modules live. Same ruling resolves the pure-core hits where
+  domain imports `errors`/`serialization`.
+- [ ] **Pure-core allowlist candidates (from dogfood evidence only):**
+  `urllib.parse` in `campaign.domain.values` / `linkpolicy.domain.policy`
+  (pure parsing — likely admit; the matcher accepts exact dotted entries, so
+  `urllib.parse` can be admitted without opening `urllib.request`), `copy` in
+  `campaign.domain.short_link` (pure — likely admit), `secrets` in
+  `campaign.application.service` (ambient entropy — likely inject through a
+  port instead of admitting).
+- [ ] **Named soundness holes in the import walker (from the ship adversarial
+  reviews — evasion paths, none live on the current trees; relative-import
+  resolution and top-level-only classification were fixed in-wave):**
+  (1) the `conftest` and `__main__` exemptions are basename-anywhere — a
+  production `campaign/domain/conftest.py` escapes all rules (fold into the
+  conftest-governance followup). (2) `FilesystemSourceReader` sweeps every
+  `*.py` under the root with no exclusions (`.venv`, `build`, generated
+  code), one unparseable or non-UTF-8 file crashes the whole run, and a role
+  FILE colliding with a role PACKAGE (`domain.py` + `domain/__init__.py`)
+  aborts on duplicate names — per-file isolation and an exclusion surface are
+  consumer-facing needs when sigcheck graduates. (3) the ratchet baseline is
+  branch-controlled — a PR can regenerate `sigcheck-ratchet` upward and pass;
+  accepted while the ratchet is temporary because the file's diff is itself
+  reviewed, but a shrink-only comparison against the base branch is the
+  durable fix if the ratchet outlives the conformance wave. (4) quoted
+  annotations (`money: 'domain.Money'`) bypass every classification-based
+  rule — the exact bug class PR #44 / v0.0.13.1 fixed in tessercheck-py with
+  one shared walk; sigcheck needs the same treatment. (5) `async def` is
+  invisible to totality — it is neither a declarable function nor a class,
+  reads as a loose statement, and evades the def-gated presence checks.
+  (6) `TYPE_CHECKING` blocks and `try/except ImportError` optional imports
+  have no conformant form (module-level `If`/`Try` are loose statements).
+  (7) a submodule appearing under a role FILE silently flips it to the
+  role-`__init__` ruleset (detection is name-prefix, not is_package — thread
+  the reader's `is_package` bit into the dispatch). (8) `__import__`/
+  importlib evade the pure-core allowlist (statically unpreventable at
+  reasonable cost — accept and note). (9) a member import from a re-export
+  `__init__` (`from rel.domain import Money`) does not classify — blocks
+  propagate from defining modules only, so signature rules go quiet; either
+  propagate through re-exports or rule that deep imports are canonical.
+  (10) srv/bootstrap have no external-import allowlist, and a constants-only
+  module can do import-time IO (`OUT: Final[bytes] = subprocess.check_output`)
+  with zero findings — fold into the host-vocabulary ruling.
+  (11) `TOOLING_MODULES` and CORE_STDLIB's `ast` entry are name-keyed and
+  global — any consumer with a top-level `rules.py` inherits the bypass, and
+  the allowlist has no per-consumer config surface yet.
+- [ ] **Make rules.py conformant** (Chris 2026-08-06). The generator is
+  currently exempt via `TOOLING_MODULES` in the whole-tree totality rule;
+  make it conform (or rule where tooling lives) and shrink the exemption.
+- [ ] **conftest governance** (Chris 2026-08-06). The exemption is now named in
+  RULES.md; discuss governing conftest alongside the test-organization work.
+  Related: `tests.discovery` / `tests.support` fire the tests-package rule in
+  python-app, and `tests.test_shape` imports `tesser.context` — the same
+  test-organization pass should settle all three.
+- [ ] **Test-module annotation.** When tests declare themselves, flip
+  "a test module imports tesser.testing at most once, as ts" to exactly-once.
+- [ ] **sigcheck internal cleanups (pre-landing review, deferred as a batch).**
+  From the ship review of the import-totality wave: (1) the
+  exactly-once-as-ts walk is triplicated (`_app_module_violations`,
+  `_import_violations`, `_test_module_violations`) and the statement-totality
+  loop is duplicated (`_app_module_violations` vs `_role_module_violations`)
+  — extract helpers without breaking the generator's literal-clause guard;
+  (2) `import_edges()`/`tesser_imports()` return positionally-decoded
+  4-tuples with different slot meanings — make both NamedTuples, and make
+  `has_alias` honest (or unrepresentable) for from-edges; (3) hardcoded
+  `"tesser.context"`/`"tesser.testing"`/`"tesser"` comparison literals →
+  Final constants; (4) the `len(found) == before` legality sentinel → an
+  explicit `denied` list; (5) rules.py: derive the conftest/`__main__`
+  exemption bullets from the AST guards (like TOOLING_MODULES) so governing
+  conftest forces the RULES.md diff, and split the TOOLING_MODULES
+  not-found vs wrong-shape errors.
+- [x] **Two clauses claim more than the code enforces** — RESOLVED 2026-08-06,
+  Chris ruling: "the code should enforce what I specified." The code moved,
+  not the wording: (1) presence is unconditional — every role and
+  srv/bootstrap module carries its `import tesser.* as ts`, constants-only
+  and empty files included (the `__init__` files stay under their own total
+  rules: context/tests/srv-bootstrap inits empty — the srv/bootstrap
+  emptiness rule is new — and role inits re-export-only; test modules keep
+  at-most-once per Chris's earlier blessing, pending test annotation).
+  (2) `from . import client` now records as a member-form import and fires
+  the aliased-module rule; the only conformant context-module form is
+  `import <context>.<role> as <alias>`. Role-`__init__` dispatch now keys on
+  the reader's `is_package` bit instead of the child-name prefix, closing
+  soundness hole (7) below.
+
 ## Toolkit
 
 - [ ] **ValueObject-shape adoption decision + classifier support** (shipped as

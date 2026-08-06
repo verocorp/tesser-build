@@ -1,12 +1,12 @@
 import tesser.adapters as ts
 
-from spike.client import CreateNoteRequest, NoteClient
+import spike.client as spike_client
 
 
 class NoteGateway(ts.Gateway):
 
-    def __init__(self, notes: NoteClient) -> None:
+    def __init__(self, notes: spike_client.NoteClient) -> None:
         self._notes = notes
 
     def record(self, text: str) -> str:
-        return self._notes.create(CreateNoteRequest(text=text)).text
+        return self._notes.create(spike_client.CreateNoteRequest(text=text)).text

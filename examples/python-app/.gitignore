@@ -2,3 +2,7 @@ __pycache__/
 *.pyc
 .mypy_cache/
 .pytest_cache/
+findings.txt
+findings-normalized.txt
+baseline-normalized.txt
+sigcheck-stderr.txt
