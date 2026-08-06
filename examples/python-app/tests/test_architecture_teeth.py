@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import sys
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+from tests.support import ROOT
 
 
 def test_ruff_config_flags_env_reads_and_exits_below_the_edge(tmp_path: pathlib.Path) -> None:

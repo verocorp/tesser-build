@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-import campaign.client
+import tesser.testing as ts
+
 from bootstrap.bootstrap import new
 from bootstrap.config import Config
 from campaign.adapters.handlers.cli import Handler
+from campaign.application.parts import CheckOutcome
+from campaign.application.service import TargetChecker
 from campaign.wiring.config import Config as CampaignConfig
 from campaign.wiring.wire import build as build_campaign
 from cliwire import CliRequest, CliResponse, UsageError, respond
@@ -13,9 +16,10 @@ from reports.wiring.config import Config as ReportsConfig
 from srv.cli.main import commands_for, dispatch
 
 
-class _AllowAllChecker:
-    def check(self, target_url: str) -> campaign.client.CheckOutcome:
-        return campaign.client.CheckOutcome(True, "ok")
+@ts.fake
+class _AllowAllChecker(TargetChecker):
+    def check(self, target_url: str) -> CheckOutcome:
+        return CheckOutcome(True, "ok")
 
 
 def test_create_campaign_transforms_args_to_a_success_line() -> None:

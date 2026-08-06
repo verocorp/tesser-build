@@ -1,19 +1,22 @@
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass
+
+import tesser.domain as ts
 
 from campaign.domain.values import Slug, TargetURL
 
 
-@dataclass(frozen=True)
-class ShortLinkSpec:
-    slug: str
-    target_url: str
-    active: bool
+class ShortLinkSpec(ts.Spec):
+
+    def __init__(self, slug: str, target_url: str, active: bool) -> None:
+        self.slug = slug
+        self.target_url = target_url
+        self.active = active
 
 
-class ShortLink:
+class ShortLink(ts.Entity):
+
     def __init__(self, spec: ShortLinkSpec) -> None:
         self._slug = Slug(spec.slug)
         self._target_url = TargetURL(spec.target_url)

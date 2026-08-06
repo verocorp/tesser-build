@@ -123,8 +123,11 @@ jobs:
       - name: examples/python-app — mypy --strict + pytest
         working-directory: examples/python-app
         run: |
-          MYPYPATH=. mypy --strict errors.py lifecycle.py serialization.py httpwire.py cliwire.py campaign linkpolicy reports bootstrap srv tests conftest.py
+          MYPYPATH=.:../../tesser-py mypy --strict errors.py lifecycle.py serialization.py httpwire.py cliwire.py campaign linkpolicy reports bootstrap srv tests conftest.py
           pytest -q
+      - name: examples/python-app — sigcheck (totality rulebook, zero findings)
+        working-directory: examples/python-app
+        run: PYTHONPATH=../spike-shells:../../tesser-py python3 -m sigcheck .
 
   serdepy-example:
     # Gates the serialization-norm worked example (Python) at the same bar:

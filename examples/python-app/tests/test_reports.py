@@ -1,30 +1,20 @@
 from __future__ import annotations
 
 from bootstrap.bootstrap import new
-from bootstrap.config import Config
 from campaign.client import AddLinkRequest, CreateCampaignRequest
-from campaign.wiring.config import Config as CampaignConfig
 from errors import DomainError
-from linkpolicy.wiring.config import Config as LinkPolicyConfig
+from reports.client import LinksByVerdictRequest
 from reports.domain.report import Link, RecordedVerdict, join_links_with_verdicts
-from reports.wiring.config import Config as ReportsConfig
-
-
-def _config() -> Config:
-    return Config(
-        campaign=CampaignConfig("memory"),
-        linkpolicy=LinkPolicyConfig("memory"),
-        reports=ReportsConfig(),
-    )
+from tests.support import app_config
 
 
 def test_report_reads_both_contexts_in_process() -> None:
-    app = new(_config())
+    app = new(app_config())
     try:
         view = app.campaign.create_campaign(CreateCampaignRequest("100.00", "USD"))
         app.campaign.add_link(AddLinkRequest(view.campaign_id, "a", "https://ok.example/a"))
         app.campaign.add_link(AddLinkRequest(view.campaign_id, "b", "https://ok.example/b"))
-        rows = app.reports.links_by_verdict()
+        rows = app.reports.links_by_verdict(LinksByVerdictRequest()).links
         assert {r.slug for r in rows} == {"a", "b"}
         assert all(r.allowed and r.reason == "ok" for r in rows)
     finally:
@@ -32,14 +22,14 @@ def test_report_reads_both_contexts_in_process() -> None:
 
 
 def test_blocked_destination_never_becomes_a_link() -> None:
-    app = new(_config())
+    app = new(app_config())
     try:
         view = app.campaign.create_campaign(CreateCampaignRequest("100.00", "USD"))
         try:
             app.campaign.add_link(AddLinkRequest(view.campaign_id, "bad", "http://ok.example/a"))
         except DomainError:
             pass
-        assert app.reports.links_by_verdict() == ()
+        assert app.reports.links_by_verdict(LinksByVerdictRequest()).links == ()
     finally:
         app.close()
 

@@ -2,28 +2,44 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from linkpolicy.client import CheckRequest, CheckResponse, VerdictView
-from linkpolicy.domain.policy import Policy, Verdict
+import tesser.application as ts
+
+from linkpolicy.client import (
+    CheckRequest,
+    CheckResponse,
+    ListVerdictsRequest,
+    ListVerdictsResponse,
+    VerdictView,
+)
+from linkpolicy.domain.policy import Policy
 
 
-class VerdictRepository(Protocol):
+class VerdictParts(ts.Parts):
 
-    def record(self, verdict: Verdict) -> None: ...
+    def __init__(self, target_url: str, allowed: bool, reason: str) -> None:
+        self.target_url = target_url
+        self.allowed = allowed
+        self.reason = reason
 
-    def all(self) -> tuple[Verdict, ...]: ...
+
+class VerdictRepository(ts.Port, Protocol):
+
+    def record(self, parts: VerdictParts) -> None: ...
+
+    def all(self) -> tuple[VerdictParts, ...]: ...
 
 
-class LinkPolicyService:
-    def __init__(self, repo: VerdictRepository, policy: Policy) -> None:
+class LinkPolicyService(ts.ApplicationService):
+
+    def __init__(self, repo: VerdictRepository) -> None:
         self._repo = repo
-        self._policy = policy
+        self._policy = Policy.default()
 
     def check(self, req: CheckRequest) -> CheckResponse:
         verdict = self._policy.evaluate(req.target_url)
-        self._repo.record(verdict)
+        self._repo.record(VerdictParts(verdict.target_url, verdict.allowed, verdict.reason))
         return CheckResponse(allowed=verdict.allowed, reason=verdict.reason)
 
-    def list_verdicts(self) -> tuple[VerdictView, ...]:
-        return tuple(
-            VerdictView(v.target_url, v.allowed, v.reason) for v in self._repo.all()
-        )
+    def list_verdicts(self, req: ListVerdictsRequest) -> ListVerdictsResponse:
+        views = tuple(VerdictView(p.target_url, p.allowed, p.reason) for p in self._repo.all())
+        return ListVerdictsResponse(verdicts=views)

@@ -1,30 +1,45 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Protocol
 
-
-@dataclass(frozen=True)
-class CheckRequest:
-    target_url: str
+import tesser.context as ts
 
 
-@dataclass(frozen=True)
-class CheckResponse:
-    allowed: bool
-    reason: str
+class CheckRequest(ts.Request):
+
+    def __init__(self, target_url: str) -> None:
+        self.target_url = target_url
 
 
-@dataclass(frozen=True)
-class VerdictView:
+class CheckResponse(ts.Response):
 
-    target_url: str
-    allowed: bool
-    reason: str
+    def __init__(self, allowed: bool, reason: str) -> None:
+        self.allowed = allowed
+        self.reason = reason
 
 
-class Client(Protocol):
+class ListVerdictsRequest(ts.Request):
+
+    def __init__(self) -> None:
+        return None
+
+
+class VerdictView(ts.Response):
+
+    def __init__(self, target_url: str, allowed: bool, reason: str) -> None:
+        self.target_url = target_url
+        self.allowed = allowed
+        self.reason = reason
+
+
+class ListVerdictsResponse(ts.Response):
+
+    def __init__(self, verdicts: tuple[VerdictView, ...]) -> None:
+        self.verdicts = verdicts
+
+
+class Client(ts.Client, Protocol):
 
     def check(self, req: CheckRequest) -> CheckResponse: ...
 
-    def list_verdicts(self) -> tuple[VerdictView, ...]: ...
+    def list_verdicts(self, req: ListVerdictsRequest) -> ListVerdictsResponse: ...

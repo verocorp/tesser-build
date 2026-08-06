@@ -1,24 +1,25 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+from typing import Final
+
+import tesser.domain as ts
 
 from errors import invalid
 from serialization import canonical_decimal, canonical_str
 
-_CURRENCY_RE = re.compile(r"[A-Z]{3}")
+_CURRENCY_RE: Final[re.Pattern[str]] = re.compile(r"[A-Z]{3}")
 
 
-@dataclass(frozen=True)
-class MoneySpec:
-    amount: str
-    currency: str
+class MoneySpec(ts.Spec):
+
+    def __init__(self, amount: str, currency: str) -> None:
+        self.amount = amount
+        self.currency = currency
 
 
-@dataclass(frozen=True, init=False)
-class MoneyAmount:
-    _value: Decimal
+class MoneyAmount(ts.ValueObject):
 
     def __init__(self, value: str) -> None:
         try:
@@ -32,27 +33,27 @@ class MoneyAmount:
     def __str__(self) -> str:
         return canonical_decimal(self._value)
 
+    _value: Decimal
 
-@dataclass(frozen=True)
-class MoneyCurrency:
-    _value: str
 
-    def __post_init__(self) -> None:
-        if not _CURRENCY_RE.fullmatch(self._value):
-            raise invalid("invalid_budget_currency", f"budget currency {self._value!r} must be 3 uppercase letters")
+class MoneyCurrency(ts.ValueObject):
+
+    def __init__(self, value: str) -> None:
+        if not _CURRENCY_RE.fullmatch(value):
+            raise invalid("invalid_budget_currency", f"budget currency {value!r} must be 3 uppercase letters")
+        object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
         return canonical_str(self._value)
 
+    _value: str
 
-@dataclass(frozen=True, init=False)
-class Money:
-    _amount: MoneyAmount
-    _currency: MoneyCurrency
 
-    def __init__(self, spec: MoneySpec) -> None:
-        object.__setattr__(self, "_amount", MoneyAmount(spec.amount))
-        object.__setattr__(self, "_currency", MoneyCurrency(spec.currency))
+class Money(ts.ValueObject):
+
+    def __init__(self, amount: str, currency: str) -> None:
+        object.__setattr__(self, "_amount", MoneyAmount(amount))
+        object.__setattr__(self, "_currency", MoneyCurrency(currency))
 
     @property
     def amount(self) -> MoneyAmount:
@@ -61,3 +62,6 @@ class Money:
     @property
     def currency(self) -> MoneyCurrency:
         return self._currency
+
+    _amount: MoneyAmount
+    _currency: MoneyCurrency
