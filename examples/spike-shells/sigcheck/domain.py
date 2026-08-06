@@ -561,7 +561,11 @@ class Codebase(ts.AggregateRoot):
                     )
                 if len(found) == before:
                     found.extend(self._form_violations(module, target, lineno, is_member, has_alias))
-            elif role in CORE_STDLIB and pieces[0] not in CORE_STDLIB[role]:
+            elif (
+                role in CORE_STDLIB
+                and target not in CORE_STDLIB[role]
+                and pieces[0] not in CORE_STDLIB[role]
+            ):
                 found.append(
                     Violation(
                         f"{module.name()}:{lineno} imports {target}; domain, client, and application "

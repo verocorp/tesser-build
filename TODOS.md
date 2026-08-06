@@ -44,9 +44,30 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   domain imports `errors`/`serialization`.
 - [ ] **Pure-core allowlist candidates (from dogfood evidence only):**
   `urllib.parse` in `campaign.domain.values` / `linkpolicy.domain.policy`
-  (pure parsing — likely admit), `copy` in `campaign.domain.short_link`
-  (pure — likely admit), `secrets` in `campaign.application.service` (ambient
-  entropy — likely inject through a port instead of admitting).
+  (pure parsing — likely admit; the matcher accepts exact dotted entries, so
+  `urllib.parse` can be admitted without opening `urllib.request`), `copy` in
+  `campaign.domain.short_link` (pure — likely admit), `secrets` in
+  `campaign.application.service` (ambient entropy — likely inject through a
+  port instead of admitting).
+- [ ] **Named soundness holes in the import walker (from the ship adversarial
+  reviews — evasion paths, none live on the current trees):** (1) relative
+  imports are invisible — `ImportFrom` with `node.module is None`
+  (`from . import client`) records no edge, and `from .client import X`
+  records the unresolved name `client`, so the matrix / member-import rules
+  can be dodged and a relative re-export in a role `__init__` false-positives;
+  resolve `node.level` against the module's package. (2) `ast.walk` counts
+  function-local imports as module imports — a nested
+  `import tesser.domain as ts` satisfies exactly-once while the module would
+  NameError at class-definition time; collect top-level and nested edges
+  separately. (3) the `conftest` exemption is basename-anywhere — a
+  production `campaign/domain/conftest.py` escapes all rules (fold into the
+  conftest-governance followup). (4) `FilesystemSourceReader` sweeps every
+  `*.py` under the root with no exclusions (`.venv`, `build`, generated
+  code) — consumer-facing when sigcheck graduates. (5) the ratchet baseline
+  is branch-controlled — a PR can regenerate `sigcheck-ratchet` upward and
+  pass; accepted while the ratchet is temporary because the file's diff is
+  itself reviewed, but a shrink-only comparison against the base branch is
+  the durable fix if the ratchet outlives the conformance wave.
 - [ ] **Make rules.py conformant** (Chris 2026-08-06). The generator is
   currently exempt via `TOOLING_MODULES` in the whole-tree totality rule;
   make it conform (or rule where tooling lives) and shrink the exemption.
