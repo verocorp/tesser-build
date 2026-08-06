@@ -110,19 +110,19 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   exemption bullets from the AST guards (like TOOLING_MODULES) so governing
   conftest forces the RULES.md diff, and split the TOOLING_MODULES
   not-found vs wrong-shape errors.
-- [ ] **Two clauses claim more than the code enforces** (surfaced by the
-  /document-release doc review, 2026-08-06 — the clause literal is the
-  generated RULES.md row *and* the violation message, so softening either one
-  is a code change, not a docs edit; ruling needed on which side moves).
-  (1) "imports its tesser package **exactly once**" — the form half holds, but
-  the presence half is conditional: a srv/bootstrap module with no functions,
-  or a role module with no classes and no functions, may import nothing at all
-  (`domain.py:414,573`). The honest clause is at-most-once, exactly-once when
-  the module declares anything. (2) "imported as an **aliased** module" —
-  `from . import client` passes, because an `ImportFrom` with no module
-  records `has_alias=True`. Arguably right (the form still binds a module and
-  keeps qualified access classifiable) but the clause reads as a hard alias
-  requirement; same root cause as the `has_alias` honesty item above.
+- [x] **Two clauses claim more than the code enforces** — RESOLVED 2026-08-06,
+  Chris ruling: "the code should enforce what I specified." The code moved,
+  not the wording: (1) presence is unconditional — every role and
+  srv/bootstrap module carries its `import tesser.* as ts`, constants-only
+  and empty files included (the `__init__` files stay under their own total
+  rules: context/tests/srv-bootstrap inits empty — the srv/bootstrap
+  emptiness rule is new — and role inits re-export-only; test modules keep
+  at-most-once per Chris's earlier blessing, pending test annotation).
+  (2) `from . import client` now records as a member-form import and fires
+  the aliased-module rule; the only conformant context-module form is
+  `import <context>.<role> as <alias>`. Role-`__init__` dispatch now keys on
+  the reader's `is_package` bit instead of the child-name prefix, closing
+  soundness hole (7) below.
 
 ## Toolkit
 

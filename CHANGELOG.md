@@ -7,7 +7,7 @@ carries the analyzer package's own version — separate streams.)
 
 ## [0.0.16.0] - 2026-08-06
 
-The import-totality wave: sigcheck's rulebook grows from 41 to 56 rules
+The import-totality wave: sigcheck's rulebook grows from 41 to 57 rules
 so that every `.py` file in a governed tree answers for its imports —
 what it may import, in what form, and whether it has a home at all.
 

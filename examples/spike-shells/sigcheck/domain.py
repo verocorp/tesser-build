@@ -135,6 +135,7 @@ class Module(ts.Entity):
         except SyntaxError as error:
             raise ValueError(f"module {spec.name} does not parse: {error}") from error
         self._name = spec.name
+        self._is_package = spec.is_package
         parts = spec.name.split(".")
         self._package: tuple[str, ...] = tuple(parts if spec.is_package else parts[:-1])
         self._body: list[ast.stmt] = list(tree.body)
@@ -170,7 +171,7 @@ class Module(ts.Entity):
                         target = ".".join(base + (alias.name,))
                         if id(node) in top_level:
                             self._package_aliases[alias.asname or alias.name] = target
-                        self._edges.append((target, node.lineno, False, True))
+                        self._edges.append((target, node.lineno, True, False))
                     continue
                 target = ".".join(base + (node.module,))
                 for alias in node.names:
@@ -196,6 +197,9 @@ class Module(ts.Entity):
 
     def name(self) -> str:
         return self._name
+
+    def is_package(self) -> bool:
+        return self._is_package
 
     def body(self) -> tuple[ast.stmt, ...]:
         return tuple(self._body)
@@ -298,6 +302,8 @@ class Codebase(ts.AggregateRoot):
         if basename.startswith("test_"):
             return self._test_module_violations(module, blocks, contexts)
         if parts[0] in APP_PACKAGES:
+            if module.is_package():
+                return self._app_module_violations(module)
             return self._app_module_violations(module) + self._app_import_violations(
                 module, parts[0], contexts, blocks
             )
@@ -310,7 +316,7 @@ class Codebase(ts.AggregateRoot):
         if basename == "__main__":
             return ()
         if len(parts) >= 2 and parts[1] in ROLES:
-            if any(other.name().startswith(module.name() + ".") for other in self._modules):
+            if module.is_package():
                 return self._role_init_violations(module)
             return self._role_module_violations(module, parts[1], blocks) + self._import_violations(
                 module, parts[0], parts[1], contexts, blocks
@@ -375,6 +381,14 @@ class Codebase(ts.AggregateRoot):
         return tuple(found)
 
     def _app_module_violations(self, module: Module) -> tuple[Violation, ...]:
+        if module.is_package():
+            return tuple(
+                Violation(
+                    f"{module.name()} __init__ declares code at line {stmt.lineno}; "
+                    "a srv or bootstrap __init__ is empty"
+                )
+                for stmt in module.body()
+            )
         found: list[Violation] = []
         found.extend(self._stray_import_violations(module))
         seen_context = False
@@ -411,7 +425,7 @@ class Codebase(ts.AggregateRoot):
                             "a srv or bootstrap module imports tesser.context exactly once, as ts"
                         )
                     )
-        if not seen_context and not seen_any and module.function_names():
+        if not seen_context and not seen_any:
             found.append(
                 Violation(
                     f"{module.name()} never imports tesser.context; "
@@ -570,7 +584,7 @@ class Codebase(ts.AggregateRoot):
                             "a role module imports its tesser package exactly once, as ts"
                         )
                     )
-        if not seen_own and not seen_any and (module.class_defs() or module.function_names()):
+        if not seen_own and not seen_any:
             found.append(
                 Violation(
                     f"{module.name()} never imports {own_package}; "

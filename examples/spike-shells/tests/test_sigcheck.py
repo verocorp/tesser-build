@@ -1052,7 +1052,11 @@ def test_relative_imports_resolve_against_the_package(tmp_path: Path) -> None:
         "a relative import resolves inside the tree" in f
         for f in findings
     )
-    assert not any("rel.wiring" in f and "imports rel.client" in f for f in findings)
+    assert any(
+        "rel.wiring:2 imports names from rel.client; "
+        "a context module is imported as an aliased module, never its members" in f
+        for f in findings
+    )
     assert any(
         "rel.adapters.repo:2 imports rel.domain.money; the same-context matrix" in f
         for f in findings
@@ -1152,9 +1156,12 @@ def test_srv_and_bootstrap_tesser_form_modes(tmp_path: Path) -> None:
     write_module(
         tmp_path,
         "srv/tfinal.py",
+        "import tesser.context as ts\n"
         "import typing\n"
         "LIMIT: typing.Final[int] = 3\n",
     )
+    write_module(tmp_path, "srv/__init__.py", "X = 1\n")
+    write_module(tmp_path, "bootstrap/__init__.py", "")
     write_module(
         tmp_path,
         "konst/domain.py",
@@ -1177,14 +1184,27 @@ def test_srv_and_bootstrap_tesser_form_modes(tmp_path: Path) -> None:
         "a srv or bootstrap module imports tesser.context exactly once, as ts" in f
         for f in findings
     )
-    assert not any("srv.consts" in f for f in findings)
+    assert any(
+        "srv.consts never imports tesser.context; "
+        "a srv or bootstrap module imports tesser.context exactly once, as ts" in f
+        for f in findings
+    )
     assert any(
         "srv.annconst:1 declares a module constant without Final; "
         "a srv or bootstrap constant is Final" in f
         for f in findings
     )
     assert not any("srv.tfinal" in f for f in findings)
-    assert not any("konst.domain" in f and "never imports" in f for f in findings)
+    assert any(
+        "konst.domain never imports tesser.domain; "
+        "a role module imports its tesser package exactly once, as ts" in f
+        for f in findings
+    )
+    assert any(
+        "srv __init__ declares code at line 1; a srv or bootstrap __init__ is empty" in f
+        for f in findings
+    )
+    assert not any("bootstrap __init__ declares code" in f for f in findings)
 
 
 def test_form_rule_fires_in_tests_and_srv_and_skips_illegal_edges(tmp_path: Path) -> None:
