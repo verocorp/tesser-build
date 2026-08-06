@@ -161,8 +161,8 @@ class Module(ts.Entity):
         return tuple(self._classes.values())
 
     def resolve(self, node: ast.expr) -> tuple[str, str] | None:
-        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
-            package = self._package_aliases.get(node.value.id)
+        if isinstance(node, ast.Attribute) and isinstance(node.value, (ast.Name, ast.Attribute)):
+            package = self._package_aliases.get(ast.unparse(node.value))
             if package is not None:
                 return (package, node.attr)
         if isinstance(node, ast.Name):
@@ -437,9 +437,14 @@ class Codebase(ts.AggregateRoot):
                     found.append(
                         Violation(f"{where} is an undeclared class; a test double declares itself with @ts.fake")
                     )
-                elif not any(blocks.get(key) == "port" for key in self._base_keys(module, stmt)):
+                elif not any(
+                    blocks.get(key) in ("port", "client") for key in self._base_keys(module, stmt)
+                ):
                     found.append(
-                        Violation(f"{where} implements no ts.Port; a fake implements the port it doubles")
+                        Violation(
+                            f"{where} implements no ts.Port or ts.Client; "
+                            "a fake implements the port or client it doubles"
+                        )
                     )
             else:
                 found.append(
