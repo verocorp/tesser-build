@@ -67,8 +67,9 @@ free** (presence required, organization not prescribed):
   Handlers receive; gateways reach out.
 - **wiring** — the context's own construction (its providers / `NewClient`).
 
-The context's **top level is its public seam**: the `Client` interface + primitive
-DTOs. There is **no separate "contract" role**.
+The context's **`client` module is its public interface**: the `Client` interface
++ primitive DTOs in `client.py`, the context's `__init__.py` empty. There is
+**no separate "contract" role**.
 
 **`internal/` is optional, not required.** The boundary is the public-vs-impl
 package split, which stands on private fields + constructor-only construction.

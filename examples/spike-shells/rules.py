@@ -14,20 +14,41 @@ HOLE_NAMES: dict[str, str] = {
     "module.name()": "⟨module⟩",
     "cls.name": "⟨class⟩",
     "cls.lineno": "⟨line⟩",
+    "stmt.lineno": "⟨line⟩",
     "node.lineno": "⟨line⟩",
+    "lineno": "⟨line⟩",
     "callee.attr": "⟨method⟩",
     "callee.id": "⟨function⟩",
     "len(params)": "⟨count⟩",
     "arg.arg": "⟨name⟩",
     "span": "⟨count⟩",
+    "target": "⟨import⟩",
+    "KIND_NAME[block]": "⟨kind⟩",
+    "KIND_ROLE[block]": "⟨role⟩",
+    "KIND_NAME[touched]": "⟨kind⟩",
 }
 
 APPLIES_TO: dict[str, str] = {
     "a service method": "public service method",
-    "an aggregate constructor": "aggregate `__init__`",
-    "Codebase._constructor_violations": "aggregate class",
+    "a client method": "client protocol method",
+    "a domain constructor": "aggregate or entity `__init__`",
+    "an aggregate": "aggregate class",
+    "an entity": "entity class",
+    "an adapter": "repository or gateway method",
+    "a port": "port protocol method",
     "Codebase._delegation_violations": "every service method, including private",
     "Codebase._body_violations": "public service method",
+    "Codebase._module_violations": "context package",
+    "Codebase._context_init_violations": "context `__init__`",
+    "Codebase._role_module_violations": "context role module",
+    "Codebase._import_violations": "context role module",
+    "Codebase._app_import_violations": "srv / bootstrap module",
+    "Codebase._test_module_violations": "test module",
+    "Codebase._helper_violations": "@ts.helper function",
+    "Codebase._dependency_violations": "service `__init__`",
+    "Codebase._valueobject_violations": "value object `__init__`",
+    "Codebase._spec_violations": "spec class",
+    "Codebase._dto_violations": "request/response DTO",
 }
 
 WHERE_PREFIX = re.compile(r"^(?:⟨[^⟩]+⟩[.:]*)+\s*")
@@ -193,6 +214,10 @@ def rule_rows() -> list[RuleRow]:
                             f"domain.py:{call.lineno}: violation message lacks a '; <normative clause>' tail"
                         )
                     head, clause = message.rsplit("; ", 1)
+                    if "⟨" in clause:
+                        raise RuntimeError(
+                            f"domain.py:{call.lineno}: the normative clause after ';' is not a literal"
+                        )
                     shape = WHERE_PREFIX.sub("", head)
                     subject = binding.get("subject")
                     key = subject if isinstance(subject, str) else f"{cls.name}.{method.name}"

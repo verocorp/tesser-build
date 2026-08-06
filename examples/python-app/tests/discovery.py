@@ -9,16 +9,16 @@ APP_LEVEL_PACKAGES = frozenset({"bootstrap", "srv", "web", "tests"})
 
 
 def exposes_client(pkg_dir: pathlib.Path) -> bool:
-    init = pkg_dir / "__init__.py"
-    if not init.is_file():
-        return False
-    tree = ast.parse(init.read_text(encoding="utf-8"))
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom):
-            if any((alias.asname or alias.name) == "Client" for alias in node.names):
+    for candidate in (pkg_dir / "client.py", pkg_dir / "client" / "__init__.py"):
+        if not candidate.is_file():
+            continue
+        tree = ast.parse(candidate.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                if any((alias.asname or alias.name) == "Client" for alias in node.names):
+                    return True
+            if isinstance(node, ast.ClassDef) and node.name == "Client":
                 return True
-        if isinstance(node, ast.ClassDef) and node.name == "Client":
-            return True
     return False
 
 

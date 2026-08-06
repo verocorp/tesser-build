@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import campaign
+import campaign.client
 from bootstrap.bootstrap import new
 from bootstrap.config import Config
 from campaign.adapters.handlers.cli import Handler
@@ -14,8 +14,8 @@ from srv.cli.main import commands_for, dispatch
 
 
 class _AllowAllChecker:
-    def check(self, target_url: str) -> campaign.CheckOutcome:
-        return campaign.CheckOutcome(True, "ok")
+    def check(self, target_url: str) -> campaign.client.CheckOutcome:
+        return campaign.client.CheckOutcome(True, "ok")
 
 
 def test_create_campaign_transforms_args_to_a_success_line() -> None:

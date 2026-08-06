@@ -26,11 +26,12 @@ prescribed):
 | **adapters** | inbound `handlers` + outbound `gateways` (taxonomy below) | `handlers.md`, `repositories.md`, `gateway-cross-context.md` |
 | **wiring** | the context's own construction + its `Config` | `wiring.md` |
 
-The context's **top level is its public interface**: the `Client` interface +
-primitive DTOs (`public-interface.md`). There is no separate "contract" role —
-the public interface *is* the top of the context. A context is **discovered by its public interface**:
-anything that exposes a `Client` is a context (the verified impl's discovery
-check keys on exactly this).
+The context's **`client` role is its public interface**: the `Client` interface +
+primitive DTOs in `client.py` (or a `client/` package as it grows), with the
+context's `__init__.py` empty (`public-interface.md`). There is no separate
+"contract" role — the client role *is* the context's public face. A context is
+**discovered by its public interface**: anything whose `client` module exposes a
+`Client` is a context (the verified impl's discovery check keys on exactly this).
 
 **App-level, not per-context** — three roles:
 

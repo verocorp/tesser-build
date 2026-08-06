@@ -2,8 +2,9 @@
 
 <!-- tb-status: full -->
 
-A `Client` interface plus its DTOs, published at the component's top level — the
-API you deliberately offer, **and nothing else**. Its purpose is to be a
+A `Client` interface plus its DTOs, published in the component's `client` module
+(`client.py`, or a `client/` package as it grows; the context's `__init__.py`
+stays empty) — the API you deliberately offer, **and nothing else**. Its purpose is to be a
 **decoupling boundary**: it separates the contract callers depend on from how you
 build the internals, so you can refactor the internals freely and the contract
 holds. Concept authority: the public-interface-as-boundary and
@@ -11,8 +12,8 @@ dependency-direction discipline is the ported vero practice, genericized here; i
 strategic-design terms the `Client` + DTOs are the contract a bounded context
 exposes to its peers (`strategic-design.md#bounded-contexts`).
 
-Where this public interface sits in a context's anatomy — the top level of the context, above
-`domain` / `application` / `adapters` / `wiring` — is `map.md`'s subject.
+Where this public interface sits in a context's anatomy — the `client` role,
+beside `domain` / `application` / `adapters` / `wiring` — is `map.md`'s subject.
 
 **Why an interface and not just a facade?** A package of exported functions over a
 wired composition root — `func PlaceOrder(ctx, req) { return wire().PlaceOrder(ctx, req) }` —

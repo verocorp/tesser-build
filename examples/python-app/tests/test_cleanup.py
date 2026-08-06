@@ -2,16 +2,16 @@ from __future__ import annotations
 
 import pytest
 
-import campaign
+import campaign.client
 import linkpolicy.wiring.wire as linkpolicy_wire
-import reports
+import reports.client
 import reports.wiring.wire as reports_wire
 from bootstrap.bootstrap import CleanupStack, new
 from bootstrap.config import Config
 from campaign.wiring.config import Config as CampaignConfig
 from errors import DomainError
 from lifecycle import Closeable
-from linkpolicy import CheckRequest, CheckResponse, Client, VerdictView
+from linkpolicy.client import CheckRequest, CheckResponse, Client, VerdictView
 from linkpolicy.wiring.config import Config as LinkPolicyConfig
 from reports.client import LinkVerdictView
 from reports.wiring.config import Config as ReportsConfig
@@ -81,8 +81,8 @@ def test_reports_closeable_is_on_the_cleanup_stack(monkeypatch: pytest.MonkeyPat
     spy = _Spy("reports", order)
 
     def fake_build(
-        cfg: ReportsConfig, campaign_client: campaign.Client, policy_client: Client
-    ) -> tuple[reports.Client, Closeable]:
+        cfg: ReportsConfig, campaign_client: campaign.client.Client, policy_client: Client
+    ) -> tuple[reports.client.Client, Closeable]:
         return _DummyReports(), spy
 
     monkeypatch.setattr(reports_wire, "build", fake_build)
@@ -102,8 +102,8 @@ def test_app_close_surfaces_errors_instead_of_dropping(monkeypatch: pytest.Monke
     failing = _Spy("reports", order, fail=True)
 
     def fake_build(
-        cfg: ReportsConfig, campaign_client: campaign.Client, policy_client: Client
-    ) -> tuple[reports.Client, Closeable]:
+        cfg: ReportsConfig, campaign_client: campaign.client.Client, policy_client: Client
+    ) -> tuple[reports.client.Client, Closeable]:
         return _DummyReports(), failing
 
     monkeypatch.setattr(reports_wire, "build", fake_build)

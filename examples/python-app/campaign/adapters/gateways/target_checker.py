@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from campaign.client import CheckOutcome
-from linkpolicy import CheckRequest
-from linkpolicy import Client as LinkPolicyClient
+from linkpolicy.client import CheckRequest
+from linkpolicy.client import Client as LinkPolicyClient
 
 
 class LinkPolicyTargetChecker:

@@ -10,3 +10,56 @@ for _rel in (("..", ".."), ("..", "..", "..")):
         break
 else:
     raise RuntimeError(f"no tesser-py at ../../ or ../../../ from {_root}")
+
+from pathlib import Path
+
+from sigcheck.adapters import FilesystemSourceReader
+from sigcheck.application import SigcheckService
+from sigcheck.client import CheckRequest
+
+
+def check_tree(root: Path) -> tuple[str, ...]:
+    service = SigcheckService(FilesystemSourceReader())
+    return service.check(CheckRequest(root=str(root))).findings
+
+
+def write_module(root: Path, rel: str, source: str) -> None:
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(source)
+
+
+def conforming_tree(root: Path) -> None:
+    write_module(
+        root,
+        "app/domain.py",
+        "import tesser.domain as ts\n"
+        "class ThingSpec(ts.Spec):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n"
+        "class Thing(ts.AggregateRoot):\n"
+        "    def __init__(self, spec: ThingSpec) -> None:\n"
+        "        self.text = spec.text\n",
+    )
+    write_module(
+        root,
+        "app/client.py",
+        "import tesser.context as ts\n"
+        "class AskRequest(ts.Request):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n"
+        "class AskResponse(ts.Response):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    write_module(
+        root,
+        "app/application.py",
+        "import tesser.application as ts\n"
+        "from app.client import AskRequest, AskResponse\n"
+        "class AskService(ts.ApplicationService):\n"
+        "    def ask(self, request: AskRequest) -> AskResponse:\n"
+        "        return AskResponse(text=request.text)\n"
+        "    def _helper(self, anything: int) -> int:\n"
+        "        return anything\n",
+    )

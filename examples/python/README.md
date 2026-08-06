@@ -7,20 +7,18 @@ by `mypy --strict` and `pytest` in CI.
 
 ## Layout
 
-- **The running arc** (top-level packages) — a link-campaign HTTP service, the
-  full vertical slice:
-  - `campaign/` — the domain: value objects, the `ShortLink` entity, the
-    `Campaign` aggregate.
-  - `campaignapp/` — the application service + the repository `Protocol`.
-  - `linkcampaign/` — the public contract: the `Client` `Protocol` + DTOs.
-  - `linkcampaignimpl/` — the concrete implementation: in-memory repository, and
-    the `new_client` seam that satisfies `Client` structurally.
-  - `transport/` — the HTTP handler (depends only on `Client`).
-  - `main.py` — the composition root (`wire()`), plus a runnable `main()`.
-- **`catalog/`** — the two value-object shapes the running arc doesn't need: a
-  compound VO (`Money`, `decimal.Decimal`) and a collection VO (`Labels`), with
-  a `Product` entity holding them.
+- **`campaign/`** — the domain: value objects, the `ShortLink` entity, the
+  `Campaign` aggregate.
+- **`catalog/`** — the two remaining value-object shapes: a compound VO
+  (`Money`, `decimal.Decimal`) and a collection VO (`Labels`), with a
+  `Product` entity holding them.
 - `tests/` — the test suite for both.
+
+The application arc that used to live here (service + interface-package
+public contract + HTTP transport + composition root) was dropped: the
+two-package `linkcampaign`/`linkcampaignimpl` interface pattern is superseded
+by the per-context `client.py` anatomy, whose full worked example is
+`examples/python-app/`.
 
 ## Run it
 
@@ -29,13 +27,10 @@ python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements-dev.txt
 
 # type-check (must be clean under --strict)
-MYPYPATH=. mypy --strict campaign campaignapp linkcampaign linkcampaignimpl transport catalog main.py tests conftest.py
+MYPYPATH=. mypy --strict campaign catalog serialization.py tests conftest.py
 
 # tests
 pytest -q
-
-# run the service
-python main.py   # serves the link-campaign API on :8080
 ```
 
 No packaging step: `conftest.py` puts this directory on `sys.path` so the

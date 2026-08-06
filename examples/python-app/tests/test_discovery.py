@@ -47,7 +47,10 @@ def test_totality_guard_teeth_flags_clientless_context(tmp_path: pathlib.Path) -
 
 def test_discovery_teeth_finds_client_bearing_context(tmp_path: pathlib.Path) -> None:
     (tmp_path / "billing").mkdir()
-    (tmp_path / "billing" / "__init__.py").write_text("from billing.client import Client\n")
+    (tmp_path / "billing" / "__init__.py").write_text("")
+    (tmp_path / "billing" / "client.py").write_text(
+        "from typing import Protocol\n\nclass Client(Protocol):\n    def ping(self) -> None: ...\n"
+    )
     contexts, unclassified = classify(tmp_path)
     assert contexts == ["billing"]
     assert not unclassified
@@ -57,7 +60,10 @@ def test_web_dir_is_app_level_not_a_context(tmp_path: pathlib.Path) -> None:
     (tmp_path / "web" / "admin").mkdir(parents=True)
     (tmp_path / "web" / "ops").mkdir()
     (tmp_path / "billing").mkdir()
-    (tmp_path / "billing" / "__init__.py").write_text("from billing.client import Client\n")
+    (tmp_path / "billing" / "__init__.py").write_text("")
+    (tmp_path / "billing" / "client.py").write_text(
+        "from typing import Protocol\n\nclass Client(Protocol):\n    def ping(self) -> None: ...\n"
+    )
     contexts, unclassified = classify(tmp_path)
     assert contexts == ["billing"]
     assert "web" not in unclassified
@@ -65,7 +71,13 @@ def test_web_dir_is_app_level_not_a_context(tmp_path: pathlib.Path) -> None:
 
 
 def test_exposes_client_detects_direct_definition(tmp_path: pathlib.Path) -> None:
-    (tmp_path / "__init__.py").write_text(
+    (tmp_path / "client.py").write_text(
         "from typing import Protocol\n\nclass Client(Protocol):\n    def ping(self) -> None: ...\n"
     )
+    assert exposes_client(tmp_path)
+
+
+def test_exposes_client_detects_a_client_package_reexport(tmp_path: pathlib.Path) -> None:
+    (tmp_path / "client").mkdir()
+    (tmp_path / "client" / "__init__.py").write_text("from client.iface import Client\n")
     assert exposes_client(tmp_path)
