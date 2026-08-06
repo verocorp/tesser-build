@@ -129,15 +129,20 @@ class Module(ts.Entity):
         self._imported: dict[str, tuple[str, str]] = {}
         self._classes: dict[str, ast.ClassDef] = {}
         self._edges: list[tuple[str, int]] = []
+        self._tesser_imports: list[tuple[str, int, str | None, bool]] = []
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
                     self._package_aliases[alias.asname or alias.name] = alias.name
                     self._edges.append((alias.name, node.lineno))
+                    if alias.name.split(".")[0] == "tesser":
+                        self._tesser_imports.append((alias.name, node.lineno, alias.asname, False))
             elif isinstance(node, ast.ImportFrom) and node.module:
                 for alias in node.names:
                     self._imported[alias.asname or alias.name] = (node.module, alias.name)
                 self._edges.append((node.module, node.lineno))
+                if node.module.split(".")[0] == "tesser":
+                    self._tesser_imports.append((node.module, node.lineno, None, True))
         self._functions: set[str] = set()
         for node in tree.body:
             if isinstance(node, ast.ClassDef):
@@ -153,6 +158,9 @@ class Module(ts.Entity):
 
     def import_edges(self) -> tuple[tuple[str, int], ...]:
         return tuple(self._edges)
+
+    def tesser_imports(self) -> tuple[tuple[str, int, str | None, bool], ...]:
+        return tuple(self._tesser_imports)
 
     def function_names(self) -> frozenset[str]:
         return frozenset(self._functions)
@@ -335,16 +343,50 @@ class Codebase(ts.AggregateRoot):
         found: list[Violation] = []
         holds_handler = self._holds_kind(module, blocks, "handler")
         holds_gateway = self._holds_kind(module, blocks, "gateway")
+        own_package = ROLE_TESSER_PACKAGE[role]
+        seen_own = False
+        for target, lineno, alias, from_form in module.tesser_imports():
+            if target != own_package:
+                found.append(
+                    Violation(
+                        f"{module.name()}:{lineno} imports {target}; "
+                        "a role module imports only its own tesser package"
+                    )
+                )
+            elif seen_own:
+                found.append(
+                    Violation(
+                        f"{module.name()}:{lineno} imports {target} again; "
+                        "a role module imports its tesser package exactly once, as ts"
+                    )
+                )
+            else:
+                seen_own = True
+                if from_form:
+                    found.append(
+                        Violation(
+                            f"{module.name()}:{lineno} imports names from {target}; "
+                            "a role module imports its tesser package exactly once, as ts"
+                        )
+                    )
+                elif alias != "ts":
+                    found.append(
+                        Violation(
+                            f"{module.name()}:{lineno} imports {target} without the ts alias; "
+                            "a role module imports its tesser package exactly once, as ts"
+                        )
+                    )
+        if not seen_own and (module.class_defs() or module.function_names()):
+            found.append(
+                Violation(
+                    f"{module.name()} never imports {own_package}; "
+                    "a role module imports its tesser package exactly once, as ts"
+                )
+            )
         for target, lineno in module.import_edges():
             pieces = target.split(".")
             if pieces[0] == "tesser":
-                if target != ROLE_TESSER_PACKAGE[role]:
-                    found.append(
-                        Violation(
-                            f"{module.name()}:{lineno} imports {target}; "
-                            "a role module imports only its own tesser package"
-                        )
-                    )
+                continue
             elif pieces[0] in contexts:
                 tail = pieces[1] if len(pieces) > 1 else ""
                 if pieces[0] == context:
@@ -415,6 +457,37 @@ class Codebase(ts.AggregateRoot):
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
+        seen_testing = False
+        for target, lineno, alias, from_form in module.tesser_imports():
+            if target != "tesser.testing":
+                found.append(
+                    Violation(
+                        f"{module.name()}:{lineno} imports {target}; a test module imports only tesser.testing"
+                    )
+                )
+            elif seen_testing:
+                found.append(
+                    Violation(
+                        f"{module.name()}:{lineno} imports {target} again; "
+                        "a test module imports tesser.testing at most once, as ts"
+                    )
+                )
+            else:
+                seen_testing = True
+                if from_form:
+                    found.append(
+                        Violation(
+                            f"{module.name()}:{lineno} imports names from {target}; "
+                            "a test module imports tesser.testing at most once, as ts"
+                        )
+                    )
+                elif alias != "ts":
+                    found.append(
+                        Violation(
+                            f"{module.name()}:{lineno} imports {target} without the ts alias; "
+                            "a test module imports tesser.testing at most once, as ts"
+                        )
+                    )
         for stmt in module.body():
             if isinstance(stmt, (ast.Import, ast.ImportFrom)):
                 continue

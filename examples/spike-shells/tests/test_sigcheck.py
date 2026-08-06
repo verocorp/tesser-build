@@ -676,6 +676,121 @@ def test_only_a_gateway_reaches_a_foreign_client(tmp_path: Path) -> None:
     )
 
 
+def test_role_module_tesser_import_is_exactly_once_as_ts(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "lone/domain.py",
+        "class Bare:\n"
+        "    pass\n",
+    )
+    write_module(
+        tmp_path,
+        "noalias/domain.py",
+        "import tesser.domain as td\n"
+        "class ThingSpec(td.Spec):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    write_module(
+        tmp_path,
+        "fromform/domain.py",
+        "from tesser.domain import Spec\n"
+        "class OtherSpec(Spec):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    write_module(
+        tmp_path,
+        "dup/domain.py",
+        "import tesser.domain as ts\n"
+        "import tesser.domain as ts\n"
+        "class DupSpec(ts.Spec):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "lone.domain never imports tesser.domain; "
+        "a role module imports its tesser package exactly once, as ts" in f
+        for f in findings
+    )
+    assert any(
+        "noalias.domain:1 imports tesser.domain without the ts alias; "
+        "a role module imports its tesser package exactly once, as ts" in f
+        for f in findings
+    )
+    assert any(
+        "fromform.domain:1 imports names from tesser.domain; "
+        "a role module imports its tesser package exactly once, as ts" in f
+        for f in findings
+    )
+    assert any(
+        "dup.domain:2 imports tesser.domain again; "
+        "a role module imports its tesser package exactly once, as ts" in f
+        for f in findings
+    )
+
+
+def test_reexport_only_role_init_needs_no_tesser_import(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "deep/domain/__init__.py",
+        "from deep.domain.money import Money\n",
+    )
+    write_module(
+        tmp_path,
+        "deep/domain/money.py",
+        "import tesser.domain as ts\n"
+        "class Money(ts.ValueObject):\n"
+        "    def __init__(self, amount: str) -> None:\n"
+        "        object.__setattr__(self, '_amount', amount)\n",
+    )
+    findings = check_tree(tmp_path)
+    assert not any("deep.domain" in f and "exactly once, as ts" in f for f in findings)
+
+
+def test_test_module_tesser_import_rules(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/test_imports.py",
+        "import tesser.domain as ts\n"
+        "import tesser.testing as th\n"
+        "import tesser.testing as ts2\n"
+        "def test_nothing() -> None:\n"
+        "    assert True\n",
+    )
+    write_module(
+        tmp_path,
+        "app/test_fromform.py",
+        "from tesser.testing import fake\n"
+        "def test_nothing() -> None:\n"
+        "    assert fake is not None\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "app.test_imports:1 imports tesser.domain; a test module imports only tesser.testing" in f
+        for f in findings
+    )
+    assert any(
+        "app.test_imports:2 imports tesser.testing without the ts alias; "
+        "a test module imports tesser.testing at most once, as ts" in f
+        for f in findings
+    )
+    assert any(
+        "app.test_imports:3 imports tesser.testing again; "
+        "a test module imports tesser.testing at most once, as ts" in f
+        for f in findings
+    )
+    assert any(
+        "app.test_fromform:1 imports names from tesser.testing; "
+        "a test module imports tesser.testing at most once, as ts" in f
+        for f in findings
+    )
+
+
 def test_an_adapters_module_holds_one_kind(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(

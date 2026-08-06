@@ -23,6 +23,7 @@ HOLE_NAMES: dict[str, str] = {
     "arg.arg": "⟨name⟩",
     "span": "⟨count⟩",
     "target": "⟨import⟩",
+    "own_package": "⟨package⟩",
     "KIND_NAME[block]": "⟨kind⟩",
     "KIND_ROLE[block]": "⟨role⟩",
     "KIND_NAME[touched]": "⟨kind⟩",
