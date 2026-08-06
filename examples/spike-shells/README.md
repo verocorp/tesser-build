@@ -50,14 +50,23 @@ row.
 - **Classification is nominal.** A context is any package with role modules
   (`domain` / `application` / `client` / `adapters` / `wiring`, as modules or
   subtrees), and a class's kind is its declared `ts.*` base. A tree that
-  declares nothing is mostly invisible to the context rules; on unmigrated
-  code the loudest family is **test totality** — every `test_*.py` anywhere
-  is held to the tests / `@ts.helper` / `@ts.fake` rules.
+  declares nothing still answers to the rules that need no declaration. On
+  unmigrated code the two loud families are **whole-tree totality** — every
+  module must belong to a context, `srv`, `bootstrap`, or `tests`, so a
+  module with no home is a finding — and **test totality**, where every
+  `test_*.py` anywhere is held to the tests / `@ts.helper` / `@ts.fake`
+  rules. The per-role rules (placement, imports, signatures) reach only the
+  modules the layout already names as a role.
 - **Point it at a source directory, not a repo root.** The spike-grade reader
   walks every `.py` under the root with no skip list — a `.venv` or
   `node_modules` in scope will be audited too.
-- **All-or-nothing.** There is no `--exclude` adoption ratchet; incremental
-  rollout arrives when these rules graduate into `tessercheck-py`.
+- **All-or-nothing per run.** sigcheck has no `--exclude` flag and no built-in
+  ratchet — a run audits the whole tree. Adoption is possible *around* the
+  tool: freeze today's findings as a baseline and fail only on ones outside
+  it. `examples/python-app` does exactly that in CI (`sigcheck-ratchet`, a
+  finding set with line numbers stripped) while it burns its bill down. An
+  in-tool incremental rollout arrives when these rules graduate into
+  `tessercheck-py`.
 
 ## Verify this tree
 

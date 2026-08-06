@@ -108,9 +108,26 @@ traceback.
 pip install -r requirements-dev.txt
 ruff check .
 PYTHONPATH=. lint-imports
-MYPYPATH=. mypy --strict errors.py lifecycle.py serialization.py httpwire.py cliwire.py campaign linkpolicy reports bootstrap srv tests conftest.py
+MYPYPATH=.:../../tesser-py mypy --strict errors.py lifecycle.py serialization.py httpwire.py cliwire.py campaign linkpolicy reports bootstrap srv tests conftest.py
 pytest -q
 ```
+
+One more gate runs in CI and does **not** pass on a bare run yet. The tree
+declares itself with the `ts.*` shells, so `tesser-py` is on both paths and
+**sigcheck** (`examples/spike-shells`) audits it:
+
+```
+PYTHONPATH=../spike-shells:../../tesser-py python3 -m sigcheck .
+```
+
+That exits 1 with 173 findings today — the import-totality wave billed this
+tree after it had already reached zero. So CI gates the *difference*, not the
+count: the run is compared against `sigcheck-ratchet`, a frozen finding set
+with line numbers stripped. A finding outside the baseline fails even at an
+equal total, and a baseline entry that stops firing fails as stale, so a fix
+cannot buy a fresh violation. The baseline shrinks to nothing as the
+conformance wave lands (TODOS.md, "Import-totality wave followups"), and then
+the step goes back to plain zero findings.
 
 `mypy --strict` + `pytest` are the same bar the other examples meet. On top of
 them, the architecture rules are **executable spec** — they fail on the violations
