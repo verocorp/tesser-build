@@ -119,9 +119,10 @@ class Violation(ts.ValueObject):
 
 class ModuleSpec(ts.Spec):
 
-    def __init__(self, name: str, source: str) -> None:
+    def __init__(self, name: str, source: str, is_package: bool) -> None:
         self.name = name
         self.source = source
+        self.is_package = is_package
 
 
 class Module(ts.Entity):
@@ -134,31 +135,52 @@ class Module(ts.Entity):
         except SyntaxError as error:
             raise ValueError(f"module {spec.name} does not parse: {error}") from error
         self._name = spec.name
+        parts = spec.name.split(".")
+        self._package: tuple[str, ...] = tuple(parts if spec.is_package else parts[:-1])
         self._body: list[ast.stmt] = list(tree.body)
         self._package_aliases: dict[str, str] = {}
         self._imported: dict[str, tuple[str, str]] = {}
         self._classes: dict[str, ast.ClassDef] = {}
         self._edges: list[tuple[str, int, bool, bool]] = []
         self._tesser_imports: list[tuple[str, int, str | None, bool]] = []
+        top_level = {
+            id(node) for node in tree.body if isinstance(node, (ast.Import, ast.ImportFrom))
+        }
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    self._package_aliases[alias.asname or alias.name] = alias.name
+                    if id(node) in top_level:
+                        self._package_aliases[alias.asname or alias.name] = alias.name
+                        if alias.name.split(".")[0] == "tesser":
+                            self._tesser_imports.append((alias.name, node.lineno, alias.asname, False))
                     self._edges.append((alias.name, node.lineno, False, alias.asname is not None))
-                    if alias.name.split(".")[0] == "tesser":
-                        self._tesser_imports.append((alias.name, node.lineno, alias.asname, False))
-            elif isinstance(node, ast.ImportFrom) and node.module:
+            elif isinstance(node, ast.ImportFrom):
+                base = self._relative_base(node.level)
+                if node.module is None:
+                    for alias in node.names:
+                        target = ".".join(base + (alias.name,))
+                        if id(node) in top_level:
+                            self._package_aliases[alias.asname or alias.name] = target
+                        self._edges.append((target, node.lineno, False, True))
+                    continue
+                target = ".".join(base + (node.module,))
                 for alias in node.names:
-                    self._imported[alias.asname or alias.name] = (node.module, alias.name)
-                self._edges.append((node.module, node.lineno, True, False))
-                if node.module.split(".")[0] == "tesser":
-                    self._tesser_imports.append((node.module, node.lineno, None, True))
+                    if id(node) in top_level:
+                        self._imported[alias.asname or alias.name] = (target, alias.name)
+                self._edges.append((target, node.lineno, True, False))
+                if target.split(".")[0] == "tesser" and id(node) in top_level:
+                    self._tesser_imports.append((target, node.lineno, None, True))
         self._functions: set[str] = set()
         for node in tree.body:
             if isinstance(node, ast.ClassDef):
                 self._classes[node.name] = node
             elif isinstance(node, ast.FunctionDef):
                 self._functions.add(node.name)
+
+    def _relative_base(self, level: int) -> tuple[str, ...]:
+        if level == 0:
+            return ()
+        return self._package[: max(0, len(self._package) - (level - 1))]
 
     def name(self) -> str:
         return self._name
@@ -193,14 +215,17 @@ class Module(ts.Entity):
 
 class CodebaseSpec(ts.Spec):
 
-    def __init__(self, sources: tuple[tuple[str, str], ...]) -> None:
+    def __init__(self, sources: tuple[tuple[str, str, bool], ...]) -> None:
         self.sources = sources
 
 
 class Codebase(ts.AggregateRoot):
 
     def __init__(self, spec: CodebaseSpec) -> None:
-        modules = tuple(Module(ModuleSpec(name=name, source=source)) for name, source in spec.sources)
+        modules = tuple(
+            Module(ModuleSpec(name=name, source=source, is_package=is_package))
+            for name, source, is_package in spec.sources
+        )
         names = [module.name() for module in modules]
         if len(names) != len(set(names)):
             raise ValueError("module names must be unique")
@@ -334,7 +359,9 @@ class Codebase(ts.AggregateRoot):
     def _app_module_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
         seen_context = False
+        seen_any = False
         for target, lineno, alias, from_form in module.tesser_imports():
+            seen_any = True
             if target != "tesser.context":
                 found.append(
                     Violation(
@@ -365,7 +392,7 @@ class Codebase(ts.AggregateRoot):
                             "a srv or bootstrap module imports tesser.context exactly once, as ts"
                         )
                     )
-        if not seen_context and module.function_names():
+        if not seen_context and not seen_any and module.function_names():
             found.append(
                 Violation(
                     f"{module.name()} never imports tesser.context; "
@@ -490,7 +517,9 @@ class Codebase(ts.AggregateRoot):
         holds_gateway = self._holds_kind(module, blocks, "gateway")
         own_package = ROLE_TESSER_PACKAGE[role]
         seen_own = False
+        seen_any = False
         for target, lineno, alias, from_form in module.tesser_imports():
+            seen_any = True
             if target != own_package:
                 found.append(
                     Violation(
@@ -521,7 +550,7 @@ class Codebase(ts.AggregateRoot):
                             "a role module imports its tesser package exactly once, as ts"
                         )
                     )
-        if not seen_own and (module.class_defs() or module.function_names()):
+        if not seen_own and not seen_any and (module.class_defs() or module.function_names()):
             found.append(
                 Violation(
                     f"{module.name()} never imports {own_package}; "
@@ -1073,7 +1102,8 @@ class Codebase(ts.AggregateRoot):
 
     @staticmethod
     def _is_final(annotation: ast.expr) -> bool:
-        return ast.unparse(annotation).startswith("Final")
+        text = ast.unparse(annotation)
+        return text in ("Final", "typing.Final") or text.startswith(("Final[", "typing.Final["))
 
     @staticmethod
     def _base_keys(module: Module, cls: ast.ClassDef) -> tuple[tuple[str, str], ...]:

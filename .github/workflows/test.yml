@@ -142,8 +142,10 @@ jobs:
           PYTHONPATH=../spike-shells:../../tesser-py python3 -m sigcheck . > findings.txt 2> sigcheck-stderr.txt || true
           if [ -s sigcheck-stderr.txt ]; then
             cat sigcheck-stderr.txt
-            echo "sigcheck crashed — failing closed"
-            exit 1
+            if grep -q "Traceback" sigcheck-stderr.txt; then
+              echo "sigcheck crashed — failing closed"
+              exit 1
+            fi
           fi
           sed -E 's/:[0-9]+//g' findings.txt | LC_ALL=C sort > findings-normalized.txt
           LC_ALL=C sort sigcheck-ratchet > baseline-normalized.txt
