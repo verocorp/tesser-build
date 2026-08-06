@@ -96,6 +96,70 @@ jobs:
         working-directory: examples/spike-shells
         run: PYTHONPATH=.:../../tesser-py lint-imports --no-cache
 
+  spike-llmport:
+    # Gates the LLM tool-call port spike at the spike-shells bar: sigcheck
+    # over the whole tree, then mypy --strict + pytest on the pure modules.
+    # Modules importing livekit-agents (scheduling/adapters/livekit.py and
+    # srv/voice/agent.py) are in sigcheck's walk (pure AST) but excluded
+    # from the mypy crawl — livekit-agents is not installed in CI; the
+    # spike README records that boundary.
+    name: spike-llmport (sigcheck + mypy --strict + pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dev tooling
+        run: pip install -r examples/spike-llmport/requirements-dev.txt
+      - name: examples/spike-llmport — sigcheck (ratcheted on the two named gaps)
+        # The ratchet carries exactly one finding per open ruling this spike
+        # evidences: srv.voice.agent.ToolAgent is a class (the host-vocabulary
+        # gap) and voicewire belongs to no governed package (the root-module-
+        # homes gap) — see README "The host/handler split". Ratcheted like
+        # python-app's gate: baseline entries are the accepted evidence,
+        # anything new fails, a stale entry fails, a crash or unexpected exit
+        # fails closed. When the rulings land, burn the baseline and restore
+        # the plain zero-findings step.
+        working-directory: examples/spike-llmport
+        run: |
+          set +e
+          PYTHONPATH=../spike-shells:../../tesser-py python3 -m sigcheck . > findings.txt 2> sigcheck-stderr.txt
+          _SIGCHECK_EXIT=$?
+          set -e
+          if [ "$_SIGCHECK_EXIT" -gt 1 ]; then
+            cat sigcheck-stderr.txt
+            echo "sigcheck exited $_SIGCHECK_EXIT — failing closed"
+            exit 1
+          fi
+          if [ -s sigcheck-stderr.txt ]; then
+            cat sigcheck-stderr.txt
+            if grep -q "Traceback" sigcheck-stderr.txt; then
+              echo "sigcheck crashed — failing closed"
+              exit 1
+            fi
+          fi
+          sed -E 's/:[0-9]+//g' findings.txt | LC_ALL=C sort > findings-normalized.txt
+          LC_ALL=C sort sigcheck-ratchet > baseline-normalized.txt
+          echo "sigcheck findings: $(wc -l < findings.txt | tr -d ' ') (baseline: $(wc -l < sigcheck-ratchet | tr -d ' '))"
+          new=$(LC_ALL=C comm -13 baseline-normalized.txt findings-normalized.txt)
+          if [ -n "$new" ]; then
+            echo "findings not in the ratchet baseline:"
+            echo "$new"
+            exit 1
+          fi
+          stale=$(LC_ALL=C comm -23 baseline-normalized.txt findings-normalized.txt)
+          if [ -n "$stale" ]; then
+            echo "stale baseline entries (no longer firing — regenerate sigcheck-ratchet):"
+            echo "$stale"
+            exit 1
+          fi
+      - name: examples/spike-llmport — mypy --strict + pytest
+        working-directory: examples/spike-llmport
+        run: |
+          MYPYPATH=.:../../tesser-py mypy --strict --exclude 'scheduling/adapters/livekit\.py' scheduling voicewire.py tests
+          pytest -q
+
   python-app-example:
     # Gates the composition-root / wiring worked example (Python) at the same bar:
     # mypy --strict + pytest, now with the two linters that own its architecture

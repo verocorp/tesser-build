@@ -5,6 +5,45 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.17.0] - 2026-08-06
+
+The LLM tool-call port spike: `examples/spike-llmport`, a `scheduling`
+bounded context whose next workflow step is decided by an LLM tool call,
+built in the `ts.*` shell idiom under the import-totality rulebook (the
+`scheduling` context sigcheck-clean, the tree ratcheted at two accepted
+findings), and shaped to answer three standing questions with running
+code.
+
+The design: the tool surface is data, not decorated host functions — and
+the context's edge owns all of it. The service exposes one-Request-one-Response use
+cases (`begin`/`provide_name`/`choose_slot`/`confirm`/`reoffer`/`status`);
+the LLM wire — tool vocabulary, JSON schemas with the offered slots
+embedded as a live enum, raw-argument parsing, tool-to-use-case dispatch,
+and the conflict choreography (a taken slot re-offers fresh slots in the
+error the model sees) — lives entirely in `adapters/handlers.py`. The
+begin use case resumes an in-flight booking, so a session reconnect
+continues the conversation instead of resetting it; the aggregate rejects
+inconsistent reconstitution outright.
+
+The host/handler question answered in code: the AgentSession wrapper is a
+host. Once `instructions()` moved onto the handler, the LiveKit agent
+became fully context-generic — `srv/voice/agent.py`'s `ToolAgent` imports
+nothing from any context and speaks to `voicewire.ToolHandler`, a
+state-generic protocol whose conformance is proven by a typed assertion
+under mypy --strict. One voice host can mount any context's LLM handler,
+exactly as the HTTP host mounts HTTP handlers. What blocks enacting the
+verdict is carried as evidence: the tree's sigcheck ratchet holds exactly
+one finding per open ruling (a class in srv — the host-vocabulary gap;
+`voicewire.py` homeless — the root-module-homes gap), fail-closed in CI.
+
+Hardened by a seven-reviewer pre-landing pass (four specialists, Claude
+adversarial, two Codex passes): the recovery path can no longer bypass the
+halt policy, tool dispatch is serialized per session, model-supplied
+strings are bounded, an exhausted directory surfaces both the conflict and
+the exhaustion, and the README records the five deliberate production
+boundaries plus a newly surfaced rulebook collision (sigcheck mandates a
+srv shell import that ruff's F401 forbids).
+
 ## [0.0.16.0] - 2026-08-06
 
 The import-totality wave: sigcheck's rulebook grows from 41 to 57 rules

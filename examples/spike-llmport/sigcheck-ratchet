@@ -1,0 +1,2 @@
+srv.voice.agent.ToolAgent is a class; a srv or bootstrap module holds only imports, declared functions, and Final constants
+voicewire belongs to no governed package; every module belongs to a context, srv, bootstrap, or tests
