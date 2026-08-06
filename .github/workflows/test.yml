@@ -146,7 +146,7 @@ jobs:
       - name: examples/spike-llmport — mypy --strict + pytest
         working-directory: examples/spike-llmport
         run: |
-          MYPYPATH=.:../../tesser-py mypy --strict scheduling/domain.py scheduling/client.py scheduling/application.py scheduling/adapters/handlers.py tests
+          MYPYPATH=.:../../tesser-py mypy --strict voicewire.py scheduling/domain.py scheduling/client.py scheduling/application.py scheduling/adapters/handlers.py tests
           pytest -q
 
   python-app-example:

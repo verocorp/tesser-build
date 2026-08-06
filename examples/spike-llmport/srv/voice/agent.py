@@ -1,36 +1,17 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Mapping
-from typing import Protocol
+from collections.abc import Awaitable, Callable
 
 import tesser.context as ts
 from livekit.agents import Agent, ToolError, function_tool
 
-
-class ToolState(Protocol):
-
-    reply: str
-
-
-class ToolHandler(Protocol):
-
-    def instructions(self) -> str: ...
-
-    def begin(self) -> ToolState: ...
-
-    def status(self) -> ToolState: ...
-
-    def tools(self, state: ToolState) -> tuple[dict[str, object], ...]: ...
-
-    def dispatch(
-        self, tool: str, raw_arguments: Mapping[str, object]
-    ) -> ToolState: ...
+import voicewire
 
 
 class ToolAgent(Agent):
 
     def __init__(
-        self, handler: ToolHandler, halt: Callable[[], Awaitable[None]]
+        self, handler: voicewire.ToolHandler, halt: Callable[[], Awaitable[None]]
     ) -> None:
         super().__init__(instructions=handler.instructions())
         self._handler = handler
@@ -39,7 +20,7 @@ class ToolAgent(Agent):
     async def on_enter(self) -> None:
         await self._rebind(self._handler.begin())
 
-    async def _rebind(self, state: ToolState) -> None:
+    async def _rebind(self, state: voicewire.ToolState) -> None:
         await self.update_tools(
             [
                 function_tool(self._shim(schema), raw_schema=schema)

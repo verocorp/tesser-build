@@ -19,6 +19,7 @@ scheduling/
     handlers.py   LlmToolHandler — the LLM wire: tool vocabulary, schemas, dispatch
     livekit.py    SchedulingAgent — the LiveKit translation over the handler
 tests/            domain/application/handler tests; each declares its own @ts.fake port doubles
+voicewire.py      the host↔handler contract for the voice mechanism (httpwire analog)
 srv/
   voice/agent.py  option B of the host/handler split: a context-generic ToolAgent
 ```
@@ -83,23 +84,27 @@ structure can answer:
 - **Option B — `srv/voice/agent.py`** (`ToolAgent`). The wrapper turns out
   to be **fully context-generic**: once `instructions()` moved onto the
   handler (it was content, misplaced in the transport), `ToolAgent` imports
-  nothing from any context — it speaks to a structural `ToolHandler`
-  protocol (instructions/begin/status/tools/dispatch). One voice host can
-  mount any context's LLM handler, exactly as the HTTP host mounts HTTP
-  handlers. This matches the settled anatomy: the host owns the transport,
-  the handler owns the content.
+  nothing from any context — it speaks to the `ToolHandler` protocol
+  (instructions/begin/status/tools/dispatch). One voice host can mount any
+  context's LLM handler, exactly as the HTTP host mounts HTTP handlers.
+  This matches the settled anatomy: the host owns the transport, the
+  handler owns the content. The protocol itself lives in **`voicewire.py`**,
+  not srv — per handlers.md, the host↔handler vocabulary is the contract
+  both sides import and neither owns (the voice analog of `httpwire.py`),
+  which keeps contexts constructible with no host in the process.
 
 The verdict the code gives: **B is the doctrinal answer** — the
 handler/host split that already existed inside the LiveKit wiring
 (`LlmToolHandler` = content, agent class = transport) is the anatomy's own
 split, and genericity proves the agent class was never context code. What
-blocks enacting it is one known gap: srv modules currently admit no
-classes ("a srv or bootstrap module holds only imports, declared functions,
-and Final constants" — the host-vocabulary question the import-totality
-wave deliberately surfaced). The three findings in `sigcheck-ratchet` are
-that gap, made exact. When a host vocabulary is ruled (a declarable srv
-class kind), option A gets deleted, the baseline burns down to zero, and
-the plain zero-findings CI step comes back.
+blocks enacting it is two known gaps, and `sigcheck-ratchet` carries
+exactly one finding for each: srv modules admit no classes (`ToolAgent` —
+the host-vocabulary question the import-totality wave deliberately
+surfaced), and a root wire-vocabulary module has no governed home
+(`voicewire.py` — the root-module-homes question, the same family as
+python-app's `httpwire.py` ratchet debt). When those are ruled, option A
+gets deleted, the baseline burns down to zero, and the plain zero-findings
+CI step comes back.
 
 ## Run it
 
