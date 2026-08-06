@@ -1,29 +1,13 @@
 from __future__ import annotations
 
-from httpwire import HttpRequest, Response, json_response
-from srv.http.router import Route, match, split
-
-
-def _ok(req: HttpRequest) -> Response:
-    return json_response(200, {"seen": dict(req.path_params)})
-
-
-def _other(req: HttpRequest) -> Response:
-    return json_response(200, {})
-
-
-ROUTES = (
-    Route("POST", "/campaigns", _other),
-    Route("GET", "/campaigns/{campaign_id}", _ok),
-    Route("GET", "/r/{slug}", _ok),
-    Route("GET", "/reports/links-by-verdict", _other),
-)
+from srv.http.router import match, split
+from tests.support import ROUTES, route_other
 
 
 def test_a_literal_route_matches_exactly() -> None:
     found = match(ROUTES, "GET", "/reports/links-by-verdict")
     assert found is not None
-    assert found.endpoint is _other
+    assert found.endpoint is route_other
     assert found.path_params == {}
 
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import tesser.domain as ts
 
 from campaign.domain.money import Money, MoneySpec
 from campaign.domain.short_link import ShortLink, ShortLinkSpec
@@ -8,17 +8,19 @@ from campaign.domain.values import CampaignID, Slug
 from errors import DomainError, conflict, invalid, not_found
 
 
-@dataclass(frozen=True)
-class CampaignSpec:
-    id: str
-    budget: MoneySpec
-    links: tuple[ShortLinkSpec, ...]
+class CampaignSpec(ts.Spec):
+
+    def __init__(self, id: str, budget: MoneySpec, links: tuple[ShortLinkSpec, ...]) -> None:
+        self.id = id
+        self.budget = budget
+        self.links = links
 
 
-class Campaign:
+class Campaign(ts.AggregateRoot):
+
     def __init__(self, spec: CampaignSpec) -> None:
         self._id = CampaignID(spec.id)
-        self._budget = Money(spec.budget)
+        self._budget = Money(spec.budget.amount, spec.budget.currency)
         admitted: list[ShortLink] = []
         for i, link_spec in enumerate(spec.links):
             try:
@@ -54,6 +56,7 @@ class Campaign:
     __hash__ = None  # type: ignore[assignment]
 
 
+@ts.function
 def _admit(links: list[ShortLink], link: ShortLink) -> list[ShortLink]:
     for existing in links:
         if existing.slug == link.slug:

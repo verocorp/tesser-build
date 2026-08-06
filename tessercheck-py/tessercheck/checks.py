@@ -85,6 +85,7 @@ class _Checker(ast.NodeVisitor):
         # DIRECT class-body __init__: a nested def named __init__ sits deeper
         # than depth+1 and never inherits it.
         self._class_stack: list[tuple[bool, frozenset[str], int]] = []
+        self._vo_bases: set[str] = set()
         self.findings: list[Finding] = []
 
     def _is_value_object(self, name: str) -> bool:
@@ -106,6 +107,19 @@ class _Checker(ast.NodeVisitor):
         self.findings.append(Finding(self._path, line, col, code, message))
 
     # -- visitors -----------------------------------------------------------
+
+    def visit_Import(self, node: ast.Import) -> None:
+        for alias in node.names:
+            if alias.name == "tesser.domain":
+                self._vo_bases.add(f"{alias.asname or alias.name}.ValueObject")
+        self.generic_visit(node)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        if node.module == "tesser.domain":
+            for alias in node.names:
+                if alias.name == "ValueObject":
+                    self._vo_bases.add(alias.asname or alias.name)
+        self.generic_visit(node)
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         is_dc, frozen, dec = _dataclass_frozen(node.decorator_list)
@@ -137,7 +151,7 @@ class _Checker(ast.NodeVisitor):
         )
         spec_init_shape = (
             is_dc and frozen and _dataclass_init_false(node.decorator_list)
-        )
+        ) or any(ast.unparse(base) in self._vo_bases for base in node.bases)
         self._class_stack.append((spec_init_shape, fields, len(self._func_stack)))
         try:
             self.generic_visit(node)
@@ -212,9 +226,10 @@ class _Checker(ast.NodeVisitor):
                 node,
                 "TB003",
                 f"object.{func.attr} bypasses frozen immutability outside "
-                "__post_init__ or the spec-taking __init__ of a "
-                "@dataclass(frozen=True, init=False); a value object never "
-                "mutates after construction",
+                "__post_init__, the spec-taking __init__ of a "
+                "@dataclass(frozen=True, init=False), or the __init__ of a "
+                "tesser ValueObject subclass; a value object never mutates "
+                "after construction",
             )
         self.generic_visit(node)
 

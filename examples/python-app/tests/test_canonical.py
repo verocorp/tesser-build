@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import ast
-import pathlib
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -11,9 +10,7 @@ from campaign.domain.campaign import Campaign
 from campaign.domain.money import Money
 from campaign.domain.short_link import ShortLink
 from serialization import canonical_datetime, canonical_decimal, canonical_str
-
-_CONVERSION_DUNDERS = ("__str__", "__int__", "__float__", "__bytes__")
-_DOMAIN_DIR = pathlib.Path(__file__).resolve().parent.parent / "campaign" / "domain"
+from tests.support import CONVERSION_DUNDERS, DOMAIN_DIR
 
 
 def test_canonical_str_is_the_identity_policy() -> None:
@@ -48,15 +45,15 @@ def test_canonical_datetime_rejects_naive() -> None:
 
 def test_structured_types_define_no_conversion_dunders() -> None:
     for cls in (Money, ShortLink, Campaign):
-        for name in _CONVERSION_DUNDERS:
+        for name in CONVERSION_DUNDERS:
             assert name not in cls.__dict__, f"{cls.__name__} defines {name}"
 
 
 def test_every_domain_conversion_dunder_routes_through_a_canonical_helper() -> None:
-    for path in sorted(_DOMAIN_DIR.glob("*.py")):
+    for path in sorted(DOMAIN_DIR.glob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
-            if not (isinstance(node, ast.FunctionDef) and node.name in _CONVERSION_DUNDERS):
+            if not (isinstance(node, ast.FunctionDef) and node.name in CONVERSION_DUNDERS):
                 continue
             calls = {
                 call.func.id

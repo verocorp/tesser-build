@@ -1,21 +1,25 @@
 from __future__ import annotations
 
+import tesser.adapters as ts
+
 from httpwire import HttpRequest, JSONObject, Response, json_response, respond
-from reports.client import Client, LinkVerdictView
+from reports.client import Client, LinksByVerdictRequest, LinkVerdictView
 
 
-class Handler:
+class Handler(ts.Handler):
     def __init__(self, client: Client) -> None:
         self._client = client
 
     def links_by_verdict(self, req: HttpRequest) -> Response:
         def run() -> Response:
-            rows = [_row(view) for view in self._client.links_by_verdict()]
+            resp = self._client.links_by_verdict(LinksByVerdictRequest())
+            rows = [_row(view) for view in resp.links]
             return json_response(200, {"links": rows})
 
         return respond(run)
 
 
+@ts.function
 def _row(view: LinkVerdictView) -> JSONObject:
     return {
         "slug": view.slug,
