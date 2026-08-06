@@ -1,0 +1,3 @@
+srv.voice.agent.ToolAgent is a class; a srv or bootstrap module holds only imports, declared functions, and Final constants
+srv.voice.agent.ToolHandler is a class; a srv or bootstrap module holds only imports, declared functions, and Final constants
+srv.voice.agent.ToolState is a class; a srv or bootstrap module holds only imports, declared functions, and Final constants

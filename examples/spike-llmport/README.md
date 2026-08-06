@@ -2,8 +2,11 @@
 
 A workflow whose next step is decided by an LLM tool call, built as a real
 `scheduling` context in the `ts.*` shell idiom and held to the spike-shells
-bar: **sigcheck reports zero findings over this tree**, mypy --strict and
-pytest gate the pure modules in CI.
+bar. The `scheduling` context is sigcheck-clean; the tree carries exactly
+three accepted findings, all in `srv/voice/agent.py` — deliberate evidence
+for the host-vocabulary ruling (see "The host/handler split" below),
+ratcheted in CI so nothing new can hide behind them. mypy --strict and
+pytest gate the pure modules.
 
 ## The shape
 
@@ -16,6 +19,8 @@ scheduling/
     handlers.py   LlmToolHandler — the LLM wire: tool vocabulary, schemas, dispatch
     livekit.py    SchedulingAgent — the LiveKit translation over the handler
 tests/            domain/application/handler tests; each declares its own @ts.fake port doubles
+srv/
+  voice/agent.py  option B of the host/handler split: a context-generic ToolAgent
 ```
 
 The division of labor the checkers enforce:
@@ -63,6 +68,38 @@ the original design genuinely collided:
   adapter keys `TOOLS_FOR_STEP` on the strings that cross in DTOs, and the
   import matrix forbids it from importing the domain's constants. The same
   totality test is the drift tripwire.
+
+## The host/handler split, answered in code
+
+Where does the `AgentSession`-owning LiveKit wrapper belong — the context's
+adapters, or a voice host in `srv/`? Both options live in this tree so the
+structure can answer:
+
+- **Option A — `scheduling/adapters/livekit.py`** (`SchedulingAgent`).
+  Conforms to the current rulebook. But it is transport glue wearing an
+  adapter's name: every context serving voice would re-implement the same
+  shim/rebind/error mechanics, the way no context re-implements the HTTP
+  server.
+- **Option B — `srv/voice/agent.py`** (`ToolAgent`). The wrapper turns out
+  to be **fully context-generic**: once `instructions()` moved onto the
+  handler (it was content, misplaced in the transport), `ToolAgent` imports
+  nothing from any context — it speaks to a structural `ToolHandler`
+  protocol (instructions/begin/status/tools/dispatch). One voice host can
+  mount any context's LLM handler, exactly as the HTTP host mounts HTTP
+  handlers. This matches the settled anatomy: the host owns the transport,
+  the handler owns the content.
+
+The verdict the code gives: **B is the doctrinal answer** — the
+handler/host split that already existed inside the LiveKit wiring
+(`LlmToolHandler` = content, agent class = transport) is the anatomy's own
+split, and genericity proves the agent class was never context code. What
+blocks enacting it is one known gap: srv modules currently admit no
+classes ("a srv or bootstrap module holds only imports, declared functions,
+and Final constants" — the host-vocabulary question the import-totality
+wave deliberately surfaced). The three findings in `sigcheck-ratchet` are
+that gap, made exact. When a host vocabulary is ruled (a declarable srv
+class kind), option A gets deleted, the baseline burns down to zero, and
+the plain zero-findings CI step comes back.
 
 ## Run it
 

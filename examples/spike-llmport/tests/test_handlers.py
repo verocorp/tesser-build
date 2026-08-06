@@ -40,6 +40,16 @@ def test_the_tool_map_covers_exactly_the_domain_steps() -> None:
     assert set(handlers.TOOLS_FOR_STEP) == set(domain.STEPS)
 
 
+def test_the_handler_owns_the_agent_instructions() -> None:
+    service = application.BookingService(
+        MemorySlotDirectory(("mon-9am",)), MemoryBookingRepository()
+    )
+    handler = handlers.LlmToolHandler(service, "b1")
+
+    assert "book an appointment" in handler.instructions()
+    assert "never invent slots" in handler.instructions()
+
+
 def test_the_flow_through_the_tool_surface() -> None:
     directory = MemorySlotDirectory(("mon-9am", "tue-2pm"))
     service = application.BookingService(directory, MemoryBookingRepository())

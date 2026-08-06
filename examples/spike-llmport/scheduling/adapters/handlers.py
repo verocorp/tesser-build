@@ -30,6 +30,12 @@ class LlmToolHandler(ts.Handler):
     def status(self) -> client.BookingStateResponse:
         return self._client.status(client.StatusRequest(booking_id=self._booking_id))
 
+    def instructions(self) -> str:
+        return (
+            "Help the caller book an appointment."
+            " Use the tools to record what they say; never invent slots."
+        )
+
     def tools(self, state: client.BookingStateResponse) -> tuple[dict[str, object], ...]:
         return tuple(self._schema(tool, state) for tool in TOOLS_FOR_STEP[state.step])
 
