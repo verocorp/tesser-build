@@ -57,6 +57,21 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   test-organization pass should settle all three.
 - [ ] **Test-module annotation.** When tests declare themselves, flip
   "a test module imports tesser.testing at most once, as ts" to exactly-once.
+- [ ] **sigcheck internal cleanups (pre-landing review, deferred as a batch).**
+  From the ship review of the import-totality wave: (1) the
+  exactly-once-as-ts walk is triplicated (`_app_module_violations`,
+  `_import_violations`, `_test_module_violations`) and the statement-totality
+  loop is duplicated (`_app_module_violations` vs `_role_module_violations`)
+  — extract helpers without breaking the generator's literal-clause guard;
+  (2) `import_edges()`/`tesser_imports()` return positionally-decoded
+  4-tuples with different slot meanings — make both NamedTuples, and make
+  `has_alias` honest (or unrepresentable) for from-edges; (3) hardcoded
+  `"tesser.context"`/`"tesser.testing"`/`"tesser"` comparison literals →
+  Final constants; (4) the `len(found) == before` legality sentinel → an
+  explicit `denied` list; (5) rules.py: derive the conftest/`__main__`
+  exemption bullets from the AST guards (like TOOLING_MODULES) so governing
+  conftest forces the RULES.md diff, and split the TOOLING_MODULES
+  not-found vs wrong-shape errors.
 
 ## Toolkit
 

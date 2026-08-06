@@ -212,8 +212,7 @@ def tooling_modules(tree: ast.Module) -> list[str]:
     raise RuntimeError("TOOLING_MODULES not found in domain.py")
 
 
-def rule_rows() -> list[RuleRow]:
-    tree = ast.parse(DOMAIN.read_text())
+def rule_rows(tree: ast.Module) -> list[RuleRow]:
     ts_map = ts_name_map(tree)
     rows: dict[str, RuleRow] = {}
     for cls in (n for n in tree.body if isinstance(n, ast.ClassDef)):
@@ -289,6 +288,7 @@ def contracts() -> list[tuple[str, str]]:
 
 
 def render() -> str:
+    tree = ast.parse(DOMAIN.read_text())
     assertions = test_assertions()
     lines = [
         "# Rules implemented in the spike",
@@ -304,13 +304,13 @@ def render() -> str:
         "| The rule | Applies to | Fires when | Source | Fixtures |",
         "|---|---|---|---|---|",
     ]
-    for row in rule_rows():
+    for row in rule_rows(tree):
         covered = covering_tests(row.clause, assertions)
         coverage = ", ".join(covered) if covered else "NONE"
         shapes = " · ".join(row.shapes).replace("|", "\\|")
         source = "domain.py:" + ",".join(str(n) for n in sorted(row.linenos))
         lines.append(f"| {row.clause} | {row.applies_to} | {shapes} | {source} | {coverage} |")
-    tooling = ", ".join(f"`{name}`" for name in tooling_modules(ast.parse(DOMAIN.read_text())))
+    tooling = ", ".join(f"`{name}`" for name in tooling_modules(tree))
     lines += [
         "",
         "## Named exemptions (carve-outs the code makes on purpose, not rules)",

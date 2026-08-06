@@ -154,6 +154,12 @@ jobs:
             echo "$new"
             exit 1
           fi
+          stale=$(LC_ALL=C comm -23 baseline-normalized.txt findings-normalized.txt)
+          if [ -n "$stale" ]; then
+            echo "sigcheck-ratchet is stale — these baseline entries no longer fire; regenerate the file:"
+            echo "$stale"
+            exit 1
+          fi
 
   serdepy-example:
     # Gates the serialization-norm worked example (Python) at the same bar:

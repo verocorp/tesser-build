@@ -93,8 +93,6 @@ PRIMITIVES: Final[frozenset[str]] = frozenset({"str", "int", "float", "bool"})
 
 TOOLING_MODULES: Final[frozenset[str]] = frozenset({"rules"})
 
-CORE_ROLES: Final[frozenset[str]] = frozenset({"domain", "client", "application"})
-
 CORE_STDLIB: Final[dict[str, frozenset[str]]] = {
     "domain": frozenset(
         {"__future__", "typing", "enum", "decimal", "fractions", "datetime", "math", "re", "ast"}
@@ -323,7 +321,7 @@ class Codebase(ts.AggregateRoot):
                         "a role __init__ only re-exports from its own role"
                     )
                 )
-        for target, lineno, is_member, has_alias in module.import_edges():
+        for target, lineno, _, _ in module.import_edges():
             if not target.startswith(module.name() + "."):
                 found.append(
                     Violation(
@@ -563,7 +561,7 @@ class Codebase(ts.AggregateRoot):
                     )
                 if len(found) == before:
                     found.extend(self._form_violations(module, target, lineno, is_member, has_alias))
-            elif role in CORE_ROLES and pieces[0] not in CORE_STDLIB[role]:
+            elif role in CORE_STDLIB and pieces[0] not in CORE_STDLIB[role]:
                 found.append(
                     Violation(
                         f"{module.name()}:{lineno} imports {target}; domain, client, and application "
