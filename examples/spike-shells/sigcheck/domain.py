@@ -143,18 +143,27 @@ class Module(ts.Entity):
         self._classes: dict[str, ast.ClassDef] = {}
         self._edges: list[tuple[str, int, bool, bool]] = []
         self._tesser_imports: list[tuple[str, int, str | None, bool]] = []
+        self._nested_tesser: list[tuple[str, int]] = []
+        self._broken_relatives: list[tuple[str, int]] = []
         top_level = {
             id(node) for node in tree.body if isinstance(node, (ast.Import, ast.ImportFrom))
         }
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
+                    if alias.name.split(".")[0] == "tesser":
+                        if id(node) in top_level:
+                            self._tesser_imports.append((alias.name, node.lineno, alias.asname, False))
+                        else:
+                            self._nested_tesser.append((alias.name, node.lineno))
                     if id(node) in top_level:
                         self._package_aliases[alias.asname or alias.name] = alias.name
-                        if alias.name.split(".")[0] == "tesser":
-                            self._tesser_imports.append((alias.name, node.lineno, alias.asname, False))
                     self._edges.append((alias.name, node.lineno, False, alias.asname is not None))
             elif isinstance(node, ast.ImportFrom):
+                if node.level > len(self._package):
+                    dots = "." * node.level
+                    self._broken_relatives.append((dots + (node.module or ""), node.lineno))
+                    continue
                 base = self._relative_base(node.level)
                 if node.module is None:
                     for alias in node.names:
@@ -168,8 +177,11 @@ class Module(ts.Entity):
                     if id(node) in top_level:
                         self._imported[alias.asname or alias.name] = (target, alias.name)
                 self._edges.append((target, node.lineno, True, False))
-                if target.split(".")[0] == "tesser" and id(node) in top_level:
-                    self._tesser_imports.append((target, node.lineno, None, True))
+                if target.split(".")[0] == "tesser":
+                    if id(node) in top_level:
+                        self._tesser_imports.append((target, node.lineno, None, True))
+                    else:
+                        self._nested_tesser.append((target, node.lineno))
         self._functions: set[str] = set()
         for node in tree.body:
             if isinstance(node, ast.ClassDef):
@@ -193,6 +205,12 @@ class Module(ts.Entity):
 
     def tesser_imports(self) -> tuple[tuple[str, int, str | None, bool], ...]:
         return tuple(self._tesser_imports)
+
+    def nested_tesser_imports(self) -> tuple[tuple[str, int], ...]:
+        return tuple(self._nested_tesser)
+
+    def broken_relative_imports(self) -> tuple[tuple[str, int], ...]:
+        return tuple(self._broken_relatives)
 
     def function_names(self) -> frozenset[str]:
         return frozenset(self._functions)
@@ -358,6 +376,7 @@ class Codebase(ts.AggregateRoot):
 
     def _app_module_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
+        found.extend(self._stray_import_violations(module))
         seen_context = False
         seen_any = False
         for target, lineno, alias, from_form in module.tesser_imports():
@@ -513,6 +532,7 @@ class Codebase(ts.AggregateRoot):
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
+        found.extend(self._stray_import_violations(module))
         holds_handler = self._holds_kind(module, blocks, "handler")
         holds_gateway = self._holds_kind(module, blocks, "gateway")
         own_package = ROLE_TESSER_PACKAGE[role]
@@ -649,6 +669,7 @@ class Codebase(ts.AggregateRoot):
         contexts: frozenset[str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
+        found.extend(self._stray_import_violations(module))
         for target, lineno, is_member, has_alias in module.import_edges():
             if target.split(".")[0] in contexts:
                 found.extend(self._form_violations(module, target, lineno, is_member, has_alias))
@@ -1058,6 +1079,25 @@ class Codebase(ts.AggregateRoot):
             ),
             None,
         )
+
+    @staticmethod
+    def _stray_import_violations(module: Module) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for target, lineno in module.nested_tesser_imports():
+            found.append(
+                Violation(
+                    f"{module.name()}:{lineno} imports {target} inside a function; "
+                    "a tesser import is module-level"
+                )
+            )
+        for target, lineno in module.broken_relative_imports():
+            found.append(
+                Violation(
+                    f"{module.name()}:{lineno} imports {target} beyond the package root; "
+                    "a relative import resolves inside the tree"
+                )
+            )
+        return tuple(found)
 
     @staticmethod
     def _form_violations(

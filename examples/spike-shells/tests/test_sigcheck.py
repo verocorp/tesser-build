@@ -1037,8 +1037,21 @@ def test_relative_imports_resolve_against_the_package(tmp_path: Path) -> None:
         "class LoadingRepo(ts.Repository):\n"
         "    def load(self, key: str) -> Money: ...\n",
     )
+    write_module(
+        tmp_path,
+        "rel/adapters/beyond.py",
+        "import tesser.adapters as ts\n"
+        "from ...domain.money import Money\n"
+        "class BeyondRepo(ts.Repository):\n"
+        "    pass\n",
+    )
     findings = check_tree(tmp_path)
     assert not any("rel.domain" in f and "a role __init__ only re-exports from its own role" in f for f in findings)
+    assert any(
+        "rel.adapters.beyond:2 imports ...domain.money beyond the package root; "
+        "a relative import resolves inside the tree" in f
+        for f in findings
+    )
     assert not any("rel.wiring" in f and "imports rel.client" in f for f in findings)
     assert any(
         "rel.adapters.repo:2 imports rel.domain.money; the same-context matrix" in f
@@ -1069,6 +1082,15 @@ def test_nested_imports_neither_classify_nor_satisfy_presence(tmp_path: Path) ->
         "        import os\n"
         "        self.text = text\n",
     )
+    write_module(
+        tmp_path,
+        "lazy3/domain.py",
+        "import tesser.domain as ts\n"
+        "class GoodSpec(ts.Spec):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        import tesser.context as tc\n"
+        "        self.text = text\n",
+    )
     findings = check_tree(tmp_path)
     assert any(
         "lazy.domain never imports tesser.domain; "
@@ -1081,6 +1103,11 @@ def test_nested_imports_neither_classify_nor_satisfy_presence(tmp_path: Path) ->
     assert any(
         "lazy2.domain:4 imports os; domain, client, and application "
         "import only their context, their tesser package, and the pure stdlib" in f
+        for f in findings
+    )
+    assert any(
+        "lazy3.domain:4 imports tesser.context inside a function; "
+        "a tesser import is module-level" in f
         for f in findings
     )
 
