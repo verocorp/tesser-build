@@ -1,18 +1,31 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Protocol
 
-
-@dataclass(frozen=True)
-class LinkVerdictView:
-
-    slug: str
-    target_url: str
-    allowed: bool
-    reason: str
+import tesser.context as ts
 
 
-class Client(Protocol):
+class LinksByVerdictRequest(ts.Request):
 
-    def links_by_verdict(self) -> tuple[LinkVerdictView, ...]: ...
+    def __init__(self) -> None:
+        return None
+
+
+class LinkVerdictView(ts.Response):
+
+    def __init__(self, slug: str, target_url: str, allowed: bool, reason: str) -> None:
+        self.slug = slug
+        self.target_url = target_url
+        self.allowed = allowed
+        self.reason = reason
+
+
+class LinksByVerdictResponse(ts.Response):
+
+    def __init__(self, links: tuple[LinkVerdictView, ...]) -> None:
+        self.links = links
+
+
+class Client(ts.Client, Protocol):
+
+    def links_by_verdict(self, req: LinksByVerdictRequest) -> LinksByVerdictResponse: ...

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from campaign.client import CheckOutcome
+import tesser.adapters as ts
+
+from campaign.application.parts import CheckOutcome
 from linkpolicy.client import CheckRequest
 from linkpolicy.client import Client as LinkPolicyClient
 
 
-class LinkPolicyTargetChecker:
+class LinkPolicyTargetChecker(ts.Gateway):
+
     def __init__(self, policy: LinkPolicyClient) -> None:
         self._policy = policy
 

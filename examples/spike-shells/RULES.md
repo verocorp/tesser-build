@@ -38,32 +38,32 @@ exact: a test covers a rule when an assert literal contains the clause.
 | a test module imports only tesser.testing | test module | imports ⟨import⟩ | domain.py:628 | test_test_module_tesser_import_rules |
 | a test module holds tests, @ts.helper builders, and @ts.fake doubles | test module | is neither a test nor a declared helper | domain.py:666 | test_test_module_totality_is_flagged |
 | a test module imports tesser.testing at most once, as ts | test module | imports ⟨import⟩ again · imports names from ⟨import⟩ · imports ⟨import⟩ without the ts alias | domain.py:634,643,650 | test_test_module_tesser_import_rules |
-| a test module holds only imports, tests, helpers, and fakes | test module | has a loose module-level statement | domain.py:683 | test_test_module_totality_is_flagged |
+| a test module holds only imports, tests, helpers, and fakes | test module | has a loose module-level statement | domain.py:688 | test_test_module_totality_is_flagged |
 | a test double declares itself with @ts.fake | test module | is an undeclared class | domain.py:675 | test_test_module_totality_is_flagged |
-| a fake implements the port it doubles | test module | implements no ts.Port | domain.py:679 | test_test_module_totality_is_flagged |
-| a helper takes only defaulted primitives | @ts.helper function | parameter ⟨name⟩ has no default · parameter ⟨name⟩ is not a primitive | domain.py:702,714 | test_helper_rules_are_flagged |
-| a helper builds a spec | @ts.helper function | does not return a ts.Spec | domain.py:719 | test_helper_rules_are_flagged |
-| a helper only constructs | @ts.helper function | has control flow at line ⟨line⟩ | domain.py:722 | test_helper_rules_are_flagged |
-| a service depends only on ports | service `__init__` | parameter ⟨name⟩ is not a ts.Port | domain.py:761 | test_service_dependencies_must_be_ports |
-| an adapter speaks records, never domain objects | repository or gateway method | carries ⟨kind⟩ in its signature | domain.py:801 | test_records_never_carry_domain_objects |
-| a port speaks records, never domain objects | port protocol method | carries ⟨kind⟩ in its signature | domain.py:801 | test_records_never_carry_domain_objects |
-| a value object constructs from primitives and value objects | value object `__init__` | parameter ⟨name⟩ is not allowed | domain.py:822 | test_domain_field_rules_are_flagged |
-| a spec only carries construction data | spec class | defines a method on a spec | domain.py:842 | test_domain_field_rules_are_flagged |
-| a spec field is a primitive, a value object, or a child spec | spec class | parameter ⟨name⟩ is not allowed | domain.py:848 | test_domain_field_rules_are_flagged |
-| a DTO carries data and nothing else | request/response DTO | defines a method on a DTO | domain.py:867 | test_domain_field_rules_are_flagged |
-| a DTO field is a primitive or another DTO | request/response DTO | parameter ⟨name⟩ is not allowed | domain.py:872 | test_domain_field_rules_are_flagged |
-| an aggregate constructs from exactly one ts.Spec | aggregate class | defines no __init__ | domain.py:889 | test_aggregate_constructor_violations_are_flagged |
-| an entity constructs from exactly one ts.Spec | entity class | defines no __init__ | domain.py:889 | test_domain_field_rules_are_flagged |
-| a domain constructor takes exactly one ts.Spec | aggregate or entity `__init__` | uses *args/**kwargs · takes ⟨count⟩ parameters · parameter ⟨name⟩ is not a ts.Spec | domain.py:929,931,934 | test_aggregate_constructor_violations_are_flagged |
-| a service method takes exactly one ts.Request | public service method | uses *args/**kwargs · takes ⟨count⟩ parameters · parameter ⟨name⟩ is not a ts.Request | domain.py:929,931,934 | test_primitive_parameter_and_return_are_flagged, test_arity_and_missing_annotations_are_flagged |
-| a service method returns a ts.Response | public service method | does not return a ts.Response | domain.py:937 | test_primitive_parameter_and_return_are_flagged, test_indirect_subclass_still_classifies |
-| a client method takes exactly one ts.Request | client protocol method | uses *args/**kwargs · takes ⟨count⟩ parameters · parameter ⟨name⟩ is not a ts.Request | domain.py:929,931,934 | test_client_method_rules_are_flagged |
-| a client method returns a ts.Response | client protocol method | does not return a ts.Response | domain.py:937 | test_client_method_rules_are_flagged |
-| a service inlines its logic | every service method, including private | delegates to self.⟨method⟩ at line ⟨line⟩ · delegates to ⟨function⟩ at line ⟨line⟩ | domain.py:962,964 | test_service_delegation_is_flagged |
-| a service method body is at most 10 source lines | public service method | body spans ⟨count⟩ source lines | domain.py:973 | test_service_body_rules_are_flagged |
-| a service method satisfies a condition with one domain call | public service method | if condition at line ⟨line⟩ is not a single call · match subject at line ⟨line⟩ is not a single call | domain.py:977,982 | test_service_body_rules_are_flagged |
-| a service method branches one level deep | public service method | nests a conditional at line ⟨line⟩ | domain.py:979,984 | test_service_body_rules_are_flagged, test_elif_chain_is_one_level |
-| a context module is imported as an aliased module, never its members | any governed module | imports names from ⟨import⟩ · imports ⟨import⟩ without an alias | domain.py:1036,1043 | test_context_module_import_form |
+| a fake implements the port or client it doubles | test module | implements no ts.Port or ts.Client | domain.py:681 | test_test_module_totality_is_flagged, test_a_dotted_module_base_resolves |
+| a helper takes only defaulted primitives | @ts.helper function | parameter ⟨name⟩ has no default · parameter ⟨name⟩ is not a primitive | domain.py:707,719 | test_helper_rules_are_flagged |
+| a helper builds a spec | @ts.helper function | does not return a ts.Spec | domain.py:724 | test_helper_rules_are_flagged |
+| a helper only constructs | @ts.helper function | has control flow at line ⟨line⟩ | domain.py:727 | test_helper_rules_are_flagged |
+| a service depends only on ports | service `__init__` | parameter ⟨name⟩ is not a ts.Port | domain.py:766 | test_service_dependencies_must_be_ports |
+| an adapter speaks records, never domain objects | repository or gateway method | carries ⟨kind⟩ in its signature | domain.py:806 | test_records_never_carry_domain_objects |
+| a port speaks records, never domain objects | port protocol method | carries ⟨kind⟩ in its signature | domain.py:806 | test_records_never_carry_domain_objects |
+| a value object constructs from primitives and value objects | value object `__init__` | parameter ⟨name⟩ is not allowed | domain.py:827 | test_domain_field_rules_are_flagged |
+| a spec only carries construction data | spec class | defines a method on a spec | domain.py:847 | test_domain_field_rules_are_flagged |
+| a spec field is a primitive, a value object, or a child spec | spec class | parameter ⟨name⟩ is not allowed | domain.py:853 | test_domain_field_rules_are_flagged |
+| a DTO carries data and nothing else | request/response DTO | defines a method on a DTO | domain.py:872 | test_domain_field_rules_are_flagged |
+| a DTO field is a primitive or another DTO | request/response DTO | parameter ⟨name⟩ is not allowed | domain.py:877 | test_domain_field_rules_are_flagged |
+| an aggregate constructs from exactly one ts.Spec | aggregate class | defines no __init__ | domain.py:894 | test_aggregate_constructor_violations_are_flagged |
+| an entity constructs from exactly one ts.Spec | entity class | defines no __init__ | domain.py:894 | test_domain_field_rules_are_flagged |
+| a domain constructor takes exactly one ts.Spec | aggregate or entity `__init__` | uses *args/**kwargs · takes ⟨count⟩ parameters · parameter ⟨name⟩ is not a ts.Spec | domain.py:934,936,939 | test_aggregate_constructor_violations_are_flagged |
+| a service method takes exactly one ts.Request | public service method | uses *args/**kwargs · takes ⟨count⟩ parameters · parameter ⟨name⟩ is not a ts.Request | domain.py:934,936,939 | test_primitive_parameter_and_return_are_flagged, test_arity_and_missing_annotations_are_flagged |
+| a service method returns a ts.Response | public service method | does not return a ts.Response | domain.py:942 | test_primitive_parameter_and_return_are_flagged, test_indirect_subclass_still_classifies |
+| a client method takes exactly one ts.Request | client protocol method | uses *args/**kwargs · takes ⟨count⟩ parameters · parameter ⟨name⟩ is not a ts.Request | domain.py:934,936,939 | test_client_method_rules_are_flagged |
+| a client method returns a ts.Response | client protocol method | does not return a ts.Response | domain.py:942 | test_client_method_rules_are_flagged |
+| a service inlines its logic | every service method, including private | delegates to self.⟨method⟩ at line ⟨line⟩ · delegates to ⟨function⟩ at line ⟨line⟩ | domain.py:967,969 | test_service_delegation_is_flagged |
+| a service method body is at most 10 source lines | public service method | body spans ⟨count⟩ source lines | domain.py:978 | test_service_body_rules_are_flagged |
+| a service method satisfies a condition with one domain call | public service method | if condition at line ⟨line⟩ is not a single call · match subject at line ⟨line⟩ is not a single call | domain.py:982,987 | test_service_body_rules_are_flagged |
+| a service method branches one level deep | public service method | nests a conditional at line ⟨line⟩ | domain.py:984,989 | test_service_body_rules_are_flagged, test_elif_chain_is_one_level |
+| a context module is imported as an aliased module, never its members | any governed module | imports names from ⟨import⟩ · imports ⟨import⟩ without an alias | domain.py:1041,1048 | test_context_module_import_form |
 
 ## Named exemptions (carve-outs the code makes on purpose, not rules)
 

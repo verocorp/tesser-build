@@ -328,7 +328,7 @@ def test_test_module_totality_is_flagged(tmp_path: Path) -> None:
         for f in findings
     )
     assert any("test_junk.Junk" in f and "a test double declares itself with @ts.fake" in f for f in findings)
-    assert any("test_junk.FakeNothing" in f and "a fake implements the port it doubles" in f for f in findings)
+    assert any("test_junk.FakeNothing" in f and "a fake implements the port or client it doubles" in f for f in findings)
     assert any(
         "test_junk" in f and "a test module holds only imports, tests, helpers, and fakes" in f
         for f in findings
@@ -1012,5 +1012,24 @@ def test_an_adapters_module_holds_one_kind(tmp_path: Path) -> None:
     findings = check_tree(tmp_path)
     assert any(
         "app.adapters mixes adapter kinds" in f and "an adapters module holds one adapter kind" in f
+        for f in findings
+    )
+
+
+def test_a_dotted_module_base_resolves(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/test_doubles.py",
+        "import tesser.testing as th\n"
+        "import app.application\n"
+        "@th.fake\n"
+        "class FakePort(app.application.AskService):\n"
+        "    pass\n",
+    )
+    findings = check_tree(tmp_path)
+    assert not any("FakePort" in f and "implements no ts.Port" in f and "undeclared" in f for f in findings)
+    assert any(
+        "FakePort" in f and "a fake implements the port or client it doubles" in f
         for f in findings
     )

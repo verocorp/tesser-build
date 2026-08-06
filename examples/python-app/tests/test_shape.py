@@ -1,23 +1,26 @@
 from __future__ import annotations
 
-import dataclasses
+import inspect
 import json
-import pathlib
 
 import campaign.client
 import linkpolicy.client
 import reports.client
+import tesser.context
+import tesser.testing as ts
 from campaign.adapters.handlers.http import Handler
+from campaign.application.parts import CheckOutcome
+from campaign.application.service import TargetChecker
 from campaign.client import LinkView, ResolveResponse
 from campaign.wiring.config import Config as CampaignConfig
 from campaign.wiring.wire import build as build_campaign
 from errors import InfraError
 from httpwire import HttpRequest, decode_body
 from reports.adapters.handlers.http import Handler as ReportsHandler
-from reports.client import LinkVerdictView
+from reports.client import LinksByVerdictRequest, LinksByVerdictResponse, LinkVerdictView
 from tests.discovery import discovered_contexts
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+from tests.support import ROOT
 
 
 def test_required_roles_present_per_context() -> None:
@@ -33,15 +36,15 @@ def test_public_interface_is_client_plus_dtos_in_the_client_module() -> None:
     for ctx in discovered_contexts():
         init_source = (ROOT / ctx / "__init__.py").read_text()
         assert init_source == "", f"{ctx}/__init__.py must be empty; the interface lives in client.py"
-    assert dataclasses.is_dataclass(ResolveResponse)
-    for field in dataclasses.fields(ResolveResponse):
-        assert field.type in ("str", str), field
-    assert dataclasses.is_dataclass(LinkView)
-    for field in dataclasses.fields(LinkView):
-        assert field.type in ("str", str, "bool", bool), field
-    assert dataclasses.is_dataclass(LinkVerdictView)
-    for field in dataclasses.fields(LinkVerdictView):
-        assert field.type in ("str", str, "bool", bool), field
+    for dto in (ResolveResponse, LinkView, LinkVerdictView):
+        assert tesser.context.Response in dto.__mro__, f"{dto.__name__} must declare ts.Response"
+        params = inspect.signature(dto.__init__).parameters
+        for name, param in params.items():
+            if name == "self":
+                continue
+            assert param.annotation in ("str", "bool", "tuple[LinkView, ...]"), (
+                f"{dto.__name__}.{name} is not a primitive DTO field: {param.annotation}"
+            )
 
 
 def test_config_lives_in_wiring_not_on_public_top_level() -> None:
@@ -50,9 +53,10 @@ def test_config_lives_in_wiring_not_on_public_top_level() -> None:
         assert not (ROOT / ctx / "config.py").exists(), f"{ctx} config leaked to the public top level"
 
 
-class _AllowAllChecker:
-    def check(self, target_url: str) -> campaign.client.CheckOutcome:
-        return campaign.client.CheckOutcome(True, "ok")
+@ts.fake
+class _AllowAllChecker(TargetChecker):
+    def check(self, target_url: str) -> CheckOutcome:
+        return CheckOutcome(True, "ok")
 
 
 def test_handler_translates_wire_to_client_dtos() -> None:
@@ -88,13 +92,17 @@ def test_handler_translates_wire_to_client_dtos() -> None:
     }
 
 
-class _StubReports:
-    def links_by_verdict(self) -> tuple[LinkVerdictView, ...]:
-        return (LinkVerdictView("promo", "https://ok.example/x", False, "host blocked"),)
+@ts.fake
+class _StubReports(reports.client.Client):
+    def links_by_verdict(self, req: LinksByVerdictRequest) -> LinksByVerdictResponse:
+        return LinksByVerdictResponse(
+            links=(LinkVerdictView("promo", "https://ok.example/x", False, "host blocked"),)
+        )
 
 
-class _FailingReports:
-    def links_by_verdict(self) -> tuple[LinkVerdictView, ...]:
+@ts.fake
+class _FailingReports(reports.client.Client):
+    def links_by_verdict(self, req: LinksByVerdictRequest) -> LinksByVerdictResponse:
         raise InfraError("the campaign store is unreachable")
 
 

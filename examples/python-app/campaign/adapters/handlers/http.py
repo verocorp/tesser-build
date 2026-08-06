@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import tesser.adapters as ts
+
 from campaign.client import (
     AddLinkRequest,
     CampaignView,
@@ -23,7 +25,7 @@ from httpwire import (
 )
 
 
-class Handler:
+class Handler(ts.Handler):
     def __init__(self, client: Client) -> None:
         self._client = client
 
@@ -85,6 +87,7 @@ class Handler:
         return respond(run)
 
 
+@ts.function
 def _campaign_body(view: CampaignView) -> JSONObject:
     return {
         "campaign_id": view.campaign_id,

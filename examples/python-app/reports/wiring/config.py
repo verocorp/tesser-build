@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import tesser.context as ts
 
 
-@dataclass(frozen=True)
-class Config:
-    pass
+class Config(ts.Wiring):
+
+    def __init__(self) -> None:
+        return None

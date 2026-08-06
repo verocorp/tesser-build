@@ -1,58 +1,58 @@
 from __future__ import annotations
 
 import ast
-import dataclasses
 import pathlib
 
 import pytest
+import tesser.testing as ts
 
 from campaign.adapters.gateways.repo_memory import InMemoryCampaignRepository
 from campaign.adapters.handlers.http import Handler
-from campaign.application.parts import campaign_parts
-from campaign.application.service import CampaignService
-from campaign.client import CheckOutcome
+from campaign.application.parts import CampaignParts, CheckOutcome, MoneyParts, campaign_parts
+from campaign.application.service import CampaignService, TargetChecker
+from campaign.application.views import required_campaign
 from campaign.domain.campaign import Campaign, CampaignSpec
 from campaign.domain.money import MoneySpec
 from campaign.domain.short_link import ShortLinkSpec
-from campaign.domain.values import CampaignID
 from errors import DomainError
 from httpwire import HttpRequest, decode_body
+from tests.support import parts_tuple
 
-_CAMPAIGN_ID = "0123456789abcdef"
 
-
-def _spec(slug: str = "promo") -> CampaignSpec:
+@ts.helper  # tesser-category: spec
+def campaign_spec(slug: str = "promo") -> CampaignSpec:
     return CampaignSpec(
-        id=_CAMPAIGN_ID,
+        id="0123456789abcdef",
         budget=MoneySpec(amount="100.00", currency="USD"),
         links=(ShortLinkSpec(slug=slug, target_url="https://ok.example/x", active=True),),
     )
 
 
-class _AllowAll:
+@ts.fake
+class _AllowAll(TargetChecker):
     def check(self, target_url: str) -> CheckOutcome:
         return CheckOutcome(True, "ok")
 
 
 def test_row_golden_locks_the_storage_shape() -> None:
     repo = InMemoryCampaignRepository()
-    repo.save(Campaign(_spec()))
-    assert dataclasses.asdict(repo._rows[_CAMPAIGN_ID]) == {
-        "campaign_id": _CAMPAIGN_ID,
-        "budget_amount": "100.00",
-        "budget_currency": "USD",
-        "links": ({"slug": "promo", "target_url": "https://ok.example/x", "active": True},),
-    }
+    repo.save(campaign_parts(Campaign(campaign_spec())))
+    assert parts_tuple(repo._rows["0123456789abcdef"]) == (
+        "0123456789abcdef",
+        "100.00",
+        "USD",
+        (("promo", "https://ok.example/x", True),),
+    )
 
 
 def test_wire_golden_locks_the_campaign_payload() -> None:
     repo = InMemoryCampaignRepository()
-    repo.save(Campaign(_spec()))
+    repo.save(campaign_parts(Campaign(campaign_spec())))
     handler = Handler(CampaignService(repo, _AllowAll()))
-    resp = handler.get_campaign(HttpRequest(path_params={"campaign_id": _CAMPAIGN_ID}))
+    resp = handler.get_campaign(HttpRequest(path_params={"campaign_id": "0123456789abcdef"}))
     assert resp.status_code == 200
     assert decode_body(resp.body) == {
-        "campaign_id": _CAMPAIGN_ID,
+        "campaign_id": "0123456789abcdef",
         "budget": {"amount": "100.00", "currency": "USD"},
         "links": [{"slug": "promo", "target_url": "https://ok.example/x", "active": True}],
     }
@@ -60,7 +60,7 @@ def test_wire_golden_locks_the_campaign_payload() -> None:
 
 def test_wire_golden_locks_resolve_as_a_real_redirect() -> None:
     repo = InMemoryCampaignRepository()
-    repo.save(Campaign(_spec()))
+    repo.save(campaign_parts(Campaign(campaign_spec())))
     handler = Handler(CampaignService(repo, _AllowAll()))
     resp = handler.resolve(HttpRequest(path_params={"slug": "promo"}))
     assert resp.status_code == 302
@@ -70,24 +70,21 @@ def test_wire_golden_locks_resolve_as_a_real_redirect() -> None:
 
 def test_load_reconstructs_value_equal_non_identical() -> None:
     repo = InMemoryCampaignRepository()
-    original = Campaign(_spec())
-    repo.save(original)
-    loaded = repo.find(CampaignID(_CAMPAIGN_ID))
-    assert loaded is not None
+    original = Campaign(campaign_spec())
+    repo.save(campaign_parts(original))
+    loaded = required_campaign(repo.find("0123456789abcdef"), "0123456789abcdef")
     assert loaded is not original
-    assert campaign_parts(loaded) == campaign_parts(original)
+    assert parts_tuple(campaign_parts(loaded)) == parts_tuple(campaign_parts(original))
 
 
 def test_store_holds_rows_not_live_objects() -> None:
     repo = InMemoryCampaignRepository()
-    original = Campaign(_spec())
-    repo.save(original)
-    loaded = repo.find(CampaignID(_CAMPAIGN_ID))
-    assert loaded is not None
+    original = Campaign(campaign_spec())
+    repo.save(campaign_parts(original))
+    loaded = required_campaign(repo.find("0123456789abcdef"), "0123456789abcdef")
     loaded.add_short_link(ShortLinkSpec(slug="extra", target_url="https://ok.example/e", active=True))
-    reloaded = repo.find(CampaignID(_CAMPAIGN_ID))
-    assert reloaded is not None
-    assert campaign_parts(reloaded) == campaign_parts(original)
+    reloaded = required_campaign(repo.find("0123456789abcdef"), "0123456789abcdef")
+    assert parts_tuple(campaign_parts(reloaded)) == parts_tuple(campaign_parts(original))
 
 
 def test_parts_module_never_touches_specs() -> None:
@@ -114,8 +111,13 @@ def test_parts_module_never_touches_specs() -> None:
 
 def test_load_reruns_invariants_on_stale_rows() -> None:
     repo = InMemoryCampaignRepository()
-    repo.save(Campaign(_spec()))
-    row = repo._rows[_CAMPAIGN_ID]
-    repo._rows[_CAMPAIGN_ID] = dataclasses.replace(row, budget_amount="-5")
+    repo.save(campaign_parts(Campaign(campaign_spec())))
+    row = repo._rows["0123456789abcdef"]
+    stale = CampaignParts(
+        id=row.id,
+        budget=MoneyParts(amount="-5", currency=row.budget.currency),
+        links=row.links,
+    )
+    repo._rows["0123456789abcdef"] = stale
     with pytest.raises(DomainError):
-        repo.find(CampaignID(_CAMPAIGN_ID))
+        required_campaign(repo.find("0123456789abcdef"), "0123456789abcdef")

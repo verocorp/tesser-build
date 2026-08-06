@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+import tesser.testing as ts
 
 import campaign.client
 import linkpolicy.wiring.wire as linkpolicy_wire
@@ -11,13 +12,20 @@ from bootstrap.config import Config
 from campaign.wiring.config import Config as CampaignConfig
 from errors import DomainError
 from lifecycle import Closeable
-from linkpolicy.client import CheckRequest, CheckResponse, Client, VerdictView
+from linkpolicy.client import (
+    CheckRequest,
+    CheckResponse,
+    Client,
+    ListVerdictsRequest,
+    ListVerdictsResponse,
+)
 from linkpolicy.wiring.config import Config as LinkPolicyConfig
-from reports.client import LinkVerdictView
+from reports.client import LinksByVerdictRequest, LinksByVerdictResponse
 from reports.wiring.config import Config as ReportsConfig
 
 
-class _Spy:
+@ts.fake
+class _Spy(Closeable):
     def __init__(self, name: str, order: list[str], *, fail: bool = False) -> None:
         self.name = name
         self._order = order
@@ -43,12 +51,13 @@ def test_stack_closes_reverse_order_and_all_despite_error() -> None:
     assert len(errors) == 1
 
 
-class _DummyPolicy:
+@ts.fake
+class _DummyPolicy(Client):
     def check(self, req: CheckRequest) -> CheckResponse:
         return CheckResponse(True, "ok")
 
-    def list_verdicts(self) -> tuple[VerdictView, ...]:
-        return ()
+    def list_verdicts(self, req: ListVerdictsRequest) -> ListVerdictsResponse:
+        return ListVerdictsResponse(verdicts=())
 
 
 def test_new_closes_already_built_deps_on_partial_failure(monkeypatch: pytest.MonkeyPatch) -> None:  # tessercheck:ignore
@@ -71,9 +80,10 @@ def test_new_closes_already_built_deps_on_partial_failure(monkeypatch: pytest.Mo
     assert spy.closed, "the already-built linkpolicy resource was not cleaned up"
 
 
-class _DummyReports:
-    def links_by_verdict(self) -> tuple[LinkVerdictView, ...]:
-        return ()
+@ts.fake
+class _DummyReports(reports.client.Client):
+    def links_by_verdict(self, req: LinksByVerdictRequest) -> LinksByVerdictResponse:
+        return LinksByVerdictResponse(links=())
 
 
 def test_reports_closeable_is_on_the_cleanup_stack(monkeypatch: pytest.MonkeyPatch) -> None:  # tessercheck:ignore

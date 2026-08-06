@@ -1,50 +1,55 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from typing import Final
 from urllib.parse import urlparse
+
+import tesser.domain as ts
 
 from errors import invalid
 from serialization import canonical_str
 
-_SLUG_RE = re.compile(r"[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?")
-_CAMPAIGN_ID_RE = re.compile(r"[a-f0-9]{16}")
+_SLUG_RE: Final[re.Pattern[str]] = re.compile(r"[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?")
+_CAMPAIGN_ID_RE: Final[re.Pattern[str]] = re.compile(r"[a-f0-9]{16}")
 
 
-@dataclass(frozen=True)
-class CampaignID:
-    _value: str
+class CampaignID(ts.ValueObject):
 
-    def __post_init__(self) -> None:
-        if not _CAMPAIGN_ID_RE.fullmatch(self._value):
-            raise invalid("invalid_campaign_id", f"campaign id {self._value!r} must be 16 lowercase hex chars")
-
-    def __str__(self) -> str:
-        return canonical_str(self._value)
-
-
-@dataclass(frozen=True)
-class Slug:
-    _value: str
-
-    def __post_init__(self) -> None:
-        if not _SLUG_RE.fullmatch(self._value):
-            raise invalid("invalid_slug", f"slug {self._value!r} must be 1-64 lowercase alnum/hyphen")
+    def __init__(self, value: str) -> None:
+        if not _CAMPAIGN_ID_RE.fullmatch(value):
+            raise invalid("invalid_campaign_id", f"campaign id {value!r} must be 16 lowercase hex chars")
+        object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
         return canonical_str(self._value)
 
-
-@dataclass(frozen=True)
-class TargetURL:
     _value: str
 
-    def __post_init__(self) -> None:
-        if any(ord(ch) < 0x20 for ch in self._value):
+
+class Slug(ts.ValueObject):
+
+    def __init__(self, value: str) -> None:
+        if not _SLUG_RE.fullmatch(value):
+            raise invalid("invalid_slug", f"slug {value!r} must be 1-64 lowercase alnum/hyphen")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return canonical_str(self._value)
+
+    _value: str
+
+
+class TargetURL(ts.ValueObject):
+
+    def __init__(self, value: str) -> None:
+        if any(ord(ch) < 0x20 for ch in value):
             raise invalid("invalid_target_url", "target url must not contain control characters")
-        parsed = urlparse(self._value)
+        parsed = urlparse(value)
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
-            raise invalid("invalid_target_url", f"target url {self._value!r} must be http(s) with a host")
+            raise invalid("invalid_target_url", f"target url {value!r} must be http(s) with a host")
+        object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
         return canonical_str(self._value)
+
+    _value: str

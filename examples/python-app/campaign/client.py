@@ -1,69 +1,87 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Protocol
 
-
-@dataclass(frozen=True)
-class CreateCampaignRequest:
-    budget_amount: str
-    budget_currency: str
+import tesser.context as ts
 
 
-@dataclass(frozen=True)
-class AddLinkRequest:
-    campaign_id: str
-    slug: str
-    target_url: str
+class CreateCampaignRequest(ts.Request):
+
+    def __init__(self, budget_amount: str, budget_currency: str) -> None:
+        self.budget_amount = budget_amount
+        self.budget_currency = budget_currency
 
 
-@dataclass(frozen=True)
-class DeactivateLinkRequest:
-    campaign_id: str
-    slug: str
+class AddLinkRequest(ts.Request):
+
+    def __init__(self, campaign_id: str, slug: str, target_url: str) -> None:
+        self.campaign_id = campaign_id
+        self.slug = slug
+        self.target_url = target_url
 
 
-@dataclass(frozen=True)
-class GetCampaignRequest:
-    campaign_id: str
+class DeactivateLinkRequest(ts.Request):
+
+    def __init__(self, campaign_id: str, slug: str) -> None:
+        self.campaign_id = campaign_id
+        self.slug = slug
 
 
-@dataclass(frozen=True)
-class ResolveRequest:
-    slug: str
+class GetCampaignRequest(ts.Request):
+
+    def __init__(self, campaign_id: str) -> None:
+        self.campaign_id = campaign_id
 
 
-@dataclass(frozen=True)
-class ResolveResponse:
-    target_url: str
+class ResolveRequest(ts.Request):
+
+    def __init__(self, slug: str) -> None:
+        self.slug = slug
 
 
-@dataclass(frozen=True)
-class LinkView:
-    slug: str
-    target_url: str
-    active: bool
+class ResolveResponse(ts.Response):
+
+    def __init__(self, target_url: str) -> None:
+        self.target_url = target_url
 
 
-@dataclass(frozen=True)
-class CampaignView:
-    campaign_id: str
-    budget_amount: str
-    budget_currency: str
-    links: tuple[LinkView, ...]
+class ListLinksRequest(ts.Request):
+
+    def __init__(self) -> None:
+        return None
 
 
-@dataclass(frozen=True)
-class CheckOutcome:
-    allowed: bool
-    reason: str
+class LinkView(ts.Response):
+
+    def __init__(self, slug: str, target_url: str, active: bool) -> None:
+        self.slug = slug
+        self.target_url = target_url
+        self.active = active
 
 
-class TargetChecker(Protocol):
-    def check(self, target_url: str) -> CheckOutcome: ...
+class ListLinksResponse(ts.Response):
+
+    def __init__(self, links: tuple[LinkView, ...]) -> None:
+        self.links = links
 
 
-class Client(Protocol):
+class CampaignView(ts.Response):
+
+    def __init__(
+        self,
+        campaign_id: str,
+        budget_amount: str,
+        budget_currency: str,
+        links: tuple[LinkView, ...],
+    ) -> None:
+        self.campaign_id = campaign_id
+        self.budget_amount = budget_amount
+        self.budget_currency = budget_currency
+        self.links = links
+
+
+class Client(ts.Client, Protocol):
+
     def create_campaign(self, req: CreateCampaignRequest) -> CampaignView: ...
 
     def add_link(self, req: AddLinkRequest) -> CampaignView: ...
@@ -74,4 +92,4 @@ class Client(Protocol):
 
     def resolve(self, req: ResolveRequest) -> ResolveResponse: ...
 
-    def list_links(self) -> tuple[LinkView, ...]: ...
+    def list_links(self, req: ListLinksRequest) -> ListLinksResponse: ...

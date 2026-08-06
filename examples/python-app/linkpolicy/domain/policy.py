@@ -1,22 +1,30 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from urllib.parse import urlparse
 
+import tesser.domain as ts
 
-@dataclass(frozen=True)
-class Verdict:
+
+class Verdict(ts.ValueObject):
 
     target_url: str
     allowed: bool
     reason: str
 
+    def __init__(self, target_url: str, allowed: bool, reason: str) -> None:
+        object.__setattr__(self, "target_url", target_url)
+        object.__setattr__(self, "allowed", allowed)
+        object.__setattr__(self, "reason", reason)
 
-@dataclass(frozen=True)
-class Policy:
+
+class Policy(ts.ValueObject):
 
     allowed_schemes: tuple[str, ...]
     blocked_hosts: tuple[str, ...]
+
+    def __init__(self, allowed_schemes: tuple[str, ...], blocked_hosts: tuple[str, ...]) -> None:
+        object.__setattr__(self, "allowed_schemes", allowed_schemes)
+        object.__setattr__(self, "blocked_hosts", blocked_hosts)
 
     @staticmethod
     def default() -> Policy:
