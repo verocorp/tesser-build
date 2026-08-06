@@ -274,7 +274,7 @@ def test_import_matrix_is_flagged(tmp_path: Path) -> None:
         tmp_path,
         "two/adapters.py",
         "import tesser.adapters as ts\n"
-        "import app.client\n"
+        "import app.client as app_client\n"
         "class Bridge(ts.Gateway):\n"
         "    pass\n",
     )
@@ -479,11 +479,11 @@ def test_a_role_may_be_a_package(tmp_path: Path) -> None:
         tmp_path,
         "deep/domain/money.py",
         "import tesser.domain as ts\n"
-        "from deep.domain.currency import Currency\n"
+        "import deep.domain.currency as currency\n"
         "class Money(ts.ValueObject):\n"
-        "    def __init__(self, amount: str, currency: Currency) -> None:\n"
+        "    def __init__(self, amount: str, unit: currency.Currency) -> None:\n"
         "        object.__setattr__(self, '_amount', amount)\n"
-        "        object.__setattr__(self, '_currency', currency)\n",
+        "        object.__setattr__(self, '_unit', unit)\n",
     )
     write_module(
         tmp_path,
@@ -528,9 +528,9 @@ def test_wiring_is_a_role(tmp_path: Path) -> None:
         tmp_path,
         "app/wiring.py",
         "import tesser.context as ts\n"
-        "import app.application\n"
-        "import app.client\n"
-        "import two.client\n"
+        "import app.application as application\n"
+        "import app.client as client\n"
+        "import two.client as two_client\n"
         "import two.domain\n"
         "class AskWiring(ts.Wiring):\n"
         "    pass\n",
@@ -575,7 +575,7 @@ def test_srv_and_bootstrap_import_rows(tmp_path: Path) -> None:
         tmp_path,
         "srv/http.py",
         "import app.application\n"
-        "import app.adapters\n"
+        "import app.adapters as app_adapters\n"
         "import two.adapters\n"
         "import bootstrap.wire\n",
     )
@@ -583,8 +583,8 @@ def test_srv_and_bootstrap_import_rows(tmp_path: Path) -> None:
         tmp_path,
         "bootstrap/wire.py",
         "import app.domain\n"
-        "import app.wiring\n"
-        "import app.client\n"
+        "import app.wiring as wiring\n"
+        "import app.client as app_client\n"
         "import srv.http\n",
     )
     findings = check_tree(tmp_path)
@@ -620,10 +620,10 @@ def test_only_a_handler_imports_its_own_client(tmp_path: Path) -> None:
         tmp_path,
         "app/adapters.py",
         "import tesser.adapters as ts\n"
-        "import app.client\n"
+        "import app.client as app_client\n"
         "class HttpHandler(ts.Handler):\n"
         "    def ask(self, body: str) -> str:\n"
-        "        return app.client.AskRequest(text=body).text\n",
+        "        return app_client.AskRequest(text=body).text\n",
     )
     write_module(
         tmp_path,
@@ -957,6 +957,43 @@ def test_pure_core_stdlib_allowlist(tmp_path: Path) -> None:
         for f in findings
     )
     assert not any("io1.adapters" in f and "the pure stdlib" in f for f in findings)
+
+
+def test_context_module_import_form(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "form/client.py",
+        "import tesser.context as ts\n"
+        "class PingRequest(ts.Request):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    write_module(
+        tmp_path,
+        "form/application.py",
+        "import tesser.application as ts\n"
+        "from form.client import PingRequest\n",
+    )
+    write_module(
+        tmp_path,
+        "form/wiring.py",
+        "import tesser.context as ts\n"
+        "import form.application\n"
+        "class PingWiring(ts.Wiring):\n"
+        "    pass\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "form.application:2 imports names from form.client; "
+        "a context module is imported as an aliased module, never its members" in f
+        for f in findings
+    )
+    assert any(
+        "form.wiring:2 imports form.application without an alias; "
+        "a context module is imported as an aliased module, never its members" in f
+        for f in findings
+    )
 
 
 def test_an_adapters_module_holds_one_kind(tmp_path: Path) -> None:

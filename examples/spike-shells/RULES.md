@@ -28,41 +28,42 @@ exact: a test covers a rule when an assert literal contains the clause.
 | a context module holds only imports, classes, declared functions, and Final constants | context role module | has a loose module-level statement | domain.py:465 | test_placement_totality_is_flagged |
 | a role module imports its tesser package exactly once, as ts | context role module | never imports ⟨package⟩ · imports ⟨import⟩ again · imports names from ⟨import⟩ · imports ⟨import⟩ without the ts alias | domain.py:503,512,519,526 | test_role_module_tesser_import_is_exactly_once_as_ts |
 | a role module imports only its own tesser package | context role module | imports ⟨import⟩ | domain.py:496 | test_placement_totality_is_flagged, test_a_role_may_be_a_package |
-| domain, client, and application import only their context, their tesser package, and the pure stdlib | context role module | imports ⟨import⟩ | domain.py:563 | test_pure_core_stdlib_allowlist |
-| a context reaches another context only through its client, and only from gateways and wiring | context role module | imports ⟨import⟩ | domain.py:556 | test_import_matrix_is_flagged, test_wiring_is_a_role, test_only_a_gateway_reaches_a_foreign_client |
-| only a handler imports its own context's client | context role module | imports ⟨import⟩ | domain.py:541 | test_only_a_handler_imports_its_own_client |
-| the same-context matrix is a role to itself, application to domain and client, adapters to application, wiring to application, adapters, and client | context role module | imports ⟨import⟩ | domain.py:548 | test_import_matrix_is_flagged |
-| a host reaches a context only through its handlers | srv / bootstrap module | imports ⟨import⟩ | domain.py:586 | test_srv_and_bootstrap_import_rows |
-| the composition root never imports a host | srv / bootstrap module | imports ⟨import⟩ | domain.py:600 | test_srv_and_bootstrap_import_rows |
-| bootstrap builds from wiring, clients, and adapters, never domain or application | srv / bootstrap module | imports ⟨import⟩ | domain.py:593 | test_srv_and_bootstrap_import_rows |
-| a test module imports only tesser.testing | test module | imports ⟨import⟩ | domain.py:617 | test_test_module_tesser_import_rules |
-| a test module holds tests, @ts.helper builders, and @ts.fake doubles | test module | is neither a test nor a declared helper | domain.py:655 | test_test_module_totality_is_flagged |
-| a test module imports tesser.testing at most once, as ts | test module | imports ⟨import⟩ again · imports names from ⟨import⟩ · imports ⟨import⟩ without the ts alias | domain.py:623,632,639 | test_test_module_tesser_import_rules |
-| a test module holds only imports, tests, helpers, and fakes | test module | has a loose module-level statement | domain.py:672 | test_test_module_totality_is_flagged |
-| a test double declares itself with @ts.fake | test module | is an undeclared class | domain.py:664 | test_test_module_totality_is_flagged |
-| a fake implements the port it doubles | test module | implements no ts.Port | domain.py:668 | test_test_module_totality_is_flagged |
-| a helper takes only defaulted primitives | @ts.helper function | parameter ⟨name⟩ has no default · parameter ⟨name⟩ is not a primitive | domain.py:691,703 | test_helper_rules_are_flagged |
-| a helper builds a spec | @ts.helper function | does not return a ts.Spec | domain.py:708 | test_helper_rules_are_flagged |
-| a helper only constructs | @ts.helper function | has control flow at line ⟨line⟩ | domain.py:711 | test_helper_rules_are_flagged |
-| a service depends only on ports | service `__init__` | parameter ⟨name⟩ is not a ts.Port | domain.py:750 | test_service_dependencies_must_be_ports |
-| an adapter speaks records, never domain objects | repository or gateway method | carries ⟨kind⟩ in its signature | domain.py:790 | test_records_never_carry_domain_objects |
-| a port speaks records, never domain objects | port protocol method | carries ⟨kind⟩ in its signature | domain.py:790 | test_records_never_carry_domain_objects |
-| a value object constructs from primitives and value objects | value object `__init__` | parameter ⟨name⟩ is not allowed | domain.py:811 | test_domain_field_rules_are_flagged |
-| a spec only carries construction data | spec class | defines a method on a spec | domain.py:831 | test_domain_field_rules_are_flagged |
-| a spec field is a primitive, a value object, or a child spec | spec class | parameter ⟨name⟩ is not allowed | domain.py:837 | test_domain_field_rules_are_flagged |
-| a DTO carries data and nothing else | request/response DTO | defines a method on a DTO | domain.py:856 | test_domain_field_rules_are_flagged |
-| a DTO field is a primitive or another DTO | request/response DTO | parameter ⟨name⟩ is not allowed | domain.py:861 | test_domain_field_rules_are_flagged |
-| an aggregate constructs from exactly one ts.Spec | aggregate class | defines no __init__ | domain.py:878 | test_aggregate_constructor_violations_are_flagged |
-| an entity constructs from exactly one ts.Spec | entity class | defines no __init__ | domain.py:878 | test_domain_field_rules_are_flagged |
-| a domain constructor takes exactly one ts.Spec | aggregate or entity `__init__` | uses *args/**kwargs · takes ⟨count⟩ parameters · parameter ⟨name⟩ is not a ts.Spec | domain.py:918,920,923 | test_aggregate_constructor_violations_are_flagged |
-| a service method takes exactly one ts.Request | public service method | uses *args/**kwargs · takes ⟨count⟩ parameters · parameter ⟨name⟩ is not a ts.Request | domain.py:918,920,923 | test_primitive_parameter_and_return_are_flagged, test_arity_and_missing_annotations_are_flagged |
-| a service method returns a ts.Response | public service method | does not return a ts.Response | domain.py:926 | test_primitive_parameter_and_return_are_flagged, test_indirect_subclass_still_classifies |
-| a client method takes exactly one ts.Request | client protocol method | uses *args/**kwargs · takes ⟨count⟩ parameters · parameter ⟨name⟩ is not a ts.Request | domain.py:918,920,923 | test_client_method_rules_are_flagged |
-| a client method returns a ts.Response | client protocol method | does not return a ts.Response | domain.py:926 | test_client_method_rules_are_flagged |
-| a service inlines its logic | every service method, including private | delegates to self.⟨method⟩ at line ⟨line⟩ · delegates to ⟨function⟩ at line ⟨line⟩ | domain.py:951,953 | test_service_delegation_is_flagged |
-| a service method body is at most 10 source lines | public service method | body spans ⟨count⟩ source lines | domain.py:962 | test_service_body_rules_are_flagged |
-| a service method satisfies a condition with one domain call | public service method | if condition at line ⟨line⟩ is not a single call · match subject at line ⟨line⟩ is not a single call | domain.py:966,971 | test_service_body_rules_are_flagged |
-| a service method branches one level deep | public service method | nests a conditional at line ⟨line⟩ | domain.py:968,973 | test_service_body_rules_are_flagged, test_elif_chain_is_one_level |
+| domain, client, and application import only their context, their tesser package, and the pure stdlib | context role module | imports ⟨import⟩ | domain.py:566 | test_pure_core_stdlib_allowlist |
+| a context reaches another context only through its client, and only from gateways and wiring | context role module | imports ⟨import⟩ | domain.py:557 | test_import_matrix_is_flagged, test_wiring_is_a_role, test_only_a_gateway_reaches_a_foreign_client |
+| only a handler imports its own context's client | context role module | imports ⟨import⟩ | domain.py:542 | test_only_a_handler_imports_its_own_client |
+| the same-context matrix is a role to itself, application to domain and client, adapters to application, wiring to application, adapters, and client | context role module | imports ⟨import⟩ | domain.py:549 | test_import_matrix_is_flagged |
+| a host reaches a context only through its handlers | srv / bootstrap module | imports ⟨import⟩ | domain.py:590 | test_srv_and_bootstrap_import_rows |
+| the composition root never imports a host | srv / bootstrap module | imports ⟨import⟩ | domain.py:606 | test_srv_and_bootstrap_import_rows |
+| bootstrap builds from wiring, clients, and adapters, never domain or application | srv / bootstrap module | imports ⟨import⟩ | domain.py:597 | test_srv_and_bootstrap_import_rows |
+| a test module imports only tesser.testing | test module | imports ⟨import⟩ | domain.py:626 | test_test_module_tesser_import_rules |
+| a test module holds tests, @ts.helper builders, and @ts.fake doubles | test module | is neither a test nor a declared helper | domain.py:664 | test_test_module_totality_is_flagged |
+| a test module imports tesser.testing at most once, as ts | test module | imports ⟨import⟩ again · imports names from ⟨import⟩ · imports ⟨import⟩ without the ts alias | domain.py:632,641,648 | test_test_module_tesser_import_rules |
+| a test module holds only imports, tests, helpers, and fakes | test module | has a loose module-level statement | domain.py:681 | test_test_module_totality_is_flagged |
+| a test double declares itself with @ts.fake | test module | is an undeclared class | domain.py:673 | test_test_module_totality_is_flagged |
+| a fake implements the port it doubles | test module | implements no ts.Port | domain.py:677 | test_test_module_totality_is_flagged |
+| a helper takes only defaulted primitives | @ts.helper function | parameter ⟨name⟩ has no default · parameter ⟨name⟩ is not a primitive | domain.py:700,712 | test_helper_rules_are_flagged |
+| a helper builds a spec | @ts.helper function | does not return a ts.Spec | domain.py:717 | test_helper_rules_are_flagged |
+| a helper only constructs | @ts.helper function | has control flow at line ⟨line⟩ | domain.py:720 | test_helper_rules_are_flagged |
+| a service depends only on ports | service `__init__` | parameter ⟨name⟩ is not a ts.Port | domain.py:759 | test_service_dependencies_must_be_ports |
+| an adapter speaks records, never domain objects | repository or gateway method | carries ⟨kind⟩ in its signature | domain.py:799 | test_records_never_carry_domain_objects |
+| a port speaks records, never domain objects | port protocol method | carries ⟨kind⟩ in its signature | domain.py:799 | test_records_never_carry_domain_objects |
+| a value object constructs from primitives and value objects | value object `__init__` | parameter ⟨name⟩ is not allowed | domain.py:820 | test_domain_field_rules_are_flagged |
+| a spec only carries construction data | spec class | defines a method on a spec | domain.py:840 | test_domain_field_rules_are_flagged |
+| a spec field is a primitive, a value object, or a child spec | spec class | parameter ⟨name⟩ is not allowed | domain.py:846 | test_domain_field_rules_are_flagged |
+| a DTO carries data and nothing else | request/response DTO | defines a method on a DTO | domain.py:865 | test_domain_field_rules_are_flagged |
+| a DTO field is a primitive or another DTO | request/response DTO | parameter ⟨name⟩ is not allowed | domain.py:870 | test_domain_field_rules_are_flagged |
+| an aggregate constructs from exactly one ts.Spec | aggregate class | defines no __init__ | domain.py:887 | test_aggregate_constructor_violations_are_flagged |
+| an entity constructs from exactly one ts.Spec | entity class | defines no __init__ | domain.py:887 | test_domain_field_rules_are_flagged |
+| a domain constructor takes exactly one ts.Spec | aggregate or entity `__init__` | uses *args/**kwargs · takes ⟨count⟩ parameters · parameter ⟨name⟩ is not a ts.Spec | domain.py:927,929,932 | test_aggregate_constructor_violations_are_flagged |
+| a service method takes exactly one ts.Request | public service method | uses *args/**kwargs · takes ⟨count⟩ parameters · parameter ⟨name⟩ is not a ts.Request | domain.py:927,929,932 | test_primitive_parameter_and_return_are_flagged, test_arity_and_missing_annotations_are_flagged |
+| a service method returns a ts.Response | public service method | does not return a ts.Response | domain.py:935 | test_primitive_parameter_and_return_are_flagged, test_indirect_subclass_still_classifies |
+| a client method takes exactly one ts.Request | client protocol method | uses *args/**kwargs · takes ⟨count⟩ parameters · parameter ⟨name⟩ is not a ts.Request | domain.py:927,929,932 | test_client_method_rules_are_flagged |
+| a client method returns a ts.Response | client protocol method | does not return a ts.Response | domain.py:935 | test_client_method_rules_are_flagged |
+| a service inlines its logic | every service method, including private | delegates to self.⟨method⟩ at line ⟨line⟩ · delegates to ⟨function⟩ at line ⟨line⟩ | domain.py:960,962 | test_service_delegation_is_flagged |
+| a service method body is at most 10 source lines | public service method | body spans ⟨count⟩ source lines | domain.py:971 | test_service_body_rules_are_flagged |
+| a service method satisfies a condition with one domain call | public service method | if condition at line ⟨line⟩ is not a single call · match subject at line ⟨line⟩ is not a single call | domain.py:975,980 | test_service_body_rules_are_flagged |
+| a service method branches one level deep | public service method | nests a conditional at line ⟨line⟩ | domain.py:977,982 | test_service_body_rules_are_flagged, test_elif_chain_is_one_level |
+| a context module is imported as an aliased module, never its members | any governed module | imports names from ⟨import⟩ · imports ⟨import⟩ without an alias | domain.py:1034,1041 | test_context_module_import_form |
 
 ## Named exemptions (carve-outs the code makes on purpose, not rules)
 

@@ -50,6 +50,7 @@ APPLIES_TO: dict[str, str] = {
     "Codebase._tests_package_violations": "tests package module",
     "Codebase._role_init_violations": "role package `__init__`",
     "Codebase._app_module_violations": "srv / bootstrap module",
+    "Codebase._form_violations": "any governed module",
     "Codebase._helper_violations": "@ts.helper function",
     "Codebase._dependency_violations": "service `__init__`",
     "Codebase._valueobject_violations": "value object `__init__`",

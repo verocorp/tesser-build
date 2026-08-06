@@ -2,7 +2,7 @@ from typing import Protocol
 
 import tesser.application as ts
 
-from digest.client import DigestRequest, DigestResponse
+import digest.client as client
 
 
 class NoteTaker(ts.Port, Protocol):
@@ -15,6 +15,6 @@ class DigestService(ts.ApplicationService):
     def __init__(self, notes: NoteTaker) -> None:
         self._notes = notes
 
-    def digest(self, request: DigestRequest) -> DigestResponse:
+    def digest(self, request: client.DigestRequest) -> client.DigestResponse:
         recorded = self._notes.record(request.text)
-        return DigestResponse(headline=recorded.upper())
+        return client.DigestResponse(headline=recorded.upper())

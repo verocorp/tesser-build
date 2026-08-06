@@ -534,6 +534,7 @@ class Codebase(ts.AggregateRoot):
                 continue
             elif pieces[0] in contexts:
                 tail = pieces[1] if len(pieces) > 1 else ""
+                before = len(found)
                 if pieces[0] == context:
                     if role == "adapters" and tail == "client":
                         if not holds_handler:
@@ -558,6 +559,8 @@ class Codebase(ts.AggregateRoot):
                             "only through its client, and only from gateways and wiring"
                         )
                     )
+                if len(found) == before:
+                    found.extend(self._form_violations(module, target, lineno, is_member, has_alias))
             elif role in CORE_ROLES and pieces[0] not in CORE_STDLIB[role]:
                 found.append(
                     Violation(
@@ -579,6 +582,7 @@ class Codebase(ts.AggregateRoot):
             pieces = target.split(".")
             tail = pieces[1] if len(pieces) > 1 else ""
             if pieces[0] in contexts:
+                before = len(found)
                 if package == "srv" and not (
                     tail == "adapters" and self._holds_kind(self._module_named(target), blocks, "handler")
                 ):
@@ -595,6 +599,8 @@ class Codebase(ts.AggregateRoot):
                             "wiring, clients, and adapters, never domain or application"
                         )
                     )
+                if len(found) == before:
+                    found.extend(self._form_violations(module, target, lineno, is_member, has_alias))
             elif package == "bootstrap" and pieces[0] == "srv":
                 found.append(
                     Violation(
@@ -610,6 +616,9 @@ class Codebase(ts.AggregateRoot):
         contexts: frozenset[str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
+        for target, lineno, is_member, has_alias in module.import_edges():
+            if target.split(".")[0] in contexts:
+                found.extend(self._form_violations(module, target, lineno, is_member, has_alias))
         seen_testing = False
         for target, lineno, alias, from_form in module.tesser_imports():
             if target != "tesser.testing":
@@ -1011,6 +1020,30 @@ class Codebase(ts.AggregateRoot):
             ),
             None,
         )
+
+    @staticmethod
+    def _form_violations(
+        module: Module,
+        target: str,
+        lineno: int,
+        is_member: bool,
+        has_alias: bool,
+    ) -> tuple[Violation, ...]:
+        if is_member:
+            return (
+                Violation(
+                    f"{module.name()}:{lineno} imports names from {target}; "
+                    "a context module is imported as an aliased module, never its members"
+                ),
+            )
+        if not has_alias:
+            return (
+                Violation(
+                    f"{module.name()}:{lineno} imports {target} without an alias; "
+                    "a context module is imported as an aliased module, never its members"
+                ),
+            )
+        return ()
 
     def _module_named(self, name: str) -> Module | None:
         return next((module for module in self._modules if module.name() == name), None)

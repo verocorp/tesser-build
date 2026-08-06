@@ -56,10 +56,10 @@ def conforming_tree(root: Path) -> None:
         root,
         "app/application.py",
         "import tesser.application as ts\n"
-        "from app.client import AskRequest, AskResponse\n"
+        "import app.client as client\n"
         "class AskService(ts.ApplicationService):\n"
-        "    def ask(self, request: AskRequest) -> AskResponse:\n"
-        "        return AskResponse(text=request.text)\n"
+        "    def ask(self, request: client.AskRequest) -> client.AskResponse:\n"
+        "        return client.AskResponse(text=request.text)\n"
         "    def _helper(self, anything: int) -> int:\n"
         "        return anything\n",
     )
