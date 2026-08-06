@@ -2556,3 +2556,49 @@ def test_tb017_readable_type_annotation_is_trusted_despite_an_incidental_constru
         "    pass\n"
     )
     assert "TB017" not in _codes(src)
+
+
+def test_tb003_allows_writes_in_a_tesser_valueobject_init() -> None:
+    src = (
+        "import tesser.domain as ts\n"
+        "class Money(ts.ValueObject):\n"
+        "    _value: str\n"
+        "    def __init__(self, value: str) -> None:\n"
+        "        object.__setattr__(self, '_value', value)\n"
+    )
+    assert not [f for f in check_source("m.py", src, is_test=False) if f.code == "TB003"]
+
+
+def test_tb003_allows_writes_under_a_from_import_valueobject_base() -> None:
+    src = (
+        "from tesser.domain import ValueObject\n"
+        "class Money(ValueObject):\n"
+        "    _value: str\n"
+        "    def __init__(self, value: str) -> None:\n"
+        "        object.__setattr__(self, '_value', value)\n"
+    )
+    assert not [f for f in check_source("m.py", src, is_test=False) if f.code == "TB003"]
+
+
+def test_tb003_still_flags_a_post_construction_write_on_a_tesser_valueobject() -> None:
+    src = (
+        "import tesser.domain as ts\n"
+        "class Money(ts.ValueObject):\n"
+        "    _value: str\n"
+        "    def __init__(self, value: str) -> None:\n"
+        "        object.__setattr__(self, '_value', value)\n"
+        "    def rewrite(self, value: str) -> None:\n"
+        "        object.__setattr__(self, '_value', value)\n"
+    )
+    assert [f.line for f in check_source("m.py", src, is_test=False) if f.code == "TB003"] == [7]
+
+
+def test_tb003_a_valueobject_base_from_elsewhere_earns_no_exemption() -> None:
+    src = (
+        "from somewhere import ValueObject\n"
+        "class Money(ValueObject):\n"
+        "    _value: str\n"
+        "    def __init__(self, value: str) -> None:\n"
+        "        object.__setattr__(self, '_value', value)\n"
+    )
+    assert [f.code for f in check_source("m.py", src, is_test=False)] == ["TB003"]
