@@ -15,7 +15,7 @@ scheduling/
   adapters/
     handlers.py   LlmToolHandler — the LLM wire: tool vocabulary, schemas, dispatch
     livekit.py    SchedulingAgent — the LiveKit translation over the handler
-tests/            fakes (ports doubled by hand) + domain/application/handler tests
+tests/            domain/application/handler tests; each declares its own @ts.fake port doubles
 ```
 
 The division of labor the checkers enforce:

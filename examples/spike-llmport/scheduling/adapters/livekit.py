@@ -5,14 +5,14 @@ from collections.abc import Awaitable, Callable
 import tesser.adapters as ts
 from livekit.agents import Agent, ToolError, function_tool
 
-from scheduling.adapters.handlers import LlmToolHandler
-from scheduling.client import BookingStateResponse
+import scheduling.adapters.handlers as handlers
+import scheduling.client as client
 
 
 class SchedulingAgent(Agent, ts.Handler):
 
     def __init__(
-        self, handler: LlmToolHandler, halt: Callable[[], Awaitable[None]]
+        self, handler: handlers.LlmToolHandler, halt: Callable[[], Awaitable[None]]
     ) -> None:
         super().__init__(
             instructions=(
@@ -26,7 +26,7 @@ class SchedulingAgent(Agent, ts.Handler):
     async def on_enter(self) -> None:
         await self._rebind(self._handler.begin())
 
-    async def _rebind(self, state: BookingStateResponse) -> None:
+    async def _rebind(self, state: client.BookingStateResponse) -> None:
         await self.update_tools(
             [
                 function_tool(self._shim(schema), raw_schema=schema)
