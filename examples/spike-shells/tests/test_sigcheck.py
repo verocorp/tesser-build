@@ -791,6 +791,130 @@ def test_test_module_tesser_import_rules(tmp_path: Path) -> None:
     )
 
 
+def test_homeless_modules_are_flagged(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(tmp_path, "loose.py", "def anything() -> None:\n    return None\n")
+    write_module(tmp_path, "stray/util.py", "def anything() -> None:\n    return None\n")
+    write_module(tmp_path, "rules.py", "def anything() -> None:\n    return None\n")
+    findings = check_tree(tmp_path)
+    assert any(
+        "loose belongs to no governed package; "
+        "every module belongs to a context, srv, bootstrap, or tests" in f
+        for f in findings
+    )
+    assert any(
+        "stray.util belongs to no governed package; "
+        "every module belongs to a context, srv, bootstrap, or tests" in f
+        for f in findings
+    )
+    assert not any("rules belongs to no governed package" in f for f in findings)
+
+
+def test_tests_package_totality_is_flagged(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(tmp_path, "tests/__init__.py", "X = 1\n")
+    write_module(tmp_path, "tests/util.py", "def anything() -> None:\n    return None\n")
+    write_module(tmp_path, "tests/test_ok.py", "def test_ok() -> None:\n    assert True\n")
+    findings = check_tree(tmp_path)
+    assert any(
+        "tests __init__ declares code at line 1; "
+        "a tests package holds only test modules and conftest" in f
+        for f in findings
+    )
+    assert any(
+        "tests.util is neither a test module nor conftest; "
+        "a tests package holds only test modules and conftest" in f
+        for f in findings
+    )
+    assert not any("tests.test_ok" in f and "a tests package holds" in f for f in findings)
+
+
+def test_role_init_only_reexports_its_own_role(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "pkg/domain/__init__.py",
+        "import tesser.domain as ts\n"
+        "from pkg.domain.vo import Tag\n"
+        "LIMIT = 3\n",
+    )
+    write_module(
+        tmp_path,
+        "pkg/domain/vo.py",
+        "import tesser.domain as ts\n"
+        "class Tag(ts.ValueObject):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        object.__setattr__(self, '_text', text)\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "pkg.domain:1 imports tesser.domain; a role __init__ only re-exports from its own role" in f
+        for f in findings
+    )
+    assert any(
+        "pkg.domain __init__ declares code at line 3; "
+        "a role __init__ only re-exports from its own role" in f
+        for f in findings
+    )
+    assert not any("imports pkg.domain.vo" in f for f in findings)
+
+
+def test_srv_and_bootstrap_statement_totality(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "srv/box.py",
+        "import tesser.context as ts\n"
+        "import tesser.domain as td\n"
+        "@ts.function\n"
+        "def fine() -> None:\n"
+        "    return None\n"
+        "def stray() -> None:\n"
+        "    return None\n"
+        "class Box:\n"
+        "    pass\n"
+        "LIMIT = 3\n"
+        "print('hi')\n",
+    )
+    write_module(
+        tmp_path,
+        "bootstrap/wire.py",
+        "def build() -> None:\n"
+        "    return None\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "srv.box:2 imports tesser.domain; a srv or bootstrap module imports only tesser.context" in f
+        for f in findings
+    )
+    assert any(
+        "srv.box.stray" in f
+        and "a srv or bootstrap function declares itself with @ts.function" in f
+        for f in findings
+    )
+    assert not any("srv.box.fine" in f for f in findings)
+    assert any(
+        "srv.box.Box" in f
+        and "is a class; a srv or bootstrap module holds only imports, declared functions, "
+        "and Final constants" in f
+        for f in findings
+    )
+    assert any(
+        "declares a module constant without Final; a srv or bootstrap constant is Final" in f
+        for f in findings
+    )
+    assert any(
+        "has a loose module-level statement; a srv or bootstrap module holds only imports, "
+        "declared functions, and Final constants" in f
+        for f in findings
+    )
+    assert any(
+        "bootstrap.wire never imports tesser.context; "
+        "a srv or bootstrap module imports tesser.context exactly once, as ts" in f
+        for f in findings
+    )
+
+
 def test_an_adapters_module_holds_one_kind(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(

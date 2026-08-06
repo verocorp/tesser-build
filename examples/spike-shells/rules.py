@@ -21,6 +21,7 @@ HOLE_NAMES: dict[str, str] = {
     "callee.id": "⟨function⟩",
     "len(params)": "⟨count⟩",
     "arg.arg": "⟨name⟩",
+    "stmt.name": "⟨name⟩",
     "span": "⟨count⟩",
     "target": "⟨import⟩",
     "own_package": "⟨package⟩",
@@ -45,6 +46,10 @@ APPLIES_TO: dict[str, str] = {
     "Codebase._import_violations": "context role module",
     "Codebase._app_import_violations": "srv / bootstrap module",
     "Codebase._test_module_violations": "test module",
+    "Codebase._homeless_violations": "top-level module",
+    "Codebase._tests_package_violations": "tests package module",
+    "Codebase._role_init_violations": "role package `__init__`",
+    "Codebase._app_module_violations": "srv / bootstrap module",
     "Codebase._helper_violations": "@ts.helper function",
     "Codebase._dependency_violations": "service `__init__`",
     "Codebase._valueobject_violations": "value object `__init__`",
@@ -188,6 +193,24 @@ def render_message(
     return "".join(parts)
 
 
+def tooling_modules(tree: ast.Module) -> list[str]:
+    for node in tree.body:
+        if (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == "TOOLING_MODULES"
+            and isinstance(node.value, ast.Call)
+            and len(node.value.args) == 1
+            and isinstance(node.value.args[0], ast.Set)
+        ):
+            return sorted(
+                element.value
+                for element in node.value.args[0].elts
+                if isinstance(element, ast.Constant) and isinstance(element.value, str)
+            )
+    raise RuntimeError("TOOLING_MODULES not found in domain.py")
+
+
 def rule_rows() -> list[RuleRow]:
     tree = ast.parse(DOMAIN.read_text())
     ts_map = ts_name_map(tree)
@@ -286,7 +309,16 @@ def render() -> str:
         shapes = " · ".join(row.shapes).replace("|", "\\|")
         source = "domain.py:" + ",".join(str(n) for n in sorted(row.linenos))
         lines.append(f"| {row.clause} | {row.applies_to} | {shapes} | {source} | {coverage} |")
+    tooling = ", ".join(f"`{name}`" for name in tooling_modules(ast.parse(DOMAIN.read_text())))
     lines += [
+        "",
+        "## Named exemptions (carve-outs the code makes on purpose, not rules)",
+        "",
+        "- a `conftest` module is ungoverned (kept for now — followup pending with",
+        "  the test-organization work).",
+        "- a context `__main__` is ungoverned (named ruling, PR #48).",
+        f"- tooling modules outside the taxonomy: {tooling} (TOOLING_MODULES in",
+        "  sigcheck/domain.py — the whole-tree totality rule skips them).",
         "",
         "## Import contracts (from .importlinter)",
         "",
