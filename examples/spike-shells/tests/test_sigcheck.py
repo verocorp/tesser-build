@@ -930,6 +930,7 @@ def test_pure_core_stdlib_allowlist(tmp_path: Path) -> None:
     write_module(
         tmp_path,
         "io1/client.py",
+        "from __future__ import annotations\n"
         "import datetime\n"
         "import tesser.context as ts\n"
         "class StampRequest(ts.Request):\n"
@@ -952,10 +953,11 @@ def test_pure_core_stdlib_allowlist(tmp_path: Path) -> None:
     )
     assert not any("io1.domain:2 imports datetime" in f for f in findings)
     assert any(
-        "io1.client:1 imports datetime; domain, client, and application "
+        "io1.client:2 imports datetime; domain, client, and application "
         "import only their context, their tesser package, and the pure stdlib" in f
         for f in findings
     )
+    assert not any("imports __future__" in f for f in findings)
     assert not any("io1.adapters" in f and "the pure stdlib" in f for f in findings)
 
 

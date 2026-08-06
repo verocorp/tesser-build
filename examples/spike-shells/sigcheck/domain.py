@@ -96,9 +96,11 @@ TOOLING_MODULES: Final[frozenset[str]] = frozenset({"rules"})
 CORE_ROLES: Final[frozenset[str]] = frozenset({"domain", "client", "application"})
 
 CORE_STDLIB: Final[dict[str, frozenset[str]]] = {
-    "domain": frozenset({"typing", "enum", "decimal", "fractions", "datetime", "math", "re", "ast"}),
-    "client": frozenset({"typing"}),
-    "application": frozenset({"typing"}),
+    "domain": frozenset(
+        {"__future__", "typing", "enum", "decimal", "fractions", "datetime", "math", "re", "ast"}
+    ),
+    "client": frozenset({"__future__", "typing"}),
+    "application": frozenset({"__future__", "typing"}),
 }
 
 DOMAIN_BLOCKS: Final[frozenset[str]] = frozenset({"aggregate", "entity", "valueobject"})
