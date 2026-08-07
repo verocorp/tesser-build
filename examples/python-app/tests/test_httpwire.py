@@ -25,6 +25,15 @@ def test_httprequest_stays_a_faithful_http_request_object() -> None:
     params = inspect.signature(HttpRequest.__init__).parameters
     assert {"method", "path", "path_params", "query_params", "headers", "body"} <= set(params)
     assert params["body"].annotation in ("bytes", bytes), "request body must stay opaque bytes, not a decoded payload"
+    req = HttpRequest(body=b'{"a": 1}')
+    assert {"method", "path", "path_params", "query_params", "headers", "body"} <= set(vars(req))
+    assert req.body == b'{"a": 1}'
+    assert isinstance(req.body, bytes)
+    assert req.method == "GET"
+    assert req.path == "/"
+    assert req.path_params == {}
+    assert req.query_params == {}
+    assert req.headers == {}
 
 
 def test_response_stays_a_faithful_http_response_object() -> None:
@@ -32,6 +41,11 @@ def test_response_stays_a_faithful_http_response_object() -> None:
     assert {"status_code", "body", "headers"} <= set(params)
     assert params["status_code"].annotation in ("int", int)
     assert params["body"].annotation in ("bytes", bytes), "response body must stay opaque bytes, so any Content-Type is expressible"
+    resp = Response(204, b"")
+    assert {"status_code", "body", "headers"} <= set(vars(resp))
+    assert resp.status_code == 204
+    assert isinstance(resp.body, bytes)
+    assert resp.headers == {}
 
 
 def test_json_response_serializes_to_bytes_and_owns_its_content_type() -> None:

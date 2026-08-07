@@ -58,6 +58,21 @@ def test_srv_port_is_a_distinct_kind_from_the_application_port() -> None:
     assert tesser.application.Port not in _ServeThings.__mro__
 
 
+def test_srv_records_are_distinct_kinds_from_the_context_dtos() -> None:
+    class WireAsk(tesser.srv.Request):
+        pass
+
+    class WireReply(tesser.srv.Response):
+        pass
+
+    srv_request: object = tesser.srv.Request
+    srv_response: object = tesser.srv.Response
+    assert srv_request is not tesser.context.Request
+    assert srv_response is not tesser.context.Response
+    assert tesser.context.Request not in WireAsk.__mro__
+    assert tesser.context.Response not in WireReply.__mro__
+
+
 def test_declaration_decorators_return_their_target_unchanged() -> None:
     def build() -> str:
         return "built"

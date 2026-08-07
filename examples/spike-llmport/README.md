@@ -74,6 +74,16 @@ the original design genuinely collided:
   adapter keys `TOOLS_FOR_STEP` on the strings that cross in DTOs, and the
   import matrix forbids it from importing the domain's constants. The same
   totality test is the drift tripwire.
+- **There is no kind for a tool declaration.** `LlmToolHandler` maintains
+  three parallel structures keyed on the same tool-name strings —
+  `TOOLS_FOR_STEP`, the `dispatch` chain, the `_schema` chain — plus inline
+  per-tool parsing: four hand-coordinated edit sites per new tool, hiding in
+  an adapter because adapters carry no body rules. The clean shape is one
+  declared tool object (name + description + schema + parse + invoke) with
+  dispatch and schemas derived from a table of them, but the vocabulary has
+  no word for it and one-kind-per-module forbids an undeclared class here.
+  Named by Chris during the srv-wire ship ("dispatch smells really bad");
+  evidence for the srv signature-matrix ruling, deliberately not improvised.
 
 ## The host/handler split, answered in code — and then enacted
 
@@ -139,7 +149,7 @@ they are copied knowingly or not at all:
   `confirm` — an operator-recoverable window, not silent loss, but real.
   The outbox/idempotency-key answer is out of scope here.
 - **`save` carries no concurrency token.** Concurrent tool calls could
-  interleave read-modify-write. The agents serialize per session with a
+  interleave read-modify-write. The agent serializes per session with a
   lock; cross-session writers need an expected-version parameter on the
   port.
 - **A slot's label is its identity.** Two distinct resources with equal
@@ -153,6 +163,12 @@ The sigcheck-vs-ruff F401 collision this tree used to document (a mandated
 `ts` import that nothing used) resolved itself with the srv vocabulary:
 `srv/voice/agent.py`'s `import tesser.srv as ts` is now load-bearing —
 `ToolAgent` subclasses `ts.Host`.
+
+One more named boundary: `ToolTurn` (like the migrated httpwire/cliwire
+records) is a mutable record — the frozen-dataclass guarantee did not
+survive the shell migration, by explicit ruling (2026-08-07): wire-record
+immutability is a per-kind invariant that belongs to the srv
+signature-matrix ruling, not a per-class patch.
 
 ## Non-goals
 

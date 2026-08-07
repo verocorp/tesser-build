@@ -1270,9 +1270,13 @@ def test_wire_module_totality_is_flagged(tmp_path: Path) -> None:
         "@ts.function\n"
         "def fine() -> None:\n"
         "    return None\n"
+        "@ts.function\n"
+        "def lazy() -> None:\n"
+        "    import tesser.domain\n"
         "def stray() -> None:\n"
         "    return None\n"
         "LIMIT: Final[int] = 3\n"
+        "ANNBARE: int = 3\n"
         "BARE = 3\n"
         "print('hi')\n",
     )
@@ -1304,8 +1308,19 @@ def test_wire_module_totality_is_flagged(tmp_path: Path) -> None:
         "boxwire.stray" in f and "a wire function declares itself with @ts.function" in f
         for f in findings
     )
+    assert (
+        len(
+            [
+                f
+                for f in findings
+                if "boxwire" in f
+                and "declares a module constant without Final; a wire constant is Final" in f
+            ]
+        )
+        == 2
+    )
     assert any(
-        "boxwire" in f and "declares a module constant without Final; a wire constant is Final" in f
+        "boxwire" in f and "imports tesser.domain inside a function; a tesser import is module-level" in f
         for f in findings
     )
     assert any(
@@ -1323,6 +1338,22 @@ def test_wire_module_tesser_import_is_exactly_once_as_ts(tmp_path: Path) -> None
         "import tesser.context as ts\n",
     )
     write_module(tmp_path, "quietwire.py", "")
+    write_module(
+        tmp_path,
+        "dupwire.py",
+        "import tesser.srv as ts\n"
+        "import tesser.srv as ts\n",
+    )
+    write_module(
+        tmp_path,
+        "formwire.py",
+        "from tesser.srv import Request\n",
+    )
+    write_module(
+        tmp_path,
+        "aliaswire.py",
+        "import tesser.srv as tz\n",
+    )
     findings = check_tree(tmp_path)
     assert any(
         "loudwire:1 imports tesser.context; a wire module imports only tesser.srv" in f
@@ -1332,6 +1363,59 @@ def test_wire_module_tesser_import_is_exactly_once_as_ts(tmp_path: Path) -> None
         "quietwire never imports tesser.srv; a wire module imports tesser.srv exactly once, as ts" in f
         for f in findings
     )
+    assert any(
+        "dupwire:2 imports tesser.srv again; a wire module imports tesser.srv exactly once, as ts" in f
+        for f in findings
+    )
+    assert any(
+        "formwire:1 imports names from tesser.srv; "
+        "a wire module imports tesser.srv exactly once, as ts" in f
+        for f in findings
+    )
+    assert any(
+        "aliaswire:1 imports tesser.srv without the ts alias; "
+        "a wire module imports tesser.srv exactly once, as ts" in f
+        for f in findings
+    )
+
+
+def test_only_an_exact_top_level_wire_suffix_module_is_a_wire_module(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(tmp_path, "boxwire/__init__.py", "")
+    write_module(tmp_path, "wired.py", "")
+    write_module(tmp_path, "wires.py", "")
+    write_module(tmp_path, "wire.py", "import tesser.srv as ts\n")
+    findings = check_tree(tmp_path)
+    assert any(f.startswith("boxwire belongs to no governed package") for f in findings)
+    assert any(f.startswith("wired belongs to no governed package") for f in findings)
+    assert any(f.startswith("wires belongs to no governed package") for f in findings)
+    assert not any(f.startswith("wire belongs") or f.startswith("wire:") for f in findings)
+
+
+def test_a_fake_may_implement_a_wire_port(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "boxwire.py",
+        "from typing import Protocol\n"
+        "import tesser.srv as ts\n"
+        "class BoxDoor(ts.Port, Protocol):\n"
+        "    def __call__(self) -> None: ...\n",
+    )
+    write_module(
+        tmp_path,
+        "app/test_doors.py",
+        "import tesser.testing as ts\n"
+        "from boxwire import BoxDoor\n"
+        "@ts.fake\n"
+        "class FakeDoor(BoxDoor):\n"
+        "    def __call__(self) -> None:\n"
+        "        return None\n"
+        "def test_door() -> None:\n"
+        "    assert FakeDoor\n",
+    )
+    findings = check_tree(tmp_path)
+    assert not any("app.test_doors.FakeDoor" in f for f in findings)
 
 
 def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv(tmp_path: Path) -> None:
@@ -1341,8 +1425,15 @@ def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv(tmp_path: P
         "app/adapters.py",
         "import tesser.adapters as ts\n"
         "import tesser.srv\n"
+        "from typing import Protocol\n"
         "class Sneaky(tesser.srv.Host):\n"
-        "    pass\n",
+        "    pass\n"
+        "class WireAsk(tesser.srv.Request):\n"
+        "    pass\n"
+        "class WireReply(tesser.srv.Response):\n"
+        "    pass\n"
+        "class WireDoor(tesser.srv.Port, Protocol):\n"
+        "    def __call__(self) -> None: ...\n",
     )
     write_module(
         tmp_path,
@@ -1350,16 +1441,41 @@ def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv(tmp_path: P
         "import tesser.srv as ts\n"
         "import tesser.domain\n"
         "class Value(tesser.domain.ValueObject):\n"
+        "    pass\n"
+        "class Turn(ts.Response):\n"
         "    pass\n",
     )
     findings = check_tree(tmp_path)
     assert any(
         "app.adapters.Sneaky" in f
-        and "is a host; a srv kind lives in srv and wire modules, never a context" in f
+        and "is a host; a host lives in srv and a wire kind in a wire module, never a context" in f
+        for f in findings
+    )
+    assert any(
+        "app.adapters.WireAsk" in f
+        and "is a wire request record; a host lives in srv and a wire kind in a wire module, "
+        "never a context" in f
+        for f in findings
+    )
+    assert any(
+        "app.adapters.WireReply" in f
+        and "is a wire response record; a host lives in srv and a wire kind in a wire module, "
+        "never a context" in f
+        for f in findings
+    )
+    assert any(
+        "app.adapters.WireDoor" in f
+        and "is a wire port; a host lives in srv and a wire kind in a wire module, "
+        "never a context" in f
         for f in findings
     )
     assert any(
         "srv.box.Value" in f and "is a value object; only a host class lives in a srv module" in f
+        for f in findings
+    )
+    assert any(
+        "srv.box.Turn" in f
+        and "is a wire response record; only a host class lives in a srv module" in f
         for f in findings
     )
 

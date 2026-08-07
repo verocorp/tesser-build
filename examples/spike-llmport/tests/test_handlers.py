@@ -85,18 +85,22 @@ def test_the_flow_through_the_tool_surface() -> None:
     handler = handlers.LlmToolHandler(service, "b1")
 
     turn = handler.begin()
+    assert turn.reply == "ask the caller for their name"
     assert [schema["name"] for schema in turn.tools] == [handlers.PROVIDE_NAME]
 
     turn = handler.dispatch(handlers.PROVIDE_NAME, {"name": "Ada Lovelace"})
+    assert turn.reply == "offer the caller the available slots"
     assert [schema["name"] for schema in turn.tools] == [handlers.CHOOSE_SLOT]
 
     turn = handler.dispatch(handlers.CHOOSE_SLOT, {"slot": "mon-9am"})
+    assert turn.reply == "slot mon-9am selected; ask the caller to confirm"
     assert [schema["name"] for schema in turn.tools] == [
         handlers.CHOOSE_SLOT,
         handlers.CONFIRM_BOOKING,
     ]
 
     turn = handler.dispatch(handlers.CONFIRM_BOOKING, {})
+    assert turn.reply == "booked mon-9am for Ada Lovelace"
     assert turn.tools == ()
     assert service.status(client.StatusRequest(booking_id="b1")).step == "booked"
     assert directory.reserved == [("mon-9am", "Ada Lovelace")]
@@ -183,6 +187,7 @@ def test_a_taken_slot_reoffers_and_names_the_fresh_slots() -> None:
     assert "now available: tue-2pm" in str(excinfo.value)
 
     turn = handler.status()
+    assert turn.reply == "continue the booking"
     assert service.status(client.StatusRequest(booking_id="b1")).step == "choose_slot"
     schema = turn.tools[0]
     parameters = schema["parameters"]

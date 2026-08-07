@@ -109,21 +109,65 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   test-organization pass should settle all three.
 - [ ] **Test-module annotation.** When tests declare themselves, flip
   "a test module imports tesser.testing at most once, as ts" to exactly-once.
-- [ ] **sigcheck internal cleanups (pre-landing review, deferred as a batch).**
-  From the ship review of the import-totality wave: (1) the
-  exactly-once-as-ts walk is triplicated (`_app_module_violations`,
-  `_import_violations`, `_test_module_violations`) and the statement-totality
-  loop is duplicated (`_app_module_violations` vs `_role_module_violations`)
-  — extract helpers without breaking the generator's literal-clause guard;
-  (2) `import_edges()`/`tesser_imports()` return positionally-decoded
-  4-tuples with different slot meanings — make both NamedTuples, and make
-  `has_alias` honest (or unrepresentable) for from-edges; (3) hardcoded
-  `"tesser.context"`/`"tesser.testing"`/`"tesser"` comparison literals →
-  Final constants; (4) the `len(found) == before` legality sentinel → an
-  explicit `denied` list; (5) rules.py: derive the conftest/`__main__`
-  exemption bullets from the AST guards (like TOOLING_MODULES) so governing
-  conftest forces the RULES.md diff, and split the TOOLING_MODULES
-  not-found vs wrong-shape errors.
+- [ ] **Wire vocabulary is declared, not structured — two design smells,
+  Chris 2026-08-07 ("smells really bad", named during the srv-wire ship).**
+  Both are evidence for the srv signature-matrix ruling; neither was
+  improvised mid-ship because both need vocabulary that doesn't exist yet.
+  (1) **`__call__` ports + `@ts.function` bags.** `httpwire` is nine loose
+  functions wearing invariant-free `@ts.function` markers plus an anonymous
+  single-operation `__call__` protocol — the most procedural corner of the
+  tree. The functions aren't homeless by nature: `problem`/`json_response`/
+  `redirect`/`respond` are Response constructors; `content_length`/
+  `decode_body`/`path_param`/`object_field`/`string_field` are HttpRequest
+  readers. Moving them onto the records collides with "a DTO carries data
+  and nothing else" — so the ruling is: do wire records carry behavior?
+  (2) **`dispatch` in the scheduling adapter.** `LlmToolHandler` maintains
+  three parallel structures keyed on the same tool-name strings
+  (`TOOLS_FOR_STEP`, the `dispatch` if/elif, the `_schema` if/elif) plus
+  inline per-tool parsing — four hand-coordinated edit sites per new tool,
+  only one pair drift-guarded, hiding in an adapter because adapters carry
+  no body rules (a service would flunk instantly). The clean fix is one
+  declared tool object (name+description+schema+parse+invoke) with dispatch
+  and _schema derived from a table — the bindings-at-the-artifact move —
+  but there is NO KIND for a tool declaration, and one-kind-per-module
+  forbids an undeclared Tool class in handlers.py. The vocabulary has no
+  word for the thing being dispatched over; rule the word before the
+  refactor.
+  (3) **Wire records lost immutability** (Chris ruling 2026-08-07, ship D1:
+  named debt, ruled with the srv matrix). The dataclass→shell migration
+  dropped `frozen=True` from `HttpRequest`/`Response`/`CliRequest`/
+  `CliResponse` (`ToolTurn` was born unfrozen); a handler can now mutate
+  the request it was handed after routing decisions were made on it —
+  flagged independently by three ship reviewers, not exploitable today.
+  The fix candidates are the same per-kind-invariant question as (1):
+  ValueObject-style guards on the `tesser.srv` shells vs a sigcheck
+  immutability rule. Do NOT freeze per-subclass in the meantime.
+- [ ] **sigcheck internal cleanups (pre-landing review, deferred as a batch;
+  re-scoped 2026-08-07 after the srv-wire wave restructured the methods).**
+  (1) the exactly-once-as-ts walk: the srv-wire wave extracted
+  `_shell_import_violations` (parameterized, covers the srv/bootstrap/wire
+  arm), but `_import_violations` and `_test_module_violations` still carry
+  their own copies; the statement-totality loop now exists at FOUR sites
+  (`_bootstrap_module_violations`, `_srv_module_violations`,
+  `_wire_module_violations`, `_role_module_violations`) — extract without
+  breaking the generator's literal-clause guard; (2) `import_edges()`/
+  `tesser_imports()` return positionally-decoded 4-tuples with different
+  slot meanings — make both NamedTuples, and make `has_alias` honest (or
+  unrepresentable) for from-edges; (3) hardcoded `"tesser.context"`/
+  `"tesser.testing"`/`"tesser"` comparison literals → Final constants;
+  (4) the `len(found) == before` legality sentinel → an explicit `denied`
+  list; (5) rules.py: derive the conftest/`__main__` exemption bullets from
+  the AST guards (like TOOLING_MODULES and WIRE_SUFFIX now are) so
+  governing conftest forces the RULES.md diff, and split the
+  TOOLING_MODULES not-found vs wrong-shape errors; (6) `Module` accessors
+  (`body()`/`import_edges()`/`function_names()`/`class_defs()`) rebuild
+  their tuple/frozenset on every call and `_delegation_violations` calls
+  `function_names()` inside its walk loop — cache on the immutable Module
+  (measured immaterial today: ~60ms whole-tree); (7) the rule-coverage
+  meta-test is clause-granular, not branch-granular — branches sharing a
+  clause collapse into one RULES.md row, so a fixture covering one branch
+  reports the row covered (found 2026-08-07; all such branches were probed
+  correct, so this is a guard-precision gap, not a bug).
 - [x] **Two clauses claim more than the code enforces** — RESOLVED 2026-08-06,
   Chris ruling: "the code should enforce what I specified." The code moved,
   not the wording: (1) presence is unconditional — every role and

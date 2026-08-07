@@ -82,9 +82,13 @@ KIND_NAME: Final[dict[str, str]] = {
     "wire_response": "a wire response record",
 }
 
-SRV_KINDS: Final[frozenset[str]] = frozenset({"host", "wire_port", "wire_request", "wire_response"})
+SRV_KINDS: Final[frozenset[str]] = frozenset(
+    block for (package, _), block in TESSER_BASE_BLOCKS.items() if package == "tesser.srv"
+)
 
-WIRE_KINDS: Final[frozenset[str]] = frozenset({"wire_port", "wire_request", "wire_response"})
+WIRE_KINDS: Final[frozenset[str]] = SRV_KINDS - frozenset({"host"})
+
+WIRE_SUFFIX: Final[str] = "wire"
 
 ROLE_TESSER_PACKAGE: Final[dict[str, str]] = {
     "domain": "tesser.domain",
@@ -325,7 +329,7 @@ class Codebase(ts.AggregateRoot):
             return body + self._app_import_violations(module, parts[0], contexts, blocks)
         if parts[0] == "tests":
             return self._tests_package_violations(module)
-        if len(parts) == 1 and not module.is_package() and basename.endswith("wire") and parts[0] not in contexts:
+        if len(parts) == 1 and not module.is_package() and basename.endswith(WIRE_SUFFIX) and parts[0] not in contexts:
             return self._wire_module_violations(module, blocks, contexts)
         if parts[0] not in contexts:
             return self._homeless_violations(module)
@@ -646,7 +650,7 @@ class Codebase(ts.AggregateRoot):
                     found.append(
                         Violation(
                             f"{where} is {KIND_NAME[block]}; "
-                            "a srv kind lives in srv and wire modules, never a context"
+                            "a host lives in srv and a wire kind in a wire module, never a context"
                         )
                     )
                 elif KIND_ROLE[block] != role:
@@ -901,7 +905,8 @@ class Codebase(ts.AggregateRoot):
                         Violation(f"{where} is an undeclared class; a test double declares itself with @ts.fake")
                     )
                 elif not any(
-                    blocks.get(key) in ("port", "client") for key in self._base_keys(module, stmt)
+                    blocks.get(key) in ("port", "client", "wire_port")
+                    for key in self._base_keys(module, stmt)
                 ):
                     found.append(
                         Violation(
