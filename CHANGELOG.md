@@ -5,6 +5,77 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.18.0] - 2026-08-07
+
+The srv and wire vocabulary: hosts and the modules both sides of a wire
+share now have declared kinds, and the two example trees that carried
+that gap as ratchet debt conform to them. Every piece of this release
+was derived from standing rulings rather than newly decided — the
+package-scoped kind grammar the errors ruling set, the position-naming
+precedent `Endpoint` established, and the spike's recorded
+delete-option-A plan.
+
+### Added
+
+- `tesser.srv` — the host-side shell package: `Host`, `Port`
+  (Protocol-shaped, a distinct kind from `tesser.application.Port` by
+  the package-scoped grammar), `Request`, `Response`, and the
+  `@ts.function` declaration. `tesser.app` (App/Config) is deliberately
+  not included — a real open question, not bundled into a derived one.
+- Wire-module governance in sigcheck: a top-level `*wire.py` is a
+  governed home (name-as-declaration, the `test_*` precedent) — it
+  imports `tesser.srv` exactly once as ts, holds only wire kinds
+  (`wire_port`/`wire_request`/`wire_response`), and its ownership is
+  enforced as import rules: context-generic, and never imports srv or
+  bootstrap, so hosts and handlers can both import it without either
+  leaking into the other. srv modules split from bootstrap (declared
+  host classes, `tesser.srv` as their shell package); RULES.md grows
+  57 → 74 rows, every clause fixture-covered, with the wire-suffix
+  convention and the srv-kinds-placement-only carve-out rendered into
+  the generated exemptions.
+- A kind-map totality meta-test (every declared block has a name and a
+  home) and a CI wheel-contents gate for tesser-py — the built wheel
+  had silently omitted `tesser.testing`, and would have omitted
+  `tesser.srv`, because every other job reaches the source via
+  PYTHONPATH; packaging switched to discovery (`packages.find`) so a
+  new shell package can never be forgotten.
+
+### Changed
+
+- `examples/spike-llmport` enacts the host/handler verdict: the wire
+  protocol is renamed `ToolSurface` (the old name collided with the
+  Handler block term), a concrete `ToolTurn` record (reply + tool
+  schemas) replaces the state-generic `ToolHandler[S]`/`ToolState`
+  machinery that produced the four-reviewer contravariance defect, and
+  `ToolAgent` declares itself a `ts.Host`. The frozen option-A mirror
+  (`scheduling/adapters/livekit.py`) is deleted per the spike's recorded
+  plan, the tree's sigcheck ratchet burns to zero, and the
+  sigcheck-vs-ruff F401 collision resolves itself — the mandated srv
+  import is now load-bearing.
+- `examples/python-app`'s `httpwire`/`cliwire` stop being homeless:
+  request/response records become declared `ts.Request`/`ts.Response`
+  shells, the `Endpoint`/`Command` Callable aliases become declared
+  `__call__` ports (positional-only parameter — zero call sites
+  changed), and the mechanism functions declare `@ts.function`. The
+  ratchet rebases 173 → 176; the five remaining wire findings are named
+  debt, one per open ruling (four exception classes on the `ts.Error`
+  track, the type alias on the alias-declaration story — recorded as
+  hard rule collisions, not conformance work).
+- `ToolTurn.reply` is asserted on every turn, the srv/context shell
+  distinctness is pinned, and the httpwire fidelity guards assert
+  stored attributes again on the new substrate.
+
+### Fixed
+
+- sigcheck's `@ts.fake` rule accepts a fake that implements a wire
+  port (previously a latent false positive on faking `Endpoint`,
+  `Command`, or `ToolSurface`), the contradictory placement clause pair
+  is reworded ("a host lives in srv and a wire kind in a wire module,
+  never a context"), and `SRV_KINDS`/`WIRE_KINDS` are derived from the
+  block table with the companion name/role maps guarded total — the
+  sanctioned one-line kind extension previously crashed the analyzer
+  instead of reporting.
+
 ## [0.0.17.0] - 2026-08-06
 
 The LLM tool-call port spike: `examples/spike-llmport`, a `scheduling`
