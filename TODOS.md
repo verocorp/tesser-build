@@ -20,28 +20,42 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 
 - [ ] **python-app conformance + remove the sigcheck CI ratchet.** The wave's
   rules (tesser exactly-once-as-ts, whole-tree totality, pure-core allowlist,
-  module-only aliased context imports) fire 173 findings on the freshly
+  module-only aliased context imports) fired 173 findings on the freshly
   migrated tree, so the zero-findings CI step became a ratchet
   (`examples/python-app/sigcheck-ratchet` — the accepted-debt baseline as a
   normalized finding set, not a scalar count: any finding outside the baseline
-  fails even at an equal total, and an analyzer crash fails closed).
+  fails even at an equal total, and an analyzer crash fails closed). The
+  srv-wire-vocabulary wave rebased the baseline to 176 (clause re-wordings;
+  wire modules migrated, leaving 5 named-debt lines). It is the only ratchet:
+  spike-llmport's burned to zero in the same wave.
   - **Mechanical (~145):** 123 import-form conversions (`from x.client import Y`
     → `import x.client as client`), 13 `@ts.function` declarations + 7
-    `import tesser.context as ts` in srv/bootstrap, 2 Final constants.
-  - **Blocked on the rulings below:** 9 srv/bootstrap classes, 5 homeless
-    modules, several pure-core hits.
+    `import tesser.srv as ts` in srv (bootstrap keeps `tesser.context`),
+    2 Final constants.
+  - **Blocked on the rulings below:** srv host-machinery classes
+    (`Route`/`Match`/`HttpHost`), bootstrap's `App`/`Config`/`HttpConfig`/
+    `CleanupStack` (the `tesser.app` question), 3 homeless modules
+    (`errors`/`serialization`/`lifecycle`), 4 wire exception classes +
+    1 wire type alias (the `ts.Error` track and the alias-declaration story),
+    several pure-core hits.
   - **Then:** regenerate the baseline per fix (the sed|sort pipeline in
     test.yml); at zero findings delete `sigcheck-ratchet` and restore the plain
     zero-findings step.
-- [ ] **Host-class vocabulary.** A class in srv/bootstrap always flags — no
-  shell exists for `Route`, `Match`, `HttpHost`, `CleanupStack`, `App`,
-  `HttpConfig`, `Config`. Decide: `tesser.srv` (Host/Request/Response) +
-  `tesser.app` (App/Config) shells per the 2026-08-02 package map, or relocate
-  the classes.
-- [ ] **Homeless root modules.** `errors`, `serialization`, `lifecycle`,
-  `cliwire`, `httpwire` belong to no governed package; ruling needed on where
-  app-level shared modules live. Same ruling resolves the pure-core hits where
-  domain imports `errors`/`serialization`.
+- [ ] **Host-class vocabulary — PARTIALLY RESOLVED (srv-wire-vocabulary wave,
+  2026-08-07).** `tesser.srv` now exists (Host, Port, Request, Response —
+  package-scoped kinds per the errors-ruling grammar; `tesser.app` was
+  deliberately left out as a real open question) and sigcheck admits declared
+  host classes in srv modules plus wire kinds in `*wire.py` wire modules.
+  Still open: host machinery that is not itself a host (`Route`, `Match` —
+  and whether `HttpHost` just declares `ts.Host`), and the whole `tesser.app`
+  half (`App`, `Config`, `HttpConfig`, `CleanupStack`).
+- [ ] **Homeless root modules.** `errors`, `serialization`, `lifecycle`
+  belong to no governed package; ruling needed on where app-level shared
+  modules live. Same ruling resolves the pure-core hits where domain imports
+  `errors`/`serialization`. (`cliwire`/`httpwire`/`voicewire` left this list
+  in the srv-wire-vocabulary wave: a top-level `*wire.py` is a governed wire
+  module — imports `tesser.srv` exactly once as ts, holds wire kinds, is
+  context-generic, and never imports srv or bootstrap.)
 - [ ] **Pure-core allowlist candidates (from dogfood evidence only):**
   `urllib.parse` in `campaign.domain.values` / `linkpolicy.domain.policy`
   (pure parsing — likely admit; the matcher accepts exact dotted entries, so
