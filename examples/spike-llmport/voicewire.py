@@ -1,25 +1,24 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Protocol, TypeVar
+from typing import Protocol
+
+import tesser.srv as ts
 
 
-class ToolState(Protocol):
+class ToolTurn(ts.Response):
 
-    reply: str
+    def __init__(self, reply: str, tools: tuple[dict[str, object], ...]) -> None:
+        self.reply = reply
+        self.tools = tools
 
 
-S = TypeVar("S", bound=ToolState)
-
-
-class ToolHandler(Protocol[S]):
+class ToolSurface(ts.Port, Protocol):
 
     def instructions(self) -> str: ...
 
-    def begin(self) -> S: ...
+    def begin(self) -> ToolTurn: ...
 
-    def status(self) -> S: ...
+    def status(self) -> ToolTurn: ...
 
-    def tools(self, state: S) -> tuple[dict[str, object], ...]: ...
-
-    def dispatch(self, tool: str, raw_arguments: Mapping[str, object]) -> S: ...
+    def dispatch(self, tool: str, raw_arguments: Mapping[str, object]) -> ToolTurn: ...

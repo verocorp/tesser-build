@@ -2,12 +2,12 @@
 
 A workflow whose next step is decided by an LLM tool call, built as a real
 `scheduling` context in the `ts.*` shell idiom and held to the spike-shells
-bar. The `scheduling` context is sigcheck-clean; the tree carries exactly
-two accepted findings — one in `srv/voice/agent.py` (a class in srv: the
-host-vocabulary gap) and one for `voicewire.py` (no governed package: the
-root-module-homes gap) — deliberate evidence for those two rulings (see
-"The host/handler split" below), ratcheted in CI so nothing new can hide
-behind them. mypy --strict and pytest gate the pure modules.
+bar. The whole tree is sigcheck-clean — zero findings, gated plainly in CI.
+The two findings the tree's ratchet used to carry were resolved by the srv
+vocabulary (`tesser.srv`: `Host`, `Port`, `Request`, `Response`) and the
+wire-module rules: `ToolAgent` declares itself a `ts.Host`, and
+`voicewire.py` is a governed wire module (see "The host/handler split"
+below for the history). mypy --strict and pytest gate the pure modules.
 
 ## The shape
 
@@ -18,11 +18,11 @@ scheduling/
   application.py  BookingParts, SlotDirectory + BookingRepository ports, BookingService
   adapters/
     handlers.py   LlmToolHandler — the LLM wire: tool vocabulary, schemas, dispatch
-    livekit.py    SchedulingAgent — the LiveKit translation over the handler
 tests/            domain/application/handler tests; each declares its own @ts.fake port doubles
-voicewire.py      the host↔handler contract for the voice mechanism (httpwire analog)
+voicewire.py      wire module: ToolSurface (ts.Port) + ToolTurn (ts.Response), the voice
+                  analog of httpwire — imported by host and handler, owned by neither
 srv/
-  voice/agent.py  option B of the host/handler split: a context-generic ToolAgent
+  voice/agent.py  ToolAgent (ts.Host) — the context-generic LiveKit host
 ```
 
 The division of labor the checkers enforce:
@@ -43,11 +43,15 @@ The division of labor the checkers enforce:
   because the slot was taken makes the adapter call the `reoffer` use case and
   re-raise with the fresh slots in the message — the model sees what is now
   bookable; the service stays four-step.
-- **`adapters/livekit.py`** translates the handler onto LiveKit Agents:
+- **`srv/voice/agent.py`** translates the wire onto LiveKit Agents:
   `function_tool(raw_schema=...)` per schema, one shim, `ToolError` for
   `ValueError` (model-correctable, with a tools rebind), halt on anything
   else. It is in sigcheck's walk (pure AST) but outside the mypy/pytest gate —
   it needs `livekit-agents` installed and a real session to exercise.
+- **The wire speaks turns, not state.** A `ToolTurn` is the mechanism's own
+  record: the reply to speak plus the tool schemas now in play. The handler
+  translates its context DTO into it, exactly as an HTTP handler renders a
+  `Response` — the context's DTOs never cross into the host.
 
 ## What conformance cost — the collisions worth knowing
 
@@ -71,67 +75,58 @@ the original design genuinely collided:
   import matrix forbids it from importing the domain's constants. The same
   totality test is the drift tripwire.
 
-## The host/handler split, answered in code
+## The host/handler split, answered in code — and then enacted
 
 Where does the `AgentSession`-owning LiveKit wrapper belong — the context's
-adapters, or a voice host in `srv/`? Both options live in this tree so the
-structure can answer:
+adapters, or a voice host in `srv/`? This tree originally carried both
+options so the structure could answer. The wrapper turned out to be **fully
+context-generic**: once `instructions()` moved onto the handler (it was
+content, misplaced in the transport), `ToolAgent` imports nothing from any
+context — it speaks to the `voicewire.ToolSurface` port. One voice host
+mounts any context's LLM handler, exactly as the HTTP host mounts HTTP
+handlers: the host owns the transport, the handler owns the content.
 
-- **Option A — `scheduling/adapters/livekit.py`** (`SchedulingAgent`).
-  Conforms to the current rulebook. But it is transport glue wearing an
-  adapter's name: every context serving voice would re-implement the same
-  shim/rebind/error mechanics, the way no context re-implements the HTTP
-  server.
-- **Option B — `srv/voice/agent.py`** (`ToolAgent`). The wrapper turns out
-  to be **fully context-generic**: once `instructions()` moved onto the
-  handler (it was content, misplaced in the transport), `ToolAgent` imports
-  nothing from any context — it speaks to the `ToolHandler` protocol
-  (instructions/begin/status/tools/dispatch). One voice host can mount any
-  context's LLM handler, exactly as the HTTP host mounts HTTP handlers.
-  This matches the settled anatomy: the host owns the transport, the
-  handler owns the content. The protocol itself lives in **`voicewire.py`**,
-  not srv — per handlers.md, the host↔handler vocabulary is the contract
-  both sides import and neither owns (the voice analog of `httpwire.py`),
-  which keeps contexts constructible with no host in the process.
+The srv vocabulary and the wire-module rules then enacted the verdict:
+`ToolAgent` declares itself a `ts.Host` in `srv/voice/agent.py`, the
+option-A adapter shim (`scheduling/adapters/livekit.py`) was deleted, and
+`voicewire.py` became a governed wire module. Per handlers.md, the wire
+vocabulary is the contract both sides import and neither owns (the voice
+analog of `httpwire.py`) — sigcheck now enforces exactly that ownership:
+a wire module imports no context and never imports srv or bootstrap, which
+keeps contexts constructible with no host in the process.
 
-The verdict the code gives: **B is the doctrinal answer** — the
-handler/host split that already existed inside the LiveKit wiring
-(`LlmToolHandler` = content, agent class = transport) is the anatomy's own
-split, and genericity proves the agent class was never context code. What
-blocks enacting it is two known gaps, and `sigcheck-ratchet` carries
-exactly one finding for each: srv modules admit no classes (`ToolAgent` —
-the host-vocabulary question the import-totality wave deliberately
-surfaced), and a root wire-vocabulary module has no governed home
-(`voicewire.py` — the root-module-homes question, the same family as
-python-app's `httpwire.py` ratchet debt). When those are ruled, option A
-gets deleted, the baseline burns down to zero, and the plain zero-findings
-CI step comes back.
+The migration also deleted the wire's structural-state machinery. The old
+contract passed the context's own response through the host behind a
+`ToolState` protocol and a state-generic `ToolHandler[S]` — the shape that
+produced the contravariance defect four pre-landing reviewers found
+independently. The host only ever read `reply` and handed the state back to
+`tools()`, so the wire now owns a concrete `ToolTurn` record (reply + the
+tool schemas now in play) and the handler translates into it, symmetric
+with HTTP. No TypeVar, no generic protocol, no conformance edge case — the
+typed assertion in the handler tests is a plain assignment.
 
 ## Run it
 
 ```sh
 PYTHONPATH=examples/spike-shells:tesser-py python3 -m sigcheck examples/spike-llmport
 cd examples/spike-llmport
-MYPYPATH=.:../../tesser-py mypy --strict --exclude 'scheduling/adapters/livekit\.py' \
-  scheduling voicewire.py tests
+MYPYPATH=.:../../tesser-py mypy --strict scheduling voicewire.py tests
 pytest -q
 ```
 
-The sigcheck run prints the two accepted findings and exits 1 — that is the
-expected state, not a break. CI compares the output against
-`sigcheck-ratchet` and fails only on a finding outside the baseline (or a
-baseline entry that has stopped firing).
+The sigcheck run prints nothing and exits 0 — the tree is finding-free and
+CI gates it at zero.
 
 ## Documented production boundaries
 
 This is teaching code; five simplifications are deliberate, named here so
 they are copied knowingly or not at all:
 
-- **The wire contract is synchronous.** `voicewire.ToolHandler` and every
-  port below it are sync; the hosts call `dispatch` inside the event loop.
+- **The wire contract is synchronous.** `voicewire.ToolSurface` and every
+  port below it are sync; the host calls `dispatch` inside the event loop.
   A real implementation with real IO must either make the contract async or
   have the host absorb the hop (`await asyncio.to_thread(...)` at the three
-  handler call sites). The per-session `asyncio.Lock` in both agents
+  handler call sites). The per-session `asyncio.Lock` in the agent
   serializes tool calls; it does not unblock the loop.
 - **Ports must not raise `ValueError` for infrastructure faults.** The
   edge's whole classification is "`ValueError` is model-correctable,
@@ -154,15 +149,10 @@ they are copied knowingly or not at all:
   "taken; no slots are available" error rather than a terminal state —
   state-machine growth left for a consumer with real requirements.
 
-`scheduling/adapters/livekit.py` (option A) is a frozen mirror of
-`srv/voice/agent.py` (option B): edit B, mirror A, delete A when the
-host-vocabulary ruling lands.
-
-One more rulebook collision surfaced by this tree: sigcheck requires
-`import tesser.context as ts` in every srv module, but `srv/voice/agent.py`
-never uses `ts`, so the repo's own ruff charter (F401) would flag the
-import the rulebook mandates. The host-vocabulary ruling needs to resolve
-the pair.
+The sigcheck-vs-ruff F401 collision this tree used to document (a mandated
+`ts` import that nothing used) resolved itself with the srv vocabulary:
+`srv/voice/agent.py`'s `import tesser.srv as ts` is now load-bearing —
+`ToolAgent` subclasses `ts.Host`.
 
 ## Non-goals
 

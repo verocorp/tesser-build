@@ -50,7 +50,8 @@ def test_a_schema_for_an_unknown_tool_is_rejected() -> None:
         MemorySlotDirectory(("mon-9am",)), MemoryBookingRepository()
     )
     handler = handlers.LlmToolHandler(service, "b1")
-    state = handler.begin()
+    handler.begin()
+    state = service.status(client.StatusRequest(booking_id="b1"))
 
     with pytest.raises(ValueError):
         handler._schema("cancel_booking", state)
@@ -62,10 +63,10 @@ def test_the_handler_satisfies_the_voicewire_contract() -> None:
     )
     handler = handlers.LlmToolHandler(service, "b1")
 
-    wired: voicewire.ToolHandler[client.BookingStateResponse] = handler
-    state: voicewire.ToolState = wired.begin()
+    wired: voicewire.ToolSurface = handler
+    turn: voicewire.ToolTurn = wired.begin()
 
-    assert state.reply == "ask the caller for their name"
+    assert turn.reply == "ask the caller for their name"
 
 
 def test_the_handler_owns_the_agent_instructions() -> None:
@@ -83,21 +84,21 @@ def test_the_flow_through_the_tool_surface() -> None:
     service = application.BookingService(directory, MemoryBookingRepository())
     handler = handlers.LlmToolHandler(service, "b1")
 
-    state = handler.begin()
-    assert [schema["name"] for schema in handler.tools(state)] == [handlers.PROVIDE_NAME]
+    turn = handler.begin()
+    assert [schema["name"] for schema in turn.tools] == [handlers.PROVIDE_NAME]
 
-    state = handler.dispatch(handlers.PROVIDE_NAME, {"name": "Ada Lovelace"})
-    assert [schema["name"] for schema in handler.tools(state)] == [handlers.CHOOSE_SLOT]
+    turn = handler.dispatch(handlers.PROVIDE_NAME, {"name": "Ada Lovelace"})
+    assert [schema["name"] for schema in turn.tools] == [handlers.CHOOSE_SLOT]
 
-    state = handler.dispatch(handlers.CHOOSE_SLOT, {"slot": "mon-9am"})
-    assert [schema["name"] for schema in handler.tools(state)] == [
+    turn = handler.dispatch(handlers.CHOOSE_SLOT, {"slot": "mon-9am"})
+    assert [schema["name"] for schema in turn.tools] == [
         handlers.CHOOSE_SLOT,
         handlers.CONFIRM_BOOKING,
     ]
 
-    state = handler.dispatch(handlers.CONFIRM_BOOKING, {})
-    assert state.step == "booked"
-    assert handler.tools(state) == ()
+    turn = handler.dispatch(handlers.CONFIRM_BOOKING, {})
+    assert turn.tools == ()
+    assert service.status(client.StatusRequest(booking_id="b1")).step == "booked"
     assert directory.reserved == [("mon-9am", "Ada Lovelace")]
 
 
@@ -108,8 +109,8 @@ def test_the_choose_slot_schema_offers_exactly_the_current_slots() -> None:
     handler = handlers.LlmToolHandler(service, "b1")
     handler.begin()
 
-    state = handler.dispatch(handlers.PROVIDE_NAME, {"name": "Ada"})
-    schema = handler.tools(state)[0]
+    turn = handler.dispatch(handlers.PROVIDE_NAME, {"name": "Ada"})
+    schema = turn.tools[0]
 
     parameters = schema["parameters"]
     assert isinstance(parameters, dict)
@@ -149,7 +150,7 @@ def test_a_confirm_at_the_wrong_step_keeps_its_own_error_and_mutates_nothing() -
 
     assert "choose_slot" in str(excinfo.value)
     assert "now available" not in str(excinfo.value)
-    state = handler.status()
+    state = service.status(client.StatusRequest(booking_id="b1"))
     assert state.step == "choose_slot"
     assert state.offered_slots == ("mon-9am", "tue-2pm")
 
@@ -181,9 +182,9 @@ def test_a_taken_slot_reoffers_and_names_the_fresh_slots() -> None:
 
     assert "now available: tue-2pm" in str(excinfo.value)
 
-    state = handler.status()
-    assert state.step == "choose_slot"
-    schema = handler.tools(state)[0]
+    turn = handler.status()
+    assert service.status(client.StatusRequest(booking_id="b1")).step == "choose_slot"
+    schema = turn.tools[0]
     parameters = schema["parameters"]
     assert isinstance(parameters, dict)
     properties = parameters["properties"]

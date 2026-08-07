@@ -6,6 +6,7 @@ from typing import Final
 import tesser.adapters as ts
 
 import scheduling.client as client
+import voicewire
 
 PROVIDE_NAME: Final[str] = "provide_name"
 CHOOSE_SLOT: Final[str] = "choose_slot"
@@ -24,11 +25,11 @@ class LlmToolHandler(ts.Handler):
         self._client = scheduling_client
         self._booking_id = booking_id
 
-    def begin(self) -> client.BookingStateResponse:
-        return self._client.begin(client.BeginBookingRequest(booking_id=self._booking_id))
+    def begin(self) -> voicewire.ToolTurn:
+        return self._turn(self._client.begin(client.BeginBookingRequest(booking_id=self._booking_id)))
 
-    def status(self) -> client.BookingStateResponse:
-        return self._client.status(client.StatusRequest(booking_id=self._booking_id))
+    def status(self) -> voicewire.ToolTurn:
+        return self._turn(self._client.status(client.StatusRequest(booking_id=self._booking_id)))
 
     def instructions(self) -> str:
         return (
@@ -36,26 +37,25 @@ class LlmToolHandler(ts.Handler):
             " Use the tools to record what they say; never invent slots."
         )
 
-    def tools(self, state: client.BookingStateResponse) -> tuple[dict[str, object], ...]:
-        return tuple(self._schema(tool, state) for tool in TOOLS_FOR_STEP[state.step])
-
-    def dispatch(
-        self, tool: str, raw_arguments: Mapping[str, object]
-    ) -> client.BookingStateResponse:
+    def dispatch(self, tool: str, raw_arguments: Mapping[str, object]) -> voicewire.ToolTurn:
         if tool == PROVIDE_NAME:
-            return self._client.provide_name(
-                client.ProvideNameRequest(
-                    booking_id=self._booking_id, name=_text(raw_arguments, "name")
+            return self._turn(
+                self._client.provide_name(
+                    client.ProvideNameRequest(
+                        booking_id=self._booking_id, name=_text(raw_arguments, "name")
+                    )
                 )
             )
         if tool == CHOOSE_SLOT:
-            return self._client.choose_slot(
-                client.ChooseSlotRequest(
-                    booking_id=self._booking_id, slot=_text(raw_arguments, "slot")
+            return self._turn(
+                self._client.choose_slot(
+                    client.ChooseSlotRequest(
+                        booking_id=self._booking_id, slot=_text(raw_arguments, "slot")
+                    )
                 )
             )
         if tool == CONFIRM_BOOKING:
-            return self._confirm()
+            return self._turn(self._confirm())
         raise ValueError(f"unknown tool {tool!r}")
 
     def _confirm(self) -> client.BookingStateResponse:
@@ -75,6 +75,12 @@ class LlmToolHandler(ts.Handler):
                 raise ValueError(f"{err}; {exhausted}") from err
             offered = ", ".join(fresh.offered_slots)
             raise ValueError(f"{err}; now available: {offered}") from err
+
+    def _turn(self, state: client.BookingStateResponse) -> voicewire.ToolTurn:
+        return voicewire.ToolTurn(
+            reply=state.reply,
+            tools=tuple(self._schema(tool, state) for tool in TOOLS_FOR_STEP[state.step]),
+        )
 
     def _schema(self, tool: str, state: client.BookingStateResponse) -> dict[str, object]:
         if tool == PROVIDE_NAME:

@@ -2,19 +2,18 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from typing import Any
 
-import tesser.context as ts
+import tesser.srv as ts
 from livekit.agents import Agent, ToolError, function_tool
 
 import voicewire
 
 
-class ToolAgent(Agent):
+class ToolAgent(Agent, ts.Host):
 
     def __init__(
         self,
-        handler: voicewire.ToolHandler[Any],
+        handler: voicewire.ToolSurface,
         halt: Callable[[], Awaitable[None]],
     ) -> None:
         super().__init__(instructions=handler.instructions())
@@ -29,19 +28,16 @@ class ToolAgent(Agent):
             await self._halt()
             raise
 
-    async def _rebind(self, state: voicewire.ToolState) -> None:
+    async def _rebind(self, turn: voicewire.ToolTurn) -> None:
         await self.update_tools(
-            [
-                function_tool(self._shim(schema), raw_schema=schema)
-                for schema in self._handler.tools(state)
-            ]
+            [function_tool(self._shim(schema), raw_schema=schema) for schema in turn.tools]
         )
 
     def _shim(self, schema: dict[str, object]) -> Callable[..., Awaitable[str]]:
         async def call(raw_arguments: dict[str, object]) -> str:
             async with self._lock:
                 try:
-                    state = self._handler.dispatch(str(schema["name"]), raw_arguments)
+                    turn = self._handler.dispatch(str(schema["name"]), raw_arguments)
                 except ValueError as err:
                     try:
                         await self._rebind(self._handler.status())
@@ -53,10 +49,10 @@ class ToolAgent(Agent):
                     await self._halt()
                     raise
                 try:
-                    await self._rebind(state)
+                    await self._rebind(turn)
                 except Exception:
                     await self._halt()
                     raise
-                return state.reply
+                return turn.reply
 
         return call
