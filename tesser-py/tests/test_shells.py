@@ -4,6 +4,7 @@ import tesser.adapters
 import tesser.application
 import tesser.context
 import tesser.domain
+import tesser.srv
 import tesser.testing
 
 
@@ -13,6 +14,10 @@ class _AskThings(tesser.context.Client, Protocol):
 
 class _SaveThings(tesser.application.Port, Protocol):
     def save(self, thing: object) -> None: ...
+
+
+class _ServeThings(tesser.srv.Port, Protocol):
+    def __call__(self, request: object) -> object: ...
 
 
 class _StructuralSaver:
@@ -43,6 +48,16 @@ def test_client_subclass_stays_a_protocol() -> None:
     assert tesser.context.Client in _AskThings.__mro__
 
 
+def test_srv_port_subclass_stays_a_protocol() -> None:
+    assert getattr(_ServeThings, "_is_protocol", False)
+    assert tesser.srv.Port in _ServeThings.__mro__
+
+
+def test_srv_port_is_a_distinct_kind_from_the_application_port() -> None:
+    assert tesser.srv.Port is not tesser.application.Port
+    assert tesser.application.Port not in _ServeThings.__mro__
+
+
 def test_declaration_decorators_return_their_target_unchanged() -> None:
     def build() -> str:
         return "built"
@@ -54,6 +69,7 @@ def test_declaration_decorators_return_their_target_unchanged() -> None:
     assert tesser.application.function(build) is build
     assert tesser.adapters.function(build) is build
     assert tesser.context.function(build) is build
+    assert tesser.srv.function(build) is build
     assert tesser.testing.helper(build) is build
     assert tesser.testing.fake(Double) is Double
 
@@ -83,5 +99,14 @@ def test_shells_classify_subclasses() -> None:
     class Inbound(tesser.adapters.Handler):
         pass
 
-    for cls in (Root, RootSpec, Service, Repo, Ask, Reply, Wire, Inbound):
+    class Server(tesser.srv.Host):
+        pass
+
+    class WireAsk(tesser.srv.Request):
+        pass
+
+    class WireReply(tesser.srv.Response):
+        pass
+
+    for cls in (Root, RootSpec, Service, Repo, Ask, Reply, Wire, Inbound, Server, WireAsk, WireReply):
         assert cls()
