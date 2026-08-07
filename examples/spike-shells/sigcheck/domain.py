@@ -18,6 +18,10 @@ TESSER_BASE_BLOCKS: Final[dict[tuple[str, str], str]] = {
     ("tesser.adapters", "Gateway"): "gateway",
     ("tesser.adapters", "Handler"): "handler",
     ("tesser.context", "Wiring"): "wiring",
+    ("tesser.srv", "Host"): "host",
+    ("tesser.srv", "Port"): "wire_port",
+    ("tesser.srv", "Request"): "wire_request",
+    ("tesser.srv", "Response"): "wire_response",
 }
 
 TESSER_DECORATORS: Final[dict[tuple[str, str], str]] = {
@@ -25,6 +29,7 @@ TESSER_DECORATORS: Final[dict[tuple[str, str], str]] = {
     ("tesser.application", "function"): "function",
     ("tesser.adapters", "function"): "function",
     ("tesser.context", "function"): "function",
+    ("tesser.srv", "function"): "function",
     ("tesser.testing", "helper"): "helper",
     ("tesser.testing", "fake"): "fake",
 }
@@ -71,7 +76,15 @@ KIND_NAME: Final[dict[str, str]] = {
     "gateway": "a gateway adapter",
     "handler": "an inbound handler",
     "wiring": "a wiring assembly",
+    "host": "a host",
+    "wire_port": "a wire port",
+    "wire_request": "a wire request record",
+    "wire_response": "a wire response record",
 }
+
+SRV_KINDS: Final[frozenset[str]] = frozenset({"host", "wire_port", "wire_request", "wire_response"})
+
+WIRE_KINDS: Final[frozenset[str]] = frozenset({"wire_port", "wire_request", "wire_response"})
 
 ROLE_TESSER_PACKAGE: Final[dict[str, str]] = {
     "domain": "tesser.domain",
@@ -303,12 +316,17 @@ class Codebase(ts.AggregateRoot):
             return self._test_module_violations(module, blocks, contexts)
         if parts[0] in APP_PACKAGES:
             if module.is_package():
-                return self._app_module_violations(module)
-            return self._app_module_violations(module) + self._app_import_violations(
-                module, parts[0], contexts, blocks
+                return self._app_init_violations(module)
+            body = (
+                self._srv_module_violations(module, blocks)
+                if parts[0] == "srv"
+                else self._bootstrap_module_violations(module)
             )
+            return body + self._app_import_violations(module, parts[0], contexts, blocks)
         if parts[0] == "tests":
             return self._tests_package_violations(module)
+        if len(parts) == 1 and not module.is_package() and basename.endswith("wire") and parts[0] not in contexts:
+            return self._wire_module_violations(module, blocks, contexts)
         if parts[0] not in contexts:
             return self._homeless_violations(module)
         if len(parts) == 1:
@@ -340,7 +358,7 @@ class Codebase(ts.AggregateRoot):
         return (
             Violation(
                 f"{module.name()} belongs to no governed package; "
-                "every module belongs to a context, srv, bootstrap, or tests"
+                "every module belongs to a context, srv, bootstrap, tests, or a wire module"
             ),
         )
 
@@ -380,58 +398,69 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _app_module_violations(self, module: Module) -> tuple[Violation, ...]:
-        if module.is_package():
-            return tuple(
-                Violation(
-                    f"{module.name()} __init__ declares code at line {stmt.lineno}; "
-                    "a srv or bootstrap __init__ is empty"
-                )
-                for stmt in module.body()
+    def _app_init_violations(self, module: Module) -> tuple[Violation, ...]:
+        return tuple(
+            Violation(
+                f"{module.name()} __init__ declares code at line {stmt.lineno}; "
+                "a srv or bootstrap __init__ is empty"
             )
+            for stmt in module.body()
+        )
+
+    def _shell_import_violations(
+        self,
+        module: Module,
+        subject: str,
+        package: str,
+    ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        found.extend(self._stray_import_violations(module))
-        seen_context = False
+        seen_own = False
         seen_any = False
         for target, lineno, alias, from_form in module.tesser_imports():
             seen_any = True
-            if target != "tesser.context":
+            if target != package:
                 found.append(
                     Violation(
                         f"{module.name()}:{lineno} imports {target}; "
-                        "a srv or bootstrap module imports only tesser.context"
+                        f"a {subject} module imports only {package}"
                     )
                 )
-            elif seen_context:
+            elif seen_own:
                 found.append(
                     Violation(
                         f"{module.name()}:{lineno} imports {target} again; "
-                        "a srv or bootstrap module imports tesser.context exactly once, as ts"
+                        f"a {subject} module imports {package} exactly once, as ts"
                     )
                 )
             else:
-                seen_context = True
+                seen_own = True
                 if from_form:
                     found.append(
                         Violation(
                             f"{module.name()}:{lineno} imports names from {target}; "
-                            "a srv or bootstrap module imports tesser.context exactly once, as ts"
+                            f"a {subject} module imports {package} exactly once, as ts"
                         )
                     )
                 elif alias != "ts":
                     found.append(
                         Violation(
                             f"{module.name()}:{lineno} imports {target} without the ts alias; "
-                            "a srv or bootstrap module imports tesser.context exactly once, as ts"
+                            f"a {subject} module imports {package} exactly once, as ts"
                         )
                     )
-        if not seen_context and not seen_any:
+        if not seen_own and not seen_any:
             found.append(
                 Violation(
-                    f"{module.name()} never imports tesser.context; "
-                    "a srv or bootstrap module imports tesser.context exactly once, as ts"
+                    f"{module.name()} never imports {package}; "
+                    f"a {subject} module imports {package} exactly once, as ts"
                 )
             )
+        return tuple(found)
+
+    def _bootstrap_module_violations(self, module: Module) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        found.extend(self._stray_import_violations(module))
+        found.extend(self._shell_import_violations(module, "bootstrap", "tesser.context"))
         for stmt in module.body():
             if isinstance(stmt, (ast.Import, ast.ImportFrom)):
                 continue
@@ -440,14 +469,14 @@ class Codebase(ts.AggregateRoot):
                     found.append(
                         Violation(
                             f"{module.name()}.{stmt.name}:{stmt.lineno} is an undeclared module function; "
-                            "a srv or bootstrap function declares itself with @ts.function"
+                            "a bootstrap function declares itself with @ts.function"
                         )
                     )
             elif isinstance(stmt, ast.ClassDef):
                 found.append(
                     Violation(
                         f"{module.name()}.{stmt.name}:{stmt.lineno} is a class; "
-                        "a srv or bootstrap module holds only imports, declared functions, and Final constants"
+                        "a bootstrap module holds only imports, declared functions, and Final constants"
                     )
                 )
             elif isinstance(stmt, ast.AnnAssign):
@@ -455,21 +484,145 @@ class Codebase(ts.AggregateRoot):
                     found.append(
                         Violation(
                             f"{module.name()}:{stmt.lineno} declares a module constant without Final; "
-                            "a srv or bootstrap constant is Final"
+                            "a bootstrap constant is Final"
                         )
                     )
             elif isinstance(stmt, ast.Assign):
                 found.append(
                     Violation(
                         f"{module.name()}:{stmt.lineno} declares a module constant without Final; "
-                        "a srv or bootstrap constant is Final"
+                        "a bootstrap constant is Final"
                     )
                 )
             else:
                 found.append(
                     Violation(
                         f"{module.name()}:{stmt.lineno} has a loose module-level statement; "
-                        "a srv or bootstrap module holds only imports, declared functions, and Final constants"
+                        "a bootstrap module holds only imports, declared functions, and Final constants"
+                    )
+                )
+        return tuple(found)
+
+    def _srv_module_violations(
+        self,
+        module: Module,
+        blocks: dict[tuple[str, str], str],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        found.extend(self._stray_import_violations(module))
+        found.extend(self._shell_import_violations(module, "srv", "tesser.srv"))
+        for stmt in module.body():
+            if isinstance(stmt, (ast.Import, ast.ImportFrom)):
+                continue
+            if isinstance(stmt, ast.ClassDef):
+                block = blocks.get((module.name(), stmt.name))
+                where = f"{module.name()}.{stmt.name}:{stmt.lineno}"
+                if block is None:
+                    found.append(Violation(f"{where} declares no ts.* base; a srv class declares its block"))
+                elif block != "host":
+                    found.append(
+                        Violation(f"{where} is {KIND_NAME[block]}; only a host class lives in a srv module")
+                    )
+            elif isinstance(stmt, ast.FunctionDef):
+                if not self._declared(module, stmt, "function"):
+                    found.append(
+                        Violation(
+                            f"{module.name()}.{stmt.name}:{stmt.lineno} is an undeclared module function; "
+                            "a srv function declares itself with @ts.function"
+                        )
+                    )
+            elif isinstance(stmt, ast.AnnAssign):
+                if not self._is_final(stmt.annotation):
+                    found.append(
+                        Violation(
+                            f"{module.name()}:{stmt.lineno} declares a module constant without Final; "
+                            "a srv constant is Final"
+                        )
+                    )
+            elif isinstance(stmt, ast.Assign):
+                found.append(
+                    Violation(
+                        f"{module.name()}:{stmt.lineno} declares a module constant without Final; "
+                        "a srv constant is Final"
+                    )
+                )
+            else:
+                found.append(
+                    Violation(
+                        f"{module.name()}:{stmt.lineno} has a loose module-level statement; a srv module "
+                        "holds only imports, declared classes and functions, and Final constants"
+                    )
+                )
+        return tuple(found)
+
+    def _wire_module_violations(
+        self,
+        module: Module,
+        blocks: dict[tuple[str, str], str],
+        contexts: frozenset[str],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        found.extend(self._stray_import_violations(module))
+        found.extend(self._shell_import_violations(module, "wire", "tesser.srv"))
+        for target, lineno, _, _ in module.import_edges():
+            head = target.split(".")[0]
+            if head in contexts:
+                found.append(
+                    Violation(
+                        f"{module.name()}:{lineno} imports {target}; "
+                        "a wire module is context-generic and imports no context"
+                    )
+                )
+            elif head in APP_PACKAGES:
+                found.append(
+                    Violation(
+                        f"{module.name()}:{lineno} imports {target}; "
+                        "a wire module never imports srv or bootstrap"
+                    )
+                )
+        for stmt in module.body():
+            if isinstance(stmt, (ast.Import, ast.ImportFrom)):
+                continue
+            if isinstance(stmt, ast.ClassDef):
+                block = blocks.get((module.name(), stmt.name))
+                where = f"{module.name()}.{stmt.name}:{stmt.lineno}"
+                if block is None:
+                    found.append(Violation(f"{where} declares no ts.* base; a wire class declares its block"))
+                elif block not in WIRE_KINDS:
+                    found.append(
+                        Violation(
+                            f"{where} is {KIND_NAME[block]}; only wire ports, wire requests, "
+                            "and wire responses live in a wire module"
+                        )
+                    )
+            elif isinstance(stmt, ast.FunctionDef):
+                if not self._declared(module, stmt, "function"):
+                    found.append(
+                        Violation(
+                            f"{module.name()}.{stmt.name}:{stmt.lineno} is an undeclared module function; "
+                            "a wire function declares itself with @ts.function"
+                        )
+                    )
+            elif isinstance(stmt, ast.AnnAssign):
+                if not self._is_final(stmt.annotation):
+                    found.append(
+                        Violation(
+                            f"{module.name()}:{stmt.lineno} declares a module constant without Final; "
+                            "a wire constant is Final"
+                        )
+                    )
+            elif isinstance(stmt, ast.Assign):
+                found.append(
+                    Violation(
+                        f"{module.name()}:{stmt.lineno} declares a module constant without Final; "
+                        "a wire constant is Final"
+                    )
+                )
+            else:
+                found.append(
+                    Violation(
+                        f"{module.name()}:{stmt.lineno} has a loose module-level statement; a wire module "
+                        "holds only imports, declared classes and functions, and Final constants"
                     )
                 )
         return tuple(found)
@@ -489,6 +642,13 @@ class Codebase(ts.AggregateRoot):
                 where = f"{module.name()}.{stmt.name}:{stmt.lineno}"
                 if block is None:
                     found.append(Violation(f"{where} declares no ts.* base; every context class declares its block"))
+                elif block in SRV_KINDS:
+                    found.append(
+                        Violation(
+                            f"{where} is {KIND_NAME[block]}; "
+                            "a srv kind lives in srv and wire modules, never a context"
+                        )
+                    )
                 elif KIND_ROLE[block] != role:
                     found.append(
                         Violation(

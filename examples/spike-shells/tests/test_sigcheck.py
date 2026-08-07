@@ -799,12 +799,12 @@ def test_homeless_modules_are_flagged(tmp_path: Path) -> None:
     findings = check_tree(tmp_path)
     assert any(
         "loose belongs to no governed package; "
-        "every module belongs to a context, srv, bootstrap, or tests" in f
+        "every module belongs to a context, srv, bootstrap, tests, or a wire module" in f
         for f in findings
     )
     assert any(
         "stray.util belongs to no governed package; "
-        "every module belongs to a context, srv, bootstrap, or tests" in f
+        "every module belongs to a context, srv, bootstrap, tests, or a wire module" in f
         for f in findings
     )
     assert not any("rules belongs to no governed package" in f for f in findings)
@@ -864,7 +864,7 @@ def test_srv_and_bootstrap_statement_totality(tmp_path: Path) -> None:
     write_module(
         tmp_path,
         "srv/box.py",
-        "import tesser.context as ts\n"
+        "import tesser.srv as ts\n"
         "import tesser.domain as td\n"
         "@ts.function\n"
         "def fine() -> None:\n"
@@ -873,6 +873,8 @@ def test_srv_and_bootstrap_statement_totality(tmp_path: Path) -> None:
         "    return None\n"
         "class Box:\n"
         "    pass\n"
+        "class Server(ts.Host):\n"
+        "    pass\n"
         "LIMIT = 3\n"
         "print('hi')\n",
     )
@@ -880,37 +882,62 @@ def test_srv_and_bootstrap_statement_totality(tmp_path: Path) -> None:
         tmp_path,
         "bootstrap/wire.py",
         "def build() -> None:\n"
-        "    return None\n",
+        "    return None\n"
+        "class App:\n"
+        "    pass\n"
+        "LIMIT = 3\n"
+        "print('hi')\n",
     )
     findings = check_tree(tmp_path)
     assert any(
-        "srv.box:2 imports tesser.domain; a srv or bootstrap module imports only tesser.context" in f
+        "srv.box:2 imports tesser.domain; a srv module imports only tesser.srv" in f
         for f in findings
     )
     assert any(
         "srv.box.stray" in f
-        and "a srv or bootstrap function declares itself with @ts.function" in f
+        and "a srv function declares itself with @ts.function" in f
         for f in findings
     )
     assert not any("srv.box.fine" in f for f in findings)
     assert any(
-        "srv.box.Box" in f
-        and "is a class; a srv or bootstrap module holds only imports, declared functions, "
-        "and Final constants" in f
+        "srv.box.Box" in f and "declares no ts.* base; a srv class declares its block" in f
+        for f in findings
+    )
+    assert not any("srv.box.Server" in f for f in findings)
+    assert any(
+        "srv.box" in f and "declares a module constant without Final; a srv constant is Final" in f
         for f in findings
     )
     assert any(
-        "declares a module constant without Final; a srv or bootstrap constant is Final" in f
-        for f in findings
-    )
-    assert any(
-        "has a loose module-level statement; a srv or bootstrap module holds only imports, "
-        "declared functions, and Final constants" in f
+        "srv.box" in f and "has a loose module-level statement; a srv module holds only imports, "
+        "declared classes and functions, and Final constants" in f
         for f in findings
     )
     assert any(
         "bootstrap.wire never imports tesser.context; "
-        "a srv or bootstrap module imports tesser.context exactly once, as ts" in f
+        "a bootstrap module imports tesser.context exactly once, as ts" in f
+        for f in findings
+    )
+    assert any(
+        "bootstrap.wire.build" in f
+        and "a bootstrap function declares itself with @ts.function" in f
+        for f in findings
+    )
+    assert any(
+        "bootstrap.wire.App" in f
+        and "is a class; a bootstrap module holds only imports, declared functions, "
+        "and Final constants" in f
+        for f in findings
+    )
+    assert any(
+        "bootstrap.wire" in f
+        and "declares a module constant without Final; a bootstrap constant is Final" in f
+        for f in findings
+    )
+    assert any(
+        "bootstrap.wire" in f
+        and "has a loose module-level statement; a bootstrap module holds only imports, "
+        "declared functions, and Final constants" in f
         for f in findings
     )
 
@@ -1120,8 +1147,8 @@ def test_srv_and_bootstrap_tesser_form_modes(tmp_path: Path) -> None:
     write_module(
         tmp_path,
         "srv/dup.py",
-        "import tesser.context as ts\n"
-        "import tesser.context as ts\n"
+        "import tesser.srv as ts\n"
+        "import tesser.srv as ts\n"
         "@ts.function\n"
         "def go() -> None:\n"
         "    return None\n",
@@ -1129,7 +1156,7 @@ def test_srv_and_bootstrap_tesser_form_modes(tmp_path: Path) -> None:
     write_module(
         tmp_path,
         "srv/alias.py",
-        "import tesser.context as tc\n"
+        "import tesser.srv as tc\n"
         "@tc.function\n"
         "def go() -> None:\n"
         "    return None\n",
@@ -1141,6 +1168,12 @@ def test_srv_and_bootstrap_tesser_form_modes(tmp_path: Path) -> None:
         "@function\n"
         "def go() -> None:\n"
         "    return None\n",
+    )
+    write_module(
+        tmp_path,
+        "bootstrap/wrongpkg.py",
+        "import tesser.context as ts\n"
+        "import tesser.domain as td\n",
     )
     write_module(
         tmp_path,
@@ -1156,7 +1189,7 @@ def test_srv_and_bootstrap_tesser_form_modes(tmp_path: Path) -> None:
     write_module(
         tmp_path,
         "srv/tfinal.py",
-        "import tesser.context as ts\n"
+        "import tesser.srv as ts\n"
         "import typing\n"
         "LIMIT: typing.Final[int] = 3\n",
     )
@@ -1170,28 +1203,33 @@ def test_srv_and_bootstrap_tesser_form_modes(tmp_path: Path) -> None:
     )
     findings = check_tree(tmp_path)
     assert any(
-        "srv.dup:2 imports tesser.context again; "
-        "a srv or bootstrap module imports tesser.context exactly once, as ts" in f
+        "srv.dup:2 imports tesser.srv again; "
+        "a srv module imports tesser.srv exactly once, as ts" in f
         for f in findings
     )
     assert any(
-        "srv.alias:1 imports tesser.context without the ts alias; "
-        "a srv or bootstrap module imports tesser.context exactly once, as ts" in f
+        "srv.alias:1 imports tesser.srv without the ts alias; "
+        "a srv module imports tesser.srv exactly once, as ts" in f
         for f in findings
     )
     assert any(
         "bootstrap.fromform:1 imports names from tesser.context; "
-        "a srv or bootstrap module imports tesser.context exactly once, as ts" in f
+        "a bootstrap module imports tesser.context exactly once, as ts" in f
         for f in findings
     )
     assert any(
-        "srv.consts never imports tesser.context; "
-        "a srv or bootstrap module imports tesser.context exactly once, as ts" in f
+        "bootstrap.wrongpkg:2 imports tesser.domain; "
+        "a bootstrap module imports only tesser.context" in f
+        for f in findings
+    )
+    assert any(
+        "srv.consts never imports tesser.srv; "
+        "a srv module imports tesser.srv exactly once, as ts" in f
         for f in findings
     )
     assert any(
         "srv.annconst:1 declares a module constant without Final; "
-        "a srv or bootstrap constant is Final" in f
+        "a srv constant is Final" in f
         for f in findings
     )
     assert not any("srv.tfinal" in f for f in findings)
@@ -1205,6 +1243,125 @@ def test_srv_and_bootstrap_tesser_form_modes(tmp_path: Path) -> None:
         for f in findings
     )
     assert not any("bootstrap __init__ declares code" in f for f in findings)
+
+
+def test_wire_module_totality_is_flagged(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "boxwire.py",
+        "import tesser.srv as ts\n"
+        "import json\n"
+        "import app.client\n"
+        "import srv.host\n"
+        "from typing import Final, Protocol\n"
+        "class BoxRequest(ts.Request):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n"
+        "class BoxResponse(ts.Response):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n"
+        "class Endpoint(ts.Port, Protocol):\n"
+        "    def __call__(self, request: BoxRequest) -> BoxResponse: ...\n"
+        "class Loose:\n"
+        "    pass\n"
+        "class Server(ts.Host):\n"
+        "    pass\n"
+        "@ts.function\n"
+        "def fine() -> None:\n"
+        "    return None\n"
+        "def stray() -> None:\n"
+        "    return None\n"
+        "LIMIT: Final[int] = 3\n"
+        "BARE = 3\n"
+        "print('hi')\n",
+    )
+    write_module(tmp_path, "srv/host.py", "import tesser.srv as ts\n")
+    findings = check_tree(tmp_path)
+    assert not any("boxwire.BoxRequest" in f for f in findings)
+    assert not any("boxwire.BoxResponse" in f for f in findings)
+    assert not any("boxwire.Endpoint" in f for f in findings)
+    assert not any("boxwire.fine" in f for f in findings)
+    assert not any("boxwire belongs to no governed package" in f for f in findings)
+    assert any(
+        "boxwire:3 imports app.client; a wire module is context-generic and imports no context" in f
+        for f in findings
+    )
+    assert any(
+        "boxwire:4 imports srv.host; a wire module never imports srv or bootstrap" in f
+        for f in findings
+    )
+    assert any(
+        "boxwire.Loose" in f and "declares no ts.* base; a wire class declares its block" in f
+        for f in findings
+    )
+    assert any(
+        "boxwire.Server" in f and "is a host; only wire ports, wire requests, "
+        "and wire responses live in a wire module" in f
+        for f in findings
+    )
+    assert any(
+        "boxwire.stray" in f and "a wire function declares itself with @ts.function" in f
+        for f in findings
+    )
+    assert any(
+        "boxwire" in f and "declares a module constant without Final; a wire constant is Final" in f
+        for f in findings
+    )
+    assert any(
+        "boxwire" in f and "has a loose module-level statement; a wire module holds only imports, "
+        "declared classes and functions, and Final constants" in f
+        for f in findings
+    )
+
+
+def test_wire_module_tesser_import_is_exactly_once_as_ts(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "loudwire.py",
+        "import tesser.context as ts\n",
+    )
+    write_module(tmp_path, "quietwire.py", "")
+    findings = check_tree(tmp_path)
+    assert any(
+        "loudwire:1 imports tesser.context; a wire module imports only tesser.srv" in f
+        for f in findings
+    )
+    assert any(
+        "quietwire never imports tesser.srv; a wire module imports tesser.srv exactly once, as ts" in f
+        for f in findings
+    )
+
+
+def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/adapters.py",
+        "import tesser.adapters as ts\n"
+        "import tesser.srv\n"
+        "class Sneaky(tesser.srv.Host):\n"
+        "    pass\n",
+    )
+    write_module(
+        tmp_path,
+        "srv/box.py",
+        "import tesser.srv as ts\n"
+        "import tesser.domain\n"
+        "class Value(tesser.domain.ValueObject):\n"
+        "    pass\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "app.adapters.Sneaky" in f
+        and "is a host; a srv kind lives in srv and wire modules, never a context" in f
+        for f in findings
+    )
+    assert any(
+        "srv.box.Value" in f and "is a value object; only a host class lives in a srv module" in f
+        for f in findings
+    )
 
 
 def test_form_rule_fires_in_tests_and_srv_and_skips_illegal_edges(tmp_path: Path) -> None:
