@@ -36,7 +36,12 @@ Deferred work with context. Each entry carries enough for a cold pickup.
     (`Route`/`Match`/`HttpHost`), bootstrap's `App`/`Config`/`HttpConfig`/
     `CleanupStack` (the `tesser.app` question), 3 homeless modules
     (`errors`/`serialization`/`lifecycle`), 4 wire exception classes +
-    1 wire type alias (the `ts.Error` track and the alias-declaration story),
+    1 wire type alias (the `ts.Error` track and the alias-declaration story
+    — and these 5 are HARD COLLISIONS, not conformance debt: an exception
+    must subclass Exception so "a wire class declares its block" has no
+    satisfiable form, and the only sigcheck-clean alias spelling
+    (`JSONObject: Final = ...`) is rejected by mypy --strict [valid-type];
+    burning them requires a rule change, verified 2026-08-07),
     several pure-core hits.
   - **Then:** regenerate the baseline per fix (the sed|sort pipeline in
     test.yml); at zero findings delete `sigcheck-ratchet` and restore the plain
@@ -99,6 +104,11 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   (11) `TOOLING_MODULES` and CORE_STDLIB's `ast` entry are name-keyed and
   global — any consumer with a top-level `rules.py` inherits the bypass, and
   the allowlist has no per-consumer config surface yet.
+  (12) a top-level FILE sharing a context's name (context package without
+  `__init__.py` + `<context>.py` beside it) falls through to
+  `_context_init_violations` and is mislabeled "__init__ declares code" —
+  the `len(parts) == 1` ⇒ package-init assumption predates wire modules
+  and is no longer safe (adversarial 2026-08-07).
 - [ ] **Make rules.py conformant** (Chris 2026-08-06). The generator is
   currently exempt via `TOOLING_MODULES` in the whole-tree totality rule;
   make it conform (or rule where tooling lives) and shrink the exemption.
@@ -133,15 +143,29 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   forbids an undeclared Tool class in handlers.py. The vocabulary has no
   word for the thing being dispatched over; rule the word before the
   refactor.
-  (3) **Wire records lost immutability** (Chris ruling 2026-08-07, ship D1:
-  named debt, ruled with the srv matrix). The dataclass→shell migration
-  dropped `frozen=True` from `HttpRequest`/`Response`/`CliRequest`/
-  `CliResponse` (`ToolTurn` was born unfrozen); a handler can now mutate
-  the request it was handed after routing decisions were made on it —
-  flagged independently by three ship reviewers, not exploitable today.
-  The fix candidates are the same per-kind-invariant question as (1):
-  ValueObject-style guards on the `tesser.srv` shells vs a sigcheck
-  immutability rule. Do NOT freeze per-subclass in the meantime.
+  (3) **Wire records lost immutability AND value equality** (Chris ruling
+  2026-08-07, ship D1: named debt, ruled with the srv matrix). The
+  dataclass→shell migration dropped `frozen=True` from `HttpRequest`/
+  `Response`/`CliRequest`/`CliResponse` (`ToolTurn` was born unfrozen); a
+  handler can now mutate the request it was handed after routing decisions
+  were made on it — flagged independently by three ship reviewers, not
+  exploitable today. `__eq__`/`__hash__` went with it: the records are
+  identity-compared now (no in-tree consumer relies on value equality —
+  verified — but a future `assert resp == Response(200, b"")` silently
+  goes False instead of failing loud). The fix candidates are the same
+  per-kind-invariant question as (1): ValueObject-style guards on the
+  `tesser.srv` shells vs a sigcheck rule. Do NOT freeze per-subclass in
+  the meantime.
+  (4) **A wire module is the least-governed home in the tree** (adversarial
+  2026-08-07, verified): no import allowlist (contrast CORE_STDLIB) — a
+  wire module importing subprocess/boto3/tests gets zero findings, so
+  `git mv shop/domain.py bizwire.py` + a base swap escapes every
+  signature, body, and allowlist rule; bootstrap importing a wire module
+  is likewise unconstrained (the composition root can couple to transport
+  records). And the suffix has no separator: `firewire.py`/`tripwire.py`/
+  `rewire.py` all opt in, and `examples/serdepy/wire.py` already uses
+  "wire" to mean serialization format — decide allowlist + a separator
+  (or in-file declaration) with the same ruling.
 - [ ] **sigcheck internal cleanups (pre-landing review, deferred as a batch;
   re-scoped 2026-08-07 after the srv-wire wave restructured the methods).**
   (1) the exactly-once-as-ts walk: the srv-wire wave extracted

@@ -910,7 +910,7 @@ class Codebase(ts.AggregateRoot):
                 ):
                     found.append(
                         Violation(
-                            f"{where} implements no ts.Port or ts.Client; "
+                            f"{where} implements no application port, wire port, or client; "
                             "a fake implements the port or client it doubles"
                         )
                     )

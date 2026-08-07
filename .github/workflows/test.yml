@@ -246,6 +246,22 @@ jobs:
         run: |
           mypy
           pytest -q
+      - name: tesser-py — the built wheel ships every subpackage
+        # The enumerated packages list once silently dropped tesser.testing
+        # and tesser.srv; every other job reaches the source via PYTHONPATH,
+        # so only building the distribution can catch the omission class.
+        working-directory: tesser-py
+        run: |
+          pip wheel --no-deps -w dist .
+          python3 - <<'EOF'
+          import glob, pathlib, sys, zipfile
+          shipped = {name.split("/")[1] for name in zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist() if name.startswith("tesser/") and name.count("/") == 2}
+          on_disk = {p.parent.name for p in pathlib.Path("tesser").glob("*/__init__.py")}
+          missing = on_disk - shipped
+          if missing:
+              sys.exit(f"wheel omits subpackages: {sorted(missing)}")
+          print(f"wheel ships: {sorted(on_disk)}")
+          EOF
 
   vobase-example:
     name: vobase example (mypy --strict + pytest)

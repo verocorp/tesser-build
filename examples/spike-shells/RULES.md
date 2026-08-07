@@ -58,7 +58,7 @@ exact: a test covers a rule when an assert literal contains the clause.
 | a test module imports tesser.testing at most once, as ts | test module | imports ⟨import⟩ again · imports names from ⟨import⟩ · imports ⟨import⟩ without the ts alias | domain.py:864,873,880 | test_test_module_tesser_import_rules |
 | a test module holds only imports, tests, helpers, and fakes | test module | has a loose module-level statement | domain.py:919 | test_test_module_totality_is_flagged |
 | a test double declares itself with @ts.fake | test module | is an undeclared class | domain.py:905 | test_test_module_totality_is_flagged |
-| a fake implements the port or client it doubles | test module | implements no ts.Port or ts.Client | domain.py:912 | test_test_module_totality_is_flagged, test_a_dotted_module_base_resolves |
+| a fake implements the port or client it doubles | test module | implements no application port, wire port, or client | domain.py:912 | test_test_module_totality_is_flagged, test_a_dotted_module_base_resolves |
 | a helper takes only defaulted primitives | @ts.helper function | parameter ⟨name⟩ has no default · parameter ⟨name⟩ is not a primitive | domain.py:938,950 | test_helper_rules_are_flagged |
 | a helper builds a spec | @ts.helper function | does not return a ts.Spec | domain.py:955 | test_helper_rules_are_flagged |
 | a helper only constructs | @ts.helper function | has control flow at line ⟨line⟩ | domain.py:958 | test_helper_rules_are_flagged |

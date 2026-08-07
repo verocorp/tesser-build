@@ -1,6 +1,13 @@
 from pathlib import Path
 
+import sigcheck.domain as domain
 from tests.conftest import check_tree, conforming_tree, write_module
+
+
+def test_every_declared_block_has_a_name_and_a_home() -> None:
+    blocks = set(domain.TESSER_BASE_BLOCKS.values())
+    assert set(domain.KIND_NAME) == blocks
+    assert set(domain.KIND_ROLE) == blocks - domain.SRV_KINDS
 
 
 def test_conforming_tree_is_clean(tmp_path: Path) -> None:
