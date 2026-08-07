@@ -87,7 +87,7 @@ def test_dispatch_routes_a_known_command() -> None:
 
     resp = dispatch({"do-thing": _endpoint}, ["do-thing", "a", "b"])
     assert resp.exit_code == 0
-    assert called == [CliRequest(("a", "b"))]
+    assert [req.args for req in called] == [("a", "b")]
 
 
 def test_dispatch_rejects_an_unknown_command_with_usage() -> None:

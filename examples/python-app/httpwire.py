@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from typing import Final, Protocol
+
+import tesser.srv as ts
 
 from errors import DomainError, InfraError, status_for
 
 JSONObject = dict[str, object]
 
-MAX_BUFFERED_BODY = 1_048_576
+MAX_BUFFERED_BODY: Final[int] = 1_048_576
 
 
 class BadRequest(Exception):
@@ -23,39 +25,60 @@ class StreamingUnsupported(Exception):
     pass
 
 
-@dataclass(frozen=True)
-class HttpRequest:
-    method: str = "GET"
-    path: str = "/"
-    path_params: Mapping[str, str] = field(default_factory=dict)
-    query_params: Mapping[str, str] = field(default_factory=dict)
-    headers: Mapping[str, str] = field(default_factory=dict)
-    body: bytes = b""
+class HttpRequest(ts.Request):
+
+    def __init__(
+        self,
+        method: str = "GET",
+        path: str = "/",
+        path_params: Mapping[str, str] | None = None,
+        query_params: Mapping[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
+        body: bytes = b"",
+    ) -> None:
+        self.method = method
+        self.path = path
+        self.path_params: Mapping[str, str] = dict(path_params or {})
+        self.query_params: Mapping[str, str] = dict(query_params or {})
+        self.headers: Mapping[str, str] = dict(headers or {})
+        self.body = body
 
 
-@dataclass(frozen=True)
-class Response:
-    status_code: int
-    body: bytes
-    headers: Mapping[str, str] = field(default_factory=dict)
+class Response(ts.Response):
+
+    def __init__(
+        self,
+        status_code: int,
+        body: bytes,
+        headers: Mapping[str, str] | None = None,
+    ) -> None:
+        self.status_code = status_code
+        self.body = body
+        self.headers: Mapping[str, str] = dict(headers or {})
 
 
-Endpoint = Callable[[HttpRequest], Response]
+class Endpoint(ts.Port, Protocol):
+
+    def __call__(self, request: HttpRequest, /) -> Response: ...
 
 
+@ts.function
 def problem(code: str, detail: str) -> JSONObject:
     return {"type": f"/problems/{code}", "detail": detail}
 
 
+@ts.function
 def json_response(status_code: int, body: JSONObject, headers: Mapping[str, str] | None = None) -> Response:
     payload = json.dumps(body).encode("utf-8")
     return Response(status_code, payload, {"Content-Type": "application/json", **(headers or {})})
 
 
+@ts.function
 def redirect(url: str, status_code: int = 302) -> Response:
     return Response(status_code, b"", {"Location": url})
 
 
+@ts.function
 def respond(run: Callable[[], Response]) -> Response:
     try:
         return run()
@@ -73,6 +96,7 @@ def respond(run: Callable[[], Response]) -> Response:
         return json_response(500, problem("internal", "unexpected error"))
 
 
+@ts.function
 def content_length(headers: Mapping[str, str]) -> int:
     lowered = {name.lower(): value for name, value in headers.items()}
     if "chunked" in lowered.get("transfer-encoding", "").lower():
@@ -91,6 +115,7 @@ def content_length(headers: Mapping[str, str]) -> int:
     return declared
 
 
+@ts.function
 def decode_body(raw: bytes) -> JSONObject:
     if not raw:
         return {}
@@ -103,6 +128,7 @@ def decode_body(raw: bytes) -> JSONObject:
     return data
 
 
+@ts.function
 def path_param(req: HttpRequest, name: str) -> str:
     value = req.path_params.get(name)
     if not value:
@@ -110,12 +136,14 @@ def path_param(req: HttpRequest, name: str) -> str:
     return value
 
 
+@ts.function
 def object_field(value: object) -> JSONObject:
     if not isinstance(value, dict):
         raise BadRequest("expected a JSON object field")
     return value
 
 
+@ts.function
 def string_field(value: object) -> str:
     if not isinstance(value, str):
         raise BadRequest("expected a string field")

@@ -2,19 +2,19 @@ bootstrap.bootstrap imports campaign.client without an alias; a context module i
 bootstrap.bootstrap imports linkpolicy.client without an alias; a context module is imported as an aliased module, never its members
 bootstrap.bootstrap imports names from campaign.adapters.gateways.target_checker; a context module is imported as an aliased module, never its members
 bootstrap.bootstrap imports reports.client without an alias; a context module is imported as an aliased module, never its members
-bootstrap.bootstrap never imports tesser.context; a srv or bootstrap module imports tesser.context exactly once, as ts
-bootstrap.bootstrap.App is a class; a srv or bootstrap module holds only imports, declared functions, and Final constants
-bootstrap.bootstrap.CleanupStack is a class; a srv or bootstrap module holds only imports, declared functions, and Final constants
-bootstrap.bootstrap.new is an undeclared module function; a srv or bootstrap function declares itself with @ts.function
-bootstrap.config declares a module constant without Final; a srv or bootstrap constant is Final
+bootstrap.bootstrap never imports tesser.context; a bootstrap module imports tesser.context exactly once, as ts
+bootstrap.bootstrap.App is a class; a bootstrap module holds only imports, declared functions, and Final constants
+bootstrap.bootstrap.CleanupStack is a class; a bootstrap module holds only imports, declared functions, and Final constants
+bootstrap.bootstrap.new is an undeclared module function; a bootstrap function declares itself with @ts.function
+bootstrap.config declares a module constant without Final; a bootstrap constant is Final
 bootstrap.config imports names from campaign.wiring.config; a context module is imported as an aliased module, never its members
 bootstrap.config imports names from linkpolicy.wiring.config; a context module is imported as an aliased module, never its members
 bootstrap.config imports names from reports.wiring.config; a context module is imported as an aliased module, never its members
-bootstrap.config never imports tesser.context; a srv or bootstrap module imports tesser.context exactly once, as ts
-bootstrap.config.Config is a class; a srv or bootstrap module holds only imports, declared functions, and Final constants
-bootstrap.config.HttpConfig is a class; a srv or bootstrap module holds only imports, declared functions, and Final constants
-bootstrap.config._port is an undeclared module function; a srv or bootstrap function declares itself with @ts.function
-bootstrap.config.from_env is an undeclared module function; a srv or bootstrap function declares itself with @ts.function
+bootstrap.config never imports tesser.context; a bootstrap module imports tesser.context exactly once, as ts
+bootstrap.config.Config is a class; a bootstrap module holds only imports, declared functions, and Final constants
+bootstrap.config.HttpConfig is a class; a bootstrap module holds only imports, declared functions, and Final constants
+bootstrap.config._port is an undeclared module function; a bootstrap function declares itself with @ts.function
+bootstrap.config.from_env is an undeclared module function; a bootstrap function declares itself with @ts.function
 campaign.adapters.gateways.repo_memory imports names from campaign.application.parts; a context module is imported as an aliased module, never its members
 campaign.adapters.gateways.target_checker imports names from campaign.application.parts; a context module is imported as an aliased module, never its members
 campaign.adapters.gateways.target_checker imports names from linkpolicy.client; a context module is imported as an aliased module, never its members
@@ -54,10 +54,13 @@ campaign.wiring.wire imports names from campaign.adapters.gateways.repo_memory; 
 campaign.wiring.wire imports names from campaign.application.service; a context module is imported as an aliased module, never its members
 campaign.wiring.wire imports names from campaign.client; a context module is imported as an aliased module, never its members
 campaign.wiring.wire imports names from campaign.wiring.config; a context module is imported as an aliased module, never its members
-cliwire belongs to no governed package; every module belongs to a context, srv, bootstrap, or tests
-errors belongs to no governed package; every module belongs to a context, srv, bootstrap, or tests
-httpwire belongs to no governed package; every module belongs to a context, srv, bootstrap, or tests
-lifecycle belongs to no governed package; every module belongs to a context, srv, bootstrap, or tests
+cliwire.UsageError declares no ts.* base; a wire class declares its block
+errors belongs to no governed package; every module belongs to a context, srv, bootstrap, tests, or a wire module
+httpwire declares a module constant without Final; a wire constant is Final
+httpwire.BadRequest declares no ts.* base; a wire class declares its block
+httpwire.PayloadTooLarge declares no ts.* base; a wire class declares its block
+httpwire.StreamingUnsupported declares no ts.* base; a wire class declares its block
+lifecycle belongs to no governed package; every module belongs to a context, srv, bootstrap, tests, or a wire module
 linkpolicy.adapters.gateways.repo_memory imports names from linkpolicy.application.service; a context module is imported as an aliased module, never its members
 linkpolicy.application.service imports names from linkpolicy.client; a context module is imported as an aliased module, never its members
 linkpolicy.application.service imports names from linkpolicy.domain.policy; a context module is imported as an aliased module, never its members
@@ -80,31 +83,31 @@ reports.wiring.wire imports names from reports.adapters.gateways.policy_verdicts
 reports.wiring.wire imports names from reports.application.service; a context module is imported as an aliased module, never its members
 reports.wiring.wire imports names from reports.client; a context module is imported as an aliased module, never its members
 reports.wiring.wire imports names from reports.wiring.config; a context module is imported as an aliased module, never its members
-serialization belongs to no governed package; every module belongs to a context, srv, bootstrap, or tests
-srv.cli.main declares a module constant without Final; a srv or bootstrap constant is Final
-srv.cli.main has a loose module-level statement; a srv or bootstrap module holds only imports, declared functions, and Final constants
+serialization belongs to no governed package; every module belongs to a context, srv, bootstrap, tests, or a wire module
+srv.cli.main declares a module constant without Final; a srv constant is Final
+srv.cli.main has a loose module-level statement; a srv module holds only imports, declared classes and functions, and Final constants
 srv.cli.main imports names from campaign.adapters.handlers.cli; a context module is imported as an aliased module, never its members
-srv.cli.main never imports tesser.context; a srv or bootstrap module imports tesser.context exactly once, as ts
-srv.cli.main.commands_for is an undeclared module function; a srv or bootstrap function declares itself with @ts.function
-srv.cli.main.dispatch is an undeclared module function; a srv or bootstrap function declares itself with @ts.function
-srv.cli.main.run is an undeclared module function; a srv or bootstrap function declares itself with @ts.function
+srv.cli.main never imports tesser.srv; a srv module imports tesser.srv exactly once, as ts
+srv.cli.main.commands_for is an undeclared module function; a srv function declares itself with @ts.function
+srv.cli.main.dispatch is an undeclared module function; a srv function declares itself with @ts.function
+srv.cli.main.run is an undeclared module function; a srv function declares itself with @ts.function
 srv.http.host imports names from campaign.adapters.handlers.http; a context module is imported as an aliased module, never its members
 srv.http.host imports names from reports.adapters.handlers.http; a context module is imported as an aliased module, never its members
-srv.http.host never imports tesser.context; a srv or bootstrap module imports tesser.context exactly once, as ts
-srv.http.host.HttpHost is a class; a srv or bootstrap module holds only imports, declared functions, and Final constants
-srv.http.host.make_server is an undeclared module function; a srv or bootstrap function declares itself with @ts.function
-srv.http.host.routes_for is an undeclared module function; a srv or bootstrap function declares itself with @ts.function
-srv.http.main has a loose module-level statement; a srv or bootstrap module holds only imports, declared functions, and Final constants
-srv.http.main never imports tesser.context; a srv or bootstrap module imports tesser.context exactly once, as ts
-srv.http.main.main is an undeclared module function; a srv or bootstrap function declares itself with @ts.function
-srv.http.router never imports tesser.context; a srv or bootstrap module imports tesser.context exactly once, as ts
-srv.http.router.Match is a class; a srv or bootstrap module holds only imports, declared functions, and Final constants
-srv.http.router.Route is a class; a srv or bootstrap module holds only imports, declared functions, and Final constants
-srv.http.router._path_params is an undeclared module function; a srv or bootstrap function declares itself with @ts.function
-srv.http.router.match is an undeclared module function; a srv or bootstrap function declares itself with @ts.function
-srv.http.router.split is an undeclared module function; a srv or bootstrap function declares itself with @ts.function
-srv.run never imports tesser.context; a srv or bootstrap module imports tesser.context exactly once, as ts
-srv.run.run_until_signal is an undeclared module function; a srv or bootstrap function declares itself with @ts.function
+srv.http.host never imports tesser.srv; a srv module imports tesser.srv exactly once, as ts
+srv.http.host.HttpHost declares no ts.* base; a srv class declares its block
+srv.http.host.make_server is an undeclared module function; a srv function declares itself with @ts.function
+srv.http.host.routes_for is an undeclared module function; a srv function declares itself with @ts.function
+srv.http.main has a loose module-level statement; a srv module holds only imports, declared classes and functions, and Final constants
+srv.http.main never imports tesser.srv; a srv module imports tesser.srv exactly once, as ts
+srv.http.main.main is an undeclared module function; a srv function declares itself with @ts.function
+srv.http.router never imports tesser.srv; a srv module imports tesser.srv exactly once, as ts
+srv.http.router.Match declares no ts.* base; a srv class declares its block
+srv.http.router.Route declares no ts.* base; a srv class declares its block
+srv.http.router._path_params is an undeclared module function; a srv function declares itself with @ts.function
+srv.http.router.match is an undeclared module function; a srv function declares itself with @ts.function
+srv.http.router.split is an undeclared module function; a srv function declares itself with @ts.function
+srv.run never imports tesser.srv; a srv module imports tesser.srv exactly once, as ts
+srv.run.run_until_signal is an undeclared module function; a srv function declares itself with @ts.function
 tests.discovery is neither a test module nor conftest; a tests package holds only test modules and conftest
 tests.support is neither a test module nor conftest; a tests package holds only test modules and conftest
 tests.test_bootstrap_once imports names from campaign.application.service; a context module is imported as an aliased module, never its members
