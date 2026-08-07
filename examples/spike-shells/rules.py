@@ -49,7 +49,13 @@ APPLIES_TO: dict[str, str] = {
     "Codebase._homeless_violations": "top-level module",
     "Codebase._tests_package_violations": "tests package module",
     "Codebase._role_init_violations": "role package `__init__`",
-    "Codebase._app_module_violations": "srv / bootstrap module",
+    "Codebase._app_init_violations": "srv / bootstrap `__init__`",
+    "Codebase._bootstrap_module_violations": "bootstrap module",
+    "Codebase._srv_module_violations": "srv module",
+    "Codebase._wire_module_violations": "wire module",
+    "srv": "srv module",
+    "bootstrap": "bootstrap module",
+    "wire": "wire module",
     "Codebase._form_violations": "direction-legal context import (role, srv/bootstrap, test modules)",
     "Codebase._stray_import_violations": "role, srv/bootstrap, or test module",
     "Codebase._helper_violations": "@ts.helper function",
@@ -195,6 +201,19 @@ def render_message(
     return "".join(parts)
 
 
+def wire_suffix(tree: ast.Module) -> str:
+    for node in tree.body:
+        if (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == "WIRE_SUFFIX"
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+        ):
+            return node.value.value
+    raise RuntimeError("WIRE_SUFFIX not found in domain.py")
+
+
 def tooling_modules(tree: ast.Module) -> list[str]:
     for node in tree.body:
         if (
@@ -312,6 +331,7 @@ def render() -> str:
         source = "domain.py:" + ",".join(str(n) for n in sorted(row.linenos))
         lines.append(f"| {row.clause} | {row.applies_to} | {shapes} | {source} | {coverage} |")
     tooling = ", ".join(f"`{name}`" for name in tooling_modules(tree))
+    suffix = wire_suffix(tree)
     lines += [
         "",
         "## Named exemptions (carve-outs the code makes on purpose, not rules)",
@@ -321,6 +341,12 @@ def render() -> str:
         "- a context `__main__` is ungoverned (named ruling, PR #48).",
         f"- tooling modules outside the taxonomy: {tooling} (TOOLING_MODULES in",
         "  sigcheck/domain.py — the whole-tree totality rule skips them).",
+        f"- a top-level module whose name ends in `{suffix}` is a wire module",
+        "  (WIRE_SUFFIX in sigcheck/domain.py) — the name is the declaration,",
+        "  the `test_*` precedent; a package or nested module never qualifies.",
+        "- srv and wire kinds carry placement and import rules only — no",
+        "  signature or body rules yet (deliberate: the srv signature matrix",
+        "  is a future ruling, not an omission).",
         "",
         "## Import contracts (from .importlinter)",
         "",

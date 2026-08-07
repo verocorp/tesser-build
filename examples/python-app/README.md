@@ -120,7 +120,7 @@ declares itself with the `ts.*` shells, so `tesser-py` is on both paths and
 PYTHONPATH=../spike-shells:../../tesser-py python3 -m sigcheck .
 ```
 
-That exits 1 with 173 findings today — the import-totality wave billed this
+That exits 1 with 176 findings today — the import-totality wave billed this
 tree after it had already reached zero. So CI gates the *difference*, not the
 count: the run is compared against `sigcheck-ratchet`, a frozen finding set
 with line numbers stripped. A finding outside the baseline fails even at an

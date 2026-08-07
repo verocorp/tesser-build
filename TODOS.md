@@ -20,28 +20,47 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 
 - [ ] **python-app conformance + remove the sigcheck CI ratchet.** The wave's
   rules (tesser exactly-once-as-ts, whole-tree totality, pure-core allowlist,
-  module-only aliased context imports) fire 173 findings on the freshly
+  module-only aliased context imports) fired 173 findings on the freshly
   migrated tree, so the zero-findings CI step became a ratchet
   (`examples/python-app/sigcheck-ratchet` — the accepted-debt baseline as a
   normalized finding set, not a scalar count: any finding outside the baseline
-  fails even at an equal total, and an analyzer crash fails closed).
+  fails even at an equal total, and an analyzer crash fails closed). The
+  srv-wire-vocabulary wave rebased the baseline to 176 (clause re-wordings;
+  wire modules migrated, leaving 5 named-debt lines). It is the only ratchet:
+  spike-llmport's burned to zero in the same wave.
   - **Mechanical (~145):** 123 import-form conversions (`from x.client import Y`
     → `import x.client as client`), 13 `@ts.function` declarations + 7
-    `import tesser.context as ts` in srv/bootstrap, 2 Final constants.
-  - **Blocked on the rulings below:** 9 srv/bootstrap classes, 5 homeless
-    modules, several pure-core hits.
+    `import tesser.srv as ts` in srv (bootstrap keeps `tesser.context`),
+    2 Final constants.
+  - **Blocked on the rulings below:** srv host-machinery classes
+    (`Route`/`Match`/`HttpHost`), bootstrap's `App`/`Config`/`HttpConfig`/
+    `CleanupStack` (the `tesser.app` question), 3 homeless modules
+    (`errors`/`serialization`/`lifecycle`), 4 wire exception classes +
+    1 wire type alias (the `ts.Error` track and the alias-declaration story
+    — and these 5 are HARD COLLISIONS, not conformance debt: an exception
+    must subclass Exception so "a wire class declares its block" has no
+    satisfiable form, and the only sigcheck-clean alias spelling
+    (`JSONObject: Final = ...`) is rejected by mypy --strict [valid-type];
+    burning them requires a rule change, verified 2026-08-07),
+    several pure-core hits.
   - **Then:** regenerate the baseline per fix (the sed|sort pipeline in
     test.yml); at zero findings delete `sigcheck-ratchet` and restore the plain
     zero-findings step.
-- [ ] **Host-class vocabulary.** A class in srv/bootstrap always flags — no
-  shell exists for `Route`, `Match`, `HttpHost`, `CleanupStack`, `App`,
-  `HttpConfig`, `Config`. Decide: `tesser.srv` (Host/Request/Response) +
-  `tesser.app` (App/Config) shells per the 2026-08-02 package map, or relocate
-  the classes.
-- [ ] **Homeless root modules.** `errors`, `serialization`, `lifecycle`,
-  `cliwire`, `httpwire` belong to no governed package; ruling needed on where
-  app-level shared modules live. Same ruling resolves the pure-core hits where
-  domain imports `errors`/`serialization`.
+- [ ] **Host-class vocabulary — PARTIALLY RESOLVED (srv-wire-vocabulary wave,
+  2026-08-07).** `tesser.srv` now exists (Host, Port, Request, Response —
+  package-scoped kinds per the errors-ruling grammar; `tesser.app` was
+  deliberately left out as a real open question) and sigcheck admits declared
+  host classes in srv modules plus wire kinds in `*wire.py` wire modules.
+  Still open: host machinery that is not itself a host (`Route`, `Match` —
+  and whether `HttpHost` just declares `ts.Host`), and the whole `tesser.app`
+  half (`App`, `Config`, `HttpConfig`, `CleanupStack`).
+- [ ] **Homeless root modules.** `errors`, `serialization`, `lifecycle`
+  belong to no governed package; ruling needed on where app-level shared
+  modules live. Same ruling resolves the pure-core hits where domain imports
+  `errors`/`serialization`. (`cliwire`/`httpwire`/`voicewire` left this list
+  in the srv-wire-vocabulary wave: a top-level `*wire.py` is a governed wire
+  module — imports `tesser.srv` exactly once as ts, holds wire kinds, is
+  context-generic, and never imports srv or bootstrap.)
 - [ ] **Pure-core allowlist candidates (from dogfood evidence only):**
   `urllib.parse` in `campaign.domain.values` / `linkpolicy.domain.policy`
   (pure parsing — likely admit; the matcher accepts exact dotted entries, so
@@ -85,6 +104,23 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   (11) `TOOLING_MODULES` and CORE_STDLIB's `ast` entry are name-keyed and
   global — any consumer with a top-level `rules.py` inherits the bypass, and
   the allowlist has no per-consumer config surface yet.
+  (12) a top-level FILE sharing a context's name (context package without
+  `__init__.py` + `<context>.py` beside it) falls through to
+  `_context_init_violations` and is mislabeled "__init__ declares code" —
+  the `len(parts) == 1` ⇒ package-init assumption predates wire modules
+  and is no longer safe (adversarial 2026-08-07).
+- [ ] **Graduate the srv/wire vocabulary into the skill docs** (opened
+  2026-08-07, v0.0.18.0 doc sweep). `skills/tesser-build/python.md:593-612`
+  and `:769-799` still teach `httpwire`/`cliwire` as frozen dataclasses with
+  `Endpoint = Callable[...]` aliases — the pre-shell idiom — while
+  `examples/python-app` now uses `ts.Request`/`ts.Response`/`ts.Port` +
+  `@ts.function`. Deliberately not updated in-wave: skill docs encode only
+  verified-implementation-backed rulings, and teaching `tesser.srv` needs
+  the `rationale/coverage.md` walk + `skill-version` bump. Blocked on the
+  srv signature-matrix ruling (don't teach a shape about to change — the
+  wire-vocabulary smells entry above is the evidence pile for that ruling).
+  Root `README.md:98-110` also under-describes tesser-py (names only
+  `tesser.domain.ValueObject`; pre-existing narrowness, fold in here).
 - [ ] **Make rules.py conformant** (Chris 2026-08-06). The generator is
   currently exempt via `TOOLING_MODULES` in the whole-tree totality rule;
   make it conform (or rule where tooling lives) and shrink the exemption.
@@ -95,21 +131,79 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   test-organization pass should settle all three.
 - [ ] **Test-module annotation.** When tests declare themselves, flip
   "a test module imports tesser.testing at most once, as ts" to exactly-once.
-- [ ] **sigcheck internal cleanups (pre-landing review, deferred as a batch).**
-  From the ship review of the import-totality wave: (1) the
-  exactly-once-as-ts walk is triplicated (`_app_module_violations`,
-  `_import_violations`, `_test_module_violations`) and the statement-totality
-  loop is duplicated (`_app_module_violations` vs `_role_module_violations`)
-  — extract helpers without breaking the generator's literal-clause guard;
-  (2) `import_edges()`/`tesser_imports()` return positionally-decoded
-  4-tuples with different slot meanings — make both NamedTuples, and make
-  `has_alias` honest (or unrepresentable) for from-edges; (3) hardcoded
-  `"tesser.context"`/`"tesser.testing"`/`"tesser"` comparison literals →
-  Final constants; (4) the `len(found) == before` legality sentinel → an
-  explicit `denied` list; (5) rules.py: derive the conftest/`__main__`
-  exemption bullets from the AST guards (like TOOLING_MODULES) so governing
-  conftest forces the RULES.md diff, and split the TOOLING_MODULES
-  not-found vs wrong-shape errors.
+- [ ] **Wire vocabulary is declared, not structured — two design smells,
+  Chris 2026-08-07 ("smells really bad", named during the srv-wire ship).**
+  Both are evidence for the srv signature-matrix ruling; neither was
+  improvised mid-ship because both need vocabulary that doesn't exist yet.
+  (1) **`__call__` ports + `@ts.function` bags.** `httpwire` is nine loose
+  functions wearing invariant-free `@ts.function` markers plus an anonymous
+  single-operation `__call__` protocol — the most procedural corner of the
+  tree. The functions aren't homeless by nature: `problem`/`json_response`/
+  `redirect`/`respond` are Response constructors; `content_length`/
+  `decode_body`/`path_param`/`object_field`/`string_field` are HttpRequest
+  readers. Moving them onto the records collides with "a DTO carries data
+  and nothing else" — so the ruling is: do wire records carry behavior?
+  (2) **`dispatch` in the scheduling adapter.** `LlmToolHandler` maintains
+  three parallel structures keyed on the same tool-name strings
+  (`TOOLS_FOR_STEP`, the `dispatch` if/elif, the `_schema` if/elif) plus
+  inline per-tool parsing — four hand-coordinated edit sites per new tool,
+  only one pair drift-guarded, hiding in an adapter because adapters carry
+  no body rules (a service would flunk instantly). The clean fix is one
+  declared tool object (name+description+schema+parse+invoke) with dispatch
+  and _schema derived from a table — the bindings-at-the-artifact move —
+  but there is NO KIND for a tool declaration, and one-kind-per-module
+  forbids an undeclared Tool class in handlers.py. The vocabulary has no
+  word for the thing being dispatched over; rule the word before the
+  refactor.
+  (3) **Wire records lost immutability AND value equality** (Chris ruling
+  2026-08-07, ship D1: named debt, ruled with the srv matrix). The
+  dataclass→shell migration dropped `frozen=True` from `HttpRequest`/
+  `Response`/`CliRequest`/`CliResponse` (`ToolTurn` was born unfrozen); a
+  handler can now mutate the request it was handed after routing decisions
+  were made on it — flagged independently by three ship reviewers, not
+  exploitable today. `__eq__`/`__hash__` went with it: the records are
+  identity-compared now (no in-tree consumer relies on value equality —
+  verified — but a future `assert resp == Response(200, b"")` silently
+  goes False instead of failing loud). The fix candidates are the same
+  per-kind-invariant question as (1): ValueObject-style guards on the
+  `tesser.srv` shells vs a sigcheck rule. Do NOT freeze per-subclass in
+  the meantime.
+  (4) **A wire module is the least-governed home in the tree** (adversarial
+  2026-08-07, verified): no import allowlist (contrast CORE_STDLIB) — a
+  wire module importing subprocess/boto3/tests gets zero findings, so
+  `git mv shop/domain.py bizwire.py` + a base swap escapes every
+  signature, body, and allowlist rule; bootstrap importing a wire module
+  is likewise unconstrained (the composition root can couple to transport
+  records). And the suffix has no separator: `firewire.py`/`tripwire.py`/
+  `rewire.py` all opt in, and `examples/serdepy/wire.py` already uses
+  "wire" to mean serialization format — decide allowlist + a separator
+  (or in-file declaration) with the same ruling.
+- [ ] **sigcheck internal cleanups (pre-landing review, deferred as a batch;
+  re-scoped 2026-08-07 after the srv-wire wave restructured the methods).**
+  (1) the exactly-once-as-ts walk: the srv-wire wave extracted
+  `_shell_import_violations` (parameterized, covers the srv/bootstrap/wire
+  arm), but `_import_violations` and `_test_module_violations` still carry
+  their own copies; the statement-totality loop now exists at FOUR sites
+  (`_bootstrap_module_violations`, `_srv_module_violations`,
+  `_wire_module_violations`, `_role_module_violations`) — extract without
+  breaking the generator's literal-clause guard; (2) `import_edges()`/
+  `tesser_imports()` return positionally-decoded 4-tuples with different
+  slot meanings — make both NamedTuples, and make `has_alias` honest (or
+  unrepresentable) for from-edges; (3) hardcoded `"tesser.context"`/
+  `"tesser.testing"`/`"tesser"` comparison literals → Final constants;
+  (4) the `len(found) == before` legality sentinel → an explicit `denied`
+  list; (5) rules.py: derive the conftest/`__main__` exemption bullets from
+  the AST guards (like TOOLING_MODULES and WIRE_SUFFIX now are) so
+  governing conftest forces the RULES.md diff, and split the
+  TOOLING_MODULES not-found vs wrong-shape errors; (6) `Module` accessors
+  (`body()`/`import_edges()`/`function_names()`/`class_defs()`) rebuild
+  their tuple/frozenset on every call and `_delegation_violations` calls
+  `function_names()` inside its walk loop — cache on the immutable Module
+  (measured immaterial today: ~60ms whole-tree); (7) the rule-coverage
+  meta-test is clause-granular, not branch-granular — branches sharing a
+  clause collapse into one RULES.md row, so a fixture covering one branch
+  reports the row covered (found 2026-08-07; all such branches were probed
+  correct, so this is a guard-precision gap, not a bug).
 - [x] **Two clauses claim more than the code enforces** — RESOLVED 2026-08-06,
   Chris ruling: "the code should enforce what I specified." The code moved,
   not the wording: (1) presence is unconditional — every role and
