@@ -52,8 +52,9 @@ row.
   subtrees), and a class's kind is its declared `ts.*` base. A tree that
   declares nothing still answers to the rules that need no declaration. On
   unmigrated code the two loud families are **whole-tree totality** — every
-  module must belong to a context, `srv`, `bootstrap`, or `tests`, so a
-  module with no home is a finding — and **test totality**, where every
+  module must belong to a context, `srv`, `bootstrap`, `tests`, or a wire
+  module (a top-level `*wire.py`), so a module with no home is a finding —
+  and **test totality**, where every
   `test_*.py` anywhere is held to the tests / `@ts.helper` / `@ts.fake`
   rules. The per-role rules (placement, imports, signatures) reach only the
   modules the layout already names as a role.
