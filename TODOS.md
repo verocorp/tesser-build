@@ -109,6 +109,18 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `_context_init_violations` and is mislabeled "__init__ declares code" —
   the `len(parts) == 1` ⇒ package-init assumption predates wire modules
   and is no longer safe (adversarial 2026-08-07).
+- [ ] **Graduate the srv/wire vocabulary into the skill docs** (opened
+  2026-08-07, v0.0.18.0 doc sweep). `skills/tesser-build/python.md:593-612`
+  and `:769-799` still teach `httpwire`/`cliwire` as frozen dataclasses with
+  `Endpoint = Callable[...]` aliases — the pre-shell idiom — while
+  `examples/python-app` now uses `ts.Request`/`ts.Response`/`ts.Port` +
+  `@ts.function`. Deliberately not updated in-wave: skill docs encode only
+  verified-implementation-backed rulings, and teaching `tesser.srv` needs
+  the `rationale/coverage.md` walk + `skill-version` bump. Blocked on the
+  srv signature-matrix ruling (don't teach a shape about to change — the
+  wire-vocabulary smells entry above is the evidence pile for that ruling).
+  Root `README.md:98-110` also under-describes tesser-py (names only
+  `tesser.domain.ValueObject`; pre-existing narrowness, fold in here).
 - [ ] **Make rules.py conformant** (Chris 2026-08-06). The generator is
   currently exempt via `TOOLING_MODULES` in the whole-tree totality rule;
   make it conform (or rule where tooling lives) and shrink the exemption.
