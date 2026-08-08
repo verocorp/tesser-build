@@ -97,7 +97,8 @@ exact: a test covers a rule when an assert literal contains the clause.
   the `test_*` precedent; a package or nested module never qualifies.
 - srv and wire kinds carry placement and import rules only — no
   signature or body rules yet (deliberate: the srv signature matrix
-  is a future ruling, not an omission).
+  ruled the kinds and their invariants, not sigcheck rules over
+  their members — see TODOS.md).
 
 ## Import contracts (from .importlinter)
 

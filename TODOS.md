@@ -47,10 +47,11 @@ Deferred work with context. Each entry carries enough for a cold pickup.
     test.yml); at zero findings delete `sigcheck-ratchet` and restore the plain
     zero-findings step.
 - [ ] **Host-class vocabulary — PARTIALLY RESOLVED (srv-wire-vocabulary wave,
-  2026-08-07).** `tesser.srv` now exists (Host, Port, Request, Response —
-  package-scoped kinds per the errors-ruling grammar; `tesser.app` was
-  deliberately left out as a real open question) and sigcheck admits declared
-  host classes in srv modules plus wire kinds in `*wire.py` wire modules.
+  2026-08-07).** `tesser.srv` now exists (Host, Port, Record, Request,
+  Response — package-scoped kinds per the errors-ruling grammar; `Record`
+  joined in the srv-matrix wave; `tesser.app` was deliberately left out as
+  a real open question) and sigcheck admits declared host classes in srv
+  modules plus wire kinds in `*wire.py` wire modules.
   Still open: host machinery that is not itself a host (`Route`, `Match` —
   and whether `HttpHost` just declares `ts.Host`), and the whole `tesser.app`
   half (`App`, `Config`, `HttpConfig`, `CleanupStack`).
@@ -126,12 +127,20 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   pointer in the skill docs, not just the code samples —
   `skills/tesser-build/srv.md:200` already dangles (`test_httpwire.py:
   content_length` was renamed to `buffered_length` in the srv-matrix wave).
-  Scope measured 2026-08-08: `python.md:591-790`, `handlers.md:47-77`, and
-  `srv.md:138-219` present `json_response`/`problem`/`respond`/`decode_body`/
-  `content_length`/`path_param` as free functions — roughly 30 lines of
-  sample code the wave deleted, in a skill distributed copy-in to consumers.
-  Root `README.md:98-110` also under-describes tesser-py (names only
-  `tesser.domain.ValueObject`; pre-existing narrowness, fold in here).
+  Scope re-measured 2026-08-08 (doc-release sweep): `python.md:591-790`,
+  `handlers.md:47-98`, and `srv.md:138-219` present `json_response`/
+  `problem`/`respond`/`decode_body`/`content_length`/`path_param` as free
+  functions — roughly 30 lines of sample code the wave deleted, in a skill
+  distributed copy-in to consumers. `testing.md:266` is a fourth site: its
+  "rename in helper's clothing" anti-pattern is written as
+  `def json_body(resp): return decode_body(resp.body)`, which now names a
+  deleted function AND collides with the real `Response.json_body` reader
+  (see item (c) of the wire-vocabulary entry below, which already rules the
+  distinction) — rewrite the illustration, don't just rename the call.
+  Root `README.md:98-110` and `CLAUDE.md:8` both under-describe tesser-py
+  (each names only `tesser.domain.ValueObject`, while the package ships
+  `adapters`, `application`, `context`, `domain`, `srv`, and `testing` —
+  pre-existing narrowness, widened by every srv wave; fold in here).
 - [ ] **Make rules.py conformant** (Chris 2026-08-06). The generator is
   currently exempt via `TOOLING_MODULES` in the whole-tree totality rule;
   make it conform (or rule where tooling lives) and shrink the exemption.
@@ -181,7 +190,11 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   field check is one-directional (undeclared names are refused, declared
   ones are not required), so a subclass that conditionally omits a field
   still builds a partial record — it cannot be made strict without a
-  declaration for the `object.__setattr__` derived-field idiom.
+  declaration for the `object.__setattr__` derived-field idiom. And a
+  record with NO fields is re-initializable (verified 2026-08-08, doc-release
+  sweep): the guard reads a populated `__dict__`, which an empty record never
+  has, so `r.__init__()` succeeds a second time. No in-tree record is
+  field-less; same ruling covers it.
   (g) **The confirm_booking tool schema omits `required`** — restored to
   main's byte shape this wave (the refactor had silently added
   `"required": []`). OpenAI strict-mode function calling wants the key

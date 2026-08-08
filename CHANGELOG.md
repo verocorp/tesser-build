@@ -21,7 +21,8 @@ and the checkers pick. Nothing here was decided in prose first.
   `__dict__` refuses a second `__init__`, which is what makes the freeze
   hold), fields land through a kwargs constructor checked against the
   class's own annotations, equality is by type and value, and records are
-  unhashable because every one in the tree carries a container. Subclasses
+  unhashable — defining `__eq__` drops the inherited hash, which is the
+  right default for wire data that can carry a header map. Subclasses
   may not take over `__eq__`/`__ne__`/`__hash__`/`__setattr__`/
   `__delattr__`, declare `__slots__`, or give a field a class-level
   default — each guard walks the MRO, so a mixin listed before the base
@@ -35,13 +36,16 @@ and the checkers pick. Nothing here was decided in prose first.
 ### Changed
 
 - **Wire records carry their behavior.** `httpwire`'s nine loose
-  `@ts.function` module functions collapse to two: `problem`/
-  `json_response`/`redirect`/`respond` became `Response` classmethods
-  (`problem` now returns the Response, folding away every
-  `json_response(status, problem(...))` double call), and `decode_body`/
-  `path_param`/`content_length` became `HttpRequest` readers
-  (`json_body`, `path_param`, `buffered_length`). `cliwire`'s four go to
-  zero. The DTO-purity objection dissolves on the package-scoped kind
+  `@ts.function` module functions collapse to two public ones
+  (`object_field`, `string_field`) plus a private JSON-object reader:
+  `problem`/`json_response`/`redirect`/`respond` became `Response`
+  classmethods (`problem` now returns the Response, folding away every
+  `json_response(status, problem(...))` double call); `decode_body`/
+  `path_param`/`content_length` became `HttpRequest` readers (`json_body`,
+  `path_param`, `buffered_length`), with `Response` gaining the mirroring
+  `json_body`. `cliwire`'s four go to zero the same way: `ok`/`respond` are
+  `CliResponse` classmethods, `arg`/`no_extra_args` are `CliRequest`
+  readers. The DTO-purity objection dissolves on the package-scoped kind
   grammar: `ts.srv.Request`/`Response` are distinct kinds from the context
   DTOs, which keep carrying data and nothing else.
 - **One binding table replaces three parallel chains.** `LlmToolHandler`

@@ -56,7 +56,7 @@ The division of labor the checkers enforce:
 
 ## What conformance cost — the collisions worth knowing
 
-Restructuring to zero findings surfaced three places where the rulebook and
+Restructuring to zero findings surfaced four places where the rulebook and
 the original design genuinely collided:
 
 - **The error-kind taxonomy is not expressible.** The settled error norm
@@ -189,5 +189,7 @@ out of `schema()` because the host hands that dict to a provider SDK.
 ## Non-goals
 
 No wiring module (no concrete gateways exist to select — the precedent is
-spike-shells' contexts), no srv/bootstrap, no evals. The eval tiers this
-design supports are the subject of the test-structure ruling, not this code.
+spike-shells' contexts), no bootstrap or composition root (`srv/voice/agent.py`
+is the one host and nothing in-tree constructs it), no evals. The eval tiers
+this design supports are the subject of the test-structure ruling, not this
+code.
