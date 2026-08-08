@@ -40,7 +40,7 @@ class _WriteOnceAsk(_WriteOnce):
     path: str
 
 
-def test_a_wire_record_blocks_rebinding_after_construction() -> None:
+def test_a_record_blocks_rebinding_after_construction() -> None:
     ask = Ask(path="/campaigns")
     with pytest.raises(AttributeError):
         ask.path = "/admin"
@@ -49,7 +49,7 @@ def test_a_wire_record_blocks_rebinding_after_construction() -> None:
     assert ask.path == "/campaigns"
 
 
-def test_a_wire_record_blocks_new_fields_after_construction() -> None:
+def test_a_record_blocks_new_fields_after_construction() -> None:
     ask = Ask(path="/campaigns")
     with pytest.raises(AttributeError):
         setattr(ask, "verdict", "allowed")
@@ -73,7 +73,7 @@ def test_write_once_lost_because_it_leaves_the_smuggling_channel_open() -> None:
     assert vars(ask)["verdict"] == "allowed"
 
 
-def test_wire_records_compare_by_value() -> None:
+def test_records_compare_by_value() -> None:
     assert Reply(200, b"ok") == Reply(200, b"ok")
     assert Reply(200, b"ok") != Reply(404, b"ok")
     assert Ask(path="/x", headers={"a": "b"}) == Ask(path="/x", headers={"a": "b"})
@@ -110,7 +110,7 @@ def test_records_of_different_types_never_compare_equal() -> None:
     assert Reply(200, b"") != OtherReply(200, b"")
 
 
-def test_a_wire_record_is_unhashable_because_it_compares_by_value() -> None:
+def test_a_record_is_unhashable_because_it_compares_by_value() -> None:
     with pytest.raises(TypeError):
         hash(Reply(200, b"ok"))
     ask = Ask(headers={"a": "b"})
@@ -123,7 +123,7 @@ def test_a_wire_record_is_unhashable_because_it_compares_by_value() -> None:
 def test_a_record_subclass_may_not_take_over_the_contract() -> None:
     with pytest.raises(
         TypeError,
-        match=r"^_Sneaky must not override __setattr__: Record owns the wire-record contract$",
+        match=r"^_Sneaky must not override __setattr__: Record owns the record contract$",
     ):
 
         class _Sneaky(tesser.srv.Request):
@@ -148,7 +148,7 @@ def test_a_mixin_listed_before_the_base_may_not_take_over_the_contract_either() 
 
     with pytest.raises(
         TypeError,
-        match=r"^_MutAsk must not override __setattr__: Record owns the wire-record contract$",
+        match=r"^_MutAsk must not override __setattr__: Record owns the record contract$",
     ):
 
         class _MutAsk(_Mut, tesser.srv.Request):
@@ -247,12 +247,12 @@ def test_a_subclass_that_skips_super_init_builds_an_empty_record_no_guard_can_se
     assert vars(Forgot(200)) == {}
 
 
-def test_a_wire_record_reprs_the_fields_it_carries() -> None:
+def test_a_record_reprs_the_fields_it_carries() -> None:
     assert repr(Reply(200, b"ok")) == "Reply(status=200, body=b'ok')"
     assert repr(Ask(path="/x", headers={"a": "b"})) == "Ask(path='/x', headers={'a': 'b'})"
 
 
-def test_a_wire_record_never_equals_a_plain_object() -> None:
+def test_a_record_never_equals_a_plain_object() -> None:
     assert Reply(200, b"ok") != "Reply(200, b'ok')"
     assert Reply(200, b"ok") != object()
 

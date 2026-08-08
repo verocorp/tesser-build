@@ -7,7 +7,7 @@ import scheduling.application.service as application
 import scheduling.client as client
 import scheduling.domain as domain
 import srv.voice.router as router
-import voicewire
+import protocol.voice as voice
 
 
 @ts.fake
@@ -62,7 +62,7 @@ def test_every_offered_tool_is_declarable_and_routable() -> None:
 def test_a_tool_call_does_not_alias_the_arguments_it_was_handed() -> None:
     arguments: dict[str, object] = {"name": "Ada", "nested": {"a": 1}}
 
-    call = voicewire.ToolCall("provide_name", arguments)
+    call = voice.ToolCall("provide_name", arguments)
     arguments["name"] = "Eve"
     nested = arguments["nested"]
     assert isinstance(nested, dict)
@@ -74,7 +74,7 @@ def test_a_tool_call_does_not_alias_the_arguments_it_was_handed() -> None:
 def test_a_tool_declaration_does_not_alias_the_schema_it_was_handed_even_nested() -> None:
     slot: dict[str, object] = {"enum": ["mon-9am"]}
     parameters: dict[str, object] = {"type": "object", "properties": {"slot": slot}}
-    tool = voicewire.Tool("choose_slot", "Record the slot the caller chose.", parameters)
+    tool = voice.Tool("choose_slot", "Record the slot the caller chose.", parameters)
 
     parameters["type"] = "string"
     slot["enum"] = ["INBOUND-CHANGED"]
@@ -103,7 +103,7 @@ def test_a_drifted_tool_map_keeps_the_recoverable_error_class() -> None:
 
 
 def test_a_tool_declaration_renders_its_wire_schema() -> None:
-    tool = voicewire.Tool("provide_name", "Record the caller's full name.", {"type": "object"})
+    tool = voice.Tool("provide_name", "Record the caller's full name.", {"type": "object"})
 
     assert tool.schema() == {
         "name": "provide_name",
@@ -122,8 +122,8 @@ def test_a_route_carries_the_endpoint_the_host_calls() -> None:
     route = router.match(router.tools_for(handler), handlers.PROVIDE_NAME)
 
     assert route is not None
-    endpoint: voicewire.ToolEndpoint = route.endpoint
-    turn = endpoint(voicewire.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada Lovelace"}))
+    endpoint: voice.ToolEndpoint = route.endpoint
+    turn = endpoint(voice.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada Lovelace"}))
     assert turn.reply == "offer the caller the available slots"
 
 
@@ -133,8 +133,8 @@ def test_the_handler_satisfies_the_voicewire_contract() -> None:
     )
     handler = handlers.LlmToolHandler(service, "b1")
 
-    wired: voicewire.ToolSurface = handler
-    turn: voicewire.ToolTurn = wired.begin()
+    wired: voice.ToolSurface = handler
+    turn: voice.ToolTurn = wired.begin()
 
     assert turn.reply == "ask the caller for their name"
 
@@ -158,18 +158,18 @@ def test_the_flow_through_the_tool_surface() -> None:
     assert turn.reply == "ask the caller for their name"
     assert [tool.name for tool in turn.tools] == [handlers.PROVIDE_NAME]
 
-    turn = handler.provide_name(voicewire.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada Lovelace"}))
+    turn = handler.provide_name(voice.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada Lovelace"}))
     assert turn.reply == "offer the caller the available slots"
     assert [tool.name for tool in turn.tools] == [handlers.CHOOSE_SLOT]
 
-    turn = handler.choose_slot(voicewire.ToolCall(handlers.CHOOSE_SLOT, {"slot": "mon-9am"}))
+    turn = handler.choose_slot(voice.ToolCall(handlers.CHOOSE_SLOT, {"slot": "mon-9am"}))
     assert turn.reply == "slot mon-9am selected; ask the caller to confirm"
     assert [tool.name for tool in turn.tools] == [
         handlers.CHOOSE_SLOT,
         handlers.CONFIRM_BOOKING,
     ]
 
-    turn = handler.confirm(voicewire.ToolCall(handlers.CONFIRM_BOOKING, {}))
+    turn = handler.confirm(voice.ToolCall(handlers.CONFIRM_BOOKING, {}))
     assert turn.reply == "booked mon-9am for Ada Lovelace"
     assert turn.tools == ()
     assert service.status(client.StatusRequest(booking_id="b1")).step == "booked"
@@ -200,9 +200,9 @@ def test_the_confirm_booking_tool_declares_no_arguments() -> None:
     )
     handler = handlers.LlmToolHandler(service, "b1")
     handler.begin()
-    handler.provide_name(voicewire.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada"}))
+    handler.provide_name(voice.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada"}))
 
-    turn = handler.choose_slot(voicewire.ToolCall(handlers.CHOOSE_SLOT, {"slot": "mon-9am"}))
+    turn = handler.choose_slot(voice.ToolCall(handlers.CHOOSE_SLOT, {"slot": "mon-9am"}))
     tool = turn.tools[1]
 
     assert tool.name == handlers.CONFIRM_BOOKING
@@ -214,12 +214,12 @@ def test_the_confirm_booking_tool_declares_no_arguments() -> None:
 
 
 def test_a_tool_declaration_is_frozen_and_compares_by_value() -> None:
-    tool = voicewire.Tool("provide_name", "Record the caller's full name.", {"type": "object"})
+    tool = voice.Tool("provide_name", "Record the caller's full name.", {"type": "object"})
 
-    assert tool == voicewire.Tool(
+    assert tool == voice.Tool(
         "provide_name", "Record the caller's full name.", {"type": "object"}
     )
-    assert tool != voicewire.Tool("choose_slot", "Record the caller's full name.", {"type": "object"})
+    assert tool != voice.Tool("choose_slot", "Record the caller's full name.", {"type": "object"})
     with pytest.raises(AttributeError):
         tool.name = "cancel_booking"
 
@@ -231,7 +231,7 @@ def test_the_choose_slot_schema_offers_exactly_the_current_slots() -> None:
     handler = handlers.LlmToolHandler(service, "b1")
     handler.begin()
 
-    turn = handler.provide_name(voicewire.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada"}))
+    turn = handler.provide_name(voice.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada"}))
     tool = turn.tools[0]
 
     properties = tool.parameters["properties"]
@@ -246,12 +246,12 @@ def test_a_taken_last_slot_with_nothing_to_reoffer_reaches_the_model_as_an_error
     service = application.BookingService(directory, MemoryBookingRepository())
     handler = handlers.LlmToolHandler(service, "b1")
     handler.begin()
-    handler.provide_name(voicewire.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada"}))
-    handler.choose_slot(voicewire.ToolCall(handlers.CHOOSE_SLOT, {"slot": "mon-9am"}))
+    handler.provide_name(voice.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada"}))
+    handler.choose_slot(voice.ToolCall(handlers.CHOOSE_SLOT, {"slot": "mon-9am"}))
 
     directory.slots.remove("mon-9am")
     with pytest.raises(ValueError) as excinfo:
-        handler.confirm(voicewire.ToolCall(handlers.CONFIRM_BOOKING, {}))
+        handler.confirm(voice.ToolCall(handlers.CONFIRM_BOOKING, {}))
 
     assert "no slots are available" in str(excinfo.value)
 
@@ -262,10 +262,10 @@ def test_a_confirm_at_the_wrong_step_keeps_its_own_error_and_mutates_nothing() -
     )
     handler = handlers.LlmToolHandler(service, "b1")
     handler.begin()
-    handler.provide_name(voicewire.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada"}))
+    handler.provide_name(voice.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada"}))
 
     with pytest.raises(ValueError) as excinfo:
-        handler.confirm(voicewire.ToolCall(handlers.CONFIRM_BOOKING, {}))
+        handler.confirm(voice.ToolCall(handlers.CONFIRM_BOOKING, {}))
 
     assert "choose_slot" in str(excinfo.value)
     assert "now available" not in str(excinfo.value)
@@ -282,7 +282,7 @@ def test_a_choose_slot_before_any_offer_is_rejected_cleanly() -> None:
     handler.begin()
 
     with pytest.raises(ValueError) as excinfo:
-        handler.choose_slot(voicewire.ToolCall(handlers.CHOOSE_SLOT, {"slot": "mon-9am"}))
+        handler.choose_slot(voice.ToolCall(handlers.CHOOSE_SLOT, {"slot": "mon-9am"}))
 
     assert "collect_name" in str(excinfo.value)
 
@@ -292,11 +292,11 @@ def test_a_taken_slot_comes_back_as_one_turn_offering_the_fresh_slots() -> None:
     service = application.BookingService(directory, MemoryBookingRepository())
     handler = handlers.LlmToolHandler(service, "b1")
     handler.begin()
-    handler.provide_name(voicewire.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada"}))
-    handler.choose_slot(voicewire.ToolCall(handlers.CHOOSE_SLOT, {"slot": "mon-9am"}))
+    handler.provide_name(voice.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada"}))
+    handler.choose_slot(voice.ToolCall(handlers.CHOOSE_SLOT, {"slot": "mon-9am"}))
 
     directory.slots.remove("mon-9am")
-    turn = handler.confirm(voicewire.ToolCall(handlers.CONFIRM_BOOKING, {}))
+    turn = handler.confirm(voice.ToolCall(handlers.CONFIRM_BOOKING, {}))
 
     assert turn.reply == "mon-9am was just taken; offer the caller the updated slots"
     assert service.status(client.StatusRequest(booking_id="b1")).step == "choose_slot"
@@ -325,5 +325,5 @@ def test_a_non_string_argument_is_rejected_with_the_wire_word() -> None:
     handler = handlers.LlmToolHandler(service, "b1")
     handler.begin()
 
-    with pytest.raises(voicewire.BadToolCall):
-        handler.provide_name(voicewire.ToolCall(handlers.PROVIDE_NAME, {"name": 3}))
+    with pytest.raises(voice.BadToolCall):
+        handler.provide_name(voice.ToolCall(handlers.PROVIDE_NAME, {"name": 3}))

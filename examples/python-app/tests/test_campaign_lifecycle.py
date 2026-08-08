@@ -22,7 +22,7 @@ from campaign.domain.money import Money, MoneyAmount, MoneyCurrency, MoneySpec
 from campaign.domain.short_link import ShortLinkSpec
 from campaign.domain.values import CampaignID
 from errors import DomainError, Kind
-from httpwire import HttpRequest
+from protocol.http import HttpRequest
 from srv.http.host import respond
 
 

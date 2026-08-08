@@ -5,7 +5,7 @@ from typing import Final
 import tesser.adapters as ts
 
 from campaign.client import AddLinkRequest, Client, CreateCampaignRequest, DeactivateLinkRequest
-from cliwire import CliRequest, CliResponse
+from protocol.cli import CliRequest, CliResponse
 
 _CREATE_USAGE: Final[str] = "usage: create-campaign <budget_amount> <currency>"
 _ADD_USAGE: Final[str] = "usage: add-link <campaign_id> <slug> <target_url>"

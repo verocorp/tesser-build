@@ -10,7 +10,7 @@ import tesser.srv as ts
 from bootstrap.bootstrap import App, new
 from bootstrap.config import from_env
 from campaign.adapters.handlers.cli import Handler as CampaignHandler
-from cliwire import CliRequest, CliResponse, Command, UsageError
+from protocol.cli import CliRequest, CliResponse, Command, UsageError
 from errors import DomainError, InfraError, exit_code_for
 
 _USAGE: Final[str] = (

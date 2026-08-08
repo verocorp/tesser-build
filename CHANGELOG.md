@@ -61,6 +61,23 @@ and the checkers pick. Nothing here was decided in prose first.
   `(ToolCall) -> ToolTurn`, the exact shape of their HTTP and CLI
   siblings, and the handler reads arguments off a frozen record instead
   of livekit's live dict.
+- **"Wire" left the ubiquitous language; the protocol package replaced
+  it** (Chris rulings, 2026-08-08). The word named the wrong boundary — a
+  `Route` never crosses any transport; the actual boundary is
+  host/handler — and it collided with the settled `wiring` role. The
+  concept is now the **protocol**: the app owns it, the handlers define
+  it, the hosts conform to it. Concretely: `httpwire.py`/`cliwire.py`
+  became `protocol/http.py`/`protocol/cli.py` and `voicewire.py` became
+  `protocol/voice.py` — a governed top-level `protocol/` package per
+  tree. sigcheck drops suffix detection for package membership
+  (`PROTOCOL_PACKAGE`), which also closes the suffix hole where
+  `tripwire.py` opted in and `serdepy/wire.py` collided: a stray
+  `*wire.py` is now simply homeless. Kind keys renamed `wire_*` ->
+  `protocol_*`; rule text, RULES.md, fixtures, and the python-app ratchet
+  renamed with them (same 163 findings). `Record`'s runtime messages stop
+  saying "wire record". Earlier the same day and in the same spirit,
+  httpwire's `Response` became `HttpResponse` — message classes carry
+  their protocol's name.
 - **The three protocol stacks now share one skeleton** (conformance
   sweep, 2026-08-08). A wire module holds records with every constructor
   field stated (no defaults — the test-convenience defaults moved into the

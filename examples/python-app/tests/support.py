@@ -6,7 +6,7 @@ import pathlib
 from bootstrap.config import Config
 from campaign.application.parts import CampaignParts
 from campaign.wiring.config import Config as CampaignConfig
-from httpwire import HttpRequest, HttpResponse
+from protocol.http import HttpRequest, HttpResponse
 from linkpolicy.wiring.config import Config as LinkPolicyConfig
 from reports.wiring.config import Config as ReportsConfig
 from srv.http.router import Route

@@ -6,7 +6,7 @@ from typing import Final
 import tesser.adapters as ts
 
 import scheduling.client as client
-import voicewire
+import protocol.voice as voice
 
 PROVIDE_NAME: Final[str] = "provide_name"
 CHOOSE_SLOT: Final[str] = "choose_slot"
@@ -50,13 +50,13 @@ class LlmToolHandler(ts.Handler):
             " Use the tools to record what they say; never invent slots."
         )
 
-    def begin(self) -> voicewire.ToolTurn:
+    def begin(self) -> voice.ToolTurn:
         return self._turn(self._client.begin(client.BeginBookingRequest(booking_id=self._booking_id)))
 
-    def status(self) -> voicewire.ToolTurn:
+    def status(self) -> voice.ToolTurn:
         return self._turn(self._client.status(client.StatusRequest(booking_id=self._booking_id)))
 
-    def provide_name(self, call: voicewire.ToolCall, /) -> voicewire.ToolTurn:
+    def provide_name(self, call: voice.ToolCall, /) -> voice.ToolTurn:
         return self._turn(
             self._client.provide_name(
                 client.ProvideNameRequest(
@@ -65,7 +65,7 @@ class LlmToolHandler(ts.Handler):
             )
         )
 
-    def choose_slot(self, call: voicewire.ToolCall, /) -> voicewire.ToolTurn:
+    def choose_slot(self, call: voice.ToolCall, /) -> voice.ToolTurn:
         return self._turn(
             self._client.choose_slot(
                 client.ChooseSlotRequest(
@@ -74,22 +74,22 @@ class LlmToolHandler(ts.Handler):
             )
         )
 
-    def confirm(self, _call: voicewire.ToolCall, /) -> voicewire.ToolTurn:
+    def confirm(self, _call: voice.ToolCall, /) -> voice.ToolTurn:
         return self._turn(
             self._client.confirm(client.ConfirmBookingRequest(booking_id=self._booking_id))
         )
 
-    def _turn(self, state: client.BookingStateResponse) -> voicewire.ToolTurn:
-        return voicewire.ToolTurn(
+    def _turn(self, state: client.BookingStateResponse) -> voice.ToolTurn:
+        return voice.ToolTurn(
             reply=state.reply,
             tools=tuple(self._tool(name, state) for name in TOOLS_FOR_STEP[state.step]),
         )
 
-    def _tool(self, name: str, state: client.BookingStateResponse) -> voicewire.Tool:
+    def _tool(self, name: str, state: client.BookingStateResponse) -> voice.Tool:
         if name not in self._declarations:
             raise ValueError(f"unknown tool {name!r}")
         description, parameters = self._declarations[name]
-        return voicewire.Tool(name=name, description=description, parameters=parameters(state))
+        return voice.Tool(name=name, description=description, parameters=parameters(state))
 
 
 @ts.function

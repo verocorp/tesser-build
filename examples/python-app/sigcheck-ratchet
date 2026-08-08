@@ -54,9 +54,8 @@ campaign.wiring.wire imports names from campaign.adapters.gateways.repo_memory; 
 campaign.wiring.wire imports names from campaign.application.service; a context module is imported as an aliased module, never its members
 campaign.wiring.wire imports names from campaign.client; a context module is imported as an aliased module, never its members
 campaign.wiring.wire imports names from campaign.wiring.config; a context module is imported as an aliased module, never its members
-errors belongs to no governed package; every module belongs to a context, srv, bootstrap, tests, or a wire module
-httpwire declares a module constant without Final; a wire constant is Final
-lifecycle belongs to no governed package; every module belongs to a context, srv, bootstrap, tests, or a wire module
+errors belongs to no governed package; every module belongs to a context, srv, bootstrap, tests, or the protocol package
+lifecycle belongs to no governed package; every module belongs to a context, srv, bootstrap, tests, or the protocol package
 linkpolicy.adapters.gateways.repo_memory imports names from linkpolicy.application.service; a context module is imported as an aliased module, never its members
 linkpolicy.application.service imports names from linkpolicy.client; a context module is imported as an aliased module, never its members
 linkpolicy.application.service imports names from linkpolicy.domain.policy; a context module is imported as an aliased module, never its members
@@ -65,6 +64,7 @@ linkpolicy.wiring.wire imports names from linkpolicy.adapters.gateways.repo_memo
 linkpolicy.wiring.wire imports names from linkpolicy.application.service; a context module is imported as an aliased module, never its members
 linkpolicy.wiring.wire imports names from linkpolicy.client; a context module is imported as an aliased module, never its members
 linkpolicy.wiring.wire imports names from linkpolicy.wiring.config; a context module is imported as an aliased module, never its members
+protocol.http declares a module constant without Final; a protocol constant is Final
 reports.adapters.gateways.campaign_links imports campaign.client without an alias; a context module is imported as an aliased module, never its members
 reports.adapters.gateways.campaign_links imports names from reports.application.service; a context module is imported as an aliased module, never its members
 reports.adapters.gateways.policy_verdicts imports linkpolicy.client without an alias; a context module is imported as an aliased module, never its members
@@ -79,7 +79,7 @@ reports.wiring.wire imports names from reports.adapters.gateways.policy_verdicts
 reports.wiring.wire imports names from reports.application.service; a context module is imported as an aliased module, never its members
 reports.wiring.wire imports names from reports.client; a context module is imported as an aliased module, never its members
 reports.wiring.wire imports names from reports.wiring.config; a context module is imported as an aliased module, never its members
-serialization belongs to no governed package; every module belongs to a context, srv, bootstrap, tests, or a wire module
+serialization belongs to no governed package; every module belongs to a context, srv, bootstrap, tests, or the protocol package
 srv.cli.main has a loose module-level statement; a srv module holds only imports, declared classes and functions, and Final constants
 srv.cli.main imports names from campaign.adapters.handlers.cli; a context module is imported as an aliased module, never its members
 srv.http.host imports names from campaign.adapters.handlers.http; a context module is imported as an aliased module, never its members

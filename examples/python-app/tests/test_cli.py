@@ -9,7 +9,7 @@ from campaign.application.parts import CheckOutcome
 from campaign.application.service import TargetChecker
 from campaign.wiring.config import Config as CampaignConfig
 from campaign.wiring.wire import build as build_campaign
-from cliwire import CliRequest, CliResponse, UsageError
+from protocol.cli import CliRequest, CliResponse, UsageError
 from errors import InfraError, conflict, invalid, not_found
 from linkpolicy.wiring.config import Config as LinkPolicyConfig
 from reports.wiring.config import Config as ReportsConfig

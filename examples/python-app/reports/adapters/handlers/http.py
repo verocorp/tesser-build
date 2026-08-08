@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tesser.adapters as ts
 
-from httpwire import HttpRequest, JSONObject, HttpResponse
+from protocol.http import HttpRequest, JSONObject, HttpResponse
 from reports.client import Client, LinksByVerdictRequest, LinkVerdictView
 
 

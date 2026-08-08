@@ -32,7 +32,7 @@ class Record:
                 if name in base.__dict__:
                     raise TypeError(
                         f"{cls.__name__} must not override {name}: "
-                        "Record owns the wire-record contract"
+                        "Record owns the record contract"
                     )
             for name, annotation in base.__dict__.get("__annotations__", {}).items():
                 if name in base.__dict__ and _is_field(annotation):
@@ -44,7 +44,7 @@ class Record:
     def __init__(self, **fields: object) -> None:
         if self.__dict__:
             raise AttributeError(
-                f"{type(self).__name__} is a frozen wire record: already constructed"
+                f"{type(self).__name__} is a frozen record: already constructed"
             )
         declared = _declared_fields(type(self))
         for name, value in fields.items():
@@ -62,7 +62,7 @@ class Record:
         return f"{type(self).__name__}({fields})"
 
     def __setattr__(self, name: str, value: object) -> None:
-        raise AttributeError(f"{type(self).__name__} is a frozen wire record: cannot set {name!r}")
+        raise AttributeError(f"{type(self).__name__} is a frozen record: cannot set {name!r}")
 
     def __delattr__(self, name: str) -> None:
-        raise AttributeError(f"{type(self).__name__} is a frozen wire record: cannot delete {name!r}")
+        raise AttributeError(f"{type(self).__name__} is a frozen record: cannot delete {name!r}")

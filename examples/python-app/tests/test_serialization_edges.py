@@ -15,7 +15,7 @@ from campaign.domain.campaign import Campaign, CampaignSpec
 from campaign.domain.money import MoneySpec
 from campaign.domain.short_link import ShortLinkSpec
 from errors import DomainError
-from httpwire import HttpRequest
+from protocol.http import HttpRequest
 from tests.support import parts_tuple
 
 

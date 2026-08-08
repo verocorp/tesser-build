@@ -243,19 +243,18 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   arguments; endpoints are `(ToolCall) -> ToolTurn` like HTTP and CLI),
   so no in-tree wire module leaves a message direction-less anymore — the
   rule question is whether sigcheck should require that.
-  (g) **A wire module is the least-governed home in the tree** (adversarial
-  2026-08-07, verified): no import allowlist (contrast CORE_STDLIB) — a
-  wire module importing subprocess/boto3/tests gets zero findings, so
-  `git mv shop/domain.py bizwire.py` + a base swap escapes every
-  signature, body, and allowlist rule; bootstrap importing a wire module
-  is likewise unconstrained (the composition root can couple to transport
-  records). Evidence for the allowlist (2026-08-08): after the conformance
-  sweep all three wire modules import only stdlib + tesser — errors.py
-  left httpwire/cliwire with `respond` — so the allowlist is now just
-  recording what the trees already do. And the suffix has no separator: `firewire.py`/`tripwire.py`/
-  `rewire.py` all opt in, and `examples/serdepy/wire.py` already uses
-  "wire" to mean serialization format — decide allowlist + a separator
-  (or in-file declaration) with the same ruling.
+  (g) **A protocol module has no import allowlist** (survives from the
+  2026-08-07 "least-governed home" adversarial item; the SUFFIX half was
+  RESOLVED 2026-08-08 by the protocol-package ruling — membership in the
+  top-level `protocol/` package is the declaration, so `firewire.py`/
+  `tripwire.py`/`serdepy/wire.py` no longer opt into anything and
+  `git mv shop/domain.py bizwire.py` lands homeless, not governed-lite).
+  What remains: no CORE_STDLIB-style allowlist — a protocol module
+  importing subprocess/boto3 gets zero findings, and bootstrap importing
+  a protocol module is unconstrained. Evidence for the allowlist: after
+  the conformance sweep all three protocol modules import only stdlib +
+  tesser — errors.py left them with `respond` — so the allowlist would
+  just record what the trees already do.
 - [ ] **A role `__init__` re-export defeats the classifier** (found while
   splitting spike-llmport's application.py into a package, 2026-08-08).
   RULES.md sanctions "a role __init__ only re-exports from its own role", but

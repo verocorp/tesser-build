@@ -119,7 +119,7 @@ jobs:
       - name: examples/spike-llmport — mypy --strict + pytest
         working-directory: examples/spike-llmport
         run: |
-          MYPYPATH=.:../../tesser-py mypy --strict scheduling voicewire.py srv/voice/router.py tests
+          MYPYPATH=.:../../tesser-py mypy --strict scheduling protocol srv/voice/router.py tests
           pytest -q
 
   python-app-example:
@@ -149,7 +149,7 @@ jobs:
       - name: examples/python-app — mypy --strict + pytest
         working-directory: examples/python-app
         run: |
-          MYPYPATH=.:../../tesser-py mypy --strict errors.py lifecycle.py serialization.py httpwire.py cliwire.py campaign linkpolicy reports bootstrap srv tests conftest.py
+          MYPYPATH=.:../../tesser-py mypy --strict errors.py lifecycle.py serialization.py protocol campaign linkpolicy reports bootstrap srv tests conftest.py
           pytest -q
       - name: examples/python-app — sigcheck (totality rulebook, ratcheted)
         # The import-totality wave (exactly-once-as-ts, whole-tree totality,

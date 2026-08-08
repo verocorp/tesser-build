@@ -7,15 +7,15 @@ import tesser.srv as ts
 from livekit.agents import Agent, ToolError, function_tool
 
 import srv.voice.router as router
-import voicewire
+import protocol.voice as voice
 
 
 class ToolAgent(Agent, ts.Host):
 
     def __init__(
         self,
-        surface: voicewire.ToolSurface,
-        routes: tuple[voicewire.Route, ...],
+        surface: voice.ToolSurface,
+        routes: tuple[voice.Route, ...],
         halt: Callable[[], Awaitable[None]],
     ) -> None:
         super().__init__(instructions=surface.instructions())
@@ -31,7 +31,7 @@ class ToolAgent(Agent, ts.Host):
             await self._halt()
             raise
 
-    async def _rebind(self, turn: voicewire.ToolTurn) -> None:
+    async def _rebind(self, turn: voice.ToolTurn) -> None:
         await self.update_tools(
             [function_tool(self._shim(tool.name), raw_schema=tool.schema()) for tool in turn.tools]
         )
@@ -43,8 +43,8 @@ class ToolAgent(Agent, ts.Host):
                 if route is None:
                     raise ToolError(f"unknown tool {name!r}")
                 try:
-                    turn = route.endpoint(voicewire.ToolCall(name, raw_arguments))
-                except (voicewire.BadToolCall, ValueError) as err:
+                    turn = route.endpoint(voice.ToolCall(name, raw_arguments))
+                except (voice.BadToolCall, ValueError) as err:
                     try:
                         await self._rebind(self._surface.status())
                     except Exception:

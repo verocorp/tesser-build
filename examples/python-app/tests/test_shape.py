@@ -15,7 +15,7 @@ from campaign.client import LinkView, ResolveResponse
 from campaign.wiring.config import Config as CampaignConfig
 from campaign.wiring.wire import build as build_campaign
 from errors import InfraError
-from httpwire import HttpRequest
+from protocol.http import HttpRequest
 from reports.adapters.handlers.http import Handler as ReportsHandler
 from reports.client import LinksByVerdictRequest, LinksByVerdictResponse, LinkVerdictView
 from srv.http.host import respond

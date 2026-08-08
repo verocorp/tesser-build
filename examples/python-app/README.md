@@ -77,10 +77,11 @@ socket is host policy: a body over the cap is a 413, a
 not built). Every endpoint has the same `(HttpRequest) -> HttpResponse` signature,
 so routing is a table rather than a branch per case, and no field name appears
 anywhere in the host. URL knowledge lives in `srv/http/router.py` alone; the
-wire vocabulary both sides share lives in `httpwire.py`, which neither owns:
-the records (`HttpRequest`/`HttpResponse`, every constructor field stated, no
-defaults), the readers, and the wire's own rejection words (`BadRequest` and
-kin, `ts.Rejection` kinds) that the host maps to statuses —
+protocol both sides abide by lives in `protocol/http.py`, app-owned — the
+handlers define it, the hosts conform to it: the records
+(`HttpRequest`/`HttpResponse`, every constructor field stated, no defaults),
+the readers, and the protocol's own rejection words (`BadRequest` and kin,
+`ts.Rejection` kinds) that the host maps to statuses —
 handlers never import from `srv/`, so a context stays constructible with no host
 in the process. The DTO names mirror FastAPI/Starlette (`path_params`,
 `query_params`, `status_code`) stripped to what a hand-written host needs.
@@ -116,7 +117,7 @@ traceback.
 pip install -r requirements-dev.txt
 ruff check .
 PYTHONPATH=. lint-imports
-MYPYPATH=.:../../tesser-py mypy --strict errors.py lifecycle.py serialization.py httpwire.py cliwire.py campaign linkpolicy reports bootstrap srv tests conftest.py
+MYPYPATH=.:../../tesser-py mypy --strict errors.py lifecycle.py serialization.py protocol campaign linkpolicy reports bootstrap srv tests conftest.py
 pytest -q
 ```
 

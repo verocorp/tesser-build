@@ -11,7 +11,7 @@ from campaign.client import (
     GetCampaignRequest,
     ResolveRequest,
 )
-from httpwire import HttpRequest, JSONObject, HttpResponse, object_field, string_field
+from protocol.http import HttpRequest, JSONObject, HttpResponse, object_field, string_field
 
 
 class Handler(ts.Handler):
