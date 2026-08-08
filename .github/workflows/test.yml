@@ -100,10 +100,10 @@ jobs:
     # Gates the LLM tool-call port spike at the spike-shells bar: sigcheck
     # zero findings over the whole tree (the srv-vocabulary + wire-module
     # rules resolved the two findings the ratchet used to carry), then
-    # mypy --strict + pytest on the pure modules. srv/voice/agent.py is in
-    # sigcheck's walk (pure AST) but outside the mypy crawl —
-    # livekit-agents is not installed in CI; the spike README records that
-    # boundary.
+    # mypy --strict + pytest on the pure modules, including the srv router
+    # (it imports no livekit). srv/voice/agent.py is in sigcheck's walk
+    # (pure AST) but outside the mypy crawl — livekit-agents is not
+    # installed in CI; the spike README records that boundary.
     name: spike-llmport (sigcheck + mypy --strict + pytest)
     runs-on: ubuntu-latest
     steps:
@@ -119,7 +119,7 @@ jobs:
       - name: examples/spike-llmport — mypy --strict + pytest
         working-directory: examples/spike-llmport
         run: |
-          MYPYPATH=.:../../tesser-py mypy --strict scheduling voicewire.py tests
+          MYPYPATH=.:../../tesser-py mypy --strict scheduling voicewire.py srv/voice/router.py tests
           pytest -q
 
   python-app-example:

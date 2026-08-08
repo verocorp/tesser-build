@@ -33,6 +33,20 @@ class ToolTurn(ts.Response):
     tools: tuple[Tool, ...]
 
 
+class ToolEndpoint(ts.Port, Protocol):
+
+    def __call__(self, raw_arguments: Mapping[str, object], /) -> ToolTurn: ...
+
+
+class Route(ts.Record):
+
+    def __init__(self, name: str, endpoint: ToolEndpoint) -> None:
+        super().__init__(name=name, endpoint=endpoint)
+
+    name: str
+    endpoint: ToolEndpoint
+
+
 class ToolSurface(ts.Port, Protocol):
 
     def instructions(self) -> str: ...
@@ -40,5 +54,3 @@ class ToolSurface(ts.Port, Protocol):
     def begin(self) -> ToolTurn: ...
 
     def status(self) -> ToolTurn: ...
-
-    def dispatch(self, tool: str, raw_arguments: Mapping[str, object]) -> ToolTurn: ...

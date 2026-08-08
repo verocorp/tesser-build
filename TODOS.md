@@ -171,7 +171,32 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   "declared tool object" shape) needs a new ADAPTERS kind — outside the
   srv-only scope; the sigcheck probe walls are recorded verbatim in
   examples/spike-llmport/README.md. Rule whether the data-table shape
-  stands or an adapters Tool kind is worth the vocabulary.
+  stands or an adapters Tool kind is worth the vocabulary. Partly answered
+  2026-08-08 by the routing move: with `dispatch` gone from the handler,
+  what remains per tool is an endpoint method plus a schema declaration,
+  so the "tool object" a class would have held is now split across the
+  handler (invoke + schema) and the srv route table (name -> endpoint).
+  (a2) **A wire record is a value object on the wire** (Chris framing
+  2026-08-08). `Record` currently does two jobs: the shared frozen/equality
+  mechanics base for Request/Response, and a declarable kind in its own
+  right. Only the second is under-justified, and it is what creates (f).
+  If the concept is "a value that appears on the wire but is not itself a
+  message" — Tool, Route — then it wants that name and its own row, with
+  the mechanics base staying undeclarable. Related: wire records are NOT
+  context DTOs (context-generic, transport-shaped, different rate of
+  change, and the handler exists to translate between them) and NOT domain
+  VOs (an HttpRequest must be constructible from whatever arrived).
+  (a3) **Wire-record construction should be one spec in, then instance
+  methods** (Chris ruling 2026-08-08). `Response` currently has FOUR
+  construction doors (`json`/`problem`/`redirect`/`respond`) where the
+  repo's own rule — enforced for domain constructors as "takes exactly one
+  ts.Spec" — is one. They passed only because wire kinds carry placement
+  and import rules but no signature rules. Two of them are not even
+  construction: `respond(run)` is an exception->Response policy mapper, and
+  `json`/`problem` are "construct from a different input shape", which is a
+  spec's job (the MoneyAmount("10.00") precedent parses in the
+  spec-taking constructor). Extending the one-spec rule to wire kinds is a
+  matrix rule change, so it was not folded into the srv-matrix wave.
   (b) **`Endpoint`/`Command`/`ToolSurface` stay anonymous-`__call__`/named
   wire ports** — untouched this wave; if the position-naming convention
   needs more than the `Endpoint` precedent, that's a matrix row.

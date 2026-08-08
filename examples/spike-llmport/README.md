@@ -17,12 +17,15 @@ scheduling/
   domain.py       Step/CustomerName/Slot VOs, Booking aggregate, step constants
   application.py  BookingParts, SlotDirectory + BookingRepository ports, BookingService
   adapters/
-    handlers.py   LlmToolHandler — the LLM wire: tool vocabulary, schemas, dispatch
+    handlers.py   LlmToolHandler — one endpoint method per tool, plus the schema
+                  declarations the model sees
 tests/            domain/application/handler tests; each declares its own @ts.fake port doubles
-voicewire.py      wire module: ToolSurface (ts.Port), ToolTurn (ts.Response), and
-                  Tool (ts.Record) — the voice analog of httpwire, imported by host
-                  and handler, owned by neither
+voicewire.py      wire module: ToolSurface + ToolEndpoint (ts.Port), ToolTurn
+                  (ts.Response), Tool and Route (ts.Record) — the voice analog of
+                  httpwire, imported by host and handler, owned by neither
 srv/
+  voice/router.py tools_for (the name -> endpoint table) + match — routing lives
+                  in srv, as it does for HTTP
   voice/agent.py  ToolAgent (ts.Host) — the context-generic LiveKit host
 ```
 
@@ -35,11 +38,13 @@ The division of labor the checkers enforce:
   decomposed back to parts; a rejected transition persists nothing.
 - **Ports speak records, never domain objects** — `SlotDirectory` and
   `BookingRepository` carry strings and `BookingParts` only.
-- **The LLM wire lives entirely in the adapter.** `handlers.py` owns the tool
+- **The handler translates; the host routes.** `handlers.py` owns the tool
   names, the JSON schemas (the choose-slot schema embeds the *current* offered
-  slots as an enum, rebuilt from every response), the raw-argument parsing,
-  and the tool→use-case dispatch. The context below it never hears the word
-  "tool".
+  slots as an enum, rebuilt from every response), and the raw-argument
+  parsing — one endpoint method per tool, exactly as an HTTP handler carries
+  one method per route. The name→endpoint table lives in `srv/voice/router.py`,
+  because routing is the host's job in every other srv. The context below the
+  handler never hears the word "tool".
 - **The conflict choreography is edge behavior.** A confirm that fails
   because the slot was taken makes the adapter call the `reoffer` use case and
   re-raise with the fresh slots in the message — the model sees what is now
@@ -91,10 +96,23 @@ the original design genuinely collided:
   generic wire-record kind) carries the declaration as data (name +
   description + parameters, `schema()` renders the raw dict the host
   mounts), `ToolTurn.tools` speaks `Tool` records instead of loose dicts,
-  and the handler owns ONE binding table (name → description +
-  schema-builder + invoke) from which both `dispatch` and the offered
-  schemas derive. Unknown-name drift is structurally gone; a new tool is
-  one table entry plus its `TOOLS_FOR_STEP` row.
+  and the handler owns the schema declarations (name → description +
+  schema-builder) the model sees.
+
+  Chris then named the structural consequence (2026-08-08): if the tool call
+  really is a handler, routing belongs where every other srv keeps it. It
+  moved. `dispatch` is gone from the handler and from `ToolSurface`; the
+  handler exposes one endpoint method per tool (`provide_name`,
+  `choose_slot`, `confirm`, each a `voicewire.ToolEndpoint`), and
+  `srv/voice/router.py` holds the `name → endpoint` table and the lookup —
+  the exact shape `srv/http/host.py` uses when it names each handler method
+  in a `Route`. Two things fell out of that: the table entry (`Route`) is a
+  wire record, because it is a value the handler authored and the host
+  mounts, and it therefore lives in the wire module rather than in `srv` —
+  which is *why* this router is sigcheck-clean while python-app's HTTP
+  router still carries six ratchet findings for its undeclared
+  `Route`/`Match` dataclasses. A new tool is now one endpoint method, one
+  declaration entry, and one route.
 
 ## The host/handler split, answered in code — and then enacted
 
@@ -131,7 +149,7 @@ typed assertion in the handler tests is a plain assignment.
 ```sh
 PYTHONPATH=examples/spike-shells:tesser-py python3 -m sigcheck examples/spike-llmport
 cd examples/spike-llmport
-MYPYPATH=.:../../tesser-py mypy --strict scheduling voicewire.py tests
+MYPYPATH=.:../../tesser-py mypy --strict scheduling voicewire.py srv/voice/router.py tests
 pytest -q
 ```
 

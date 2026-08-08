@@ -24,38 +24,25 @@ class LlmToolHandler(ts.Handler):
     def __init__(self, scheduling_client: client.SchedulingClient, booking_id: str) -> None:
         self._client = scheduling_client
         self._booking_id = booking_id
-        self._tools: dict[
+        self._declarations: dict[
             str,
-            tuple[
-                str,
-                Callable[[client.BookingStateResponse], dict[str, object]],
-                Callable[[Mapping[str, object]], client.BookingStateResponse],
-            ],
+            tuple[str, Callable[[client.BookingStateResponse], dict[str, object]]],
         ] = {
             PROVIDE_NAME: (
                 "Record the caller's full name.",
                 lambda _state: _params({"name": {"type": "string"}}, ("name",)),
-                self._provide_name,
             ),
             CHOOSE_SLOT: (
                 "Record the slot the caller chose.",
                 lambda state: _params(
                     {"slot": {"type": "string", "enum": list(state.offered_slots)}}, ("slot",)
                 ),
-                self._choose_slot,
             ),
             CONFIRM_BOOKING: (
                 "Book the chosen slot after the caller confirms.",
                 lambda _state: _params({}, ()),
-                self._confirm,
             ),
         }
-
-    def begin(self) -> voicewire.ToolTurn:
-        return self._turn(self._client.begin(client.BeginBookingRequest(booking_id=self._booking_id)))
-
-    def status(self) -> voicewire.ToolTurn:
-        return self._turn(self._client.status(client.StatusRequest(booking_id=self._booking_id)))
 
     def instructions(self) -> str:
         return (
@@ -63,26 +50,34 @@ class LlmToolHandler(ts.Handler):
             " Use the tools to record what they say; never invent slots."
         )
 
-    def dispatch(self, tool: str, raw_arguments: Mapping[str, object]) -> voicewire.ToolTurn:
-        if tool not in self._tools:
-            raise ValueError(f"unknown tool {tool!r}")
-        _, _, invoke = self._tools[tool]
-        return self._turn(invoke(raw_arguments))
+    def begin(self) -> voicewire.ToolTurn:
+        return self._turn(self._client.begin(client.BeginBookingRequest(booking_id=self._booking_id)))
 
-    def _provide_name(self, raw: Mapping[str, object]) -> client.BookingStateResponse:
-        return self._client.provide_name(
-            client.ProvideNameRequest(booking_id=self._booking_id, name=_text(raw, "name"))
+    def status(self) -> voicewire.ToolTurn:
+        return self._turn(self._client.status(client.StatusRequest(booking_id=self._booking_id)))
+
+    def provide_name(self, raw_arguments: Mapping[str, object], /) -> voicewire.ToolTurn:
+        return self._turn(
+            self._client.provide_name(
+                client.ProvideNameRequest(
+                    booking_id=self._booking_id, name=_text(raw_arguments, "name")
+                )
+            )
         )
 
-    def _choose_slot(self, raw: Mapping[str, object]) -> client.BookingStateResponse:
-        return self._client.choose_slot(
-            client.ChooseSlotRequest(booking_id=self._booking_id, slot=_text(raw, "slot"))
+    def choose_slot(self, raw_arguments: Mapping[str, object], /) -> voicewire.ToolTurn:
+        return self._turn(
+            self._client.choose_slot(
+                client.ChooseSlotRequest(
+                    booking_id=self._booking_id, slot=_text(raw_arguments, "slot")
+                )
+            )
         )
 
-    def _confirm(self, _raw: Mapping[str, object]) -> client.BookingStateResponse:
+    def confirm(self, _raw_arguments: Mapping[str, object], /) -> voicewire.ToolTurn:
         try:
-            return self._client.confirm(
-                client.ConfirmBookingRequest(booking_id=self._booking_id)
+            return self._turn(
+                self._client.confirm(client.ConfirmBookingRequest(booking_id=self._booking_id))
             )
         except ValueError as err:
             state = self._client.status(client.StatusRequest(booking_id=self._booking_id))
@@ -104,9 +99,9 @@ class LlmToolHandler(ts.Handler):
         )
 
     def _tool(self, name: str, state: client.BookingStateResponse) -> voicewire.Tool:
-        if name not in self._tools:
+        if name not in self._declarations:
             raise ValueError(f"unknown tool {name!r}")
-        description, parameters, _ = self._tools[name]
+        description, parameters = self._declarations[name]
         return voicewire.Tool(name=name, description=description, parameters=parameters(state))
 
 
