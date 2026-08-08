@@ -60,19 +60,28 @@ context's own config lives in its `wiring`, never on the public interface
 coordinate would land in).
 
 **The host routes; the handler transforms.** `srv/http/host.py` holds the whole
-URL surface in one route table and does exactly four things per request: match
+URL surface in one route table and does exactly five things per request: match
 `(method, path)`, read the declared body **bytes** off the socket into an
-`HttpRequest`, call the endpoint, write back the `Response` bytes and headers.
-It never parses or serializes a body — `req.body` and `Response.body` are raw
-`bytes`, and the handler decodes (`decode_body(req.body)`) and encodes
-(`json_response(...)`), owning its `Content-Type`. That is why the host is
+`HttpRequest`, call the endpoint, map any escaping rejection or domain error to
+a problem response (`respond` — the host owns error policy, so handler bodies
+stay three jobs: map request, invoke the service, map response), and write back
+the `HttpResponse` bytes and headers.
+It never parses or serializes a body — `req.body` and `HttpResponse.body` are raw
+`bytes`, and the handler decodes (`req.json_body()`) and encodes
+(`HttpResponse.json(...)`), owning its `Content-Type`. That is why the host is
 content-type-agnostic: a `.png` in or out never touches it. Framing is the
-host's call from the headers — a body over the cap is a 413, a
+host's call from the headers — `buffered_length` and the size cap live in
+`srv/http/host.py`, not on the record, because how many bytes to trust off the
+socket is host policy: a body over the cap is a 413, a
 `Transfer-Encoding: chunked` body a 411 (streaming is a documented boundary,
-not built). Every endpoint has the same `(HttpRequest) -> Response` signature,
+not built). Every endpoint has the same `(HttpRequest) -> HttpResponse` signature,
 so routing is a table rather than a branch per case, and no field name appears
 anywhere in the host. URL knowledge lives in `srv/http/router.py` alone; the
-wire vocabulary both sides share lives in `httpwire.py`, which neither owns —
+protocol both sides abide by lives in `protocol/http.py`, app-owned — the
+handlers define it, the hosts conform to it: the records
+(`HttpRequest`/`HttpResponse`, every constructor field stated, no defaults),
+the readers, and the protocol's own rejection words (`BadRequest` and kin,
+`ts.Rejection` kinds) that the host maps to statuses —
 handlers never import from `srv/`, so a context stays constructible with no host
 in the process. The DTO names mirror FastAPI/Starlette (`path_params`,
 `query_params`, `status_code`) stripped to what a hand-written host needs.
@@ -108,7 +117,7 @@ traceback.
 pip install -r requirements-dev.txt
 ruff check .
 PYTHONPATH=. lint-imports
-MYPYPATH=.:../../tesser-py mypy --strict errors.py lifecycle.py serialization.py httpwire.py cliwire.py campaign linkpolicy reports bootstrap srv tests conftest.py
+MYPYPATH=.:../../tesser-py mypy --strict errors.py lifecycle.py serialization.py protocol campaign linkpolicy reports bootstrap srv tests conftest.py
 pytest -q
 ```
 

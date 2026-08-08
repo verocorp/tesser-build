@@ -114,7 +114,7 @@ example doesn't ship (streaming via a `stream()` body, auth via a header,
 content negotiation via `Accept`) instead of being boxed in; collapsing the body
 back to a decoded `dict` for convenience is the regression that forecloses them.
 The shape is locked against that drift by
-`examples/python-app/tests/test_httpwire.py` (the request/response fidelity
+`examples/python-app/tests/test_http_protocol.py` (the request/response fidelity
 tests). Construction mechanics: `python.md#inbound-handlers-and-hosts`; verified impl:
 `examples/python-app/campaign/adapters/handlers/http.py` (full case) and
 `examples/python-app/reports/adapters/handlers/http.py` (minimal case: one
@@ -135,7 +135,7 @@ read endpoint over a cross-context read model).
    `srv/cli` host that routes a command name to it, prints, and exits. The
    `CliRequest` (positional `args`, and stdin/options if ever needed) and
    `CliResponse` (`exit_code`, `stdout`, `stderr`) are the CLI's request/response
-   DTOs; `cliwire.py` is their shared vocabulary, the analog of `httpwire.py`.
+   DTOs; `protocol/cli.py` is their shared vocabulary, the analog of `protocol/http.py`.
    The one CLI-specific piece is the error mapper: the same closed domain `Kind`
    set maps to an **exit code** (`errors.exit_code_for`) exactly as HTTP maps it
    to a status (`status_for`) — one taxonomy, two total edge mappers. It obeys
@@ -144,15 +144,16 @@ read endpoint over a cross-context read model).
    errors as a problem object (`type` + `detail`, RFC 9457-shaped) with the
    domain error's open `Code` as the type — decided once at the `respond`
    path for the whole mechanism.
-4. **Where does the shared wire vocabulary live?** The request/response DTOs,
-   the problem renderer, and the `respond` error table describe the
+4. **Where does the shared protocol vocabulary live?** The request/response
+   DTOs, the problem renderer, and the rejection words describe the
    *mechanism*, not any one context — so once a second context serves the same
-   mechanism they belong in one app-level module (verified impl:
-   `examples/python-app/httpwire.py`). Leaving them in the first context's
+   mechanism they belong in one app-level protocol module (verified impl:
+   `examples/python-app/protocol/http.py`). Leaving them in the first context's
    handler forces its peers to import a sibling's adapter internals, which is
    a public-interface violation dressed up as reuse. That module is the
-   **contract between the host and every handler**, so both sides import it and
-   neither owns it — which is also what keeps the dependency straight: a
+   **protocol the app owns**: the handlers define its content, the hosts
+   conform to it, and both sides import it — which is also what keeps the
+   dependency straight: a
    handler must never import from `srv/`, because a context has to be
    constructible and testable with no host in the process.
 5. **Does the route table belong to the host or the context?** The host. A

@@ -19,9 +19,11 @@ TESSER_BASE_BLOCKS: Final[dict[tuple[str, str], str]] = {
     ("tesser.adapters", "Handler"): "handler",
     ("tesser.context", "Wiring"): "wiring",
     ("tesser.srv", "Host"): "host",
-    ("tesser.srv", "Port"): "wire_port",
-    ("tesser.srv", "Request"): "wire_request",
-    ("tesser.srv", "Response"): "wire_response",
+    ("tesser.srv", "Port"): "protocol_port",
+    ("tesser.srv", "Record"): "protocol_record",
+    ("tesser.srv", "Rejection"): "protocol_rejection",
+    ("tesser.srv", "Request"): "protocol_request",
+    ("tesser.srv", "Response"): "protocol_response",
 }
 
 TESSER_DECORATORS: Final[dict[tuple[str, str], str]] = {
@@ -77,18 +79,20 @@ KIND_NAME: Final[dict[str, str]] = {
     "handler": "an inbound handler",
     "wiring": "a wiring assembly",
     "host": "a host",
-    "wire_port": "a wire port",
-    "wire_request": "a wire request record",
-    "wire_response": "a wire response record",
+    "protocol_port": "a protocol port",
+    "protocol_record": "a protocol record",
+    "protocol_rejection": "a protocol rejection",
+    "protocol_request": "a protocol request record",
+    "protocol_response": "a protocol response record",
 }
 
 SRV_KINDS: Final[frozenset[str]] = frozenset(
     block for (package, _), block in TESSER_BASE_BLOCKS.items() if package == "tesser.srv"
 )
 
-WIRE_KINDS: Final[frozenset[str]] = SRV_KINDS - frozenset({"host"})
+PROTOCOL_KINDS: Final[frozenset[str]] = SRV_KINDS - frozenset({"host"})
 
-WIRE_SUFFIX: Final[str] = "wire"
+PROTOCOL_PACKAGE: Final[str] = "protocol"
 
 ROLE_TESSER_PACKAGE: Final[dict[str, str]] = {
     "domain": "tesser.domain",
@@ -329,8 +333,10 @@ class Codebase(ts.AggregateRoot):
             return body + self._app_import_violations(module, parts[0], contexts, blocks)
         if parts[0] == "tests":
             return self._tests_package_violations(module)
-        if len(parts) == 1 and not module.is_package() and basename.endswith(WIRE_SUFFIX) and parts[0] not in contexts:
-            return self._wire_module_violations(module, blocks, contexts)
+        if parts[0] == PROTOCOL_PACKAGE:
+            if module.is_package():
+                return self._protocol_init_violations(module)
+            return self._protocol_module_violations(module, blocks, contexts)
         if parts[0] not in contexts:
             return self._homeless_violations(module)
         if len(parts) == 1:
@@ -356,13 +362,21 @@ class Codebase(ts.AggregateRoot):
             for stmt in module.body()
         )
 
+    def _protocol_init_violations(self, module: Module) -> tuple[Violation, ...]:
+        return tuple(
+            Violation(
+                f"{module.name()} __init__ declares code at line {stmt.lineno}; a protocol __init__ is empty"
+            )
+            for stmt in module.body()
+        )
+
     def _homeless_violations(self, module: Module) -> tuple[Violation, ...]:
         if module.name() in TOOLING_MODULES:
             return ()
         return (
             Violation(
                 f"{module.name()} belongs to no governed package; "
-                "every module belongs to a context, srv, bootstrap, tests, or a wire module"
+                "every module belongs to a context, srv, bootstrap, tests, or the protocol package"
             ),
         )
 
@@ -559,7 +573,7 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _wire_module_violations(
+    def _protocol_module_violations(
         self,
         module: Module,
         blocks: dict[tuple[str, str], str],
@@ -567,21 +581,21 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         found.extend(self._stray_import_violations(module))
-        found.extend(self._shell_import_violations(module, "wire", "tesser.srv"))
+        found.extend(self._shell_import_violations(module, "protocol", "tesser.srv"))
         for target, lineno, _, _ in module.import_edges():
             head = target.split(".")[0]
             if head in contexts:
                 found.append(
                     Violation(
                         f"{module.name()}:{lineno} imports {target}; "
-                        "a wire module is context-generic and imports no context"
+                        "a protocol module is context-generic and imports no context"
                     )
                 )
             elif head in APP_PACKAGES:
                 found.append(
                     Violation(
                         f"{module.name()}:{lineno} imports {target}; "
-                        "a wire module never imports srv or bootstrap"
+                        "a protocol module never imports srv or bootstrap"
                     )
                 )
         for stmt in module.body():
@@ -591,12 +605,12 @@ class Codebase(ts.AggregateRoot):
                 block = blocks.get((module.name(), stmt.name))
                 where = f"{module.name()}.{stmt.name}:{stmt.lineno}"
                 if block is None:
-                    found.append(Violation(f"{where} declares no ts.* base; a wire class declares its block"))
-                elif block not in WIRE_KINDS:
+                    found.append(Violation(f"{where} declares no ts.* base; a protocol class declares its block"))
+                elif block not in PROTOCOL_KINDS:
                     found.append(
                         Violation(
-                            f"{where} is {KIND_NAME[block]}; only wire ports, wire requests, "
-                            "and wire responses live in a wire module"
+                            f"{where} is {KIND_NAME[block]}; only protocol ports, protocol records, "
+                            "protocol rejections, protocol requests, and protocol responses live in a protocol module"
                         )
                     )
             elif isinstance(stmt, ast.FunctionDef):
@@ -604,7 +618,7 @@ class Codebase(ts.AggregateRoot):
                     found.append(
                         Violation(
                             f"{module.name()}.{stmt.name}:{stmt.lineno} is an undeclared module function; "
-                            "a wire function declares itself with @ts.function"
+                            "a protocol function declares itself with @ts.function"
                         )
                     )
             elif isinstance(stmt, ast.AnnAssign):
@@ -612,20 +626,20 @@ class Codebase(ts.AggregateRoot):
                     found.append(
                         Violation(
                             f"{module.name()}:{stmt.lineno} declares a module constant without Final; "
-                            "a wire constant is Final"
+                            "a protocol constant is Final"
                         )
                     )
             elif isinstance(stmt, ast.Assign):
                 found.append(
                     Violation(
                         f"{module.name()}:{stmt.lineno} declares a module constant without Final; "
-                        "a wire constant is Final"
+                        "a protocol constant is Final"
                     )
                 )
             else:
                 found.append(
                     Violation(
-                        f"{module.name()}:{stmt.lineno} has a loose module-level statement; a wire module "
+                        f"{module.name()}:{stmt.lineno} has a loose module-level statement; a protocol module "
                         "holds only imports, declared classes and functions, and Final constants"
                     )
                 )
@@ -650,7 +664,7 @@ class Codebase(ts.AggregateRoot):
                     found.append(
                         Violation(
                             f"{where} is {KIND_NAME[block]}; "
-                            "a host lives in srv and a wire kind in a wire module, never a context"
+                            "a host lives in srv and a protocol kind in a protocol module, never a context"
                         )
                     )
                 elif KIND_ROLE[block] != role:
@@ -905,12 +919,12 @@ class Codebase(ts.AggregateRoot):
                         Violation(f"{where} is an undeclared class; a test double declares itself with @ts.fake")
                     )
                 elif not any(
-                    blocks.get(key) in ("port", "client", "wire_port")
+                    blocks.get(key) in ("port", "client", "protocol_port")
                     for key in self._base_keys(module, stmt)
                 ):
                     found.append(
                         Violation(
-                            f"{where} implements no application port, wire port, or client; "
+                            f"{where} implements no application port, protocol port, or client; "
                             "a fake implements the port or client it doubles"
                         )
                     )

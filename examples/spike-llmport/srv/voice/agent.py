@@ -6,41 +6,47 @@ from collections.abc import Awaitable, Callable
 import tesser.srv as ts
 from livekit.agents import Agent, ToolError, function_tool
 
-import voicewire
+import srv.voice.router as router
+import protocol.voice as voice
 
 
 class ToolAgent(Agent, ts.Host):
 
     def __init__(
         self,
-        handler: voicewire.ToolSurface,
+        surface: voice.ToolSurface,
+        routes: tuple[voice.Route, ...],
         halt: Callable[[], Awaitable[None]],
     ) -> None:
-        super().__init__(instructions=handler.instructions())
-        self._handler = handler
+        super().__init__(instructions=surface.instructions())
+        self._surface = surface
+        self._routes = routes
         self._halt = halt
         self._lock = asyncio.Lock()
 
     async def on_enter(self) -> None:
         try:
-            await self._rebind(self._handler.begin())
+            await self._rebind(self._surface.begin())
         except Exception:
             await self._halt()
             raise
 
-    async def _rebind(self, turn: voicewire.ToolTurn) -> None:
+    async def _rebind(self, turn: voice.ToolTurn) -> None:
         await self.update_tools(
-            [function_tool(self._shim(schema), raw_schema=schema) for schema in turn.tools]
+            [function_tool(self._shim(tool.name), raw_schema=tool.schema()) for tool in turn.tools]
         )
 
-    def _shim(self, schema: dict[str, object]) -> Callable[..., Awaitable[str]]:
+    def _shim(self, name: str) -> Callable[..., Awaitable[str]]:
         async def call(raw_arguments: dict[str, object]) -> str:
             async with self._lock:
+                route = router.match(self._routes, name)
+                if route is None:
+                    raise ToolError(f"unknown tool {name!r}")
                 try:
-                    turn = self._handler.dispatch(str(schema["name"]), raw_arguments)
-                except ValueError as err:
+                    turn = route.endpoint(voice.ToolCall(name, raw_arguments))
+                except (voice.BadToolCall, ValueError) as err:
                     try:
-                        await self._rebind(self._handler.status())
+                        await self._rebind(self._surface.status())
                     except Exception:
                         await self._halt()
                         raise

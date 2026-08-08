@@ -22,7 +22,8 @@ layout; assumptions parameterized, not copied):
   dirs) are outside the contract and skipped, as are hidden dirs,
   ``__pycache__``, and the analyzer's standard skip set.
 * The app-level set defaults to the template's mandatory top dirs
-  (``bootstrap``, ``srv``, ``tests``); a consumer extends it explicitly
+  (``bootstrap``, ``protocol``, ``srv``, ``tests``); a consumer extends it
+  explicitly
   (CLI ``--app-level``) — an extension is a declared fact, not an inference.
 * A declared exclusion (CLI ``--exclude``) removes a root-level package from
   classification *and* from the checked file set: for scratch/demo packages
@@ -45,7 +46,7 @@ from tessercheck.run import SKIP_DIRS
 # The template's mandatory app-level top dirs (skills/tesser-build/map.md
 # "App-level, not per-context"), plus the conventional tests dir. Everything
 # else at the app root must be a Client-bearing context.
-APP_LEVEL_PACKAGES: frozenset[str] = frozenset({"bootstrap", "srv", "tests"})
+APP_LEVEL_PACKAGES: frozenset[str] = frozenset({"bootstrap", "protocol", "srv", "tests"})
 
 
 @dataclass(frozen=True)

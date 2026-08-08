@@ -6,7 +6,7 @@ import pathlib
 from bootstrap.config import Config
 from campaign.application.parts import CampaignParts
 from campaign.wiring.config import Config as CampaignConfig
-from httpwire import HttpRequest, Response, json_response
+from protocol.http import HttpRequest, HttpResponse
 from linkpolicy.wiring.config import Config as LinkPolicyConfig
 from reports.wiring.config import Config as ReportsConfig
 from srv.http.router import Route
@@ -89,12 +89,12 @@ class SpyApp:
         self.closed += 1
 
 
-def route_ok(req: HttpRequest) -> Response:
-    return json_response(200, {"seen": dict(req.path_params)})
+def route_ok(req: HttpRequest) -> HttpResponse:
+    return HttpResponse.json(200, {"seen": dict(req.path_params)})
 
 
-def route_other(req: HttpRequest) -> Response:
-    return json_response(200, {})
+def route_other(req: HttpRequest) -> HttpResponse:
+    return HttpResponse.json(200, {})
 
 
 ROUTES = (

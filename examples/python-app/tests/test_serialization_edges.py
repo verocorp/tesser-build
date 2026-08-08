@@ -15,8 +15,10 @@ from campaign.domain.campaign import Campaign, CampaignSpec
 from campaign.domain.money import MoneySpec
 from campaign.domain.short_link import ShortLinkSpec
 from errors import DomainError
-from httpwire import HttpRequest, decode_body
+from protocol.http import HttpRequest
 from tests.support import parts_tuple
+
+
 
 
 @ts.helper  # tesser-category: spec
@@ -49,9 +51,9 @@ def test_wire_golden_locks_the_campaign_payload() -> None:
     repo = InMemoryCampaignRepository()
     repo.save(campaign_parts(Campaign(campaign_spec())))
     handler = Handler(CampaignService(repo, _AllowAll()))
-    resp = handler.get_campaign(HttpRequest(path_params={"campaign_id": "0123456789abcdef"}))
+    resp = handler.get_campaign(HttpRequest("GET", "/", {"campaign_id": "0123456789abcdef"}, {}, {}, b""))
     assert resp.status_code == 200
-    assert decode_body(resp.body) == {
+    assert resp.json_body() == {
         "campaign_id": "0123456789abcdef",
         "budget": {"amount": "100.00", "currency": "USD"},
         "links": [{"slug": "promo", "target_url": "https://ok.example/x", "active": True}],
@@ -62,7 +64,7 @@ def test_wire_golden_locks_resolve_as_a_real_redirect() -> None:
     repo = InMemoryCampaignRepository()
     repo.save(campaign_parts(Campaign(campaign_spec())))
     handler = Handler(CampaignService(repo, _AllowAll()))
-    resp = handler.resolve(HttpRequest(path_params={"slug": "promo"}))
+    resp = handler.resolve(HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
     assert resp.status_code == 302
     assert resp.body == b""
     assert resp.headers == {"Location": "https://ok.example/x"}
