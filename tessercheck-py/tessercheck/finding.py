@@ -137,6 +137,16 @@ CHECKS: tuple[CheckMeta, ...] = (
         "(skills/tesser-build/serialization.md rule 3)",
     ),
     CheckMeta(
+        "TB019",
+        "domain-return",
+        "a domain object's public method returns a domain object: a subclass of "
+        "ts.ValueObject / ts.Entity / ts.AggregateRoot may not hand back a "
+        "primitive, an enum, a foreign value (Decimal/datetime) or a DTO. Three "
+        "licensed exits — the protocol dunders whose return type the language "
+        "fixes, a leaf's canonical conversion exit (TB015/TB018 own it), and a "
+        "'-> None' transition",
+    ),
+    CheckMeta(
         "TB020",
         "no-comments",
         "the comments norm v0: no code comments and no docstrings — machine "

@@ -219,6 +219,10 @@ def check_typed(
             # primitives leave (TB015) and, for value objects, what it holds
             # inside (TB016).
             findings.extend(_check_public_decompiler(stmt, registry, path, suppressed))
+            # TB019 governs what the declared stereotype may hand back — the
+            # same rule for all three bases, so it sits outside the
+            # value-object / identity-object split below.
+            findings.extend(_check_domain_return(stmt, info, registry, path, suppressed))
         if info.stereotype is Stereotype.VALUE_OBJECT:
             findings.extend(_check_vo_exposure(stmt, path, suppressed))
             findings.extend(_check_compound_raw_primitive(stmt, path, suppressed))
@@ -973,3 +977,132 @@ def _bare_self_field_returned(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> str
         ):
             return self_attr(first.value)
     return None
+
+
+# The dunders whose return type the LANGUAGE fixes, not the author. No amount of
+# domain modelling changes what __eq__ may return, so the total-return rule
+# cannot reach them; they are licensed, not excused. The conversion dunders are
+# licensed for a different reason — they ARE the canonical exit, and TB015/TB018
+# already govern which one a type may define and what it must delegate to.
+_PROTOCOL_EXITS: frozenset[str] = frozenset(
+    {
+        "__eq__", "__ne__", "__hash__", "__bool__", "__len__", "__contains__",
+        "__lt__", "__le__", "__gt__", "__ge__", "__repr__", "__format__",
+        "__str__", "__int__", "__float__", "__bytes__", "__index__",
+        "__iter__", "__next__", "__getitem__", "__init__", "__post_init__",
+        "__setattr__", "__delattr__", "__init_subclass__", "__class_getitem__",
+    }
+)
+
+# ``Self`` and ``Never``/``NoReturn`` name the class itself or no value at all —
+# neither is a foreign type escaping the domain.
+_SELF_NAMES: frozenset[str] = frozenset({"Self", "Never", "NoReturn"})
+
+# Container and wrapper names that carry a payload rather than being one. They
+# are stripped before judging, so the rule reads the cargo and not the crate.
+_COLLECTION_WRAPPERS: frozenset[str] = frozenset(
+    {
+        "tuple", "Tuple", "list", "List", "set", "Set", "frozenset", "FrozenSet",
+        "dict", "Dict", "Mapping", "MutableMapping", "Sequence", "MutableSequence",
+        "Iterable", "Iterator", "Collection", "Optional", "Union", "Final",
+    }
+)
+
+
+def _returned_payload_names(ann: ast.expr) -> frozenset[str]:
+    """The type names a return annotation actually PRODUCES.
+
+    Containers are transparent: ``tuple[Money, ...]`` produces ``Money``, and
+    ``Money | None`` produces ``Money``. ``returned_only`` drops ``type[X]`` and
+    ``Callable[..., X]`` contents, which are mentioned without being produced.
+    """
+    return frozenset(
+        n
+        for n in _annotation_names(ann, returned_only=True)
+        if n not in _COLLECTION_WRAPPERS and n != "None"
+    )
+
+
+def _is_domain_name(name: str, own: str, registry: dict[str, ClassInfo]) -> bool:
+    """Does ``name`` denote a domain object — a value object or identity object?
+
+    The class's own name and ``Self`` count: a transition returning a new
+    instance of itself has not left the domain.
+    """
+    if name in _SELF_NAMES or name == own:
+        return True
+    info = registry.get(name)
+    return info is not None and info.stereotype in (
+        Stereotype.VALUE_OBJECT,
+        Stereotype.IDENTITY_OBJECT,
+    )
+
+
+def _check_domain_return(
+    node: ast.ClassDef,
+    info: ClassInfo,
+    registry: dict[str, ClassInfo],
+    path: str,
+    suppressed: "_Suppressed",
+) -> list[Finding]:
+    """TB019 — a domain object's public method returns a domain object.
+
+    Keyed on the DECLARED stereotype: a class that subclasses ts.ValueObject,
+    ts.Entity or ts.AggregateRoot has stated what it is, and this is the rule on
+    what its behavior may hand back. A primitive, an enum, a foreign value
+    (Decimal, datetime) or a DTO crossing back out of a method is the same
+    representation leak a public field would be — it just costs a call.
+
+    Three licensed exits, each because the rule provably cannot reach it:
+
+    * **protocol** — a dunder whose return type the language fixes
+      (:data:`_PROTOCOL_EXITS`). ``__eq__`` returning a ``Truth`` value object
+      would need ``Truth.__eq__`` to return a ``Truth``, and never bottoms out;
+      ``if`` consumes a ``bool`` at the call site regardless.
+    * **canonical exit** — the leaf's single conversion dunder, the one
+      primitive door serialization.md rule 3 REQUIRES. Governed by TB015 (which
+      dunder a type may define) and TB018 (what it delegates to), not here.
+    * **command** — a public method annotated ``-> None``. A transition has no
+      value to promote; whether it should return the new state instead is the
+      fact-vs-lifecycle decision entities.md leaves to the domain.
+
+    An unannotated method is not judged: the gated trees run mypy --strict, so
+    the annotation is already mandatory there, and a second totality rule here
+    would only duplicate that gate.
+    """
+    findings: list[Finding] = []
+    kind = (
+        "value object"
+        if info.stereotype is Stereotype.VALUE_OBJECT
+        else "domain object"
+    )
+
+    for member in node.body:
+        if not isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if member.name.startswith("_") or member.name in _PROTOCOL_EXITS:
+            continue
+        if member.returns is None or _annotation_base(member.returns) == "None":
+            continue
+
+        payload = _returned_payload_names(member.returns)
+        offenders = sorted(
+            n for n in payload if not _is_domain_name(n, node.name, registry)
+        )
+        if not offenders or suppressed(member.lineno):
+            continue
+        named = ", ".join(repr(n) for n in offenders)
+        findings.append(
+            Finding(
+                path,
+                member.lineno,
+                member.col_offset + 1,
+                "TB019",
+                f"{kind} {node.name!r} method {member.name!r} returns {named}, "
+                "which is not a domain object; a domain object's behavior hands "
+                "back domain objects. The licensed exits are the protocol "
+                "dunders, a leaf's canonical conversion exit, and a '-> None' "
+                "transition — everything else names a type the domain owns",
+            )
+        )
+    return findings
