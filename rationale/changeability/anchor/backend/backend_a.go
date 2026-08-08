@@ -13,9 +13,9 @@ import (
 )
 
 // OrderRowA is backend A's persistence row — a BACKEND-SPECIFIC type. A
-// dependent that reaches through to this type (the coupled arm) is bound to
-// backend A and will not compile after the migration to backend B, which has no
-// OrderRowA. A dependent that stays on orders.Client never sees it.
+// dependent that reaches through to this type (the coupled contender) is bound
+// to backend A and will not compile after the migration to backend B, which has
+// no OrderRowA. A dependent that stays on orders.Client never sees it.
 type OrderRowA struct {
 	PK    string // backend-A specific: partition key
 	Cents int64
@@ -37,6 +37,7 @@ func (r *repoA) Get(_ context.Context, id string) (ordersapp.Order, error) {
 	return ordersapp.NewOrder(ordersapp.OrderSpec{ID: row.PK, Total: row.Cents})
 }
 
-// FetchRawA exposes the backend-A row directly. It is the leak the coupled arm
-// reaches for; it exists only in backend A, so a caller of it breaks on migration.
+// FetchRawA exposes the backend-A row directly. It is the leak the coupled
+// contender reaches for; it exists only in backend A, so a caller of it breaks
+// on migration.
 func FetchRawA(id string) OrderRowA { return OrderRowA{PK: id} }

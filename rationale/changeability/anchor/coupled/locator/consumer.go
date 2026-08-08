@@ -1,6 +1,6 @@
-// Package locator is a realistic coupled arm for skills/tesser-build/public-interface.md
-// (the public-interface rule): service locators can hide wiring while still
-// returning backend-specific types.
+// Package locator is a realistic coupled contender for the public-interface
+// rule (skills/tesser-build/public-interface.md): service locators can hide
+// wiring while still returning backend-specific types.
 //
 // Authored by the Codex adversary against the frozen SCORING.md; see
 // ../../adversary_provenance.md. It fails to build after `-tags swap` because its

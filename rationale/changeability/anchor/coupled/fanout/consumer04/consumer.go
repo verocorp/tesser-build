@@ -2,8 +2,8 @@
 
 // Package consumer04 reaches through to backend A's raw row — the coupling the
 // backend A->B migration forces to change. One of N identical dependents; the
-// coupled arm's forced-edit count is N. Fails to build under -tags swap because
-// its own source names backend.OrderRowA / backend.FetchRawA.
+// coupled contender's forced-edit count is N. Fails to build under -tags swap
+// because its own source names backend.OrderRowA / backend.FetchRawA.
 package consumer04
 
 import (

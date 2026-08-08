@@ -596,7 +596,7 @@ def test_tb030_suppression_covers_a_formatter_wrapped_import() -> None:
 
 def test_tb030_reports_one_finding_per_violation() -> None:
     # An import plus N uses of the imported name is ONE violation with one
-    # place to fix. There is no bare-Name arm, so the import is reported once
+    # place to fix. There is no bare-Name branch, so the import is reported once
     # and a single suppression marker can clear it — rather than one finding
     # per reference, each needing its own marker.
     src = (
@@ -1623,7 +1623,7 @@ def test_tb032_comment_read_fails_closed_when_the_source_will_not_tokenize() -> 
 def test_tb032_flags_a_helper_with_no_return_annotation() -> None:
     # `node.returns is None` is the first gate in _returns_a_spec. An
     # unannotated helper cannot be shown to build a spec, so it must report
-    # rather than slip through the structural arm on an absent signal.
+    # rather than slip through the structural branch on an absent signal.
     src = (
         "def _helper(x=1):\n"
         "    return x\n"
@@ -1636,7 +1636,7 @@ def test_tb032_flags_a_helper_with_no_return_annotation() -> None:
 def test_tb032_resolves_a_dotted_return_annotation() -> None:
     # _annotation_names collects Attribute.attr as well as Name.id, so a helper
     # annotated `-> wire.LinkSpec` classifies exactly like `-> LinkSpec`. Without
-    # the Attribute arm, every helper in a module that imports its spec by
+    # the Attribute branch, every helper in a module that imports its spec by
     # module name would need a marker to say what the code already says.
     src = _SPEC_DEF + (
         "import wire\n"
@@ -2043,7 +2043,7 @@ def test_tb032_judges_a_unittest_testcase_whatever_it_is_named(declaration: str)
 
 
 def test_tb032_needs_a_collectible_test_not_merely_a_collectible_class() -> None:
-    # The class arm requires BOTH halves: a class pytest would collect AND a
+    # The class branch requires BOTH halves: a class pytest would collect AND a
     # test_* method on it. A Test*-named class holding only helpers yields no
     # tests, so the module is not a test module — the same known hole as a
     # helper-only file, reached by a different route. Treating the class name

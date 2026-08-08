@@ -1,9 +1,9 @@
 # Adversary provenance — decision 3 (no outward representation)
 
 Per `../SCORING.md` §Reproducibility, the adversary run is a one-time design
-exercise whose **arms are committed** and whose **provenance is committed** so that
+exercise whose **contenders are committed** and whose **provenance is committed** so that
 "the adversary tried hard" is verifiable, not asserted. The human role is curating
-**realism** of the arms — not judging the winner; the metric judges.
+**realism** of the contenders — not judging the winner; the metric judges.
 
 ## Provenance history — two passes (the first improved the benchmark)
 
@@ -32,11 +32,11 @@ exercise whose **arms are committed** and whose **provenance is committed** so t
 (`BurnSeconds` → `DurationMillis`). Decoupled = operates on the domain object's
 value objects; coupled = reaches the domain-emitted DTO's field.
 
-## The committed arms + verified scoring
+## The committed contenders + verified scoring
 
 Per-package `go build` (SCORING.md's unit), default vs `-tags repv2`:
 
-| Arm | Pattern | pre-migration | `-tags repv2` | forced-edits |
+| Contender | Pattern | pre-migration | `-tags repv2` | forced-edits |
 |---|---|---|---|---|
 | `coupled/webhookpayload` | outbound adapter builds its own struct from `emit.Maneuver.ToResponse().BurnSeconds` | builds | **fails** | 1 (→ N fanned out) |
 | `coupled/burnsort` | reporting/UI sorts `[]emit.Maneuver` by `ToResponse().BurnSeconds` | builds | **fails** | 1 (→ N) |
@@ -56,14 +56,14 @@ sanctioned constructs.
 
 ## Ceremony comparison (Codex)
 
-- Decoupled arm (direct domain VO use): a dependent must know `domain.Maneuver`,
+- Decoupled contender (direct domain VO use): a dependent must know `domain.Maneuver`,
   `Maneuver.Burn`, `Burn.Seconds` — 3 symbols; concepts = aggregate + value object +
   VO-owns-conversion; setup = the caller already holds a `domain.Maneuver`.
 - `redteam/burnquery`: a scalar-read dependent must know `burnquery.BurnSeconds` — 1
   symbol; concepts = query facade (+ the hidden application client); setup = 0 for
   the simple call.
 
-On the ceremony metric, the facade beats the decoupled arm **for narrow scalar-read
+On the ceremony metric, the facade beats the decoupled contender **for narrow scalar-read
 consumers** — but note the comparison is not like-for-like: the facade also does the
 fetch-from-id the decoupled consumer assumes already done (Codex's own rejected
 variant).
@@ -74,14 +74,14 @@ variant).
   banned by the type-shape rule (this was pass 1's false-tie lever; now excluded).
 - **One-line projection `func BurnSeconds(domain.Maneuver) int64`:** lower ceremony,
   but assumes the consumer already holds a domain object outside the service.
-- **`map[string]any` / reflection / JSON probing:** banned for coupled arms; weak
+- **`map[string]any` / reflection / JSON probing:** banned for coupled contenders; weak
   evidence.
 - **Generic `Measurement[T]` / interface shims:** more ceremony than the facade, or
   hide coupling rather than improve the architecture.
 
 ## Codex's verdict (verbatim conclusion)
 
-> Decision 3 earns its place against the realistic coupled arms: once the domain
+> Decision 3 earns its place against the realistic coupled contenders: once the domain
 > emits `pub.ManeuverResponse`, normal webhook/reporting/sorting code starts naming
 > `BurnSeconds`, and D3 forces N direct edits.
 >
@@ -95,7 +95,7 @@ variant).
 ## The finding → action
 
 **Decision 3 is validated** (the `coverage.md` row stands): the realistic coupled
-arms pay N under the outward-format migration, and the red-team **did not** justify
+contenders pay N under the outward-format migration, and the red-team **did not** justify
 `emit.Maneuver.ToResponse()` — it explicitly conceded D3 forces N there.
 
 The red-team's facade is the **sanctioned application-layer mapper**, orthogonal to
@@ -110,7 +110,7 @@ existing CQRS-read sanctioning (`repositories.md` read path; decision 4's
 `composition-root.md`): teach not just the rule but the alternatives, which axis each
 wins/loses, and the negative —
 - **the invariant:** the domain never emits its own DTO (`ToResponse()` on a domain
-  object) — a wire reshape then fans out to N dependents (this arm);
+  object) — a wire reshape then fans out to N dependents (this contender);
 - **the good read patterns and when:** domain-side code that already holds the
   aggregate reads its value objects; a narrow read consumer starting from an id is
   better served by a **query/projection facade** over the application service (lower

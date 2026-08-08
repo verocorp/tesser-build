@@ -15,7 +15,7 @@ Two categories are decided structurally, so conformant code needs no annotation:
 
 * a function whose return annotation names a **spec** in the whole-tree
   classifier registry (the classifier calls an inert public-field frozen
-  dataclass a ``SPEC``, which is the same shape a DTO has — so this arm covers
+  dataclass a ``SPEC``, which is the same shape a DTO has — so this branch covers
   both of the sanctioned kinds);
 * a function decorated ``@pytest.fixture``.
 
@@ -127,9 +127,9 @@ def _is_test_class(node: ast.ClassDef) -> bool:
     """A class pytest collects tests from: named ``Test*``, or a
     ``unittest.TestCase`` subclass.
 
-    The TestCase arm is not decoration. pytest collects a TestCase subclass
+    The TestCase branch is not decoration. pytest collects a TestCase subclass
     whatever it is called, so ``class CampaignCase(unittest.TestCase)`` holds
-    real tests — and without this arm the whole module's helpers go unjudged,
+    real tests — and without this branch the whole module's helpers go unjudged,
     which is a silent coverage loss in the most standard test style there is.
     """
     if node.name.startswith("Test"):

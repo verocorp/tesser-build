@@ -61,7 +61,7 @@ FOREIGN_V = "FOREIGN"
 UNKNOWN = "UNKNOWN"
 # AMBIGUOUS: the same class name means different things in different modules.
 # Reported rather than resolved -- guessing here is how the first draft of this
-# probe classified arm_enum's LinkStatus(Enum) as DOMAIN.
+# probe classified as_enum's LinkStatus(Enum) as DOMAIN.
 AMBIGUOUS = "AMBIGUOUS"
 
 
@@ -104,11 +104,12 @@ def collect_types(roots: list[Path]):
         for f in sorted(root.rglob("*.py")):
             if "test" in f.name or ".venv" in f.parts:
                 continue
-            # statearms/ holds deliberate anti-pattern fixtures. They are
-            # measured by pointing the probe AT that directory, and skipped
-            # when it is merely swept up in a corpus walk -- otherwise the
-            # corpus tally counts fixtures as findings.
-            if "statearms" in f.parts and root.name != "statearms":
+            # spike-totalreturn/state/ holds deliberate anti-pattern fixtures.
+            # They are measured by pointing the probe AT that directory, and
+            # skipped when merely swept up in a corpus walk -- otherwise the
+            # corpus tally counts fixtures as findings. Matched on the full
+            # spike path, not the bare name: "state" is a common directory.
+            if "spike-totalreturn" in f.parts and root.name != "state":
                 continue
             try:
                 tree = ast.parse(f.read_text(), filename=str(f))

@@ -158,16 +158,16 @@ file says *how*, and it is the cross-cutting layer they assume.
 - **The example trees** (`examples/`) — the norm's verified impls; they conform
   and are gated in CI.
 - **Not the toolkit's own internals** (analyzers, generator, `rationale/`
-  arms), which are outside the governed surface, same as `comments.md`.
+  contenders), which are outside the governed surface, same as `comments.md`.
 
 ## How the machine sees it
 
 - **`TB030` (no-mock-libraries)** — rule 1. Flags a mocking-library import in
   any shape (`unittest.mock`, the `mock` backport, the
   `import unittest` → `unittest.mock.patch` reach-through) and
-  `pytest.MonkeyPatch`; the import arms are **global**, because domain code has
-  no business importing a mock library either. The `monkeypatch` / `mocker`
-  **fixture-parameter** arm is narrower on purpose — it fires only inside a
+  `pytest.MonkeyPatch`; the import branches are **global**, because domain code
+  has no business importing a mock library either. The `monkeypatch` / `mocker`
+  **fixture-parameter** branch is narrower on purpose — it fires only inside a
   pytest-shaped function (`test_*` or a `@fixture` factory), since a parameter
   with that name anywhere else is an ordinary identifier.
 

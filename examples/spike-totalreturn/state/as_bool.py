@@ -1,6 +1,6 @@
-"""Arm 1: state as a bool. What examples/python-app/campaign/domain/short_link.py:34 does today.
+"""The bool contender: state as a bool. What examples/python-app/campaign/domain/short_link.py:34 does today.
 
-Each arm models the same thing -- a short link that is servable or not -- and
+Each contender models the same thing -- a short link that is servable or not -- and
 exposes the same three consumers. The test then adds a THIRD state (suspended
 for billing) and counts silent sites: call sites that still run, still pass
 their old tests, and are now wrong.

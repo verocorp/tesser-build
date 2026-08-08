@@ -1,13 +1,14 @@
-// Package inconsistent is ARM 2 of the changeability comparison: a MIXTURE of
-// bare primitives and inconsistently-built "value objects" — the realistic
-// state of a codebase where "use value objects" was adopted without a STANDARD.
-// Some concepts are left as primitives, some are wrapped, and the wrapped ones
-// are wrapped different ways by different authors.
+// Package inconsistent is the INCONSISTENT contender of the changeability
+// comparison: a MIXTURE of bare primitives and inconsistently-built "value
+// objects" — the realistic state of a codebase where "use value objects" was
+// adopted without a STANDARD. Some concepts are left as primitives, some are
+// wrapped, and the wrapped ones are wrapped different ways by different
+// authors.
 //
-// The thesis this package exists to prove: arm 2 reopens the same silent sites
-// the consistent value objects (../valueobject) close. Inconsistent VOs behave
-// like NO VOs on the change-speed axis — so the dividend is bought by the
-// standard, not by the pattern.
+// The thesis this package exists to prove: inconsistency reopens the same
+// silent sites the consistent value objects (../valueobject) close.
+// Inconsistent VOs behave like NO VOs on the change-speed axis — so the
+// dividend is bought by the standard, not by the pattern.
 //
 // Every non-conformance below is anchored to a real shape found in production
 // history (see ../../docs/design-three-contender-changeability.md).

@@ -37,8 +37,8 @@ func TestCoverageMatrix_NoSilentGaps(t *testing.T) {
 	// (Patterns like "Test*_Equality" carry an asterisk and are not matched.)
 	var src strings.Builder
 	testFiles, _ := filepath.Glob("*_test.go")
-	// Also the changeability arms' tests (a separate matrix dimension): the
-	// coverage.md "Changeability arms" row names them, so they must resolve here.
+	// Also the changeability contenders' tests (a separate matrix dimension): the
+	// coverage.md "Changeability contenders" row names them, so they must resolve here.
 	anchorTests, _ := filepath.Glob(filepath.Join("changeability", "anchor", "*_test.go"))
 	nooutwardTests, _ := filepath.Glob(filepath.Join("changeability", "nooutward", "*_test.go"))
 	armTests := append(anchorTests, nooutwardTests...)

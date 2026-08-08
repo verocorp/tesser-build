@@ -1,6 +1,6 @@
 # Real-code corroboration — the public-interface anchor
 
-The committed synthetic arms (`contrast_test.go`, `substitution_test.go`) are the
+The committed synthetic contenders (`contrast_test.go`, `substitution_test.go`) are the
 CI-reproducible proof. They could be dismissed as authored-to-win. This note
 corroborates the **migration-surface direction** on *real conforming code* — not a
 fan-out fixture — using `../../measure-ablation.sh` + `git grep -w`, the same
@@ -23,7 +23,7 @@ cross-package spread is taken with `git grep -w`, per the script's own note):
 | **public-contract type** `ShortLinkView` (a DTO the `Client` returns) | 9 | **2** (`linkcampaign` + the mapping service `campaignapp`) | 0 named directly |
 
 **Reading it.** A change to a component-**internal** type is *contained* — 0
-edits forced on the consumers of the public `Client`, exactly the decoupled arm's
+edits forced on the consumers of the public `Client`, exactly the decoupled contender's
 `O(1)`/0. A change to the **contract** spreads across the boundary to more
 packages — the cost the boundary cannot hide. The *direction* (internal contained,
 contract spreads) holds on real code.

@@ -67,9 +67,9 @@ different way each time buys nothing on the change-speed axis (see below).
 ## Where the "why" lives — read before changing the analyzers or conventions
 
 - [`rationale/`](rationale/) — the executable case. Three contenders over one
-  neutral domain (Mars Climate Orbiter navigation): `primitive/` (arm 1),
-  `inconsistent/` (arm 2 — a mixture of primitives and non-conforming VOs), and
-  `valueobject/` (arm 3). The tests **assert** the wins; don't narrate them.
+  neutral domain (Mars Climate Orbiter navigation): `primitive/`,
+  `inconsistent/` (a mixture of primitives and non-conforming VOs), and
+  `valueobject/`. The tests **assert** the wins; don't narrate them.
 - [`rationale/coverage.md`](rationale/coverage.md) — the rule ↔ demo ↔ checker
   matrix. `coverage_test.go` fails on a **silent gap** (a checker with no row, or
   a row naming a test that doesn't exist). When you add a checker or a demo,

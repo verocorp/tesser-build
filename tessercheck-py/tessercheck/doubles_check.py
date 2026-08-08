@@ -12,7 +12,7 @@ importing a mock library either):
   ``monkeypatch`` fixture parameter);
 * pytest-mock's ``mocker`` fixture parameter.
 
-There is deliberately no bare-``MonkeyPatch``-Name arm: for the import shapes
+There is deliberately no bare-``MonkeyPatch``-Name branch: for the import shapes
 above it adds no detection power, while emitting a second finding per reference
 and forcing a suppression marker onto every one of those lines.
 
@@ -20,15 +20,15 @@ and forcing a suppression marker onto every one of those lines.
 it can see in one file's AST, and these shapes get through:
 
 * an **aliased module import** — ``import unittest as u`` then ``u.mock.patch``,
-  or ``import pytest as pt`` then ``pt.MonkeyPatch``. The attribute arms match
+  or ``import pytest as pt`` then ``pt.MonkeyPatch``. The attribute branches match
   the literal module name; closing this needs an alias table built in a first
   pass.
 * **dynamic import** — ``importlib.import_module("unittest.mock")``,
   ``__import__``, ``getattr(unittest, "mock")``, ``sys.modules[...]``, or a
   star-import re-export.
 * **use-site fixture access** — ``request.getfixturevalue("monkeypatch")``
-  takes no banned parameter, so the fixture-parameter arm never sees it.
-* a **suppressed import whitelists the module** — the mock-library arms fire on
+  takes no banned parameter, so the fixture-parameter branch never sees it.
+* a **suppressed import whitelists the module** — the mock-library branches fire on
   the import, not on each use, so one marker on the import line clears every
   call site below it.
 
@@ -36,10 +36,10 @@ They are tracked rather than papered over; each is a self-service bypass by an
 author who could equally write the marker, which is why none of them blocks
 shipping the rule.
 
-Two scopes, on purpose. The **import** arms are global — domain and adapter
+Two scopes, on purpose. The **import** branches are global — domain and adapter
 code have no business importing a mock library either, and global scope keeps
 the ``bad.py`` fixture provable with ``is_test=False``. The **fixture-parameter**
-arm is the check's one identifier-name signal, so it fires only inside a
+branch is the check's one identifier-name signal, so it fires only inside a
 pytest-shaped function (``test_*`` or a ``@fixture``-decorated factory): a
 parameter named ``monkeypatch`` anywhere else is an ordinary name, and flagging
 it would redden conformant code.
@@ -193,7 +193,7 @@ def check_test_doubles(path: str, source: str, tree: ast.Module) -> list[Finding
             # `mocker`/`monkeypatch` is a fixture injection only inside a test
             # or a fixture factory; anywhere else it is an ordinary name, and
             # flagging it would redden conformant production code. The
-            # import-based arms above stay global — domain code has no business
+            # import-based branches above stay global — domain code has no business
             # importing a mock library either.
             if not _is_pytest_shaped(node):
                 continue

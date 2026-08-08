@@ -1,7 +1,7 @@
-"""Arm 2: state as an enum -- a closed set of named constants that SELECTS behavior.
+"""The enum contender: state as an enum -- a closed set of named constants that SELECTS behavior.
 
 This is the shape value-objects.md:29-30 calls "a primitive with a name," and
-the shape the maintainer ruling keeps primitive. The arm exists to measure what
+the shape the maintainer ruling keeps primitive. It exists to measure what
 that ruling costs and buys, not to advocate for it.
 """
 

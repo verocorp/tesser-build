@@ -1,13 +1,13 @@
-// Arm 2 of the changeability comparison. Each test proves the inconsistent
-// arm (a mixture of primitives and non-conforming value objects) reopens a
-// silent site the consistent value object (arm 3, ../valueobject) closes —
+// The inconsistent contender of the changeability comparison. Each test proves
+// that a mixture of primitives and non-conforming value objects reopens a
+// silent site the consistent value object (../valueobject) closes —
 // the executable form of "inconsistent VOs ≈ no VOs on the change-speed axis."
 //
 // Three contenders, same domain:
 //
-//	../primitive    arm 1 — bare primitives
-//	./inconsistent  arm 2 — mixture of primitives + inconsistent VOs  (THIS)
-//	../valueobject  arm 3 — consistent value objects
+//	../primitive    bare primitives
+//	./inconsistent  mixture of primitives + inconsistent VOs  (THIS)
+//	../valueobject  consistent value objects
 package changeability_test
 
 import (
@@ -24,8 +24,8 @@ import (
 
 // The rate got wrapped; the altitude did not. A feet altitude passes straight
 // into the bare-float64 slot, compiles clean, and returns a wrong number — the
-// Mars bug the value-object arm makes impossible, reopened through the one slot
-// that stayed primitive. Wrapping SOME concepts bought nothing.
+// Mars bug the value-object contender makes impossible, reopened through the
+// one slot that stayed primitive. Wrapping SOME concepts bought nothing.
 func TestPartialAdoption_InconsistentAdmitsWrongUnit(t *testing.T) {
 	altitudeInFeet := 10000.0 // = 3048 m
 	got := inconsistent.TimeToImpact(altitudeInFeet, inconsistent.NewMetersPerSecond(50))
@@ -51,11 +51,12 @@ func TestScatteredValidation_InconsistentAdmitsBadValue(t *testing.T) {
 	}
 }
 
-// 2b: the changeability cost. The invariant lives in N places in arm 2 but ONE
-// place in arm 3, so changing the rule is an N-site edit (miss one -> silent)
-// vs a one-site edit. We count the marked invariant sites in each package's
-// source — this is the silent-site thesis at fixture scale; case-study.md
-// carries the real magnitude (a slot left raw across 43 call sites).
+// 2b: the changeability cost. The invariant lives in N places in the
+// inconsistent contender but ONE place in the value-object contender, so
+// changing the rule is an N-site edit (miss one -> silent) vs a one-site edit.
+// We count the marked invariant sites in each package's source — this is the
+// silent-site thesis at fixture scale; case-study.md carries the real magnitude
+// (a slot left raw across 43 call sites).
 func TestScatteredValidation_RuleLivesInManyPlaces(t *testing.T) {
 	const marker = "//ALT_INVARIANT"
 	inconsistentSites := countMarker(t, "inconsistent", marker)
@@ -65,7 +66,7 @@ func TestScatteredValidation_RuleLivesInManyPlaces(t *testing.T) {
 		t.Fatalf("consistent VO should hold the altitude invariant in exactly 1 site, got %d", consistentSites)
 	}
 	if inconsistentSites <= consistentSites {
-		t.Fatalf("inconsistent arm should duplicate the invariant across more sites than the consistent VO; got inconsistent=%d consistent=%d", inconsistentSites, consistentSites)
+		t.Fatalf("inconsistent contender should duplicate the invariant across more sites than the consistent VO; got inconsistent=%d consistent=%d", inconsistentSites, consistentSites)
 	}
 	// inconsistentSites edits to change the rule, any one missable; consistent = 1.
 }

@@ -1,7 +1,7 @@
-"""Arm 3: the only arm that actually satisfies the rule under test.
+"""The value-object contender: the only one that actually satisfies the rule under test.
 
 The rule ("no primitive returns, and an enum is a primitive") does not turn
-`active -> bool` into `active -> SomeEnumLikeVO`. That would be arm 2 wearing a
+`active -> bool` into `active -> SomeEnumLikeVO`. That would be the enum contender wearing a
 value object's coat: the call site still asks "which one is it?" and selects
 behavior itself.
 

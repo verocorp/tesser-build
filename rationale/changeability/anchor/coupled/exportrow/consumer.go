@@ -1,6 +1,6 @@
-// Package exportrow is a realistic coupled arm for skills/tesser-build/public-interface.md
-// (the public-interface rule): consumers should not expose backend persistence
-// rows in their own public APIs.
+// Package exportrow is a realistic coupled contender for the public-interface
+// rule (skills/tesser-build/public-interface.md): consumers should not expose
+// backend persistence rows in their own public APIs.
 //
 // Authored by the Codex adversary against the frozen SCORING.md; see
 // ../../adversary_provenance.md. It fails to build after `-tags swap` because its

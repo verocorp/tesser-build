@@ -6,7 +6,7 @@
 #   - Order is the domain ENTITY: identity is by ID (see Order.Equal), not by
 #     attributes; it is constructed through NewOrder(OrderSpec) but is not a value
 #     object, so it gets no Must*/String requirement.
-#   - RawOrderLocator is a COUPLED violation arm (a service-locator that reaches
+#   - RawOrderLocator is a COUPLED violation contender (a service-locator that reaches
 #     through to backend rows); it is not a value object.
 exclude:
   - Order

@@ -1,9 +1,10 @@
 // Package orders is the PUBLIC boundary of the ordering context: the Client
 // contract and the DTOs it speaks. It imports nothing internal. A dependent
 // that depends only on this package survives a backend migration untouched —
-// the O(1) (decoupled) arm of the public-interface changeability decision.
+// the O(1) (decoupled) contender of the public-interface changeability
+// decision.
 //
-// See ../SCORING.md for how the arms are scored.
+// See ../SCORING.md for how the contenders are scored.
 package orders
 
 import "context"
