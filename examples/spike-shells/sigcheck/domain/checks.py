@@ -411,7 +411,7 @@ class Codebase(ts.AggregateRoot):
                         "a role __init__ only re-exports from its own role"
                     )
                 )
-        for target, lineno, _, _ in module.import_edges():
+        for target, lineno, is_member, has_alias in module.import_edges():
             if not target.startswith(module.name() + "."):
                 found.append(
                     Violation(
@@ -419,6 +419,7 @@ class Codebase(ts.AggregateRoot):
                         "a role __init__ only re-exports from its own role"
                     )
                 )
+            found.extend(self._form_violations(module, target, lineno, is_member, has_alias))
         return tuple(found)
 
     def _app_init_violations(self, module: Module) -> tuple[Violation, ...]:

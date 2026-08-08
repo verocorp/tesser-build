@@ -872,6 +872,41 @@ def test_role_init_only_reexports_its_own_role(tmp_path: Path) -> None:
         for f in findings
     )
     assert not any("imports pkg.domain.vo" in f for f in findings)
+    assert any(
+        "pkg.domain:2 imports names from pkg.domain.vo; "
+        "a context module is imported as an aliased module, never its members" in f
+        for f in findings
+    )
+
+
+def test_a_role_init_may_import_a_module_but_never_a_class(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "mod/domain/vo.py",
+        "import tesser.domain as ts\n"
+        "class Tag(ts.ValueObject):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        object.__setattr__(self, '_text', text)\n",
+    )
+    write_module(tmp_path, "mod/domain/__init__.py", "import mod.domain.vo as vo\n")
+    write_module(
+        tmp_path,
+        "mod/client/client.py",
+        "import tesser.context as ts\n"
+        "class AskRequest(ts.Request):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    write_module(tmp_path, "mod/client/__init__.py", "")
+    assert not any("mod.domain:" in f for f in check_tree(tmp_path))
+
+    write_module(tmp_path, "mod/domain/__init__.py", "from mod.domain.vo import Tag\n")
+    assert any(
+        "mod.domain:1 imports names from mod.domain.vo; "
+        "a context module is imported as an aliased module, never its members" in f
+        for f in check_tree(tmp_path)
+    )
 
 
 def test_srv_and_bootstrap_statement_totality(tmp_path: Path) -> None:

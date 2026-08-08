@@ -57,7 +57,7 @@ APPLIES_TO: dict[str, str] = {
     "srv": "srv module",
     "bootstrap": "bootstrap module",
     "protocol": "protocol module",
-    "Codebase._form_violations": "direction-legal context import (role, srv/bootstrap, test modules)",
+    "Codebase._form_violations": "direction-legal context import (role modules and their __init__, srv/bootstrap, test modules)",
     "Codebase._stray_import_violations": "role, srv/bootstrap, or test module",
     "Codebase._helper_violations": "@ts.helper function",
     "Codebase._dependency_violations": "service `__init__`",
