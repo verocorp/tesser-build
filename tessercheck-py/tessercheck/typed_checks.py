@@ -996,15 +996,14 @@ _LANGUAGE_FIXED: frozenset[str] = frozenset(
     }
 )
 
-# The six rich comparisons are NOT language-fixed: CPython hands back whatever
-# they return (verified — ``Day(1) < Day(2)`` yields the object itself, and
-# ``sorted`` still works when the result carries ``__bool__``). So the rule
-# reaches them, and a domain object comparing itself answers with a domain
-# object or does not implement the operator at all.
-#
-# The consequence a caller must know: if that answer type omits ``__bool__``,
-# every ``if a == b`` is silently TRUE, because a plain object is truthy. The
-# answer type owns a ``__bool__``; that dunder is language-fixed above.
+# The six rich comparisons are NOT language-fixed — CPython hands back whatever
+# they return — so a domain object has no business defining one (ruling
+# 2026-08-08). That prohibition is NOT enforced here, for two reasons that both
+# point elsewhere: equality is TB014's subject end to end, and the runtime base
+# already refuses it outright — ValueObject and Entity raise TypeError from
+# __init_subclass__ when a subclass overrides __eq__/__hash__, which catches it
+# at import time rather than at lint time. TB019 governs the ORDINARY methods,
+# where nothing else is watching.
 _COMPARISON_DUNDERS: frozenset[str] = frozenset(
     {"__eq__", "__ne__", "__lt__", "__le__", "__gt__", "__ge__"}
 )
@@ -1123,18 +1122,24 @@ def _check_domain_return(
     for member in node.body:
         if not isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        dunder = member.name.startswith("__") and member.name.endswith("__")
-        if dunder:
-            # A comparison answers with a domain object; every other dunder is
-            # either language-fixed or not this rule's business.
-            if member.name not in _COMPARISON_DUNDERS:
-                continue
-        elif member.name.startswith("_"):
+        if member.name.startswith("_"):
             continue
         if member.returns is None or _annotation_base(member.returns) == "None":
             continue
 
+        if _bare_self_field_returned(member) is not None:
+            # A bare `return self._x` is the representation leak TB010 owns on a
+            # value object and TB011 on an aggregate's collection. Reporting it
+            # twice tells the reader nothing new and breaks fixture isolation.
+            continue
+
         payload = _returned_payload_names(member.returns)
+        if any(
+            registry.get(n) is not None and registry[n].stereotype is Stereotype.SPEC
+            for n in payload
+        ):
+            # Returning a spec is TB015's decompose-to-primitives surface.
+            continue
         declared = _qualified_domain_names(member.returns, ts_prefixes)
         offenders = sorted(
             n

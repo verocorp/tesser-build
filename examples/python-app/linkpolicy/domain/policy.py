@@ -101,25 +101,18 @@ class Verdict(ts.ValueObject):
     _reason: Reason
 
 
-class PolicySpec(ts.Spec):
+class Policy(ts.ValueObject):
 
     def __init__(
         self,
         allowed_schemes: tuple[str, ...] = _DEFAULT_SCHEMES,
         blocked_hosts: tuple[str, ...] = _DEFAULT_BLOCKED,
     ) -> None:
-        self.allowed_schemes = allowed_schemes
-        self.blocked_hosts = blocked_hosts
-
-
-class Policy(ts.ValueObject):
-
-    def __init__(self, spec: PolicySpec) -> None:
         object.__setattr__(
-            self, "_allowed_schemes", tuple(Scheme(s) for s in spec.allowed_schemes)
+            self, "_allowed_schemes", tuple(Scheme(s) for s in allowed_schemes)
         )
         object.__setattr__(
-            self, "_blocked_hosts", tuple(Host(h) for h in spec.blocked_hosts)
+            self, "_blocked_hosts", tuple(Host(h) for h in blocked_hosts)
         )
 
     @property

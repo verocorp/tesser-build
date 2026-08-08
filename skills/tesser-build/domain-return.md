@@ -25,6 +25,12 @@ behavior may return. (Maintainer ruling 2026-08-08.)
    banning the other was an artifact. The base owns them: `ValueObject`
    compares by value, `Entity` compares by `identity`, an aggregate root blocks
    equality with `__eq__ = None`. Domain code spells none of them.
+
+   **Enforced by the base, not by TB019.** `ValueObject.__init_subclass__` and
+   `Entity.__init_subclass__` raise `TypeError` when a subclass overrides
+   `__eq__`/`__hash__` — at import time, which beats lint time — and equality
+   shape is TB014's subject end to end. TB019 governs the ORDINARY methods,
+   where nothing else is watching.
 3. **Two exits, because the rule cannot reach them.**
    - **Language-fixed dunders.** CPython raises `TypeError` if these return
      anything else, verified per dunder: `__hash__`, `__str__`, `__repr__`,
@@ -83,10 +89,14 @@ behavior may return. (Maintainer ruling 2026-08-08.)
 ## How the machine sees it
 
 `TB019` (`tessercheck-py`) keys on the classified stereotype, which the declared
-`ts.*` base establishes. It skips private methods and unannotated ones (the
-gated trees run `mypy --strict`, which already requires the annotation), reads
-containers through to their payload, and resolves a `tesser.domain`-qualified
-return without the library being in the analyzed tree.
+`ts.*` base establishes. It skips private methods, dunders, and unannotated
+ones (the gated trees run `mypy --strict`, which already requires the
+annotation), reads containers through to their payload, and resolves a
+`tesser.domain`-qualified return without the library being in the analyzed tree.
+
+It also stands down where another check already owns the shape, so one leak is
+never reported twice: a bare `return self._x` belongs to TB010 (value object)
+and TB011 (aggregate collection); a spec-typed return belongs to TB015.
 
 There is no Go analyzer yet — a named gap, tracked in `TODOS.md`.
 

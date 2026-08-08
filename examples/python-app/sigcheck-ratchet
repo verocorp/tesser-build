@@ -59,6 +59,8 @@ lifecycle belongs to no governed package; every module belongs to a context, srv
 linkpolicy.adapters.gateways.repo_memory imports names from linkpolicy.application.service; a context module is imported as an aliased module, never its members
 linkpolicy.application.service imports names from linkpolicy.client; a context module is imported as an aliased module, never its members
 linkpolicy.application.service imports names from linkpolicy.domain.policy; a context module is imported as an aliased module, never its members
+linkpolicy.domain.policy imports errors; domain, client, and application import only their context, their tesser package, and the pure stdlib
+linkpolicy.domain.policy imports serialization; domain, client, and application import only their context, their tesser package, and the pure stdlib
 linkpolicy.domain.policy imports urllib.parse; domain, client, and application import only their context, their tesser package, and the pure stdlib
 linkpolicy.wiring.wire imports names from linkpolicy.adapters.gateways.repo_memory; a context module is imported as an aliased module, never its members
 linkpolicy.wiring.wire imports names from linkpolicy.application.service; a context module is imported as an aliased module, never its members
@@ -72,6 +74,8 @@ reports.adapters.gateways.policy_verdicts imports names from reports.application
 reports.adapters.handlers.http imports names from reports.client; a context module is imported as an aliased module, never its members
 reports.application.service imports names from reports.client; a context module is imported as an aliased module, never its members
 reports.application.service imports names from reports.domain.report; a context module is imported as an aliased module, never its members
+reports.domain.values imports errors; domain, client, and application import only their context, their tesser package, and the pure stdlib
+reports.domain.values imports serialization; domain, client, and application import only their context, their tesser package, and the pure stdlib
 reports.wiring.wire imports campaign.client without an alias; a context module is imported as an aliased module, never its members
 reports.wiring.wire imports linkpolicy.client without an alias; a context module is imported as an aliased module, never its members
 reports.wiring.wire imports names from reports.adapters.gateways.campaign_links; a context module is imported as an aliased module, never its members

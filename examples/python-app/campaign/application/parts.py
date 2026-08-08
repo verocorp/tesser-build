@@ -4,7 +4,6 @@ import tesser.application as ts
 
 from campaign.domain.campaign import Campaign
 from campaign.domain.short_link import ShortLink
-from campaign.domain.values import LinkStatus
 
 
 class MoneyParts(ts.Parts):
@@ -69,5 +68,5 @@ def short_link_parts(link: ShortLink) -> ShortLinkParts:
     return ShortLinkParts(
         slug=str(link.slug),
         target_url=str(link.target_url),
-        active=link.status == LinkStatus("active"),
+        active=str(link.status) == "active",
     )

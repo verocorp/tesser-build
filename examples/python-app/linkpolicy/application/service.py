@@ -11,7 +11,7 @@ from linkpolicy.client import (
     ListVerdictsResponse,
     VerdictView,
 )
-from linkpolicy.domain.policy import Policy, PolicySpec
+from linkpolicy.domain.policy import Policy
 
 
 class VerdictParts(ts.Parts):
@@ -33,7 +33,7 @@ class LinkPolicyService(ts.ApplicationService):
 
     def __init__(self, repo: VerdictRepository) -> None:
         self._repo = repo
-        self._policy = Policy(PolicySpec())
+        self._policy = Policy()
 
     def check(self, req: CheckRequest) -> CheckResponse:
         verdict = self._policy.evaluate(req.target_url)
