@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from typing import Final, Protocol
 
 import tesser.srv as ts
@@ -53,19 +53,27 @@ class HttpRequest(ts.Request):
     body: bytes
 
     @classmethod
-    def buffered_length(cls, headers: Mapping[str, str]) -> int:
-        lowered = {name.lower(): value for name, value in headers.items()}
-        if "chunked" in lowered.get("transfer-encoding", "").lower():
+    def buffered_length(cls, headers: Iterable[tuple[str, str]]) -> int:
+        lengths: list[str] = []
+        streaming = False
+        for name, value in headers:
+            lowered = name.lower()
+            if lowered == "transfer-encoding":
+                streaming = True
+            elif lowered == "content-length":
+                lengths.append(value.strip())
+        if streaming:
             raise StreamingUnsupported(
                 "this host buffers; declare a Content-Length (streaming bodies are a documented boundary)"
             )
-        raw = lowered.get("content-length") or "0"
-        try:
-            declared = int(raw)
-        except ValueError as e:
-            raise BadRequest(f"invalid Content-Length: {raw!r}") from e
-        if declared < 0:
-            raise BadRequest("negative Content-Length")
+        if not lengths:
+            return 0
+        if len(set(lengths)) > 1:
+            raise BadRequest(f"conflicting Content-Length headers: {', '.join(lengths)}")
+        raw = lengths[0]
+        if not raw.isascii() or not raw.isdigit():
+            raise BadRequest(f"invalid Content-Length: {raw!r}")
+        declared = int(raw)
         if declared > MAX_BUFFERED_BODY:
             raise PayloadTooLarge(f"body exceeds the {MAX_BUFFERED_BODY}-byte buffer limit")
         return declared
@@ -101,7 +109,10 @@ class Response(ts.Response):
     @classmethod
     def json(cls, status_code: int, body: JSONObject, headers: Mapping[str, str] | None = None) -> Response:
         payload = json.dumps(body).encode("utf-8")
-        return cls(status_code, payload, {"Content-Type": "application/json", **(headers or {})})
+        declared = dict(headers or {})
+        if not any(name.lower() == "content-type" for name in declared):
+            declared["Content-Type"] = "application/json"
+        return cls(status_code, payload, declared)
 
     @classmethod
     def problem(cls, status_code: int, code: str, detail: str) -> Response:
@@ -109,6 +120,8 @@ class Response(ts.Response):
 
     @classmethod
     def redirect(cls, url: str, status_code: int = 302) -> Response:
+        if any(char in url for char in "\r\n\x00"):
+            raise BadRequest("a redirect target carries a control character")
         return cls(status_code, b"", {"Location": url})
 
     @classmethod

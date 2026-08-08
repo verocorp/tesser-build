@@ -28,6 +28,8 @@ def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
     routes = routes_for(app)
 
     class _RequestHandler(BaseHTTPRequestHandler):
+        timeout = 30
+
         def do_GET(self) -> None:
             self._send(self._dispatch("GET"))
 
@@ -39,8 +41,9 @@ def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
                 found = match(routes, method, self.path)
                 if found is None:
                     return Response.problem(404, "not_found", "unknown route")
-                headers = {name.lower(): value for name, value in self.headers.items()}
-                body = self.rfile.read(HttpRequest.buffered_length(headers))
+                declared = self.headers.items()
+                headers = {name.lower(): value for name, value in declared}
+                body = self.rfile.read(HttpRequest.buffered_length(declared))
                 return found.endpoint(
                     HttpRequest(
                         method=method,
@@ -61,6 +64,8 @@ def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
             self.send_response(resp.status_code)
             self.send_header("Content-Length", str(len(resp.body)))
             for name, value in resp.headers.items():
+                if name.lower() == "content-length":
+                    continue
                 self.send_header(name, value)
             self.end_headers()
             self.wfile.write(resp.body)

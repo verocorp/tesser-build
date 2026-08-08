@@ -89,34 +89,34 @@ def test_a_request_reads_its_own_json_body_and_rejects_non_json() -> None:
 
 
 def test_a_request_owns_its_buffering_rule() -> None:
-    assert HttpRequest.buffered_length({"Content-Length": "42"}) == 42
-    assert HttpRequest.buffered_length({}) == 0
+    assert HttpRequest.buffered_length((("Content-Length", "42"),)) == 42
+    assert HttpRequest.buffered_length(()) == 0
 
 
 def test_buffered_length_rejects_a_non_numeric_header_as_a_client_error() -> None:
     with pytest.raises(BadRequest):
-        HttpRequest.buffered_length({"Content-Length": "abc"})
+        HttpRequest.buffered_length((("Content-Length", "abc"),))
 
 
 def test_buffered_length_is_case_insensitive_like_http_headers() -> None:
-    assert HttpRequest.buffered_length({"content-length": "42"}) == 42
+    assert HttpRequest.buffered_length((("content-length", "42"),)) == 42
     with pytest.raises(StreamingUnsupported):
-        HttpRequest.buffered_length({"transfer-encoding": "chunked"})
+        HttpRequest.buffered_length((("transfer-encoding", "chunked"),))
 
 
 def test_buffered_length_refuses_a_streaming_body() -> None:
     with pytest.raises(StreamingUnsupported):
-        HttpRequest.buffered_length({"Transfer-Encoding": "chunked"})
+        HttpRequest.buffered_length((("Transfer-Encoding", "chunked"),))
 
 
 def test_buffered_length_refuses_an_oversized_body() -> None:
     with pytest.raises(PayloadTooLarge):
-        HttpRequest.buffered_length({"Content-Length": str(MAX_BUFFERED_BODY + 1)})
+        HttpRequest.buffered_length((("Content-Length", str(MAX_BUFFERED_BODY + 1)),))
 
 
 def test_buffered_length_refuses_a_negative_declaration() -> None:
     with pytest.raises(BadRequest):
-        HttpRequest.buffered_length({"Content-Length": "-1"})
+        HttpRequest.buffered_length((("Content-Length", "-1"),))
 
 
 def test_a_request_reads_its_own_path_parameters() -> None:
@@ -128,6 +128,33 @@ def test_a_missing_or_empty_path_parameter_is_a_client_error() -> None:
         HttpRequest().path_param("campaign_id")
     with pytest.raises(BadRequest):
         HttpRequest(path_params={"campaign_id": ""}).path_param("campaign_id")
+
+
+def test_conflicting_content_lengths_are_refused_rather_than_framed() -> None:
+    with pytest.raises(BadRequest):
+        HttpRequest.buffered_length((("Content-Length", "0"), ("Content-Length", "49")))
+    assert HttpRequest.buffered_length((("Content-Length", "7"), ("Content-Length", "7"))) == 7
+
+
+def test_a_content_length_is_plain_ascii_digits_and_nothing_else() -> None:
+    for raw in ("5_0", "+50", " 50 x", "0x10", "\u0665"):
+        with pytest.raises(BadRequest):
+            HttpRequest.buffered_length((("Content-Length", raw),))
+
+
+def test_any_transfer_encoding_refuses_the_body_not_only_chunked() -> None:
+    with pytest.raises(StreamingUnsupported):
+        HttpRequest.buffered_length((("Transfer-Encoding", "gzip"), ("Content-Length", "5")))
+
+
+def test_a_redirect_target_may_not_smuggle_a_header() -> None:
+    with pytest.raises(BadRequest):
+        Response.redirect("https://ok.example/x\r\nSet-Cookie: a=b")
+
+
+def test_a_caller_supplied_content_type_replaces_rather_than_duplicates() -> None:
+    resp = Response.json(200, {"a": 1}, {"content-type": "application/problem+json"})
+    assert resp.headers == {"content-type": "application/problem+json"}
 
 
 def test_respond_maps_each_failure_class_to_a_problem_document() -> None:

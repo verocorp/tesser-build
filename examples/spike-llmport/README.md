@@ -178,9 +178,13 @@ The sigcheck-vs-ruff F401 collision this tree used to document (a mandated
 One more named boundary, since closed: `ToolTurn` (like the migrated
 httpwire/cliwire records) briefly lost the frozen-dataclass guarantee in
 the shell migration. The srv matrix ruled it per-kind (2026-08-07):
-`ts.srv.Record` now owns immutability and value equality for every wire
-record, so `ToolTurn` and `Tool` are frozen again without a per-class
-patch.
+`ts.Record` now owns one-shot construction, attribute immutability, and
+value equality for every wire record, so `ToolTurn` and `Tool` carry the
+guarantee without a per-class patch. The freeze is SHALLOW by design —
+it stops rebinding, not mutation of a field's referent — so a record
+holding a container copies it at the door: the httpwire records copy
+their header and param maps, and `Tool` deep-copies its schema in and
+out of `schema()` because the host hands that dict to a provider SDK.
 
 ## Non-goals
 

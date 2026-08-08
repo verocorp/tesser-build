@@ -10,7 +10,7 @@ class Handler(ts.Handler):
     def __init__(self, client: Client) -> None:
         self._client = client
 
-    def links_by_verdict(self, req: HttpRequest) -> Response:
+    def links_by_verdict(self, _req: HttpRequest) -> Response:
         def run() -> Response:
             resp = self._client.links_by_verdict(LinksByVerdictRequest())
             rows = [_row(view) for view in resp.links]

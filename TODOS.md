@@ -117,7 +117,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `@ts.function`. Deliberately not updated in-wave: skill docs encode only
   verified-implementation-backed rulings, and teaching `tesser.srv` needs
   the `rationale/coverage.md` walk + `skill-version` bump. The srv-matrix
-  core landed in code 2026-08-07 (frozen ts.srv.Record + behavior-carrying
+  core landed in code 2026-08-07 (frozen ts.Record + behavior-carrying
   wire records + the tool binding table), so the taught shape is now
   live-verified in both example trees — graduation waits only on Chris
   confirming the enacted rulings (wire-vocabulary entry below) and on the
@@ -126,6 +126,10 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   pointer in the skill docs, not just the code samples —
   `skills/tesser-build/srv.md:200` already dangles (`test_httpwire.py:
   content_length` was renamed to `buffered_length` in the srv-matrix wave).
+  Scope measured 2026-08-08: `python.md:591-790`, `handlers.md:47-77`, and
+  `srv.md:138-219` present `json_response`/`problem`/`respond`/`decode_body`/
+  `content_length`/`path_param` as free functions — roughly 30 lines of
+  sample code the wave deleted, in a skill distributed copy-in to consumers.
   Root `README.md:98-110` also under-describes tesser-py (names only
   `tesser.domain.ValueObject`; pre-existing narrowness, fold in here).
 - [ ] **Make rules.py conformant** (Chris 2026-08-06). The generator is
@@ -147,11 +151,11 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `path_param`/`content_length` became HttpRequest readers (bag 9→2 public
   in httpwire, 4→0 in cliwire; the DTO-purity collision dissolved by the
   package-scoped kind grammar — context DTOs stay data-only); (2) the tool
-  declaration became wire-side data — `ts.srv.Record` is the new generic
+  declaration became wire-side data — `ts.Record` is the new generic
   wire-record kind, `voicewire.Tool` its first instance, and the handler
   owns one binding table deriving dispatch + schemas (the three parallel
   string-keyed chains are gone); (3) immutability + value equality returned
-  per-kind on `ts.srv.Record` (VO-style frozen beat write-once — the
+  per-kind on `ts.Record` (VO-style frozen beat write-once — the
   losing arm and its smuggling hole are pinned in
   tesser-py/tests/test_record.py). STILL OPEN, needing Chris:
   (a) **the tool declaration as a context-side CLASS** (his original
@@ -168,6 +172,21 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   reader mirroring `HttpRequest.json_body`, and its test-only callers are
   tests playing the HTTP-client role — not a test-local rename. Don't
   re-delete it without ruling the reader question.
+  (f) **The one-shot construction guard forbids a multi-level record**
+  (adversarial 2026-08-08): a child record cannot add its own fields via a
+  second `Record.__init__` call, and a subclass that sets a derived field
+  before `super().__init__()` gets "already constructed", which names the
+  wrong problem. No in-tree record does either. Rule whether multi-level
+  records are wanted before a consumer needs one. Related, same guard: the
+  field check is one-directional (undeclared names are refused, declared
+  ones are not required), so a subclass that conditionally omits a field
+  still builds a partial record — it cannot be made strict without a
+  declaration for the `object.__setattr__` derived-field idiom.
+  (g) **The confirm_booking tool schema omits `required`** — restored to
+  main's byte shape this wave (the refactor had silently added
+  `"required": []`). OpenAI strict-mode function calling wants the key
+  present even when empty, so if the spike ever runs against strict mode,
+  rule which shape the provider gets.
   (e) **`ts.Record` admits direction-less wire declarations** (red team
   2026-08-08, verified): WIRE_KINDS is derived set arithmetic, so a wire
   module may declare every record as `ts.Record` — including Endpoint

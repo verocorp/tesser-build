@@ -1,5 +1,20 @@
 from __future__ import annotations
 
+_NOT_A_FIELD = ("ClassVar", "Final")
+
+
+def _is_field(annotation: object) -> bool:
+    return not str(annotation).replace("typing.", "").startswith(_NOT_A_FIELD)
+
+
+def _declared_fields(cls: type) -> set[str]:
+    fields: set[str] = set()
+    for base in cls.__mro__:
+        for name, annotation in getattr(base, "__annotations__", {}).items():
+            if _is_field(annotation):
+                fields.add(name)
+    return fields
+
 
 class Record:
 
@@ -19,21 +34,19 @@ class Record:
                         f"{cls.__name__} must not override {name}: "
                         "Record owns the wire-record contract"
                     )
-        for name in cls.__dict__.get("__annotations__", {}):
-            if name in cls.__dict__:
-                raise TypeError(
-                    f"{cls.__name__} gives field {name!r} a class-level default: "
-                    "a record field has no default outside __init__"
-                )
+            for name, annotation in base.__dict__.get("__annotations__", {}).items():
+                if name in base.__dict__ and _is_field(annotation):
+                    raise TypeError(
+                        f"{cls.__name__} gives field {name!r} a class-level default: "
+                        "a record field has no default outside __init__"
+                    )
 
     def __init__(self, **fields: object) -> None:
         if self.__dict__:
             raise AttributeError(
                 f"{type(self).__name__} is a frozen wire record: already constructed"
             )
-        declared: set[str] = set()
-        for base in type(self).__mro__:
-            declared.update(getattr(base, "__annotations__", {}))
+        declared = _declared_fields(type(self))
         for name, value in fields.items():
             if name not in declared:
                 raise TypeError(f"{type(self).__name__} declares no field {name!r}")

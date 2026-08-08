@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from typing import ClassVar
 
 import pytest
 
@@ -201,6 +202,35 @@ def test_a_record_field_may_not_carry_a_class_level_default() -> None:
 
         class _Defaulted(tesser.srv.Response):
             status: int = 200
+
+
+def test_a_classvar_is_not_a_field_and_cannot_be_shadowed_per_instance() -> None:
+    class Tagged(tesser.srv.Response):
+
+        KIND: ClassVar[str] = "reply"
+
+        def __init__(self, status: int) -> None:
+            super().__init__(status=status)
+
+        status: int
+
+    with pytest.raises(TypeError, match=r"^Tagged declares no field 'KIND'$"):
+        tesser.srv.Record.__init__(Tagged.__new__(Tagged), KIND="pwned")
+    assert Tagged(200).KIND == "reply"
+
+
+def test_an_annotated_mixin_may_not_smuggle_a_defaulted_field() -> None:
+    class _Loaded:
+        secret: str = "default"
+
+    with pytest.raises(
+        TypeError,
+        match=r"^_Carrier gives field 'secret' a class-level default: "
+        r"a record field has no default outside __init__$",
+    ):
+
+        class _Carrier(_Loaded, tesser.srv.Response):
+            pass
 
 
 def test_a_subclass_that_skips_super_init_builds_an_empty_record_no_guard_can_see() -> None:
