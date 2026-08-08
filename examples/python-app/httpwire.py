@@ -52,6 +52,33 @@ class HttpRequest(ts.Request):
     headers: Mapping[str, str]
     body: bytes
 
+    @classmethod
+    def buffered_length(cls, headers: Mapping[str, str]) -> int:
+        lowered = {name.lower(): value for name, value in headers.items()}
+        if "chunked" in lowered.get("transfer-encoding", "").lower():
+            raise StreamingUnsupported(
+                "this host buffers; declare a Content-Length (streaming bodies are a documented boundary)"
+            )
+        raw = lowered.get("content-length") or "0"
+        try:
+            declared = int(raw)
+        except ValueError as e:
+            raise BadRequest(f"invalid Content-Length: {raw!r}") from e
+        if declared < 0:
+            raise BadRequest("negative Content-Length")
+        if declared > MAX_BUFFERED_BODY:
+            raise PayloadTooLarge(f"body exceeds the {MAX_BUFFERED_BODY}-byte buffer limit")
+        return declared
+
+    def json_body(self) -> JSONObject:
+        return _json_object(self.body)
+
+    def path_param(self, name: str) -> str:
+        value = self.path_params.get(name)
+        if not value:
+            raise BadRequest(f"missing path parameter: {name}")
+        return value
+
 
 class Response(ts.Response):
 
@@ -71,6 +98,39 @@ class Response(ts.Response):
     body: bytes
     headers: Mapping[str, str]
 
+    @classmethod
+    def json(cls, status_code: int, body: JSONObject, headers: Mapping[str, str] | None = None) -> Response:
+        payload = json.dumps(body).encode("utf-8")
+        return cls(status_code, payload, {"Content-Type": "application/json", **(headers or {})})
+
+    @classmethod
+    def problem(cls, status_code: int, code: str, detail: str) -> Response:
+        return cls.json(status_code, {"type": f"/problems/{code}", "detail": detail})
+
+    @classmethod
+    def redirect(cls, url: str, status_code: int = 302) -> Response:
+        return cls(status_code, b"", {"Location": url})
+
+    @classmethod
+    def respond(cls, run: Callable[[], Response]) -> Response:
+        try:
+            return run()
+        except BadRequest as e:
+            return cls.problem(400, "malformed_request", str(e))
+        except PayloadTooLarge as e:
+            return cls.problem(413, "payload_too_large", str(e))
+        except StreamingUnsupported as e:
+            return cls.problem(411, "length_required", str(e))
+        except DomainError as e:
+            return cls.problem(status_for(e.kind), e.code, e.message)
+        except InfraError:
+            return cls.problem(503, "unavailable", "a dependency is unavailable; please retry")
+        except Exception:
+            return cls.problem(500, "internal", "unexpected error")
+
+    def json_body(self) -> JSONObject:
+        return _json_object(self.body)
+
 
 class Endpoint(ts.Port, Protocol):
 
@@ -78,60 +138,7 @@ class Endpoint(ts.Port, Protocol):
 
 
 @ts.function
-def problem(code: str, detail: str) -> JSONObject:
-    return {"type": f"/problems/{code}", "detail": detail}
-
-
-@ts.function
-def json_response(status_code: int, body: JSONObject, headers: Mapping[str, str] | None = None) -> Response:
-    payload = json.dumps(body).encode("utf-8")
-    return Response(status_code, payload, {"Content-Type": "application/json", **(headers or {})})
-
-
-@ts.function
-def redirect(url: str, status_code: int = 302) -> Response:
-    return Response(status_code, b"", {"Location": url})
-
-
-@ts.function
-def respond(run: Callable[[], Response]) -> Response:
-    try:
-        return run()
-    except BadRequest as e:
-        return json_response(400, problem("malformed_request", str(e)))
-    except PayloadTooLarge as e:
-        return json_response(413, problem("payload_too_large", str(e)))
-    except StreamingUnsupported as e:
-        return json_response(411, problem("length_required", str(e)))
-    except DomainError as e:
-        return json_response(status_for(e.kind), problem(e.code, e.message))
-    except InfraError:
-        return json_response(503, problem("unavailable", "a dependency is unavailable; please retry"))
-    except Exception:
-        return json_response(500, problem("internal", "unexpected error"))
-
-
-@ts.function
-def content_length(headers: Mapping[str, str]) -> int:
-    lowered = {name.lower(): value for name, value in headers.items()}
-    if "chunked" in lowered.get("transfer-encoding", "").lower():
-        raise StreamingUnsupported(
-            "this host buffers; declare a Content-Length (streaming bodies are a documented boundary)"
-        )
-    raw = lowered.get("content-length") or "0"
-    try:
-        declared = int(raw)
-    except ValueError as e:
-        raise BadRequest(f"invalid Content-Length: {raw!r}") from e
-    if declared < 0:
-        raise BadRequest("negative Content-Length")
-    if declared > MAX_BUFFERED_BODY:
-        raise PayloadTooLarge(f"body exceeds the {MAX_BUFFERED_BODY}-byte buffer limit")
-    return declared
-
-
-@ts.function
-def decode_body(raw: bytes) -> JSONObject:
+def _json_object(raw: bytes) -> JSONObject:
     if not raw:
         return {}
     try:
@@ -141,14 +148,6 @@ def decode_body(raw: bytes) -> JSONObject:
     if not isinstance(data, dict):
         raise BadRequest("expected a JSON object")
     return data
-
-
-@ts.function
-def path_param(req: HttpRequest, name: str) -> str:
-    value = req.path_params.get(name)
-    if not value:
-        raise BadRequest(f"missing path parameter: {name}")
-    return value
 
 
 @ts.function

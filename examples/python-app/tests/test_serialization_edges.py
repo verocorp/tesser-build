@@ -15,7 +15,7 @@ from campaign.domain.campaign import Campaign, CampaignSpec
 from campaign.domain.money import MoneySpec
 from campaign.domain.short_link import ShortLinkSpec
 from errors import DomainError
-from httpwire import HttpRequest, decode_body
+from httpwire import HttpRequest
 from tests.support import parts_tuple
 
 
@@ -51,7 +51,7 @@ def test_wire_golden_locks_the_campaign_payload() -> None:
     handler = Handler(CampaignService(repo, _AllowAll()))
     resp = handler.get_campaign(HttpRequest(path_params={"campaign_id": "0123456789abcdef"}))
     assert resp.status_code == 200
-    assert decode_body(resp.body) == {
+    assert resp.json_body() == {
         "campaign_id": "0123456789abcdef",
         "budget": {"amount": "100.00", "currency": "USD"},
         "links": [{"slug": "promo", "target_url": "https://ok.example/x", "active": True}],

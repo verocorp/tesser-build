@@ -9,7 +9,7 @@ from campaign.application.parts import CheckOutcome
 from campaign.application.service import TargetChecker
 from campaign.wiring.config import Config as CampaignConfig
 from campaign.wiring.wire import build as build_campaign
-from cliwire import CliRequest, CliResponse, UsageError, respond
+from cliwire import CliRequest, CliResponse, UsageError
 from errors import InfraError, conflict, invalid, not_found
 from linkpolicy.wiring.config import Config as LinkPolicyConfig
 from reports.wiring.config import Config as ReportsConfig
@@ -58,7 +58,7 @@ def test_respond_maps_each_failure_class_to_an_exit_code() -> None:
         def run() -> CliResponse:
             raise exc
 
-        return respond(run)
+        return CliResponse.respond(run)
 
     assert raising(UsageError("bad")).exit_code == 2
     assert raising(invalid("bad_amount", "must be positive")).exit_code == 2
@@ -72,7 +72,7 @@ def test_respond_never_leaks_internals_on_the_unexpected_path() -> None:
     def run() -> CliResponse:
         raise RuntimeError("secret stack detail")
 
-    resp = respond(run)
+    resp = CliResponse.respond(run)
     assert resp.exit_code == 1
     assert "secret" not in resp.stderr
     assert resp.stderr == "unexpected error"

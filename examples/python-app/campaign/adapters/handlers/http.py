@@ -11,18 +11,7 @@ from campaign.client import (
     GetCampaignRequest,
     ResolveRequest,
 )
-from httpwire import (
-    HttpRequest,
-    JSONObject,
-    Response,
-    decode_body,
-    json_response,
-    object_field,
-    path_param,
-    redirect,
-    respond,
-    string_field,
-)
+from httpwire import HttpRequest, JSONObject, Response, object_field, string_field
 
 
 class Handler(ts.Handler):
@@ -31,7 +20,7 @@ class Handler(ts.Handler):
 
     def create_campaign(self, req: HttpRequest) -> Response:
         def run() -> Response:
-            body = decode_body(req.body)
+            body = req.json_body()
             budget = object_field(body.get("budget"))
             view = self._client.create_campaign(
                 CreateCampaignRequest(
@@ -39,13 +28,13 @@ class Handler(ts.Handler):
                     budget_currency=string_field(budget.get("currency")),
                 )
             )
-            return json_response(201, _campaign_body(view))
+            return Response.json(201, _campaign_body(view))
 
-        return respond(run)
+        return Response.respond(run)
 
     def add_link(self, req: HttpRequest) -> Response:
         def run() -> Response:
-            body = decode_body(req.body)
+            body = req.json_body()
             view = self._client.add_link(
                 AddLinkRequest(
                     campaign_id=string_field(body.get("campaign_id")),
@@ -53,38 +42,38 @@ class Handler(ts.Handler):
                     target_url=string_field(body.get("target_url")),
                 )
             )
-            return json_response(200, _campaign_body(view))
+            return Response.json(200, _campaign_body(view))
 
-        return respond(run)
+        return Response.respond(run)
 
     def deactivate_link(self, req: HttpRequest) -> Response:
         def run() -> Response:
-            body = decode_body(req.body)
+            body = req.json_body()
             view = self._client.deactivate_link(
                 DeactivateLinkRequest(
                     campaign_id=string_field(body.get("campaign_id")),
                     slug=string_field(body.get("slug")),
                 )
             )
-            return json_response(200, _campaign_body(view))
+            return Response.json(200, _campaign_body(view))
 
-        return respond(run)
+        return Response.respond(run)
 
     def get_campaign(self, req: HttpRequest) -> Response:
         def run() -> Response:
             view = self._client.get_campaign(
-                GetCampaignRequest(campaign_id=path_param(req, "campaign_id"))
+                GetCampaignRequest(campaign_id=req.path_param("campaign_id"))
             )
-            return json_response(200, _campaign_body(view))
+            return Response.json(200, _campaign_body(view))
 
-        return respond(run)
+        return Response.respond(run)
 
     def resolve(self, req: HttpRequest) -> Response:
         def run() -> Response:
-            resp = self._client.resolve(ResolveRequest(slug=path_param(req, "slug")))
-            return redirect(resp.target_url)
+            resp = self._client.resolve(ResolveRequest(slug=req.path_param("slug")))
+            return Response.redirect(resp.target_url)
 
-        return respond(run)
+        return Response.respond(run)
 
 
 @ts.function

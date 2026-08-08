@@ -6,7 +6,7 @@ from typing import Any
 
 from bootstrap.bootstrap import App
 from campaign.adapters.handlers.http import Handler as CampaignHandler
-from httpwire import HttpRequest, Response, content_length, json_response, problem, respond
+from httpwire import HttpRequest, Response
 from reports.adapters.handlers.http import Handler as ReportsHandler
 from srv.http.router import Route, match
 
@@ -38,9 +38,9 @@ def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
             def run() -> Response:
                 found = match(routes, method, self.path)
                 if found is None:
-                    return json_response(404, problem("not_found", "unknown route"))
+                    return Response.problem(404, "not_found", "unknown route")
                 headers = {name.lower(): value for name, value in self.headers.items()}
-                body = self.rfile.read(content_length(headers))
+                body = self.rfile.read(HttpRequest.buffered_length(headers))
                 return found.endpoint(
                     HttpRequest(
                         method=method,
@@ -52,7 +52,7 @@ def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
                     )
                 )
 
-            return respond(run)
+            return Response.respond(run)
 
         def log_message(self, format: str, *args: Any) -> None:
             return

@@ -64,8 +64,8 @@ URL surface in one route table and does exactly four things per request: match
 `(method, path)`, read the declared body **bytes** off the socket into an
 `HttpRequest`, call the endpoint, write back the `Response` bytes and headers.
 It never parses or serializes a body — `req.body` and `Response.body` are raw
-`bytes`, and the handler decodes (`decode_body(req.body)`) and encodes
-(`json_response(...)`), owning its `Content-Type`. That is why the host is
+`bytes`, and the handler decodes (`req.json_body()`) and encodes
+(`Response.json(...)`), owning its `Content-Type`. That is why the host is
 content-type-agnostic: a `.png` in or out never touches it. Framing is the
 host's call from the headers — a body over the cap is a 413, a
 `Transfer-Encoding: chunked` body a 411 (streaming is a documented boundary,

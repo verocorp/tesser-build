@@ -19,6 +19,15 @@ class CliRequest(ts.Request):
 
     args: tuple[str, ...]
 
+    def arg(self, index: int, name: str, usage: str) -> str:
+        if index >= len(self.args) or not self.args[index]:
+            raise UsageError(f"missing argument <{name}>\n{usage}")
+        return self.args[index]
+
+    def no_extra_args(self, count: int, usage: str) -> None:
+        if len(self.args) > count:
+            raise UsageError(f"unexpected extra arguments\n{usage}")
+
 
 class CliResponse(ts.Response):
 
@@ -29,39 +38,24 @@ class CliResponse(ts.Response):
     stdout: str
     stderr: str
 
+    @classmethod
+    def ok(cls, line: str) -> CliResponse:
+        return cls(0, stdout=line)
+
+    @classmethod
+    def respond(cls, run: Callable[[], CliResponse]) -> CliResponse:
+        try:
+            return run()
+        except UsageError as e:
+            return cls(2, stderr=str(e))
+        except DomainError as e:
+            return cls(exit_code_for(e.kind), stderr=f"[{e.code}] {e.message}")
+        except InfraError:
+            return cls(1, stderr="a dependency is unavailable; please retry")
+        except Exception:
+            return cls(1, stderr="unexpected error")
+
 
 class Command(ts.Port, Protocol):
 
     def __call__(self, request: CliRequest, /) -> CliResponse: ...
-
-
-@ts.function
-def ok(line: str) -> CliResponse:
-    return CliResponse(0, stdout=line)
-
-
-@ts.function
-def respond(run: Callable[[], CliResponse]) -> CliResponse:
-    try:
-        return run()
-    except UsageError as e:
-        return CliResponse(2, stderr=str(e))
-    except DomainError as e:
-        return CliResponse(exit_code_for(e.kind), stderr=f"[{e.code}] {e.message}")
-    except InfraError:
-        return CliResponse(1, stderr="a dependency is unavailable; please retry")
-    except Exception:
-        return CliResponse(1, stderr="unexpected error")
-
-
-@ts.function
-def arg(req: CliRequest, index: int, name: str, usage: str) -> str:
-    if index >= len(req.args) or not req.args[index]:
-        raise UsageError(f"missing argument <{name}>\n{usage}")
-    return req.args[index]
-
-
-@ts.function
-def no_extra_args(req: CliRequest, count: int, usage: str) -> None:
-    if len(req.args) > count:
-        raise UsageError(f"unexpected extra arguments\n{usage}")

@@ -22,7 +22,7 @@ from campaign.domain.money import Money, MoneyAmount, MoneyCurrency, MoneySpec
 from campaign.domain.short_link import ShortLinkSpec
 from campaign.domain.values import CampaignID
 from errors import DomainError, Kind
-from httpwire import HttpRequest, decode_body
+from httpwire import HttpRequest
 
 @ts.fake
 class _AllowAll(TargetChecker):
@@ -90,7 +90,7 @@ def test_deactivate_link_endpoint_returns_the_campaign_payload() -> None:
         HttpRequest(body=json.dumps({"campaign_id": id, "slug": "promo"}).encode("utf-8"))
     )
     assert resp.status_code == 200
-    assert decode_body(resp.body)["links"] == [
+    assert resp.json_body()["links"] == [
         {"slug": "promo", "target_url": "https://ok.example/x", "active": False}
     ]
 
@@ -186,4 +186,4 @@ def test_create_campaign_endpoint_rejects_a_non_object_budget() -> None:
         HttpRequest(body=json.dumps({"budget": "100.00"}).encode("utf-8"))
     )
     assert resp.status_code == 400
-    assert decode_body(resp.body)["type"] == "/problems/malformed_request"
+    assert resp.json_body()["type"] == "/problems/malformed_request"
