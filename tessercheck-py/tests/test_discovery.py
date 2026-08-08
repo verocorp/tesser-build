@@ -61,6 +61,36 @@ def test_exposes_client_detects_a_client_package(tmp_path: pathlib.Path) -> None
     assert exposes_client(tmp_path / "billing")
 
 
+def test_exposes_client_detects_a_client_package_with_an_empty_init(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The conformant role-package shape: empty __init__, Client in a sibling.
+
+    A role __init__ that re-exports is itself a finding under the import-form
+    rule ("a context module is imported as an aliased module, never its
+    members"), so discovery cannot rely on __init__ carrying the name — it has
+    to scan the whole client role.
+    """
+    d = _pkg(tmp_path, "billing")
+    (d / "client").mkdir()
+    (d / "client" / "__init__.py").write_text("", encoding="utf-8")
+    (d / "client" / "client.py").write_text(
+        "import tesser.context as ts\n\n\nclass Client(ts.Client):\n    ...\n",
+        encoding="utf-8",
+    )
+    assert exposes_client(tmp_path / "billing")
+
+
+def test_a_client_package_without_a_client_anywhere_stays_unclassified(
+    tmp_path: pathlib.Path,
+) -> None:
+    d = _pkg(tmp_path, "billing")
+    (d / "client").mkdir()
+    (d / "client" / "__init__.py").write_text("", encoding="utf-8")
+    (d / "client" / "dtos.py").write_text("class AskRequest:\n    ...\n", encoding="utf-8")
+    assert not exposes_client(tmp_path / "billing")
+
+
 def test_exposes_client_detects_asname_reexport(tmp_path: pathlib.Path) -> None:
     _ctx(tmp_path, "billing", "from billing.impl import ApiClient as Client\n")
     assert exposes_client(tmp_path / "billing")
