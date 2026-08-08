@@ -2,7 +2,18 @@ from decimal import Decimal
 
 import tesser.domain as ts
 
-from serialization import canonical_decimal, canonical_str
+from serialization import canonical_decimal, canonical_int, canonical_str
+
+
+class Same(ts.ValueObject):
+
+    def __init__(self, holds: bool) -> None:
+        object.__setattr__(self, "_holds", holds)
+
+    def __bool__(self) -> bool:
+        return self._holds
+
+    _holds: bool
 
 
 class Slug(ts.ValueObject):
@@ -41,6 +52,17 @@ class LinkStatus(ts.ValueObject):
     _value: str
 
 
+class LinkCount(ts.ValueObject):
+
+    def __init__(self, value: int) -> None:
+        object.__setattr__(self, "_value", value)
+
+    def __int__(self) -> int:
+        return canonical_int(self._value)
+
+    _value: int
+
+
 class ShortLink(ts.Entity):
 
     def __init__(self, slug: str, status: str) -> None:
@@ -58,8 +80,8 @@ class ShortLink(ts.Entity):
     def deactivate(self) -> None:
         self._status = LinkStatus("inactive")
 
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, ShortLink) and self._slug == other._slug
+    def __eq__(self, other: object) -> Same:
+        return Same(isinstance(other, ShortLink) and self._slug == other._slug)
 
     def __hash__(self) -> int:
         return hash(self._slug)
@@ -78,11 +100,14 @@ class Campaign(ts.AggregateRoot):
     def links(self) -> tuple[ShortLink, ...]:
         return tuple(self._links)
 
+    def link_count(self) -> LinkCount:
+        return LinkCount(len(self._links))
+
     def add_link(self, slug: str) -> None:
         self._links.append(ShortLink(slug, "active"))
 
-    def __eq__(self, other: object) -> bool:
-        return self is other
+    def __eq__(self, other: object) -> Same:
+        return Same(self is other)
 
     def __hash__(self) -> int:
         return id(self)

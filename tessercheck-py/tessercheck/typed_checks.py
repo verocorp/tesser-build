@@ -852,8 +852,23 @@ def _check_compound_raw_primitive(
     findings: list[Finding] = []
     fields = _fields(node)
 
+    # A comparison-answer type is the one value object that MAY wrap a bool.
+    # TB016's reason for the ban is that a bool has no serialization form and
+    # its only candidate dunder, __bool__, is truthiness rather than a canonical
+    # exit. For this type that reasoning inverts: truthiness IS its purpose (it
+    # is what `if a < b` consumes), and it never crosses an edge, so it needs no
+    # wire form. Required by TB019, which stopped licensing the rich comparisons
+    # — a domain object answers a comparison with a domain object, and without
+    # __bool__ on that answer every `if a == b` is silently true.
+    answers_a_comparison = any(
+        isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)) and m.name == "__bool__"
+        for m in node.body
+    )
+
     for field in fields:
         if _annotation_base(field.annotation) not in _NON_WRAPPABLE:
+            continue
+        if answers_a_comparison and _annotation_base(field.annotation) == "bool":
             continue
         if suppressed(field.lineno):
             continue
@@ -979,19 +994,31 @@ def _bare_self_field_returned(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> str
     return None
 
 
-# The dunders whose return type the LANGUAGE fixes, not the author. No amount of
-# domain modelling changes what __eq__ may return, so the total-return rule
-# cannot reach them; they are licensed, not excused. The conversion dunders are
-# licensed for a different reason — they ARE the canonical exit, and TB015/TB018
-# already govern which one a type may define and what it must delegate to.
-_PROTOCOL_EXITS: frozenset[str] = frozenset(
+# The dunders whose return type CPython ENFORCES — returning anything else is a
+# TypeError at the call site, so the rule genuinely cannot reach them. This list
+# is measured, not judged: each entry raises when handed a domain object
+# (``__hash__ method should return an integer``, ``__str__ returned
+# non-string``, ...), and ``__contains__`` silently coerces its result to bool,
+# which is the same thing one layer down. ``__bool__`` is where the boolean
+# terminator actually lives — ONE language-fixed site, not one per predicate.
+_LANGUAGE_FIXED: frozenset[str] = frozenset(
     {
-        "__eq__", "__ne__", "__hash__", "__bool__", "__len__", "__contains__",
-        "__lt__", "__le__", "__gt__", "__ge__", "__repr__", "__format__",
-        "__str__", "__int__", "__float__", "__bytes__", "__index__",
-        "__iter__", "__next__", "__getitem__", "__init__", "__post_init__",
-        "__setattr__", "__delattr__", "__init_subclass__", "__class_getitem__",
+        "__hash__", "__str__", "__repr__", "__bool__", "__len__", "__contains__",
+        "__int__", "__float__", "__bytes__", "__index__", "__format__",
     }
+)
+
+# The six rich comparisons are NOT language-fixed: CPython hands back whatever
+# they return (verified — ``Day(1) < Day(2)`` yields the object itself, and
+# ``sorted`` still works when the result carries ``__bool__``). So the rule
+# reaches them, and a domain object comparing itself answers with a domain
+# object or does not implement the operator at all.
+#
+# The consequence a caller must know: if that answer type omits ``__bool__``,
+# every ``if a == b`` is silently TRUE, because a plain object is truthy. The
+# answer type owns a ``__bool__``; that dunder is language-fixed above.
+_COMPARISON_DUNDERS: frozenset[str] = frozenset(
+    {"__eq__", "__ne__", "__lt__", "__le__", "__gt__", "__ge__"}
 )
 
 # ``Self`` and ``Never``/``NoReturn`` name the class itself or no value at all —
@@ -1053,18 +1080,28 @@ def _check_domain_return(
     (Decimal, datetime) or a DTO crossing back out of a method is the same
     representation leak a public field would be — it just costs a call.
 
-    Three licensed exits, each because the rule provably cannot reach it:
+    The comparison dunders are IN scope, not licensed (maintainer ruling
+    2026-08-08). CPython fixes the return type of eleven dunders and raises
+    TypeError otherwise (:data:`_LANGUAGE_FIXED`); it does not fix the six rich
+    comparisons (:data:`_COMPARISON_DUNDERS`), which hand back whatever they
+    return. So ``Day.__lt__(other) -> bool`` is a choice, and it is the same
+    leak as ``Day.before(other) -> bool`` — licensing one spelling and banning
+    the other was an artifact, not a rule. A domain object either answers a
+    comparison with a domain object or does not implement the operator.
 
-    * **protocol** — a dunder whose return type the language fixes
-      (:data:`_PROTOCOL_EXITS`). ``__eq__`` returning a ``Truth`` value object
-      would need ``Truth.__eq__`` to return a ``Truth``, and never bottoms out;
-      ``if`` consumes a ``bool`` at the call site regardless.
-    * **canonical exit** — the leaf's single conversion dunder, the one
-      primitive door serialization.md rule 3 REQUIRES. Governed by TB015 (which
-      dunder a type may define) and TB018 (what it delegates to), not here.
+    Two exits remain, each because the rule provably cannot reach it:
+
+    * **language-fixed** — the eleven dunders CPython enforces, ``__bool__``
+      among them. That is where the boolean terminator lives: ONE site the
+      language pins, reached through a comparison's answer type, rather than a
+      bool at every predicate.
     * **command** — a public method annotated ``-> None``. A transition has no
       value to promote; whether it should return the new state instead is the
       fact-vs-lifecycle decision entities.md leaves to the domain.
+
+    A leaf's canonical conversion exit needs no exit of its own: ``__str__`` and
+    friends are language-fixed, and TB015/TB018 govern which one a type may
+    define and what it must delegate to.
 
     An unannotated method is not judged: the gated trees run mypy --strict, so
     the annotation is already mandatory there, and a second totality rule here
@@ -1080,7 +1117,13 @@ def _check_domain_return(
     for member in node.body:
         if not isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        if member.name.startswith("_") or member.name in _PROTOCOL_EXITS:
+        dunder = member.name.startswith("__") and member.name.endswith("__")
+        if dunder:
+            # A comparison answers with a domain object; every other dunder is
+            # either language-fixed or not this rule's business.
+            if member.name not in _COMPARISON_DUNDERS:
+                continue
+        elif member.name.startswith("_"):
             continue
         if member.returns is None or _annotation_base(member.returns) == "None":
             continue
