@@ -34,7 +34,7 @@ class LlmToolHandler(ts.Handler):
         ] = {
             PROVIDE_NAME: (
                 "Record the caller's full name.",
-                lambda state: _params({"name": {"type": "string"}}, ("name",)),
+                lambda _state: _params({"name": {"type": "string"}}, ("name",)),
                 self._provide_name,
             ),
             CHOOSE_SLOT: (
@@ -46,7 +46,7 @@ class LlmToolHandler(ts.Handler):
             ),
             CONFIRM_BOOKING: (
                 "Book the chosen slot after the caller confirms.",
-                lambda state: _params({}, ()),
+                lambda _state: _params({}, ()),
                 self._confirm,
             ),
         }
@@ -64,10 +64,10 @@ class LlmToolHandler(ts.Handler):
         )
 
     def dispatch(self, tool: str, raw_arguments: Mapping[str, object]) -> voicewire.ToolTurn:
-        bound = self._tools.get(tool)
-        if bound is None:
+        if tool not in self._tools:
             raise ValueError(f"unknown tool {tool!r}")
-        return self._turn(bound[2](raw_arguments))
+        _, _, invoke = self._tools[tool]
+        return self._turn(invoke(raw_arguments))
 
     def _provide_name(self, raw: Mapping[str, object]) -> client.BookingStateResponse:
         return self._client.provide_name(
@@ -79,7 +79,7 @@ class LlmToolHandler(ts.Handler):
             client.ChooseSlotRequest(booking_id=self._booking_id, slot=_text(raw, "slot"))
         )
 
-    def _confirm(self, raw: Mapping[str, object]) -> client.BookingStateResponse:
+    def _confirm(self, _raw: Mapping[str, object]) -> client.BookingStateResponse:
         try:
             return self._client.confirm(
                 client.ConfirmBookingRequest(booking_id=self._booking_id)

@@ -122,6 +122,10 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   live-verified in both example trees — graduation waits only on Chris
   confirming the enacted rulings (wire-vocabulary entry below) and on the
   wire-module governance items that could still move module-level shapes.
+  The graduation pass must also re-verify every `verified impl:` file:symbol
+  pointer in the skill docs, not just the code samples —
+  `skills/tesser-build/srv.md:200` already dangles (`test_httpwire.py:
+  content_length` was renamed to `buffered_length` in the srv-matrix wave).
   Root `README.md:98-110` also under-describes tesser-py (names only
   `tesser.domain.ValueObject`; pre-existing narrowness, fold in here).
 - [ ] **Make rules.py conformant** (Chris 2026-08-06). The generator is
@@ -158,7 +162,13 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   (b) **`Endpoint`/`Command`/`ToolSurface` stay anonymous-`__call__`/named
   wire ports** — untouched this wave; if the position-naming convention
   needs more than the `Endpoint` precedent, that's a matrix row.
-  (4) **A wire module is the least-governed home in the tree** (adversarial
+  (c) **`Response.json_body` knowingly resembles the deleted test-helper
+  alias** (CHANGELOG once removed `tests/wire.py`'s `json_body` as a
+  rename-in-helper's-clothing). Kept deliberately: it is the record's own
+  reader mirroring `HttpRequest.json_body`, and its test-only callers are
+  tests playing the HTTP-client role — not a test-local rename. Don't
+  re-delete it without ruling the reader question.
+  (d) **A wire module is the least-governed home in the tree** (adversarial
   2026-08-07, verified): no import allowlist (contrast CORE_STDLIB) — a
   wire module importing subprocess/boto3/tests gets zero findings, so
   `git mv shop/domain.py bizwire.py` + a base swap escapes every

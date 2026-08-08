@@ -8,15 +8,15 @@ import tesser.srv as ts
 
 class Tool(ts.Record):
 
-    def __init__(self, name: str, description: str, parameters: dict[str, object]) -> None:
-        super().__init__(name=name, description=description, parameters=parameters)
+    def __init__(self, name: str, description: str, parameters: Mapping[str, object]) -> None:
+        super().__init__(name=name, description=description, parameters=dict(parameters))
 
     name: str
     description: str
-    parameters: dict[str, object]
+    parameters: Mapping[str, object]
 
     def schema(self) -> dict[str, object]:
-        return {"name": self.name, "description": self.description, "parameters": self.parameters}
+        return {"name": self.name, "description": self.description, "parameters": dict(self.parameters)}
 
 
 class ToolTurn(ts.Response):

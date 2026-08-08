@@ -1456,6 +1456,8 @@ def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv(tmp_path: P
         "class Value(tesser.domain.ValueObject):\n"
         "    pass\n"
         "class Turn(ts.Response):\n"
+        "    pass\n"
+        "class Label(ts.Record):\n"
         "    pass\n",
     )
     findings = check_tree(tmp_path)
@@ -1495,6 +1497,11 @@ def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv(tmp_path: P
     assert any(
         "srv.box.Turn" in f
         and "is a wire response record; only a host class lives in a srv module" in f
+        for f in findings
+    )
+    assert any(
+        "srv.box.Label" in f
+        and "is a wire record; only a host class lives in a srv module" in f
         for f in findings
     )
 

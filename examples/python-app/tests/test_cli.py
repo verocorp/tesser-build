@@ -46,6 +46,13 @@ def test_a_missing_argument_is_a_usage_error() -> None:
     assert "usage: create-campaign" in resp.stderr
 
 
+def test_an_empty_argument_is_a_usage_error() -> None:
+    client, _ = build_campaign(CampaignConfig("memory"), _AllowAllChecker())
+    resp = Handler(client).create_campaign(CliRequest(("", "USD")))
+    assert resp.exit_code == 2
+    assert "missing argument <budget_amount>" in resp.stderr
+
+
 def test_extra_arguments_are_a_usage_error() -> None:
     client, _ = build_campaign(CampaignConfig("memory"), _AllowAllChecker())
     resp = Handler(client).create_campaign(CliRequest(("100.00", "USD", "surplus")))

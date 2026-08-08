@@ -69,6 +69,25 @@ def test_wire_records_compare_by_value() -> None:
     assert Ask(path="/x", headers={"a": "b"}) == Ask(path="/x", headers={"a": "b"})
 
 
+def test_equality_covers_every_field_a_record_carries() -> None:
+    assert Reply(200, b"ok") != Reply(200, b"other")
+    assert Ask(path="/x", headers={"a": "b"}) != Ask(path="/x", headers={"a": "c"})
+    assert Ask(path="/x", headers={"a": "b"}) != Ask(path="/x")
+    assert Ask(path="/x") != Ask(path="/y")
+
+
+def test_a_misspelled_field_fails_at_construction_not_first_read() -> None:
+    class Typoed(tesser.srv.Response):
+
+        def __init__(self, status: int) -> None:
+            super().__init__(stauts=status)
+
+        status: int
+
+    with pytest.raises(TypeError, match=r"^Typoed declares no field 'stauts'$"):
+        Typoed(200)
+
+
 def test_records_of_different_types_never_compare_equal() -> None:
     class OtherReply(tesser.srv.Response):
 
@@ -90,17 +109,81 @@ def test_a_wire_record_is_unhashable_because_it_carries_containers() -> None:
 
 
 def test_a_record_subclass_may_not_take_over_the_contract() -> None:
-    with pytest.raises(TypeError):
+    with pytest.raises(
+        TypeError,
+        match=r"^_Sneaky must not override __setattr__: Record owns the wire-record contract$",
+    ):
 
         class _Sneaky(tesser.srv.Request):
 
             def __setattr__(self, name: str, value: object) -> None:
                 pass
 
-    with pytest.raises(TypeError):
+    with pytest.raises(
+        TypeError,
+        match=r"^_Slotted must not define or inherit __slots__: Record equality reads __dict__$",
+    ):
 
         class _Slotted(tesser.srv.Request):
             __slots__ = ("x",)
+
+
+def test_a_mixin_listed_before_the_base_may_not_take_over_the_contract_either() -> None:
+    class _Mut:
+
+        def __setattr__(self, name: str, value: object) -> None:
+            object.__setattr__(self, name, value)
+
+    with pytest.raises(
+        TypeError,
+        match=r"^_MutAsk must not override __setattr__: Record owns the wire-record contract$",
+    ):
+
+        class _MutAsk(_Mut, tesser.srv.Request):
+            pass
+
+
+def test_a_record_subclass_may_not_redefine_equality_or_hashing_or_deletion() -> None:
+    with pytest.raises(TypeError):
+
+        class _Loose(tesser.srv.Response):
+
+            def __eq__(self, other: object) -> bool:
+                return True
+
+    with pytest.raises(TypeError):
+
+        class _Hashed(tesser.srv.Response):
+
+            def __hash__(self) -> int:
+                return 0
+
+    with pytest.raises(TypeError):
+
+        class _Deletable(tesser.srv.Response):
+
+            def __delattr__(self, name: str) -> None:
+                return None
+
+
+def test_a_slotted_mixin_is_refused_even_though_the_subclass_declares_no_slots() -> None:
+    class _Compact:
+        __slots__ = ("x",)
+
+    with pytest.raises(TypeError):
+
+        class _Mixed(tesser.srv.Request, _Compact):
+            pass
+
+
+def test_a_wire_record_reprs_the_fields_it_carries() -> None:
+    assert repr(Reply(200, b"ok")) == "Reply(status=200, body=b'ok')"
+    assert repr(Ask(path="/x", headers={"a": "b"})) == "Ask(path='/x', headers={'a': 'b'})"
+
+
+def test_a_wire_record_never_equals_a_plain_object() -> None:
+    assert Reply(200, b"ok") != "Reply(200, b'ok')"
+    assert Reply(200, b"ok") != object()
 
 
 def test_a_derived_field_uses_the_valueobject_idiom() -> None:

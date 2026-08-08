@@ -4,7 +4,7 @@ A workflow whose next step is decided by an LLM tool call, built as a real
 `scheduling` context in the `ts.*` shell idiom and held to the spike-shells
 bar. The whole tree is sigcheck-clean — zero findings, gated plainly in CI.
 The two findings the tree's ratchet used to carry were resolved by the srv
-vocabulary (`tesser.srv`: `Host`, `Port`, `Request`, `Response`) and the
+vocabulary (`tesser.srv`: `Host`, `Port`, `Record`, `Request`, `Response`) and the
 wire-module rules: `ToolAgent` declares itself a `ts.Host`, and
 `voicewire.py` is a governed wire module (see "The host/handler split"
 below for the history). mypy --strict and pytest gate the pure modules.

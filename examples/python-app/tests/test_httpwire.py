@@ -54,6 +54,8 @@ def test_a_wire_record_refuses_rewriting_after_construction() -> None:
 def test_wire_records_regained_value_equality() -> None:
     assert Response(204, b"") == Response(204, b"")
     assert Response(204, b"") != Response(200, b"")
+    assert Response(204, b"a") != Response(204, b"b")
+    assert Response(204, b"", {"X-A": "1"}) != Response(204, b"")
 
 
 def test_response_json_serializes_to_bytes_and_owns_its_content_type() -> None:
@@ -110,6 +112,22 @@ def test_buffered_length_refuses_a_streaming_body() -> None:
 def test_buffered_length_refuses_an_oversized_body() -> None:
     with pytest.raises(PayloadTooLarge):
         HttpRequest.buffered_length({"Content-Length": str(MAX_BUFFERED_BODY + 1)})
+
+
+def test_buffered_length_refuses_a_negative_declaration() -> None:
+    with pytest.raises(BadRequest):
+        HttpRequest.buffered_length({"Content-Length": "-1"})
+
+
+def test_a_request_reads_its_own_path_parameters() -> None:
+    assert HttpRequest(path_params={"campaign_id": "abc"}).path_param("campaign_id") == "abc"
+
+
+def test_a_missing_or_empty_path_parameter_is_a_client_error() -> None:
+    with pytest.raises(BadRequest):
+        HttpRequest().path_param("campaign_id")
+    with pytest.raises(BadRequest):
+        HttpRequest(path_params={"campaign_id": ""}).path_param("campaign_id")
 
 
 def test_respond_maps_each_failure_class_to_a_problem_document() -> None:

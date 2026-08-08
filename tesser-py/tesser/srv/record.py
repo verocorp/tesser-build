@@ -11,15 +11,22 @@ class Record:
                     f"{cls.__name__} must not define or inherit __slots__: "
                     "Record equality reads __dict__"
                 )
-        for name in ("__eq__", "__hash__", "__setattr__", "__delattr__"):
-            if name in cls.__dict__:
-                raise TypeError(
-                    f"{cls.__name__} must not override {name}: "
-                    "Record owns the wire-record contract"
-                )
+            if base is Record or base is object:
+                continue
+            for name in ("__eq__", "__hash__", "__setattr__", "__delattr__"):
+                if name in base.__dict__:
+                    raise TypeError(
+                        f"{cls.__name__} must not override {name}: "
+                        "Record owns the wire-record contract"
+                    )
 
     def __init__(self, **fields: object) -> None:
+        declared: set[str] = set()
+        for base in type(self).__mro__:
+            declared.update(getattr(base, "__annotations__", {}))
         for name, value in fields.items():
+            if name not in declared:
+                raise TypeError(f"{type(self).__name__} declares no field {name!r}")
             object.__setattr__(self, name, value)
 
     def __eq__(self, other: object) -> bool:

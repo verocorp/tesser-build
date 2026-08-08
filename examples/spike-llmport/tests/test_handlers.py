@@ -52,7 +52,17 @@ def test_every_offered_tool_has_a_binding() -> None:
     handler = handlers.LlmToolHandler(service, "b1")
     offered = {name for names in handlers.TOOLS_FOR_STEP.values() for name in names}
 
-    assert offered <= set(handler._tools)
+    assert offered == set(handler._tools)
+
+
+def test_a_tool_declaration_does_not_alias_the_schema_it_was_handed() -> None:
+    parameters: dict[str, object] = {"type": "object"}
+    tool = voicewire.Tool("provide_name", "Record the caller's full name.", parameters)
+
+    parameters["type"] = "string"
+
+    assert tool.parameters == {"type": "object"}
+    assert tool.schema()["parameters"] == {"type": "object"}
 
 
 def test_a_tool_declaration_renders_its_wire_schema() -> None:
@@ -112,6 +122,55 @@ def test_the_flow_through_the_tool_surface() -> None:
     assert turn.tools == ()
     assert service.status(client.StatusRequest(booking_id="b1")).step == "booked"
     assert directory.reserved == [("mon-9am", "Ada Lovelace")]
+
+
+def test_the_provide_name_tool_declares_exactly_a_required_name() -> None:
+    service = application.BookingService(
+        MemorySlotDirectory(("mon-9am",)), MemoryBookingRepository()
+    )
+    handler = handlers.LlmToolHandler(service, "b1")
+
+    tool = handler.begin().tools[0]
+
+    assert tool.name == handlers.PROVIDE_NAME
+    assert tool.description == "Record the caller's full name."
+    assert tool.parameters == {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+        "additionalProperties": False,
+    }
+
+
+def test_the_confirm_booking_tool_declares_no_arguments() -> None:
+    service = application.BookingService(
+        MemorySlotDirectory(("mon-9am",)), MemoryBookingRepository()
+    )
+    handler = handlers.LlmToolHandler(service, "b1")
+    handler.begin()
+    handler.dispatch(handlers.PROVIDE_NAME, {"name": "Ada"})
+
+    turn = handler.dispatch(handlers.CHOOSE_SLOT, {"slot": "mon-9am"})
+    tool = turn.tools[1]
+
+    assert tool.name == handlers.CONFIRM_BOOKING
+    assert tool.parameters == {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": False,
+    }
+
+
+def test_a_tool_declaration_is_frozen_and_compares_by_value() -> None:
+    tool = voicewire.Tool("provide_name", "Record the caller's full name.", {"type": "object"})
+
+    assert tool == voicewire.Tool(
+        "provide_name", "Record the caller's full name.", {"type": "object"}
+    )
+    assert tool != voicewire.Tool("choose_slot", "Record the caller's full name.", {"type": "object"})
+    with pytest.raises(AttributeError):
+        tool.name = "cancel_booking"
 
 
 def test_the_choose_slot_schema_offers_exactly_the_current_slots() -> None:
