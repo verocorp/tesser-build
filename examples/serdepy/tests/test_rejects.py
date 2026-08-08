@@ -73,12 +73,12 @@ def _spec(weight_kg: float = 20.5) -> ParcelSpec:
 
 
 def test_is_heavy_is_true_above_the_threshold() -> None:
-    assert Parcel(_spec(20.5)).is_heavy()
+    assert str(Parcel(_spec(20.5)).weight_class()) == "heavy"
 
 
 def test_is_heavy_is_false_at_and_below_the_threshold() -> None:
-    assert not Parcel(_spec(20.0)).is_heavy()
-    assert not Parcel(_spec(0.5)).is_heavy()
+    assert str(Parcel(_spec(20.0)).weight_class()) == "standard"
+    assert str(Parcel(_spec(0.5)).weight_class()) == "standard"
 
 
 def test_the_compound_propagates_a_child_rejection() -> None:

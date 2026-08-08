@@ -110,12 +110,13 @@ class _Checker(ast.NodeVisitor):
 
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
-            if alias.name == "tesser.domain":
+            if alias.name == "tesser.domain" or alias.name.startswith("tesser.domain."):
                 self._vo_bases.add(f"{alias.asname or alias.name}.ValueObject")
         self.generic_visit(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        if node.module == "tesser.domain":
+        module = node.module or ""
+        if module == "tesser.domain" or module.startswith("tesser.domain."):
             for alias in node.names:
                 if alias.name == "ValueObject":
                     self._vo_bases.add(alias.asname or alias.name)

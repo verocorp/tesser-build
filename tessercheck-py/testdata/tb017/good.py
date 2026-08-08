@@ -53,6 +53,15 @@ class Money:
         return self._currency
 
 
+@dataclass(frozen=True)
+class LabelValue:
+    _value: str
+
+    def __post_init__(self) -> None:
+        if not self._value:
+            raise ValueError("label value must not be empty")
+
+
 @dataclass(frozen=True, init=False)
 class Labels:
     _values: tuple[tuple[str, str], ...]
@@ -62,8 +71,9 @@ class Labels:
             raise ValueError("labels must not be empty")
         object.__setattr__(self, "_values", tuple(sorted(values.items())))
 
-    def get(self, key: str) -> str | None:
-        return dict(self._values).get(key)
+    def get(self, key: str) -> LabelValue | None:
+        raw = dict(self._values).get(key)
+        return LabelValue(raw) if raw is not None else None
 
     def __len__(self) -> int:
         return len(self._values)

@@ -1,8 +1,10 @@
 import copy
 from dataclasses import dataclass
 
+from campaign.link_status import LinkStatus
 from campaign.slug import Slug
 from campaign.target_url import TargetURL
+from entity import Entity
 
 
 @dataclass(frozen=True)
@@ -13,7 +15,7 @@ class ShortLinkSpec:
     active: bool
 
 
-class ShortLink:
+class ShortLink(Entity):
 
     def __init__(self, spec: ShortLinkSpec) -> None:
         try:
@@ -24,7 +26,7 @@ class ShortLink:
             self._target_url = TargetURL(spec.target_url)
         except ValueError as e:
             raise ValueError(f"invalid target url: {e}") from e
-        self._active = spec.active
+        self._status = LinkStatus("active" if spec.active else "inactive")
 
     @property
     def slug(self) -> Slug:
@@ -35,19 +37,17 @@ class ShortLink:
         return self._target_url
 
     @property
-    def active(self) -> bool:
-        return self._active
+    def status(self) -> LinkStatus:
+        return self._status
 
     def deactivate(self) -> None:
-        if not self._active:
+        if self._status == LinkStatus("inactive"):
             raise ValueError(f"short link {self._slug} is already deactivated")
-        self._active = False
+        self._status = LinkStatus("inactive")
 
     def _clone(self) -> "ShortLink":
         return copy.copy(self)
 
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, ShortLink) and other._slug == self._slug
-
-    def __hash__(self) -> int:
-        return hash(self._slug)
+    @property
+    def identity(self) -> Slug:
+        return self._slug

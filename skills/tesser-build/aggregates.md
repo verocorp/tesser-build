@@ -46,7 +46,10 @@ aggregate tax.
    accessors return **defensive copies**, never the backing collection.
 4. **Block accidental equality.** An aggregate is not a value; comparing two
    aggregates with native equality is a bug. Make the type non-comparable
-   where the language allows and give it identity-based equality only.
+   where the language allows and give it identity-based equality only. In
+   Python that is `__eq__ = None` / `__hash__ = None` — *blocking* the
+   operator, which the base permits, as distinct from redefining it, which it
+   refuses (`domain-return.md` rule 2).
 5. **Mutability is a domain decision** (same fact-vs-lifecycle test as
    entities). Fact aggregates return new instances from state changes;
    lifecycle aggregates expose root-guarded transitions.

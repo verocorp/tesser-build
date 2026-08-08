@@ -1,6 +1,7 @@
-// Package reachthrough is a realistic coupled arm for skills/tesser-build/public-interface.md
-// (the public-interface rule): consumers should depend on the public orders.Client
-// boundary, not backend-specific adapter helpers.
+// Package reachthrough is a realistic coupled contender for the
+// public-interface rule (skills/tesser-build/public-interface.md): consumers
+// should depend on the public orders.Client boundary, not backend-specific
+// adapter helpers.
 //
 // Authored by the Codex adversary against the frozen SCORING.md; see
 // ../../adversary_provenance.md. It fails to build after `-tags swap` because its

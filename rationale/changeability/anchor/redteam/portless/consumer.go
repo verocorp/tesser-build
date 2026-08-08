@@ -1,8 +1,8 @@
-// Package portless is the Codex red-team arm for skills/tesser-build/public-interface.md
-// (the public-interface rule). It is the adversary's best attempt to match the
-// decoupled arm's 0 forced-edits under the backend A->B migration with LESS
-// ceremony than orders.Client: a package-level facade over anchor.Wire(),
-// importing only anchor + the orders DTOs, never backend.
+// Package portless is the Codex red-team contender for the public-interface
+// rule (skills/tesser-build/public-interface.md). It is the adversary's best
+// attempt to match the decoupled contender's 0 forced-edits under the backend
+// A->B migration with LESS ceremony than orders.Client: a package-level facade
+// over anchor.Wire(), importing only anchor + the orders DTOs, never backend.
 //
 // Authored by the Codex adversary against the frozen SCORING.md; see
 // ../../adversary_provenance.md. Codex's own verdict: it lowers consumer setup

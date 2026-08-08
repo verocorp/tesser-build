@@ -24,5 +24,5 @@ def parcel_parts(p: Parcel) -> ParcelParts:
         label_digest=bytes(p.label_digest),
         declared_value=str(p.declared_value),
         scanned_at=str(p.scanned_at),
-        heavy=p.is_heavy(),
+        heavy=str(p.weight_class()) == "heavy",
     )

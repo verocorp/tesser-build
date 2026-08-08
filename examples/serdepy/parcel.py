@@ -45,6 +45,18 @@ class ItemCount:
 
 
 @dataclass(frozen=True)
+class WeightClass:
+    _value: str
+
+    def __post_init__(self) -> None:
+        if self._value not in ("heavy", "standard"):
+            raise ValueError(f"weight class must be heavy or standard: {self._value!r}")
+
+    def __str__(self) -> str:
+        return canonical_str(self._value)
+
+
+@dataclass(frozen=True)
 class WeightKg:
     _value: float
 
@@ -55,8 +67,8 @@ class WeightKg:
     def __float__(self) -> float:
         return canonical_float(self._value)
 
-    def exceeds(self, threshold_kg: float) -> bool:
-        return self._value > threshold_kg
+    def _exceeds(self, threshold: WeightKg) -> bool:
+        return self._value > threshold._value
 
 
 @dataclass(frozen=True)
@@ -156,5 +168,6 @@ class Parcel:
     def scanned_at(self) -> ScannedAt:
         return self._scanned_at
 
-    def is_heavy(self) -> bool:
-        return self._weight.exceeds(_HEAVY_KG)
+    def weight_class(self) -> WeightClass:
+        heavy = self._weight._exceeds(WeightKg(_HEAVY_KG))
+        return WeightClass("heavy" if heavy else "standard")

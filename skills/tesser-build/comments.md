@@ -73,7 +73,7 @@ judgment call made inline at write time (Chris ruling 2026-07-19).
 - **The example trees** (`examples/`) — they are production templates and
   the norm's verified impls; they conform and are gated in CI.
 - **Not the toolkit's own internals** (analyzers, generator, rationale
-  arms) and **not prose surfaces** (`.md` files, commit messages, PR
+  contenders) and **not prose surfaces** (`.md` files, commit messages, PR
   bodies) — those are the layers explanation moves *to*.
 
 ## Carve-outs: how an exception gets in

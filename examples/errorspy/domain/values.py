@@ -8,6 +8,7 @@ from errors import DomainError, invalid, wrap
 from serialization import canonical_str
 
 _SLUG_PATTERN = re.compile(r"^[a-z0-9-]{4,20}$")
+_LINK_STATES = frozenset({"active", "inactive"})
 
 
 @dataclass(frozen=True)
@@ -67,8 +68,26 @@ class Day:
     def __str__(self) -> str:
         return self._value.isoformat()
 
-    def before(self, other: "Day") -> bool:
+    def _before(self, other: "Day") -> bool:
         return self._value < other._value
+
+
+@dataclass(frozen=True)
+class LinkStatus:
+
+    _value: str
+
+    def __post_init__(self) -> None:
+        if self._value not in _LINK_STATES:
+            raise invalid(
+                "bad_link_status",
+                f"invalid link status {self._value!r}: must be one of "
+                f"{', '.join(sorted(_LINK_STATES))}",
+                field="status",
+            )
+
+    def __str__(self) -> str:
+        return canonical_str(self._value)
 
 
 @dataclass(frozen=True, init=False)
@@ -80,7 +99,7 @@ class DateWindow:
     def __init__(self, spec: DateWindowSpec) -> None:
         start = _day(spec.start, field="start")
         end = _day(spec.end, field="end")
-        if not start.before(end):
+        if not start._before(end):
             raise invalid(
                 "window_order",
                 f"window start {start} must be before end {end}",

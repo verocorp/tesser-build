@@ -109,7 +109,7 @@ residuals are **out of v1**.
   (app-service SRP) → the domain-logic-leakage check (`for`-loop over domain
   objects / arithmetic inside an app service) `application-services.md` already
   describes. Testdata fixtures like v1. This is independent of the pending
-  **rationale arms** for decisions 1 & 4 (the changeability *proof*, synthetic,
+  **rationale contenders** for decisions 1 & 4 (the changeability *proof*, synthetic,
   also not pilot-gated) — enforcement does not wait on the proof.
 
 _(Dropped: Go-checker-failure triage — the toolkit tree is green and the failures

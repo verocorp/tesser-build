@@ -37,7 +37,7 @@ from tessercheck.astutil import (
     _has_unparseable_forward_ref,
     _name_of,
 )
-from tessercheck.classify import ClassInfo, Stereotype
+from tessercheck.classify import ClassInfo, Stereotype, tesser_domain_prefixes
 from tessercheck.finding import Finding
 
 # A predicate over 1-based line numbers: is a ``# tessercheck:ignore`` on that line?
@@ -199,6 +199,7 @@ def check_typed(
 ) -> list[Finding]:
     """Every classification-aware finding for one file."""
     lines = source.splitlines()
+    ts_prefixes = tesser_domain_prefixes(tree)
 
     def suppressed(line: int) -> bool:
         return 1 <= line <= len(lines) and _SUPPRESS_MARKER in lines[line - 1]
@@ -219,6 +220,12 @@ def check_typed(
             # primitives leave (TB015) and, for value objects, what it holds
             # inside (TB016).
             findings.extend(_check_public_decompiler(stmt, registry, path, suppressed))
+            # TB019 governs what the declared stereotype may hand back — the
+            # same rule for all three bases, so it sits outside the
+            # value-object / identity-object split below.
+            findings.extend(
+                _check_domain_return(stmt, info, registry, ts_prefixes, path, suppressed)
+            )
         if info.stereotype is Stereotype.VALUE_OBJECT:
             findings.extend(_check_vo_exposure(stmt, path, suppressed))
             findings.extend(_check_compound_raw_primitive(stmt, path, suppressed))
@@ -973,3 +980,186 @@ def _bare_self_field_returned(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> str
         ):
             return self_attr(first.value)
     return None
+
+
+# The dunders whose return type CPython ENFORCES — returning anything else is a
+# TypeError at the call site, so the rule genuinely cannot reach them. This list
+# is measured, not judged: each entry raises when handed a domain object
+# (``__hash__ method should return an integer``, ``__str__ returned
+# non-string``, ...), and ``__contains__`` silently coerces its result to bool,
+# which is the same thing one layer down. ``__bool__`` is where the boolean
+# terminator actually lives — ONE language-fixed site, not one per predicate.
+_LANGUAGE_FIXED: frozenset[str] = frozenset(
+    {
+        "__hash__", "__str__", "__repr__", "__bool__", "__len__", "__contains__",
+        "__int__", "__float__", "__bytes__", "__index__", "__format__",
+    }
+)
+
+# The six rich comparisons are NOT language-fixed — CPython hands back whatever
+# they return — so a domain object has no business defining one (ruling
+# 2026-08-08). That prohibition is NOT enforced here, for two reasons that both
+# point elsewhere: equality is TB014's subject end to end, and the runtime base
+# already refuses it outright — ValueObject and Entity raise TypeError from
+# __init_subclass__ when a subclass overrides __eq__/__hash__, which catches it
+# at import time rather than at lint time. TB019 governs the ORDINARY methods,
+# where nothing else is watching.
+_COMPARISON_DUNDERS: frozenset[str] = frozenset(
+    {"__eq__", "__ne__", "__lt__", "__le__", "__gt__", "__ge__"}
+)
+
+# ``Self`` and ``Never``/``NoReturn`` name the class itself or no value at all —
+# neither is a foreign type escaping the domain.
+_SELF_NAMES: frozenset[str] = frozenset({"Self", "Never", "NoReturn"})
+
+# Container and wrapper names that carry a payload rather than being one. They
+# are stripped before judging, so the rule reads the cargo and not the crate.
+_COLLECTION_WRAPPERS: frozenset[str] = frozenset(
+    {
+        "tuple", "Tuple", "list", "List", "set", "Set", "frozenset", "FrozenSet",
+        "dict", "Dict", "Mapping", "MutableMapping", "Sequence", "MutableSequence",
+        "Iterable", "Iterator", "Collection", "Optional", "Union", "Final",
+    }
+)
+
+
+def _returned_payload_names(ann: ast.expr) -> frozenset[str]:
+    """The type names a return annotation actually PRODUCES.
+
+    Containers are transparent: ``tuple[Money, ...]`` produces ``Money``, and
+    ``Money | None`` produces ``Money``. ``returned_only`` drops ``type[X]`` and
+    ``Callable[..., X]`` contents, which are mentioned without being produced.
+    """
+    return frozenset(
+        n
+        for n in _annotation_names(ann, returned_only=True)
+        if n not in _COLLECTION_WRAPPERS and n != "None"
+    )
+
+
+def _is_domain_name(name: str, own: str, registry: dict[str, ClassInfo]) -> bool:
+    """Does ``name`` denote a domain object — a value object or identity object?
+
+    The class's own name and ``Self`` count: a transition returning a new
+    instance of itself has not left the domain.
+    """
+    if name in _SELF_NAMES or name == own:
+        return True
+    info = registry.get(name)
+    return info is not None and info.stereotype in (
+        Stereotype.VALUE_OBJECT,
+        Stereotype.IDENTITY_OBJECT,
+    )
+
+
+def _qualified_domain_names(ann: ast.expr, prefixes: frozenset[str]) -> frozenset[str]:
+    """Names in ``ann`` reached through a ``tesser.domain`` alias.
+
+    ``ts.Money`` yields ``{"Money"}``, so the caller can clear it without the
+    library being in the analyzed tree.
+    """
+    found: set[str] = set()
+    for node in ast.walk(ann):
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id in prefixes
+        ):
+            found.add(node.attr)
+    return frozenset(found)
+
+
+def _check_domain_return(
+    node: ast.ClassDef,
+    info: ClassInfo,
+    registry: dict[str, ClassInfo],
+    ts_prefixes: frozenset[str],
+    path: str,
+    suppressed: "_Suppressed",
+) -> list[Finding]:
+    """TB019 — a domain object's public method returns a domain object.
+
+    Keyed on the DECLARED stereotype: a class that subclasses ts.ValueObject,
+    ts.Entity or ts.AggregateRoot has stated what it is, and this is the rule on
+    what its behavior may hand back. A primitive, an enum, a foreign value
+    (Decimal, datetime) or a DTO crossing back out of a method is the same
+    representation leak a public field would be — it just costs a call.
+
+    The comparison dunders are IN scope, not licensed (maintainer ruling
+    2026-08-08). CPython fixes the return type of eleven dunders and raises
+    TypeError otherwise (:data:`_LANGUAGE_FIXED`); it does not fix the six rich
+    comparisons (:data:`_COMPARISON_DUNDERS`), which hand back whatever they
+    return. So ``Day.__lt__(other) -> bool`` is a choice, and it is the same
+    leak as ``Day.before(other) -> bool`` — licensing one spelling and banning
+    the other was an artifact, not a rule. A domain object either answers a
+    comparison with a domain object or does not implement the operator.
+
+    Two exits remain, each because the rule provably cannot reach it:
+
+    * **language-fixed** — the eleven dunders CPython enforces, ``__bool__``
+      among them. That is where the boolean terminator lives: ONE site the
+      language pins, reached through a comparison's answer type, rather than a
+      bool at every predicate.
+    * **command** — a public method annotated ``-> None``. A transition has no
+      value to promote; whether it should return the new state instead is the
+      fact-vs-lifecycle decision entities.md leaves to the domain.
+
+    A leaf's canonical conversion exit needs no exit of its own: ``__str__`` and
+    friends are language-fixed, and TB015/TB018 govern which one a type may
+    define and what it must delegate to.
+
+    An unannotated method is not judged: the gated trees run mypy --strict, so
+    the annotation is already mandatory there, and a second totality rule here
+    would only duplicate that gate.
+    """
+    findings: list[Finding] = []
+    kind = (
+        "value object"
+        if info.stereotype is Stereotype.VALUE_OBJECT
+        else "domain object"
+    )
+
+    for member in node.body:
+        if not isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if member.name.startswith("_"):
+            continue
+        if member.returns is None or _annotation_base(member.returns) == "None":
+            continue
+
+        if _bare_self_field_returned(member) is not None:
+            # A bare `return self._x` is the representation leak TB010 owns on a
+            # value object and TB011 on an aggregate's collection. Reporting it
+            # twice tells the reader nothing new and breaks fixture isolation.
+            continue
+
+        payload = _returned_payload_names(member.returns)
+        if any(
+            registry.get(n) is not None and registry[n].stereotype is Stereotype.SPEC
+            for n in payload
+        ):
+            # Returning a spec is TB015's decompose-to-primitives surface.
+            continue
+        declared = _qualified_domain_names(member.returns, ts_prefixes)
+        offenders = sorted(
+            n
+            for n in payload
+            if n not in declared and not _is_domain_name(n, node.name, registry)
+        )
+        if not offenders or suppressed(member.lineno):
+            continue
+        named = ", ".join(repr(n) for n in offenders)
+        findings.append(
+            Finding(
+                path,
+                member.lineno,
+                member.col_offset + 1,
+                "TB019",
+                f"{kind} {node.name!r} method {member.name!r} returns {named}, "
+                "which is not a domain object; a domain object's behavior hands "
+                "back domain objects. The licensed exits are the protocol "
+                "dunders, a leaf's canonical conversion exit, and a '-> None' "
+                "transition — everything else names a type the domain owns",
+            )
+        )
+    return findings

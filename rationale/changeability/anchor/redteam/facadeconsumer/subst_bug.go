@@ -2,7 +2,7 @@
 
 // This file is EXCLUDED from normal builds (the subst tag is never set in
 // production or in `go test ./...`). It models change C2 — "make this dependent
-// unit-testable against a substitute" — for the FACADE arm.
+// unit-testable against a substitute" — for the FACADE contender.
 //
 // To test facadeconsumer.Reserve against a fake, you would need to pass a
 // substitute into the facade. The facade (redteam/portless) exposes no such

@@ -27,6 +27,18 @@ from tessercheck.astutil import (
     _name_of,
 )
 
+# The tesser.domain runtime bases, mapped to the stereotype they DECLARE. A
+# class that names one of these is not inferred, it is stated: the base is the
+# author's answer to the question the local heuristics below are guessing at, so
+# it outranks them (see _local_stereotype).
+_DECLARED_BASES: dict[str, str] = {
+    "ValueObject": "VALUE_OBJECT",
+    "Spec": "SPEC",
+    "Entity": "IDENTITY_OBJECT",
+    "AggregateRoot": "IDENTITY_OBJECT",
+    "Aggregate": "IDENTITY_OBJECT",
+}
+
 # Annotation bases that denote a *collection of* their element type. Owning a
 # collection of domain objects is the structural signal of an aggregate role.
 _COLLECTION_BASES: frozenset[str] = frozenset(
@@ -72,6 +84,8 @@ class ClassInfo:
     has_underscore_field: bool
     has_eq_none: bool
     has_eq_method: bool
+    is_contract_base: bool
+    has_identity: bool
     field_type_names: frozenset[str]
     collection_element_names: frozenset[str]
 
@@ -82,6 +96,76 @@ class ClassInfo:
         is the sub-state. An entity embedding only value objects is *not* a root.
         """
         return self.stereotype is Stereotype.IDENTITY_OBJECT and self.embeds_entity
+
+
+def _declared_base_aliases(tree: ast.Module) -> dict[str, str]:
+    """Map the names this module can spell a ``tesser.domain`` base with, to the
+    stereotype that base declares.
+
+    Both import shapes, aliases included — ``import tesser.domain as ts`` makes
+    the base ``ts.ValueObject``; ``from tesser.domain import Entity as E`` makes
+    it ``E``. Submodule imports (``from tesser.domain.entity import Entity``)
+    count too: ``tesser/domain/__init__.py`` only re-exports them. Mirrors the
+    resolution in checks.py, widened past ValueObject to every runtime base.
+    """
+    aliases: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "tesser.domain" or alias.name.startswith("tesser.domain."):
+                    prefix = alias.asname or alias.name
+                    for base, stereo in _DECLARED_BASES.items():
+                        aliases[f"{prefix}.{base}"] = stereo
+        elif isinstance(node, ast.ImportFrom):
+            mod = node.module or ""
+            if mod == "tesser.domain" or mod.startswith("tesser.domain."):
+                for alias in node.names:
+                    if alias.name in _DECLARED_BASES:
+                        aliases[alias.asname or alias.name] = _DECLARED_BASES[alias.name]
+    return aliases
+
+
+def tesser_domain_prefixes(tree: ast.Module) -> frozenset[str]:
+    """The attribute prefixes this module can spell a ``tesser.domain`` type
+    with — ``{"ts"}`` for ``import tesser.domain as ts``.
+
+    A type reached through one of these is a domain object by DECLARATION, and
+    checks may trust it without the defining package being in the analyzed
+    tree. tesser-py is a runtime dependency: a consumer analyzing its own app
+    never has the library's own modules in scope, and a cross-package domain
+    type must not read as foreign just because it lives in the library.
+    """
+    prefixes: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "tesser.domain":
+                    prefixes.add(alias.asname or alias.name)
+    return frozenset(prefixes)
+
+
+def _dotted_name(node: ast.expr) -> str | None:
+    """``ts.ValueObject`` as the string ``"ts.ValueObject"``.
+
+    Not ``_name_of``, which returns only the last segment: matching on the bare
+    segment would classify an unrelated local class named ``ValueObject`` as a
+    tesser value object.
+    """
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        prefix = _dotted_name(node.value)
+        return f"{prefix}.{node.attr}" if prefix else None
+    return None
+
+
+def _declared_stereotype(node: ast.ClassDef, aliases: dict[str, str]) -> str | None:
+    """The stereotype this class DECLARES via a tesser.domain base, if any."""
+    for base in node.bases:
+        name = _dotted_name(base)
+        if name in aliases:
+            return aliases[name]
+    return None
 
 
 def _is_property(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
@@ -108,16 +192,25 @@ class _Scan:
     col: int
     frozen_dataclass: bool
     any_dataclass: bool
+    # The stereotype a tesser.domain base declares outright, if any.
+    declared: str | None
     has_method: bool
     has_post_init: bool
     has_underscore_field: bool
     has_eq_none: bool
     has_eq_method: bool
+    # Defines __init_subclass__: this class POLICES its subclasses, which is what
+    # a base establishing a contract does and what an instance of one never does.
+    is_contract_base: bool
+    # Declares `identity` — the entity contract now that the base owns __eq__.
+    has_identity: bool
     field_type_names: frozenset[str]
     collection_element_names: frozenset[str]
 
 
-def _scan_class(node: ast.ClassDef, module: str) -> _Scan:
+def _scan_class(
+    node: ast.ClassDef, module: str, aliases: dict[str, str] | None = None
+) -> _Scan:
     any_dc, frozen, dec = _dataclass_frozen(node.decorator_list)
     methods: set[str] = set()
     has_eq_none = False
@@ -173,18 +266,36 @@ def _scan_class(node: ast.ClassDef, module: str) -> _Scan:
         col=int(getattr(anchor, "col_offset", node.col_offset)) + 1,
         frozen_dataclass=frozen,
         any_dataclass=any_dc,
+        declared=_declared_stereotype(node, aliases or {}),
         has_method=bool(methods),
         has_post_init="__post_init__" in methods,
         has_underscore_field=has_underscore_field,
         has_eq_none=has_eq_none,
         has_eq_method="__eq__" in methods,
+        is_contract_base="__init_subclass__" in methods,
+        has_identity="identity" in methods,
         field_type_names=frozenset(field_types),
         collection_element_names=frozenset(collection_elems),
     )
 
 
 def _local_stereotype(scan: _Scan) -> Stereotype:
-    """Axis 1 — kind of identity, from local signals only."""
+    """Axis 1 — kind of identity, from local signals only.
+
+    A declared tesser.domain base wins outright. The signals below are
+    heuristics for an UNdeclared class, and they key on shapes a base-class
+    domain object does not have: it is not a dataclass, and it inherits
+    ``__eq__`` rather than defining one, so every one of them fell to OTHER —
+    invisible to every classifier-keyed check (TB010-TB018).
+    """
+    if scan.declared is not None:
+        return Stereotype[scan.declared]
+    if scan.is_contract_base:
+        # ValueObject/Entity and their stdlib renderings DEFINE a stereotype's
+        # contract; they are not instances of it. Without this they match the
+        # identity heuristic below (they carry __eq__ and are not dataclasses)
+        # and every rule keyed on the stereotype fires on the library itself.
+        return Stereotype.OTHER
     if scan.frozen_dataclass:
         # value family: a VO *validates* (__post_init__) and/or *hides* its
         # representation (an underscore-private field). A record / spec / DTO
@@ -193,8 +304,12 @@ def _local_stereotype(scan: _Scan) -> Stereotype:
         if scan.has_post_init or scan.has_underscore_field:
             return Stereotype.VALUE_OBJECT
         return Stereotype.SPEC
-    if not scan.any_dataclass and (scan.has_eq_method or scan.has_eq_none):
-        # identity equality (by id) or blocked equality (``__eq__ = None``).
+    if not scan.any_dataclass and (
+        scan.has_eq_method or scan.has_eq_none or scan.has_identity
+    ):
+        # identity equality (by id), blocked equality (``__eq__ = None``), or a
+        # declared ``identity`` — the contract once the base owns __eq__ and the
+        # entity no longer spells equality itself.
         return Stereotype.IDENTITY_OBJECT
     return Stereotype.OTHER
 
@@ -207,9 +322,10 @@ def classify_trees(trees: dict[str, ast.Module]) -> dict[str, ClassInfo]:
     scans: dict[str, _Scan] = {}
     stereos: dict[str, Stereotype] = {}
     for module, tree in trees.items():
+        aliases = _declared_base_aliases(tree)
         for stmt in tree.body:
             if isinstance(stmt, ast.ClassDef):
-                scan = _scan_class(stmt, module)
+                scan = _scan_class(stmt, module, aliases)
                 scans[scan.name] = scan
                 stereos[scan.name] = _local_stereotype(scan)
 
@@ -241,6 +357,8 @@ def classify_trees(trees: dict[str, ast.Module]) -> dict[str, ClassInfo]:
             has_underscore_field=scan.has_underscore_field,
             has_eq_none=scan.has_eq_none,
             has_eq_method=scan.has_eq_method,
+            is_contract_base=scan.is_contract_base,
+            has_identity=scan.has_identity,
             field_type_names=scan.field_type_names,
             collection_element_names=scan.collection_element_names,
         )

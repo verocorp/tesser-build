@@ -38,6 +38,6 @@ def test_join_semantics_default_and_ordering() -> None:
     links = (Link("z", "https://ok.example/z"), Link("a", "https://bad.example/a"))
     verdicts = (RecordedVerdict("https://bad.example/a", False, "host blocked"),)
     rows = join_links_with_verdicts(links, verdicts)
-    assert [r.slug for r in rows] == ["a", "z"]
-    assert not rows[0].allowed and rows[0].reason == "host blocked"
-    assert rows[1].allowed and rows[1].reason == "no verdict recorded"
+    assert [str(r.slug) for r in rows] == ["a", "z"]
+    assert str(rows[0].allowed) == "denied" and str(rows[0].reason) == "host blocked"
+    assert str(rows[1].allowed) == "allowed" and str(rows[1].reason) == "no verdict recorded"

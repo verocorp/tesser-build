@@ -1,16 +1,17 @@
 // The decision-3 changeability contrast on an outward-representation migration
 // (-tags repv2, the public response DTO's BurnSeconds -> DurationMillis). Per
-// ../SCORING.md the proof is the DELTA between arms at matched N, taken with
-// PER-PACKAGE builds (a whole-module `go build ./...` stops early and undercounts):
+// ../SCORING.md the proof is the DELTA between contenders at matched N, taken
+// with PER-PACKAGE builds (a whole-module `go build ./...` stops early and
+// undercounts):
 //
 //	at N = 8:   decoupled forced-edits = 0   |   coupled forced-edits = 8
 //	at N = 16:  decoupled forced-edits = 0   |   coupled forced-edits = 16
 //
-// The decoupled arm (operates on the domain object's VALUE OBJECTS) flat at 0
-// across N is O(1); the coupled arm (reaches the DOMAIN-EMITTED DTO's raw field)
-// tracking N is O(dependents). The single correct mapping site is the application
-// service's Respond (package app), which a migration forces once — that O(1) is
-// what the domain-emitting violation trades for O(N).
+// The decoupled contender (operates on the domain object's VALUE OBJECTS) flat
+// at 0 across N is O(1); the coupled contender (reaches the DOMAIN-EMITTED
+// DTO's raw field) tracking N is O(dependents). The single correct mapping site
+// is the application service's Respond (package app), which a migration forces
+// once — that O(1) is what the domain-emitting violation trades for O(N).
 //
 // There is no import-cycle guard here: a dumb DTO imports nothing, so the domain
 // importing it would never be a cycle. The rule is a convention the compiler does
@@ -74,16 +75,16 @@ func forcedEdits(t *testing.T, pkgs []string, n int) int {
 
 // assertBaseline is the mandatory pre-migration positive control: every dependent
 // builds BEFORE the migration, so a post-migration failure is meaningful.
-func assertBaseline(t *testing.T, pkgs []string, arm string) {
+func assertBaseline(t *testing.T, pkgs []string, contender string) {
 	t.Helper()
 	for _, p := range pkgs {
 		if !buildsClean(t, p, false /*pre-migration*/) {
-			t.Fatalf("pre-migration baseline build failed for %s (%s arm)", p, arm)
+			t.Fatalf("pre-migration baseline build failed for %s (%s contender)", p, contender)
 		}
 	}
 }
 
-func TestDecoupledArm_SurvivesRepMigration(t *testing.T) {
+func TestDecoupledContender_SurvivesRepMigration(t *testing.T) {
 	pkgs := armPkgs(t, "decoupled")
 	if len(pkgs) < 16 {
 		t.Fatalf("want >=16 decoupled consumers, got %d", len(pkgs))
@@ -91,19 +92,19 @@ func TestDecoupledArm_SurvivesRepMigration(t *testing.T) {
 	assertBaseline(t, pkgs, "decoupled")
 	for _, n := range []int{8, 16} {
 		if got := forcedEdits(t, pkgs, n); got != 0 {
-			t.Fatalf("decoupled arm forced %d edits at N=%d under the rep migration, want 0", got, n)
+			t.Fatalf("decoupled contender forced %d edits at N=%d under the rep migration, want 0", got, n)
 		}
 	}
 }
 
-// The contrast: at matched N the decoupled arm stays flat at 0 while the coupled
-// arm tracks N. The delta — not the coupled count in isolation — is the
-// O(1)-vs-O(dependents) proof.
+// The contrast: at matched N the decoupled contender stays flat at 0 while the
+// coupled contender tracks N. The delta — not the coupled count in isolation —
+// is the O(1)-vs-O(dependents) proof.
 func TestContrast_DecoupledFlat_CoupledTracksN(t *testing.T) {
 	decoupled := armPkgs(t, "decoupled")
 	coupled := armPkgs(t, filepath.Join("coupled", "fanout"))
 	if len(decoupled) < 16 || len(coupled) < 16 {
-		t.Fatalf("want >=16 in each arm, got decoupled=%d coupled=%d", len(decoupled), len(coupled))
+		t.Fatalf("want >=16 in each contender, got decoupled=%d coupled=%d", len(decoupled), len(coupled))
 	}
 	assertBaseline(t, coupled, "coupled")
 

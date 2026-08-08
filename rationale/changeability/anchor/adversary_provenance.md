@@ -1,9 +1,9 @@
 # Adversary provenance — the public-interface anchor
 
 Per `SCORING.md` §Reproducibility, the adversary run is a one-time design
-exercise whose **arms are committed** and whose **provenance is committed** so
+exercise whose **contenders are committed** and whose **provenance is committed** so
 that "the adversary tried hard" is verifiable, not asserted. This file is that
-provenance. The human role here is curating **realism** of the arms — not judging
+provenance. The human role here is curating **realism** of the contenders — not judging
 the winner; the metric judges.
 
 ## What was commissioned
@@ -12,19 +12,19 @@ An outside model (Codex, `codex exec -s read-only -c model_reasoning_effort=high
 two calls on 2026-07-12) was given the frozen `SCORING.md` plus the full anchor
 code and asked to produce, optimizing **against** the fixed contract:
 
-- **Coupled arms** — 2–3 distinct *realistic* coupling patterns real Go devs
+- **Coupled contenders** — 2–3 distinct *realistic* coupling patterns real Go devs
   write (not deliberately-worst code), each forced to change by the declared
   change **C = migrate backend A→B** (`go build -tags swap`). Escape-hatch ban
   applied (no `interface{}`/reflection/maps/stringly-typed hiding).
-- **Red-team arm** — its best attempt to match the decoupled arm's 0 forced-edits
+- **Red-team contender** — its best attempt to match the decoupled contender's 0 forced-edits
   under C with **less ceremony**, or to break the O(1) claim. Bans lifted; any
   real architecture allowed.
 
-## The committed arms + verified scoring
+## The committed contenders + verified scoring
 
 Per-package `go build` (SCORING.md's unit), default vs `-tags swap`:
 
-| Arm | Pattern | pre-swap | post-swap (C) | forced-edits |
+| Contender | Pattern | pre-swap | post-swap (C) | forced-edits |
 |---|---|---|---|---|
 | `coupled/reachthrough` | calls `backend.FetchRawA`, returns `OrderRowA` (ad-hoc reconciliation) | builds | **fails** | 1 (→ N when fanned out) |
 | `coupled/exportrow` | bakes `backend.OrderRowA` into its own exported API type | builds | **fails** | 1 (→ N) |
@@ -64,12 +64,12 @@ On the letter of the ceremony metric, `portless` matches our changeability with
 - **Returning domain `ordersapp.Order`** — avoids backend coupling, but exposes
   application internals; more conceptual leakage than the facade.
 - **`interface{}` / maps / reflection / stringly-typed rows** — disallowed for
-  coupled arms, and poor red-team evidence (hides static coupling instead of
+  coupled contenders, and poor red-team evidence (hides static coupling instead of
   improving the boundary).
 
 ## Codex's verdict (verbatim conclusion)
 
-> I cannot cleanly beat the decoupled arm on both changeability and overall
+> I cannot cleanly beat the decoupled contender on both changeability and overall
 > ceremony without paying elsewhere. `portless` reduces visible consumer setup,
 > but it centralizes wiring inside every call and is less testable/injectable than
 > accepting an `orders.Client`. The strongest conclusion is that `orders.Client`

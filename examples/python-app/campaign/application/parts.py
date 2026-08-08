@@ -68,5 +68,5 @@ def short_link_parts(link: ShortLink) -> ShortLinkParts:
     return ShortLinkParts(
         slug=str(link.slug),
         target_url=str(link.target_url),
-        active=link.active,
+        active=str(link.status) == "active",
     )

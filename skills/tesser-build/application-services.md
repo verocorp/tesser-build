@@ -104,7 +104,7 @@ own outward representation drags the wire shape into the domain: every read-side
 dependent that reaches `m.ToResponse().SomeField` is bound to the wire format, so an
 outward-format change (a renamed or retyped response field) fans out to *N* of them
 instead of the one Respond site. (Measured: `rationale/changeability/nooutward` — the
-domain-emitting arm pays N; the service-Respond arm pays 1.)
+domain-emitting contender pays N; the service-Respond contender pays 1.)
 
 There is more than one *correct* way to get a value to a caller; pick by where the
 caller starts:

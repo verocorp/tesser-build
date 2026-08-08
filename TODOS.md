@@ -271,7 +271,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   re-scoped 2026-08-07 after the srv-wire wave restructured the methods).**
   (1) the exactly-once-as-ts walk: the srv-wire wave extracted
   `_shell_import_violations` (parameterized, covers the srv/bootstrap/wire
-  arm), but `_import_violations` and `_test_module_violations` still carry
+  branch), but `_import_violations` and `_test_module_violations` still carry
   their own copies; the statement-totality loop now exists at FOUR sites
   (`_bootstrap_module_violations`, `_srv_module_violations`,
   `_wire_module_violations`, `_role_module_violations`) — extract without
@@ -360,14 +360,14 @@ Deferred work with context. Each entry carries enough for a cold pickup.
     shapes get through, all documented in `doubles_check.py`'s module docstring
     so they are declared rather than hidden:
     1. **aliased module import** — `import unittest as u` → `u.mock.patch`, and
-       `import pytest as pt` → `pt.MonkeyPatch`. The attribute arms match the
+       `import pytest as pt` → `pt.MonkeyPatch`. The attribute branches match the
        literal module name. This is the highest-value one and Codex rated it
        block-worthy.
     2. **dynamic import** — `importlib.import_module("unittest.mock")`,
        `__import__`, `getattr(unittest, "mock")`, `sys.modules[...]`.
     3. **use-site fixture access** — `request.getfixturevalue("monkeypatch")`
        takes no banned parameter, defeating the monkeypatch half of the rule.
-    4. **a suppressed import whitelists the module** — the library arms fire on
+    4. **a suppressed import whitelists the module** — the library branches fire on
        the import, not each use, so one marker clears every call site below.
   - **How:** (1) needs an alias table built in a first pass over `Import`
     nodes, then matching attribute roots against it — the natural next
@@ -729,7 +729,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 
 - [ ] **No example tree contains an `async def`, so async annotation handling
   is unproven end-to-end** (coverage audit 2026-07-26)
-  - **What:** the metamorphic sweep's `visit_AsyncFunctionDef` arm and every
+  - **What:** the metamorphic sweep's `visit_AsyncFunctionDef` branch and every
     checker's `AsyncFunctionDef` branch run only on synthetic unit fixtures —
     the four example trees have zero async code. The sweep looks like it
     covers async return annotations and does not.

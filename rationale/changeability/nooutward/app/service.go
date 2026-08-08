@@ -1,11 +1,12 @@
 // Package app is the APPLICATION SERVICE behind pub.Client: the only place that
 // knows both worlds. It accepts and returns DTOs (dumb primitives) and converts
-// them to and from domain objects (value objects), so the domain and repositories
-// operate on domain objects only. The four-step shape is Convert -> Delegate ->
-// Persist -> Respond; Respond (domain object -> response DTO) is the SINGLE
-// mapping site, and it is the only code an outward-representation migration forces
-// to change (respond_v1.go / respond_v2.go, -tags repv2). Contrast that O(1) with
-// the coupled arm, where the domain emits the DTO and every dependent pays.
+// them to and from domain objects (value objects), so the domain and
+// repositories operate on domain objects only. The four-step shape is Convert
+// -> Delegate -> Persist -> Respond; Respond (domain object -> response DTO) is
+// the SINGLE mapping site, and it is the only code an outward-representation
+// migration forces to change (respond_v1.go / respond_v2.go, -tags repv2).
+// Contrast that O(1) with the coupled contender, where the domain emits the DTO
+// and every dependent pays.
 //
 // See ../../SCORING.md (decision 3).
 package app

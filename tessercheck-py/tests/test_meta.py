@@ -221,7 +221,7 @@ def test_quoting_every_annotation_changes_no_finding_tree_wide() -> None:
     # The per-file sweep above classifies each file in isolation; the
     # cross-file embeds_entity / is_member resolution that motivated the walk
     # unification is built by run_paths' whole-tree registry and never enters
-    # that guard (red-team review). This arm materializes each corpus quoted
+    # that guard (red-team review). This branch materializes each corpus quoted
     # and compares whole-tree output, so the registry direction is inside the
     # invariance too.
     import tempfile

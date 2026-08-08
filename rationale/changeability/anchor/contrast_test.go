@@ -1,13 +1,15 @@
 // The public-interface changeability contrast on change C1 (backend migration).
-// Per ../SCORING.md the proof is the DELTA between arms at matched N, taken with
-// PER-PACKAGE builds (a whole-module `go build ./...` stops early and undercounts):
+// Per ../SCORING.md the proof is the DELTA between contenders at matched N,
+// taken with PER-PACKAGE builds (a whole-module `go build ./...` stops early
+// and undercounts):
 //
 //	at N = 8:   decoupled forced-edits = 0   |   coupled forced-edits = 8
 //	at N = 16:  decoupled forced-edits = 0   |   coupled forced-edits = 16
 //
-// The decoupled arm flat at 0 across N is O(1); the coupled arm tracking N is
-// O(dependents). C1 alone is TIED by the red-team facade with less ceremony —
-// substitution_test.go carries C2, where the interface actually earns its place.
+// The decoupled contender flat at 0 across N is O(1); the coupled contender
+// tracking N is O(dependents). C1 alone is TIED by the red-team facade with
+// less ceremony — substitution_test.go carries C2, where the interface actually
+// earns its place.
 package anchor_test
 
 import (
@@ -67,16 +69,16 @@ func forcedEdits(t *testing.T, pkgs []string, n int) int {
 
 // assertBaseline is the mandatory pre-swap positive control: every dependent
 // builds BEFORE the migration, so a post-swap failure is meaningful.
-func assertBaseline(t *testing.T, pkgs []string, arm string) {
+func assertBaseline(t *testing.T, pkgs []string, contender string) {
 	t.Helper()
 	for _, p := range pkgs {
 		if !buildsClean(t, p, false /*pre-swap*/) {
-			t.Fatalf("pre-swap baseline build failed for %s (%s arm)", p, arm)
+			t.Fatalf("pre-swap baseline build failed for %s (%s contender)", p, contender)
 		}
 	}
 }
 
-func TestDecoupledArm_SurvivesBackendSwap(t *testing.T) {
+func TestDecoupledContender_SurvivesBackendSwap(t *testing.T) {
 	pkgs := armPkgs(t, "decoupled")
 	if len(pkgs) < 16 {
 		t.Fatalf("want >=16 decoupled consumers, got %d", len(pkgs))
@@ -84,19 +86,19 @@ func TestDecoupledArm_SurvivesBackendSwap(t *testing.T) {
 	assertBaseline(t, pkgs, "decoupled")
 	for _, n := range []int{8, 16} {
 		if got := forcedEdits(t, pkgs, n); got != 0 {
-			t.Fatalf("decoupled arm forced %d edits at N=%d under the backend swap, want 0", got, n)
+			t.Fatalf("decoupled contender forced %d edits at N=%d under the backend swap, want 0", got, n)
 		}
 	}
 }
 
-// The C1 contrast: at matched N the decoupled arm stays flat at 0 while the
-// coupled arm tracks N. The delta — not the coupled count in isolation — is the
-// O(1)-vs-O(dependents) proof.
+// The C1 contrast: at matched N the decoupled contender stays flat at 0 while
+// the coupled contender tracks N. The delta — not the coupled count in
+// isolation — is the O(1)-vs-O(dependents) proof.
 func TestContrast_C1_DecoupledFlat_CoupledTracksN(t *testing.T) {
 	decoupled := armPkgs(t, "decoupled")
 	coupled := armPkgs(t, filepath.Join("coupled", "fanout"))
 	if len(decoupled) < 16 || len(coupled) < 16 {
-		t.Fatalf("want >=16 in each arm, got decoupled=%d coupled=%d", len(decoupled), len(coupled))
+		t.Fatalf("want >=16 in each contender, got decoupled=%d coupled=%d", len(decoupled), len(coupled))
 	}
 	assertBaseline(t, coupled, "coupled")
 

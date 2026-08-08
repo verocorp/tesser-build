@@ -5,10 +5,10 @@
 // dependents to obtain the DTO through the domain and read its wire fields.
 //
 // A dependent that reaches m.ToResponse().BurnSeconds is bound to the outward
-// format and breaks when it migrates — the coupled arm of decision 3's fan-out.
-// The DTO assembly is split by build tag (respond_v1.go / respond_v2.go) so this
-// package itself compiles under both states; only the DEPENDENTS naming the
-// reshaped field are forced. See ../../SCORING.md.
+// format and breaks when it migrates — the coupled contender of decision 3's
+// fan-out. The DTO assembly is split by build tag (respond_v1.go /
+// respond_v2.go) so this package itself compiles under both states; only the
+// DEPENDENTS naming the reshaped field are forced. See ../../SCORING.md.
 package emit
 
 import (

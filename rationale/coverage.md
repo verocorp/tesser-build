@@ -50,17 +50,17 @@ silent; the demos are backlog, not a blocker.
 
 ## Consistency dimension — the case for the *standard*, not just the pattern
 
-The matrix above is arm 1 (primitive) vs arm 3 (consistent value object). But a
+The matrix above is the primitive contender vs the value-object contender. But a
 value object adopted *inconsistently* buys nothing on the change-speed axis: if
 every author holds a different idea of what a VO is, the result leaks
 representation and construction the same way a bare primitive does. **Inconsistent
-VOs ≈ no VOs.** `rationale/inconsistent/` is arm 2 — a realistic mixture of bare
+VOs ≈ no VOs.** `rationale/inconsistent/` is the inconsistent contender — a realistic mixture of bare
 primitives and non-conforming value objects — and each row below proves it
 reopens a silent site the consistent VO closes. This is the rationale for the
 *analyzers* (and the coming skills): they enforce the one canonical form that
 actually delivers the dividend.
 
-| Non-conformance (arm 2) | Silent site it reopens | Demo (test in this package) | Real-world anchor | Analyzer that plugs it | Status |
+| Non-conformance (inconsistent contender) | Silent site it reopens | Demo (test in this package) | Real-world anchor | Analyzer that plugs it | Status |
 |---|---|---|---|---|---|
 | **Partial adoption** — some concepts left primitive while others get wrapped | type confusion / wrong unit | `TestPartialAdoption_InconsistentAdmitsWrongUnit` | a slot left a bare string across 43 call sites while its VO existed | — | ❌ no analyzer yet |
 | **Scattered validation** — no single constructor; the invariant copied across builders | bad value admitted at the site that forgot; rule change is an N-site edit | `TestScatteredValidation_InconsistentAdmitsBadValue`, `TestScatteredValidation_RuleLivesInManyPlaces` | pricing primitive-obsession postmortem (parent-validates-child) | `voconstructor` (forces a single constructor path; does not check the body validates) | ⚠️ structural |
@@ -155,23 +155,23 @@ is a breaking change to this matrix (and to the resolver's routes). Authoring
 rules for the skill files live in
 [`docs/skill-authoring.md`](../docs/skill-authoring.md).
 
-## Changeability arms — executable proof per decision
+## Changeability contenders — executable proof per decision
 
 A separate dimension from the VO win tables above: each **skill decision** is put
-under an executable contender-arm benchmark that proves it earns its place on the
+under an executable contender benchmark that proves it earns its place on the
 **changeability** axis (how the cost of a representative change scales with the
-number of dependents N), or surfaces what to change. The arms are scored by a
-predeclared contract, `changeability/SCORING.md`, committed before any arm; an
-outside model (Codex) authors the coupled + red-team arms, committed with their
+number of dependents N), or surfaces what to change. The contenders are scored by a
+predeclared contract, `changeability/SCORING.md`, committed before any contender; an
+outside model (Codex) authors the coupled + red-team contenders, committed with their
 provenance. This matrix row is the anti-silent-gap net for that dimension:
 `coverage_test.go` also globs `changeability/anchor/*_test.go` and
-`changeability/nooutward/*_test.go`, so a named arm test that is renamed or deleted
+`changeability/nooutward/*_test.go`, so a named contender test that is renamed or deleted
 fails the guard.
 
-| Decision (skills/tesser-build) | Change(s) | Arms | Result | Committed tests |
+| Decision (skills/tesser-build) | Change(s) | Contenders | Result | Committed tests |
 |---|---|---|---|---|
-| **Public interface** (`public-interface.md`) | C1 backend migration (`-tags swap`); C2 substitution (`-tags subst`) | decoupled (depends on `Client`); coupled fan-out + 3 realistic patterns; Codex red-team `portless` (facade); a fake for substitution | **C1 is TIED** by the lower-ceremony facade (a facade decouples from a backend too) — decoupled 0 vs coupled N at N=8/16. **C2 the interface WINS** — it substitutes a fake at 0 edits; the facade cannot (no seam). | `anchor/`: `TestDecoupledArm_SurvivesBackendSwap`, `TestContrast_C1_DecoupledFlat_CoupledTracksN`, `TestInterfaceDependent_SubstitutesForFree`, `TestFacadeDependent_CannotSubstituteWithoutEdit` |
-| **No outward representation** (`application-services.md` Respond) | D3 outward-representation migration (`-tags repv2`: response DTO field reshaped) | decoupled (operate on `domain.Maneuver` value objects); coupled fan-out + 2 realistic patterns (`webhookpayload`, `burnsort`); Codex red-team `burnquery` (query facade) | **Decision 3 WINS** — a domain that emits its own DTO fans a wire reshape out to N; the decoupled arm is 0, coupled N at N=8/16. The red-team facade is the *sanctioned* mapper (0 edits) — it does not justify a domain emitting a DTO; it only ties on read-ceremony. **No compile guard** (a dumb DTO imports nothing → no cycle); the fan-out is the proof. | `nooutward/`: `TestDecoupledArm_SurvivesRepMigration`, `TestContrast_DecoupledFlat_CoupledTracksN` |
+| **Public interface** (`public-interface.md`) | C1 backend migration (`-tags swap`); C2 substitution (`-tags subst`) | decoupled (depends on `Client`); coupled fan-out + 3 realistic patterns; Codex red-team `portless` (facade); a fake for substitution | **C1 is TIED** by the lower-ceremony facade (a facade decouples from a backend too) — decoupled 0 vs coupled N at N=8/16. **C2 the interface WINS** — it substitutes a fake at 0 edits; the facade cannot (no seam). | `anchor/`: `TestDecoupledContender_SurvivesBackendSwap`, `TestContrast_C1_DecoupledFlat_CoupledTracksN`, `TestInterfaceDependent_SubstitutesForFree`, `TestFacadeDependent_CannotSubstituteWithoutEdit` |
+| **No outward representation** (`application-services.md` Respond) | D3 outward-representation migration (`-tags repv2`: response DTO field reshaped) | decoupled (operate on `domain.Maneuver` value objects); coupled fan-out + 2 realistic patterns (`webhookpayload`, `burnsort`); Codex red-team `burnquery` (query facade) | **Decision 3 WINS** — a domain that emits its own DTO fans a wire reshape out to N; the decoupled contender is 0, coupled N at N=8/16. The red-team facade is the *sanctioned* mapper (0 edits) — it does not justify a domain emitting a DTO; it only ties on read-ceremony. **No compile guard** (a dumb DTO imports nothing → no cycle); the fan-out is the proof. | `nooutward/`: `TestDecoupledContender_SurvivesRepMigration`, `TestContrast_DecoupledFlat_CoupledTracksN` |
 
 **Findings folded to doctrine.** (1) C1 alone under-justifies the interface, so
 `public-interface.md` teaches the interface earns its place via *substitutability*,
@@ -188,7 +188,7 @@ discriminates the rule you defend).
 
 <!-- tb-cell: application-services rationale 🟡 -- D3 (no outward representation) won; D1 (app-SRP) pending -->
 <!-- tb-cell: gateway-repository rationale ❌ -- D4 (repo speaks domain objects) pending -->
-<!-- tb-cell: norm-errors rationale ❌ -- the errorspy example matrix is the proof; no changeability arm -->
+<!-- tb-cell: norm-errors rationale ❌ -- the errorspy example matrix is the proof; no changeability contender -->
 
 
 ## Run
@@ -234,6 +234,7 @@ classifier design
 | — no Go analyzer (same gap) | `TB017` single-construction-door | a value object has ONE construction door — its own `__init__` (the 2026-07-20 (b)-uniform ruling, extended to collection VOs 2026-07-21): any classmethod/staticmethod returning its own type is a second door, name-agnostic (`from_spec`/`parse`/`new`/`require`/`of`), because two doors mean two invariant sets on one type. A factory returning another type, and any spec, are out of scope; entities/aggregates keep the narrower `TB013` | `tb017/{good,bad}.py` |
 | — no Go analyzer (same gap) | `TB018` canonical-exit-routing | a leaf's conversion dunder is a one-line delegation to the `canonical_*` policy helper for its backing type (`serialization.md` rule 3), so each canonical form has exactly ONE implementation site. Two shapes: not a delegation (hand-rolled or post-processed), and delegation to the wrong policy. The mismatched-*dunder* shape stays `TB015`'s; `date`/`time` leaves are out of contract until the time-type taxonomy is ruled | `tb018/{good,bad}.py` |
 | `mustnew` | — dissolved | "No `Must*` twin is needed" | — |
+| — no Go analyzer (a named gap — `TODOS.md`) | `TB019` domain-return | a domain object's public method returns a domain object (`domain-return.md`; maintainer ruling 2026-08-08): no primitive, enum, foreign value or DTO out of a `ts.ValueObject`/`ts.Entity`/`ts.AggregateRoot` subclass. The six rich comparisons are IN scope — measured: CPython fixes the return type of eleven dunders and raises `TypeError` otherwise, but hands back whatever `__eq__`/`__lt__` return — so the base owns equality and domain code spells none of them. Exits: the language-fixed dunders (`__bool__` is the boolean terminator, one pinned site) and a `-> None` transition | `tb019/{good,bad}.py` |
 | `comments` | `TB020` no-comments | comments norm v0 (`comments.md`): zero comments and docstrings, machine directives exempt | `tb020/{good,bad}.py` |
 | — no Go analyzer (the Go testing mirror is a named gap — `TODOS.md`) | `TB030` no-mock-libraries | testing norm v0 (`testing.md` rule 1): a test double is a hand-written fake. Mocking-library **imports** (`unittest.mock` and submodules in any import shape, the `mock` backport, `pytest`/`_pytest.monkeypatch` → `MonkeyPatch`) are flagged tree-wide with no test exemption; the `monkeypatch`/`mocker` **fixture-parameter** rule is scoped to pytest-shaped functions so it cannot redden a production parameter of the same name. Escape hatch is `# tessercheck:ignore` as a real comment token. Known syntactic holes (aliased module imports, dynamic import, `request.getfixturevalue`) are documented in the checker's module docstring | `tb030/{good,bad}.py` |
 | — no Go analyzer (same testing gap) | `TB032` test-helper-totality | testing norm (`testing.md`): a helper in a test module builds a **spec or DTO** and nothing else. The analyzer's first **totality** check — every module-level function in a test module must classify, and what does not is reported as a worklist. Decided structurally: a return annotation naming a spec (resolved against the shared registry **and** the file's own classes) or a `@pytest.fixture`. Everything else declares itself with `# tesser-category:` from a closed set (`spec`/`dto`/`fixture`), validated by this check while TB020 exempts only the marker's *prefix*, so a typo reports once with the right diagnosis. Scope is module-level functions only — **measured**: every non-test method on a class in the gated trees is a hand-written fake, the shape TB030 requires. Test detection **walks** (pytest's class style hides every test from a `tree.body` scan) and is structural, never the `is_test` flag. Known hole: a module defining no `test_*` at all is never judged | `tb032/{good,bad}.py` |
