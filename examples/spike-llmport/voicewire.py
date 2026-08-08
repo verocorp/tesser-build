@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from collections.abc import Mapping
 from typing import Protocol
 
@@ -9,14 +10,18 @@ import tesser.srv as ts
 class Tool(ts.Record):
 
     def __init__(self, name: str, description: str, parameters: Mapping[str, object]) -> None:
-        super().__init__(name=name, description=description, parameters=dict(parameters))
+        super().__init__(name=name, description=description, parameters=copy.deepcopy(dict(parameters)))
 
     name: str
     description: str
     parameters: Mapping[str, object]
 
     def schema(self) -> dict[str, object]:
-        return {"name": self.name, "description": self.description, "parameters": dict(self.parameters)}
+        return {
+            "name": self.name,
+            "description": self.description,
+            "parameters": copy.deepcopy(dict(self.parameters)),
+        }
 
 
 class ToolTurn(ts.Response):

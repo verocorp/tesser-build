@@ -10,6 +10,14 @@ def test_every_declared_block_has_a_name_and_a_home() -> None:
     assert set(domain.KIND_ROLE) == blocks - domain.SRV_KINDS
 
 
+def test_every_kind_row_names_a_real_tesser_export() -> None:
+    root = Path(__file__).resolve().parents[3] / "tesser-py"
+    rows = list(domain.TESSER_BASE_BLOCKS) + list(domain.TESSER_DECORATORS)
+    for package, name in rows:
+        exports = (root / package.replace(".", "/") / "__init__.py").read_text()
+        assert f" {name} as {name}" in exports
+
+
 def test_conforming_tree_is_clean(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     assert check_tree(tmp_path) == ()
@@ -1264,13 +1272,16 @@ def test_wire_module_totality_is_flagged(tmp_path: Path) -> None:
         "from typing import Final, Protocol\n"
         "class BoxRequest(ts.Request):\n"
         "    def __init__(self, text: str) -> None:\n"
-        "        self.text = text\n"
+        "        super().__init__(text=text)\n"
+        "    text: str\n"
         "class BoxResponse(ts.Response):\n"
         "    def __init__(self, text: str) -> None:\n"
-        "        self.text = text\n"
+        "        super().__init__(text=text)\n"
+        "    text: str\n"
         "class BoxLabel(ts.Record):\n"
         "    def __init__(self, text: str) -> None:\n"
-        "        self.text = text\n"
+        "        super().__init__(text=text)\n"
+        "    text: str\n"
         "class Endpoint(ts.Port, Protocol):\n"
         "    def __call__(self, request: BoxRequest) -> BoxResponse: ...\n"
         "class Loose:\n"

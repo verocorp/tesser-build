@@ -104,18 +104,19 @@ class LlmToolHandler(ts.Handler):
         )
 
     def _tool(self, name: str, state: client.BookingStateResponse) -> voicewire.Tool:
+        if name not in self._tools:
+            raise ValueError(f"unknown tool {name!r}")
         description, parameters, _ = self._tools[name]
         return voicewire.Tool(name=name, description=description, parameters=parameters(state))
 
 
 @ts.function
 def _params(properties: dict[str, object], required: tuple[str, ...]) -> dict[str, object]:
-    return {
-        "type": "object",
-        "properties": properties,
-        "required": list(required),
-        "additionalProperties": False,
-    }
+    schema: dict[str, object] = {"type": "object", "properties": properties}
+    if required:
+        schema["required"] = list(required)
+    schema["additionalProperties"] = False
+    return schema
 
 
 @ts.function

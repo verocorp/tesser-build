@@ -55,6 +55,15 @@ def test_a_wire_record_blocks_new_fields_after_construction() -> None:
     assert "verdict" not in vars(ask)
 
 
+def test_construction_is_one_shot_even_through_init_itself() -> None:
+    ask = Ask(path="/campaigns")
+    with pytest.raises(AttributeError, match=r"already constructed"):
+        Ask.__init__(ask, path="/admin")
+    with pytest.raises(AttributeError, match=r"already constructed"):
+        tesser.srv.Record.__init__(ask, path="/admin")
+    assert ask.path == "/campaigns"
+
+
 def test_write_once_lost_because_it_leaves_the_smuggling_channel_open() -> None:
     ask = _WriteOnceAsk("/campaigns")
     with pytest.raises(AttributeError):
@@ -165,6 +174,13 @@ def test_a_record_subclass_may_not_redefine_equality_or_hashing_or_deletion() ->
             def __delattr__(self, name: str) -> None:
                 return None
 
+    with pytest.raises(TypeError):
+
+        class _Inverted(tesser.srv.Response):
+
+            def __ne__(self, other: object) -> bool:
+                return False
+
 
 def test_a_slotted_mixin_is_refused_even_though_the_subclass_declares_no_slots() -> None:
     class _Compact:
@@ -174,6 +190,29 @@ def test_a_slotted_mixin_is_refused_even_though_the_subclass_declares_no_slots()
 
         class _Mixed(tesser.srv.Request, _Compact):
             pass
+
+
+def test_a_record_field_may_not_carry_a_class_level_default() -> None:
+    with pytest.raises(
+        TypeError,
+        match=r"^_Defaulted gives field 'status' a class-level default: "
+        r"a record field has no default outside __init__$",
+    ):
+
+        class _Defaulted(tesser.srv.Response):
+            status: int = 200
+
+
+def test_a_subclass_that_skips_super_init_builds_an_empty_record_no_guard_can_see() -> None:
+    class Forgot(tesser.srv.Response):
+
+        def __init__(self, status: int) -> None:
+            pass
+
+        status: int
+
+    assert Forgot(200) == Forgot(500)
+    assert vars(Forgot(200)) == {}
 
 
 def test_a_wire_record_reprs_the_fields_it_carries() -> None:

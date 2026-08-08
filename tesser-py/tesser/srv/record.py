@@ -13,14 +13,24 @@ class Record:
                 )
             if base is Record or base is object:
                 continue
-            for name in ("__eq__", "__hash__", "__setattr__", "__delattr__"):
+            for name in ("__eq__", "__ne__", "__hash__", "__setattr__", "__delattr__"):
                 if name in base.__dict__:
                     raise TypeError(
                         f"{cls.__name__} must not override {name}: "
                         "Record owns the wire-record contract"
                     )
+        for name in cls.__dict__.get("__annotations__", {}):
+            if name in cls.__dict__:
+                raise TypeError(
+                    f"{cls.__name__} gives field {name!r} a class-level default: "
+                    "a record field has no default outside __init__"
+                )
 
     def __init__(self, **fields: object) -> None:
+        if self.__dict__:
+            raise AttributeError(
+                f"{type(self).__name__} is a frozen wire record: already constructed"
+            )
         declared: set[str] = set()
         for base in type(self).__mro__:
             declared.update(getattr(base, "__annotations__", {}))

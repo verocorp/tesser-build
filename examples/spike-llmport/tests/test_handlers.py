@@ -55,14 +55,35 @@ def test_every_offered_tool_has_a_binding() -> None:
     assert offered == set(handler._tools)
 
 
-def test_a_tool_declaration_does_not_alias_the_schema_it_was_handed() -> None:
-    parameters: dict[str, object] = {"type": "object"}
-    tool = voicewire.Tool("provide_name", "Record the caller's full name.", parameters)
+def test_a_tool_declaration_does_not_alias_the_schema_it_was_handed_even_nested() -> None:
+    slot: dict[str, object] = {"enum": ["mon-9am"]}
+    parameters: dict[str, object] = {"type": "object", "properties": {"slot": slot}}
+    tool = voicewire.Tool("choose_slot", "Record the slot the caller chose.", parameters)
 
     parameters["type"] = "string"
+    slot["enum"] = ["INBOUND-CHANGED"]
+    rendered = tool.schema()
+    outer = rendered["parameters"]
+    assert isinstance(outer, dict)
+    properties = outer["properties"]
+    assert isinstance(properties, dict)
+    inner = properties["slot"]
+    assert isinstance(inner, dict)
+    inner["enum"] = ["OUTBOUND-CHANGED"]
 
-    assert tool.parameters == {"type": "object"}
-    assert tool.schema()["parameters"] == {"type": "object"}
+    assert tool.parameters == {"type": "object", "properties": {"slot": {"enum": ["mon-9am"]}}}
+
+
+def test_a_drifted_tool_map_keeps_the_recoverable_error_class() -> None:
+    service = application.BookingService(
+        MemorySlotDirectory(("mon-9am",)), MemoryBookingRepository()
+    )
+    handler = handlers.LlmToolHandler(service, "b1")
+    handler.begin()
+    state = service.status(client.StatusRequest(booking_id="b1"))
+
+    with pytest.raises(ValueError):
+        handler._tool("cancel_booking", state)
 
 
 def test_a_tool_declaration_renders_its_wire_schema() -> None:
@@ -157,7 +178,6 @@ def test_the_confirm_booking_tool_declares_no_arguments() -> None:
     assert tool.parameters == {
         "type": "object",
         "properties": {},
-        "required": [],
         "additionalProperties": False,
     }
 
