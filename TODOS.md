@@ -116,9 +116,12 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `examples/python-app` now uses `ts.Request`/`ts.Response`/`ts.Port` +
   `@ts.function`. Deliberately not updated in-wave: skill docs encode only
   verified-implementation-backed rulings, and teaching `tesser.srv` needs
-  the `rationale/coverage.md` walk + `skill-version` bump. Blocked on the
-  srv signature-matrix ruling (don't teach a shape about to change — the
-  wire-vocabulary smells entry above is the evidence pile for that ruling).
+  the `rationale/coverage.md` walk + `skill-version` bump. The srv-matrix
+  core landed in code 2026-08-07 (frozen ts.srv.Record + behavior-carrying
+  wire records + the tool binding table), so the taught shape is now
+  live-verified in both example trees — graduation waits only on Chris
+  confirming the enacted rulings (wire-vocabulary entry below) and on the
+  wire-module governance items that could still move module-level shapes.
   Root `README.md:98-110` also under-describes tesser-py (names only
   `tesser.domain.ValueObject`; pre-existing narrowness, fold in here).
 - [ ] **Make rules.py conformant** (Chris 2026-08-06). The generator is
@@ -131,43 +134,30 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   test-organization pass should settle all three.
 - [ ] **Test-module annotation.** When tests declare themselves, flip
   "a test module imports tesser.testing at most once, as ts" to exactly-once.
-- [ ] **Wire vocabulary is declared, not structured — two design smells,
-  Chris 2026-08-07 ("smells really bad", named during the srv-wire ship).**
-  Both are evidence for the srv signature-matrix ruling; neither was
-  improvised mid-ship because both need vocabulary that doesn't exist yet.
-  (1) **`__call__` ports + `@ts.function` bags.** `httpwire` is nine loose
-  functions wearing invariant-free `@ts.function` markers plus an anonymous
-  single-operation `__call__` protocol — the most procedural corner of the
-  tree. The functions aren't homeless by nature: `problem`/`json_response`/
-  `redirect`/`respond` are Response constructors; `content_length`/
-  `decode_body`/`path_param`/`object_field`/`string_field` are HttpRequest
-  readers. Moving them onto the records collides with "a DTO carries data
-  and nothing else" — so the ruling is: do wire records carry behavior?
-  (2) **`dispatch` in the scheduling adapter.** `LlmToolHandler` maintains
-  three parallel structures keyed on the same tool-name strings
-  (`TOOLS_FOR_STEP`, the `dispatch` if/elif, the `_schema` if/elif) plus
-  inline per-tool parsing — four hand-coordinated edit sites per new tool,
-  only one pair drift-guarded, hiding in an adapter because adapters carry
-  no body rules (a service would flunk instantly). The clean fix is one
-  declared tool object (name+description+schema+parse+invoke) with dispatch
-  and _schema derived from a table — the bindings-at-the-artifact move —
-  but there is NO KIND for a tool declaration, and one-kind-per-module
-  forbids an undeclared Tool class in handlers.py. The vocabulary has no
-  word for the thing being dispatched over; rule the word before the
-  refactor.
-  (3) **Wire records lost immutability AND value equality** (Chris ruling
-  2026-08-07, ship D1: named debt, ruled with the srv matrix). The
-  dataclass→shell migration dropped `frozen=True` from `HttpRequest`/
-  `Response`/`CliRequest`/`CliResponse` (`ToolTurn` was born unfrozen); a
-  handler can now mutate the request it was handed after routing decisions
-  were made on it — flagged independently by three ship reviewers, not
-  exploitable today. `__eq__`/`__hash__` went with it: the records are
-  identity-compared now (no in-tree consumer relies on value equality —
-  verified — but a future `assert resp == Response(200, b"")` silently
-  goes False instead of failing loud). The fix candidates are the same
-  per-kind-invariant question as (1): ValueObject-style guards on the
-  `tesser.srv` shells vs a sigcheck rule. Do NOT freeze per-subclass in
-  the meantime.
+- [ ] **Wire vocabulary — what the srv-matrix build wave left open**
+  (re-cut 2026-08-07 after the srv-only build wave; Chris directive: build
+  each option, let the code rule). Items (1)-(3) of the original smells
+  entry are ENACTED IN CODE, each with its ruling recorded where it was
+  made: (1) wire records carry behavior — `problem`/`json_response`/
+  `redirect`/`respond` became Response classmethods, `decode_body`/
+  `path_param`/`content_length` became HttpRequest readers (bag 9→2 public
+  in httpwire, 4→0 in cliwire; the DTO-purity collision dissolved by the
+  package-scoped kind grammar — context DTOs stay data-only); (2) the tool
+  declaration became wire-side data — `ts.srv.Record` is the new generic
+  wire-record kind, `voicewire.Tool` its first instance, and the handler
+  owns one binding table deriving dispatch + schemas (the three parallel
+  string-keyed chains are gone); (3) immutability + value equality returned
+  per-kind on `ts.srv.Record` (VO-style frozen beat write-once — the
+  losing arm and its smuggling hole are pinned in
+  tesser-py/tests/test_record.py). STILL OPEN, needing Chris:
+  (a) **the tool declaration as a context-side CLASS** (his original
+  "declared tool object" shape) needs a new ADAPTERS kind — outside the
+  srv-only scope; the sigcheck probe walls are recorded verbatim in
+  examples/spike-llmport/README.md. Rule whether the data-table shape
+  stands or an adapters Tool kind is worth the vocabulary.
+  (b) **`Endpoint`/`Command`/`ToolSurface` stay anonymous-`__call__`/named
+  wire ports** — untouched this wave; if the position-naming convention
+  needs more than the `Endpoint` precedent, that's a matrix row.
   (4) **A wire module is the least-governed home in the tree** (adversarial
   2026-08-07, verified): no import allowlist (contrast CORE_STDLIB) — a
   wire module importing subprocess/boto3/tests gets zero findings, so
