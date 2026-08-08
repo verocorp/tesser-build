@@ -591,7 +591,7 @@ per-context handler owns the content — raw bytes ↔ `Client` DTOs, and the
 response's `Content-Type` — through one respond path.
 
 ```python
-# httpwire.py — the host↔handler contract: both sides import it, neither owns it
+# protocol/http.py — the app-owned protocol: handlers define it, hosts conform to it
 @dataclass(frozen=True)
 class HttpRequest:
     method: str = "GET"
@@ -762,12 +762,13 @@ def main() -> None:
   name through a table to a `(CliRequest) -> CliResponse` transform in
   `campaign/adapters/handlers/cli.py`, then prints `stdout`/`stderr` and
   `sys.exit`s the `exit_code`; the handler never touches `argv`, `print`, or the
-  process. The shared vocabulary is `cliwire.py` (`CliRequest`, `CliResponse`,
-  `respond`), the analog of `httpwire.py`, and the error table maps the closed
+  process. The shared vocabulary is `protocol/cli.py` (`CliRequest`,
+  `CliResponse`), the analog of `protocol/http.py`, and the host's error
+  table maps the closed
   domain `Kind` to an exit code via `errors.exit_code_for` — the CLI's `status_for`.
 
 ```python
-# cliwire.py — the CLI mechanism's shared vocabulary
+# protocol/cli.py — the CLI mechanism's shared vocabulary
 @dataclass(frozen=True)
 class CliRequest:
     args: tuple[str, ...] = ()

@@ -47,10 +47,11 @@ Deferred work with context. Each entry carries enough for a cold pickup.
     test.yml); at zero findings delete `sigcheck-ratchet` and restore the plain
     zero-findings step.
 - [ ] **Host-class vocabulary — PARTIALLY RESOLVED (srv-wire-vocabulary wave,
-  2026-08-07).** `tesser.srv` now exists (Host, Port, Request, Response —
-  package-scoped kinds per the errors-ruling grammar; `tesser.app` was
-  deliberately left out as a real open question) and sigcheck admits declared
-  host classes in srv modules plus wire kinds in `*wire.py` wire modules.
+  2026-08-07).** `tesser.srv` now exists (Host, Port, Record, Request,
+  Response — package-scoped kinds per the errors-ruling grammar; `Record`
+  joined in the srv-matrix wave; `tesser.app` was deliberately left out as
+  a real open question) and sigcheck admits declared host classes in srv
+  modules plus wire kinds in `*wire.py` wire modules.
   Still open: host machinery that is not itself a host (`Route`, `Match` —
   and whether `HttpHost` just declares `ts.Host`), and the whole `tesser.app`
   half (`App`, `Config`, `HttpConfig`, `CleanupStack`).
@@ -116,11 +117,30 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `examples/python-app` now uses `ts.Request`/`ts.Response`/`ts.Port` +
   `@ts.function`. Deliberately not updated in-wave: skill docs encode only
   verified-implementation-backed rulings, and teaching `tesser.srv` needs
-  the `rationale/coverage.md` walk + `skill-version` bump. Blocked on the
-  srv signature-matrix ruling (don't teach a shape about to change — the
-  wire-vocabulary smells entry above is the evidence pile for that ruling).
-  Root `README.md:98-110` also under-describes tesser-py (names only
-  `tesser.domain.ValueObject`; pre-existing narrowness, fold in here).
+  the `rationale/coverage.md` walk + `skill-version` bump. The srv-matrix
+  core landed in code 2026-08-07 (frozen ts.Record + behavior-carrying
+  wire records + the tool binding table), so the taught shape is now
+  live-verified in both example trees — graduation waits only on Chris
+  confirming the enacted rulings (wire-vocabulary entry below) and on the
+  wire-module governance items that could still move module-level shapes.
+  The graduation pass must also re-verify every `verified impl:` file:symbol
+  pointer in the skill docs, not just the code samples —
+  `skills/tesser-build/srv.md:200` already dangles (`test_httpwire.py:
+  content_length` was renamed to `buffered_length` in the srv-matrix wave).
+  Scope re-measured 2026-08-08 (doc-release sweep): `python.md:591-790`,
+  `handlers.md:47-98`, and `srv.md:138-219` present `json_response`/
+  `problem`/`respond`/`decode_body`/`content_length`/`path_param` as free
+  functions — roughly 30 lines of sample code the wave deleted, in a skill
+  distributed copy-in to consumers. `testing.md:266` is a fourth site: its
+  "rename in helper's clothing" anti-pattern is written as
+  `def json_body(resp): return decode_body(resp.body)`, which now names a
+  deleted function AND collides with the real `Response.json_body` reader
+  (see item (c) of the wire-vocabulary entry below, which already rules the
+  distinction) — rewrite the illustration, don't just rename the call.
+  Root `README.md:98-110` and `CLAUDE.md:8` both under-describe tesser-py
+  (each names only `tesser.domain.ValueObject`, while the package ships
+  `adapters`, `application`, `context`, `domain`, `srv`, and `testing` —
+  pre-existing narrowness, widened by every srv wave; fold in here).
 - [ ] **Make rules.py conformant** (Chris 2026-08-06). The generator is
   currently exempt via `TOOLING_MODULES` in the whole-tree totality rule;
   make it conform (or rule where tooling lives) and shrink the exemption.
@@ -131,53 +151,122 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   test-organization pass should settle all three.
 - [ ] **Test-module annotation.** When tests declare themselves, flip
   "a test module imports tesser.testing at most once, as ts" to exactly-once.
-- [ ] **Wire vocabulary is declared, not structured — two design smells,
-  Chris 2026-08-07 ("smells really bad", named during the srv-wire ship).**
-  Both are evidence for the srv signature-matrix ruling; neither was
-  improvised mid-ship because both need vocabulary that doesn't exist yet.
-  (1) **`__call__` ports + `@ts.function` bags.** `httpwire` is nine loose
-  functions wearing invariant-free `@ts.function` markers plus an anonymous
-  single-operation `__call__` protocol — the most procedural corner of the
-  tree. The functions aren't homeless by nature: `problem`/`json_response`/
-  `redirect`/`respond` are Response constructors; `content_length`/
-  `decode_body`/`path_param`/`object_field`/`string_field` are HttpRequest
-  readers. Moving them onto the records collides with "a DTO carries data
-  and nothing else" — so the ruling is: do wire records carry behavior?
-  (2) **`dispatch` in the scheduling adapter.** `LlmToolHandler` maintains
-  three parallel structures keyed on the same tool-name strings
-  (`TOOLS_FOR_STEP`, the `dispatch` if/elif, the `_schema` if/elif) plus
-  inline per-tool parsing — four hand-coordinated edit sites per new tool,
-  only one pair drift-guarded, hiding in an adapter because adapters carry
-  no body rules (a service would flunk instantly). The clean fix is one
-  declared tool object (name+description+schema+parse+invoke) with dispatch
-  and _schema derived from a table — the bindings-at-the-artifact move —
-  but there is NO KIND for a tool declaration, and one-kind-per-module
-  forbids an undeclared Tool class in handlers.py. The vocabulary has no
-  word for the thing being dispatched over; rule the word before the
-  refactor.
-  (3) **Wire records lost immutability AND value equality** (Chris ruling
-  2026-08-07, ship D1: named debt, ruled with the srv matrix). The
-  dataclass→shell migration dropped `frozen=True` from `HttpRequest`/
-  `Response`/`CliRequest`/`CliResponse` (`ToolTurn` was born unfrozen); a
-  handler can now mutate the request it was handed after routing decisions
-  were made on it — flagged independently by three ship reviewers, not
-  exploitable today. `__eq__`/`__hash__` went with it: the records are
-  identity-compared now (no in-tree consumer relies on value equality —
-  verified — but a future `assert resp == Response(200, b"")` silently
-  goes False instead of failing loud). The fix candidates are the same
-  per-kind-invariant question as (1): ValueObject-style guards on the
-  `tesser.srv` shells vs a sigcheck rule. Do NOT freeze per-subclass in
-  the meantime.
-  (4) **A wire module is the least-governed home in the tree** (adversarial
-  2026-08-07, verified): no import allowlist (contrast CORE_STDLIB) — a
-  wire module importing subprocess/boto3/tests gets zero findings, so
-  `git mv shop/domain.py bizwire.py` + a base swap escapes every
-  signature, body, and allowlist rule; bootstrap importing a wire module
-  is likewise unconstrained (the composition root can couple to transport
-  records). And the suffix has no separator: `firewire.py`/`tripwire.py`/
-  `rewire.py` all opt in, and `examples/serdepy/wire.py` already uses
-  "wire" to mean serialization format — decide allowlist + a separator
-  (or in-file declaration) with the same ruling.
+- [ ] **Wire vocabulary — what the srv-matrix build wave left open**
+  (re-cut 2026-08-07 after the srv-only build wave; Chris directive: build
+  each option, let the code rule). Items (1)-(3) of the original smells
+  entry are ENACTED IN CODE, each with its ruling recorded where it was
+  made: (1) wire records carry behavior — `problem`/`json_response`/
+  `redirect`/`respond` became Response classmethods, `decode_body`/
+  `path_param`/`content_length` became HttpRequest readers (bag 9→2 public
+  in httpwire, 4→0 in cliwire; the DTO-purity collision dissolved by the
+  package-scoped kind grammar — context DTOs stay data-only); (2) the tool
+  declaration became wire-side data — `ts.Record` is the new generic
+  wire-record kind, `voicewire.Tool` its first instance, and the handler
+  owns one binding table deriving dispatch + schemas (the three parallel
+  string-keyed chains are gone); (3) immutability + value equality returned
+  per-kind on `ts.Record` (VO-style frozen beat write-once — the
+  losing arm and its smuggling hole are pinned in
+  tesser-py/tests/test_record.py). STILL OPEN, needing Chris:
+  (a) **the tool declaration as a context-side CLASS** (his original
+  "declared tool object" shape) needs a new ADAPTERS kind — outside the
+  srv-only scope; the sigcheck probe walls are recorded verbatim in
+  examples/spike-llmport/README.md. Rule whether the data-table shape
+  stands or an adapters Tool kind is worth the vocabulary. Partly answered
+  2026-08-08 by the routing move: with `dispatch` gone from the handler,
+  what remains per tool is an endpoint method plus a schema declaration,
+  so the "tool object" a class would have held is now split across the
+  handler (invoke + schema) and the srv route table (name -> endpoint).
+  (a2) **A wire record is a value object on the wire** (Chris framing
+  2026-08-08). `Record` currently does two jobs: the shared frozen/equality
+  mechanics base for Request/Response, and a declarable kind in its own
+  right. Only the second is under-justified, and it is what creates (f).
+  If the concept is "a value that appears on the wire but is not itself a
+  message" — Tool, Route — then it wants that name and its own row, with
+  the mechanics base staying undeclarable. Related: wire records are NOT
+  context DTOs (context-generic, transport-shaped, different rate of
+  change, and the handler exists to translate between them) and NOT domain
+  VOs (an HttpRequest must be constructible from whatever arrived).
+  (a3) **Wire-record construction should be one spec in, then instance
+  methods** (Chris ruling 2026-08-08). `Response` currently has FOUR
+  construction doors (`json`/`problem`/`redirect`/`respond`) where the
+  repo's own rule — enforced for domain constructors as "takes exactly one
+  ts.Spec" — is one. They passed only because wire kinds carry placement
+  and import rules but no signature rules. Two of them are not even
+  construction: `respond(run)` is an exception->Response policy mapper, and
+  `json`/`problem` are "construct from a different input shape", which is a
+  spec's job (the MoneyAmount("10.00") precedent parses in the
+  spec-taking constructor). Extending the one-spec rule to wire kinds is a
+  matrix rule change, so it was not folded into the srv-matrix wave.
+  Narrowed 2026-08-08 (conformance sweep): `respond` is GONE from every
+  response record — exception mapping is host policy now (srv/http/host.py,
+  srv/cli/main.py, agent.py) — and constructor defaults are gone from all
+  wire records. What remains of (a3) is the door question alone:
+  HttpResponse.json/problem/redirect and CliResponse.ok are
+  construct-from-another-shape classmethods still awaiting the one-spec
+  ruling; ToolTurn has none.
+  (b) **`Endpoint`/`Command`/`ToolSurface` stay anonymous-`__call__`/named
+  wire ports** — untouched this wave; if the position-naming convention
+  needs more than the `Endpoint` precedent, that's a matrix row.
+  (c) **`Response.json_body` knowingly resembles the deleted test-helper
+  alias** (CHANGELOG once removed `tests/wire.py`'s `json_body` as a
+  rename-in-helper's-clothing). Kept deliberately: it is the record's own
+  reader mirroring `HttpRequest.json_body`, and its test-only callers are
+  tests playing the HTTP-client role — not a test-local rename. Don't
+  re-delete it without ruling the reader question.
+  (d) **The one-shot construction guard forbids a multi-level record**
+  (adversarial 2026-08-08): a child record cannot add its own fields via a
+  second `Record.__init__` call, and a subclass that sets a derived field
+  before `super().__init__()` gets "already constructed", which names the
+  wrong problem. No in-tree record does either. Rule whether multi-level
+  records are wanted before a consumer needs one. Related, same guard: the
+  field check is one-directional (undeclared names are refused, declared
+  ones are not required), so a subclass that conditionally omits a field
+  still builds a partial record — it cannot be made strict without a
+  declaration for the `object.__setattr__` derived-field idiom. And a
+  record with NO fields is re-initializable (verified 2026-08-08, doc-release
+  sweep): the guard reads a populated `__dict__`, which an empty record never
+  has, so `r.__init__()` succeeds a second time. No in-tree record is
+  field-less; same ruling covers it.
+  (e) **The confirm_booking tool schema omits `required`** — restored to
+  main's byte shape this wave (the refactor had silently added
+  `"required": []`). OpenAI strict-mode function calling wants the key
+  present even when empty, so if the spike ever runs against strict mode,
+  rule which shape the provider gets.
+  (f) **`ts.Record` admits direction-less wire declarations** (red team
+  2026-08-08, verified): WIRE_KINDS is derived set arithmetic, so a wire
+  module may declare every record as `ts.Record` — including Endpoint
+  `__call__` parameter/return positions — and satisfy totality without
+  ever committing to request vs response. Rule whether those positions
+  require a directed kind, or record that the direction kinds are
+  advisory and Record is the general case. Narrowed 2026-08-08: voicewire
+  now declares its inbound message (`ToolCall(ts.Request)`, name + frozen
+  arguments; endpoints are `(ToolCall) -> ToolTurn` like HTTP and CLI),
+  so no in-tree wire module leaves a message direction-less anymore — the
+  rule question is whether sigcheck should require that.
+  (g) **A protocol module has no import allowlist** (survives from the
+  2026-08-07 "least-governed home" adversarial item; the SUFFIX half was
+  RESOLVED 2026-08-08 by the protocol-package ruling — membership in the
+  top-level `protocol/` package is the declaration, so `firewire.py`/
+  `tripwire.py`/`serdepy/wire.py` no longer opt into anything and
+  `git mv shop/domain.py bizwire.py` lands homeless, not governed-lite).
+  What remains: no CORE_STDLIB-style allowlist — a protocol module
+  importing subprocess/boto3 gets zero findings, and bootstrap importing
+  a protocol module is unconstrained. Evidence for the allowlist: after
+  the conformance sweep all three protocol modules import only stdlib +
+  tesser — errors.py left them with `respond` — so the allowlist would
+  just record what the trees already do.
+- [ ] **A role `__init__` re-export defeats the classifier** (found while
+  splitting spike-llmport's application.py into a package, 2026-08-08).
+  RULES.md sanctions "a role __init__ only re-exports from its own role", but
+  `resolve()` does not follow a base class through the re-export: with
+  `scheduling/application/__init__.py` re-exporting `SlotDirectory` from
+  `service.py`, every `@ts.fake` subclassing `application.SlotDirectory` drew
+  "implements no application port, wire port, or client" — five false
+  findings on a conforming tree. Worked around by emptying the `__init__`
+  and importing submodules directly, which is what python-app already does
+  (its `campaign/application/__init__.py` is empty) — so the sanctioned
+  shape is one no tree in the repo can actually use. Either teach the
+  classifier to follow re-exports or stop sanctioning them.
 - [ ] **sigcheck internal cleanups (pre-landing review, deferred as a batch;
   re-scoped 2026-08-07 after the srv-wire wave restructured the methods).**
   (1) the exactly-once-as-ts walk: the srv-wire wave extracted

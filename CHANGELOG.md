@@ -5,6 +5,128 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.19.0] - 2026-08-08
+
+The srv signature matrix, ruled by building it. Three questions had been
+parked as named debt — do wire records carry behavior, what word covers a
+tool declaration, and where does wire-record immutability come back — and
+each was settled by building the candidate shapes and letting the code
+and the checkers pick. Nothing here was decided in prose first.
+
+### Added
+
+- `tesser.srv.Record` — the frozen wire-record base, and the generic wire
+  kind for wire data that is neither a request nor a response. `Request`
+  and `Response` now subclass it. Construction is one-shot (a populated
+  `__dict__` refuses a second `__init__`, which is what makes the freeze
+  hold), fields land through a kwargs constructor checked against the
+  class's own annotations, equality is by type and value, and records are
+  unhashable — defining `__eq__` drops the inherited hash, which is the
+  right default for wire data that can carry a header map. Subclasses
+  may not take over `__eq__`/`__ne__`/`__hash__`/`__setattr__`/
+  `__delattr__`, declare `__slots__`, or give a field a class-level
+  default — each guard walks the MRO, so a mixin listed before the base
+  cannot reopen the record.
+- `wire_record` joins the sigcheck kind table, accepted in a wire module
+  and refused in a context or `srv` module like its sibling wire kinds.
+- `tesser.srv.Rejection` — the wire's own refusal word, and the
+  `wire_rejection` sigcheck kind. Every protocol needed one (`BadRequest`/
+  `PayloadTooLarge`/`StreamingUnsupported`, `UsageError`, `BadToolCall`)
+  and all five were ratchet debt or unbuildable until the kind existed;
+  the host maps rejections to statuses/exit codes/tool errors, the wire
+  only names them.
+- A meta-test resolves every `TESSER_BASE_BLOCKS` and `TESSER_DECORATORS`
+  row against the real `tesser-py` export lists, so an analyzer row can no
+  longer outlive the class it names.
+
+### Changed
+
+- **Wire records carry their behavior.** `httpwire`'s nine loose
+  `@ts.function` module functions collapse to two public ones
+  (`object_field`, `string_field`) plus a private JSON-object reader:
+  `problem`/`json_response`/`redirect`/`respond` became `HttpResponse`
+  classmethods (`problem` now returns the HttpResponse, folding away every
+  `json_response(status, problem(...))` double call); `decode_body`/
+  `path_param`/`content_length` became `HttpRequest` readers (`json_body`,
+  `path_param`, `buffered_length`), with `HttpResponse` gaining the mirroring
+  `json_body`. `cliwire`'s four go to zero the same way: `ok`/`respond` are
+  `CliResponse` classmethods, `arg`/`no_extra_args` are `CliRequest`
+  readers. The DTO-purity objection dissolves on the package-scoped kind
+  grammar: `ts.srv.Request`/`Response` are distinct kinds from the context
+  DTOs, which keep carrying data and nothing else.
+- **The LLM tool call gets its request record.** `voicewire.ToolCall`
+  (`ts.Request`: tool name + arguments, deep-copied at construction like
+  `Tool.parameters`) replaces the bare `Mapping[str, object]` the voice
+  host used to hand across the boundary — endpoints are now
+  `(ToolCall) -> ToolTurn`, the exact shape of their HTTP and CLI
+  siblings, and the handler reads arguments off a frozen record instead
+  of livekit's live dict.
+- **"Wire" left the ubiquitous language; the protocol package replaced
+  it** (Chris rulings, 2026-08-08). The word named the wrong boundary — a
+  `Route` never crosses any transport; the actual boundary is
+  host/handler — and it collided with the settled `wiring` role. The
+  concept is now the **protocol**: the app owns it, the handlers define
+  it, the hosts conform to it. Concretely: `httpwire.py`/`cliwire.py`
+  became `protocol/http.py`/`protocol/cli.py` and `voicewire.py` became
+  `protocol/voice.py` — a governed top-level `protocol/` package per
+  tree. sigcheck drops suffix detection for package membership
+  (`PROTOCOL_PACKAGE`), which also closes the suffix hole where
+  `tripwire.py` opted in and `serdepy/wire.py` collided: a stray
+  `*wire.py` is now simply homeless. Kind keys renamed `wire_*` ->
+  `protocol_*`; rule text, RULES.md, fixtures, and the python-app ratchet
+  renamed with them (same 163 findings). `Record`'s runtime messages stop
+  saying "wire record". Earlier the same day and in the same spirit,
+  httpwire's `Response` became `HttpResponse` — message classes carry
+  their protocol's name.
+- **The three protocol stacks now share one skeleton** (conformance
+  sweep, 2026-08-08). A wire module holds records with every constructor
+  field stated (no defaults — the test-convenience defaults moved into the
+  tests that wanted them), readers that raise the wire's own `ts.Rejection`,
+  and no error policy; a handler method is exactly three jobs (map request,
+  invoke the service, map response) — the per-method `respond` wrappers and
+  their `def run()` closures are gone from every HTTP and CLI handler; the
+  host owns the exception→response mapping (`srv/http/host.py` gained
+  `respond` + `buffered_length` + the size cap, `srv/cli/main.py` gained
+  `respond`, and the voice host now catches `BadToolCall` alongside domain
+  `ValueError` — previously a non-string argument would have crashed the
+  session instead of reaching the model). `ToolCall.text` moved the argument
+  reader into the wire where `string_field`/`arg` already live. Verified
+  against the live server: 400/422/201/411 byte-identical with the handler
+  wrappers gone. python-app's sigcheck ratchet burned 176 -> 163 (wire
+  exceptions declared, hosts import ts, srv functions declared, HttpHost
+  declares ts.Host), shrink-only.
+- **One binding table replaces three parallel chains.** `LlmToolHandler`
+  keyed tool names in `TOOLS_FOR_STEP`, a `dispatch` if/elif, and a
+  `_schema` if/elif — four hand-coordinated edit sites per tool. Dispatch
+  and the offered schemas now derive from a single table, and a new tool
+  is one entry plus its step row. The declaration itself became wire-side
+  data (`voicewire.Tool`); the context-side tool CLASS turned out to be
+  unbuildable inside the srv vocabulary, and the analyzer's refusals are
+  recorded verbatim in the spike README as evidence for that ruling.
+
+### Fixed
+
+- **Request smuggling in the HTTP host.** Duplicate `Content-Length`
+  headers collapsed into a dict framed the body on the last value, so a
+  fronting proxy honoring the first would desync the connection.
+  `buffered_length` now reads the raw header pairs and refuses conflicting
+  declarations. Verified against the live server: the request that
+  returned 201 with a smuggled body now returns 400.
+- **Permissive body framing.** `int()` accepted `5_0` (framed as 50),
+  `+50`, and surrounding whitespace; the length is now plain ASCII digits
+  or a 400. The `Transfer-Encoding` guard matched the substring `chunked`,
+  so `Transfer-Encoding: gzip` alongside a `Content-Length` was accepted —
+  any transfer encoding now draws 411, since this host buffers.
+- Smaller wire hardening: `HttpResponse.json` replaces rather than duplicates
+  a caller-supplied `Content-Type`, `HttpResponse.redirect` refuses a control
+  character in the target instead of trusting the domain, the host no
+  longer emits `Content-Length` twice when a handler set one, and the
+  request handler has a timeout so a declared-but-undelivered body cannot
+  pin a thread.
+- Wire records regained the immutability and value equality that the
+  dataclass-to-shell migration dropped in 0.0.18.0 (recorded then as named
+  debt for this ruling).
+
 ## [0.0.18.0] - 2026-08-07
 
 The srv and wire vocabulary: hosts and the modules both sides of a wire

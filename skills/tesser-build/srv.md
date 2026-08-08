@@ -197,8 +197,9 @@ follow-on work, not yet shipped. Review-side tells:
 - **The transport framing is guarded** — the length/framing decision is a pure
   function of the headers, tested directly: a declared finite size reads, a
   chunked body is refused (411), an over-cap body is refused (413) (verified
-  impl: `test_httpwire.py:content_length`). The response is content-type-agnostic
-  bytes: `json_response` serializes and sets the type, the host copies it.
+  impl: `test_http_protocol.py:buffered_length`). The response is
+  content-type-agnostic bytes: `HttpResponse.json` serializes and sets the
+  type, the host copies it.
 
 ## Common mistakes
 

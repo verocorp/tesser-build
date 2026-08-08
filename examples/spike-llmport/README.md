@@ -4,10 +4,11 @@ A workflow whose next step is decided by an LLM tool call, built as a real
 `scheduling` context in the `ts.*` shell idiom and held to the spike-shells
 bar. The whole tree is sigcheck-clean — zero findings, gated plainly in CI.
 The two findings the tree's ratchet used to carry were resolved by the srv
-vocabulary (`tesser.srv`: `Host`, `Port`, `Request`, `Response`) and the
-wire-module rules: `ToolAgent` declares itself a `ts.Host`, and
-`voicewire.py` is a governed wire module (see "The host/handler split"
-below for the history). mypy --strict and pytest gate the pure modules.
+vocabulary (`tesser.srv`: `Host`, `Port`, `Record`, `Rejection`, `Request`,
+`Response`) and the protocol-module rules: `ToolAgent` declares itself a
+`ts.Host`, and `protocol/voice.py` is a governed protocol module (see "The
+host/handler split" below for the history — it lived as the "wire module"
+`voicewire.py` until the 2026-08-08 vocabulary ruling). mypy --strict and pytest gate the pure modules.
 
 ## The shape
 
@@ -15,13 +16,24 @@ below for the history). mypy --strict and pytest gate the pure modules.
 scheduling/
   client.py       requests/responses (primitive DTOs) + SchedulingClient
   domain.py       Step/CustomerName/Slot VOs, Booking aggregate, step constants
-  application.py  BookingParts, SlotDirectory + BookingRepository ports, BookingService
+  application/
+    parts.py      BookingParts + the Reserved | SlotTaken reservation outcomes
+    views.py      loaded / parts_of / state / reoffered — the vocabulary the
+                  service bodies are written in
+    service.py    SlotDirectory + BookingRepository ports, BookingService
   adapters/
-    handlers.py   LlmToolHandler — the LLM wire: tool vocabulary, schemas, dispatch
+    handlers.py   LlmToolHandler — one endpoint method per tool, plus the schema
+                  declarations the model sees
 tests/            domain/application/handler tests; each declares its own @ts.fake port doubles
-voicewire.py      wire module: ToolSurface (ts.Port) + ToolTurn (ts.Response), the voice
-                  analog of httpwire — imported by host and handler, owned by neither
+protocol/
+  voice.py        the protocol module: ToolSurface + ToolEndpoint (ts.Port),
+                  ToolCall (ts.Request), ToolTurn (ts.Response), Tool and Route
+                  (ts.Record), BadToolCall (ts.Rejection) — the voice analog of
+                  protocol/http.py; the app owns it, handlers define it, hosts
+                  conform to it
 srv/
+  voice/router.py tools_for (the name -> endpoint table) + match — routing lives
+                  in srv, as it does for HTTP
   voice/agent.py  ToolAgent (ts.Host) — the context-generic LiveKit host
 ```
 
@@ -29,33 +41,44 @@ The division of labor the checkers enforce:
 
 - **The service speaks only Requests and Responses** — one `ts.Request` in,
   one `ts.Response` out, per use case (`begin`, `provide_name`, `choose_slot`,
-  `confirm`, `reoffer`, `status`), each body inline and under ten lines. The
+  `confirm`, `status`), each body inline and under ten lines. The
   booking is loaded from parts, driven through one guarded transition, and
   decomposed back to parts; a rejected transition persists nothing.
 - **Ports speak records, never domain objects** — `SlotDirectory` and
   `BookingRepository` carry strings and `BookingParts` only.
-- **The LLM wire lives entirely in the adapter.** `handlers.py` owns the tool
+- **The handler translates; the host routes.** `handlers.py` owns the tool
   names, the JSON schemas (the choose-slot schema embeds the *current* offered
-  slots as an enum, rebuilt from every response), the raw-argument parsing,
-  and the tool→use-case dispatch. The context below it never hears the word
-  "tool".
-- **The conflict choreography is edge behavior.** A confirm that fails
-  because the slot was taken makes the adapter call the `reoffer` use case and
-  re-raise with the fresh slots in the message — the model sees what is now
-  bookable; the service stays four-step.
-- **`srv/voice/agent.py`** translates the wire onto LiveKit Agents:
+  slots as an enum, rebuilt from every response), and the raw-argument
+  parsing — one endpoint method per tool, exactly as an HTTP handler carries
+  one method per route. The name→endpoint table lives in `srv/voice/router.py`,
+  because routing is the host's job in every other srv. The context below the
+  handler never hears the word "tool".
+- **A taken slot is an outcome, not an error.** `SlotDirectory.reserve`
+  returns `Reserved | SlotTaken` rather than raising, and `confirm` matches on
+  it: reserved books, taken re-offers the slots that are free now and persists
+  that. One call, one turn — the caller is told what happened and what to do
+  next in the same response, and the state it is told about is the state that
+  was saved. This was edge choreography until 2026-08-08 (the adapter caught
+  the failure, called a `reoffer` use case, and re-raised with the fresh slots
+  in the message). Chris's handler definition — map request, invoke service,
+  map response — named it: three service calls and a domain-state branch is
+  not mapping. Moving it also removed `reoffer` from the client surface (its
+  only caller was that `except` block) and closed a real defect, since the
+  `try` had grown wide enough to swallow a `ValueError` from schema-table
+  drift and answer it with "that slot was taken".
+- **`srv/voice/agent.py`** translates the protocol onto LiveKit Agents:
   `function_tool(raw_schema=...)` per schema, one shim, `ToolError` for
   `ValueError` (model-correctable, with a tools rebind), halt on anything
   else. It is in sigcheck's walk (pure AST) but outside the mypy/pytest gate —
   it needs `livekit-agents` installed and a real session to exercise.
-- **The wire speaks turns, not state.** A `ToolTurn` is the mechanism's own
+- **The protocol speaks turns, not state.** A `ToolTurn` is the mechanism's own
   record: the reply to speak plus the tool schemas now in play. The handler
   translates its context DTO into it, exactly as an HTTP handler renders a
   `Response` — the context's DTOs never cross into the host.
 
 ## What conformance cost — the collisions worth knowing
 
-Restructuring to zero findings surfaced three places where the rulebook and
+Restructuring to zero findings surfaced four places where the rulebook and
 the original design genuinely collided:
 
 - **The error-kind taxonomy is not expressible.** The settled error norm
@@ -74,16 +97,39 @@ the original design genuinely collided:
   adapter keys `TOOLS_FOR_STEP` on the strings that cross in DTOs, and the
   import matrix forbids it from importing the domain's constants. The same
   totality test is the drift tripwire.
-- **There is no kind for a tool declaration.** `LlmToolHandler` maintains
-  three parallel structures keyed on the same tool-name strings —
-  `TOOLS_FOR_STEP`, the `dispatch` chain, the `_schema` chain — plus inline
-  per-tool parsing: four hand-coordinated edit sites per new tool, hiding in
-  an adapter because adapters carry no body rules. The clean shape is one
-  declared tool object (name + description + schema + parse + invoke) with
-  dispatch and schemas derived from a table of them, but the vocabulary has
-  no word for it and one-kind-per-module forbids an undeclared class here.
-  Named by Chris during the srv-wire ship ("dispatch smells really bad");
-  evidence for the srv signature-matrix ruling, deliberately not improvised.
+- **The tool declaration got its word — on the wire side.** `LlmToolHandler`
+  used to maintain three parallel structures keyed on the same tool-name
+  strings (`TOOLS_FOR_STEP`, the `dispatch` chain, the `_schema` chain) plus
+  inline per-tool parsing — the dispatch smell Chris named during the
+  srv-wire ship. Resolved 2026-08-07 by building both candidate shapes and
+  letting sigcheck rule. The declared-tool-CLASS shape (name + schema +
+  parse + invoke as one context-side class) is unbuildable inside the srv
+  vocabulary — probed verbatim: an undeclared class in the adapter draws
+  "declares no ts.* base; every context class declares its block", and
+  declaring it with the wire vocabulary draws "is a wire record; a host
+  lives in srv and a wire kind in a wire module, never a context" — a tool
+  class would need a new adapters kind, which is a ruling this spike may
+  not improvise. What IS buildable: `voicewire.Tool` (`ts.Record`, the new
+  generic wire-record kind) carries the declaration as data (name +
+  description + parameters, `schema()` renders the raw dict the host
+  mounts), `ToolTurn.tools` speaks `Tool` records instead of loose dicts,
+  and the handler owns the schema declarations (name → description +
+  schema-builder) the model sees.
+
+  Chris then named the structural consequence (2026-08-08): if the tool call
+  really is a handler, routing belongs where every other srv keeps it. It
+  moved. `dispatch` is gone from the handler and from `ToolSurface`; the
+  handler exposes one endpoint method per tool (`provide_name`,
+  `choose_slot`, `confirm`, each a `voicewire.ToolEndpoint`), and
+  `srv/voice/router.py` holds the `name → endpoint` table and the lookup —
+  the exact shape `srv/http/host.py` uses when it names each handler method
+  in a `Route`. Two things fell out of that: the table entry (`Route`) is a
+  wire record, because it is a value the handler authored and the host
+  mounts, and it therefore lives in the wire module rather than in `srv` —
+  which is *why* this router is sigcheck-clean while python-app's HTTP
+  router still carries six ratchet findings for its undeclared
+  `Route`/`Match` dataclasses. A new tool is now one endpoint method, one
+  declaration entry, and one route.
 
 ## The host/handler split, answered in code — and then enacted
 
@@ -92,25 +138,26 @@ adapters, or a voice host in `srv/`? This tree originally carried both
 options so the structure could answer. The wrapper turned out to be **fully
 context-generic**: once `instructions()` moved onto the handler (it was
 content, misplaced in the transport), `ToolAgent` imports nothing from any
-context — it speaks to the `voicewire.ToolSurface` port. One voice host
+context — it speaks to the `ToolSurface` port. One voice host
 mounts any context's LLM handler, exactly as the HTTP host mounts HTTP
 handlers: the host owns the transport, the handler owns the content.
 
-The srv vocabulary and the wire-module rules then enacted the verdict:
+The srv vocabulary and the protocol-module rules then enacted the verdict:
 `ToolAgent` declares itself a `ts.Host` in `srv/voice/agent.py`, the
 option-A adapter shim (`scheduling/adapters/livekit.py`) was deleted, and
-`voicewire.py` became a governed wire module. Per handlers.md, the wire
-vocabulary is the contract both sides import and neither owns (the voice
-analog of `httpwire.py`) — sigcheck now enforces exactly that ownership:
-a wire module imports no context and never imports srv or bootstrap, which
-keeps contexts constructible with no host in the process.
+the module (then `voicewire.py`, now `protocol/voice.py`) became governed.
+The protocol is the contract the app owns and both sides abide by — the
+handlers define it, the hosts conform to it (the voice analog of
+`protocol/http.py`) — and sigcheck enforces exactly that ownership: a
+protocol module imports no context and never imports srv or bootstrap,
+which keeps contexts constructible with no host in the process.
 
-The migration also deleted the wire's structural-state machinery. The old
+The migration also deleted the protocol's structural-state machinery. The old
 contract passed the context's own response through the host behind a
 `ToolState` protocol and a state-generic `ToolHandler[S]` — the shape that
 produced the contravariance defect four pre-landing reviewers found
 independently. The host only ever read `reply` and handed the state back to
-`tools()`, so the wire now owns a concrete `ToolTurn` record (reply + the
+`tools()`, so the protocol now owns a concrete `ToolTurn` record (reply + the
 tool schemas now in play) and the handler translates into it, symmetric
 with HTTP. No TypeVar, no generic protocol, no conformance edge case — the
 typed assertion in the handler tests is a plain assignment.
@@ -120,7 +167,7 @@ typed assertion in the handler tests is a plain assignment.
 ```sh
 PYTHONPATH=examples/spike-shells:tesser-py python3 -m sigcheck examples/spike-llmport
 cd examples/spike-llmport
-MYPYPATH=.:../../tesser-py mypy --strict scheduling voicewire.py tests
+MYPYPATH=.:../../tesser-py mypy --strict scheduling protocol srv/voice/router.py tests
 pytest -q
 ```
 
@@ -132,7 +179,7 @@ CI gates it at zero.
 This is teaching code; five simplifications are deliberate, named here so
 they are copied knowingly or not at all:
 
-- **The wire contract is synchronous.** `voicewire.ToolSurface` and every
+- **The protocol contract is synchronous.** `ToolSurface` and every
   port below it are sync; the host calls `dispatch` inside the event loop.
   A real implementation with real IO must either make the contract async or
   have the host absorb the hop (`await asyncio.to_thread(...)` at the three
@@ -164,14 +211,21 @@ The sigcheck-vs-ruff F401 collision this tree used to document (a mandated
 `srv/voice/agent.py`'s `import tesser.srv as ts` is now load-bearing —
 `ToolAgent` subclasses `ts.Host`.
 
-One more named boundary: `ToolTurn` (like the migrated httpwire/cliwire
-records) is a mutable record — the frozen-dataclass guarantee did not
-survive the shell migration, by explicit ruling (2026-08-07): wire-record
-immutability is a per-kind invariant that belongs to the srv
-signature-matrix ruling, not a per-class patch.
+One more named boundary, since closed: `ToolTurn` (like the migrated
+HTTP/CLI protocol records) briefly lost the frozen-dataclass guarantee in
+the shell migration. The srv matrix ruled it per-kind (2026-08-07):
+`ts.Record` now owns one-shot construction, attribute immutability, and
+value equality for every wire record, so `ToolTurn` and `Tool` carry the
+guarantee without a per-class patch. The freeze is SHALLOW by design —
+it stops rebinding, not mutation of a field's referent — so a record
+holding a container copies it at the door: the HTTP protocol records copy
+their header and param maps, and `Tool` deep-copies its schema in and
+out of `schema()` because the host hands that dict to a provider SDK.
 
 ## Non-goals
 
 No wiring module (no concrete gateways exist to select — the precedent is
-spike-shells' contexts), no srv/bootstrap, no evals. The eval tiers this
-design supports are the subject of the test-structure ruling, not this code.
+spike-shells' contexts), no bootstrap or composition root (`srv/voice/agent.py`
+is the one host and nothing in-tree constructs it), no evals. The eval tiers
+this design supports are the subject of the test-structure ruling, not this
+code.

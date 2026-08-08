@@ -2,13 +2,18 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Callable
+from typing import Final
+
+import tesser.srv as ts
 
 from bootstrap.bootstrap import App, new
 from bootstrap.config import from_env
 from campaign.adapters.handlers.cli import Handler as CampaignHandler
-from cliwire import CliRequest, CliResponse, Command
+from protocol.cli import CliRequest, CliResponse, Command, UsageError
+from errors import DomainError, InfraError, exit_code_for
 
-_USAGE = (
+_USAGE: Final[str] = (
     "usage: python -m srv.cli.main <command> [args]\n"
     "commands:\n"
     "  create-campaign <budget_amount> <currency>\n"
@@ -17,6 +22,7 @@ _USAGE = (
 )
 
 
+@ts.function
 def commands_for(app: App) -> dict[str, Command]:
     campaign = CampaignHandler(app.campaign)
     return {
@@ -26,12 +32,28 @@ def commands_for(app: App) -> dict[str, Command]:
     }
 
 
+@ts.function
+def respond(run: Callable[[], CliResponse]) -> CliResponse:
+    try:
+        return run()
+    except UsageError as e:
+        return CliResponse(2, stdout="", stderr=str(e))
+    except DomainError as e:
+        return CliResponse(exit_code_for(e.kind), stdout="", stderr=f"[{e.code}] {e.message}")
+    except InfraError:
+        return CliResponse(1, stdout="", stderr="a dependency is unavailable; please retry")
+    except Exception:
+        return CliResponse(1, stdout="", stderr="unexpected error")
+
+
+@ts.function
 def dispatch(commands: dict[str, Command], argv: list[str]) -> CliResponse:
     if not argv or argv[0] not in commands:
-        return CliResponse(2, stderr=_USAGE)
-    return commands[argv[0]](CliRequest(args=tuple(argv[1:])))
+        return CliResponse(2, stdout="", stderr=_USAGE)
+    return respond(lambda: commands[argv[0]](CliRequest(args=tuple(argv[1:]))))
 
 
+@ts.function
 def run(argv: list[str]) -> int:
     app = new(from_env(os.getenv))
     try:

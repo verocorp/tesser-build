@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tesser.adapters as ts
 
-from httpwire import HttpRequest, JSONObject, Response, json_response, respond
+from protocol.http import HttpRequest, JSONObject, HttpResponse
 from reports.client import Client, LinksByVerdictRequest, LinkVerdictView
 
 
@@ -10,13 +10,10 @@ class Handler(ts.Handler):
     def __init__(self, client: Client) -> None:
         self._client = client
 
-    def links_by_verdict(self, req: HttpRequest) -> Response:
-        def run() -> Response:
-            resp = self._client.links_by_verdict(LinksByVerdictRequest())
-            rows = [_row(view) for view in resp.links]
-            return json_response(200, {"links": rows})
-
-        return respond(run)
+    def links_by_verdict(self, _req: HttpRequest) -> HttpResponse:
+        resp = self._client.links_by_verdict(LinksByVerdictRequest())
+        rows = [_row(view) for view in resp.links]
+        return HttpResponse.json(200, {"links": rows})
 
 
 @ts.function

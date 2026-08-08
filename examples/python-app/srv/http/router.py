@@ -3,7 +3,7 @@ from __future__ import annotations
 import urllib.parse
 from dataclasses import dataclass
 
-from httpwire import Endpoint
+from protocol.http import Endpoint
 
 
 @dataclass(frozen=True)

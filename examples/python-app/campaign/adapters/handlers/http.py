@@ -11,80 +11,54 @@ from campaign.client import (
     GetCampaignRequest,
     ResolveRequest,
 )
-from httpwire import (
-    HttpRequest,
-    JSONObject,
-    Response,
-    decode_body,
-    json_response,
-    object_field,
-    path_param,
-    redirect,
-    respond,
-    string_field,
-)
+from protocol.http import HttpRequest, JSONObject, HttpResponse, object_field, string_field
 
 
 class Handler(ts.Handler):
     def __init__(self, client: Client) -> None:
         self._client = client
 
-    def create_campaign(self, req: HttpRequest) -> Response:
-        def run() -> Response:
-            body = decode_body(req.body)
-            budget = object_field(body.get("budget"))
-            view = self._client.create_campaign(
-                CreateCampaignRequest(
-                    budget_amount=string_field(budget.get("amount")),
-                    budget_currency=string_field(budget.get("currency")),
-                )
+    def create_campaign(self, req: HttpRequest) -> HttpResponse:
+        body = req.json_body()
+        budget = object_field(body.get("budget"))
+        view = self._client.create_campaign(
+            CreateCampaignRequest(
+                budget_amount=string_field(budget.get("amount")),
+                budget_currency=string_field(budget.get("currency")),
             )
-            return json_response(201, _campaign_body(view))
+        )
+        return HttpResponse.json(201, _campaign_body(view))
 
-        return respond(run)
-
-    def add_link(self, req: HttpRequest) -> Response:
-        def run() -> Response:
-            body = decode_body(req.body)
-            view = self._client.add_link(
-                AddLinkRequest(
-                    campaign_id=string_field(body.get("campaign_id")),
-                    slug=string_field(body.get("slug")),
-                    target_url=string_field(body.get("target_url")),
-                )
+    def add_link(self, req: HttpRequest) -> HttpResponse:
+        body = req.json_body()
+        view = self._client.add_link(
+            AddLinkRequest(
+                campaign_id=string_field(body.get("campaign_id")),
+                slug=string_field(body.get("slug")),
+                target_url=string_field(body.get("target_url")),
             )
-            return json_response(200, _campaign_body(view))
+        )
+        return HttpResponse.json(200, _campaign_body(view))
 
-        return respond(run)
-
-    def deactivate_link(self, req: HttpRequest) -> Response:
-        def run() -> Response:
-            body = decode_body(req.body)
-            view = self._client.deactivate_link(
-                DeactivateLinkRequest(
-                    campaign_id=string_field(body.get("campaign_id")),
-                    slug=string_field(body.get("slug")),
-                )
+    def deactivate_link(self, req: HttpRequest) -> HttpResponse:
+        body = req.json_body()
+        view = self._client.deactivate_link(
+            DeactivateLinkRequest(
+                campaign_id=string_field(body.get("campaign_id")),
+                slug=string_field(body.get("slug")),
             )
-            return json_response(200, _campaign_body(view))
+        )
+        return HttpResponse.json(200, _campaign_body(view))
 
-        return respond(run)
+    def get_campaign(self, req: HttpRequest) -> HttpResponse:
+        view = self._client.get_campaign(
+            GetCampaignRequest(campaign_id=req.path_param("campaign_id"))
+        )
+        return HttpResponse.json(200, _campaign_body(view))
 
-    def get_campaign(self, req: HttpRequest) -> Response:
-        def run() -> Response:
-            view = self._client.get_campaign(
-                GetCampaignRequest(campaign_id=path_param(req, "campaign_id"))
-            )
-            return json_response(200, _campaign_body(view))
-
-        return respond(run)
-
-    def resolve(self, req: HttpRequest) -> Response:
-        def run() -> Response:
-            resp = self._client.resolve(ResolveRequest(slug=path_param(req, "slug")))
-            return redirect(resp.target_url)
-
-        return respond(run)
+    def resolve(self, req: HttpRequest) -> HttpResponse:
+        resp = self._client.resolve(ResolveRequest(slug=req.path_param("slug")))
+        return HttpResponse.redirect(resp.target_url)
 
 
 @ts.function
