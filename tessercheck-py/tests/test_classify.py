@@ -7,7 +7,12 @@ right structural attributes.
 
 import os
 
-from tessercheck.classify import ClassInfo, Stereotype, classify_paths
+from tessercheck.classify import (
+    ClassInfo,
+    Stereotype,
+    classify_paths,
+    classify_sources,
+)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _EXAMPLES = os.path.normpath(os.path.join(_HERE, "..", "..", "examples"))
@@ -46,3 +51,58 @@ def test_link_campaign_domain_classification() -> None:
     assert reg["Campaign"].embeds_entity is True
     assert reg["Campaign"].is_aggregate_root is True
     assert reg["Campaign"].is_member is False
+
+
+def test_tesser_domain_base_declares_the_stereotype() -> None:
+    """A ``tesser.domain`` base is a DECLARATION and outranks the heuristics.
+
+    Regression: the local signals key on ``@dataclass`` and a defined
+    ``__eq__``, and a base-class domain object has neither — it is not a
+    dataclass and it inherits equality from the base. Every such class fell to
+    OTHER, so every classifier-keyed check (TB010-TB018) skipped it silently.
+    Both import shapes, aliases included.
+    """
+    reg = classify_sources(
+        {
+            "dotted.py": (
+                "import tesser.domain as ts\n"
+                "class Slug(ts.ValueObject):\n"
+                "    _value: str\n"
+            ),
+            "plain.py": (
+                "from tesser.domain import Entity\n"
+                "class Order(Entity):\n"
+                "    _id: str\n"
+            ),
+            "aliased.py": (
+                "from tesser.domain import AggregateRoot as Root\n"
+                "class Basket(Root):\n"
+                "    _id: str\n"
+            ),
+            "spec.py": (
+                "import tesser.domain as ts\n"
+                "class OrderSpec(ts.Spec):\n"
+                "    id: str\n"
+            ),
+        }
+    )
+    assert reg["Slug"].stereotype is Stereotype.VALUE_OBJECT
+    assert reg["Order"].stereotype is Stereotype.IDENTITY_OBJECT
+    assert reg["Basket"].stereotype is Stereotype.IDENTITY_OBJECT
+    assert reg["OrderSpec"].stereotype is Stereotype.SPEC
+
+
+def test_unrelated_class_named_valueobject_is_not_a_tesser_value_object() -> None:
+    """The base match is on the DOTTED name, not the last segment — a local
+    class that happens to be called ``ValueObject`` declares nothing."""
+    reg = classify_sources(
+        {
+            "local.py": (
+                "class ValueObject:\n"
+                "    pass\n"
+                "class Thing(ValueObject):\n"
+                "    x: str\n"
+            )
+        }
+    )
+    assert reg["Thing"].stereotype is Stereotype.OTHER
