@@ -48,6 +48,20 @@ def test_response_stays_a_faithful_http_response_object() -> None:
     assert resp.headers == {}
 
 
+def test_a_wire_record_refuses_rewriting_after_construction() -> None:
+    req = HttpRequest(path="/campaigns")
+    with pytest.raises(AttributeError):
+        req.path = "/admin"
+    with pytest.raises(AttributeError):
+        setattr(req, "verdict", "allowed")
+    assert req.path == "/campaigns"
+
+
+def test_wire_records_regained_value_equality() -> None:
+    assert Response(204, b"") == Response(204, b"")
+    assert Response(204, b"") != Response(200, b"")
+
+
 def test_json_response_serializes_to_bytes_and_owns_its_content_type() -> None:
     resp = json_response(200, {"a": 1})
     assert isinstance(resp.body, bytes)

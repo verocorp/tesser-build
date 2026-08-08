@@ -15,15 +15,19 @@ class UsageError(Exception):
 class CliRequest(ts.Request):
 
     def __init__(self, args: tuple[str, ...] = ()) -> None:
-        self.args = args
+        super().__init__(args=args)
+
+    args: tuple[str, ...]
 
 
 class CliResponse(ts.Response):
 
     def __init__(self, exit_code: int, stdout: str = "", stderr: str = "") -> None:
-        self.exit_code = exit_code
-        self.stdout = stdout
-        self.stderr = stderr
+        super().__init__(exit_code=exit_code, stdout=stdout, stderr=stderr)
+
+    exit_code: int
+    stdout: str
+    stderr: str
 
 
 class Command(ts.Port, Protocol):

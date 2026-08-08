@@ -36,12 +36,21 @@ class HttpRequest(ts.Request):
         headers: Mapping[str, str] | None = None,
         body: bytes = b"",
     ) -> None:
-        self.method = method
-        self.path = path
-        self.path_params: Mapping[str, str] = dict(path_params or {})
-        self.query_params: Mapping[str, str] = dict(query_params or {})
-        self.headers: Mapping[str, str] = dict(headers or {})
-        self.body = body
+        super().__init__(
+            method=method,
+            path=path,
+            path_params=dict(path_params or {}),
+            query_params=dict(query_params or {}),
+            headers=dict(headers or {}),
+            body=body,
+        )
+
+    method: str
+    path: str
+    path_params: Mapping[str, str]
+    query_params: Mapping[str, str]
+    headers: Mapping[str, str]
+    body: bytes
 
 
 class Response(ts.Response):
@@ -52,9 +61,15 @@ class Response(ts.Response):
         body: bytes,
         headers: Mapping[str, str] | None = None,
     ) -> None:
-        self.status_code = status_code
-        self.body = body
-        self.headers: Mapping[str, str] = dict(headers or {})
+        super().__init__(
+            status_code=status_code,
+            body=body,
+            headers=dict(headers or {}),
+        )
+
+    status_code: int
+    body: bytes
+    headers: Mapping[str, str]
 
 
 class Endpoint(ts.Port, Protocol):

@@ -9,8 +9,10 @@ import tesser.srv as ts
 class ToolTurn(ts.Response):
 
     def __init__(self, reply: str, tools: tuple[dict[str, object], ...]) -> None:
-        self.reply = reply
-        self.tools = tools
+        super().__init__(reply=reply, tools=tools)
+
+    reply: str
+    tools: tuple[dict[str, object], ...]
 
 
 class ToolSurface(ts.Port, Protocol):
