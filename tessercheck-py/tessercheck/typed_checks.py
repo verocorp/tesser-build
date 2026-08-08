@@ -37,7 +37,7 @@ from tessercheck.astutil import (
     _has_unparseable_forward_ref,
     _name_of,
 )
-from tessercheck.classify import ClassInfo, Stereotype
+from tessercheck.classify import ClassInfo, Stereotype, tesser_domain_prefixes
 from tessercheck.finding import Finding
 
 # A predicate over 1-based line numbers: is a ``# tessercheck:ignore`` on that line?
@@ -199,6 +199,7 @@ def check_typed(
 ) -> list[Finding]:
     """Every classification-aware finding for one file."""
     lines = source.splitlines()
+    ts_prefixes = tesser_domain_prefixes(tree)
 
     def suppressed(line: int) -> bool:
         return 1 <= line <= len(lines) and _SUPPRESS_MARKER in lines[line - 1]
@@ -222,7 +223,9 @@ def check_typed(
             # TB019 governs what the declared stereotype may hand back — the
             # same rule for all three bases, so it sits outside the
             # value-object / identity-object split below.
-            findings.extend(_check_domain_return(stmt, info, registry, path, suppressed))
+            findings.extend(
+                _check_domain_return(stmt, info, registry, ts_prefixes, path, suppressed)
+            )
         if info.stereotype is Stereotype.VALUE_OBJECT:
             findings.extend(_check_vo_exposure(stmt, path, suppressed))
             findings.extend(_check_compound_raw_primitive(stmt, path, suppressed))
@@ -1065,10 +1068,28 @@ def _is_domain_name(name: str, own: str, registry: dict[str, ClassInfo]) -> bool
     )
 
 
+def _qualified_domain_names(ann: ast.expr, prefixes: frozenset[str]) -> frozenset[str]:
+    """Names in ``ann`` reached through a ``tesser.domain`` alias.
+
+    ``ts.Truth`` yields ``{"Truth"}``, so the caller can clear it without the
+    library being in the analyzed tree.
+    """
+    found: set[str] = set()
+    for node in ast.walk(ann):
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id in prefixes
+        ):
+            found.add(node.attr)
+    return frozenset(found)
+
+
 def _check_domain_return(
     node: ast.ClassDef,
     info: ClassInfo,
     registry: dict[str, ClassInfo],
+    ts_prefixes: frozenset[str],
     path: str,
     suppressed: "_Suppressed",
 ) -> list[Finding]:
@@ -1129,8 +1150,11 @@ def _check_domain_return(
             continue
 
         payload = _returned_payload_names(member.returns)
+        declared = _qualified_domain_names(member.returns, ts_prefixes)
         offenders = sorted(
-            n for n in payload if not _is_domain_name(n, node.name, registry)
+            n
+            for n in payload
+            if n not in declared and not _is_domain_name(n, node.name, registry)
         )
         if not offenders or suppressed(member.lineno):
             continue

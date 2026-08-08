@@ -1,5 +1,6 @@
 import pytest
 
+from campaign.link_status import LinkStatus
 from campaign.short_link import ShortLink, ShortLinkSpec
 from campaign.slug import Slug
 
@@ -13,7 +14,7 @@ class TestShortLink:
         link = ShortLink(_spec())
         assert link.slug == Slug("spring-sale")
         assert str(link.target_url) == "https://a.example"
-        assert link.active is True
+        assert link.status == LinkStatus("active")
 
     def test_constructor_wraps_child_error(self) -> None:
         with pytest.raises(ValueError, match="invalid slug"):
@@ -30,6 +31,6 @@ class TestShortLink:
     def test_deactivate_is_guarded(self) -> None:
         link = ShortLink(_spec())
         link.deactivate()
-        assert link.active is False
+        assert link.status == LinkStatus("inactive")
         with pytest.raises(ValueError, match="already deactivated"):
             link.deactivate()

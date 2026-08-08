@@ -45,6 +45,14 @@ class ItemCount:
 
 
 @dataclass(frozen=True)
+class Truth:
+    _value: bool
+
+    def __bool__(self) -> bool:
+        return self._value
+
+
+@dataclass(frozen=True)
 class WeightKg:
     _value: float
 
@@ -55,8 +63,8 @@ class WeightKg:
     def __float__(self) -> float:
         return canonical_float(self._value)
 
-    def exceeds(self, threshold_kg: float) -> bool:
-        return self._value > threshold_kg
+    def exceeds(self, threshold: WeightKg) -> Truth:
+        return Truth(self._value > threshold._value)
 
 
 @dataclass(frozen=True)
@@ -156,5 +164,5 @@ class Parcel:
     def scanned_at(self) -> ScannedAt:
         return self._scanned_at
 
-    def is_heavy(self) -> bool:
-        return self._weight.exceeds(_HEAVY_KG)
+    def is_heavy(self) -> Truth:
+        return self._weight.exceeds(WeightKg(_HEAVY_KG))

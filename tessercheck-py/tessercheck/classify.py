@@ -123,6 +123,25 @@ def _declared_base_aliases(tree: ast.Module) -> dict[str, str]:
     return aliases
 
 
+def tesser_domain_prefixes(tree: ast.Module) -> frozenset[str]:
+    """The attribute prefixes this module can spell a ``tesser.domain`` type
+    with — ``{"ts"}`` for ``import tesser.domain as ts``.
+
+    A type reached through one of these is a domain object by DECLARATION, and
+    checks may trust it without the defining package being in the analyzed
+    tree. tesser-py is a runtime dependency: a consumer analyzing its own app
+    never has ``tesser/domain/truth.py`` in scope, and a cross-package domain
+    type must not read as foreign just because it lives in the library.
+    """
+    prefixes: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "tesser.domain":
+                    prefixes.add(alias.asname or alias.name)
+    return frozenset(prefixes)
+
+
 def _dotted_name(node: ast.expr) -> str | None:
     """``ts.ValueObject`` as the string ``"ts.ValueObject"``.
 

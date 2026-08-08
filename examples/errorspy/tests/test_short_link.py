@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from domain.short_link import ShortLink, ShortLinkSpec
+from domain.values import LinkStatus
 from errors import DomainError, DomainKind
 
 
@@ -13,7 +14,7 @@ def _spec(slug: str = "spring-sale") -> ShortLinkSpec:
 def test_short_link_valid() -> None:
     link = ShortLink(_spec())
     assert str(link.slug) == "spring-sale"
-    assert link.active is True
+    assert link.status == LinkStatus("active")
 
 
 def test_child_error_propagates_unchanged() -> None:
@@ -28,7 +29,7 @@ def test_child_error_propagates_unchanged() -> None:
 def test_deactivate_then_deactivate_is_conflict() -> None:
     link = ShortLink(_spec())
     link.deactivate()
-    assert link.active is False
+    assert link.status == LinkStatus("inactive")
     with pytest.raises(DomainError) as ei:
         link.deactivate()
     assert ei.value.kind is DomainKind.CONFLICT

@@ -5,6 +5,7 @@ from campaign.campaign import (
     Campaign,
     CampaignSpec,
 )
+from campaign.link_status import LinkStatus
 from campaign.short_link import ShortLinkSpec
 from campaign.slug import Slug
 
@@ -49,7 +50,7 @@ class TestCampaignTransitions:
     def test_deactivate_short_link_via_root(self) -> None:
         c = Campaign(_spec("spring-sale"))
         c.deactivate_short_link(Slug("spring-sale"))
-        assert c.links[0].active is False
+        assert c.links[0].status == LinkStatus("inactive")
 
     def test_deactivate_unknown_slug_raises(self) -> None:
         c = Campaign(_spec("spring-sale"))
@@ -69,7 +70,7 @@ def test_links_accessor_is_a_defensive_copy() -> None:
 def test_links_accessor_does_not_leak_mutable_children() -> None:
     c = Campaign(_spec("spring-sale"))
     c.links[0].deactivate()
-    assert c.links[0].active is True
+    assert c.links[0].status == LinkStatus("active")
 
 
 def test_aggregates_are_not_value_compared() -> None:

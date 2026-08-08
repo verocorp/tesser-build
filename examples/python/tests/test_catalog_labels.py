@@ -1,4 +1,4 @@
-from catalog.labels import Labels
+from catalog.labels import LabelValue, Labels
 
 
 def test_empty_is_legal() -> None:
@@ -17,14 +17,13 @@ def test_copies_input_defensively() -> None:
     src = {"color": "black"}
     labels = Labels(src)
     src["color"] = "white"
-    assert labels.get("color") == "black"
+    assert labels.get("color") == LabelValue("black")
 
 
-def test_as_dict_copies_out_defensively() -> None:
+def test_reader_hands_back_a_value_object_not_the_representation() -> None:
     labels = Labels({"color": "black"})
-    out = labels.as_dict()
-    out["color"] = "white"
-    assert labels.get("color") == "black"
+    assert labels.get("color") == LabelValue("black")
+    assert labels.get("absent") is None
 
 
 def test_single_construction_door() -> None:
@@ -40,4 +39,4 @@ def test_collection_vo_has_no_conversion_dunders() -> None:
     labels = Labels({"size": "M", "color": "black"})
     for name in ("__str__", "__int__", "__float__", "__bytes__"):
         assert name not in Labels.__dict__
-    assert labels.as_dict() == {"size": "M", "color": "black"}
+    assert labels.get("size") == LabelValue("M")

@@ -45,5 +45,8 @@ class ReportsService(ts.ApplicationService):
             RecordedVerdict(f.target_url, f.allowed, f.reason) for f in self._verdicts.verdicts()
         )
         rows = join_links_with_verdicts(links, verdicts)
-        views = tuple(LinkVerdictView(r.slug, r.target_url, r.allowed, r.reason) for r in rows)
+        views = tuple(
+            LinkVerdictView(str(r.slug), str(r.target_url), bool(r.allowed), str(r.reason))
+            for r in rows
+        )
         return LinksByVerdictResponse(links=views)

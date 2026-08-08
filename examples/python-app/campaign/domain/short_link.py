@@ -4,7 +4,7 @@ import copy
 
 import tesser.domain as ts
 
-from campaign.domain.values import Slug, TargetURL
+from campaign.domain.values import LinkStatus, Slug, TargetURL
 
 
 class ShortLinkSpec(ts.Spec):
@@ -20,7 +20,7 @@ class ShortLink(ts.Entity):
     def __init__(self, spec: ShortLinkSpec) -> None:
         self._slug = Slug(spec.slug)
         self._target_url = TargetURL(spec.target_url)
-        self._active = spec.active
+        self._status = LinkStatus("active" if spec.active else "inactive")
 
     @property
     def slug(self) -> Slug:
@@ -31,17 +31,17 @@ class ShortLink(ts.Entity):
         return self._target_url
 
     @property
-    def active(self) -> bool:
-        return self._active
+    def status(self) -> LinkStatus:
+        return self._status
 
     def deactivate(self) -> None:
-        self._active = False
+        self._status = LinkStatus("inactive")
 
     def _clone(self) -> "ShortLink":
         return copy.copy(self)
 
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, ShortLink) and other._slug == self._slug
+    def __eq__(self, other: object) -> ts.Truth:
+        return ts.Truth(isinstance(other, ShortLink) and other._slug == self._slug)
 
     def __hash__(self) -> int:
         return hash(self._slug)
