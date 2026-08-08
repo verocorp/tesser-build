@@ -5,7 +5,7 @@ import pytest
 import campaign.wiring.wire as campaign_wire
 from bootstrap.bootstrap import new
 from campaign.application.service import TargetChecker
-from campaign.client import AddLinkRequest, Client, CreateCampaignRequest, ListLinksRequest
+from campaign.client.client import AddLinkRequest, Client, CreateCampaignRequest, ListLinksRequest
 from campaign.wiring.config import Config as CampaignConfig
 from campaign.wiring.wire import build as real_campaign_build
 from lifecycle import Closeable

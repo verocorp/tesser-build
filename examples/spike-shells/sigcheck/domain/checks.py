@@ -243,6 +243,11 @@ class Module(ts.Entity):
     def class_defs(self) -> tuple[ast.ClassDef, ...]:
         return tuple(self._classes.values())
 
+    def bound_names(self) -> tuple[tuple[str, str, str], ...]:
+        return tuple(
+            (local, target, original) for local, (target, original) in self._imported.items()
+        )
+
     def resolve(self, node: ast.expr) -> tuple[str, str] | None:
         if isinstance(node, ast.Attribute) and isinstance(node.value, (ast.Name, ast.Attribute)):
             package = self._package_aliases.get(ast.unparse(node.value))
@@ -406,7 +411,7 @@ class Codebase(ts.AggregateRoot):
                         "a role __init__ only re-exports from its own role"
                     )
                 )
-        for target, lineno, _, _ in module.import_edges():
+        for target, lineno, is_member, has_alias in module.import_edges():
             if not target.startswith(module.name() + "."):
                 found.append(
                     Violation(
@@ -414,6 +419,7 @@ class Codebase(ts.AggregateRoot):
                         "a role __init__ only re-exports from its own role"
                     )
                 )
+            found.extend(self._form_violations(module, target, lineno, is_member, has_alias))
         return tuple(found)
 
     def _app_init_violations(self, module: Module) -> tuple[Violation, ...]:
@@ -1160,6 +1166,14 @@ class Codebase(ts.AggregateRoot):
                             blocks[key] = blocks[base_key]
                             changed = True
                             break
+                for local, target, original in module.bound_names():
+                    key = (module.name(), local)
+                    if key in blocks:
+                        continue
+                    source = blocks.get((target, original))
+                    if source is not None:
+                        blocks[key] = source
+                        changed = True
         return blocks
 
     def _signature_violations(

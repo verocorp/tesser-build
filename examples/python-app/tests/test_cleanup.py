@@ -3,16 +3,16 @@ from __future__ import annotations
 import pytest
 import tesser.testing as ts
 
-import campaign.client
+import campaign.client.client as campaign_client
 import linkpolicy.wiring.wire as linkpolicy_wire
-import reports.client
+import reports.client.client as reports_client
 import reports.wiring.wire as reports_wire
 from bootstrap.bootstrap import CleanupStack, new
 from bootstrap.config import Config
 from campaign.wiring.config import Config as CampaignConfig
 from errors import DomainError
 from lifecycle import Closeable
-from linkpolicy.client import (
+from linkpolicy.client.client import (
     CheckRequest,
     CheckResponse,
     Client,
@@ -20,7 +20,7 @@ from linkpolicy.client import (
     ListVerdictsResponse,
 )
 from linkpolicy.wiring.config import Config as LinkPolicyConfig
-from reports.client import LinksByVerdictRequest, LinksByVerdictResponse
+from reports.client.client import LinksByVerdictRequest, LinksByVerdictResponse
 from reports.wiring.config import Config as ReportsConfig
 
 
@@ -81,7 +81,7 @@ def test_new_closes_already_built_deps_on_partial_failure(monkeypatch: pytest.Mo
 
 
 @ts.fake
-class _DummyReports(reports.client.Client):
+class _DummyReports(reports_client.Client):
     def links_by_verdict(self, req: LinksByVerdictRequest) -> LinksByVerdictResponse:
         return LinksByVerdictResponse(links=())
 
@@ -91,8 +91,8 @@ def test_reports_closeable_is_on_the_cleanup_stack(monkeypatch: pytest.MonkeyPat
     spy = _Spy("reports", order)
 
     def fake_build(
-        cfg: ReportsConfig, campaign_client: campaign.client.Client, policy_client: Client
-    ) -> tuple[reports.client.Client, Closeable]:
+        cfg: ReportsConfig, campaign_client: campaign_client.Client, policy_client: Client
+    ) -> tuple[reports_client.Client, Closeable]:
         return _DummyReports(), spy
 
     monkeypatch.setattr(reports_wire, "build", fake_build)
@@ -112,8 +112,8 @@ def test_app_close_surfaces_errors_instead_of_dropping(monkeypatch: pytest.Monke
     failing = _Spy("reports", order, fail=True)
 
     def fake_build(
-        cfg: ReportsConfig, campaign_client: campaign.client.Client, policy_client: Client
-    ) -> tuple[reports.client.Client, Closeable]:
+        cfg: ReportsConfig, campaign_client: campaign_client.Client, policy_client: Client
+    ) -> tuple[reports_client.Client, Closeable]:
         return _DummyReports(), failing
 
     monkeypatch.setattr(reports_wire, "build", fake_build)

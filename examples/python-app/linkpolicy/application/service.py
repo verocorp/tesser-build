@@ -4,7 +4,7 @@ from typing import Protocol
 
 import tesser.application as ts
 
-from linkpolicy.client import (
+from linkpolicy.client.client import (
     CheckRequest,
     CheckResponse,
     ListVerdictsRequest,

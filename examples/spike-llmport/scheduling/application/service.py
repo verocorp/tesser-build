@@ -6,8 +6,8 @@ import tesser.application as ts
 
 import scheduling.application.parts as parts
 import scheduling.application.views as views
-import scheduling.client as client
-import scheduling.domain as domain
+import scheduling.client.client as client
+import scheduling.domain.scheduling as domain
 
 
 class SlotDirectory(ts.Port, Protocol):

@@ -1,9 +1,9 @@
 import tesser.testing as ts
 
-import digest.adapters as adapters
-import digest.application as application
-import digest.client as client
-import spike.application as spike_application
+import digest.adapters.gateways as adapters
+import digest.application.service as application
+import digest.client.client as client
+import spike.application.service as spike_application
 
 
 @ts.fake

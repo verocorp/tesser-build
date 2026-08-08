@@ -1,6 +1,6 @@
 import pytest
 
-import scheduling.domain as domain
+import scheduling.domain.scheduling as domain
 
 
 def test_customer_name_equality() -> None:

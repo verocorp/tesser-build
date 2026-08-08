@@ -4,8 +4,8 @@ import tesser.testing as ts
 import scheduling.adapters.handlers as handlers
 import scheduling.application.parts as parts
 import scheduling.application.service as application
-import scheduling.client as client
-import scheduling.domain as domain
+import scheduling.client.client as client
+import scheduling.domain.scheduling as domain
 import srv.voice.router as router
 import protocol.voice as voice
 

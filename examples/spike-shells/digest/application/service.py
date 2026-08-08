@@ -2,7 +2,7 @@ from typing import Protocol
 
 import tesser.application as ts
 
-import digest.client as client
+import digest.client.client as client
 
 
 class NoteTaker(ts.Port, Protocol):

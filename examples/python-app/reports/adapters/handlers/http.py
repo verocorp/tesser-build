@@ -3,7 +3,7 @@ from __future__ import annotations
 import tesser.adapters as ts
 
 from protocol.http import HttpRequest, JSONObject, HttpResponse
-from reports.client import Client, LinksByVerdictRequest, LinkVerdictView
+from reports.client.client import Client, LinksByVerdictRequest, LinkVerdictView
 
 
 class Handler(ts.Handler):

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from bootstrap.bootstrap import new
-from campaign.client import AddLinkRequest, CreateCampaignRequest
+from campaign.client.client import AddLinkRequest, CreateCampaignRequest
 from errors import DomainError
-from reports.client import LinksByVerdictRequest
+from reports.client.client import LinksByVerdictRequest
 from reports.domain.report import Link, RecordedVerdict, join_links_with_verdicts
 from tests.support import app_config
 

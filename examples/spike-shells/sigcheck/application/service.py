@@ -2,8 +2,8 @@ from typing import Protocol
 
 import tesser.application as ts
 
-import sigcheck.client as client
-import sigcheck.domain as domain
+import sigcheck.client.client as client
+import sigcheck.domain.checks as domain
 
 
 class SourceReader(ts.Port, Protocol):

@@ -3,8 +3,8 @@ from __future__ import annotations
 import tesser.adapters as ts
 
 from campaign.application.parts import CheckOutcome
-from linkpolicy.client import CheckRequest
-from linkpolicy.client import Client as LinkPolicyClient
+from linkpolicy.client.client import CheckRequest
+from linkpolicy.client.client import Client as LinkPolicyClient
 
 
 class LinkPolicyTargetChecker(ts.Gateway):

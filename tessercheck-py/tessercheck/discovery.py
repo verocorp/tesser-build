@@ -57,19 +57,33 @@ class Discovery:
     unclassified: tuple[str, ...]
 
 
+def _client_sources(pkg_dir: pathlib.Path) -> list[pathlib.Path]:
+    """Every module of the package's client role, in either form."""
+    role = pkg_dir / "client"
+    if role.is_dir():
+        return sorted(role.glob("*.py"))
+    return [pkg_dir / "client.py"]
+
+
 def exposes_client(pkg_dir: pathlib.Path) -> bool:
     """The discovery key: does the package's client module expose a ``Client``?
 
-    True for a ``class Client`` defined in ``client.py`` (or
-    ``client/__init__.py``) or any ``from ... import`` there that binds the
-    name ``Client`` (directly or via ``as Client``) — **as a top-level
-    statement only**. A binding nested in a function, class, or conditional
+    True for a ``class Client`` defined in the package's client role — either
+    the module form (``client.py``) or any module of the package form
+    (``client/*.py``) — or any ``from ... import`` there that binds the name
+    ``Client`` (directly or via ``as Client``) — **as a top-level statement
+    only**. A binding nested in a function, class, or conditional
     (``if False:``, ``if TYPE_CHECKING:``) is not a public module attribute
     at runtime and does not count — a dead import cannot smuggle a package
     past the totality guard. Missing or unparsable client module is False —
     the caller classifies the package as unclassified, never exempt.
+
+    The package form must be scanned in full, not just its ``__init__``: a
+    role package re-exporting from its ``__init__`` is itself a finding under
+    the import-form rule, so a conformant ``client/__init__.py`` is empty and
+    ``Client`` lives in a sibling module.
     """
-    for candidate in (pkg_dir / "client.py", pkg_dir / "client" / "__init__.py"):
+    for candidate in _client_sources(pkg_dir):
         if not candidate.is_file():
             continue
         try:
@@ -149,11 +163,13 @@ def totality_errors(
     """
     errors: list[str] = []
     for name in discovery.unclassified:
-        if (root / name / "client.py").is_file():
+        present = [p for p in _client_sources(root / name) if p.is_file()]
+        if present:
+            where = ", ".join(str(p.relative_to(root)) for p in present)
             errors.append(
-                f"{root / name}: {name}/client.py exists but does not expose "
+                f"{root / name}: {where} exists but does not expose "
                 f"Client — define 'class Client' (or re-export it) at the top "
-                f"level of {name}/client.py "
+                f"level of the {name} client role "
                 "(skills/tesser-build/public-interface.md)"
             )
         else:
