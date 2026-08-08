@@ -5,17 +5,6 @@ import tesser.domain as ts
 from serialization import canonical_decimal, canonical_int, canonical_str
 
 
-class Same(ts.ValueObject):
-
-    def __init__(self, holds: bool) -> None:
-        object.__setattr__(self, "_holds", holds)
-
-    def __bool__(self) -> bool:
-        return self._holds
-
-    _holds: bool
-
-
 class Slug(ts.ValueObject):
 
     def __init__(self, value: str) -> None:
@@ -80,11 +69,9 @@ class ShortLink(ts.Entity):
     def deactivate(self) -> None:
         self._status = LinkStatus("inactive")
 
-    def __eq__(self, other: object) -> Same:
-        return Same(isinstance(other, ShortLink) and self._slug == other._slug)
-
-    def __hash__(self) -> int:
-        return hash(self._slug)
+    @property
+    def identity(self) -> Slug:
+        return self._slug
 
 
 class Campaign(ts.AggregateRoot):
@@ -106,8 +93,6 @@ class Campaign(ts.AggregateRoot):
     def add_link(self, slug: str) -> None:
         self._links.append(ShortLink(slug, "active"))
 
-    def __eq__(self, other: object) -> Same:
-        return Same(self is other)
-
-    def __hash__(self) -> int:
-        return id(self)
+    @property
+    def identity(self) -> MoneyAmount:
+        return self._budget

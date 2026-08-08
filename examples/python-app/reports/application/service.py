@@ -46,7 +46,7 @@ class ReportsService(ts.ApplicationService):
         )
         rows = join_links_with_verdicts(links, verdicts)
         views = tuple(
-            LinkVerdictView(str(r.slug), str(r.target_url), bool(r.allowed), str(r.reason))
+            LinkVerdictView(str(r.slug), str(r.target_url), str(r.allowed) == "allowed", str(r.reason))
             for r in rows
         )
         return LinksByVerdictResponse(links=views)

@@ -1,11 +1,10 @@
 import copy
 from dataclasses import dataclass
 
-import tesser.domain as ts
-
 from campaign.link_status import LinkStatus
 from campaign.slug import Slug
 from campaign.target_url import TargetURL
+from entity import Entity
 
 
 @dataclass(frozen=True)
@@ -16,7 +15,7 @@ class ShortLinkSpec:
     active: bool
 
 
-class ShortLink:
+class ShortLink(Entity):
 
     def __init__(self, spec: ShortLinkSpec) -> None:
         try:
@@ -49,8 +48,6 @@ class ShortLink:
     def _clone(self) -> "ShortLink":
         return copy.copy(self)
 
-    def __eq__(self, other: object) -> ts.Truth:
-        return ts.Truth(isinstance(other, ShortLink) and other._slug == self._slug)
-
-    def __hash__(self) -> int:
-        return hash(self._slug)
+    @property
+    def identity(self) -> Slug:
+        return self._slug

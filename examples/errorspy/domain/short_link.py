@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from domain.values import LinkStatus, Slug, TargetURL, Truth
+from domain.entity import Entity
+from domain.values import LinkStatus, Slug, TargetURL
 from errors import conflict
 
 
@@ -12,7 +13,7 @@ class ShortLinkSpec:
     target_url: str
 
 
-class ShortLink:
+class ShortLink(Entity):
 
     def __init__(self, spec: ShortLinkSpec) -> None:
         self._slug = Slug(spec.slug)
@@ -38,8 +39,6 @@ class ShortLink:
             )
         self._status = LinkStatus("inactive")
 
-    def __eq__(self, other: object) -> Truth:
-        return Truth(isinstance(other, ShortLink) and other._slug == self._slug)
-
-    def __hash__(self) -> int:
-        return hash(self._slug)
+    @property
+    def identity(self) -> Slug:
+        return self._slug

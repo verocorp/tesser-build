@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tesser.domain as ts
 
-from reports.domain.values import Reason, Slug, TargetURL
+from reports.domain.values import Decision, Reason, Slug, TargetURL
 
 
 class Link(ts.ValueObject):
@@ -27,7 +27,7 @@ class RecordedVerdict(ts.ValueObject):
 
     def __init__(self, target_url: str, allowed: bool, reason: str) -> None:
         object.__setattr__(self, "_target_url", TargetURL(target_url))
-        object.__setattr__(self, "_allowed", ts.Truth(allowed))
+        object.__setattr__(self, "_allowed", Decision("allowed" if allowed else "denied"))
         object.__setattr__(self, "_reason", Reason(reason))
 
     @property
@@ -35,7 +35,7 @@ class RecordedVerdict(ts.ValueObject):
         return self._target_url
 
     @property
-    def allowed(self) -> ts.Truth:
+    def allowed(self) -> Decision:
         return self._allowed
 
     @property
@@ -43,7 +43,7 @@ class RecordedVerdict(ts.ValueObject):
         return self._reason
 
     _target_url: TargetURL
-    _allowed: ts.Truth
+    _allowed: Decision
     _reason: Reason
 
 
@@ -52,7 +52,7 @@ class LinkVerdict(ts.ValueObject):
     def __init__(self, slug: str, target_url: str, allowed: bool, reason: str) -> None:
         object.__setattr__(self, "_slug", Slug(slug))
         object.__setattr__(self, "_target_url", TargetURL(target_url))
-        object.__setattr__(self, "_allowed", ts.Truth(allowed))
+        object.__setattr__(self, "_allowed", Decision("allowed" if allowed else "denied"))
         object.__setattr__(self, "_reason", Reason(reason))
 
     @property
@@ -64,7 +64,7 @@ class LinkVerdict(ts.ValueObject):
         return self._target_url
 
     @property
-    def allowed(self) -> ts.Truth:
+    def allowed(self) -> Decision:
         return self._allowed
 
     @property
@@ -73,7 +73,7 @@ class LinkVerdict(ts.ValueObject):
 
     _slug: Slug
     _target_url: TargetURL
-    _allowed: ts.Truth
+    _allowed: Decision
     _reason: Reason
 
 
@@ -86,7 +86,7 @@ def join_links_with_verdicts(
         LinkVerdict(
             slug=str(link.slug),
             target_url=str(link.target_url),
-            allowed=bool(by_url[str(link.target_url)].allowed)
+            allowed=str(by_url[str(link.target_url)].allowed) == "allowed"
             if str(link.target_url) in by_url
             else True,
             reason=str(by_url[str(link.target_url)].reason)
@@ -95,4 +95,4 @@ def join_links_with_verdicts(
         )
         for link in links
     ]
-    return tuple(sorted(rows, key=lambda r: (bool(r.allowed), str(r.slug))))
+    return tuple(sorted(rows, key=lambda r: (str(r.allowed) == "allowed", str(r.slug))))

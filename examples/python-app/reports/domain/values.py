@@ -38,6 +38,19 @@ class TargetURL(ts.ValueObject):
     _value: str
 
 
+class Decision(ts.ValueObject):
+
+    def __init__(self, value: str) -> None:
+        if value not in ("allowed", "denied"):
+            raise invalid("invalid_decision", f"decision {value!r} must be allowed or denied")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return canonical_str(self._value)
+
+    _value: str
+
+
 class Reason(ts.ValueObject):
 
     def __init__(self, value: str) -> None:

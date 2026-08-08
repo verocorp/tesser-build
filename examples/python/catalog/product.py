@@ -1,11 +1,10 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-import tesser.domain as ts
-
 from catalog.labels import Labels
 from catalog.money import Money, MoneySpec
 from catalog.sku import SKU
+from entity import Entity
 
 
 @dataclass(frozen=True)
@@ -16,7 +15,7 @@ class ProductSpec:
     labels: Mapping[str, str]
 
 
-class Product:
+class Product(Entity):
 
     def __init__(self, spec: ProductSpec) -> None:
         try:
@@ -41,8 +40,6 @@ class Product:
     def labels(self) -> Labels:
         return self._labels
 
-    def __eq__(self, other: object) -> ts.Truth:
-        return ts.Truth(isinstance(other, Product) and other._sku == self._sku)
-
-    def __hash__(self) -> int:
-        return hash(self._sku)
+    @property
+    def identity(self) -> SKU:
+        return self._sku

@@ -84,6 +84,8 @@ class ClassInfo:
     has_underscore_field: bool
     has_eq_none: bool
     has_eq_method: bool
+    is_contract_base: bool
+    has_identity: bool
     field_type_names: frozenset[str]
     collection_element_names: frozenset[str]
 
@@ -130,7 +132,7 @@ def tesser_domain_prefixes(tree: ast.Module) -> frozenset[str]:
     A type reached through one of these is a domain object by DECLARATION, and
     checks may trust it without the defining package being in the analyzed
     tree. tesser-py is a runtime dependency: a consumer analyzing its own app
-    never has ``tesser/domain/truth.py`` in scope, and a cross-package domain
+    never has the library's own modules in scope, and a cross-package domain
     type must not read as foreign just because it lives in the library.
     """
     prefixes: set[str] = set()
@@ -197,6 +199,11 @@ class _Scan:
     has_underscore_field: bool
     has_eq_none: bool
     has_eq_method: bool
+    # Defines __init_subclass__: this class POLICES its subclasses, which is what
+    # a base establishing a contract does and what an instance of one never does.
+    is_contract_base: bool
+    # Declares `identity` — the entity contract now that the base owns __eq__.
+    has_identity: bool
     field_type_names: frozenset[str]
     collection_element_names: frozenset[str]
 
@@ -265,6 +272,8 @@ def _scan_class(
         has_underscore_field=has_underscore_field,
         has_eq_none=has_eq_none,
         has_eq_method="__eq__" in methods,
+        is_contract_base="__init_subclass__" in methods,
+        has_identity="identity" in methods,
         field_type_names=frozenset(field_types),
         collection_element_names=frozenset(collection_elems),
     )
@@ -281,6 +290,12 @@ def _local_stereotype(scan: _Scan) -> Stereotype:
     """
     if scan.declared is not None:
         return Stereotype[scan.declared]
+    if scan.is_contract_base:
+        # ValueObject/Entity and their stdlib renderings DEFINE a stereotype's
+        # contract; they are not instances of it. Without this they match the
+        # identity heuristic below (they carry __eq__ and are not dataclasses)
+        # and every rule keyed on the stereotype fires on the library itself.
+        return Stereotype.OTHER
     if scan.frozen_dataclass:
         # value family: a VO *validates* (__post_init__) and/or *hides* its
         # representation (an underscore-private field). A record / spec / DTO
@@ -289,8 +304,12 @@ def _local_stereotype(scan: _Scan) -> Stereotype:
         if scan.has_post_init or scan.has_underscore_field:
             return Stereotype.VALUE_OBJECT
         return Stereotype.SPEC
-    if not scan.any_dataclass and (scan.has_eq_method or scan.has_eq_none):
-        # identity equality (by id) or blocked equality (``__eq__ = None``).
+    if not scan.any_dataclass and (
+        scan.has_eq_method or scan.has_eq_none or scan.has_identity
+    ):
+        # identity equality (by id), blocked equality (``__eq__ = None``), or a
+        # declared ``identity`` — the contract once the base owns __eq__ and the
+        # entity no longer spells equality itself.
         return Stereotype.IDENTITY_OBJECT
     return Stereotype.OTHER
 
@@ -338,6 +357,8 @@ def classify_trees(trees: dict[str, ast.Module]) -> dict[str, ClassInfo]:
             has_underscore_field=scan.has_underscore_field,
             has_eq_none=scan.has_eq_none,
             has_eq_method=scan.has_eq_method,
+            is_contract_base=scan.is_contract_base,
+            has_identity=scan.has_identity,
             field_type_names=scan.field_type_names,
             collection_element_names=scan.collection_element_names,
         )

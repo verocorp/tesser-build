@@ -39,10 +39,10 @@ class LinkPolicyService(ts.ApplicationService):
         verdict = self._policy.evaluate(req.target_url)
         self._repo.record(
             VerdictParts(
-                str(verdict.target_url), bool(verdict.allowed), str(verdict.reason)
+                str(verdict.target_url), str(verdict.allowed) == "allowed", str(verdict.reason)
             )
         )
-        return CheckResponse(allowed=bool(verdict.allowed), reason=str(verdict.reason))
+        return CheckResponse(allowed=str(verdict.allowed) == "allowed", reason=str(verdict.reason))
 
     def list_verdicts(self, req: ListVerdictsRequest) -> ListVerdictsResponse:
         views = tuple(VerdictView(p.target_url, p.allowed, p.reason) for p in self._repo.all())

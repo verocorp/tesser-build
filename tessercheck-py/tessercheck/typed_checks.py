@@ -855,23 +855,8 @@ def _check_compound_raw_primitive(
     findings: list[Finding] = []
     fields = _fields(node)
 
-    # A comparison-answer type is the one value object that MAY wrap a bool.
-    # TB016's reason for the ban is that a bool has no serialization form and
-    # its only candidate dunder, __bool__, is truthiness rather than a canonical
-    # exit. For this type that reasoning inverts: truthiness IS its purpose (it
-    # is what `if a < b` consumes), and it never crosses an edge, so it needs no
-    # wire form. Required by TB019, which stopped licensing the rich comparisons
-    # — a domain object answers a comparison with a domain object, and without
-    # __bool__ on that answer every `if a == b` is silently true.
-    answers_a_comparison = any(
-        isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)) and m.name == "__bool__"
-        for m in node.body
-    )
-
     for field in fields:
         if _annotation_base(field.annotation) not in _NON_WRAPPABLE:
-            continue
-        if answers_a_comparison and _annotation_base(field.annotation) == "bool":
             continue
         if suppressed(field.lineno):
             continue
@@ -1071,7 +1056,7 @@ def _is_domain_name(name: str, own: str, registry: dict[str, ClassInfo]) -> bool
 def _qualified_domain_names(ann: ast.expr, prefixes: frozenset[str]) -> frozenset[str]:
     """Names in ``ann`` reached through a ``tesser.domain`` alias.
 
-    ``ts.Truth`` yields ``{"Truth"}``, so the caller can clear it without the
+    ``ts.Money`` yields ``{"Money"}``, so the caller can clear it without the
     library being in the analyzed tree.
     """
     found: set[str] = set()

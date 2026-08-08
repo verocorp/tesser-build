@@ -64,11 +64,24 @@ class Reason(ts.ValueObject):
     _value: str
 
 
+class Decision(ts.ValueObject):
+
+    def __init__(self, value: str) -> None:
+        if value not in ("allowed", "denied"):
+            raise invalid("invalid_decision", f"decision {value!r} must be allowed or denied")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return canonical_str(self._value)
+
+    _value: str
+
+
 class Verdict(ts.ValueObject):
 
     def __init__(self, target_url: str, allowed: bool, reason: str) -> None:
         object.__setattr__(self, "_target_url", TargetURL(target_url))
-        object.__setattr__(self, "_allowed", ts.Truth(allowed))
+        object.__setattr__(self, "_allowed", Decision("allowed" if allowed else "denied"))
         object.__setattr__(self, "_reason", Reason(reason))
 
     @property
@@ -76,7 +89,7 @@ class Verdict(ts.ValueObject):
         return self._target_url
 
     @property
-    def allowed(self) -> ts.Truth:
+    def allowed(self) -> Decision:
         return self._allowed
 
     @property
@@ -84,7 +97,7 @@ class Verdict(ts.ValueObject):
         return self._reason
 
     _target_url: TargetURL
-    _allowed: ts.Truth
+    _allowed: Decision
     _reason: Reason
 
 

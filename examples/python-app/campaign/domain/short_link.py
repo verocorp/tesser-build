@@ -40,8 +40,6 @@ class ShortLink(ts.Entity):
     def _clone(self) -> "ShortLink":
         return copy.copy(self)
 
-    def __eq__(self, other: object) -> ts.Truth:
-        return ts.Truth(isinstance(other, ShortLink) and other._slug == self._slug)
-
-    def __hash__(self) -> int:
-        return hash(self._slug)
+    @property
+    def identity(self) -> Slug:
+        return self._slug

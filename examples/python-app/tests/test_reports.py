@@ -15,8 +15,8 @@ def test_report_reads_both_contexts_in_process() -> None:
         app.campaign.add_link(AddLinkRequest(view.campaign_id, "a", "https://ok.example/a"))
         app.campaign.add_link(AddLinkRequest(view.campaign_id, "b", "https://ok.example/b"))
         rows = app.reports.links_by_verdict(LinksByVerdictRequest()).links
-        assert {str(r.slug) for r in rows} == {"a", "b"}
-        assert all(r.allowed and str(r.reason) == "ok" for r in rows)
+        assert {r.slug for r in rows} == {"a", "b"}
+        assert all(r.allowed and r.reason == "ok" for r in rows)
     finally:
         app.close()
 
@@ -39,5 +39,5 @@ def test_join_semantics_default_and_ordering() -> None:
     verdicts = (RecordedVerdict("https://bad.example/a", False, "host blocked"),)
     rows = join_links_with_verdicts(links, verdicts)
     assert [str(r.slug) for r in rows] == ["a", "z"]
-    assert not rows[0].allowed and str(rows[0].reason) == "host blocked"
-    assert rows[1].allowed and str(rows[1].reason) == "no verdict recorded"
+    assert str(rows[0].allowed) == "denied" and str(rows[0].reason) == "host blocked"
+    assert str(rows[1].allowed) == "allowed" and str(rows[1].reason) == "no verdict recorded"
