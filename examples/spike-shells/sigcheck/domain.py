@@ -21,6 +21,7 @@ TESSER_BASE_BLOCKS: Final[dict[tuple[str, str], str]] = {
     ("tesser.srv", "Host"): "host",
     ("tesser.srv", "Port"): "wire_port",
     ("tesser.srv", "Record"): "wire_record",
+    ("tesser.srv", "Rejection"): "wire_rejection",
     ("tesser.srv", "Request"): "wire_request",
     ("tesser.srv", "Response"): "wire_response",
 }
@@ -80,6 +81,7 @@ KIND_NAME: Final[dict[str, str]] = {
     "host": "a host",
     "wire_port": "a wire port",
     "wire_record": "a wire record",
+    "wire_rejection": "a wire rejection",
     "wire_request": "a wire request record",
     "wire_response": "a wire response record",
 }
@@ -598,7 +600,7 @@ class Codebase(ts.AggregateRoot):
                     found.append(
                         Violation(
                             f"{where} is {KIND_NAME[block]}; only wire ports, wire records, "
-                            "wire requests, and wire responses live in a wire module"
+                            "wire rejections, wire requests, and wire responses live in a wire module"
                         )
                     )
             elif isinstance(stmt, ast.FunctionDef):

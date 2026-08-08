@@ -7,6 +7,10 @@ from typing import Protocol
 import tesser.srv as ts
 
 
+class BadToolCall(ts.Rejection):
+    pass
+
+
 class Tool(ts.Record):
 
     def __init__(self, name: str, description: str, parameters: Mapping[str, object]) -> None:
@@ -31,6 +35,12 @@ class ToolCall(ts.Request):
 
     name: str
     arguments: Mapping[str, object]
+
+    def text(self, key: str) -> str:
+        value = self.arguments.get(key)
+        if not isinstance(value, str):
+            raise BadToolCall(f"{key} must be a string")
+        return value
 
 
 class ToolTurn(ts.Response):

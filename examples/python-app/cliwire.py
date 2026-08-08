@@ -1,20 +1,17 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Protocol
 
 import tesser.srv as ts
 
-from errors import DomainError, InfraError, exit_code_for
 
-
-class UsageError(Exception):
+class UsageError(ts.Rejection):
     pass
 
 
 class CliRequest(ts.Request):
 
-    def __init__(self, args: tuple[str, ...] = ()) -> None:
+    def __init__(self, args: tuple[str, ...]) -> None:
         super().__init__(args=args)
 
     args: tuple[str, ...]
@@ -31,7 +28,7 @@ class CliRequest(ts.Request):
 
 class CliResponse(ts.Response):
 
-    def __init__(self, exit_code: int, stdout: str = "", stderr: str = "") -> None:
+    def __init__(self, exit_code: int, stdout: str, stderr: str) -> None:
         super().__init__(exit_code=exit_code, stdout=stdout, stderr=stderr)
 
     exit_code: int
@@ -40,20 +37,7 @@ class CliResponse(ts.Response):
 
     @classmethod
     def ok(cls, line: str) -> CliResponse:
-        return cls(0, stdout=line)
-
-    @classmethod
-    def respond(cls, run: Callable[[], CliResponse]) -> CliResponse:
-        try:
-            return run()
-        except UsageError as e:
-            return cls(2, stderr=str(e))
-        except DomainError as e:
-            return cls(exit_code_for(e.kind), stderr=f"[{e.code}] {e.message}")
-        except InfraError:
-            return cls(1, stderr="a dependency is unavailable; please retry")
-        except Exception:
-            return cls(1, stderr="unexpected error")
+        return cls(0, stdout=line, stderr="")
 
 
 class Command(ts.Port, Protocol):

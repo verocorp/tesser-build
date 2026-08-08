@@ -29,6 +29,12 @@ and the checkers pick. Nothing here was decided in prose first.
   cannot reopen the record.
 - `wire_record` joins the sigcheck kind table, accepted in a wire module
   and refused in a context or `srv` module like its sibling wire kinds.
+- `tesser.srv.Rejection` — the wire's own refusal word, and the
+  `wire_rejection` sigcheck kind. Every protocol needed one (`BadRequest`/
+  `PayloadTooLarge`/`StreamingUnsupported`, `UsageError`, `BadToolCall`)
+  and all five were ratchet debt or unbuildable until the kind existed;
+  the host maps rejections to statuses/exit codes/tool errors, the wire
+  only names them.
 - A meta-test resolves every `TESSER_BASE_BLOCKS` and `TESSER_DECORATORS`
   row against the real `tesser-py` export lists, so an analyzer row can no
   longer outlive the class it names.
@@ -55,6 +61,23 @@ and the checkers pick. Nothing here was decided in prose first.
   `(ToolCall) -> ToolTurn`, the exact shape of their HTTP and CLI
   siblings, and the handler reads arguments off a frozen record instead
   of livekit's live dict.
+- **The three protocol stacks now share one skeleton** (conformance
+  sweep, 2026-08-08). A wire module holds records with every constructor
+  field stated (no defaults — the test-convenience defaults moved into the
+  tests that wanted them), readers that raise the wire's own `ts.Rejection`,
+  and no error policy; a handler method is exactly three jobs (map request,
+  invoke the service, map response) — the per-method `respond` wrappers and
+  their `def run()` closures are gone from every HTTP and CLI handler; the
+  host owns the exception→response mapping (`srv/http/host.py` gained
+  `respond` + `buffered_length` + the size cap, `srv/cli/main.py` gained
+  `respond`, and the voice host now catches `BadToolCall` alongside domain
+  `ValueError` — previously a non-string argument would have crashed the
+  session instead of reaching the model). `ToolCall.text` moved the argument
+  reader into the wire where `string_field`/`arg` already live. Verified
+  against the live server: 400/422/201/411 byte-identical with the handler
+  wrappers gone. python-app's sigcheck ratchet burned 176 -> 163 (wire
+  exceptions declared, hosts import ts, srv functions declared, HttpHost
+  declares ts.Host), shrink-only.
 - **One binding table replaces three parallel chains.** `LlmToolHandler`
   keyed tool names in `TOOLS_FOR_STEP`, a `dispatch` if/elif, and a
   `_schema` if/elif — four hand-coordinated edit sites per tool. Dispatch

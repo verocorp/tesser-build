@@ -197,6 +197,13 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   spec's job (the MoneyAmount("10.00") precedent parses in the
   spec-taking constructor). Extending the one-spec rule to wire kinds is a
   matrix rule change, so it was not folded into the srv-matrix wave.
+  Narrowed 2026-08-08 (conformance sweep): `respond` is GONE from every
+  response record — exception mapping is host policy now (srv/http/host.py,
+  srv/cli/main.py, agent.py) — and constructor defaults are gone from all
+  wire records. What remains of (a3) is the door question alone:
+  HttpResponse.json/problem/redirect and CliResponse.ok are
+  construct-from-another-shape classmethods still awaiting the one-spec
+  ruling; ToolTurn has none.
   (b) **`Endpoint`/`Command`/`ToolSurface` stay anonymous-`__call__`/named
   wire ports** — untouched this wave; if the position-naming convention
   needs more than the `Endpoint` precedent, that's a matrix row.
@@ -242,7 +249,10 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `git mv shop/domain.py bizwire.py` + a base swap escapes every
   signature, body, and allowlist rule; bootstrap importing a wire module
   is likewise unconstrained (the composition root can couple to transport
-  records). And the suffix has no separator: `firewire.py`/`tripwire.py`/
+  records). Evidence for the allowlist (2026-08-08): after the conformance
+  sweep all three wire modules import only stdlib + tesser — errors.py
+  left httpwire/cliwire with `respond` — so the allowlist is now just
+  recording what the trees already do. And the suffix has no separator: `firewire.py`/`tripwire.py`/
   `rewire.py` all opt in, and `examples/serdepy/wire.py` already uses
   "wire" to mean serialization format — decide allowlist + a separator
   (or in-file declaration) with the same ruling.

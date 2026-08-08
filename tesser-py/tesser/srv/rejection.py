@@ -1,0 +1,2 @@
+class Rejection(Exception):
+    pass

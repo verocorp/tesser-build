@@ -1,27 +1,23 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Iterable, Mapping
-from typing import Final, Protocol
+from collections.abc import Mapping
+from typing import Protocol
 
 import tesser.srv as ts
 
-from errors import DomainError, InfraError, status_for
-
 JSONObject = dict[str, object]
 
-MAX_BUFFERED_BODY: Final[int] = 1_048_576
 
-
-class BadRequest(Exception):
+class BadRequest(ts.Rejection):
     pass
 
 
-class PayloadTooLarge(Exception):
+class PayloadTooLarge(ts.Rejection):
     pass
 
 
-class StreamingUnsupported(Exception):
+class StreamingUnsupported(ts.Rejection):
     pass
 
 
@@ -29,19 +25,19 @@ class HttpRequest(ts.Request):
 
     def __init__(
         self,
-        method: str = "GET",
-        path: str = "/",
-        path_params: Mapping[str, str] | None = None,
-        query_params: Mapping[str, str] | None = None,
-        headers: Mapping[str, str] | None = None,
-        body: bytes = b"",
+        method: str,
+        path: str,
+        path_params: Mapping[str, str],
+        query_params: Mapping[str, str],
+        headers: Mapping[str, str],
+        body: bytes,
     ) -> None:
         super().__init__(
             method=method,
             path=path,
-            path_params=dict(path_params or {}),
-            query_params=dict(query_params or {}),
-            headers=dict(headers or {}),
+            path_params=dict(path_params),
+            query_params=dict(query_params),
+            headers=dict(headers),
             body=body,
         )
 
@@ -51,32 +47,6 @@ class HttpRequest(ts.Request):
     query_params: Mapping[str, str]
     headers: Mapping[str, str]
     body: bytes
-
-    @classmethod
-    def buffered_length(cls, headers: Iterable[tuple[str, str]]) -> int:
-        lengths: list[str] = []
-        streaming = False
-        for name, value in headers:
-            lowered = name.lower()
-            if lowered == "transfer-encoding":
-                streaming = True
-            elif lowered == "content-length":
-                lengths.append(value.strip())
-        if streaming:
-            raise StreamingUnsupported(
-                "this host buffers; declare a Content-Length (streaming bodies are a documented boundary)"
-            )
-        if not lengths:
-            return 0
-        if len(set(lengths)) > 1:
-            raise BadRequest(f"conflicting Content-Length headers: {', '.join(lengths)}")
-        raw = lengths[0]
-        if not raw.isascii() or not raw.isdigit():
-            raise BadRequest(f"invalid Content-Length: {raw!r}")
-        declared = int(raw)
-        if declared > MAX_BUFFERED_BODY:
-            raise PayloadTooLarge(f"body exceeds the {MAX_BUFFERED_BODY}-byte buffer limit")
-        return declared
 
     def json_body(self) -> JSONObject:
         return _json_object(self.body)
@@ -90,16 +60,11 @@ class HttpRequest(ts.Request):
 
 class HttpResponse(ts.Response):
 
-    def __init__(
-        self,
-        status_code: int,
-        body: bytes,
-        headers: Mapping[str, str] | None = None,
-    ) -> None:
+    def __init__(self, status_code: int, body: bytes, headers: Mapping[str, str]) -> None:
         super().__init__(
             status_code=status_code,
             body=body,
-            headers=dict(headers or {}),
+            headers=dict(headers),
         )
 
     status_code: int
@@ -123,23 +88,6 @@ class HttpResponse(ts.Response):
         if any(char in url for char in "\r\n\x00"):
             raise BadRequest("a redirect target carries a control character")
         return cls(status_code, b"", {"Location": url})
-
-    @classmethod
-    def respond(cls, run: Callable[[], HttpResponse]) -> HttpResponse:
-        try:
-            return run()
-        except BadRequest as e:
-            return cls.problem(400, "malformed_request", str(e))
-        except PayloadTooLarge as e:
-            return cls.problem(413, "payload_too_large", str(e))
-        except StreamingUnsupported as e:
-            return cls.problem(411, "length_required", str(e))
-        except DomainError as e:
-            return cls.problem(status_for(e.kind), e.code, e.message)
-        except InfraError:
-            return cls.problem(503, "unavailable", "a dependency is unavailable; please retry")
-        except Exception:
-            return cls.problem(500, "internal", "unexpected error")
 
     def json_body(self) -> JSONObject:
         return _json_object(self.body)

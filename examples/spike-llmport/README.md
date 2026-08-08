@@ -25,9 +25,9 @@ scheduling/
                   declarations the model sees
 tests/            domain/application/handler tests; each declares its own @ts.fake port doubles
 voicewire.py      wire module: ToolSurface + ToolEndpoint (ts.Port), ToolCall
-                  (ts.Request), ToolTurn (ts.Response), Tool and Route (ts.Record)
-                  — the voice analog of httpwire, imported by host and handler,
-                  owned by neither
+                  (ts.Request), ToolTurn (ts.Response), Tool and Route (ts.Record),
+                  BadToolCall (ts.Rejection) — the voice analog of httpwire,
+                  imported by host and handler, owned by neither
 srv/
   voice/router.py tools_for (the name -> endpoint table) + match — routing lives
                   in srv, as it does for HTTP

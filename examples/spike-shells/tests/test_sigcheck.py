@@ -1323,7 +1323,7 @@ def test_wire_module_totality_is_flagged(tmp_path: Path) -> None:
     )
     assert any(
         "boxwire.Server" in f and "is a host; only wire ports, wire records, "
-        "wire requests, and wire responses live in a wire module" in f
+        "wire rejections, wire requests, and wire responses live in a wire module" in f
         for f in findings
     )
     assert any(

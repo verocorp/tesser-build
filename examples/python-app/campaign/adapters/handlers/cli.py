@@ -17,42 +17,33 @@ class Handler(ts.Handler):
         self._client = client
 
     def create_campaign(self, req: CliRequest) -> CliResponse:
-        def run() -> CliResponse:
-            amount = req.arg(0, "budget_amount", _CREATE_USAGE)
-            currency = req.arg(1, "currency", _CREATE_USAGE)
-            req.no_extra_args(2, _CREATE_USAGE)
-            view = self._client.create_campaign(
-                CreateCampaignRequest(budget_amount=amount, budget_currency=currency)
-            )
-            return CliResponse.ok(
-                f"created campaign {view.campaign_id} "
-                f"with budget {view.budget_amount} {view.budget_currency}"
-            )
-
-        return CliResponse.respond(run)
+        amount = req.arg(0, "budget_amount", _CREATE_USAGE)
+        currency = req.arg(1, "currency", _CREATE_USAGE)
+        req.no_extra_args(2, _CREATE_USAGE)
+        view = self._client.create_campaign(
+            CreateCampaignRequest(budget_amount=amount, budget_currency=currency)
+        )
+        return CliResponse.ok(
+            f"created campaign {view.campaign_id} "
+            f"with budget {view.budget_amount} {view.budget_currency}"
+        )
 
     def add_link(self, req: CliRequest) -> CliResponse:
-        def run() -> CliResponse:
-            campaign_id = req.arg(0, "campaign_id", _ADD_USAGE)
-            slug = req.arg(1, "slug", _ADD_USAGE)
-            target_url = req.arg(2, "target_url", _ADD_USAGE)
-            req.no_extra_args(3, _ADD_USAGE)
-            view = self._client.add_link(
-                AddLinkRequest(campaign_id=campaign_id, slug=slug, target_url=target_url)
-            )
-            return CliResponse.ok(f"campaign {view.campaign_id} now has {len(view.links)} link(s)")
-
-        return CliResponse.respond(run)
+        campaign_id = req.arg(0, "campaign_id", _ADD_USAGE)
+        slug = req.arg(1, "slug", _ADD_USAGE)
+        target_url = req.arg(2, "target_url", _ADD_USAGE)
+        req.no_extra_args(3, _ADD_USAGE)
+        view = self._client.add_link(
+            AddLinkRequest(campaign_id=campaign_id, slug=slug, target_url=target_url)
+        )
+        return CliResponse.ok(f"campaign {view.campaign_id} now has {len(view.links)} link(s)")
 
     def deactivate_link(self, req: CliRequest) -> CliResponse:
-        def run() -> CliResponse:
-            campaign_id = req.arg(0, "campaign_id", _DEACTIVATE_USAGE)
-            slug = req.arg(1, "slug", _DEACTIVATE_USAGE)
-            req.no_extra_args(2, _DEACTIVATE_USAGE)
-            view = self._client.deactivate_link(
-                DeactivateLinkRequest(campaign_id=campaign_id, slug=slug)
-            )
-            active = sum(1 for link in view.links if link.active)
-            return CliResponse.ok(f"campaign {view.campaign_id} now has {active} active link(s)")
-
-        return CliResponse.respond(run)
+        campaign_id = req.arg(0, "campaign_id", _DEACTIVATE_USAGE)
+        slug = req.arg(1, "slug", _DEACTIVATE_USAGE)
+        req.no_extra_args(2, _DEACTIVATE_USAGE)
+        view = self._client.deactivate_link(
+            DeactivateLinkRequest(campaign_id=campaign_id, slug=slug)
+        )
+        active = sum(1 for link in view.links if link.active)
+        return CliResponse.ok(f"campaign {view.campaign_id} now has {active} active link(s)")

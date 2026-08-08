@@ -11,12 +11,9 @@ class Handler(ts.Handler):
         self._client = client
 
     def links_by_verdict(self, _req: HttpRequest) -> HttpResponse:
-        def run() -> HttpResponse:
-            resp = self._client.links_by_verdict(LinksByVerdictRequest())
-            rows = [_row(view) for view in resp.links]
-            return HttpResponse.json(200, {"links": rows})
-
-        return HttpResponse.respond(run)
+        resp = self._client.links_by_verdict(LinksByVerdictRequest())
+        rows = [_row(view) for view in resp.links]
+        return HttpResponse.json(200, {"links": rows})
 
 
 @ts.function

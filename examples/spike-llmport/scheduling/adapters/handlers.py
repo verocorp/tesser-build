@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from typing import Final
 
 import tesser.adapters as ts
@@ -60,7 +60,7 @@ class LlmToolHandler(ts.Handler):
         return self._turn(
             self._client.provide_name(
                 client.ProvideNameRequest(
-                    booking_id=self._booking_id, name=_text(call.arguments, "name")
+                    booking_id=self._booking_id, name=call.text("name")
                 )
             )
         )
@@ -69,7 +69,7 @@ class LlmToolHandler(ts.Handler):
         return self._turn(
             self._client.choose_slot(
                 client.ChooseSlotRequest(
-                    booking_id=self._booking_id, slot=_text(call.arguments, "slot")
+                    booking_id=self._booking_id, slot=call.text("slot")
                 )
             )
         )
@@ -100,10 +100,3 @@ def _params(properties: dict[str, object], required: tuple[str, ...]) -> dict[st
     schema["additionalProperties"] = False
     return schema
 
-
-@ts.function
-def _text(raw_arguments: Mapping[str, object], key: str) -> str:
-    value = raw_arguments.get(key)
-    if not isinstance(value, str):
-        raise ValueError(f"{key} must be a string")
-    return value

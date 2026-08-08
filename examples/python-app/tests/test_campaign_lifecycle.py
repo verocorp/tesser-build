@@ -23,6 +23,9 @@ from campaign.domain.short_link import ShortLinkSpec
 from campaign.domain.values import CampaignID
 from errors import DomainError, Kind
 from httpwire import HttpRequest
+from srv.http.host import respond
+
+
 
 @ts.fake
 class _AllowAll(TargetChecker):
@@ -87,7 +90,7 @@ def test_deactivate_link_endpoint_returns_the_campaign_payload() -> None:
     svc.add_link(AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     handler = Handler(svc)
     resp = handler.deactivate_link(
-        HttpRequest(body=json.dumps({"campaign_id": id, "slug": "promo"}).encode("utf-8"))
+        HttpRequest("POST", "/", {}, {}, {}, json.dumps({"campaign_id": id, "slug": "promo"}).encode("utf-8"))
     )
     assert resp.status_code == 200
     assert resp.json_body()["links"] == [
@@ -100,8 +103,10 @@ def test_deactivate_link_endpoint_maps_a_missing_link_to_404() -> None:
     id = svc.create_campaign(CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
     svc.add_link(AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     handler = Handler(svc)
-    resp = handler.deactivate_link(
-        HttpRequest(body=json.dumps({"campaign_id": id, "slug": "nosuch"}).encode("utf-8"))
+    resp = respond(
+        lambda: handler.deactivate_link(
+            HttpRequest("POST", "/", {}, {}, {}, json.dumps({"campaign_id": id, "slug": "nosuch"}).encode("utf-8"))
+        )
     )
     assert resp.status_code == 404
 
@@ -112,7 +117,8 @@ def test_resolve_endpoint_maps_a_deactivated_link_to_404() -> None:
     svc.add_link(AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     handler = Handler(svc)
     svc.deactivate_link(DeactivateLinkRequest(campaign_id=id, slug="promo"))
-    assert handler.resolve(HttpRequest(path_params={"slug": "promo"})).status_code == 404
+    resp = respond(lambda: handler.resolve(HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b"")))
+    assert resp.status_code == 404
 
 
 @pytest.mark.parametrize("value", ["", "0123456789ABCDEF", "0123456789abcde", "0123456789abcdefa", "zzz"])
@@ -182,8 +188,10 @@ def test_campaign_wraps_an_invalid_link_with_its_index() -> None:
 
 def test_create_campaign_endpoint_rejects_a_non_object_budget() -> None:
     handler = Handler(CampaignService(InMemoryCampaignRepository(), _AllowAll()))
-    resp = handler.create_campaign(
-        HttpRequest(body=json.dumps({"budget": "100.00"}).encode("utf-8"))
+    resp = respond(
+        lambda: handler.create_campaign(
+            HttpRequest("POST", "/", {}, {}, {}, json.dumps({"budget": "100.00"}).encode("utf-8"))
+        )
     )
     assert resp.status_code == 400
     assert resp.json_body()["type"] == "/problems/malformed_request"

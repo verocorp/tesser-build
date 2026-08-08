@@ -1,16 +1,68 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable, Iterable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any
+from typing import Any, Final
+
+import tesser.srv as ts
 
 from bootstrap.bootstrap import App
 from campaign.adapters.handlers.http import Handler as CampaignHandler
-from httpwire import HttpRequest, HttpResponse
+from errors import DomainError, InfraError, status_for
+from httpwire import BadRequest, HttpRequest, HttpResponse, PayloadTooLarge, StreamingUnsupported
 from reports.adapters.handlers.http import Handler as ReportsHandler
 from srv.http.router import Route, match
 
+MAX_BUFFERED_BODY: Final[int] = 1_048_576
 
+
+@ts.function
+def buffered_length(headers: Iterable[tuple[str, str]]) -> int:
+    lengths: list[str] = []
+    streaming = False
+    for name, value in headers:
+        lowered = name.lower()
+        if lowered == "transfer-encoding":
+            streaming = True
+        elif lowered == "content-length":
+            lengths.append(value.strip())
+    if streaming:
+        raise StreamingUnsupported(
+            "this host buffers; declare a Content-Length (streaming bodies are a documented boundary)"
+        )
+    if not lengths:
+        return 0
+    if len(set(lengths)) > 1:
+        raise BadRequest(f"conflicting Content-Length headers: {', '.join(lengths)}")
+    raw = lengths[0]
+    if not raw.isascii() or not raw.isdigit():
+        raise BadRequest(f"invalid Content-Length: {raw!r}")
+    declared = int(raw)
+    if declared > MAX_BUFFERED_BODY:
+        raise PayloadTooLarge(f"body exceeds the {MAX_BUFFERED_BODY}-byte buffer limit")
+    return declared
+
+
+@ts.function
+def respond(run: Callable[[], HttpResponse]) -> HttpResponse:
+    try:
+        return run()
+    except BadRequest as e:
+        return HttpResponse.problem(400, "malformed_request", str(e))
+    except PayloadTooLarge as e:
+        return HttpResponse.problem(413, "payload_too_large", str(e))
+    except StreamingUnsupported as e:
+        return HttpResponse.problem(411, "length_required", str(e))
+    except DomainError as e:
+        return HttpResponse.problem(status_for(e.kind), e.code, e.message)
+    except InfraError:
+        return HttpResponse.problem(503, "unavailable", "a dependency is unavailable; please retry")
+    except Exception:
+        return HttpResponse.problem(500, "internal", "unexpected error")
+
+
+@ts.function
 def routes_for(app: App) -> tuple[Route, ...]:
     campaign = CampaignHandler(app.campaign)
     reports = ReportsHandler(app.reports)
@@ -24,6 +76,7 @@ def routes_for(app: App) -> tuple[Route, ...]:
     )
 
 
+@ts.function
 def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
     routes = routes_for(app)
 
@@ -43,7 +96,7 @@ def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
                     return HttpResponse.problem(404, "not_found", "unknown route")
                 declared = self.headers.items()
                 headers = {name.lower(): value for name, value in declared}
-                body = self.rfile.read(HttpRequest.buffered_length(declared))
+                body = self.rfile.read(buffered_length(declared))
                 return found.endpoint(
                     HttpRequest(
                         method=method,
@@ -55,7 +108,7 @@ def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
                     )
                 )
 
-            return HttpResponse.respond(run)
+            return respond(run)
 
         def log_message(self, format: str, *args: Any) -> None:
             return
@@ -73,7 +126,7 @@ def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
     return ThreadingHTTPServer(addr, _RequestHandler)
 
 
-class HttpHost:
+class HttpHost(ts.Host):
     def __init__(self, addr: tuple[str, int], app: App) -> None:
         self._server = make_server(addr, app)
 

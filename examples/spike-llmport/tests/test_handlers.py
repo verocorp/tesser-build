@@ -318,12 +318,12 @@ def test_an_unroutable_tool_name_has_no_endpoint() -> None:
     assert router.match(router.tools_for(handler), "cancel_booking") is None
 
 
-def test_a_non_string_argument_is_rejected() -> None:
+def test_a_non_string_argument_is_rejected_with_the_wire_word() -> None:
     service = application.BookingService(
         MemorySlotDirectory(("mon-9am",)), MemoryBookingRepository()
     )
     handler = handlers.LlmToolHandler(service, "b1")
     handler.begin()
 
-    with pytest.raises(ValueError):
+    with pytest.raises(voicewire.BadToolCall):
         handler.provide_name(voicewire.ToolCall(handlers.PROVIDE_NAME, {"name": 3}))

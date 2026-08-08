@@ -19,6 +19,8 @@ from httpwire import HttpRequest
 from tests.support import parts_tuple
 
 
+
+
 @ts.helper  # tesser-category: spec
 def campaign_spec(slug: str = "promo") -> CampaignSpec:
     return CampaignSpec(
@@ -49,7 +51,7 @@ def test_wire_golden_locks_the_campaign_payload() -> None:
     repo = InMemoryCampaignRepository()
     repo.save(campaign_parts(Campaign(campaign_spec())))
     handler = Handler(CampaignService(repo, _AllowAll()))
-    resp = handler.get_campaign(HttpRequest(path_params={"campaign_id": "0123456789abcdef"}))
+    resp = handler.get_campaign(HttpRequest("GET", "/", {"campaign_id": "0123456789abcdef"}, {}, {}, b""))
     assert resp.status_code == 200
     assert resp.json_body() == {
         "campaign_id": "0123456789abcdef",
@@ -62,7 +64,7 @@ def test_wire_golden_locks_resolve_as_a_real_redirect() -> None:
     repo = InMemoryCampaignRepository()
     repo.save(campaign_parts(Campaign(campaign_spec())))
     handler = Handler(CampaignService(repo, _AllowAll()))
-    resp = handler.resolve(HttpRequest(path_params={"slug": "promo"}))
+    resp = handler.resolve(HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
     assert resp.status_code == 302
     assert resp.body == b""
     assert resp.headers == {"Location": "https://ok.example/x"}
