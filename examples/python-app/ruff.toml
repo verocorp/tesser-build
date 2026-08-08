@@ -17,8 +17,14 @@
 
 target-version = "py311"
 
+# F823 catches `x = x.Thing(...)` where `x` is also a module alias: the
+# assignment makes `x` function-local for the whole body, so the read on the
+# right-hand side raises UnboundLocalError at runtime. mypy --strict does not
+# see it. Role packages make it likely — a module alias is now a concept noun
+# (`money`, `service`) rather than a role noun (`domain`, `client`), and concept
+# nouns are what locals get named.
 [lint]
-select = ["TID251", "PLR1722", "F401"]
+select = ["TID251", "PLR1722", "F401", "F823"]
 
 [lint.flake8-tidy-imports.banned-api]
 "os.getenv" = { msg = "read the environment only in srv/*/main.py — pass values inward as a Config (skills/tesser-build/bootstrap.md)" }
