@@ -48,8 +48,12 @@ object; **identity must be earned, not assumed**.
    path. It builds each child value object and wraps its error with context.
 5. **Mutability is a domain decision, not a default** — see the decision
    below. Either way, every state change preserves the entity's invariants.
-6. **Equality is identity.** Two entities are "the same" iff same ID — never
-   by attribute comparison, and never by string form.
+6. **Equality is identity, and the base owns it.** Two entities are "the same"
+   iff same ID — never by attribute comparison, and never by string form. The
+   entity declares `identity` (the ID value object) and does **not** spell
+   `__eq__`/`__hash__`: those are the base's, because a comparison dunder
+   returning a raw `bool` is a representation leak like any other
+   (`domain-return.md` rule 2).
 
 ## Shape
 

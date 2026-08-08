@@ -336,6 +336,23 @@
       "rationale": []
     },
     {
+      "key": "norm-domain-return",
+      "title": "Norm: domain return",
+      "skill": "domain-return.md",
+      "py_example": [
+        "examples/python",
+        "examples/python-app",
+        "examples/serdepy",
+        "examples/errorspy"
+      ],
+      "go_example": [],
+      "go_analyzers": [],
+      "py_checks": [
+        "TB019"
+      ],
+      "rationale": []
+    },
+    {
       "key": "norm-logging",
       "title": "Norm: logging",
       "skill": "logging.md",

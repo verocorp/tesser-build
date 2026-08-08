@@ -44,8 +44,11 @@ persistence-only column, a local implementation detail. Blanket wrapping is
    **canonical exit** — the one conversion protocol matching its backing
    primitive, locked by a round-trip law (`serialization.md` rule 3).
    Display formatting is a presentation concern, never the value's.
-4. **Equality is by value, and it's explicit.** Same attributes ⇒ equal,
-   across all representations of the same logical value.
+4. **Equality is by value, and the base owns it.** Same attributes ⇒ equal,
+   across all representations of the same logical value. The value object does
+   not spell `__eq__`/`__hash__` — the base does, so every value compares the
+   same way and no comparison hands a raw `bool` back out
+   (`domain-return.md` rule 2).
 5. **Validation belongs to the value, not its parents.** A parent constructor
    never re-checks a child value object's rules — it just builds the child and
    propagates the error.
