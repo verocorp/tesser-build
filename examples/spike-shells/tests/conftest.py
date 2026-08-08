@@ -32,7 +32,7 @@ def write_module(root: Path, rel: str, source: str) -> None:
 def conforming_tree(root: Path) -> None:
     write_module(
         root,
-        "app/domain.py",
+        "app/domain/thing.py",
         "import tesser.domain as ts\n"
         "class ThingSpec(ts.Spec):\n"
         "    def __init__(self, text: str) -> None:\n"
@@ -43,7 +43,7 @@ def conforming_tree(root: Path) -> None:
     )
     write_module(
         root,
-        "app/client.py",
+        "app/client/client.py",
         "import tesser.context as ts\n"
         "class AskRequest(ts.Request):\n"
         "    def __init__(self, text: str) -> None:\n"
@@ -54,9 +54,9 @@ def conforming_tree(root: Path) -> None:
     )
     write_module(
         root,
-        "app/application.py",
+        "app/application/service.py",
         "import tesser.application as ts\n"
-        "import app.client as client\n"
+        "import app.client.client as client\n"
         "class AskService(ts.ApplicationService):\n"
         "    def ask(self, request: client.AskRequest) -> client.AskResponse:\n"
         "        return client.AskResponse(text=request.text)\n"
