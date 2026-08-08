@@ -85,9 +85,49 @@ type for it**. The flagship case is in the conformant app:
   and it cannot stay `bool`.
 
 This is the one place the proposal exposes a genuine hole in the existing
-rules rather than colliding with them. It needs a ruling: either enums become
-a first-class domain kind with their own rules, or state exits as a VO wrapping
-a closed set, or `bool` is licensed for predicates.
+rules rather than colliding with them.
+
+### Ruled (2026-08-08): enums stay primitive. They are not value objects.
+
+`value-objects.md:29-30` stands. So the hole is closed from the other side —
+and `statearms/` measures what that costs, using the repo's own silent-site
+metric (`docs/design-three-contender-changeability.md`). Three arms, same
+domain, then a third state (`suspended`) arrives:
+
+```
+PYTHONPATH=tesser-py:examples/spike-totalreturn/statearms \
+  python3 examples/spike-totalreturn/statearms/test_arms.py     # 9 pass, 0 fail
+```
+
+| arm | silent sites when `suspended` arrives | probe verdict |
+|---|---|---|
+| `arm_bool.py` — `active -> bool` (today's shape) | **2** + an invalid state becomes representable (`active=True, suspended=True`) | 3 public breaks |
+| `arm_enum.py` — `status -> LinkStatus(Enum)` | **1**, plus 1 *accidentally* correct | 2 public breaks, incl. `[ENUM]` |
+| `arm_vo.py` — the branch folds into the type | **0**; consumers never touched | **0 public breaks** |
+
+The load-bearing result is not that arm 3 wins on count. It is **what arm 3
+had to become**. The rule does *not* turn `active -> bool` into
+`active -> StatusVO`; that is arm 2 in a value object's coat, and the probe
+still flags it. What the rule forces is that **the predicate stops existing**:
+
+- `arm_bool.py:38` / `arm_enum.py:38` — `should_redirect(link) -> bool`, a
+  question the caller asks and then answers itself.
+- `arm_vo.py:114` — `resolve(link) -> Resolution`. There is no predicate to get
+  wrong, because nothing is handed out to branch on
+  (`statearms/test_arms.py:127` asserts the Resolution exposes no selector).
+
+Two consequences worth naming before this goes near the skill:
+
+1. **The domain absorbs the public message** (`arm_vo.py:68-72`). That is a
+   real transfer of responsibility from the edge into the domain, and it is not
+   obviously right — `value-objects.md:46` currently says "display formatting is
+   a presentation concern, never the value's." Arm 3 as written is in tension
+   with that line. Resolving it is a second ruling, not a detail.
+2. **The exhaustiveness win is the registry, not the rule.** `arm_vo.py:68-72`
+   makes every state's behavior mandatory at one site, so an undecided state
+   fails construction (`test_arms.py:113`). An enum arm with the same registry
+   would get the same win. The value object is what makes the registry the
+   *only* door; it is not itself the source of the exhaustiveness.
 
 ---
 

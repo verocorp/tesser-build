@@ -59,6 +59,10 @@ COMMAND = "COMMAND"
 ENUM = "ENUM"
 FOREIGN_V = "FOREIGN"
 UNKNOWN = "UNKNOWN"
+# AMBIGUOUS: the same class name means different things in different modules.
+# Reported rather than resolved -- guessing here is how the first draft of this
+# probe classified arm_enum's LinkStatus(Enum) as DOMAIN.
+AMBIGUOUS = "AMBIGUOUS"
 
 
 @dataclass
@@ -83,30 +87,51 @@ def base_names(node: ast.ClassDef) -> set[str]:
     return out
 
 
-def collect_types(roots: list[Path]) -> tuple[dict[str, set[str]], set[str], list[tuple[Path, ast.Module]]]:
-    """Return (domain class names by kind, enum class names, parsed modules)."""
+def collect_types(roots: list[Path]):
+    """Return (domain names by kind, per-module name->kind, global name->kinds, modules).
+
+    Names are resolved per-module first. A bare-name registry is wrong: two
+    modules may each define a `LinkStatus` -- one an enum, one a value object --
+    and a module-blind lookup silently classifies the enum as DOMAIN. Where a
+    name is not defined locally, it resolves globally only if unambiguous;
+    otherwise it is reported rather than guessed.
+    """
     domain: dict[str, set[str]] = {kind: set() for kind in sorted(DOMAIN_BASES)}
-    enums: set[str] = set()
+    per_module: dict[str, dict[str, str]] = {}
+    global_kinds: dict[str, set[str]] = {}
     modules: list[tuple[Path, ast.Module]] = []
     for root in roots:
         for f in sorted(root.rglob("*.py")):
             if "test" in f.name or ".venv" in f.parts:
+                continue
+            # statearms/ holds deliberate anti-pattern fixtures. They are
+            # measured by pointing the probe AT that directory, and skipped
+            # when it is merely swept up in a corpus walk -- otherwise the
+            # corpus tally counts fixtures as findings.
+            if "statearms" in f.parts and root.name != "statearms":
                 continue
             try:
                 tree = ast.parse(f.read_text(), filename=str(f))
             except SyntaxError:
                 continue
             modules.append((f, tree))
+            local: dict[str, str] = {}
             for node in ast.walk(tree):
                 if not isinstance(node, ast.ClassDef):
                     continue
                 bases = base_names(node)
-                for kind in DOMAIN_BASES:
-                    if kind in bases:
-                        domain[kind].add(node.name)
-                if bases & {"Enum", "StrEnum", "IntEnum", "Flag"}:
-                    enums.add(node.name)
-    return domain, enums, modules
+                kind = ""
+                if bases & DOMAIN_BASES:
+                    kind = DOMAIN
+                    for k in DOMAIN_BASES & bases:
+                        domain[k].add(node.name)
+                elif bases & {"Enum", "StrEnum", "IntEnum", "Flag"}:
+                    kind = ENUM
+                if kind:
+                    local[node.name] = kind
+                    global_kinds.setdefault(node.name, set()).add(kind)
+            per_module[str(f)] = local
+    return domain, per_module, global_kinds, modules
 
 
 def annotation_text(node: ast.expr | None) -> str:
@@ -115,8 +140,13 @@ def annotation_text(node: ast.expr | None) -> str:
     return ast.unparse(node)
 
 
-def classify(node: ast.expr | None, domain: set[str], enums: set[str]) -> str:
-    """Classify a return annotation. Containers classify by element type."""
+def classify(node: ast.expr | None, local: dict[str, str], glob: dict[str, set[str]]) -> str:
+    """Classify a return annotation. Containers classify by element type.
+
+    `local` is the defining module's own classes; `glob` is every class name
+    seen, mapped to the set of kinds that name carries anywhere in the corpus.
+    """
+    domain, enums = local, glob
     if node is None:
         return UNKNOWN
     if isinstance(node, ast.Constant):
@@ -145,10 +175,16 @@ def classify(node: ast.expr | None, domain: set[str], enums: set[str]) -> str:
         return classify(node.left, domain, enums)
     if isinstance(node, ast.Name):
         n = node.id
-        if n in domain or n == "Self":
+        if n == "Self":
             return DOMAIN
-        if n in enums:
-            return ENUM
+        # Local definitions win: the module you are reading is the module that
+        # decided what this name means.
+        if n in local:
+            return local[n]
+        if n in glob:
+            kinds = glob[n]
+            # Two modules disagree about this name. Say so; do not pick.
+            return next(iter(kinds)) if len(kinds) == 1 else AMBIGUOUS
         if n in BUILTINS:
             return PRIMITIVE
         if n in FOREIGN:
@@ -157,17 +193,17 @@ def classify(node: ast.expr | None, domain: set[str], enums: set[str]) -> str:
     return UNKNOWN
 
 
-def measure(modules, domain_by_kind, enums) -> list[Finding]:
-    all_domain = set().union(*domain_by_kind.values())
+def measure(modules, per_module, global_kinds) -> list[Finding]:
     findings: list[Finding] = []
     for path, tree in modules:
+        local = per_module.get(str(path), {})
         for node in ast.walk(tree):
             if not isinstance(node, ast.ClassDef) or not (base_names(node) & DOMAIN_BASES):
                 continue
             for item in node.body:
                 if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     continue
-                verdict = classify(item.returns, all_domain, enums)
+                verdict = classify(item.returns, local, global_kinds)
                 if verdict == PRIMITIVE and annotation_text(item.returns) == "None":
                     verdict = COMMAND
                 findings.append(Finding(
@@ -180,8 +216,8 @@ def measure(modules, domain_by_kind, enums) -> list[Finding]:
 
 def main() -> int:
     roots = [Path(a) for a in sys.argv[1:]] or [Path("examples"), Path("tesser-py")]
-    domain_by_kind, enums, modules = collect_types(roots)
-    findings = measure(modules, domain_by_kind, enums)
+    domain_by_kind, per_module, global_kinds, modules = collect_types(roots)
+    findings = measure(modules, per_module, global_kinds)
 
     breaks = [f for f in findings if f.verdict != DOMAIN]
     fixed = [f for f in breaks if f.protocol]
