@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parent
-DOMAIN = ROOT / "sigcheck" / "domain.py"
+DOMAIN = ROOT / "sigcheck" / "domain" / "checks.py"
 TESTS = ROOT / "tests" / "test_sigcheck.py"
 CONTRACTS = ROOT / ".importlinter"
 OUTPUT = ROOT / "RULES.md"
@@ -102,7 +102,7 @@ def ts_name_map(tree: ast.Module) -> dict[str, str]:
                 ):
                     out[key.value] = value.value
             return out
-    raise RuntimeError("TS_NAME_BY_BLOCK not found in domain.py")
+    raise RuntimeError("TS_NAME_BY_BLOCK not found in checks.py")
 
 
 def instantiations(tree: ast.Module, method: ast.FunctionDef) -> list[dict[str, str | None]]:
@@ -164,7 +164,7 @@ def fill_hole(
     if param is not None:
         if param not in binding:
             raise RuntimeError(
-                f"domain.py:{lineno}: hole {{{text}}} depends on caller argument {param!r} that is not a literal"
+                f"checks.py:{lineno}: hole {{{text}}} depends on caller argument {param!r} that is not a literal"
             )
         block = binding[param]
         if block is None:
@@ -175,7 +175,7 @@ def fill_hole(
         if bound is None:
             return None
         return bound
-    raise RuntimeError(f"domain.py:{lineno}: no reader name for message hole {{{text}}}; extend HOLE_NAMES")
+    raise RuntimeError(f"checks.py:{lineno}: no reader name for message hole {{{text}}}; extend HOLE_NAMES")
 
 
 def render_message(
@@ -188,7 +188,7 @@ def render_message(
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return node.value
     if not isinstance(node, ast.JoinedStr):
-        raise RuntimeError(f"domain.py:{lineno}: violation message is not a literal or f-string")
+        raise RuntimeError(f"checks.py:{lineno}: violation message is not a literal or f-string")
     parts: list[str] = []
     for value in node.values:
         if isinstance(value, ast.Constant) and isinstance(value.value, str):
@@ -212,7 +212,7 @@ def protocol_package(tree: ast.Module) -> str:
             and isinstance(node.value.value, str)
         ):
             return node.value.value
-    raise RuntimeError("PROTOCOL_PACKAGE not found in domain.py")
+    raise RuntimeError("PROTOCOL_PACKAGE not found in checks.py")
 
 
 def tooling_modules(tree: ast.Module) -> list[str]:
@@ -230,7 +230,7 @@ def tooling_modules(tree: ast.Module) -> list[str]:
                 for element in node.value.args[0].elts
                 if isinstance(element, ast.Constant) and isinstance(element.value, str)
             )
-    raise RuntimeError("TOOLING_MODULES not found in domain.py")
+    raise RuntimeError("TOOLING_MODULES not found in checks.py")
 
 
 def rule_rows(tree: ast.Module) -> list[RuleRow]:
@@ -256,12 +256,12 @@ def rule_rows(tree: ast.Module) -> list[RuleRow]:
                         continue
                     if "; " not in message:
                         raise RuntimeError(
-                            f"domain.py:{call.lineno}: violation message lacks a '; <normative clause>' tail"
+                            f"checks.py:{call.lineno}: violation message lacks a '; <normative clause>' tail"
                         )
                     head, clause = message.rsplit("; ", 1)
                     if "⟨" in clause:
                         raise RuntimeError(
-                            f"domain.py:{call.lineno}: the normative clause after ';' is not a literal"
+                            f"checks.py:{call.lineno}: the normative clause after ';' is not a literal"
                         )
                     shape = WHERE_PREFIX.sub("", head)
                     subject = binding.get("subject")
@@ -320,7 +320,7 @@ def render() -> str:
         "with. ⟨…⟩ marks a value filled in per violation. Fixture coverage is",
         "exact: a test covers a rule when an assert literal contains the clause.",
         "",
-        "## sigcheck rules (from the violation messages in sigcheck/domain.py)",
+        "## sigcheck rules (from the violation messages in sigcheck/domain/checks.py)",
         "",
         "| The rule | Applies to | Fires when | Source | Fixtures |",
         "|---|---|---|---|---|",
@@ -329,7 +329,7 @@ def render() -> str:
         covered = covering_tests(row.clause, assertions)
         coverage = ", ".join(covered) if covered else "NONE"
         shapes = " · ".join(row.shapes).replace("|", "\\|")
-        source = "domain.py:" + ",".join(str(n) for n in sorted(row.linenos))
+        source = "domain/checks.py:" + ",".join(str(n) for n in sorted(row.linenos))
         lines.append(f"| {row.clause} | {row.applies_to} | {shapes} | {source} | {coverage} |")
     tooling = ", ".join(f"`{name}`" for name in tooling_modules(tree))
     package = protocol_package(tree)
@@ -341,9 +341,9 @@ def render() -> str:
         "  the test-organization work).",
         "- a context `__main__` is ungoverned (named ruling, PR #48).",
         f"- tooling modules outside the taxonomy: {tooling} (TOOLING_MODULES in",
-        "  sigcheck/domain.py — the whole-tree totality rule skips them).",
+        "  sigcheck/domain/checks.py — the whole-tree totality rule skips them).",
         f"- modules under the top-level `{package}/` package are the protocol",
-        "  modules (PROTOCOL_PACKAGE in sigcheck/domain.py) — package membership",
+        "  modules (PROTOCOL_PACKAGE in sigcheck/domain/checks.py) — package membership",
         "  is the declaration; no suffix opts a module in, so a stray `*wire.py`",
         "  is homeless.",
         "- srv and protocol kinds carry placement and import rules only — no",

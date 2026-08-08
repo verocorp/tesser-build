@@ -1,8 +1,8 @@
 import pytest
 import tesser.testing as ts
 
-import spike.application as application
-import spike.client as client
+import spike.application.service as application
+import spike.client.client as client
 
 
 @ts.fake

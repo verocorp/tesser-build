@@ -1,8 +1,8 @@
 import sys
 
-from sigcheck.adapters import FilesystemSourceReader
-from sigcheck.application import SigcheckService
-from sigcheck.client import CheckRequest
+from sigcheck.adapters.repositories import FilesystemSourceReader
+from sigcheck.application.service import SigcheckService
+from sigcheck.client.client import CheckRequest
 
 
 def main() -> int:

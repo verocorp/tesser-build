@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import sigcheck.domain as domain
+import sigcheck.domain.checks as domain
 from tests.conftest import check_tree, conforming_tree, write_module
 
 

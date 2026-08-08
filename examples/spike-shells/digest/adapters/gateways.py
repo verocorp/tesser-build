@@ -1,6 +1,6 @@
 import tesser.adapters as ts
 
-import spike.client as spike_client
+import spike.client.client as spike_client
 
 
 class NoteGateway(ts.Gateway):
