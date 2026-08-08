@@ -181,7 +181,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   reader mirroring `HttpRequest.json_body`, and its test-only callers are
   tests playing the HTTP-client role — not a test-local rename. Don't
   re-delete it without ruling the reader question.
-  (f) **The one-shot construction guard forbids a multi-level record**
+  (d) **The one-shot construction guard forbids a multi-level record**
   (adversarial 2026-08-08): a child record cannot add its own fields via a
   second `Record.__init__` call, and a subclass that sets a derived field
   before `super().__init__()` gets "already constructed", which names the
@@ -195,19 +195,19 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   sweep): the guard reads a populated `__dict__`, which an empty record never
   has, so `r.__init__()` succeeds a second time. No in-tree record is
   field-less; same ruling covers it.
-  (g) **The confirm_booking tool schema omits `required`** — restored to
+  (e) **The confirm_booking tool schema omits `required`** — restored to
   main's byte shape this wave (the refactor had silently added
   `"required": []`). OpenAI strict-mode function calling wants the key
   present even when empty, so if the spike ever runs against strict mode,
   rule which shape the provider gets.
-  (e) **`ts.Record` admits direction-less wire declarations** (red team
+  (f) **`ts.Record` admits direction-less wire declarations** (red team
   2026-08-08, verified): WIRE_KINDS is derived set arithmetic, so a wire
   module may declare every record as `ts.Record` — including Endpoint
   `__call__` parameter/return positions — and satisfy totality without
   ever committing to request vs response. Rule whether those positions
   require a directed kind, or record that the direction kinds are
   advisory and Record is the general case.
-  (d) **A wire module is the least-governed home in the tree** (adversarial
+  (g) **A wire module is the least-governed home in the tree** (adversarial
   2026-08-07, verified): no import allowlist (contrast CORE_STDLIB) — a
   wire module importing subprocess/boto3/tests gets zero findings, so
   `git mv shop/domain.py bizwire.py` + a base swap escapes every

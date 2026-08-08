@@ -110,7 +110,9 @@ def test_records_of_different_types_never_compare_equal() -> None:
     assert Reply(200, b"") != OtherReply(200, b"")
 
 
-def test_a_wire_record_is_unhashable_because_it_carries_containers() -> None:
+def test_a_wire_record_is_unhashable_because_it_compares_by_value() -> None:
+    with pytest.raises(TypeError):
+        hash(Reply(200, b"ok"))
     ask = Ask(headers={"a": "b"})
     with pytest.raises(TypeError):
         hash(ask)
