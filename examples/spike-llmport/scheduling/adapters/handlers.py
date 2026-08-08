@@ -5,7 +5,7 @@ from typing import Final
 
 import tesser.adapters as ts
 
-import scheduling.client as client
+import scheduling.client.client as client
 import protocol.voice as voice
 
 PROVIDE_NAME: Final[str] = "provide_name"

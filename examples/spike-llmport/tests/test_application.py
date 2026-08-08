@@ -3,7 +3,7 @@ import tesser.testing as ts
 
 import scheduling.application.parts as parts
 import scheduling.application.service as application
-import scheduling.client as client
+import scheduling.client.client as client
 
 
 @ts.fake
