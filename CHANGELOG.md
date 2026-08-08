@@ -5,6 +5,77 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.19.0] - 2026-08-08
+
+The srv signature matrix, ruled by building it. Three questions had been
+parked as named debt — do wire records carry behavior, what word covers a
+tool declaration, and where does wire-record immutability come back — and
+each was settled by building the candidate shapes and letting the code
+and the checkers pick. Nothing here was decided in prose first.
+
+### Added
+
+- `tesser.srv.Record` — the frozen wire-record base, and the generic wire
+  kind for wire data that is neither a request nor a response. `Request`
+  and `Response` now subclass it. Construction is one-shot (a populated
+  `__dict__` refuses a second `__init__`, which is what makes the freeze
+  hold), fields land through a kwargs constructor checked against the
+  class's own annotations, equality is by type and value, and records are
+  unhashable because every one in the tree carries a container. Subclasses
+  may not take over `__eq__`/`__ne__`/`__hash__`/`__setattr__`/
+  `__delattr__`, declare `__slots__`, or give a field a class-level
+  default — each guard walks the MRO, so a mixin listed before the base
+  cannot reopen the record.
+- `wire_record` joins the sigcheck kind table, accepted in a wire module
+  and refused in a context or `srv` module like its sibling wire kinds.
+- A meta-test resolves every `TESSER_BASE_BLOCKS` and `TESSER_DECORATORS`
+  row against the real `tesser-py` export lists, so an analyzer row can no
+  longer outlive the class it names.
+
+### Changed
+
+- **Wire records carry their behavior.** `httpwire`'s nine loose
+  `@ts.function` module functions collapse to two: `problem`/
+  `json_response`/`redirect`/`respond` became `Response` classmethods
+  (`problem` now returns the Response, folding away every
+  `json_response(status, problem(...))` double call), and `decode_body`/
+  `path_param`/`content_length` became `HttpRequest` readers
+  (`json_body`, `path_param`, `buffered_length`). `cliwire`'s four go to
+  zero. The DTO-purity objection dissolves on the package-scoped kind
+  grammar: `ts.srv.Request`/`Response` are distinct kinds from the context
+  DTOs, which keep carrying data and nothing else.
+- **One binding table replaces three parallel chains.** `LlmToolHandler`
+  keyed tool names in `TOOLS_FOR_STEP`, a `dispatch` if/elif, and a
+  `_schema` if/elif — four hand-coordinated edit sites per tool. Dispatch
+  and the offered schemas now derive from a single table, and a new tool
+  is one entry plus its step row. The declaration itself became wire-side
+  data (`voicewire.Tool`); the context-side tool CLASS turned out to be
+  unbuildable inside the srv vocabulary, and the analyzer's refusals are
+  recorded verbatim in the spike README as evidence for that ruling.
+
+### Fixed
+
+- **Request smuggling in the HTTP host.** Duplicate `Content-Length`
+  headers collapsed into a dict framed the body on the last value, so a
+  fronting proxy honoring the first would desync the connection.
+  `buffered_length` now reads the raw header pairs and refuses conflicting
+  declarations. Verified against the live server: the request that
+  returned 201 with a smuggled body now returns 400.
+- **Permissive body framing.** `int()` accepted `5_0` (framed as 50),
+  `+50`, and surrounding whitespace; the length is now plain ASCII digits
+  or a 400. The `Transfer-Encoding` guard matched the substring `chunked`,
+  so `Transfer-Encoding: gzip` alongside a `Content-Length` was accepted —
+  any transfer encoding now draws 411, since this host buffers.
+- Smaller wire hardening: `Response.json` replaces rather than duplicates
+  a caller-supplied `Content-Type`, `Response.redirect` refuses a control
+  character in the target instead of trusting the domain, the host no
+  longer emits `Content-Length` twice when a handler set one, and the
+  request handler has a timeout so a declared-but-undelivered body cannot
+  pin a thread.
+- Wire records regained the immutability and value equality that the
+  dataclass-to-shell migration dropped in 0.0.18.0 (recorded then as named
+  debt for this ruling).
+
 ## [0.0.18.0] - 2026-08-07
 
 The srv and wire vocabulary: hosts and the modules both sides of a wire
