@@ -4,7 +4,7 @@ from typing import Protocol
 
 import tesser.application as ts
 
-from reports.client import LinksByVerdictRequest, LinksByVerdictResponse, LinkVerdictView
+from reports.client.client import LinksByVerdictRequest, LinksByVerdictResponse, LinkVerdictView
 from reports.domain.report import Link, RecordedVerdict, join_links_with_verdicts
 
 

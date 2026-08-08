@@ -7,7 +7,7 @@ import tesser.application as ts
 
 from campaign.application.parts import CampaignParts, CheckOutcome, FoundCampaign, MissingCampaign, campaign_parts
 from campaign.application.views import active_target, campaign_view, link_view, required_campaign
-from campaign.client import (
+from campaign.client.client import (
     AddLinkRequest,
     CampaignView,
     CreateCampaignRequest,

@@ -10,7 +10,7 @@ import tesser.testing as ts
 
 from campaign.application.parts import CheckOutcome
 from campaign.application.service import TargetChecker
-from campaign.client import (
+from campaign.client.client import (
     AddLinkRequest,
     CreateCampaignRequest,
     DeactivateLinkRequest,

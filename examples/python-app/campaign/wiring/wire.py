@@ -4,7 +4,7 @@ import tesser.context as ts
 
 from campaign.adapters.gateways.repo_memory import InMemoryCampaignRepository
 from campaign.application.service import CampaignRepository, CampaignService, TargetChecker
-from campaign.client import Client
+from campaign.client.client import Client
 from campaign.wiring.config import Config
 from errors import invalid
 from lifecycle import Closeable

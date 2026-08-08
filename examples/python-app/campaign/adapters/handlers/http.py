@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tesser.adapters as ts
 
-from campaign.client import (
+from campaign.client.client import (
     AddLinkRequest,
     CampaignView,
     Client,

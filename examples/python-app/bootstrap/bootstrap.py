@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import campaign.client
+import campaign.client.client as campaign_client
 import campaign.wiring.wire as campaign_wire
-import linkpolicy.client
+import linkpolicy.client.client as linkpolicy_client
 import linkpolicy.wiring.wire as linkpolicy_wire
-import reports.client
+import reports.client.client as reports_client
 import reports.wiring.wire as reports_wire
 from bootstrap.config import Config
 from campaign.adapters.gateways.target_checker import LinkPolicyTargetChecker
@@ -34,9 +34,9 @@ class App:
 
     def __init__(
         self,
-        campaign_client: campaign.client.Client,
-        policy_client: linkpolicy.client.Client,
-        reports_client: reports.client.Client,
+        campaign_client: campaign_client.Client,
+        policy_client: linkpolicy_client.Client,
+        reports_client: reports_client.Client,
         stack: CleanupStack,
     ) -> None:
         self.campaign = campaign_client

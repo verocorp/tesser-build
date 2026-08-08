@@ -8,8 +8,15 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 APP_LEVEL_PACKAGES = frozenset({"bootstrap", "protocol", "srv", "web", "tests"})
 
 
+def client_sources(pkg_dir: pathlib.Path) -> list[pathlib.Path]:
+    role = pkg_dir / "client"
+    if role.is_dir():
+        return sorted(role.glob("*.py"))
+    return [pkg_dir / "client.py"]
+
+
 def exposes_client(pkg_dir: pathlib.Path) -> bool:
-    for candidate in (pkg_dir / "client.py", pkg_dir / "client" / "__init__.py"):
+    for candidate in client_sources(pkg_dir):
         if not candidate.is_file():
             continue
         tree = ast.parse(candidate.read_text(encoding="utf-8"))

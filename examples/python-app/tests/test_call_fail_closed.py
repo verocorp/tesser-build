@@ -11,7 +11,7 @@ from campaign.application.parts import (
     MoneyParts,
 )
 from campaign.application.service import CampaignRepository, CampaignService, TargetChecker
-from campaign.client import AddLinkRequest
+from campaign.client.client import AddLinkRequest
 from errors import DomainError, InfraError, Kind
 
 

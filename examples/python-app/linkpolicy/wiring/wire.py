@@ -6,7 +6,7 @@ from errors import invalid
 from lifecycle import Closeable
 from linkpolicy.adapters.gateways.repo_memory import InMemoryVerdictRepository
 from linkpolicy.application.service import LinkPolicyService, VerdictRepository
-from linkpolicy.client import Client
+from linkpolicy.client.client import Client
 from linkpolicy.wiring.config import Config
 
 

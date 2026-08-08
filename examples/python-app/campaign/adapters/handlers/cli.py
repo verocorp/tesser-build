@@ -4,7 +4,7 @@ from typing import Final
 
 import tesser.adapters as ts
 
-from campaign.client import AddLinkRequest, Client, CreateCampaignRequest, DeactivateLinkRequest
+from campaign.client.client import AddLinkRequest, Client, CreateCampaignRequest, DeactivateLinkRequest
 from protocol.cli import CliRequest, CliResponse
 
 _CREATE_USAGE: Final[str] = "usage: create-campaign <budget_amount> <currency>"

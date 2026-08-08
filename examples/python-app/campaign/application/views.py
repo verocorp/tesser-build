@@ -3,7 +3,7 @@ from __future__ import annotations
 import tesser.application as ts
 
 from campaign.application.parts import CampaignParts, FoundCampaign, MissingCampaign, ShortLinkParts
-from campaign.client import CampaignView, LinkView
+from campaign.client.client import CampaignView, LinkView
 from campaign.domain.campaign import Campaign, CampaignSpec
 from campaign.domain.money import MoneySpec
 from campaign.domain.short_link import ShortLinkSpec

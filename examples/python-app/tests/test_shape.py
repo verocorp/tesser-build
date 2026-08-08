@@ -3,21 +3,21 @@ from __future__ import annotations
 import inspect
 import json
 
-import campaign.client
-import linkpolicy.client
-import reports.client
+import campaign.client.client as campaign_client
+import linkpolicy.client.client as linkpolicy_client
+import reports.client.client as reports_client
 import tesser.context
 import tesser.testing as ts
 from campaign.adapters.handlers.http import Handler
 from campaign.application.parts import CheckOutcome
 from campaign.application.service import TargetChecker
-from campaign.client import LinkView, ResolveResponse
+from campaign.client.client import LinkView, ResolveResponse
 from campaign.wiring.config import Config as CampaignConfig
 from campaign.wiring.wire import build as build_campaign
 from errors import InfraError
 from protocol.http import HttpRequest
 from reports.adapters.handlers.http import Handler as ReportsHandler
-from reports.client import LinksByVerdictRequest, LinksByVerdictResponse, LinkVerdictView
+from reports.client.client import LinksByVerdictRequest, LinksByVerdictResponse, LinkVerdictView
 from srv.http.host import respond
 from tests.discovery import discovered_contexts
 
@@ -33,12 +33,12 @@ def test_required_roles_present_per_context() -> None:
 
 
 def test_public_interface_is_client_plus_dtos_in_the_client_module() -> None:
-    assert hasattr(campaign.client, "Client")
-    assert hasattr(linkpolicy.client, "Client")
-    assert hasattr(reports.client, "Client")
+    assert hasattr(campaign_client, "Client")
+    assert hasattr(linkpolicy_client, "Client")
+    assert hasattr(reports_client, "Client")
     for ctx in discovered_contexts():
         init_source = (ROOT / ctx / "__init__.py").read_text()
-        assert init_source == "", f"{ctx}/__init__.py must be empty; the interface lives in client.py"
+        assert init_source == "", f"{ctx}/__init__.py must be empty; the interface lives in the client role"
     for dto in (ResolveResponse, LinkView, LinkVerdictView):
         assert tesser.context.Response in dto.__mro__, f"{dto.__name__} must declare ts.Response"
         params = inspect.signature(dto.__init__).parameters
@@ -96,7 +96,7 @@ def test_handler_translates_wire_to_client_dtos() -> None:
 
 
 @ts.fake
-class _StubReports(reports.client.Client):
+class _StubReports(reports_client.Client):
     def links_by_verdict(self, req: LinksByVerdictRequest) -> LinksByVerdictResponse:
         return LinksByVerdictResponse(
             links=(LinkVerdictView("promo", "https://ok.example/x", False, "host blocked"),)
@@ -104,7 +104,7 @@ class _StubReports(reports.client.Client):
 
 
 @ts.fake
-class _FailingReports(reports.client.Client):
+class _FailingReports(reports_client.Client):
     def links_by_verdict(self, req: LinksByVerdictRequest) -> LinksByVerdictResponse:
         raise InfraError("the campaign store is unreachable")
 
