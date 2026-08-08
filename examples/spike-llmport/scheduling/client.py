@@ -31,12 +31,6 @@ class ConfirmBookingRequest(ts.Request):
         self.booking_id = booking_id
 
 
-class ReofferRequest(ts.Request):
-
-    def __init__(self, booking_id: str) -> None:
-        self.booking_id = booking_id
-
-
 class StatusRequest(ts.Request):
 
     def __init__(self, booking_id: str) -> None:
@@ -60,7 +54,5 @@ class SchedulingClient(ts.Client, Protocol):
     def choose_slot(self, request: ChooseSlotRequest) -> BookingStateResponse: ...
 
     def confirm(self, request: ConfirmBookingRequest) -> BookingStateResponse: ...
-
-    def reoffer(self, request: ReofferRequest) -> BookingStateResponse: ...
 
     def status(self, request: StatusRequest) -> BookingStateResponse: ...

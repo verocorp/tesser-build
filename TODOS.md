@@ -242,6 +242,18 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `rewire.py` all opt in, and `examples/serdepy/wire.py` already uses
   "wire" to mean serialization format — decide allowlist + a separator
   (or in-file declaration) with the same ruling.
+- [ ] **A role `__init__` re-export defeats the classifier** (found while
+  splitting spike-llmport's application.py into a package, 2026-08-08).
+  RULES.md sanctions "a role __init__ only re-exports from its own role", but
+  `resolve()` does not follow a base class through the re-export: with
+  `scheduling/application/__init__.py` re-exporting `SlotDirectory` from
+  `service.py`, every `@ts.fake` subclassing `application.SlotDirectory` drew
+  "implements no application port, wire port, or client" — five false
+  findings on a conforming tree. Worked around by emptying the `__init__`
+  and importing submodules directly, which is what python-app already does
+  (its `campaign/application/__init__.py` is empty) — so the sanctioned
+  shape is one no tree in the repo can actually use. Either teach the
+  classifier to follow re-exports or stop sanctioning them.
 - [ ] **sigcheck internal cleanups (pre-landing review, deferred as a batch;
   re-scoped 2026-08-07 after the srv-wire wave restructured the methods).**
   (1) the exactly-once-as-ts walk: the srv-wire wave extracted

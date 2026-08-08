@@ -15,7 +15,11 @@ below for the history). mypy --strict and pytest gate the pure modules.
 scheduling/
   client.py       requests/responses (primitive DTOs) + SchedulingClient
   domain.py       Step/CustomerName/Slot VOs, Booking aggregate, step constants
-  application.py  BookingParts, SlotDirectory + BookingRepository ports, BookingService
+  application/
+    parts.py      BookingParts + the Reserved | SlotTaken reservation outcomes
+    views.py      loaded / parts_of / state / reoffered — the vocabulary the
+                  service bodies are written in
+    service.py    SlotDirectory + BookingRepository ports, BookingService
   adapters/
     handlers.py   LlmToolHandler — one endpoint method per tool, plus the schema
                   declarations the model sees
@@ -33,7 +37,7 @@ The division of labor the checkers enforce:
 
 - **The service speaks only Requests and Responses** — one `ts.Request` in,
   one `ts.Response` out, per use case (`begin`, `provide_name`, `choose_slot`,
-  `confirm`, `reoffer`, `status`), each body inline and under ten lines. The
+  `confirm`, `status`), each body inline and under ten lines. The
   booking is loaded from parts, driven through one guarded transition, and
   decomposed back to parts; a rejected transition persists nothing.
 - **Ports speak records, never domain objects** — `SlotDirectory` and
@@ -45,10 +49,19 @@ The division of labor the checkers enforce:
   one method per route. The name→endpoint table lives in `srv/voice/router.py`,
   because routing is the host's job in every other srv. The context below the
   handler never hears the word "tool".
-- **The conflict choreography is edge behavior.** A confirm that fails
-  because the slot was taken makes the adapter call the `reoffer` use case and
-  re-raise with the fresh slots in the message — the model sees what is now
-  bookable; the service stays four-step.
+- **A taken slot is an outcome, not an error.** `SlotDirectory.reserve`
+  returns `Reserved | SlotTaken` rather than raising, and `confirm` matches on
+  it: reserved books, taken re-offers the slots that are free now and persists
+  that. One call, one turn — the caller is told what happened and what to do
+  next in the same response, and the state it is told about is the state that
+  was saved. This was edge choreography until 2026-08-08 (the adapter caught
+  the failure, called a `reoffer` use case, and re-raised with the fresh slots
+  in the message). Chris's handler definition — map request, invoke service,
+  map response — named it: three service calls and a domain-state branch is
+  not mapping. Moving it also removed `reoffer` from the client surface (its
+  only caller was that `except` block) and closed a real defect, since the
+  `try` had grown wide enough to swallow a `ValueError` from schema-table
+  drift and answer it with "that slot was taken".
 - **`srv/voice/agent.py`** translates the wire onto LiveKit Agents:
   `function_tool(raw_schema=...)` per schema, one shim, `ToolError` for
   `ValueError` (model-correctable, with a tools rebind), halt on anything

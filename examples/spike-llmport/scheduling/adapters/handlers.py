@@ -75,22 +75,9 @@ class LlmToolHandler(ts.Handler):
         )
 
     def confirm(self, _raw_arguments: Mapping[str, object], /) -> voicewire.ToolTurn:
-        try:
-            return self._turn(
-                self._client.confirm(client.ConfirmBookingRequest(booking_id=self._booking_id))
-            )
-        except ValueError as err:
-            state = self._client.status(client.StatusRequest(booking_id=self._booking_id))
-            if state.step != "confirm":
-                raise
-            try:
-                fresh = self._client.reoffer(
-                    client.ReofferRequest(booking_id=self._booking_id)
-                )
-            except ValueError as exhausted:
-                raise ValueError(f"{err}; {exhausted}") from err
-            offered = ", ".join(fresh.offered_slots)
-            raise ValueError(f"{err}; now available: {offered}") from err
+        return self._turn(
+            self._client.confirm(client.ConfirmBookingRequest(booking_id=self._booking_id))
+        )
 
     def _turn(self, state: client.BookingStateResponse) -> voicewire.ToolTurn:
         return voicewire.ToolTurn(

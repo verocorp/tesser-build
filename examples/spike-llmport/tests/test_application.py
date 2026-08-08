@@ -1,7 +1,8 @@
 import pytest
 import tesser.testing as ts
 
-import scheduling.application as application
+import scheduling.application.parts as parts
+import scheduling.application.service as application
 import scheduling.client as client
 
 
@@ -15,26 +16,27 @@ class MemorySlotDirectory(application.SlotDirectory):
     def available(self) -> tuple[str, ...]:
         return tuple(self.slots)
 
-    def reserve(self, slot: str, name: str) -> None:
+    def reserve(self, slot: str, name: str) -> parts.Reserved | parts.SlotTaken:
         if slot not in self.slots:
-            raise ValueError(f"slot {slot} was just taken")
+            return parts.SlotTaken(available=tuple(self.slots))
         self.slots.remove(slot)
         self.reserved.append((slot, name))
+        return parts.Reserved()
 
 
 @ts.fake
 class MemoryBookingRepository(application.BookingRepository):
 
     def __init__(self) -> None:
-        self.stored: dict[str, application.BookingParts] = {}
+        self.stored: dict[str, parts.BookingParts] = {}
 
     def has(self, booking_id: str) -> bool:
         return booking_id in self.stored
 
-    def get(self, booking_id: str) -> application.BookingParts:
+    def get(self, booking_id: str) -> parts.BookingParts:
         return self.stored[booking_id]
 
-    def save(self, booking_id: str, parts: application.BookingParts) -> None:
+    def save(self, booking_id: str, parts: parts.BookingParts) -> None:
         self.stored[booking_id] = parts
 
 
@@ -44,7 +46,7 @@ class DownSlotDirectory(application.SlotDirectory):
     def available(self) -> tuple[str, ...]:
         raise RuntimeError("slot directory unreachable")
 
-    def reserve(self, slot: str, name: str) -> None:
+    def reserve(self, slot: str, name: str) -> parts.Reserved | parts.SlotTaken:
         raise RuntimeError("slot directory unreachable")
 
 
@@ -89,7 +91,7 @@ def test_a_rejected_transition_persists_nothing() -> None:
     assert repository.stored["b1"].chosen == ""
 
 
-def test_a_slot_taken_between_choice_and_confirm_surfaces_and_reoffer_recovers() -> None:
+def test_a_slot_taken_between_choice_and_confirm_comes_back_as_a_fresh_offer() -> None:
     directory = MemorySlotDirectory(("mon-9am", "tue-2pm"))
     repository = MemoryBookingRepository()
     service = application.BookingService(directory, repository)
@@ -98,19 +100,43 @@ def test_a_slot_taken_between_choice_and_confirm_surfaces_and_reoffer_recovers()
     service.choose_slot(client.ChooseSlotRequest(booking_id="b1", slot="mon-9am"))
 
     directory.slots.remove("mon-9am")
+    state = service.confirm(client.ConfirmBookingRequest(booking_id="b1"))
+
+    assert "mon-9am was just taken" in state.reply
+    assert state.step == "choose_slot"
+    assert state.offered_slots == ("tue-2pm",)
+    assert repository.stored["b1"].step == "choose_slot"
+    assert repository.stored["b1"].offered == ("tue-2pm",)
+
+
+def test_a_taken_slot_with_nothing_left_to_offer_is_an_error() -> None:
+    directory = MemorySlotDirectory(("mon-9am",))
+    service = application.BookingService(directory, MemoryBookingRepository())
+    service.begin(client.BeginBookingRequest(booking_id="b1"))
+    service.provide_name(client.ProvideNameRequest(booking_id="b1", name="Ada"))
+    service.choose_slot(client.ChooseSlotRequest(booking_id="b1", slot="mon-9am"))
+
+    directory.slots.remove("mon-9am")
     with pytest.raises(ValueError) as excinfo:
         service.confirm(client.ConfirmBookingRequest(booking_id="b1"))
 
-    assert "taken" in str(excinfo.value)
-    assert repository.stored["b1"].step == "confirm"
+    assert "no slots are available" in str(excinfo.value)
 
-    state = service.reoffer(client.ReofferRequest(booking_id="b1"))
-    assert state.step == "choose_slot"
-    assert state.offered_slots == ("tue-2pm",)
+
+def test_the_fresh_offer_is_choosable_and_bookable() -> None:
+    directory = MemorySlotDirectory(("mon-9am", "tue-2pm"))
+    service = application.BookingService(directory, MemoryBookingRepository())
+    service.begin(client.BeginBookingRequest(booking_id="b1"))
+    service.provide_name(client.ProvideNameRequest(booking_id="b1", name="Ada"))
+    service.choose_slot(client.ChooseSlotRequest(booking_id="b1", slot="mon-9am"))
+    directory.slots.remove("mon-9am")
+    service.confirm(client.ConfirmBookingRequest(booking_id="b1"))
 
     service.choose_slot(client.ChooseSlotRequest(booking_id="b1", slot="tue-2pm"))
     state = service.confirm(client.ConfirmBookingRequest(booking_id="b1"))
+
     assert state.step == "booked"
+    assert directory.reserved == [("tue-2pm", "Ada")]
 
 
 def test_status_reads_without_mutating() -> None:

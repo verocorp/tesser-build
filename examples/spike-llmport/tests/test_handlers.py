@@ -2,7 +2,8 @@ import pytest
 import tesser.testing as ts
 
 import scheduling.adapters.handlers as handlers
-import scheduling.application as application
+import scheduling.application.parts as parts
+import scheduling.application.service as application
 import scheduling.client as client
 import scheduling.domain as domain
 import srv.voice.router as router
@@ -19,26 +20,27 @@ class MemorySlotDirectory(application.SlotDirectory):
     def available(self) -> tuple[str, ...]:
         return tuple(self.slots)
 
-    def reserve(self, slot: str, name: str) -> None:
+    def reserve(self, slot: str, name: str) -> parts.Reserved | parts.SlotTaken:
         if slot not in self.slots:
-            raise ValueError(f"slot {slot} was just taken")
+            return parts.SlotTaken(available=tuple(self.slots))
         self.slots.remove(slot)
         self.reserved.append((slot, name))
+        return parts.Reserved()
 
 
 @ts.fake
 class MemoryBookingRepository(application.BookingRepository):
 
     def __init__(self) -> None:
-        self.stored: dict[str, application.BookingParts] = {}
+        self.stored: dict[str, parts.BookingParts] = {}
 
     def has(self, booking_id: str) -> bool:
         return booking_id in self.stored
 
-    def get(self, booking_id: str) -> application.BookingParts:
+    def get(self, booking_id: str) -> parts.BookingParts:
         return self.stored[booking_id]
 
-    def save(self, booking_id: str, parts: application.BookingParts) -> None:
+    def save(self, booking_id: str, parts: parts.BookingParts) -> None:
         self.stored[booking_id] = parts
 
 
@@ -227,7 +229,7 @@ def test_the_choose_slot_schema_offers_exactly_the_current_slots() -> None:
     assert slot["enum"] == ["mon-9am", "tue-2pm"]
 
 
-def test_a_taken_last_slot_names_both_the_conflict_and_the_exhaustion() -> None:
+def test_a_taken_last_slot_with_nothing_to_reoffer_reaches_the_model_as_an_error() -> None:
     directory = MemorySlotDirectory(("mon-9am",))
     service = application.BookingService(directory, MemoryBookingRepository())
     handler = handlers.LlmToolHandler(service, "b1")
@@ -239,7 +241,6 @@ def test_a_taken_last_slot_names_both_the_conflict_and_the_exhaustion() -> None:
     with pytest.raises(ValueError) as excinfo:
         handler.confirm({})
 
-    assert "taken" in str(excinfo.value)
     assert "no slots are available" in str(excinfo.value)
 
 
@@ -274,7 +275,7 @@ def test_a_choose_slot_before_any_offer_is_rejected_cleanly() -> None:
     assert "collect_name" in str(excinfo.value)
 
 
-def test_a_taken_slot_reoffers_and_names_the_fresh_slots() -> None:
+def test_a_taken_slot_comes_back_as_one_turn_offering_the_fresh_slots() -> None:
     directory = MemorySlotDirectory(("mon-9am", "tue-2pm"))
     service = application.BookingService(directory, MemoryBookingRepository())
     handler = handlers.LlmToolHandler(service, "b1")
@@ -283,14 +284,11 @@ def test_a_taken_slot_reoffers_and_names_the_fresh_slots() -> None:
     handler.choose_slot({"slot": "mon-9am"})
 
     directory.slots.remove("mon-9am")
-    with pytest.raises(ValueError) as excinfo:
-        handler.confirm({})
+    turn = handler.confirm({})
 
-    assert "now available: tue-2pm" in str(excinfo.value)
-
-    turn = handler.status()
-    assert turn.reply == "continue the booking"
+    assert turn.reply == "mon-9am was just taken; offer the caller the updated slots"
     assert service.status(client.StatusRequest(booking_id="b1")).step == "choose_slot"
+    assert [tool.name for tool in turn.tools] == [handlers.CHOOSE_SLOT]
     tool = turn.tools[0]
     properties = tool.parameters["properties"]
     assert isinstance(properties, dict)
