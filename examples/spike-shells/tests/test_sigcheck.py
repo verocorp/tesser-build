@@ -1268,6 +1268,9 @@ def test_wire_module_totality_is_flagged(tmp_path: Path) -> None:
         "class BoxResponse(ts.Response):\n"
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n"
+        "class BoxLabel(ts.Record):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n"
         "class Endpoint(ts.Port, Protocol):\n"
         "    def __call__(self, request: BoxRequest) -> BoxResponse: ...\n"
         "class Loose:\n"
@@ -1291,6 +1294,7 @@ def test_wire_module_totality_is_flagged(tmp_path: Path) -> None:
     findings = check_tree(tmp_path)
     assert not any("boxwire.BoxRequest" in f for f in findings)
     assert not any("boxwire.BoxResponse" in f for f in findings)
+    assert not any("boxwire.BoxLabel" in f for f in findings)
     assert not any("boxwire.Endpoint" in f for f in findings)
     assert not any("boxwire.fine" in f for f in findings)
     assert not any("boxwire belongs to no governed package" in f for f in findings)
@@ -1307,8 +1311,8 @@ def test_wire_module_totality_is_flagged(tmp_path: Path) -> None:
         for f in findings
     )
     assert any(
-        "boxwire.Server" in f and "is a host; only wire ports, wire requests, "
-        "and wire responses live in a wire module" in f
+        "boxwire.Server" in f and "is a host; only wire ports, wire records, "
+        "wire requests, and wire responses live in a wire module" in f
         for f in findings
     )
     assert any(
@@ -1440,7 +1444,9 @@ def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv(tmp_path: P
         "class WireReply(tesser.srv.Response):\n"
         "    pass\n"
         "class WireDoor(tesser.srv.Port, Protocol):\n"
-        "    def __call__(self) -> None: ...\n",
+        "    def __call__(self) -> None: ...\n"
+        "class WireLabel(tesser.srv.Record):\n"
+        "    pass\n",
     )
     write_module(
         tmp_path,
@@ -1473,6 +1479,12 @@ def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv(tmp_path: P
     assert any(
         "app.adapters.WireDoor" in f
         and "is a wire port; a host lives in srv and a wire kind in a wire module, "
+        "never a context" in f
+        for f in findings
+    )
+    assert any(
+        "app.adapters.WireLabel" in f
+        and "is a wire record; a host lives in srv and a wire kind in a wire module, "
         "never a context" in f
         for f in findings
     )

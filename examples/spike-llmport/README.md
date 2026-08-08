@@ -19,8 +19,9 @@ scheduling/
   adapters/
     handlers.py   LlmToolHandler — the LLM wire: tool vocabulary, schemas, dispatch
 tests/            domain/application/handler tests; each declares its own @ts.fake port doubles
-voicewire.py      wire module: ToolSurface (ts.Port) + ToolTurn (ts.Response), the voice
-                  analog of httpwire — imported by host and handler, owned by neither
+voicewire.py      wire module: ToolSurface (ts.Port), ToolTurn (ts.Response), and
+                  Tool (ts.Record) — the voice analog of httpwire, imported by host
+                  and handler, owned by neither
 srv/
   voice/agent.py  ToolAgent (ts.Host) — the context-generic LiveKit host
 ```
@@ -74,16 +75,26 @@ the original design genuinely collided:
   adapter keys `TOOLS_FOR_STEP` on the strings that cross in DTOs, and the
   import matrix forbids it from importing the domain's constants. The same
   totality test is the drift tripwire.
-- **There is no kind for a tool declaration.** `LlmToolHandler` maintains
-  three parallel structures keyed on the same tool-name strings —
-  `TOOLS_FOR_STEP`, the `dispatch` chain, the `_schema` chain — plus inline
-  per-tool parsing: four hand-coordinated edit sites per new tool, hiding in
-  an adapter because adapters carry no body rules. The clean shape is one
-  declared tool object (name + description + schema + parse + invoke) with
-  dispatch and schemas derived from a table of them, but the vocabulary has
-  no word for it and one-kind-per-module forbids an undeclared class here.
-  Named by Chris during the srv-wire ship ("dispatch smells really bad");
-  evidence for the srv signature-matrix ruling, deliberately not improvised.
+- **The tool declaration got its word — on the wire side.** `LlmToolHandler`
+  used to maintain three parallel structures keyed on the same tool-name
+  strings (`TOOLS_FOR_STEP`, the `dispatch` chain, the `_schema` chain) plus
+  inline per-tool parsing — the dispatch smell Chris named during the
+  srv-wire ship. Resolved 2026-08-07 by building both candidate shapes and
+  letting sigcheck rule. The declared-tool-CLASS shape (name + schema +
+  parse + invoke as one context-side class) is unbuildable inside the srv
+  vocabulary — probed verbatim: an undeclared class in the adapter draws
+  "declares no ts.* base; every context class declares its block", and
+  declaring it with the wire vocabulary draws "is a wire record; a host
+  lives in srv and a wire kind in a wire module, never a context" — a tool
+  class would need a new adapters kind, which is a ruling this spike may
+  not improvise. What IS buildable: `voicewire.Tool` (`ts.Record`, the new
+  generic wire-record kind) carries the declaration as data (name +
+  description + parameters, `schema()` renders the raw dict the host
+  mounts), `ToolTurn.tools` speaks `Tool` records instead of loose dicts,
+  and the handler owns ONE binding table (name → description +
+  schema-builder + invoke) from which both `dispatch` and the offered
+  schemas derive. Unknown-name drift is structurally gone; a new tool is
+  one table entry plus its `TOOLS_FOR_STEP` row.
 
 ## The host/handler split, answered in code — and then enacted
 
@@ -164,11 +175,12 @@ The sigcheck-vs-ruff F401 collision this tree used to document (a mandated
 `srv/voice/agent.py`'s `import tesser.srv as ts` is now load-bearing —
 `ToolAgent` subclasses `ts.Host`.
 
-One more named boundary: `ToolTurn` (like the migrated httpwire/cliwire
-records) is a mutable record — the frozen-dataclass guarantee did not
-survive the shell migration, by explicit ruling (2026-08-07): wire-record
-immutability is a per-kind invariant that belongs to the srv
-signature-matrix ruling, not a per-class patch.
+One more named boundary, since closed: `ToolTurn` (like the migrated
+httpwire/cliwire records) briefly lost the frozen-dataclass guarantee in
+the shell migration. The srv matrix ruled it per-kind (2026-08-07):
+`ts.srv.Record` now owns immutability and value equality for every wire
+record, so `ToolTurn` and `Tool` are frozen again without a per-class
+patch.
 
 ## Non-goals
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Final
 
 import tesser.adapters as ts
@@ -24,6 +24,32 @@ class LlmToolHandler(ts.Handler):
     def __init__(self, scheduling_client: client.SchedulingClient, booking_id: str) -> None:
         self._client = scheduling_client
         self._booking_id = booking_id
+        self._tools: dict[
+            str,
+            tuple[
+                str,
+                Callable[[client.BookingStateResponse], dict[str, object]],
+                Callable[[Mapping[str, object]], client.BookingStateResponse],
+            ],
+        ] = {
+            PROVIDE_NAME: (
+                "Record the caller's full name.",
+                lambda state: _params({"name": {"type": "string"}}, ("name",)),
+                self._provide_name,
+            ),
+            CHOOSE_SLOT: (
+                "Record the slot the caller chose.",
+                lambda state: _params(
+                    {"slot": {"type": "string", "enum": list(state.offered_slots)}}, ("slot",)
+                ),
+                self._choose_slot,
+            ),
+            CONFIRM_BOOKING: (
+                "Book the chosen slot after the caller confirms.",
+                lambda state: _params({}, ()),
+                self._confirm,
+            ),
+        }
 
     def begin(self) -> voicewire.ToolTurn:
         return self._turn(self._client.begin(client.BeginBookingRequest(booking_id=self._booking_id)))
@@ -38,27 +64,22 @@ class LlmToolHandler(ts.Handler):
         )
 
     def dispatch(self, tool: str, raw_arguments: Mapping[str, object]) -> voicewire.ToolTurn:
-        if tool == PROVIDE_NAME:
-            return self._turn(
-                self._client.provide_name(
-                    client.ProvideNameRequest(
-                        booking_id=self._booking_id, name=_text(raw_arguments, "name")
-                    )
-                )
-            )
-        if tool == CHOOSE_SLOT:
-            return self._turn(
-                self._client.choose_slot(
-                    client.ChooseSlotRequest(
-                        booking_id=self._booking_id, slot=_text(raw_arguments, "slot")
-                    )
-                )
-            )
-        if tool == CONFIRM_BOOKING:
-            return self._turn(self._confirm())
-        raise ValueError(f"unknown tool {tool!r}")
+        bound = self._tools.get(tool)
+        if bound is None:
+            raise ValueError(f"unknown tool {tool!r}")
+        return self._turn(bound[2](raw_arguments))
 
-    def _confirm(self) -> client.BookingStateResponse:
+    def _provide_name(self, raw: Mapping[str, object]) -> client.BookingStateResponse:
+        return self._client.provide_name(
+            client.ProvideNameRequest(booking_id=self._booking_id, name=_text(raw, "name"))
+        )
+
+    def _choose_slot(self, raw: Mapping[str, object]) -> client.BookingStateResponse:
+        return self._client.choose_slot(
+            client.ChooseSlotRequest(booking_id=self._booking_id, slot=_text(raw, "slot"))
+        )
+
+    def _confirm(self, raw: Mapping[str, object]) -> client.BookingStateResponse:
         try:
             return self._client.confirm(
                 client.ConfirmBookingRequest(booking_id=self._booking_id)
@@ -79,45 +100,22 @@ class LlmToolHandler(ts.Handler):
     def _turn(self, state: client.BookingStateResponse) -> voicewire.ToolTurn:
         return voicewire.ToolTurn(
             reply=state.reply,
-            tools=tuple(self._schema(tool, state) for tool in TOOLS_FOR_STEP[state.step]),
+            tools=tuple(self._tool(name, state) for name in TOOLS_FOR_STEP[state.step]),
         )
 
-    def _schema(self, tool: str, state: client.BookingStateResponse) -> dict[str, object]:
-        if tool == PROVIDE_NAME:
-            return {
-                "name": tool,
-                "description": "Record the caller's full name.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {"name": {"type": "string"}},
-                    "required": ["name"],
-                    "additionalProperties": False,
-                },
-            }
-        if tool == CHOOSE_SLOT:
-            return {
-                "name": tool,
-                "description": "Record the slot the caller chose.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "slot": {"type": "string", "enum": list(state.offered_slots)}
-                    },
-                    "required": ["slot"],
-                    "additionalProperties": False,
-                },
-            }
-        if tool == CONFIRM_BOOKING:
-            return {
-                "name": tool,
-                "description": "Book the chosen slot after the caller confirms.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {},
-                    "additionalProperties": False,
-                },
-            }
-        raise ValueError(f"unknown tool {tool!r}")
+    def _tool(self, name: str, state: client.BookingStateResponse) -> voicewire.Tool:
+        description, parameters, _ = self._tools[name]
+        return voicewire.Tool(name=name, description=description, parameters=parameters(state))
+
+
+@ts.function
+def _params(properties: dict[str, object], required: tuple[str, ...]) -> dict[str, object]:
+    return {
+        "type": "object",
+        "properties": properties,
+        "required": list(required),
+        "additionalProperties": False,
+    }
 
 
 @ts.function

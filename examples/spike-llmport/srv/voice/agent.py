@@ -30,14 +30,14 @@ class ToolAgent(Agent, ts.Host):
 
     async def _rebind(self, turn: voicewire.ToolTurn) -> None:
         await self.update_tools(
-            [function_tool(self._shim(schema), raw_schema=schema) for schema in turn.tools]
+            [function_tool(self._shim(tool.name), raw_schema=tool.schema()) for tool in turn.tools]
         )
 
-    def _shim(self, schema: dict[str, object]) -> Callable[..., Awaitable[str]]:
+    def _shim(self, name: str) -> Callable[..., Awaitable[str]]:
         async def call(raw_arguments: dict[str, object]) -> str:
             async with self._lock:
                 try:
-                    turn = self._handler.dispatch(str(schema["name"]), raw_arguments)
+                    turn = self._handler.dispatch(name, raw_arguments)
                 except ValueError as err:
                     try:
                         await self._rebind(self._handler.status())

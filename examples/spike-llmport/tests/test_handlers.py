@@ -45,16 +45,24 @@ def test_the_tool_map_covers_exactly_the_domain_steps() -> None:
     assert set(handlers.TOOLS_FOR_STEP) == set(domain.STEPS)
 
 
-def test_a_schema_for_an_unknown_tool_is_rejected() -> None:
+def test_every_offered_tool_has_a_binding() -> None:
     service = application.BookingService(
         MemorySlotDirectory(("mon-9am",)), MemoryBookingRepository()
     )
     handler = handlers.LlmToolHandler(service, "b1")
-    handler.begin()
-    state = service.status(client.StatusRequest(booking_id="b1"))
+    offered = {name for names in handlers.TOOLS_FOR_STEP.values() for name in names}
 
-    with pytest.raises(ValueError):
-        handler._schema("cancel_booking", state)
+    assert offered <= set(handler._tools)
+
+
+def test_a_tool_declaration_renders_its_wire_schema() -> None:
+    tool = voicewire.Tool("provide_name", "Record the caller's full name.", {"type": "object"})
+
+    assert tool.schema() == {
+        "name": "provide_name",
+        "description": "Record the caller's full name.",
+        "parameters": {"type": "object"},
+    }
 
 
 def test_the_handler_satisfies_the_voicewire_contract() -> None:
@@ -86,15 +94,15 @@ def test_the_flow_through_the_tool_surface() -> None:
 
     turn = handler.begin()
     assert turn.reply == "ask the caller for their name"
-    assert [schema["name"] for schema in turn.tools] == [handlers.PROVIDE_NAME]
+    assert [tool.name for tool in turn.tools] == [handlers.PROVIDE_NAME]
 
     turn = handler.dispatch(handlers.PROVIDE_NAME, {"name": "Ada Lovelace"})
     assert turn.reply == "offer the caller the available slots"
-    assert [schema["name"] for schema in turn.tools] == [handlers.CHOOSE_SLOT]
+    assert [tool.name for tool in turn.tools] == [handlers.CHOOSE_SLOT]
 
     turn = handler.dispatch(handlers.CHOOSE_SLOT, {"slot": "mon-9am"})
     assert turn.reply == "slot mon-9am selected; ask the caller to confirm"
-    assert [schema["name"] for schema in turn.tools] == [
+    assert [tool.name for tool in turn.tools] == [
         handlers.CHOOSE_SLOT,
         handlers.CONFIRM_BOOKING,
     ]
@@ -114,11 +122,9 @@ def test_the_choose_slot_schema_offers_exactly_the_current_slots() -> None:
     handler.begin()
 
     turn = handler.dispatch(handlers.PROVIDE_NAME, {"name": "Ada"})
-    schema = turn.tools[0]
+    tool = turn.tools[0]
 
-    parameters = schema["parameters"]
-    assert isinstance(parameters, dict)
-    properties = parameters["properties"]
+    properties = tool.parameters["properties"]
     assert isinstance(properties, dict)
     slot = properties["slot"]
     assert isinstance(slot, dict)
@@ -189,10 +195,8 @@ def test_a_taken_slot_reoffers_and_names_the_fresh_slots() -> None:
     turn = handler.status()
     assert turn.reply == "continue the booking"
     assert service.status(client.StatusRequest(booking_id="b1")).step == "choose_slot"
-    schema = turn.tools[0]
-    parameters = schema["parameters"]
-    assert isinstance(parameters, dict)
-    properties = parameters["properties"]
+    tool = turn.tools[0]
+    properties = tool.parameters["properties"]
     assert isinstance(properties, dict)
     slot = properties["slot"]
     assert isinstance(slot, dict)

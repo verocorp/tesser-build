@@ -6,13 +6,26 @@ from typing import Protocol
 import tesser.srv as ts
 
 
+class Tool(ts.Record):
+
+    def __init__(self, name: str, description: str, parameters: dict[str, object]) -> None:
+        super().__init__(name=name, description=description, parameters=parameters)
+
+    name: str
+    description: str
+    parameters: dict[str, object]
+
+    def schema(self) -> dict[str, object]:
+        return {"name": self.name, "description": self.description, "parameters": self.parameters}
+
+
 class ToolTurn(ts.Response):
 
-    def __init__(self, reply: str, tools: tuple[dict[str, object], ...]) -> None:
+    def __init__(self, reply: str, tools: tuple[Tool, ...]) -> None:
         super().__init__(reply=reply, tools=tools)
 
     reply: str
-    tools: tuple[dict[str, object], ...]
+    tools: tuple[Tool, ...]
 
 
 class ToolSurface(ts.Port, Protocol):
