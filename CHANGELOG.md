@@ -38,11 +38,11 @@ and the checkers pick. Nothing here was decided in prose first.
 - **Wire records carry their behavior.** `httpwire`'s nine loose
   `@ts.function` module functions collapse to two public ones
   (`object_field`, `string_field`) plus a private JSON-object reader:
-  `problem`/`json_response`/`redirect`/`respond` became `Response`
-  classmethods (`problem` now returns the Response, folding away every
+  `problem`/`json_response`/`redirect`/`respond` became `HttpResponse`
+  classmethods (`problem` now returns the HttpResponse, folding away every
   `json_response(status, problem(...))` double call); `decode_body`/
   `path_param`/`content_length` became `HttpRequest` readers (`json_body`,
-  `path_param`, `buffered_length`), with `Response` gaining the mirroring
+  `path_param`, `buffered_length`), with `HttpResponse` gaining the mirroring
   `json_body`. `cliwire`'s four go to zero the same way: `ok`/`respond` are
   `CliResponse` classmethods, `arg`/`no_extra_args` are `CliRequest`
   readers. The DTO-purity objection dissolves on the package-scoped kind
@@ -70,8 +70,8 @@ and the checkers pick. Nothing here was decided in prose first.
   or a 400. The `Transfer-Encoding` guard matched the substring `chunked`,
   so `Transfer-Encoding: gzip` alongside a `Content-Length` was accepted —
   any transfer encoding now draws 411, since this host buffers.
-- Smaller wire hardening: `Response.json` replaces rather than duplicates
-  a caller-supplied `Content-Type`, `Response.redirect` refuses a control
+- Smaller wire hardening: `HttpResponse.json` replaces rather than duplicates
+  a caller-supplied `Content-Type`, `HttpResponse.redirect` refuses a control
   character in the target instead of trusting the domain, the host no
   longer emits `Content-Length` twice when a handler set one, and the
   request handler has a timeout so a declared-but-undelivered body cannot

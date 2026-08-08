@@ -6,7 +6,7 @@ from typing import Any
 
 from bootstrap.bootstrap import App
 from campaign.adapters.handlers.http import Handler as CampaignHandler
-from httpwire import HttpRequest, Response
+from httpwire import HttpRequest, HttpResponse
 from reports.adapters.handlers.http import Handler as ReportsHandler
 from srv.http.router import Route, match
 
@@ -36,11 +36,11 @@ def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
         def do_POST(self) -> None:
             self._send(self._dispatch("POST"))
 
-        def _dispatch(self, method: str) -> Response:
-            def run() -> Response:
+        def _dispatch(self, method: str) -> HttpResponse:
+            def run() -> HttpResponse:
                 found = match(routes, method, self.path)
                 if found is None:
-                    return Response.problem(404, "not_found", "unknown route")
+                    return HttpResponse.problem(404, "not_found", "unknown route")
                 declared = self.headers.items()
                 headers = {name.lower(): value for name, value in declared}
                 body = self.rfile.read(HttpRequest.buffered_length(declared))
@@ -55,12 +55,12 @@ def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
                     )
                 )
 
-            return Response.respond(run)
+            return HttpResponse.respond(run)
 
         def log_message(self, format: str, *args: Any) -> None:
             return
 
-        def _send(self, resp: Response) -> None:
+        def _send(self, resp: HttpResponse) -> None:
             self.send_response(resp.status_code)
             self.send_header("Content-Length", str(len(resp.body)))
             for name, value in resp.headers.items():

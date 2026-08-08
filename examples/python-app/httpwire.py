@@ -88,7 +88,7 @@ class HttpRequest(ts.Request):
         return value
 
 
-class Response(ts.Response):
+class HttpResponse(ts.Response):
 
     def __init__(
         self,
@@ -107,7 +107,7 @@ class Response(ts.Response):
     headers: Mapping[str, str]
 
     @classmethod
-    def json(cls, status_code: int, body: JSONObject, headers: Mapping[str, str] | None = None) -> Response:
+    def json(cls, status_code: int, body: JSONObject, headers: Mapping[str, str] | None = None) -> HttpResponse:
         payload = json.dumps(body).encode("utf-8")
         declared = dict(headers or {})
         if not any(name.lower() == "content-type" for name in declared):
@@ -115,17 +115,17 @@ class Response(ts.Response):
         return cls(status_code, payload, declared)
 
     @classmethod
-    def problem(cls, status_code: int, code: str, detail: str) -> Response:
+    def problem(cls, status_code: int, code: str, detail: str) -> HttpResponse:
         return cls.json(status_code, {"type": f"/problems/{code}", "detail": detail})
 
     @classmethod
-    def redirect(cls, url: str, status_code: int = 302) -> Response:
+    def redirect(cls, url: str, status_code: int = 302) -> HttpResponse:
         if any(char in url for char in "\r\n\x00"):
             raise BadRequest("a redirect target carries a control character")
         return cls(status_code, b"", {"Location": url})
 
     @classmethod
-    def respond(cls, run: Callable[[], Response]) -> Response:
+    def respond(cls, run: Callable[[], HttpResponse]) -> HttpResponse:
         try:
             return run()
         except BadRequest as e:
@@ -147,7 +147,7 @@ class Response(ts.Response):
 
 class Endpoint(ts.Port, Protocol):
 
-    def __call__(self, request: HttpRequest, /) -> Response: ...
+    def __call__(self, request: HttpRequest, /) -> HttpResponse: ...
 
 
 @ts.function

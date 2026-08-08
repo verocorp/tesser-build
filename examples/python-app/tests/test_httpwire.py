@@ -10,7 +10,7 @@ from httpwire import (
     BadRequest,
     HttpRequest,
     PayloadTooLarge,
-    Response,
+    HttpResponse,
     StreamingUnsupported,
 )
 
@@ -31,11 +31,11 @@ def test_httprequest_stays_a_faithful_http_request_object() -> None:
 
 
 def test_response_stays_a_faithful_http_response_object() -> None:
-    params = inspect.signature(Response.__init__).parameters
+    params = inspect.signature(HttpResponse.__init__).parameters
     assert {"status_code", "body", "headers"} <= set(params)
     assert params["status_code"].annotation in ("int", int)
     assert params["body"].annotation in ("bytes", bytes), "response body must stay opaque bytes, so any Content-Type is expressible"
-    resp = Response(204, b"")
+    resp = HttpResponse(204, b"")
     assert {"status_code", "body", "headers"} <= set(vars(resp))
     assert resp.status_code == 204
     assert isinstance(resp.body, bytes)
@@ -52,26 +52,26 @@ def test_a_wire_record_refuses_rewriting_after_construction() -> None:
 
 
 def test_wire_records_regained_value_equality() -> None:
-    assert Response(204, b"") == Response(204, b"")
-    assert Response(204, b"") != Response(200, b"")
-    assert Response(204, b"a") != Response(204, b"b")
-    assert Response(204, b"", {"X-A": "1"}) != Response(204, b"")
+    assert HttpResponse(204, b"") == HttpResponse(204, b"")
+    assert HttpResponse(204, b"") != HttpResponse(200, b"")
+    assert HttpResponse(204, b"a") != HttpResponse(204, b"b")
+    assert HttpResponse(204, b"", {"X-A": "1"}) != HttpResponse(204, b"")
 
 
 def test_response_json_serializes_to_bytes_and_owns_its_content_type() -> None:
-    resp = Response.json(200, {"a": 1})
+    resp = HttpResponse.json(200, {"a": 1})
     assert isinstance(resp.body, bytes)
     assert resp.body == b'{"a": 1}'
     assert resp.headers == {"Content-Type": "application/json"}
 
 
 def test_response_json_merges_extra_headers_without_dropping_content_type() -> None:
-    resp = Response.json(200, {"a": 1}, {"Cache-Control": "no-store"})
+    resp = HttpResponse.json(200, {"a": 1}, {"Cache-Control": "no-store"})
     assert resp.headers == {"Content-Type": "application/json", "Cache-Control": "no-store"}
 
 
 def test_a_redirect_is_an_empty_body_plus_location() -> None:
-    resp = Response.redirect("https://ok.example/x")
+    resp = HttpResponse.redirect("https://ok.example/x")
     assert resp.status_code == 302
     assert resp.body == b""
     assert resp.headers == {"Location": "https://ok.example/x"}
@@ -149,20 +149,20 @@ def test_any_transfer_encoding_refuses_the_body_not_only_chunked() -> None:
 
 def test_a_redirect_target_may_not_smuggle_a_header() -> None:
     with pytest.raises(BadRequest):
-        Response.redirect("https://ok.example/x\r\nSet-Cookie: a=b")
+        HttpResponse.redirect("https://ok.example/x\r\nSet-Cookie: a=b")
 
 
 def test_a_caller_supplied_content_type_replaces_rather_than_duplicates() -> None:
-    resp = Response.json(200, {"a": 1}, {"content-type": "application/problem+json"})
+    resp = HttpResponse.json(200, {"a": 1}, {"content-type": "application/problem+json"})
     assert resp.headers == {"content-type": "application/problem+json"}
 
 
 def test_respond_maps_each_failure_class_to_a_problem_document() -> None:
-    def raising(exc: Exception) -> Response:
-        def run() -> Response:
+    def raising(exc: Exception) -> HttpResponse:
+        def run() -> HttpResponse:
             raise exc
 
-        return Response.respond(run)
+        return HttpResponse.respond(run)
 
     assert raising(BadRequest("bad")).status_code == 400
     assert raising(PayloadTooLarge("big")).status_code == 413
@@ -173,10 +173,10 @@ def test_respond_maps_each_failure_class_to_a_problem_document() -> None:
 
 
 def test_respond_never_leaks_internals_on_the_unexpected_path() -> None:
-    def run() -> Response:
+    def run() -> HttpResponse:
         raise RuntimeError("secret stack detail")
 
-    resp = Response.respond(run)
+    resp = HttpResponse.respond(run)
     assert resp.status_code == 500
     assert b"secret" not in resp.body
     assert resp.json_body() == {"type": "/problems/internal", "detail": "unexpected error"}
