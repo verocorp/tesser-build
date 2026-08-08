@@ -243,6 +243,11 @@ class Module(ts.Entity):
     def class_defs(self) -> tuple[ast.ClassDef, ...]:
         return tuple(self._classes.values())
 
+    def bound_names(self) -> tuple[tuple[str, str, str], ...]:
+        return tuple(
+            (local, target, original) for local, (target, original) in self._imported.items()
+        )
+
     def resolve(self, node: ast.expr) -> tuple[str, str] | None:
         if isinstance(node, ast.Attribute) and isinstance(node.value, (ast.Name, ast.Attribute)):
             package = self._package_aliases.get(ast.unparse(node.value))
@@ -1160,6 +1165,14 @@ class Codebase(ts.AggregateRoot):
                             blocks[key] = blocks[base_key]
                             changed = True
                             break
+                for local, target, original in module.bound_names():
+                    key = (module.name(), local)
+                    if key in blocks:
+                        continue
+                    source = blocks.get((target, original))
+                    if source is not None:
+                        blocks[key] = source
+                        changed = True
         return blocks
 
     def _signature_violations(
