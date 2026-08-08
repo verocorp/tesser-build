@@ -24,6 +24,15 @@ class Tool(ts.Record):
         }
 
 
+class ToolCall(ts.Request):
+
+    def __init__(self, name: str, arguments: Mapping[str, object]) -> None:
+        super().__init__(name=name, arguments=copy.deepcopy(dict(arguments)))
+
+    name: str
+    arguments: Mapping[str, object]
+
+
 class ToolTurn(ts.Response):
 
     def __init__(self, reply: str, tools: tuple[Tool, ...]) -> None:
@@ -35,7 +44,7 @@ class ToolTurn(ts.Response):
 
 class ToolEndpoint(ts.Port, Protocol):
 
-    def __call__(self, raw_arguments: Mapping[str, object], /) -> ToolTurn: ...
+    def __call__(self, call: ToolCall, /) -> ToolTurn: ...
 
 
 class Route(ts.Record):

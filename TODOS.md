@@ -231,7 +231,11 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `__call__` parameter/return positions — and satisfy totality without
   ever committing to request vs response. Rule whether those positions
   require a directed kind, or record that the direction kinds are
-  advisory and Record is the general case.
+  advisory and Record is the general case. Narrowed 2026-08-08: voicewire
+  now declares its inbound message (`ToolCall(ts.Request)`, name + frozen
+  arguments; endpoints are `(ToolCall) -> ToolTurn` like HTTP and CLI),
+  so no in-tree wire module leaves a message direction-less anymore — the
+  rule question is whether sigcheck should require that.
   (g) **A wire module is the least-governed home in the tree** (adversarial
   2026-08-07, verified): no import allowlist (contrast CORE_STDLIB) — a
   wire module importing subprocess/boto3/tests gets zero findings, so

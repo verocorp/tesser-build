@@ -56,25 +56,25 @@ class LlmToolHandler(ts.Handler):
     def status(self) -> voicewire.ToolTurn:
         return self._turn(self._client.status(client.StatusRequest(booking_id=self._booking_id)))
 
-    def provide_name(self, raw_arguments: Mapping[str, object], /) -> voicewire.ToolTurn:
+    def provide_name(self, call: voicewire.ToolCall, /) -> voicewire.ToolTurn:
         return self._turn(
             self._client.provide_name(
                 client.ProvideNameRequest(
-                    booking_id=self._booking_id, name=_text(raw_arguments, "name")
+                    booking_id=self._booking_id, name=_text(call.arguments, "name")
                 )
             )
         )
 
-    def choose_slot(self, raw_arguments: Mapping[str, object], /) -> voicewire.ToolTurn:
+    def choose_slot(self, call: voicewire.ToolCall, /) -> voicewire.ToolTurn:
         return self._turn(
             self._client.choose_slot(
                 client.ChooseSlotRequest(
-                    booking_id=self._booking_id, slot=_text(raw_arguments, "slot")
+                    booking_id=self._booking_id, slot=_text(call.arguments, "slot")
                 )
             )
         )
 
-    def confirm(self, _raw_arguments: Mapping[str, object], /) -> voicewire.ToolTurn:
+    def confirm(self, _call: voicewire.ToolCall, /) -> voicewire.ToolTurn:
         return self._turn(
             self._client.confirm(client.ConfirmBookingRequest(booking_id=self._booking_id))
         )

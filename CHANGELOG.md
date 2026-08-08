@@ -48,6 +48,13 @@ and the checkers pick. Nothing here was decided in prose first.
   readers. The DTO-purity objection dissolves on the package-scoped kind
   grammar: `ts.srv.Request`/`Response` are distinct kinds from the context
   DTOs, which keep carrying data and nothing else.
+- **The LLM tool call gets its request record.** `voicewire.ToolCall`
+  (`ts.Request`: tool name + arguments, deep-copied at construction like
+  `Tool.parameters`) replaces the bare `Mapping[str, object]` the voice
+  host used to hand across the boundary — endpoints are now
+  `(ToolCall) -> ToolTurn`, the exact shape of their HTTP and CLI
+  siblings, and the handler reads arguments off a frozen record instead
+  of livekit's live dict.
 - **One binding table replaces three parallel chains.** `LlmToolHandler`
   keyed tool names in `TOOLS_FOR_STEP`, a `dispatch` if/elif, and a
   `_schema` if/elif — four hand-coordinated edit sites per tool. Dispatch

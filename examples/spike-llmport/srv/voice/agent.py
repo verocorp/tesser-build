@@ -43,7 +43,7 @@ class ToolAgent(Agent, ts.Host):
                 if route is None:
                     raise ToolError(f"unknown tool {name!r}")
                 try:
-                    turn = route.endpoint(raw_arguments)
+                    turn = route.endpoint(voicewire.ToolCall(name, raw_arguments))
                 except ValueError as err:
                     try:
                         await self._rebind(self._surface.status())
