@@ -269,7 +269,8 @@ def test_non_context_module_and_nonempty_init_are_flagged(tmp_path: Path) -> Non
     write_module(tmp_path, "app/__init__.py", "X = 1\n")
     findings = check_tree(tmp_path)
     assert any(
-        "app.util" in f and "a context holds only domain, application, client, adapters, and wiring modules" in f
+        "app.util" in f
+        and "a context holds only domain, application, client, adapters, wiring, and tests modules" in f
         for f in findings
     )
     assert any("app" in f and "a context __init__ is empty" in f for f in findings)
@@ -481,6 +482,112 @@ def test_domain_field_rules_are_flagged(tmp_path: Path) -> None:
         for f in findings
     )
     assert any("WireRequest.validate" in f and "a DTO carries data and nothing else" in f for f in findings)
+
+
+def test_a_test_reaches_only_what_its_placement_allows(tmp_path: Path) -> None:
+    """Placement IS the tier — the same import walker decides both.
+
+    A test inside domain/ inherits domain's reach, so the isolation tier stops
+    being convention-plus-discipline and becomes checkable structure. Before
+    this rule a test module was matched on its NAME before its LOCATION was
+    ever considered, so a test in domain/ could import anything.
+    """
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "far/domain/test_thing.py",
+        "import tesser.testing as ts\n"
+        "import far.client.client as client\n"
+        "import app.client.client as foreign\n"
+        "def test_x() -> None:\n"
+        "    assert True\n",
+    )
+    write_module(
+        tmp_path,
+        "far/domain/thing.py",
+        "import tesser.domain as ts\n"
+        "class Tag(ts.ValueObject):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        object.__setattr__(self, '_text', text)\n",
+    )
+    write_module(
+        tmp_path,
+        "far/client/client.py",
+        "import tesser.context as ts\n"
+        "class Client(ts.Client):\n"
+        "    ...\n",
+    )
+    write_module(tmp_path, "far/domain/__init__.py", "")
+    write_module(tmp_path, "far/client/__init__.py", "")
+    findings = check_tree(tmp_path)
+    assert any(
+        "far.domain.test_thing:2 imports far.client.client, but a test placed in domain "
+        "reaches only domain of its own context; "
+        "a test reaches only what its placement allows" in f
+        for f in findings
+    )
+    assert any(
+        "far.domain.test_thing:3 imports app.client.client, but a test placed in domain "
+        "reaches no neighbouring context; "
+        "a test reaches only what its placement allows" in f
+        for f in findings
+    )
+
+
+def test_a_context_tier_test_reaches_its_whole_context_and_a_neighbours_application(
+    tmp_path: Path,
+) -> None:
+    """The row that keeps "real neighbour, faked ports" legal.
+
+    The sanctioned cross-context test wires the REAL neighbour service with the
+    neighbour's own ports faked, which needs the neighbour's APPLICATION, not
+    just its client. A clients-only row would ban it and force a hand-written
+    fake client instead — reintroducing the drift the pattern removes, since
+    nothing proves a fake client still matches the real service.
+    """
+    conforming_tree(tmp_path)
+    write_module(tmp_path, "near/tests/__init__.py", "")
+    write_module(
+        tmp_path,
+        "near/domain/thing.py",
+        "import tesser.domain as ts\n"
+        "class Tag(ts.ValueObject):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        object.__setattr__(self, '_text', text)\n",
+    )
+    write_module(
+        tmp_path,
+        "near/client/client.py",
+        "import tesser.context as ts\n"
+        "class Client(ts.Client):\n"
+        "    ...\n",
+    )
+    write_module(tmp_path, "near/domain/__init__.py", "")
+    write_module(tmp_path, "near/client/__init__.py", "")
+    write_module(
+        tmp_path,
+        "near/tests/test_wiring.py",
+        "import tesser.testing as ts\n"
+        "import near.domain.thing as thing\n"
+        "import app.application.service as neighbour\n"
+        "def test_x() -> None:\n"
+        "    assert True\n",
+    )
+    assert not any("near.tests.test_wiring" in f for f in check_tree(tmp_path))
+
+    write_module(tmp_path, "near/tests/__init__.py", "X = 1\n")
+    assert any(
+        "near.tests __init__ declares code at line 1; a context tests __init__ is empty" in f
+        for f in check_tree(tmp_path)
+    )
+
+    write_module(tmp_path, "near/tests/__init__.py", "")
+    write_module(tmp_path, "near/tests/helpers.py", "VALUE = 1\n")
+    assert any(
+        "near.tests.helpers is neither a test module nor conftest; "
+        "a context tests package holds only test modules and conftest" in f
+        for f in check_tree(tmp_path)
+    )
 
 
 def test_a_role_must_be_a_package(tmp_path: Path) -> None:
