@@ -93,13 +93,38 @@ go test -bench=. -benchmem ./rationale/ # the honest cost (collection-VO copy ta
 go vet ./... && gofmt -l .             # both must be clean
 ```
 
-The Python half is not covered by `go test`. Run it too:
+The Python half is not covered by `go test`. **`scripts/verify` runs every
+Python gate CI runs** — the same commands, from the same definitions, because
+the CI jobs call this script rather than inlining their own copies. If it is
+green, that half of CI is green.
 
 ```
-(cd tessercheck-py && mypy && pytest -q) # the TB0* checks + the fixture meta-test
-python3 roadmap/generate.py --check      # ROADMAP.md is generated — never hand-edit it
-(cd roadmap && pytest tests -q)          # the generator's own suite
+python3 -m venv .venv && source .venv/bin/activate
+scripts/install-dev                      # every tree's requirements-dev.txt
+scripts/verify                           # all nine Python trees
+scripts/verify python-app spike-shells   # or just the ones you touched
 ```
+
+Two things to know:
+
+- **`scripts/verify` covers more than the tree you are editing.** The four
+  `tessercheck` CLI gates run the *shipped* analyzer over `examples/python`,
+  `examples/python-app`, `examples/serdepy`, and `examples/errorspy`, so a
+  layout change in an example can break the analyzer without touching a file
+  under `tessercheck-py/`. That is not hypothetical — it is how PR #56 failed.
+- **`roadmap` is not in it.** `generate.py --check` and 2 of its 32 tests shell
+  out to `go run ./cmd/analyzers-json`, so it is a Go/Python hybrid, not a
+  Python tree. It stays a workflow job:
+
+```
+python3 roadmap/generate.py --check      # ROADMAP.md is generated — never hand-edit it
+(cd roadmap && pytest tests -q)          # the generator's own suite (needs Go)
+```
+
+The python-app sigcheck gate is a **ratchet**, not a zero-findings check.
+`scripts/sigcheck-ratchet --regenerate` rewrites the accepted-debt baseline
+after you fix findings; review its diff, since the baseline is
+branch-controlled.
 
 ## Git & shipping
 
