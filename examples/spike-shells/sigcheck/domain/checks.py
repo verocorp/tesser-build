@@ -112,6 +112,17 @@ SAME_CONTEXT_IMPORTS: Final[dict[str, tuple[str, ...]]] = {
 
 TESTS_ROLE: Final[str] = "tests"
 
+# `eval_` is the one path-visible special category: a sampled test that calls a
+# real model, so it is neither free nor deterministic and CI selects it by name.
+# A gateway is its ONLY home. Dropping context-tier evals was safe rather than
+# free — the argument for a through-the-service eval was closing the
+# input-assembly drift gap, and that gap is closed structurally only while
+# schema and prompt assembly stay single-sourced at the edge. If anyone ever
+# hand-builds a prompt inside an eval, the tier deleted here was the safety net.
+EVAL_PREFIX: Final[str] = "eval_"
+
+EVAL_HOME: Final[str] = "gateways"
+
 # A test's tier is its PLACEMENT. A test inside domain/ may reach only domain,
 # and that IS the isolation tier — the same import walker that governs
 # production code decides it, so the tier stops being convention plus
@@ -363,6 +374,8 @@ class Codebase(ts.AggregateRoot):
             return ()
         if basename.startswith("test_"):
             return self._test_module_violations(module, blocks, contexts)
+        if basename.startswith(EVAL_PREFIX):
+            return self._eval_module_violations(module, blocks, contexts)
         if parts[0] in APP_PACKAGES:
             if module.is_package():
                 return self._app_init_violations(module)
@@ -993,6 +1006,44 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
         return tuple(found)
+
+    def _eval_module_violations(
+        self,
+        module: Module,
+        blocks: dict[tuple[str, str], str],
+        contexts: frozenset[str],
+    ) -> tuple[Violation, ...]:
+        """An eval is a sampled test, and a gateway is its only home.
+
+        Both gateway forms take one: flat beside the gateway
+        (gateways/eval_llm.py) and nested under an escalated one
+        (gateways/<vendor>/evals/eval_*.py). The eval_ prefix alone carries the
+        category, so evals follow the same flat-by-default escalation as
+        everything else.
+
+        Contents are the test-module ruleset — an eval holds tests, @ts.helper
+        builders, and @ts.fake doubles — and its reach is the gateway tier's,
+        because that is where it lives.
+        """
+        parts = module.name().split(".")
+        at_home = (
+            len(parts) >= 4
+            and parts[0] in contexts
+            and parts[1] == "adapters"
+            and EVAL_HOME in parts[2:-1]
+        )
+        if not at_home:
+            return (
+                Violation(
+                    f"{module.name()} is an eval outside a gateway; "
+                    "an eval lives only in a gateway, the one place a sampled real-model "
+                    "call is honest"
+                ),
+            )
+        # No placement call here: _test_tier already resolves an eval under
+        # gateways/ (flat or nested) to the gateways tier, so
+        # _test_module_violations applies the row. Adding it again double-reports.
+        return self._test_module_violations(module, blocks, contexts)
 
     def _test_module_violations(
         self,

@@ -484,6 +484,41 @@ def test_domain_field_rules_are_flagged(tmp_path: Path) -> None:
     assert any("WireRequest.validate" in f and "a DTO carries data and nothing else" in f for f in findings)
 
 
+def test_an_eval_lives_only_in_a_gateway(tmp_path: Path) -> None:
+    """`eval_` is the one path-visible special category, and gateways own it.
+
+    Dropping context-tier evals was safe rather than free: the argument for a
+    through-the-service eval was closing the input-assembly drift gap, and that
+    gap is closed structurally only while schema and prompt assembly stay
+    single-sourced at the edge. Both gateway forms take an eval — flat beside
+    the gateway, and nested under an escalated one.
+    """
+    conforming_tree(tmp_path)
+    body = "import tesser.testing as ts\ndef test_model_picks_a_tool() -> None:\n    assert True\n"
+    write_module(tmp_path, "app/adapters/eval_flat.py", body)
+    write_module(tmp_path, "app/tests/__init__.py", "")
+    write_module(tmp_path, "app/tests/eval_tier.py", body)
+    write_module(tmp_path, "app/domain/eval_role.py", body)
+    findings = check_tree(tmp_path)
+    for outside in ("app.adapters.eval_flat", "app.tests.eval_tier", "app.domain.eval_role"):
+        assert any(
+            f"{outside} is an eval outside a gateway; an eval lives only in a gateway, "
+            "the one place a sampled real-model call is honest" in f
+            for f in findings
+        ), outside
+
+    # Both gateway forms are its home: flat beside the gateway, and nested
+    # under one that escalated.
+    write_module(tmp_path, "app/adapters/gateways/__init__.py", "")
+    write_module(tmp_path, "app/adapters/gateways/eval_llm.py", body)
+    write_module(tmp_path, "app/adapters/gateways/llm/__init__.py", "")
+    write_module(tmp_path, "app/adapters/gateways/llm/evals/__init__.py", "")
+    write_module(tmp_path, "app/adapters/gateways/llm/evals/eval_tools.py", body)
+    housed = check_tree(tmp_path)
+    assert not any("eval_llm is an eval outside a gateway" in f for f in housed)
+    assert not any("eval_tools is an eval outside a gateway" in f for f in housed)
+
+
 def test_a_test_reaches_only_what_its_placement_allows(tmp_path: Path) -> None:
     """Placement IS the tier — the same import walker decides both.
 
