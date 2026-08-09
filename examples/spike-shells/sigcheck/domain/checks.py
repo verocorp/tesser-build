@@ -110,6 +110,42 @@ SAME_CONTEXT_IMPORTS: Final[dict[str, tuple[str, ...]]] = {
     "wiring": ("application", "adapters", "client"),
 }
 
+TESTS_ROLE: Final[str] = "tests"
+
+# A test's tier is its PLACEMENT. A test inside domain/ may reach only domain,
+# and that IS the isolation tier — the same import walker that governs
+# production code decides it, so the tier stops being convention plus
+# discipline. The rows are evidence-based, read off real test trees rather than
+# derived from the production matrix: an application isolation test fakes every
+# port and asserts on client DTOs, so it needs application and client but not
+# domain.
+TEST_TIER_SAME_CONTEXT: Final[dict[str, tuple[str, ...]]] = {
+    "domain": ("domain",),
+    "application": ("application", "client"),
+    "handlers": ("adapters", "application", "client"),
+    "gateways": ("adapters", "application"),
+    TESTS_ROLE: ROLES,
+}
+
+# Which tiers may reach a neighbouring context, and through what.
+#
+# The context tier needs the neighbour's APPLICATION, not just its client. The
+# sanctioned cross-context test wires the REAL neighbour service with the
+# neighbour's own ports faked — NoteGateway(NoteService(DroppedNotes())) — which
+# needs the service class and its port protocol, both of which live in
+# application. A clients-only row would ban that and force a hand-written fake
+# client instead, reintroducing the drift the pattern exists to remove: nothing
+# proves a fake client still matches the real service.
+#
+# The gateway tier gets the neighbour's client because production gateways
+# already may ("a context reaches another context only through its client, and
+# only from gateways and wiring") — a gateway's sibling test has to construct
+# what the gateway takes.
+TEST_TIER_FOREIGN: Final[dict[str, tuple[str, ...]]] = {
+    "gateways": ("client",),
+    TESTS_ROLE: ("application", "client"),
+}
+
 PRIMITIVES: Final[frozenset[str]] = frozenset({"str", "int", "float", "bool"})
 
 TOOLING_MODULES: Final[frozenset[str]] = frozenset({"rules"})
@@ -348,6 +384,20 @@ class Codebase(ts.AggregateRoot):
             return self._context_init_violations(module)
         if basename == "__main__":
             return ()
+        if len(parts) >= 2 and parts[1] == TESTS_ROLE:
+            # The context tier. A context may hold a tests package alongside its
+            # five roles: the multi-boundary test constructs adapters and wiring,
+            # not just one role, so it needs a home whose implied import scope it
+            # does not immediately violate. Its members are test modules, reached
+            # by the test branch above; anything else is a finding.
+            if module.is_package():
+                return self._context_tests_init_violations(module)
+            return (
+                Violation(
+                    f"{module.name()} is neither a test module nor conftest; "
+                    "a context tests package holds only test modules and conftest"
+                ),
+            )
         if len(parts) >= 2 and parts[1] in ROLES:
             if module.is_package():
                 return self._role_init_violations(module)
@@ -363,7 +413,7 @@ class Codebase(ts.AggregateRoot):
         return (
             Violation(
                 f"{module.name()} is not a context module; "
-                "a context holds only domain, application, client, adapters, and wiring modules"
+                "a context holds only domain, application, client, adapters, wiring, and tests modules"
             ),
         )
 
@@ -405,6 +455,15 @@ class Codebase(ts.AggregateRoot):
                 f"{module.name()} is neither a test module nor conftest; "
                 "a tests package holds only test modules and conftest"
             ),
+        )
+
+    def _context_tests_init_violations(self, module: Module) -> tuple[Violation, ...]:
+        return tuple(
+            Violation(
+                f"{module.name()} __init__ declares code at line {stmt.lineno}; "
+                "a context tests __init__ is empty"
+            )
+            for stmt in module.body()
         )
 
     def _role_init_violations(self, module: Module) -> tuple[Violation, ...]:
@@ -866,6 +925,75 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
+    @staticmethod
+    def _test_tier(module: Module, contexts: frozenset[str]) -> tuple[str, str] | None:
+        """The (context, tier) a test module's PLACEMENT puts it in.
+
+        None for the app tier — a top-level tests package, which is free: what
+        it wires is everything, and which counterparts are real on a given run
+        is the environment's property, not the tree's.
+        """
+        parts = module.name().split(".")
+        if len(parts) < 3 or parts[0] not in contexts:
+            return None
+        if parts[1] == TESTS_ROLE:
+            return (parts[0], TESTS_ROLE)
+        if parts[1] not in ROLES:
+            return None
+        if parts[1] == "adapters":
+            # adapters/handlers/test_*.py and adapters/gateways/test_*.py are
+            # different tiers: an inbound handler is a total transform testable
+            # with no transport, an outbound gateway is meaningless without its
+            # real counterpart.
+            if len(parts) >= 4 and parts[2] in ("handlers", "gateways"):
+                return (parts[0], parts[2])
+            return None
+        return (parts[0], parts[1])
+
+    def _test_placement_violations(
+        self,
+        module: Module,
+        context: str,
+        tier: str,
+        contexts: frozenset[str],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        same = TEST_TIER_SAME_CONTEXT[tier]
+        foreign = TEST_TIER_FOREIGN.get(tier, ())
+        own_roles = ", ".join(same)
+        foreign_roles = ", ".join(foreign)
+        for target, lineno, _, _ in module.import_edges():
+            pieces = target.split(".")
+            if pieces[0] == "tesser" or pieces[0] not in contexts:
+                continue
+            tail = pieces[1] if len(pieces) > 1 else ""
+            if pieces[0] == context:
+                if tail not in same:
+                    found.append(
+                        Violation(
+                            f"{module.name()}:{lineno} imports {target}, but a test placed in "
+                            f"{tier} reaches only {own_roles} of its own context; "
+                            "a test reaches only what its placement allows"
+                        )
+                    )
+            elif not foreign:
+                found.append(
+                    Violation(
+                        f"{module.name()}:{lineno} imports {target}, but a test placed in "
+                        f"{tier} reaches no neighbouring context; "
+                        "a test reaches only what its placement allows"
+                    )
+                )
+            elif tail not in foreign:
+                found.append(
+                    Violation(
+                        f"{module.name()}:{lineno} imports {target}, but a test placed in "
+                        f"{tier} reaches only {foreign_roles} of a neighbouring context; "
+                        "a test reaches only what its placement allows"
+                    )
+                )
+        return tuple(found)
+
     def _test_module_violations(
         self,
         module: Module,
@@ -874,6 +1002,9 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         found.extend(self._stray_import_violations(module))
+        placement = self._test_tier(module, contexts)
+        if placement is not None:
+            found.extend(self._test_placement_violations(module, placement[0], placement[1], contexts))
         for target, lineno, is_member, has_alias in module.import_edges():
             if target.split(".")[0] in contexts:
                 found.extend(self._form_violations(module, target, lineno, is_member, has_alias))
