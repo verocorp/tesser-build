@@ -351,6 +351,12 @@ class Codebase(ts.AggregateRoot):
         if len(parts) >= 2 and parts[1] in ROLES:
             if module.is_package():
                 return self._role_init_violations(module)
+            if len(parts) == 2:
+                return (
+                    Violation(
+                        f"{module.name()} is a role module; a role is a package, never a module"
+                    ),
+                )
             return self._role_module_violations(module, parts[1], blocks) + self._import_violations(
                 module, parts[0], parts[1], contexts, blocks
             )

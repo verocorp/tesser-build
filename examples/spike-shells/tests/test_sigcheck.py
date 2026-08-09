@@ -44,7 +44,7 @@ def test_arity_and_missing_annotations_are_flagged(tmp_path: Path) -> None:
         tmp_path,
         "app/bad.py",
         "import tesser.application as ts\n"
-        "from app.client import AskRequest, AskResponse\n"
+        "from app.client.client import AskRequest, AskResponse\n"
         "class BadService(ts.ApplicationService):\n"
         "    def two(self, a: AskRequest, b: AskRequest) -> AskResponse:\n"
         "        return AskResponse(text='')\n"
@@ -65,7 +65,7 @@ def test_aggregate_constructor_violations_are_flagged(tmp_path: Path) -> None:
         tmp_path,
         "app/badroots.py",
         "import tesser.domain as ts\n"
-        "from app.domain import ThingSpec\n"
+        "from app.domain.thing import ThingSpec\n"
         "class Primitive(ts.AggregateRoot):\n"
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n"
@@ -99,7 +99,7 @@ def test_service_body_rules_are_flagged(tmp_path: Path) -> None:
         tmp_path,
         "app/busy.py",
         "import tesser.application as ts\n"
-        "from app.client import AskRequest, AskResponse\n"
+        "from app.client.client import AskRequest, AskResponse\n"
         "class BusyService(ts.ApplicationService):\n"
         "    def long(self, request: AskRequest) -> AskResponse:\n"
         + "".join(f"        step_{i} = request.text\n" for i in range(11))
@@ -148,7 +148,7 @@ def test_service_delegation_is_flagged(tmp_path: Path) -> None:
         tmp_path,
         "app/helped.py",
         "import tesser.application as ts\n"
-        "from app.client import AskRequest, AskResponse\n"
+        "from app.client.client import AskRequest, AskResponse\n"
         "def shape(text: str) -> str:\n"
         "    return text\n"
         "class HelpedService(ts.ApplicationService):\n"
@@ -178,7 +178,7 @@ def test_elif_chain_is_one_level(tmp_path: Path) -> None:
         tmp_path,
         "app/chained.py",
         "import tesser.application as ts\n"
-        "from app.client import AskRequest, AskResponse\n"
+        "from app.client.client import AskRequest, AskResponse\n"
         "class ChainService(ts.ApplicationService):\n"
         "    def pick(self, request: AskRequest) -> AskResponse:\n"
         "        if request.ready():\n"
@@ -196,8 +196,8 @@ def test_indirect_subclass_still_classifies(tmp_path: Path) -> None:
     write_module(
         tmp_path,
         "app/derived.py",
-        "from app.application import AskService\n"
-        "from app.client import AskRequest\n"
+        "from app.application.service import AskService\n"
+        "from app.client.client import AskRequest\n"
         "class DerivedService(AskService):\n"
         "    def again(self, request: AskRequest) -> AskRequest:\n"
         "        return request\n",
@@ -213,7 +213,7 @@ def test_indirect_subclass_still_classifies(tmp_path: Path) -> None:
 def test_placement_totality_is_flagged(tmp_path: Path) -> None:
     write_module(
         tmp_path,
-        "plain/domain.py",
+        "plain/domain/thing.py",
         "import tesser.domain as ts\n"
         "import tesser.context as tc\n"
         "class Loose:\n"
@@ -227,9 +227,9 @@ def test_placement_totality_is_flagged(tmp_path: Path) -> None:
         "print('hi')\n",
     )
     findings = check_tree(tmp_path)
-    assert any("plain.domain.Loose" in f and "every context class declares its block" in f for f in findings)
-    assert any("plain.domain.Ask" in f and "a kind lives only in its role module" in f for f in findings)
-    assert any("plain.domain.stray" in f and "a module function declares itself with @ts.function" in f for f in findings)
+    assert any("plain.domain.thing.Loose" in f and "every context class declares its block" in f for f in findings)
+    assert any("plain.domain.thing.Ask" in f and "a kind lives only in its role module" in f for f in findings)
+    assert any("plain.domain.thing.stray" in f and "a module function declares itself with @ts.function" in f for f in findings)
     assert any("a module constant is Final" in f for f in findings)
     assert any(
         "a context module holds only imports, classes, declared functions, and Final constants" in f
@@ -250,7 +250,7 @@ def test_declared_function_and_final_constant_pass(tmp_path: Path) -> None:
     )
     write_module(
         tmp_path,
-        "plain/domain.py",
+        "plain/domain/thing.py",
         "from typing import Final\n"
         "import tesser.domain as ts\n"
         "LIMIT: Final[int] = 3\n"
@@ -259,8 +259,8 @@ def test_declared_function_and_final_constant_pass(tmp_path: Path) -> None:
         "    return None\n",
     )
     findings = check_tree(tmp_path)
-    assert not any("plain.domain" in f and "@ts.function" in f for f in findings)
-    assert not any("plain.domain" in f and "a module constant is Final" in f for f in findings)
+    assert not any("plain.domain.thing" in f and "@ts.function" in f for f in findings)
+    assert not any("plain.domain.thing" in f and "a module constant is Final" in f for f in findings)
 
 
 def test_non_context_module_and_nonempty_init_are_flagged(tmp_path: Path) -> None:
@@ -279,7 +279,7 @@ def test_import_matrix_is_flagged(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
         tmp_path,
-        "two/client.py",
+        "two/client/client.py",
         "import tesser.context as ts\n"
         "class PingRequest(ts.Request):\n"
         "    def __init__(self, text: str) -> None:\n"
@@ -287,39 +287,39 @@ def test_import_matrix_is_flagged(tmp_path: Path) -> None:
     )
     write_module(
         tmp_path,
-        "two/adapters.py",
+        "two/adapters/gateways.py",
         "import tesser.adapters as ts\n"
-        "import app.client as app_client\n"
+        "import app.client.client as app_client\n"
         "class Bridge(ts.Gateway):\n"
         "    pass\n",
     )
     write_module(
         tmp_path,
-        "two/domain.py",
+        "two/domain/thing.py",
         "import tesser.domain as ts\n"
-        "import two.client\n"
+        "import two.client.client\n"
         "class TwoSpec(ts.Spec):\n"
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n",
     )
     write_module(
         tmp_path,
-        "two/application.py",
+        "two/application/service.py",
         "import tesser.application as ts\n"
-        "import app.domain\n",
+        "import app.domain.thing\n",
     )
     findings = check_tree(tmp_path)
     assert any(
-        "two.domain" in f
+        "two.domain.thing" in f
         and "the same-context matrix is a role to itself, application to domain and client, adapters to application, wiring to application, adapters, and client" in f
         for f in findings
     )
     assert any(
-        "two.application" in f
+        "two.application.service" in f
         and "a context reaches another context only through its client, and only from gateways and wiring" in f
         for f in findings
     )
-    assert not any("two.adapters" in f and "imports app.client" in f for f in findings)
+    assert not any("two.adapters.gateways" in f and "imports app.client.client" in f for f in findings)
 
 
 def test_test_module_totality_is_flagged(tmp_path: Path) -> None:
@@ -356,7 +356,7 @@ def test_helper_rules_are_flagged(tmp_path: Path) -> None:
         tmp_path,
         "app/test_helpers.py",
         "import tesser.testing as th\n"
-        "from app.domain import Thing, ThingSpec\n"
+        "from app.domain.thing import Thing, ThingSpec\n"
         "@th.helper\n"
         "def bad_builder(thing: Thing, count: int) -> Thing:\n"
         "    if count:\n"
@@ -382,7 +382,7 @@ def test_service_dependencies_must_be_ports(tmp_path: Path) -> None:
         tmp_path,
         "app/extra.py",
         "import tesser.application as ts\n"
-        "from app.client import AskRequest, AskResponse\n"
+        "from app.client.client import AskRequest, AskResponse\n"
         "class NeedyService(ts.ApplicationService):\n"
         "    def __init__(self, db: str) -> None:\n"
         "        self._db = db\n"
@@ -425,7 +425,7 @@ def test_records_never_carry_domain_objects(tmp_path: Path) -> None:
         "from typing import Protocol\n"
         "import tesser.adapters as ta\n"
         "import tesser.application as tap\n"
-        "from app.domain import Thing\n"
+        "from app.domain.thing import Thing\n"
         "class LoadingRepo(ta.Repository):\n"
         "    def load(self, key: str) -> Thing: ...\n"
         "class LoadingPort(tap.Port, Protocol):\n"
@@ -483,6 +483,40 @@ def test_domain_field_rules_are_flagged(tmp_path: Path) -> None:
     assert any("WireRequest.validate" in f and "a DTO carries data and nothing else" in f for f in findings)
 
 
+def test_a_role_must_be_a_package(tmp_path: Path) -> None:
+    """The module form of a role is retired — a role is always a package.
+
+    Placement is what carries a test's tier under the test-organization
+    ruling (a test inside domain/ inherits domain's import rule, and that IS
+    the isolation tier), so a role has to be a directory for sibling tests to
+    have anywhere to live. Both forms being legal is what made that
+    impossible.
+    """
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "flat/domain.py",
+        "import tesser.domain as ts\n"
+        "class Tag(ts.ValueObject):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        object.__setattr__(self, '_text', text)\n",
+    )
+    write_module(
+        tmp_path,
+        "flat/client/client.py",
+        "import tesser.context as ts\n"
+        "class Client(ts.Client):\n"
+        "    ...\n",
+    )
+    write_module(tmp_path, "flat/client/__init__.py", "")
+    findings = check_tree(tmp_path)
+    assert any(
+        "flat.domain is a role module; a role is a package, never a module" in f
+        for f in findings
+    )
+    assert not any("flat.client" in f for f in findings)
+
+
 def test_a_role_may_be_a_package(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
@@ -533,7 +567,7 @@ def test_wiring_is_a_role(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
         tmp_path,
-        "two/client.py",
+        "two/client/client.py",
         "import tesser.context as ts\n"
         "class PingRequest(ts.Request):\n"
         "    def __init__(self, text: str) -> None:\n"
@@ -541,22 +575,22 @@ def test_wiring_is_a_role(tmp_path: Path) -> None:
     )
     write_module(
         tmp_path,
-        "app/wiring.py",
+        "app/wiring/wire.py",
         "import tesser.context as ts\n"
-        "import app.application as application\n"
-        "import app.client as client\n"
-        "import two.client as two_client\n"
-        "import two.domain\n"
+        "import app.application.service as application\n"
+        "import app.client.client as client\n"
+        "import two.client.client as two_client\n"
+        "import two.domain.thing\n"
         "class AskWiring(ts.Wiring):\n"
         "    pass\n",
     )
     findings = check_tree(tmp_path)
-    assert not any("app.wiring" in f and "not a context module" in f for f in findings)
-    assert not any("app.wiring" in f and "imports app.application" in f for f in findings)
-    assert not any("app.wiring" in f and "imports two.client" in f for f in findings)
-    assert not any("app.wiring.AskWiring" in f and "a kind lives only in its role module" in f for f in findings)
+    assert not any("app.wiring.wire" in f and "not a context module" in f for f in findings)
+    assert not any("app.wiring.wire" in f and "imports app.application.service" in f for f in findings)
+    assert not any("app.wiring.wire" in f and "imports two.client.client" in f for f in findings)
+    assert not any("app.wiring.wire.AskWiring" in f and "a kind lives only in its role module" in f for f in findings)
     assert any(
-        "app.wiring" in f and "imports two.domain" in f
+        "app.wiring.wire" in f and "imports two.domain.thing" in f
         and "a context reaches another context only through its client, and only from gateways and wiring" in f
         for f in findings
     )
@@ -566,14 +600,14 @@ def test_srv_and_bootstrap_import_rows(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
         tmp_path,
-        "app/adapters.py",
+        "app/adapters/gateways.py",
         "import tesser.adapters as ts\n"
         "class HttpHandler(ts.Handler):\n"
         "    pass\n",
     )
     write_module(
         tmp_path,
-        "two/client.py",
+        "two/client/client.py",
         "import tesser.context as ts\n"
         "class PingRequest(ts.Request):\n"
         "    def __init__(self, text: str) -> None:\n"
@@ -581,7 +615,7 @@ def test_srv_and_bootstrap_import_rows(tmp_path: Path) -> None:
     )
     write_module(
         tmp_path,
-        "two/adapters.py",
+        "two/adapters/gateways.py",
         "import tesser.adapters as ts\n"
         "class Bridge(ts.Gateway):\n"
         "    pass\n",
@@ -589,39 +623,39 @@ def test_srv_and_bootstrap_import_rows(tmp_path: Path) -> None:
     write_module(
         tmp_path,
         "srv/http.py",
-        "import app.application\n"
-        "import app.adapters as app_adapters\n"
-        "import two.adapters\n"
+        "import app.application.service\n"
+        "import app.adapters.gateways as app_adapters\n"
+        "import two.adapters.gateways\n"
         "import bootstrap.wire\n",
     )
     write_module(
         tmp_path,
         "bootstrap/wire.py",
-        "import app.domain\n"
-        "import app.wiring as wiring\n"
-        "import app.client as app_client\n"
+        "import app.domain.thing\n"
+        "import app.wiring.wire as wiring\n"
+        "import app.client.client as app_client\n"
         "import srv.http\n",
     )
     findings = check_tree(tmp_path)
     assert any(
-        "srv.http" in f and "imports app.application" in f
+        "srv.http" in f and "imports app.application.service" in f
         and "a host reaches a context only through its handlers" in f
         for f in findings
     )
     assert any(
-        "srv.http" in f and "imports two.adapters" in f
+        "srv.http" in f and "imports two.adapters.gateways" in f
         and "a host reaches a context only through its handlers" in f
         for f in findings
     )
-    assert not any("srv.http" in f and "imports app.adapters" in f for f in findings)
+    assert not any("srv.http" in f and "imports app.adapters.gateways" in f for f in findings)
     assert not any("srv.http" in f and "imports bootstrap.wire" in f for f in findings)
     assert any(
-        "bootstrap.wire" in f and "imports app.domain" in f
+        "bootstrap.wire" in f and "imports app.domain.thing" in f
         and "bootstrap builds from wiring, clients, and adapters, never domain or application" in f
         for f in findings
     )
-    assert not any("bootstrap.wire" in f and "imports app.wiring" in f for f in findings)
-    assert not any("bootstrap.wire" in f and "imports app.client" in f for f in findings)
+    assert not any("bootstrap.wire" in f and "imports app.wiring.wire" in f for f in findings)
+    assert not any("bootstrap.wire" in f and "imports app.client.client" in f for f in findings)
     assert any(
         "bootstrap.wire" in f and "imports srv.http" in f
         and "the composition root never imports a host" in f
@@ -633,16 +667,16 @@ def test_only_a_handler_imports_its_own_client(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
         tmp_path,
-        "app/adapters.py",
+        "app/adapters/gateways.py",
         "import tesser.adapters as ts\n"
-        "import app.client as app_client\n"
+        "import app.client.client as app_client\n"
         "class HttpHandler(ts.Handler):\n"
         "    def ask(self, body: str) -> str:\n"
         "        return app_client.AskRequest(text=body).text\n",
     )
     write_module(
         tmp_path,
-        "two/client.py",
+        "two/client/client.py",
         "import tesser.context as ts\n"
         "class PingRequest(ts.Request):\n"
         "    def __init__(self, text: str) -> None:\n"
@@ -650,16 +684,16 @@ def test_only_a_handler_imports_its_own_client(tmp_path: Path) -> None:
     )
     write_module(
         tmp_path,
-        "two/adapters.py",
+        "two/adapters/gateways.py",
         "import tesser.adapters as ts\n"
-        "import two.client\n"
+        "import two.client.client\n"
         "class SneakyGateway(ts.Gateway):\n"
         "    pass\n",
     )
     findings = check_tree(tmp_path)
-    assert not any("app.adapters" in f and "imports app.client" in f for f in findings)
+    assert not any("app.adapters.gateways" in f and "imports app.client.client" in f for f in findings)
     assert any(
-        "two.adapters" in f and "imports two.client" in f
+        "two.adapters.gateways" in f and "imports two.client.client" in f
         and "only a handler imports its own context's client" in f
         for f in findings
     )
@@ -669,7 +703,7 @@ def test_only_a_gateway_reaches_a_foreign_client(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
         tmp_path,
-        "two/client.py",
+        "two/client/client.py",
         "import tesser.context as ts\n"
         "class PingRequest(ts.Request):\n"
         "    def __init__(self, text: str) -> None:\n"
@@ -677,15 +711,15 @@ def test_only_a_gateway_reaches_a_foreign_client(tmp_path: Path) -> None:
     )
     write_module(
         tmp_path,
-        "app/adapters.py",
+        "app/adapters/gateways.py",
         "import tesser.adapters as ts\n"
-        "import two.client\n"
+        "import two.client.client\n"
         "class HttpHandler(ts.Handler):\n"
         "    pass\n",
     )
     findings = check_tree(tmp_path)
     assert any(
-        "app.adapters" in f and "imports two.client" in f
+        "app.adapters.gateways" in f and "imports two.client.client" in f
         and "a context reaches another context only through its client, and only from gateways and wiring" in f
         for f in findings
     )
@@ -695,13 +729,13 @@ def test_role_module_tesser_import_is_exactly_once_as_ts(tmp_path: Path) -> None
     conforming_tree(tmp_path)
     write_module(
         tmp_path,
-        "lone/domain.py",
+        "lone/domain/thing.py",
         "class Bare:\n"
         "    pass\n",
     )
     write_module(
         tmp_path,
-        "noalias/domain.py",
+        "noalias/domain/thing.py",
         "import tesser.domain as td\n"
         "class ThingSpec(td.Spec):\n"
         "    def __init__(self, text: str) -> None:\n"
@@ -709,7 +743,7 @@ def test_role_module_tesser_import_is_exactly_once_as_ts(tmp_path: Path) -> None
     )
     write_module(
         tmp_path,
-        "fromform/domain.py",
+        "fromform/domain/thing.py",
         "from tesser.domain import Spec\n"
         "class OtherSpec(Spec):\n"
         "    def __init__(self, text: str) -> None:\n"
@@ -717,7 +751,7 @@ def test_role_module_tesser_import_is_exactly_once_as_ts(tmp_path: Path) -> None
     )
     write_module(
         tmp_path,
-        "dup/domain.py",
+        "dup/domain/thing.py",
         "import tesser.domain as ts\n"
         "import tesser.domain as ts\n"
         "class DupSpec(ts.Spec):\n"
@@ -726,22 +760,22 @@ def test_role_module_tesser_import_is_exactly_once_as_ts(tmp_path: Path) -> None
     )
     findings = check_tree(tmp_path)
     assert any(
-        "lone.domain never imports tesser.domain; "
+        "lone.domain.thing never imports tesser.domain; "
         "a role module imports its tesser package exactly once, as ts" in f
         for f in findings
     )
     assert any(
-        "noalias.domain:1 imports tesser.domain without the ts alias; "
+        "noalias.domain.thing:1 imports tesser.domain without the ts alias; "
         "a role module imports its tesser package exactly once, as ts" in f
         for f in findings
     )
     assert any(
-        "fromform.domain:1 imports names from tesser.domain; "
+        "fromform.domain.thing:1 imports names from tesser.domain; "
         "a role module imports its tesser package exactly once, as ts" in f
         for f in findings
     )
     assert any(
-        "dup.domain:2 imports tesser.domain again; "
+        "dup.domain.thing:2 imports tesser.domain again; "
         "a role module imports its tesser package exactly once, as ts" in f
         for f in findings
     )
@@ -996,7 +1030,7 @@ def test_pure_core_stdlib_allowlist(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
         tmp_path,
-        "io1/domain.py",
+        "io1/domain/thing.py",
         "import os\n"
         "import datetime\n"
         "import tesser.domain as ts\n"
@@ -1006,7 +1040,7 @@ def test_pure_core_stdlib_allowlist(tmp_path: Path) -> None:
     )
     write_module(
         tmp_path,
-        "io1/client.py",
+        "io1/client/client.py",
         "from __future__ import annotations\n"
         "import datetime\n"
         "import tesser.context as ts\n"
@@ -1016,7 +1050,7 @@ def test_pure_core_stdlib_allowlist(tmp_path: Path) -> None:
     )
     write_module(
         tmp_path,
-        "io1/adapters.py",
+        "io1/adapters/gateways.py",
         "from pathlib import Path\n"
         "import tesser.adapters as ts\n"
         "class DiskRepository(ts.Repository):\n"
@@ -1024,25 +1058,25 @@ def test_pure_core_stdlib_allowlist(tmp_path: Path) -> None:
     )
     findings = check_tree(tmp_path)
     assert any(
-        "io1.domain:1 imports os; domain, client, and application "
+        "io1.domain.thing:1 imports os; domain, client, and application "
         "import only their context, their tesser package, and the pure stdlib" in f
         for f in findings
     )
-    assert not any("io1.domain:2 imports datetime" in f for f in findings)
+    assert not any("io1.domain.thing:2 imports datetime" in f for f in findings)
     assert any(
-        "io1.client:2 imports datetime; domain, client, and application "
+        "io1.client.client:2 imports datetime; domain, client, and application "
         "import only their context, their tesser package, and the pure stdlib" in f
         for f in findings
     )
     assert not any("imports __future__" in f for f in findings)
-    assert not any("io1.adapters" in f and "the pure stdlib" in f for f in findings)
+    assert not any("io1.adapters.gateways" in f and "the pure stdlib" in f for f in findings)
 
 
 def test_context_module_import_form(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
         tmp_path,
-        "form/client.py",
+        "form/client/client.py",
         "import tesser.context as ts\n"
         "class PingRequest(ts.Request):\n"
         "    def __init__(self, text: str) -> None:\n"
@@ -1050,26 +1084,26 @@ def test_context_module_import_form(tmp_path: Path) -> None:
     )
     write_module(
         tmp_path,
-        "form/application.py",
+        "form/application/service.py",
         "import tesser.application as ts\n"
-        "from form.client import PingRequest\n",
+        "from form.client.client import PingRequest\n",
     )
     write_module(
         tmp_path,
-        "form/wiring.py",
+        "form/wiring/wire.py",
         "import tesser.context as ts\n"
-        "import form.application\n"
+        "import form.application.service\n"
         "class PingWiring(ts.Wiring):\n"
         "    pass\n",
     )
     findings = check_tree(tmp_path)
     assert any(
-        "form.application:2 imports names from form.client; "
+        "form.application.service:2 imports names from form.client.client; "
         "a context module is imported as an aliased module, never its members" in f
         for f in findings
     )
     assert any(
-        "form.wiring:2 imports form.application without an alias; "
+        "form.wiring.wire:2 imports form.application.service without an alias; "
         "a context module is imported as an aliased module, never its members" in f
         for f in findings
     )
@@ -1092,7 +1126,7 @@ def test_relative_imports_resolve_against_the_package(tmp_path: Path) -> None:
     )
     write_module(
         tmp_path,
-        "rel/client.py",
+        "rel/client/client.py",
         "import tesser.context as ts\n"
         "class RelRequest(ts.Request):\n"
         "    def __init__(self, text: str) -> None:\n"
@@ -1100,9 +1134,9 @@ def test_relative_imports_resolve_against_the_package(tmp_path: Path) -> None:
     )
     write_module(
         tmp_path,
-        "rel/wiring.py",
+        "rel/wiring/wire.py",
         "import tesser.context as ts\n"
-        "from . import client\n"
+        "from ..client.client import RelRequest\n"
         "class RelWiring(ts.Wiring):\n"
         "    pass\n",
     )
@@ -1130,7 +1164,7 @@ def test_relative_imports_resolve_against_the_package(tmp_path: Path) -> None:
         for f in findings
     )
     assert any(
-        "rel.wiring:2 imports names from rel.client; "
+        "rel.wiring.wire:2 imports names from rel.client.client; "
         "a context module is imported as an aliased module, never its members" in f
         for f in findings
     )
@@ -1148,7 +1182,7 @@ def test_nested_imports_neither_classify_nor_satisfy_presence(tmp_path: Path) ->
     conforming_tree(tmp_path)
     write_module(
         tmp_path,
-        "lazy/domain.py",
+        "lazy/domain/thing.py",
         "class HiddenSpec(ts.Spec):\n"
         "    def __init__(self, text: str) -> None:\n"
         "        import tesser.domain as ts\n"
@@ -1156,7 +1190,7 @@ def test_nested_imports_neither_classify_nor_satisfy_presence(tmp_path: Path) ->
     )
     write_module(
         tmp_path,
-        "lazy2/domain.py",
+        "lazy2/domain/thing.py",
         "import tesser.domain as ts\n"
         "class LazySpec(ts.Spec):\n"
         "    def __init__(self, text: str) -> None:\n"
@@ -1165,7 +1199,7 @@ def test_nested_imports_neither_classify_nor_satisfy_presence(tmp_path: Path) ->
     )
     write_module(
         tmp_path,
-        "lazy3/domain.py",
+        "lazy3/domain/thing.py",
         "import tesser.domain as ts\n"
         "class GoodSpec(ts.Spec):\n"
         "    def __init__(self, text: str) -> None:\n"
@@ -1174,20 +1208,20 @@ def test_nested_imports_neither_classify_nor_satisfy_presence(tmp_path: Path) ->
     )
     findings = check_tree(tmp_path)
     assert any(
-        "lazy.domain never imports tesser.domain; "
+        "lazy.domain.thing never imports tesser.domain; "
         "a role module imports its tesser package exactly once, as ts" in f
         for f in findings
     )
     assert any(
-        "lazy.domain.HiddenSpec" in f and "declares no ts.* base" in f for f in findings
+        "lazy.domain.thing.HiddenSpec" in f and "declares no ts.* base" in f for f in findings
     )
     assert any(
-        "lazy2.domain:4 imports os; domain, client, and application "
+        "lazy2.domain.thing:4 imports os; domain, client, and application "
         "import only their context, their tesser package, and the pure stdlib" in f
         for f in findings
     )
     assert any(
-        "lazy3.domain:4 imports tesser.context inside a function; "
+        "lazy3.domain.thing:4 imports tesser.context inside a function; "
         "a tesser import is module-level" in f
         for f in findings
     )
@@ -1247,7 +1281,7 @@ def test_srv_and_bootstrap_tesser_form_modes(tmp_path: Path) -> None:
     write_module(tmp_path, "bootstrap/__init__.py", "")
     write_module(
         tmp_path,
-        "konst/domain.py",
+        "konst/domain/thing.py",
         "from typing import Final\n"
         "LIMIT: Final[int] = 3\n",
     )
@@ -1284,7 +1318,7 @@ def test_srv_and_bootstrap_tesser_form_modes(tmp_path: Path) -> None:
     )
     assert not any("srv.tfinal" in f for f in findings)
     assert any(
-        "konst.domain never imports tesser.domain; "
+        "konst.domain.thing never imports tesser.domain; "
         "a role module imports its tesser package exactly once, as ts" in f
         for f in findings
     )
@@ -1302,7 +1336,7 @@ def test_protocol_module_totality_is_flagged(tmp_path: Path) -> None:
         "protocol/box.py",
         "import tesser.srv as ts\n"
         "import json\n"
-        "import app.client\n"
+        "import app.client.client\n"
         "import srv.host\n"
         "from typing import Final, Protocol\n"
         "class BoxRequest(ts.Request):\n"
@@ -1345,7 +1379,7 @@ def test_protocol_module_totality_is_flagged(tmp_path: Path) -> None:
     assert not any("protocol.box.fine" in f for f in findings)
     assert not any("protocol.box belongs to no governed package" in f for f in findings)
     assert any(
-        "protocol.box:3 imports app.client; a protocol module is context-generic and imports no context" in f
+        "protocol.box:3 imports app.client.client; a protocol module is context-generic and imports no context" in f
         for f in findings
     )
     assert any(
@@ -1490,7 +1524,7 @@ def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv(tmp_path: P
     conforming_tree(tmp_path)
     write_module(
         tmp_path,
-        "app/adapters.py",
+        "app/adapters/gateways.py",
         "import tesser.adapters as ts\n"
         "import tesser.srv\n"
         "from typing import Protocol\n"
@@ -1519,30 +1553,30 @@ def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv(tmp_path: P
     )
     findings = check_tree(tmp_path)
     assert any(
-        "app.adapters.Sneaky" in f
+        "app.adapters.gateways.Sneaky" in f
         and "is a host; a host lives in srv and a protocol kind in a protocol module, never a context" in f
         for f in findings
     )
     assert any(
-        "app.adapters.WireAsk" in f
+        "app.adapters.gateways.WireAsk" in f
         and "is a protocol request record; a host lives in srv and a protocol kind in a protocol module, "
         "never a context" in f
         for f in findings
     )
     assert any(
-        "app.adapters.WireReply" in f
+        "app.adapters.gateways.WireReply" in f
         and "is a protocol response record; a host lives in srv and a protocol kind in a protocol module, "
         "never a context" in f
         for f in findings
     )
     assert any(
-        "app.adapters.WireDoor" in f
+        "app.adapters.gateways.WireDoor" in f
         and "is a protocol port; a host lives in srv and a protocol kind in a protocol module, "
         "never a context" in f
         for f in findings
     )
     assert any(
-        "app.adapters.WireLabel" in f
+        "app.adapters.gateways.WireLabel" in f
         and "is a protocol record; a host lives in srv and a protocol kind in a protocol module, "
         "never a context" in f
         for f in findings
@@ -1568,13 +1602,13 @@ def test_form_rule_fires_in_tests_and_srv_and_skips_illegal_edges(tmp_path: Path
     write_module(
         tmp_path,
         "app/test_forms.py",
-        "from app.domain import Thing\n"
+        "from app.domain.thing import Thing\n"
         "def test_thing() -> None:\n"
         "    assert Thing\n",
     )
     write_module(
         tmp_path,
-        "app/adapters.py",
+        "app/adapters/gateways.py",
         "import tesser.adapters as ts\n"
         "class HttpHandler(ts.Handler):\n"
         "    pass\n",
@@ -1582,35 +1616,35 @@ def test_form_rule_fires_in_tests_and_srv_and_skips_illegal_edges(tmp_path: Path
     write_module(
         tmp_path,
         "srv/http.py",
-        "from app.adapters import HttpHandler\n",
+        "from app.adapters.gateways import HttpHandler\n",
     )
     write_module(
         tmp_path,
-        "skipctx/domain.py",
+        "skipctx/domain/thing.py",
         "import tesser.domain as ts\n"
-        "from app.client import AskRequest\n"
+        "from app.client.client import AskRequest\n"
         "class SkipSpec(ts.Spec):\n"
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n",
     )
     findings = check_tree(tmp_path)
     assert any(
-        "app.test_forms:1 imports names from app.domain; "
+        "app.test_forms:1 imports names from app.domain.thing; "
         "a context module is imported as an aliased module, never its members" in f
         for f in findings
     )
     assert any(
-        "srv.http:1 imports names from app.adapters; "
+        "srv.http:1 imports names from app.adapters.gateways; "
         "a context module is imported as an aliased module, never its members" in f
         for f in findings
     )
     assert any(
-        "skipctx.domain:2 imports app.client; a context reaches another context "
+        "skipctx.domain.thing:2 imports app.client.client; a context reaches another context "
         "only through its client, and only from gateways and wiring" in f
         for f in findings
     )
     assert not any(
-        "skipctx.domain" in f and "a context module is imported as an aliased module" in f
+        "skipctx.domain.thing" in f and "a context module is imported as an aliased module" in f
         for f in findings
     )
 
@@ -1618,7 +1652,7 @@ def test_form_rule_fires_in_tests_and_srv_and_skips_illegal_edges(tmp_path: Path
 def test_pure_core_allowlist_covers_application_and_domain_future(tmp_path: Path) -> None:
     write_module(
         tmp_path,
-        "io2/domain.py",
+        "io2/domain/thing.py",
         "from __future__ import annotations\n"
         "import tesser.domain as ts\n"
         "class DSpec(ts.Spec):\n"
@@ -1627,7 +1661,7 @@ def test_pure_core_allowlist_covers_application_and_domain_future(tmp_path: Path
     )
     write_module(
         tmp_path,
-        "io2/application.py",
+        "io2/application/service.py",
         "from __future__ import annotations\n"
         "import typing\n"
         "import socket\n"
@@ -1636,21 +1670,21 @@ def test_pure_core_allowlist_covers_application_and_domain_future(tmp_path: Path
         "    pass\n",
     )
     findings = check_tree(tmp_path)
-    assert not any("io2.domain" in f and "the pure stdlib" in f for f in findings)
+    assert not any("io2.domain.thing" in f and "the pure stdlib" in f for f in findings)
     assert any(
-        "io2.application:3 imports socket; domain, client, and application "
+        "io2.application.service:3 imports socket; domain, client, and application "
         "import only their context, their tesser package, and the pure stdlib" in f
         for f in findings
     )
-    assert not any("io2.application:1" in f for f in findings)
-    assert not any("io2.application:2" in f for f in findings)
+    assert not any("io2.application.service:1" in f for f in findings)
+    assert not any("io2.application.service:2" in f for f in findings)
 
 
 def test_an_adapters_module_holds_one_kind(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
         tmp_path,
-        "app/adapters.py",
+        "app/adapters/gateways.py",
         "import tesser.adapters as ts\n"
         "class HttpHandler(ts.Handler):\n"
         "    pass\n"
@@ -1659,7 +1693,7 @@ def test_an_adapters_module_holds_one_kind(tmp_path: Path) -> None:
     )
     findings = check_tree(tmp_path)
     assert any(
-        "app.adapters mixes adapter kinds" in f and "an adapters module holds one adapter kind" in f
+        "app.adapters.gateways mixes adapter kinds" in f and "an adapters module holds one adapter kind" in f
         for f in findings
     )
 
@@ -1670,9 +1704,9 @@ def test_a_dotted_module_base_resolves(tmp_path: Path) -> None:
         tmp_path,
         "app/test_doubles.py",
         "import tesser.testing as th\n"
-        "import app.application\n"
+        "import app.application.service\n"
         "@th.fake\n"
-        "class FakePort(app.application.AskService):\n"
+        "class FakePort(app.application.service.AskService):\n"
         "    pass\n",
     )
     findings = check_tree(tmp_path)
