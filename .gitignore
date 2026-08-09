@@ -6,3 +6,15 @@
 # tessercheck-py, roadmap/, and the examples/ trees.
 __pycache__/
 *.py[cod]
+
+# Distribution artifacts from the tesser-py wheel gate (scripts/verify
+# tesser-py). build/lib/ is a full duplicate of the source tree, and sigcheck
+# walks every .py under its root with no exclusion list — a lingering copy from
+# an interrupted run would change findings. The script cleans up after itself;
+# this is the backstop.
+dist/
+build/
+*.egg-info/
+
+# Local verify environment (scripts/install-dev).
+.venv/

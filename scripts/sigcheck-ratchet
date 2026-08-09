@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+#
+# The sigcheck ratchet gate for examples/python-app.
+#
+# The accepted-debt baseline is examples/python-app/sigcheck-ratchet: the
+# current findings with line numbers stripped, LC_ALL=C sorted. It is a finding
+# SET, not a scalar count — a finding outside the baseline fails even at an
+# equal total, so a fix cannot buy a fresh violation. A stale baseline entry
+# (one that no longer fires) also fails, so the file cannot drift upward
+# unnoticed. An analyzer crash fails closed: stderr with a Traceback is a
+# failure, never an empty pass.
+#
+#   scripts/sigcheck-ratchet              check (what CI runs)
+#   scripts/sigcheck-ratchet --regenerate rewrite the baseline from the tree
+#
+# Regenerate after fixing findings, and review the diff — the baseline is
+# branch-controlled, so its own diff is the control (TODOS.md names a
+# shrink-only comparison against the base branch as the durable fix if the
+# ratchet outlives the conformance wave). At zero findings, delete
+# examples/python-app/sigcheck-ratchet and restore a plain zero-findings check.
+set -uo pipefail
+
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+APP="$ROOT/examples/python-app"
+BASELINE="$APP/sigcheck-ratchet"
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+cd "$APP" || exit 1
+PYTHONPATH=../spike-shells:../../tesser-py python3 -m sigcheck . \
+  > "$work/findings.txt" 2> "$work/stderr.txt" || true
+
+if [ -s "$work/stderr.txt" ]; then
+  cat "$work/stderr.txt"
+  if grep -q "Traceback" "$work/stderr.txt"; then
+    echo "sigcheck crashed — failing closed"
+    exit 1
+  fi
+fi
+
+sed -E 's/:[0-9]+//g' "$work/findings.txt" | LC_ALL=C sort > "$work/normalized.txt"
+
+if [ "${1:-}" = "--regenerate" ]; then
+  cp "$work/normalized.txt" "$BASELINE"
+  echo "regenerated $BASELINE ($(wc -l < "$BASELINE" | tr -d ' ') findings)"
+  exit 0
+fi
+
+LC_ALL=C sort "$BASELINE" > "$work/baseline.txt"
+echo "sigcheck findings: $(wc -l < "$work/findings.txt" | tr -d ' ') (baseline: $(wc -l < "$BASELINE" | tr -d ' '))"
+
+status=0
+new=$(LC_ALL=C comm -13 "$work/baseline.txt" "$work/normalized.txt")
+if [ -n "$new" ]; then
+  echo "findings not in the ratchet baseline:"
+  echo "$new"
+  status=1
+fi
+
+stale=$(LC_ALL=C comm -23 "$work/baseline.txt" "$work/normalized.txt")
+if [ -n "$stale" ]; then
+  echo "sigcheck-ratchet is stale — these baseline entries no longer fire; regenerate with scripts/sigcheck-ratchet --regenerate:"
+  echo "$stale"
+  status=1
+fi
+
+exit $status

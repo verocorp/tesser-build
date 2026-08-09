@@ -1,0 +1,188 @@
+#!/usr/bin/env bash
+#
+# Every Python gate CI runs, runnable locally, one command per tree.
+#
+#   scripts/verify              all trees
+#   scripts/verify python-app   one tree
+#   scripts/verify spike-shells python-app
+#
+# Each CI job calls this with its own tree, so the commands live here — in the
+# repo, reviewable — rather than inline in workflow YAML. That is the point:
+# "green locally" and "green in CI" have to mean the same thing, and they only
+# do if there is one definition of what green is.
+#
+# Tools are taken from PATH, exactly as in CI. Install them into the active
+# environment with scripts/install-dev.
+#
+# The Go gates are deliberately not here — go test, go vet, gofmt, and the
+# golangci-lint plugin bundling job stay in the workflow.
+#
+# `roadmap` is not here either, and that is not an oversight: it is a Go/Python
+# hybrid, not a Python tree. generate.py --check shells out to
+# `go run ./cmd/analyzers-json` for the checker column, and 2 of its 32 tests
+# go through the same bridge. Putting it here would mean a gate that cannot
+# pass without the Go toolchain, which is exactly the kind of half-run this
+# script exists to eliminate. It stays a workflow job.
+set -uo pipefail
+
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$ROOT" || exit 1
+
+TREES=(python spike-shells spike-llmport python-app serdepy errorspy tesser-py vobase tessercheck-py)
+
+failed=()
+
+step() { echo "  → $*"; }
+
+run_python() {
+  cd "$ROOT/examples/python" || return 1
+  step "mypy --strict"
+  MYPYPATH=. mypy --strict campaign catalog serialization.py tests conftest.py || return 1
+  step "pytest"
+  pytest -q || return 1
+}
+
+run_spike_shells() {
+  cd "$ROOT/examples/spike-shells" || return 1
+  step "sigcheck (self-check over its own tree)"
+  PYTHONPATH=.:../../tesser-py python3 -m sigcheck . || return 1
+  step "RULES.md drift gate"
+  python3 rules.py --check || return 1
+  step "mypy --strict"
+  MYPYPATH=.:../../tesser-py mypy --strict spike sigcheck digest tests rules.py || return 1
+  step "pytest"
+  pytest -q || return 1
+  step "import contracts"
+  PYTHONPATH=.:../../tesser-py lint-imports --no-cache || return 1
+}
+
+run_spike_llmport() {
+  cd "$ROOT/examples/spike-llmport" || return 1
+  step "sigcheck (zero findings over the whole tree)"
+  PYTHONPATH=../spike-shells:../../tesser-py python3 -m sigcheck . || return 1
+  step "mypy --strict"
+  MYPYPATH=.:../../tesser-py mypy --strict scheduling protocol srv/voice/router.py tests || return 1
+  step "pytest"
+  pytest -q || return 1
+}
+
+run_python_app() {
+  cd "$ROOT/examples/python-app" || return 1
+  step "ruff (env edge + exit edge + dead imports + F823)"
+  ruff check . || return 1
+  step "import-linter (import direction)"
+  PYTHONPATH=. lint-imports || return 1
+  step "mypy --strict"
+  MYPYPATH=.:../../tesser-py mypy --strict errors.py lifecycle.py serialization.py protocol campaign linkpolicy reports bootstrap srv tests conftest.py || return 1
+  step "pytest"
+  pytest -q || return 1
+  step "sigcheck ratchet"
+  "$ROOT/scripts/sigcheck-ratchet" || return 1
+}
+
+run_serdepy() {
+  cd "$ROOT/examples/serdepy" || return 1
+  step "mypy --strict"
+  MYPYPATH=. mypy --strict serialization.py parcel.py parts.py wire.py conftest.py tests || return 1
+  step "pytest"
+  pytest -q || return 1
+}
+
+run_errorspy() {
+  cd "$ROOT/examples/errorspy" || return 1
+  step "mypy --strict"
+  MYPYPATH=. mypy --strict errors.py serialization.py conftest.py domain app transport main.py tests || return 1
+  step "pytest"
+  pytest -q || return 1
+}
+
+run_tesser_py() {
+  cd "$ROOT/tesser-py" || return 1
+  step "mypy --strict"
+  mypy || return 1
+  step "pytest"
+  pytest -q || return 1
+  step "built wheel ships every subpackage"
+  # Clean before and after: `pip wheel` leaves build/ and *.egg-info/ behind,
+  # and build/lib/ is a full duplicate of the source tree. CI never notices
+  # (fresh checkout), but locally that duplicate is live — sigcheck walks every
+  # .py under its root with no exclusion list, so a stray copy changes findings.
+  rm -rf dist build ./*.egg-info
+  trap 'rm -rf "$ROOT/tesser-py/dist" "$ROOT/tesser-py/build" "$ROOT"/tesser-py/*.egg-info' RETURN
+  pip wheel --no-deps -w dist . > /dev/null || return 1
+  python3 - <<'EOF' || return 1
+import glob, pathlib, sys, zipfile
+shipped = {name.split("/")[1] for name in zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist() if name.startswith("tesser/") and name.count("/") == 2}
+on_disk = {p.parent.name for p in pathlib.Path("tesser").glob("*/__init__.py")}
+missing = on_disk - shipped
+if missing:
+    sys.exit(f"wheel omits subpackages: {sorted(missing)}")
+print(f"wheel ships: {sorted(on_disk)}")
+EOF
+}
+
+run_vobase() {
+  cd "$ROOT/examples/vobase" || return 1
+  step "mypy --strict"
+  MYPYPATH=.:../../tesser-py mypy --strict vobase tests || return 1
+  step "pytest"
+  pytest -q || return 1
+}
+
+run_tessercheck_py() {
+  cd "$ROOT/tessercheck-py" || return 1
+  step "mypy --strict"
+  mypy || return 1
+  step "pytest"
+  pytest -q || return 1
+  cd "$ROOT" || return 1
+  # These four gate the SHIPPED analyzer against the example trees. They used to
+  # live only in the tessercheck-py CI job, so a layout change in python-app
+  # could pass every python-app gate and still break discovery — which is
+  # exactly what happened in PR #56.
+  for target in "examples/python" "--app-root examples/python-app" "examples/serdepy" "examples/errorspy"; do
+    step "tessercheck $target"
+    # shellcheck disable=SC2086
+    PYTHONPATH=tessercheck-py python3 -m tessercheck $target || return 1
+  done
+}
+
+run_tree() {
+  local tree=$1
+  echo
+  echo "=== $tree ==="
+  case "$tree" in
+    python)         run_python ;;
+    spike-shells)   run_spike_shells ;;
+    spike-llmport)  run_spike_llmport ;;
+    python-app)     run_python_app ;;
+    serdepy)        run_serdepy ;;
+    errorspy)       run_errorspy ;;
+    tesser-py)      run_tesser_py ;;
+    vobase)         run_vobase ;;
+    tessercheck-py) run_tessercheck_py ;;
+    *) echo "unknown tree: $tree (known: ${TREES[*]})"; return 1 ;;
+  esac
+}
+
+selected=("$@")
+if [ ${#selected[@]} -eq 0 ]; then
+  selected=("${TREES[@]}")
+fi
+
+for tree in "${selected[@]}"; do
+  if run_tree "$tree"; then
+    echo "  PASS $tree"
+  else
+    echo "  FAIL $tree"
+    failed+=("$tree")
+  fi
+done
+
+echo
+if [ ${#failed[@]} -eq 0 ]; then
+  echo "all green (${#selected[@]} tree(s))"
+  exit 0
+fi
+echo "FAILED: ${failed[*]}"
+exit 1

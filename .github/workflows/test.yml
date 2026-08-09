@@ -66,10 +66,7 @@ jobs:
       - name: Install dev tooling
         run: pip install -r examples/python/requirements-dev.txt
       - name: examples/python — mypy --strict + pytest
-        working-directory: examples/python
-        run: |
-          MYPYPATH=. mypy --strict campaign catalog serialization.py tests conftest.py
-          pytest -q
+        run: scripts/verify python
 
   spike-shells:
     name: spike-shells (sigcheck self-check + RULES.md drift + mypy --strict + pytest + import-linter)
@@ -81,20 +78,8 @@ jobs:
           python-version: '3.12'
       - name: Install dev tooling
         run: pip install -r examples/spike-shells/requirements-dev.txt
-      - name: examples/spike-shells — sigcheck over its own tree
-        working-directory: examples/spike-shells
-        run: PYTHONPATH=.:../../tesser-py python3 -m sigcheck .
-      - name: examples/spike-shells — RULES.md drift gate
-        working-directory: examples/spike-shells
-        run: python3 rules.py --check
-      - name: examples/spike-shells — mypy --strict + pytest
-        working-directory: examples/spike-shells
-        run: |
-          MYPYPATH=.:../../tesser-py mypy --strict spike sigcheck digest tests rules.py
-          pytest -q
-      - name: examples/spike-shells — import contracts
-        working-directory: examples/spike-shells
-        run: PYTHONPATH=.:../../tesser-py lint-imports --no-cache
+      - name: examples/spike-shells — sigcheck self-check + RULES.md drift + mypy --strict + pytest + import contracts
+        run: scripts/verify spike-shells
 
   spike-llmport:
     # Gates the LLM tool-call port spike at the spike-shells bar: sigcheck
@@ -113,14 +98,8 @@ jobs:
           python-version: '3.12'
       - name: Install dev tooling
         run: pip install -r examples/spike-llmport/requirements-dev.txt
-      - name: examples/spike-llmport — sigcheck over the whole tree
-        working-directory: examples/spike-llmport
-        run: PYTHONPATH=../spike-shells:../../tesser-py python3 -m sigcheck .
-      - name: examples/spike-llmport — mypy --strict + pytest
-        working-directory: examples/spike-llmport
-        run: |
-          MYPYPATH=.:../../tesser-py mypy --strict scheduling protocol srv/voice/router.py tests
-          pytest -q
+      - name: examples/spike-llmport — sigcheck + mypy --strict + pytest
+        run: scripts/verify spike-llmport
 
   python-app-example:
     # Gates the composition-root / wiring worked example (Python) at the same bar:
@@ -140,54 +119,14 @@ jobs:
           python-version: '3.12'
       - name: Install dev tooling
         run: pip install -r examples/python-app/requirements-dev.txt
-      - name: examples/python-app — ruff (env edge + exit edge + dead imports)
-        working-directory: examples/python-app
-        run: ruff check .
-      - name: examples/python-app — import-linter (import direction)
-        working-directory: examples/python-app
-        run: PYTHONPATH=. lint-imports
-      - name: examples/python-app — mypy --strict + pytest
-        working-directory: examples/python-app
-        run: |
-          MYPYPATH=.:../../tesser-py mypy --strict errors.py lifecycle.py serialization.py protocol campaign linkpolicy reports bootstrap srv tests conftest.py
-          pytest -q
-      - name: examples/python-app — sigcheck (totality rulebook, ratcheted)
-        # The import-totality wave (exactly-once-as-ts, whole-tree totality,
-        # pure-core allowlist, module-only imports) landed after this tree
-        # reached zero findings, so the gate is a ratchet until the conformance
-        # wave burns the bill down (TODOS.md "Import-totality wave followups").
-        # sigcheck-ratchet is the accepted-debt baseline: the current findings
-        # with line numbers stripped, LC_ALL=C sorted. Any finding not in the
-        # baseline fails, even at an equal total — a fix cannot buy a fresh
-        # violation. An analyzer crash fails closed (stderr is a failure, not
-        # an empty pass). After fixing findings, regenerate the baseline with
-        # the sed|sort pipeline below; at zero findings, delete sigcheck-ratchet
-        # and restore the plain zero-findings step.
-        working-directory: examples/python-app
-        run: |
-          PYTHONPATH=../spike-shells:../../tesser-py python3 -m sigcheck . > findings.txt 2> sigcheck-stderr.txt || true
-          if [ -s sigcheck-stderr.txt ]; then
-            cat sigcheck-stderr.txt
-            if grep -q "Traceback" sigcheck-stderr.txt; then
-              echo "sigcheck crashed — failing closed"
-              exit 1
-            fi
-          fi
-          sed -E 's/:[0-9]+//g' findings.txt | LC_ALL=C sort > findings-normalized.txt
-          LC_ALL=C sort sigcheck-ratchet > baseline-normalized.txt
-          echo "sigcheck findings: $(wc -l < findings.txt | tr -d ' ') (baseline: $(wc -l < sigcheck-ratchet | tr -d ' '))"
-          new=$(LC_ALL=C comm -13 baseline-normalized.txt findings-normalized.txt)
-          if [ -n "$new" ]; then
-            echo "findings not in the ratchet baseline:"
-            echo "$new"
-            exit 1
-          fi
-          stale=$(LC_ALL=C comm -23 baseline-normalized.txt findings-normalized.txt)
-          if [ -n "$stale" ]; then
-            echo "sigcheck-ratchet is stale — these baseline entries no longer fire; regenerate the file:"
-            echo "$stale"
-            exit 1
-          fi
+      - name: examples/python-app — ruff + import-linter + mypy --strict + pytest + sigcheck ratchet
+        # The sigcheck step is a ratchet, not a zero-findings gate: the
+        # import-totality wave landed after this tree reached zero, so
+        # examples/python-app/sigcheck-ratchet carries the accepted debt until
+        # the conformance wave burns it down (TODOS.md "Import-totality wave
+        # followups"). The gate logic and how to regenerate the baseline live
+        # in scripts/sigcheck-ratchet.
+        run: scripts/verify python-app
 
   serdepy-example:
     # Gates the serialization-norm worked example (Python) at the same bar:
@@ -206,10 +145,7 @@ jobs:
       - name: Install dev tooling
         run: pip install -r examples/serdepy/requirements-dev.txt
       - name: examples/serdepy — mypy --strict + pytest
-        working-directory: examples/serdepy
-        run: |
-          MYPYPATH=. mypy --strict serialization.py parcel.py parts.py wire.py conftest.py tests
-          pytest -q
+        run: scripts/verify serdepy
 
   errorspy-example:
     # Gates the error-norms worked example (Python) at the same bar: mypy
@@ -226,10 +162,7 @@ jobs:
       - name: Install dev tooling
         run: pip install -r examples/errorspy/requirements-dev.txt
       - name: examples/errorspy — mypy --strict + pytest
-        working-directory: examples/errorspy
-        run: |
-          MYPYPATH=. mypy --strict errors.py serialization.py conftest.py domain app transport main.py tests
-          pytest -q
+        run: scripts/verify errorspy
 
   tesser-py:
     name: tesser-py runtime library (mypy --strict + pytest)
@@ -241,27 +174,12 @@ jobs:
           python-version: '3.12'
       - name: Install dev tooling
         run: pip install -r tesser-py/requirements-dev.txt
-      - name: tesser-py — mypy --strict + pytest
-        working-directory: tesser-py
-        run: |
-          mypy
-          pytest -q
-      - name: tesser-py — the built wheel ships every subpackage
-        # The enumerated packages list once silently dropped tesser.testing
-        # and tesser.srv; every other job reaches the source via PYTHONPATH,
-        # so only building the distribution can catch the omission class.
-        working-directory: tesser-py
-        run: |
-          pip wheel --no-deps -w dist .
-          python3 - <<'EOF'
-          import glob, pathlib, sys, zipfile
-          shipped = {name.split("/")[1] for name in zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist() if name.startswith("tesser/") and name.count("/") == 2}
-          on_disk = {p.parent.name for p in pathlib.Path("tesser").glob("*/__init__.py")}
-          missing = on_disk - shipped
-          if missing:
-              sys.exit(f"wheel omits subpackages: {sorted(missing)}")
-          print(f"wheel ships: {sorted(on_disk)}")
-          EOF
+      - name: tesser-py — mypy --strict + pytest + the built wheel ships every subpackage
+        # The wheel check is not redundant with the type/test gates: the
+        # enumerated packages list once silently dropped tesser.testing and
+        # tesser.srv, and every other job reaches the source via PYTHONPATH, so
+        # only building the distribution can catch that omission class.
+        run: scripts/verify tesser-py
 
   vobase-example:
     name: vobase example (mypy --strict + pytest)
@@ -274,10 +192,7 @@ jobs:
       - name: Install dev tooling
         run: pip install -r examples/vobase/requirements-dev.txt
       - name: examples/vobase — mypy --strict + pytest
-        working-directory: examples/vobase
-        run: |
-          MYPYPATH=.:../../tesser-py mypy --strict vobase tests
-          pytest -q
+        run: scripts/verify vobase
 
   roadmap:
     # The roadmap matrix is generated, never hand-maintained (Wave 2 item 10):
@@ -322,39 +237,12 @@ jobs:
           python-version: '3.12'
       - name: Install dev tooling
         run: pip install -r tessercheck-py/requirements-dev.txt
-      - name: tessercheck-py — mypy --strict + pytest
-        working-directory: tessercheck-py
-        run: |
-          mypy
-          pytest -q
-      - name: tessercheck-py on examples/python (explicit CLI gate)
-        run: python -m tessercheck examples/python
-        working-directory: .
-        env:
-          PYTHONPATH: tessercheck-py
-      # Full acceptance gate on the verified impl: discovery (the totality
-      # guard must find campaign, linkpolicy, reports with zero
-      # configuration; discovery errors exit 2) AND every check clean —
-      # python-app's former TB010 nonconformance (Slug/TargetURL public
-      # `value`) is fixed, so nothing is scoped out anymore.
-      - name: tessercheck-py full gate on examples/python-app (--app-root)
-        run: python -m tessercheck --app-root examples/python-app
-        working-directory: .
-        env:
-          PYTHONPATH: tessercheck-py
-      - name: tessercheck-py on examples/serdepy (explicit CLI gate)
-        run: python -m tessercheck examples/serdepy
-        working-directory: .
-        env:
-          PYTHONPATH: tessercheck-py
-      # errorspy joins the fully-gated trees: its DateWindow was swept to the
-      # serialization norm (spec construction, no compound dunder) so the repo
-      # no longer contains code that violates a check it ships. The raw-date
-      # bounds are conformant under the current primitive set; if date/datetime
-      # are ruled into it (TODOS.md), DateWindow's bounds get wrapped in the
-      # same change and this gate keeps it honest.
-      - name: tessercheck-py on examples/errorspy (explicit CLI gate)
-        run: python -m tessercheck examples/errorspy
-        working-directory: .
-        env:
-          PYTHONPATH: tessercheck-py
+      # mypy + pytest, then the four CLI gates that run the SHIPPED analyzer
+      # over the example trees: examples/python, the --app-root full gate on
+      # examples/python-app (discovery must find campaign, linkpolicy, reports
+      # with zero configuration; discovery errors exit 2), examples/serdepy,
+      # and examples/errorspy. Those four are why this job can fail on a change
+      # that touches no file under tessercheck-py — a layout change in
+      # python-app broke discovery in PR #56 exactly that way.
+      - name: tessercheck-py — mypy --strict + pytest + the four CLI gates
+        run: scripts/verify tessercheck-py

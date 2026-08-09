@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+#
+# Install every tree's dev tooling into the active environment, so one
+# environment can run scripts/verify over all of them.
+#
+#   python3 -m venv .venv && source .venv/bin/activate
+#   scripts/install-dev
+#   scripts/verify
+#
+# It installs each tree's own requirements-dev.txt rather than a curated union,
+# so this cannot drift when a tree adds a tool. The union today is mypy,
+# pytest, import-linter, ruff, and mutmut — all floor-pinned, no conflicts,
+# which is why a single environment works at all.
+#
+# CI does NOT use this: each job installs only its own tree's requirements, and
+# that isolation is load-bearing — it proves each requirements-dev.txt is
+# sufficient on its own. A shared environment would hide a missing entry.
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$ROOT"
+
+mapfile -t files < <(find examples tessercheck-py tesser-py -name requirements-dev.txt | sort)
+
+echo "installing dev tooling from ${#files[@]} requirements files:"
+printf '  %s\n' "${files[@]}"
+
+args=()
+for f in "${files[@]}"; do
+  args+=(-r "$f")
+done
+
+pip install "${args[@]}"
+
+echo
+echo "done — run scripts/verify"
