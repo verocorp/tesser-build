@@ -53,7 +53,7 @@ def test_config_lives_in_wiring_not_on_public_top_level() -> None:
 
 
 @ts.fake
-class _ScriptedCampaigns(campaign_client.Client):
+class FakeCampaignClientScripted(campaign_client.Client):
     def __init__(self, *views: campaign_client.CampaignView) -> None:
         self.pending = list(views)
         self.requests: list[object] = []
@@ -90,7 +90,7 @@ class _ScriptedCampaigns(campaign_client.Client):
 
 
 def test_handler_translates_wire_to_client_dtos() -> None:
-    scripted = _ScriptedCampaigns(
+    scripted = FakeCampaignClientScripted(
         campaign_client.CampaignView("0123456789abcdef", "100.00", "USD", ()),
         campaign_client.CampaignView(
             "0123456789abcdef",
@@ -141,7 +141,7 @@ def test_handler_translates_wire_to_client_dtos() -> None:
 
 
 @ts.fake
-class _StubReports(reports_client.Client):
+class FakeReportsClientStub(reports_client.Client):
     def links_by_verdict(self, req: LinksByVerdictRequest) -> LinksByVerdictResponse:
         return LinksByVerdictResponse(
             links=(LinkVerdictView("promo", "https://ok.example/x", False, "host blocked"),)
@@ -149,13 +149,13 @@ class _StubReports(reports_client.Client):
 
 
 @ts.fake
-class _FailingReports(reports_client.Client):
+class FakeReportsClientFailing(reports_client.Client):
     def links_by_verdict(self, req: LinksByVerdictRequest) -> LinksByVerdictResponse:
         raise InfraError("the campaign store is unreachable")
 
 
 def test_reports_handler_translates_client_dtos_to_wire() -> None:
-    resp = ReportsHandler(_StubReports()).links_by_verdict(HttpRequest("GET", "/", {}, {}, {}, b""))
+    resp = ReportsHandler(FakeReportsClientStub()).links_by_verdict(HttpRequest("GET", "/", {}, {}, {}, b""))
     assert resp.status_code == 200
     assert resp.json_body() == {
         "links": [
@@ -170,7 +170,7 @@ def test_reports_handler_translates_client_dtos_to_wire() -> None:
 
 
 def test_reports_handler_maps_a_failure_to_a_problem_document() -> None:
-    resp = respond(lambda: ReportsHandler(_FailingReports()).links_by_verdict(HttpRequest("GET", "/", {}, {}, {}, b"")))
+    resp = respond(lambda: ReportsHandler(FakeReportsClientFailing()).links_by_verdict(HttpRequest("GET", "/", {}, {}, {}, b"")))
     assert resp.status_code == 503
     assert resp.json_body() == {
         "type": "/problems/unavailable",

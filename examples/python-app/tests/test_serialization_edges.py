@@ -8,8 +8,8 @@ import tesser.testing as ts
 
 from campaign.adapters.gateways.repo_memory import InMemoryCampaignRepository
 from campaign.adapters.handlers.http import Handler
-from campaign.application.parts import CampaignParts, CheckOutcome, MoneyParts, campaign_parts
-from campaign.application.service import CampaignService, TargetChecker
+from campaign.application.parts import CampaignParts, PolicyOutcome, MoneyParts, campaign_parts
+from campaign.application.service import CampaignService, TargetPolicy
 from campaign.application.views import required_campaign
 from campaign.domain.campaign import Campaign, CampaignSpec
 from campaign.domain.money import MoneySpec
@@ -31,9 +31,9 @@ def campaign_spec(slug: str = "promo") -> CampaignSpec:
 
 
 @ts.fake
-class _AllowAll(TargetChecker):
-    def check(self, target_url: str) -> CheckOutcome:
-        return CheckOutcome(True, "ok")
+class FakeTargetPolicyAllowAll(TargetPolicy):
+    def check(self, target_url: str) -> PolicyOutcome:
+        return PolicyOutcome(True, "ok")
 
 
 def test_row_golden_locks_the_storage_shape() -> None:
@@ -50,7 +50,7 @@ def test_row_golden_locks_the_storage_shape() -> None:
 def test_wire_golden_locks_the_campaign_payload() -> None:
     repo = InMemoryCampaignRepository()
     repo.save(campaign_parts(Campaign(campaign_spec())))
-    handler = Handler(CampaignService(repo, _AllowAll()))
+    handler = Handler(CampaignService(repo, FakeTargetPolicyAllowAll()))
     resp = handler.get_campaign(HttpRequest("GET", "/", {"campaign_id": "0123456789abcdef"}, {}, {}, b""))
     assert resp.status_code == 200
     assert resp.json_body() == {
@@ -63,7 +63,7 @@ def test_wire_golden_locks_the_campaign_payload() -> None:
 def test_wire_golden_locks_resolve_as_a_real_redirect() -> None:
     repo = InMemoryCampaignRepository()
     repo.save(campaign_parts(Campaign(campaign_spec())))
-    handler = Handler(CampaignService(repo, _AllowAll()))
+    handler = Handler(CampaignService(repo, FakeTargetPolicyAllowAll()))
     resp = handler.resolve(HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
     assert resp.status_code == 302
     assert resp.body == b""

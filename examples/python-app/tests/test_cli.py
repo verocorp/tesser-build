@@ -15,7 +15,7 @@ from srv.cli.main import commands_for, dispatch, respond
 
 
 @ts.fake
-class _ScriptedCampaigns(campaign_client.Client):
+class FakeCampaignClientScripted(campaign_client.Client):
     def __init__(
         self, *views: campaign_client.CampaignView, error: Exception | None = None
     ) -> None:
@@ -57,7 +57,7 @@ class _ScriptedCampaigns(campaign_client.Client):
 
 
 def test_create_campaign_transforms_args_to_a_success_line() -> None:
-    client = _ScriptedCampaigns(
+    client = FakeCampaignClientScripted(
         campaign_client.CampaignView("0123456789abcdef", "100.00", "USD", ())
     )
     resp = Handler(client).create_campaign(CliRequest(("100.00", "USD")))
@@ -72,7 +72,7 @@ def test_create_campaign_transforms_args_to_a_success_line() -> None:
 
 
 def test_a_domain_rejection_becomes_an_exit_code_not_a_traceback() -> None:
-    client = _ScriptedCampaigns(error=invalid("bad_amount", "must be positive"))
+    client = FakeCampaignClientScripted(error=invalid("bad_amount", "must be positive"))
     resp = dispatch({"create-campaign": Handler(client).create_campaign}, ["create-campaign", "-5", "USD"])
     assert resp.exit_code == 2
     assert resp.stdout == ""
@@ -80,21 +80,21 @@ def test_a_domain_rejection_becomes_an_exit_code_not_a_traceback() -> None:
 
 
 def test_a_missing_argument_is_a_usage_error() -> None:
-    client = _ScriptedCampaigns()
+    client = FakeCampaignClientScripted()
     resp = dispatch({"create-campaign": Handler(client).create_campaign}, ["create-campaign", "100.00"])
     assert resp.exit_code == 2
     assert "usage: create-campaign" in resp.stderr
 
 
 def test_an_empty_argument_is_a_usage_error() -> None:
-    client = _ScriptedCampaigns()
+    client = FakeCampaignClientScripted()
     resp = dispatch({"create-campaign": Handler(client).create_campaign}, ["create-campaign", "", "USD"])
     assert resp.exit_code == 2
     assert "missing argument <budget_amount>" in resp.stderr
 
 
 def test_extra_arguments_are_a_usage_error() -> None:
-    client = _ScriptedCampaigns()
+    client = FakeCampaignClientScripted()
     resp = dispatch({"create-campaign": Handler(client).create_campaign}, ["create-campaign", "100.00", "USD", "surplus"])
     assert resp.exit_code == 2
     assert "usage: create-campaign" in resp.stderr

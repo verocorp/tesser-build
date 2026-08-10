@@ -7,7 +7,7 @@ import linkpolicy.wiring.wire as linkpolicy_wire
 import reports.client.client as reports_client
 import reports.wiring.wire as reports_wire
 from bootstrap.config import Config
-from campaign.adapters.gateways.target_checker import LinkPolicyTargetChecker
+from campaign.adapters.gateways.target_policy import LinkPolicyTargetPolicy
 from lifecycle import Closeable
 
 
@@ -59,8 +59,8 @@ def new(cfg: Config) -> App:
         policy_client, policy_closeable = linkpolicy_wire.build(cfg.linkpolicy)
         stack.push(policy_closeable)
 
-        checker = LinkPolicyTargetChecker(policy_client)
-        campaign_client, campaign_closeable = campaign_wire.build(cfg.campaign, checker)
+        policy = LinkPolicyTargetPolicy(policy_client)
+        campaign_client, campaign_closeable = campaign_wire.build(cfg.campaign, policy)
         stack.push(campaign_closeable)
 
         reports_client, reports_closeable = reports_wire.build(cfg.reports, campaign_client, policy_client)

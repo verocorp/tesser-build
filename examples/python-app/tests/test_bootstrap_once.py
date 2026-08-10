@@ -4,7 +4,7 @@ import pytest
 
 import campaign.wiring.wire as campaign_wire
 from bootstrap.bootstrap import new
-from campaign.application.service import TargetChecker
+from campaign.application.service import TargetPolicy
 from campaign.client.client import AddLinkRequest, Client, CreateCampaignRequest, ListLinksRequest
 from campaign.wiring.config import Config as CampaignConfig
 from campaign.wiring.wire import build as real_campaign_build
@@ -26,9 +26,9 @@ def test_graph_built_once_state_persists_across_calls() -> None:
 def test_constructor_runs_once_across_many_calls(monkeypatch: pytest.MonkeyPatch) -> None:  # tessercheck:ignore
     calls = {"n": 0}
 
-    def counting(cfg: CampaignConfig, checker: TargetChecker) -> tuple[Client, Closeable]:
+    def counting(cfg: CampaignConfig, policy: TargetPolicy) -> tuple[Client, Closeable]:
         calls["n"] += 1
-        return real_campaign_build(cfg, checker)
+        return real_campaign_build(cfg, policy)
 
     monkeypatch.setattr(campaign_wire, "build", counting)
     app = new(app_config())

@@ -5,7 +5,7 @@ from typing import Protocol
 
 import tesser.application as ts
 
-from campaign.application.parts import CampaignParts, CheckOutcome, FoundCampaign, MissingCampaign, campaign_parts
+from campaign.application.parts import CampaignParts, PolicyOutcome, FoundCampaign, MissingCampaign, campaign_parts
 from campaign.application.views import active_target, campaign_view, link_view, required_campaign
 from campaign.client.client import (
     AddLinkRequest,
@@ -38,16 +38,16 @@ class CampaignRepository(ts.Port, Protocol):
     def all(self) -> tuple[CampaignParts, ...]: ...
 
 
-class TargetChecker(ts.Port, Protocol):
+class TargetPolicy(ts.Port, Protocol):
 
-    def check(self, target_url: str) -> CheckOutcome: ...
+    def check(self, target_url: str) -> PolicyOutcome: ...
 
 
 class CampaignService(ts.ApplicationService):
 
-    def __init__(self, repo: CampaignRepository, checker: TargetChecker) -> None:
+    def __init__(self, repo: CampaignRepository, policy: TargetPolicy) -> None:
         self._repo = repo
-        self._checker = checker
+        self._policy = policy
 
     def create_campaign(self, req: CreateCampaignRequest) -> CampaignView:
         budget = MoneySpec(amount=req.budget_amount, currency=req.budget_currency)
@@ -57,7 +57,7 @@ class CampaignService(ts.ApplicationService):
 
     def add_link(self, req: AddLinkRequest) -> CampaignView:
         slug = str(Slug(req.slug))
-        outcome = self._checker.check(str(TargetURL(req.target_url)))
+        outcome = self._policy.check(str(TargetURL(req.target_url)))
         if outcome.blocked():
             raise conflict("destination_blocked", f"destination not allowed: {outcome.reason}")
         if self._repo.slug_taken(slug):

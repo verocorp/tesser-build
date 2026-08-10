@@ -1,4 +1,4 @@
-bootstrap.bootstrap imports names from campaign.adapters.gateways.target_checker; a context module is imported as an aliased module, never its members
+bootstrap.bootstrap imports names from campaign.adapters.gateways.target_policy; a context module is imported as an aliased module, never its members
 bootstrap.bootstrap never imports tesser.context; a bootstrap module imports tesser.context exactly once, as ts
 bootstrap.bootstrap.App is a class; a bootstrap module holds only imports, declared functions, and Final constants
 bootstrap.bootstrap.CleanupStack is a class; a bootstrap module holds only imports, declared functions, and Final constants
@@ -13,9 +13,9 @@ bootstrap.config.HttpConfig is a class; a bootstrap module holds only imports, d
 bootstrap.config._port is an undeclared module function; a bootstrap function declares itself with @ts.function
 bootstrap.config.from_env is an undeclared module function; a bootstrap function declares itself with @ts.function
 campaign.adapters.gateways.repo_memory imports names from campaign.application.parts; a context module is imported as an aliased module, never its members
-campaign.adapters.gateways.target_checker imports names from campaign.application.parts; a context module is imported as an aliased module, never its members
-campaign.adapters.gateways.target_checker imports names from linkpolicy.client.client; a context module is imported as an aliased module, never its members
-campaign.adapters.gateways.target_checker imports names from linkpolicy.client.client; a context module is imported as an aliased module, never its members
+campaign.adapters.gateways.target_policy imports names from campaign.application.parts; a context module is imported as an aliased module, never its members
+campaign.adapters.gateways.target_policy imports names from linkpolicy.client.client; a context module is imported as an aliased module, never its members
+campaign.adapters.gateways.target_policy imports names from linkpolicy.client.client; a context module is imported as an aliased module, never its members
 campaign.adapters.handlers.cli imports names from campaign.client.client; a context module is imported as an aliased module, never its members
 campaign.adapters.handlers.http imports names from campaign.client.client; a context module is imported as an aliased module, never its members
 campaign.application.parts imports names from campaign.domain.campaign; a context module is imported as an aliased module, never its members

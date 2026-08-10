@@ -12,7 +12,7 @@ import protocol.voice as voice
 
 
 @ts.fake
-class ScriptedScheduling(client.SchedulingClient):
+class FakeSchedulingClientScripted(client.SchedulingClient):
     """The handler tier fakes exactly one layer down: the client.
 
     Scripted, not simulated — it answers every call with the states it was
@@ -50,7 +50,7 @@ def test_the_tool_map_covers_exactly_the_domain_steps() -> None:
 
 
 def test_every_offered_tool_is_declarable_and_routable() -> None:
-    handler = handlers.LlmToolHandler(ScriptedScheduling(), "b1")
+    handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(), "b1")
     offered = {name for names in handlers.TOOLS_FOR_STEP.values() for name in names}
 
     assert offered == set(handler._declarations)
@@ -89,7 +89,7 @@ def test_a_tool_declaration_does_not_alias_the_schema_it_was_handed_even_nested(
 
 
 def test_a_drifted_tool_map_keeps_the_recoverable_error_class() -> None:
-    handler = handlers.LlmToolHandler(ScriptedScheduling(), "b1")
+    handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(), "b1")
 
     with pytest.raises(ValueError):
         handler._tool("cancel_booking", client.BookingStateResponse(step="collect_name", offered_slots=(), reply="ask the caller for their name"))
@@ -106,7 +106,7 @@ def test_a_tool_declaration_renders_its_wire_schema() -> None:
 
 
 def test_a_route_carries_the_endpoint_the_host_calls() -> None:
-    scripted = ScriptedScheduling(client.BookingStateResponse(step="choose_slot", offered_slots=("mon-9am", "tue-2pm"), reply="offer the caller the available slots"))
+    scripted = FakeSchedulingClientScripted(client.BookingStateResponse(step="choose_slot", offered_slots=("mon-9am", "tue-2pm"), reply="offer the caller the available slots"))
     handler = handlers.LlmToolHandler(scripted, "b1")
 
     route = router.match(router.tools_for(handler), handlers.PROVIDE_NAME)
@@ -122,7 +122,7 @@ def test_a_route_carries_the_endpoint_the_host_calls() -> None:
 
 
 def test_the_handler_satisfies_the_voicewire_contract() -> None:
-    handler = handlers.LlmToolHandler(ScriptedScheduling(client.BookingStateResponse(step="collect_name", offered_slots=(), reply="ask the caller for their name")), "b1")
+    handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(client.BookingStateResponse(step="collect_name", offered_slots=(), reply="ask the caller for their name")), "b1")
 
     wired: voice.ToolSurface = handler
     turn: voice.ToolTurn = wired.begin()
@@ -131,14 +131,14 @@ def test_the_handler_satisfies_the_voicewire_contract() -> None:
 
 
 def test_the_handler_owns_the_agent_instructions() -> None:
-    handler = handlers.LlmToolHandler(ScriptedScheduling(), "b1")
+    handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(), "b1")
 
     assert "book an appointment" in handler.instructions()
     assert "never invent slots" in handler.instructions()
 
 
 def test_a_turn_carries_the_reply_and_the_tools_for_the_step() -> None:
-    scripted = ScriptedScheduling(client.BookingStateResponse(step="confirm", offered_slots=("mon-9am",), reply="ask the caller to confirm"))
+    scripted = FakeSchedulingClientScripted(client.BookingStateResponse(step="confirm", offered_slots=("mon-9am",), reply="ask the caller to confirm"))
     handler = handlers.LlmToolHandler(scripted, "b1")
 
     turn = handler.begin()
@@ -151,7 +151,7 @@ def test_a_turn_carries_the_reply_and_the_tools_for_the_step() -> None:
 
 
 def test_the_provide_name_tool_declares_exactly_a_required_name() -> None:
-    handler = handlers.LlmToolHandler(ScriptedScheduling(client.BookingStateResponse(step="collect_name", offered_slots=(), reply="ask the caller for their name")), "b1")
+    handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(client.BookingStateResponse(step="collect_name", offered_slots=(), reply="ask the caller for their name")), "b1")
 
     tool = handler.begin().tools[0]
 
@@ -166,7 +166,7 @@ def test_the_provide_name_tool_declares_exactly_a_required_name() -> None:
 
 
 def test_the_confirm_booking_tool_declares_no_arguments() -> None:
-    handler = handlers.LlmToolHandler(ScriptedScheduling(client.BookingStateResponse(step="confirm", offered_slots=("mon-9am",), reply="ask the caller to confirm")), "b1")
+    handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(client.BookingStateResponse(step="confirm", offered_slots=("mon-9am",), reply="ask the caller to confirm")), "b1")
 
     turn = handler.begin()
     tool = turn.tools[1]
@@ -191,7 +191,7 @@ def test_a_tool_declaration_is_frozen_and_compares_by_value() -> None:
 
 
 def test_the_choose_slot_schema_offers_exactly_the_current_slots() -> None:
-    handler = handlers.LlmToolHandler(ScriptedScheduling(client.BookingStateResponse(step="choose_slot", offered_slots=("mon-9am", "tue-2pm"), reply="offer the caller the available slots")), "b1")
+    handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(client.BookingStateResponse(step="choose_slot", offered_slots=("mon-9am", "tue-2pm"), reply="offer the caller the available slots")), "b1")
 
     turn = handler.begin()
     tool = turn.tools[0]
@@ -204,13 +204,13 @@ def test_the_choose_slot_schema_offers_exactly_the_current_slots() -> None:
 
 
 def test_an_unroutable_tool_name_has_no_endpoint() -> None:
-    handler = handlers.LlmToolHandler(ScriptedScheduling(), "b1")
+    handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(), "b1")
 
     assert router.match(router.tools_for(handler), "cancel_booking") is None
 
 
 def test_a_non_string_argument_is_rejected_with_the_wire_word() -> None:
-    scripted = ScriptedScheduling()
+    scripted = FakeSchedulingClientScripted()
     handler = handlers.LlmToolHandler(scripted, "b1")
 
     with pytest.raises(voice.BadToolCall):

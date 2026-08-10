@@ -25,7 +25,7 @@ from reports.wiring.config import Config as ReportsConfig
 
 
 @ts.fake
-class _Spy(Closeable):
+class FakeCloseableSpy(Closeable):
     def __init__(self, name: str, order: list[str], *, fail: bool = False) -> None:
         self.name = name
         self._order = order
@@ -41,7 +41,7 @@ class _Spy(Closeable):
 
 def test_stack_closes_reverse_order_and_all_despite_error() -> None:
     order: list[str] = []
-    a, b, c = _Spy("a", order), _Spy("b", order, fail=True), _Spy("c", order)
+    a, b, c = FakeCloseableSpy("a", order), FakeCloseableSpy("b", order, fail=True), FakeCloseableSpy("c", order)
     stack = CleanupStack()
     for r in (a, b, c):
         stack.push(r)
@@ -52,7 +52,7 @@ def test_stack_closes_reverse_order_and_all_despite_error() -> None:
 
 
 @ts.fake
-class _DummyPolicy(Client):
+class FakeLinkPolicyClientAllowAll(Client):
     def check(self, req: CheckRequest) -> CheckResponse:
         return CheckResponse(True, "ok")
 
@@ -62,10 +62,10 @@ class _DummyPolicy(Client):
 
 def test_new_closes_already_built_deps_on_partial_failure(monkeypatch: pytest.MonkeyPatch) -> None:  # tessercheck:ignore
     order: list[str] = []
-    spy = _Spy("linkpolicy", order)
+    spy = FakeCloseableSpy("linkpolicy", order)
 
     def fake_build(cfg: LinkPolicyConfig) -> tuple[Client, Closeable]:
-        return _DummyPolicy(), spy
+        return FakeLinkPolicyClientAllowAll(), spy
 
     monkeypatch.setattr(linkpolicy_wire, "build", fake_build)
 
@@ -81,19 +81,19 @@ def test_new_closes_already_built_deps_on_partial_failure(monkeypatch: pytest.Mo
 
 
 @ts.fake
-class _DummyReports(reports_client.Client):
+class FakeReportsClientEmpty(reports_client.Client):
     def links_by_verdict(self, req: LinksByVerdictRequest) -> LinksByVerdictResponse:
         return LinksByVerdictResponse(links=())
 
 
 def test_reports_closeable_is_on_the_cleanup_stack(monkeypatch: pytest.MonkeyPatch) -> None:  # tessercheck:ignore
     order: list[str] = []
-    spy = _Spy("reports", order)
+    spy = FakeCloseableSpy("reports", order)
 
     def fake_build(
         cfg: ReportsConfig, campaign_client: campaign_client.Client, policy_client: Client
     ) -> tuple[reports_client.Client, Closeable]:
-        return _DummyReports(), spy
+        return FakeReportsClientEmpty(), spy
 
     monkeypatch.setattr(reports_wire, "build", fake_build)
     app = new(
@@ -109,12 +109,12 @@ def test_reports_closeable_is_on_the_cleanup_stack(monkeypatch: pytest.MonkeyPat
 
 def test_app_close_surfaces_errors_instead_of_dropping(monkeypatch: pytest.MonkeyPatch) -> None:  # tessercheck:ignore
     order: list[str] = []
-    failing = _Spy("reports", order, fail=True)
+    failing = FakeCloseableSpy("reports", order, fail=True)
 
     def fake_build(
         cfg: ReportsConfig, campaign_client: campaign_client.Client, policy_client: Client
     ) -> tuple[reports_client.Client, Closeable]:
-        return _DummyReports(), failing
+        return FakeReportsClientEmpty(), failing
 
     monkeypatch.setattr(reports_wire, "build", fake_build)
     app = new(

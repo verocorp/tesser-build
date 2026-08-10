@@ -5,18 +5,18 @@ import tesser.testing as ts
 
 from campaign.application.parts import (
     CampaignParts,
-    CheckOutcome,
+    PolicyOutcome,
     FoundCampaign,
     MissingCampaign,
     MoneyParts,
 )
-from campaign.application.service import CampaignRepository, CampaignService, TargetChecker
+from campaign.application.service import CampaignRepository, CampaignService, TargetPolicy
 from campaign.client.client import AddLinkRequest
 from errors import DomainError, InfraError, Kind
 
 
 @ts.fake
-class _RecordingRepo(CampaignRepository):
+class FakeCampaignRepositoryRecording(CampaignRepository):
     def __init__(self) -> None:
         budget = MoneyParts(amount="100.00", currency="USD")
         self._parts = CampaignParts(id="0123456789abcdef", budget=budget, links=())
@@ -39,26 +39,26 @@ class _RecordingRepo(CampaignRepository):
 
 
 @ts.fake
-class _Blocking(TargetChecker):
-    def check(self, target_url: str) -> CheckOutcome:
-        return CheckOutcome(False, "not on the allow-list")
+class FakeTargetPolicyBlocking(TargetPolicy):
+    def check(self, target_url: str) -> PolicyOutcome:
+        return PolicyOutcome(False, "not on the allow-list")
 
 
 @ts.fake
-class _Outage(TargetChecker):
-    def check(self, target_url: str) -> CheckOutcome:
+class FakeTargetPolicyOutage(TargetPolicy):
+    def check(self, target_url: str) -> PolicyOutcome:
         raise InfraError("linkpolicy unavailable")
 
 
 @ts.fake
-class _AllowAll(TargetChecker):
-    def check(self, target_url: str) -> CheckOutcome:
-        return CheckOutcome(True, "ok")
+class FakeTargetPolicyAllowAll(TargetPolicy):
+    def check(self, target_url: str) -> PolicyOutcome:
+        return PolicyOutcome(True, "ok")
 
 
 def test_rejection_is_a_conflict_and_creates_nothing() -> None:
-    repo = _RecordingRepo()
-    svc = CampaignService(repo, _Blocking())
+    repo = FakeCampaignRepositoryRecording()
+    svc = CampaignService(repo, FakeTargetPolicyBlocking())
     req = AddLinkRequest(campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x")
     with pytest.raises(DomainError) as caught:
         svc.add_link(req)
@@ -67,8 +67,8 @@ def test_rejection_is_a_conflict_and_creates_nothing() -> None:
 
 
 def test_outage_propagates_and_creates_nothing() -> None:
-    repo = _RecordingRepo()
-    svc = CampaignService(repo, _Outage())
+    repo = FakeCampaignRepositoryRecording()
+    svc = CampaignService(repo, FakeTargetPolicyOutage())
     req = AddLinkRequest(campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x")
     with pytest.raises(InfraError):
         svc.add_link(req)
@@ -76,8 +76,8 @@ def test_outage_propagates_and_creates_nothing() -> None:
 
 
 def test_allowed_verdict_creates_the_link() -> None:
-    repo = _RecordingRepo()
-    svc = CampaignService(repo, _AllowAll())
+    repo = FakeCampaignRepositoryRecording()
+    svc = CampaignService(repo, FakeTargetPolicyAllowAll())
     req = AddLinkRequest(campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x")
     view = svc.add_link(req)
     assert [link.slug for link in view.links] == ["promo"]

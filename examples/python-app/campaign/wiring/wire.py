@@ -3,7 +3,7 @@ from __future__ import annotations
 import tesser.context as ts
 
 from campaign.adapters.gateways.repo_memory import InMemoryCampaignRepository
-from campaign.application.service import CampaignRepository, CampaignService, TargetChecker
+from campaign.application.service import CampaignRepository, CampaignService, TargetPolicy
 from campaign.client.client import Client
 from campaign.wiring.config import Config
 from errors import invalid
@@ -21,6 +21,6 @@ def repo_for(cfg: Config) -> tuple[CampaignRepository, Closeable]:
 
 
 @ts.function
-def build(cfg: Config, checker: TargetChecker) -> tuple[Client, Closeable]:
+def build(cfg: Config, policy: TargetPolicy) -> tuple[Client, Closeable]:
     repo, closeable = repo_for(cfg)
-    return CampaignService(repo, checker), closeable
+    return CampaignService(repo, policy), closeable

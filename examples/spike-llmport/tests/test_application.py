@@ -7,7 +7,7 @@ import scheduling.client.client as client
 
 
 @ts.fake
-class MemorySlotDirectory(application.SlotDirectory):
+class FakeSlotDirectory(application.SlotDirectory):
 
     def __init__(self, slots: tuple[str, ...]) -> None:
         self.slots = list(slots)
@@ -25,7 +25,7 @@ class MemorySlotDirectory(application.SlotDirectory):
 
 
 @ts.fake
-class MemoryBookingRepository(application.BookingRepository):
+class FakeBookingRepository(application.BookingRepository):
 
     def __init__(self) -> None:
         self.stored: dict[str, parts.BookingParts] = {}
@@ -41,7 +41,7 @@ class MemoryBookingRepository(application.BookingRepository):
 
 
 @ts.fake
-class DownSlotDirectory(application.SlotDirectory):
+class FakeSlotDirectoryDown(application.SlotDirectory):
 
     def available(self) -> tuple[str, ...]:
         raise RuntimeError("slot directory unreachable")
@@ -51,8 +51,8 @@ class DownSlotDirectory(application.SlotDirectory):
 
 
 def test_the_full_booking_flow_through_the_client_surface() -> None:
-    directory = MemorySlotDirectory(("mon-9am", "tue-2pm"))
-    repository = MemoryBookingRepository()
+    directory = FakeSlotDirectory(("mon-9am", "tue-2pm"))
+    repository = FakeBookingRepository()
     service = application.BookingService(directory, repository)
 
     state = service.begin(client.BeginBookingRequest(booking_id="b1"))
@@ -78,8 +78,8 @@ def test_the_full_booking_flow_through_the_client_surface() -> None:
 
 
 def test_a_rejected_transition_persists_nothing() -> None:
-    directory = MemorySlotDirectory(("mon-9am",))
-    repository = MemoryBookingRepository()
+    directory = FakeSlotDirectory(("mon-9am",))
+    repository = FakeBookingRepository()
     service = application.BookingService(directory, repository)
     service.begin(client.BeginBookingRequest(booking_id="b1"))
     service.provide_name(client.ProvideNameRequest(booking_id="b1", name="Ada"))
@@ -92,8 +92,8 @@ def test_a_rejected_transition_persists_nothing() -> None:
 
 
 def test_a_slot_taken_between_choice_and_confirm_comes_back_as_a_fresh_offer() -> None:
-    directory = MemorySlotDirectory(("mon-9am", "tue-2pm"))
-    repository = MemoryBookingRepository()
+    directory = FakeSlotDirectory(("mon-9am", "tue-2pm"))
+    repository = FakeBookingRepository()
     service = application.BookingService(directory, repository)
     service.begin(client.BeginBookingRequest(booking_id="b1"))
     service.provide_name(client.ProvideNameRequest(booking_id="b1", name="Ada"))
@@ -110,8 +110,8 @@ def test_a_slot_taken_between_choice_and_confirm_comes_back_as_a_fresh_offer() -
 
 
 def test_a_taken_slot_with_nothing_left_to_offer_is_an_error() -> None:
-    directory = MemorySlotDirectory(("mon-9am",))
-    service = application.BookingService(directory, MemoryBookingRepository())
+    directory = FakeSlotDirectory(("mon-9am",))
+    service = application.BookingService(directory, FakeBookingRepository())
     service.begin(client.BeginBookingRequest(booking_id="b1"))
     service.provide_name(client.ProvideNameRequest(booking_id="b1", name="Ada"))
     service.choose_slot(client.ChooseSlotRequest(booking_id="b1", slot="mon-9am"))
@@ -124,8 +124,8 @@ def test_a_taken_slot_with_nothing_left_to_offer_is_an_error() -> None:
 
 
 def test_the_fresh_offer_is_choosable_and_bookable() -> None:
-    directory = MemorySlotDirectory(("mon-9am", "tue-2pm"))
-    service = application.BookingService(directory, MemoryBookingRepository())
+    directory = FakeSlotDirectory(("mon-9am", "tue-2pm"))
+    service = application.BookingService(directory, FakeBookingRepository())
     service.begin(client.BeginBookingRequest(booking_id="b1"))
     service.provide_name(client.ProvideNameRequest(booking_id="b1", name="Ada"))
     service.choose_slot(client.ChooseSlotRequest(booking_id="b1", slot="mon-9am"))
@@ -140,8 +140,8 @@ def test_the_fresh_offer_is_choosable_and_bookable() -> None:
 
 
 def test_status_reads_without_mutating() -> None:
-    directory = MemorySlotDirectory(("mon-9am",))
-    repository = MemoryBookingRepository()
+    directory = FakeSlotDirectory(("mon-9am",))
+    repository = FakeBookingRepository()
     service = application.BookingService(directory, repository)
     service.begin(client.BeginBookingRequest(booking_id="b1"))
     service.provide_name(client.ProvideNameRequest(booking_id="b1", name="Ada"))
@@ -154,7 +154,7 @@ def test_status_reads_without_mutating() -> None:
 
 
 def test_an_infrastructure_failure_passes_through_untranslated() -> None:
-    service = application.BookingService(DownSlotDirectory(), MemoryBookingRepository())
+    service = application.BookingService(FakeSlotDirectoryDown(), FakeBookingRepository())
     service.begin(client.BeginBookingRequest(booking_id="b1"))
 
     with pytest.raises(RuntimeError):
@@ -162,8 +162,8 @@ def test_an_infrastructure_failure_passes_through_untranslated() -> None:
 
 
 def test_begin_resumes_an_in_flight_booking() -> None:
-    directory = MemorySlotDirectory(("mon-9am",))
-    repository = MemoryBookingRepository()
+    directory = FakeSlotDirectory(("mon-9am",))
+    repository = FakeBookingRepository()
     service = application.BookingService(directory, repository)
     service.begin(client.BeginBookingRequest(booking_id="b1"))
     service.provide_name(client.ProvideNameRequest(booking_id="b1", name="Ada"))
@@ -177,8 +177,8 @@ def test_begin_resumes_an_in_flight_booking() -> None:
 
 
 def test_begin_resumes_a_booked_booking_without_touching_it() -> None:
-    directory = MemorySlotDirectory(("mon-9am",))
-    repository = MemoryBookingRepository()
+    directory = FakeSlotDirectory(("mon-9am",))
+    repository = FakeBookingRepository()
     service = application.BookingService(directory, repository)
     service.begin(client.BeginBookingRequest(booking_id="b1"))
     service.provide_name(client.ProvideNameRequest(booking_id="b1", name="Ada"))
@@ -194,7 +194,7 @@ def test_begin_resumes_a_booked_booking_without_touching_it() -> None:
 
 def test_an_unknown_booking_id_is_not_a_domain_rejection() -> None:
     service = application.BookingService(
-        MemorySlotDirectory(("mon-9am",)), MemoryBookingRepository()
+        FakeSlotDirectory(("mon-9am",)), FakeBookingRepository()
     )
 
     with pytest.raises(KeyError):
