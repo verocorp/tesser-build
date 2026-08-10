@@ -173,7 +173,7 @@
       "title": "Gateway: cross-context",
       "skill": "gateway-cross-context.md",
       "py_example": [
-        "examples/python-app/campaign/adapters/gateways/target_checker.py"
+        "examples/python-app/campaign/adapters/gateways/target_policy.py"
       ],
       "go_example": [
         "examples/app"

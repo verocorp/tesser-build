@@ -531,9 +531,9 @@ def repo_for(cfg: Config) -> tuple[CampaignRepository, Closeable]:
     raise invalid("unknown_backend", f"campaign storage {cfg.storage!r} not supported")
 
 
-def build(cfg: Config, checker: TargetChecker) -> tuple[Client, Closeable]:
+def build(cfg: Config, policy: TargetPolicy) -> tuple[Client, Closeable]:
     repo, closeable = repo_for(cfg)
-    return CampaignService(repo, checker), closeable
+    return CampaignService(repo, policy), closeable
 
 
 # bootstrap/config.py — the app Config nests the per-context ones
@@ -549,8 +549,8 @@ def new(cfg: Config) -> App:
     try:
         policy_client, policy_closeable = linkpolicy_wire.build(cfg.linkpolicy)
         stack.push(policy_closeable)
-        checker = LinkPolicyTargetChecker(policy_client)   # cross-context adapter:
-        campaign_client, c_closeable = campaign_wire.build(cfg.campaign, checker)
+        policy = LinkPolicyTargetPolicy(policy_client)   # cross-context adapter:
+        campaign_client, c_closeable = campaign_wire.build(cfg.campaign, policy)
         stack.push(c_closeable)                            # built HERE, injected
         return App(campaign_client, policy_client, stack)  # App owns close()
     except Exception:

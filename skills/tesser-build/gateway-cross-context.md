@@ -14,7 +14,7 @@ impl exists anywhere; note the gap, don't invent a convention).
 > verified impl). The fuller treatment — translation depth, error mapping,
 > async/event-shaped crossings — is **not yet materialized**: note the gap,
 > don't invent a convention; the verified impl is
-> `examples/python-app/campaign/adapters/gateways/target_checker.py`.
+> `examples/python-app/campaign/adapters/gateways/target_policy.py`.
 
 ## Is this what I'm building?
 
@@ -33,7 +33,7 @@ behind an interface the calling context owns?* Yes → cross-context gateway.
 ## Rules
 
 1. **The consumer owns the port.** The calling context declares the interface it
-   needs (campaign's `TargetChecker`), in its own vocabulary, on its own side of
+   needs (campaign's `TargetPolicy`), in its own vocabulary, on its own side of
    the boundary. The peer never learns the caller exists.
 2. **The adapter lives in the caller's `adapters/gateways`.** It wraps the
    peer's `Client` and translates the peer's DTOs into the caller's own types —
@@ -53,6 +53,6 @@ behind an interface the calling context owns?* Yes → cross-context gateway.
 ## Now build it
 
 Not yet materialized beyond the rules above (see status note). The verified impl
-to imitate: `examples/python-app/campaign/adapters/gateways/target_checker.py`
-(port + `CheckOutcome` declared beside campaign's `Client`; adapter over
+to imitate: `examples/python-app/campaign/adapters/gateways/target_policy.py`
+(port + `PolicyOutcome` declared beside campaign's `Client`; adapter over
 `linkpolicy.Client`; wired in `examples/python-app/bootstrap/bootstrap.py`).
