@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import tesser.testing as ts
 
+import campaign.client.client as campaign_client
 from bootstrap.bootstrap import new
 from bootstrap.config import Config
 from campaign.adapters.handlers.cli import Handler
-from campaign.application.parts import CheckOutcome
-from campaign.application.service import TargetChecker
 from campaign.wiring.config import Config as CampaignConfig
-from campaign.wiring.wire import build as build_campaign
 from protocol.cli import CliRequest, CliResponse, UsageError
 from errors import InfraError, conflict, invalid, not_found
 from linkpolicy.wiring.config import Config as LinkPolicyConfig
@@ -17,22 +15,64 @@ from srv.cli.main import commands_for, dispatch, respond
 
 
 @ts.fake
-class _AllowAllChecker(TargetChecker):
-    def check(self, target_url: str) -> CheckOutcome:
-        return CheckOutcome(True, "ok")
+class _ScriptedCampaigns(campaign_client.Client):
+    def __init__(
+        self, *views: campaign_client.CampaignView, error: Exception | None = None
+    ) -> None:
+        self.pending = list(views)
+        self.error = error
+        self.requests: list[object] = []
+
+    def _next(self, request: object) -> campaign_client.CampaignView:
+        self.requests.append(request)
+        if self.error is not None:
+            raise self.error
+        return self.pending.pop(0)
+
+    def create_campaign(
+        self, req: campaign_client.CreateCampaignRequest
+    ) -> campaign_client.CampaignView:
+        return self._next(req)
+
+    def add_link(self, req: campaign_client.AddLinkRequest) -> campaign_client.CampaignView:
+        return self._next(req)
+
+    def deactivate_link(
+        self, req: campaign_client.DeactivateLinkRequest
+    ) -> campaign_client.CampaignView:
+        return self._next(req)
+
+    def get_campaign(
+        self, req: campaign_client.GetCampaignRequest
+    ) -> campaign_client.CampaignView:
+        return self._next(req)
+
+    def resolve(self, req: campaign_client.ResolveRequest) -> campaign_client.ResolveResponse:
+        raise AssertionError("resolve is not part of the CLI surface")
+
+    def list_links(
+        self, req: campaign_client.ListLinksRequest
+    ) -> campaign_client.ListLinksResponse:
+        raise AssertionError("list_links is not part of the CLI surface")
 
 
 def test_create_campaign_transforms_args_to_a_success_line() -> None:
-    client, _ = build_campaign(CampaignConfig("memory"), _AllowAllChecker())
+    client = _ScriptedCampaigns(
+        campaign_client.CampaignView("0123456789abcdef", "100.00", "USD", ())
+    )
     resp = Handler(client).create_campaign(CliRequest(("100.00", "USD")))
     assert resp.exit_code == 0
     assert resp.stdout.startswith("created campaign ")
     assert "budget 100.00 USD" in resp.stdout
     assert resp.stderr == ""
+    request = client.requests[0]
+    assert isinstance(request, campaign_client.CreateCampaignRequest)
+    assert request.budget_amount == "100.00"
+    assert request.budget_currency == "USD"
 
 
 def test_a_domain_rejection_becomes_an_exit_code_not_a_traceback() -> None:
-    client, _ = build_campaign(CampaignConfig("memory"), _AllowAllChecker())
+    client = _ScriptedCampaigns(error=invalid("bad_amount", "must be positive"))
     resp = dispatch({"create-campaign": Handler(client).create_campaign}, ["create-campaign", "-5", "USD"])
     assert resp.exit_code == 2
     assert resp.stdout == ""
@@ -40,21 +80,21 @@ def test_a_domain_rejection_becomes_an_exit_code_not_a_traceback() -> None:
 
 
 def test_a_missing_argument_is_a_usage_error() -> None:
-    client, _ = build_campaign(CampaignConfig("memory"), _AllowAllChecker())
+    client = _ScriptedCampaigns()
     resp = dispatch({"create-campaign": Handler(client).create_campaign}, ["create-campaign", "100.00"])
     assert resp.exit_code == 2
     assert "usage: create-campaign" in resp.stderr
 
 
 def test_an_empty_argument_is_a_usage_error() -> None:
-    client, _ = build_campaign(CampaignConfig("memory"), _AllowAllChecker())
+    client = _ScriptedCampaigns()
     resp = dispatch({"create-campaign": Handler(client).create_campaign}, ["create-campaign", "", "USD"])
     assert resp.exit_code == 2
     assert "missing argument <budget_amount>" in resp.stderr
 
 
 def test_extra_arguments_are_a_usage_error() -> None:
-    client, _ = build_campaign(CampaignConfig("memory"), _AllowAllChecker())
+    client = _ScriptedCampaigns()
     resp = dispatch({"create-campaign": Handler(client).create_campaign}, ["create-campaign", "100.00", "USD", "surplus"])
     assert resp.exit_code == 2
     assert "usage: create-campaign" in resp.stderr

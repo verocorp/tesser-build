@@ -123,18 +123,35 @@ EVAL_PREFIX: Final[str] = "eval_"
 
 EVAL_HOME: Final[str] = "gateways"
 
-# A test's tier is its PLACEMENT. A test inside domain/ may reach only domain,
-# and that IS the isolation tier — the same import walker that governs
-# production code decides it, so the tier stops being convention plus
-# discipline. The rows are evidence-based, read off real test trees rather than
-# derived from the production matrix: an application isolation test fakes every
-# port and asserts on client DTOs, so it needs application and client but not
-# domain.
-TEST_TIER_SAME_CONTEXT: Final[dict[str, tuple[str, ...]]] = {
-    "domain": ("domain",),
-    "application": ("application", "client"),
-    "handlers": ("adapters", "application", "client"),
-    "gateways": ("adapters", "application"),
+# A test's tier is its PLACEMENT, and a sibling test may import what its
+# SUBJECT may import, plus the subject itself. The ladder (Chris, 2026-08-09):
+# each layer imports and fakes exactly one layer down — srv fakes handlers,
+# handlers fake the client, an application service fakes the gateways and repos
+# through the ports application itself defines, and gateways/repos fake
+# nothing (their correctness is meaningless without the real counterpart).
+#
+# So the rows are DERIVED from the production import matrix, not hand-written:
+# a looser test row than the production row for the same layer licenses
+# reach-through the architecture forbids. The one deliberate divergence is
+# handlers: SAME_CONTEXT_IMPORTS["adapters"] admits application because
+# GATEWAYS need it (parts in their signatures); a handler's production imports
+# are client only (the handler carve-out), so its test row is too.
+#
+# TEST_TIER_HOME names the subject's own role — importing your subject is the
+# self-reference every production role has implicitly. The subrole pins
+# adapters tests to their own kind: a handler test may not reach gateways.
+TEST_TIER_HOME: Final[dict[str, tuple[str, str | None]]] = {
+    "domain": ("domain", None),
+    "application": ("application", None),
+    "handlers": ("adapters", "handlers"),
+    "gateways": ("adapters", "gateways"),
+}
+
+TEST_TIER_REACH: Final[dict[str, tuple[str, ...]]] = {
+    "domain": SAME_CONTEXT_IMPORTS["domain"],
+    "application": SAME_CONTEXT_IMPORTS["application"],
+    "handlers": ("client",),
+    "gateways": SAME_CONTEXT_IMPORTS["adapters"],
     TESTS_ROLE: ROLES,
 }
 
@@ -156,6 +173,11 @@ TEST_TIER_FOREIGN: Final[dict[str, tuple[str, ...]]] = {
     "gateways": ("client",),
     TESTS_ROLE: ("application", "client"),
 }
+
+# The srv tier: a router/host test fakes handlers, so it reaches a context
+# only through adapters.handlers — the same door production srv gets ("a host
+# reaches a context only through its handlers").
+SRV_TIER: Final[str] = "srv"
 
 PRIMITIVES: Final[frozenset[str]] = frozenset({"str", "int", "float", "bool"})
 
@@ -947,6 +969,8 @@ class Codebase(ts.AggregateRoot):
         is the environment's property, not the tree's.
         """
         parts = module.name().split(".")
+        if parts[0] == "srv" and len(parts) >= 2:
+            return ("", SRV_TIER)
         if len(parts) < 3 or parts[0] not in contexts:
             return None
         if parts[1] == TESTS_ROLE:
@@ -971,9 +995,30 @@ class Codebase(ts.AggregateRoot):
         contexts: frozenset[str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        same = TEST_TIER_SAME_CONTEXT[tier]
+        if tier == SRV_TIER:
+            for target, lineno, _, _ in module.import_edges():
+                pieces = target.split(".")
+                if pieces[0] not in contexts:
+                    continue
+                if len(pieces) >= 3 and pieces[1] == "adapters" and pieces[2] == "handlers":
+                    continue
+                found.append(
+                    Violation(
+                        f"{module.name()}:{lineno} imports {target}, but a test placed in "
+                        "srv reaches a context only through its handlers; "
+                        "a test reaches only what its placement allows"
+                    )
+                )
+            return tuple(found)
+        reach = TEST_TIER_REACH[tier]
         foreign = TEST_TIER_FOREIGN.get(tier, ())
-        own_roles = ", ".join(same)
+        home = TEST_TIER_HOME.get(tier)
+        if home is None:
+            own_roles = ", ".join(reach)
+        elif home[1] is None:
+            own_roles = ", ".join((home[0], *reach))
+        else:
+            own_roles = ", ".join((f"{home[0]}.{home[1]}", *reach))
         foreign_roles = ", ".join(foreign)
         for target, lineno, _, _ in module.import_edges():
             pieces = target.split(".")
@@ -981,7 +1026,10 @@ class Codebase(ts.AggregateRoot):
                 continue
             tail = pieces[1] if len(pieces) > 1 else ""
             if pieces[0] == context:
-                if tail not in same:
+                allowed = tail in reach
+                if not allowed and home is not None and tail == home[0]:
+                    allowed = home[1] is None or (len(pieces) >= 3 and pieces[2] == home[1])
+                if not allowed:
                     found.append(
                         Violation(
                             f"{module.name()}:{lineno} imports {target}, but a test placed in "
