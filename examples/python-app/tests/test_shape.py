@@ -9,11 +9,7 @@ import reports.client.client as reports_client
 import tesser.context
 import tesser.testing as ts
 from campaign.adapters.handlers.http import Handler
-from campaign.application.parts import CheckOutcome
-from campaign.application.service import TargetChecker
 from campaign.client.client import LinkView, ResolveResponse
-from campaign.wiring.config import Config as CampaignConfig
-from campaign.wiring.wire import build as build_campaign
 from errors import InfraError
 from protocol.http import HttpRequest
 from reports.adapters.handlers.http import Handler as ReportsHandler
@@ -57,14 +53,53 @@ def test_config_lives_in_wiring_not_on_public_top_level() -> None:
 
 
 @ts.fake
-class _AllowAllChecker(TargetChecker):
-    def check(self, target_url: str) -> CheckOutcome:
-        return CheckOutcome(True, "ok")
+class FakeCampaignClientScripted(campaign_client.Client):
+    def __init__(self, *views: campaign_client.CampaignView) -> None:
+        self.pending = list(views)
+        self.requests: list[object] = []
+
+    def _next(self, request: object) -> campaign_client.CampaignView:
+        self.requests.append(request)
+        return self.pending.pop(0)
+
+    def create_campaign(
+        self, req: campaign_client.CreateCampaignRequest
+    ) -> campaign_client.CampaignView:
+        return self._next(req)
+
+    def add_link(self, req: campaign_client.AddLinkRequest) -> campaign_client.CampaignView:
+        return self._next(req)
+
+    def deactivate_link(
+        self, req: campaign_client.DeactivateLinkRequest
+    ) -> campaign_client.CampaignView:
+        return self._next(req)
+
+    def get_campaign(
+        self, req: campaign_client.GetCampaignRequest
+    ) -> campaign_client.CampaignView:
+        return self._next(req)
+
+    def resolve(self, req: campaign_client.ResolveRequest) -> ResolveResponse:
+        raise AssertionError("resolve is not under test here")
+
+    def list_links(
+        self, req: campaign_client.ListLinksRequest
+    ) -> campaign_client.ListLinksResponse:
+        raise AssertionError("list_links is not under test here")
 
 
 def test_handler_translates_wire_to_client_dtos() -> None:
-    client, _ = build_campaign(CampaignConfig("memory"), _AllowAllChecker())
-    handler = Handler(client)
+    scripted = FakeCampaignClientScripted(
+        campaign_client.CampaignView("0123456789abcdef", "100.00", "USD", ()),
+        campaign_client.CampaignView(
+            "0123456789abcdef",
+            "100.00",
+            "USD",
+            (LinkView("promo", "https://ok.example/x", True),),
+        ),
+    )
+    handler = Handler(scripted)
     created = handler.create_campaign(
         HttpRequest(
             "POST", "/", {}, {}, {},
@@ -72,31 +107,41 @@ def test_handler_translates_wire_to_client_dtos() -> None:
         )
     )
     assert created.status_code == 201
-    created_body = created.json_body()
-    campaign_id = created_body["campaign_id"]
-    assert created_body == {
-        "campaign_id": campaign_id,
+    assert created.json_body() == {
+        "campaign_id": "0123456789abcdef",
         "budget": {"amount": "100.00", "currency": "USD"},
         "links": [],
     }
+    create_request = scripted.requests[0]
+    assert isinstance(create_request, campaign_client.CreateCampaignRequest)
+    assert create_request.budget_amount == "100.00"
+    assert create_request.budget_currency == "USD"
     added = handler.add_link(
         HttpRequest(
             "POST", "/", {}, {}, {},
             json.dumps(
-                {"campaign_id": campaign_id, "slug": "promo", "target_url": "https://ok.example/x"}
+                {
+                    "campaign_id": "0123456789abcdef",
+                    "slug": "promo",
+                    "target_url": "https://ok.example/x",
+                }
             ).encode("utf-8"),
         )
     )
     assert added.status_code == 200
     assert added.json_body() == {
-        "campaign_id": campaign_id,
+        "campaign_id": "0123456789abcdef",
         "budget": {"amount": "100.00", "currency": "USD"},
         "links": [{"slug": "promo", "target_url": "https://ok.example/x", "active": True}],
     }
+    add_request = scripted.requests[1]
+    assert isinstance(add_request, campaign_client.AddLinkRequest)
+    assert add_request.campaign_id == "0123456789abcdef"
+    assert add_request.slug == "promo"
 
 
 @ts.fake
-class _StubReports(reports_client.Client):
+class FakeReportsClientStub(reports_client.Client):
     def links_by_verdict(self, req: LinksByVerdictRequest) -> LinksByVerdictResponse:
         return LinksByVerdictResponse(
             links=(LinkVerdictView("promo", "https://ok.example/x", False, "host blocked"),)
@@ -104,13 +149,13 @@ class _StubReports(reports_client.Client):
 
 
 @ts.fake
-class _FailingReports(reports_client.Client):
+class FakeReportsClientFailing(reports_client.Client):
     def links_by_verdict(self, req: LinksByVerdictRequest) -> LinksByVerdictResponse:
         raise InfraError("the campaign store is unreachable")
 
 
 def test_reports_handler_translates_client_dtos_to_wire() -> None:
-    resp = ReportsHandler(_StubReports()).links_by_verdict(HttpRequest("GET", "/", {}, {}, {}, b""))
+    resp = ReportsHandler(FakeReportsClientStub()).links_by_verdict(HttpRequest("GET", "/", {}, {}, {}, b""))
     assert resp.status_code == 200
     assert resp.json_body() == {
         "links": [
@@ -125,7 +170,7 @@ def test_reports_handler_translates_client_dtos_to_wire() -> None:
 
 
 def test_reports_handler_maps_a_failure_to_a_problem_document() -> None:
-    resp = respond(lambda: ReportsHandler(_FailingReports()).links_by_verdict(HttpRequest("GET", "/", {}, {}, {}, b"")))
+    resp = respond(lambda: ReportsHandler(FakeReportsClientFailing()).links_by_verdict(HttpRequest("GET", "/", {}, {}, {}, b"")))
     assert resp.status_code == 503
     assert resp.json_body() == {
         "type": "/problems/unavailable",

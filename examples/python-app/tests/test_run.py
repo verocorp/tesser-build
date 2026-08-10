@@ -11,25 +11,25 @@ from tests.support import SpyApp
 
 
 @ts.fake
-class _ReturningHost(Host):
+class FakeHostReturning(Host):
     def run(self, stop: threading.Event) -> None:
         return
 
 
 @ts.fake
-class _RaisingHost(Host):
+class FakeHostRaising(Host):
     def run(self, stop: threading.Event) -> None:
         raise RuntimeError("serve loop crashed")
 
 
 def test_close_runs_when_host_returns(restore_signals: None) -> None:
     app = SpyApp()
-    run_until_signal(_ReturningHost(), app)
+    run_until_signal(FakeHostReturning(), app)
     assert app.closed == 1
 
 
 def test_close_runs_when_host_raises(restore_signals: None) -> None:
     app = SpyApp()
     with pytest.raises(RuntimeError):
-        run_until_signal(_RaisingHost(), app)
+        run_until_signal(FakeHostRaising(), app)
     assert app.closed == 1

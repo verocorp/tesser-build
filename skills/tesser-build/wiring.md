@@ -53,7 +53,7 @@ Yes → the context's wiring.
    shipping quietly. An unknown coordinate is equally an error naming the
    value.
 5. **Cross-context dependencies arrive injected.** Wiring takes the peer-facing
-   port (e.g. a `TargetChecker`) as a `build` parameter; it never constructs
+   port (e.g. a `TargetPolicy`) as a `build` parameter; it never constructs
    the adapter over a peer's `Client` — only the composition root knows two
    contexts at once (`gateway-cross-context.md`). A context that imports a
    peer inside its wiring has re-coupled what the boundary decoupled.
@@ -65,9 +65,9 @@ Yes → the context's wiring.
   config.py / config.go     ← the context's Config: spec-shaped, primitive leaves
   wire.py / wire.go         ← repo_for(cfg) + build(cfg, deps) → (Client, Closeable)
 
-def build(cfg: Config, checker: TargetChecker) -> tuple[Client, Closeable]:
+def build(cfg: Config, policy: TargetPolicy) -> tuple[Client, Closeable]:
     repo, closeable = repo_for(cfg)              # coordinate-driven, fail-fast
-    return CampaignService(repo, checker), closeable
+    return CampaignService(repo, policy), closeable
 ```
 
 `repo_for` is the impl-selection site — the only place that changes when the

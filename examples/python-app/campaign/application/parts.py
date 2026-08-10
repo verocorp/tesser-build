@@ -41,7 +41,7 @@ class MissingCampaign(ts.Parts):
         return None
 
 
-class CheckOutcome(ts.Parts):
+class PolicyOutcome(ts.Parts):
 
     def __init__(self, allowed: bool, reason: str) -> None:
         self.allowed = allowed

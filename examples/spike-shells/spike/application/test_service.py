@@ -6,7 +6,7 @@ import spike.client.client as client
 
 
 @ts.fake
-class MemoryNoteRepository(application.NoteRepository):
+class FakeNoteRepository(application.NoteRepository):
 
     def __init__(self) -> None:
         self.saved: list[application.NoteParts] = []
@@ -16,7 +16,7 @@ class MemoryNoteRepository(application.NoteRepository):
 
 
 def test_create_builds_the_aggregate_and_saves_its_parts() -> None:
-    repository = MemoryNoteRepository()
+    repository = FakeNoteRepository()
     service = application.NoteService(repository)
 
     response = service.create(client.CreateNoteRequest(text="write the spike"))
@@ -29,7 +29,7 @@ def test_create_builds_the_aggregate_and_saves_its_parts() -> None:
 
 
 def test_invalid_text_rejects_and_saves_nothing() -> None:
-    repository = MemoryNoteRepository()
+    repository = FakeNoteRepository()
     service = application.NoteService(repository)
 
     with pytest.raises(ValueError):

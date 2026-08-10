@@ -50,6 +50,7 @@ APPLIES_TO: dict[str, str] = {
     "Codebase._app_import_violations": "srv / bootstrap module",
     "Codebase._test_module_violations": "test module",
     "Codebase._test_placement_violations": "test module, by where it is placed",
+    "Codebase._eval_module_violations": "eval module (`eval_*.py`)",
     "Codebase._context_tests_init_violations": "context tests `__init__`",
     "Codebase._homeless_violations": "top-level module",
     "Codebase._tests_package_violations": "tests package module",

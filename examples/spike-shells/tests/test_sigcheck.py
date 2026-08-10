@@ -484,6 +484,130 @@ def test_domain_field_rules_are_flagged(tmp_path: Path) -> None:
     assert any("WireRequest.validate" in f and "a DTO carries data and nothing else" in f for f in findings)
 
 
+def test_an_eval_lives_only_in_a_gateway(tmp_path: Path) -> None:
+    """`eval_` is the one path-visible special category, and gateways own it.
+
+    Dropping context-tier evals was safe rather than free: the argument for a
+    through-the-service eval was closing the input-assembly drift gap, and that
+    gap is closed structurally only while schema and prompt assembly stay
+    single-sourced at the edge. Both gateway forms take an eval — flat beside
+    the gateway, and nested under an escalated one.
+    """
+    conforming_tree(tmp_path)
+    body = "import tesser.testing as ts\ndef test_model_picks_a_tool() -> None:\n    assert True\n"
+    write_module(tmp_path, "app/adapters/eval_flat.py", body)
+    write_module(tmp_path, "app/tests/__init__.py", "")
+    write_module(tmp_path, "app/tests/eval_tier.py", body)
+    write_module(tmp_path, "app/domain/eval_role.py", body)
+    findings = check_tree(tmp_path)
+    for outside in ("app.adapters.eval_flat", "app.tests.eval_tier", "app.domain.eval_role"):
+        assert any(
+            f"{outside} is an eval outside a gateway; an eval lives only in a gateway, "
+            "the one place a sampled real-model call is honest" in f
+            for f in findings
+        ), outside
+
+    # Both gateway forms are its home: flat beside the gateway, and nested
+    # under one that escalated.
+    write_module(tmp_path, "app/adapters/gateways/__init__.py", "")
+    write_module(tmp_path, "app/adapters/gateways/eval_llm.py", body)
+    write_module(tmp_path, "app/adapters/gateways/llm/__init__.py", "")
+    write_module(tmp_path, "app/adapters/gateways/llm/evals/__init__.py", "")
+    write_module(tmp_path, "app/adapters/gateways/llm/evals/eval_tools.py", body)
+    housed = check_tree(tmp_path)
+    assert not any("eval_llm is an eval outside a gateway" in f for f in housed)
+    assert not any("eval_tools is an eval outside a gateway" in f for f in housed)
+
+
+def test_a_handler_sibling_fakes_only_the_client(tmp_path: Path) -> None:
+    """The ladder: each layer imports and fakes exactly one layer down.
+
+    A handler's production imports are client only (the handler carve-out), so
+    its sibling test reaches client only — reaching application licenses
+    wiring the real service through the handler, which is the reach-through
+    the ladder forbids. The test row is DERIVED from the production row; it
+    cannot be looser than the thing it governs.
+    """
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/adapters/handlers/http.py",
+        "import tesser.adapters as ts\n"
+        "import app.client.client as client\n"
+        "class Handler(ts.Handler):\n"
+        "    def __init__(self, c: client.Client) -> None:\n"
+        "        self._c = c\n",
+    )
+    write_module(tmp_path, "app/adapters/handlers/__init__.py", "")
+    write_module(tmp_path, "app/adapters/__init__.py", "")
+    write_module(
+        tmp_path,
+        "app/adapters/handlers/test_http.py",
+        "import tesser.testing as ts\n"
+        "import app.adapters.handlers.http as http\n"
+        "import app.client.client as client\n"
+        "import app.application.service as application\n"
+        "import app.adapters.gateways as gateways\n"
+        "def test_x() -> None:\n"
+        "    assert True\n",
+    )
+    write_module(
+        tmp_path,
+        "app/adapters/gateways/__init__.py",
+        "",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "app.adapters.handlers.test_http:4 imports app.application.service, but a test "
+        "placed in handlers reaches only adapters.handlers, client of its own context; "
+        "a test reaches only what its placement allows" in f
+        for f in findings
+    )
+    assert any(
+        "app.adapters.handlers.test_http:5 imports app.adapters.gateways, but a test "
+        "placed in handlers reaches only adapters.handlers, client of its own context; "
+        "a test reaches only what its placement allows" in f
+        for f in findings
+    )
+    assert not any("test_http:2" in f for f in findings)
+    assert not any("test_http:3" in f for f in findings)
+
+
+def test_a_srv_test_reaches_a_context_only_through_its_handlers(tmp_path: Path) -> None:
+    """The top of the ladder: srv fakes handlers, so a srv test reaches a
+    context only through adapters.handlers — the same door production srv gets
+    ("a host reaches a context only through its handlers")."""
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/adapters/handlers/http.py",
+        "import tesser.adapters as ts\n"
+        "import app.client.client as client\n"
+        "class Handler(ts.Handler):\n"
+        "    def __init__(self, c: client.Client) -> None:\n"
+        "        self._c = c\n",
+    )
+    write_module(tmp_path, "app/adapters/handlers/__init__.py", "")
+    write_module(tmp_path, "app/adapters/__init__.py", "")
+    write_module(
+        tmp_path,
+        "srv/test_router.py",
+        "import tesser.testing as ts\n"
+        "import app.adapters.handlers.http as http\n"
+        "import app.application.service as application\n"
+        "def test_x() -> None:\n"
+        "    assert True\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "srv.test_router:3 imports app.application.service, but a test placed in "
+        "srv reaches a context only through its handlers; "
+        "a test reaches only what its placement allows" in f
+        for f in findings
+    )
+    assert not any("test_router:2" in f for f in findings)
+
+
 def test_a_test_reaches_only_what_its_placement_allows(tmp_path: Path) -> None:
     """Placement IS the tier — the same import walker decides both.
 
