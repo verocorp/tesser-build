@@ -40,7 +40,7 @@ class FilesystemSourceReader(ts.Repository):
             if not parts:
                 continue
             try:
-                source: str | None = path.read_text(encoding="utf-8")
+                source: str | None = path.read_text(encoding="utf-8-sig")
             except (UnicodeDecodeError, OSError):
                 source = None
             found.append((str(relative), ".".join(parts), source, is_package))

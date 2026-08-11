@@ -2010,7 +2010,7 @@ def test_a_non_utf8_file_is_a_finding_not_a_crash(tmp_path: Path) -> None:
     (tmp_path / "binary.py").write_bytes(b"\xff\xfe\x00junk")
     findings = check_tree(tmp_path)
     assert any(
-        "binary.py:1: TB043" in f and "every checked module is UTF-8 Python" in f
+        "binary.py:1: TB043" in f and "every checked module is readable UTF-8 Python" in f
         for f in findings
     )
 
@@ -2068,3 +2068,109 @@ def test_a_file_level_ignore_covers_the_whole_module(tmp_path: Path) -> None:
     findings = check_tree(tmp_path)
     assert not any("never imports tesser.srv" in f for f in findings)
     assert not any("TB090" in f and "srv/host.py" in f for f in findings)
+
+
+def test_a_marker_suppresses_several_codes_space_or_comma_separated(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(tmp_path, "stray.py", "import os  # tessercheck:ignore TB040 TB050\n")
+    write_module(tmp_path, "loose.py", "import os  # tessercheck:ignore TB040, TB050\n")
+    findings = check_tree(tmp_path)
+    assert not any("stray" in f for f in findings)
+    assert not any("loose" in f for f in findings)
+
+
+def test_a_file_level_ignore_requires_codes(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(tmp_path, "stray.py", "import os  # tessercheck:ignore-file\n")
+    findings = check_tree(tmp_path)
+    assert any("stray belongs to no governed package" in f for f in findings)
+    assert any("stray.py:1: TB090" in f for f in findings)
+
+
+def test_a_typo_or_junk_token_makes_the_marker_inert(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(tmp_path, "stray.py", "import os  # tessercheck:ignored TB040\n")
+    write_module(tmp_path, "loose.py", "import os  # tessercheck:ignore TB040 permanent\n")
+    findings = check_tree(tmp_path)
+    assert any("stray belongs to no governed package" in f for f in findings)
+    assert any("loose belongs to no governed package" in f for f in findings)
+    assert not any("TB090" in f for f in findings)
+
+
+def test_a_bare_line_ignore_is_line_scoped(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/domain/extra.py",
+        "import os\nimport tesser.domain as ts  # tessercheck:ignore\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any("app.domain.extra imports os" in f and " TB062 " in f for f in findings)
+    assert any("app/domain/extra.py:2: TB090" in f for f in findings)
+
+
+def test_tb090_itself_cannot_be_ignored(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/domain/extra.py",
+        "import tesser.domain as ts  # tessercheck:ignore-file TB090\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "app/domain/extra.py:1: TB090" in f
+        and "an ignore comment suppresses an actual finding" in f
+        for f in findings
+    )
+
+
+def test_reader_findings_are_never_inline_suppressible(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(tmp_path, "broken.py", "# tessercheck:ignore-file TB043\ndef f(:\n")
+    findings = check_tree(tmp_path)
+    assert any(
+        "broken.py:2: TB043" in f and "every checked module parses" in f for f in findings
+    )
+    assert not any("TB090" in f for f in findings)
+
+
+def test_a_colliding_unparseable_file_reports_the_collision(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(tmp_path, "col.py", "def f(:\n")
+    write_module(tmp_path, "col/__init__.py", "")
+    findings = check_tree(tmp_path)
+    assert any(
+        "col.py:1: TB043" in f and "a module has one definition" in f for f in findings
+    )
+    assert not any("every checked module parses" in f for f in findings)
+
+
+def test_a_utf8_bom_file_is_checked_normally(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    (tmp_path / "app" / "domain" / "bom.py").write_bytes(
+        b"\xef\xbb\xbfimport tesser.domain as ts\n"
+    )
+    findings = check_tree(tmp_path)
+    assert not any("bom" in f for f in findings)
+
+
+def test_optional_construction_data_is_the_only_union(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/domain/opt.py",
+        "import tesser.domain as ts\n"
+        "class OptSpec(ts.Spec):\n"
+        "    def __init__(self, text: str | None, items: list | None, mix: str | int) -> None:\n"
+        "        self.text = text\n"
+        "        self.items = items\n"
+        "        self.mix = mix\n",
+    )
+    findings = check_tree(tmp_path)
+    assert not any("parameter 'text'" in f for f in findings)
+    assert any(
+        "parameter 'items' is not allowed; "
+        "a spec field is a primitive, a value object, or a child spec" in f
+        for f in findings
+    )
+    assert any("parameter 'mix' is not allowed" in f for f in findings)

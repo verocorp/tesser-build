@@ -316,16 +316,16 @@ def rule_rows(tree: ast.Module) -> list[RuleRow]:
                 if isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Name)
                 and node.func.id == "Violation"
-                and node.args
             ]
             if not calls:
                 continue
             aliases = local_aliases(method)
             for binding in instantiations(tree, method):
                 for call in calls:
-                    if len(call.args) != 4:
+                    if call.keywords or len(call.args) != 4:
                         raise RuntimeError(
-                            f"checks.py:{call.lineno}: Violation takes (path, line, code, message)"
+                            f"checks.py:{call.lineno}: Violation takes exactly the four "
+                            "positional arguments (path, line, code, message)"
                         )
                     code_expr = call.args[2]
                     if isinstance(code_expr, ast.Constant) and isinstance(code_expr.value, str):

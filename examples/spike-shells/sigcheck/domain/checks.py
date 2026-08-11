@@ -1,5 +1,6 @@
 import ast
 import io
+import re
 import tokenize
 from typing import Final
 
@@ -101,6 +102,8 @@ TESSER: Final[str] = "tesser"
 IGNORE_MARKER: Final[str] = "tessercheck:ignore"
 
 IGNORE_FILE_MARKER: Final[str] = "tessercheck:ignore-file"
+
+CODE_SHAPE: Final[re.Pattern[str]] = re.compile(r"TB[0-9]{3}\Z")
 
 ROLE_TESSER_PACKAGE: Final[dict[str, str]] = {
     "domain": "tesser.domain",
@@ -271,6 +274,8 @@ class Ignore(ts.ValueObject):
         return self._file_level
 
     def suppresses(self, violation: Violation) -> bool:
+        if self._file_level and not self._codes:
+            return False
         if self._codes and violation.code() not in self._codes:
             return False
         return self._file_level or violation.line() == self._line
@@ -439,7 +444,11 @@ class Module(ts.Entity):
                 file_level = False
             else:
                 continue
+            if rest and rest[0] not in " \t":
+                continue
             codes = tuple(part for part in rest.replace(",", " ").split() if part)
+            if any(not CODE_SHAPE.match(code) for code in codes):
+                continue
             found.append(Ignore(line=token.start[0], codes=codes, file_level=file_level))
         return tuple(found)
 
@@ -529,7 +538,8 @@ class Codebase(ts.AggregateRoot):
                         path,
                         1,
                         "TB043",
-                        f"{name} is not UTF-8 text; every checked module is UTF-8 Python",
+                        f"{name} could not be read as UTF-8 text; "
+                        "every checked module is readable UTF-8 Python",
                     )
                 )
                 continue
@@ -2098,9 +2108,12 @@ class Codebase(ts.AggregateRoot):
         if isinstance(node, ast.Name) and node.id in PRIMITIVES:
             return True
         if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
-            return self._allowed_annotation(
-                module, node.left, blocks, allowed_blocks
-            ) and self._allowed_annotation(module, node.right, blocks, allowed_blocks)
+            left_none = isinstance(node.left, ast.Constant) and node.left.value is None
+            right_none = isinstance(node.right, ast.Constant) and node.right.value is None
+            if left_none == right_none:
+                return False
+            wrapped = node.right if left_none else node.left
+            return self._allowed_annotation(module, wrapped, blocks, allowed_blocks)
         if isinstance(node, ast.Subscript):
             if isinstance(node.value, ast.Name) and node.value.id == "tuple":
                 elements = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]

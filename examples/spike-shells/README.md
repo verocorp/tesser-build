@@ -44,11 +44,18 @@ The clause after the semicolon is the rule — the same text as its RULES.md
 row — and the `TB0xx` code names the rule family (RULES.md's Code column).
 Codes are reporting affordances, not an adoption mechanism: CI is always
 zero-findings, and the only opt-out is per instance, at the site. A trailing
-`# tessercheck:ignore` suppresses that line's findings;
-`# tessercheck:ignore TB052` suppresses exactly that family on the line; a
-`# tessercheck:ignore-file TB040` anywhere in a file suppresses the family
-module-wide. An ignore that suppresses nothing is itself a finding (TB090),
-so opt-outs cannot outlive their reason.
+`# tessercheck:ignore` suppresses the findings *reported at* that line (for
+a signature finding that is the `def` line); `# tessercheck:ignore TB052`
+suppresses exactly that family on the line (several codes may follow,
+space- or comma-separated); `# tessercheck:ignore-file TB040` anywhere in a
+file suppresses the family module-wide — the file form **requires** codes,
+because a blanket module switch is not a per-instance opt-out. An ignore
+that suppresses nothing is itself a finding (TB090), TB090 itself cannot be
+ignored, and the grammar is strict: a typo in the marker word or a token
+that is not a `TB0xx` code makes the comment inert, so the finding it meant
+to hide stays visible. TB043 reader findings (unparseable, unreadable, or
+twice-defined files) are never inline-suppressible — a file the parser
+cannot read cannot carry a working marker, so those are fixed, not excused.
 
 ## What to expect on an arbitrary tree
 
