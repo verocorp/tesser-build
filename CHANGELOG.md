@@ -5,6 +5,41 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.20.0] - 2026-08-11
+
+The sigcheck internal cleanup batch — the deferred pre-landing items from
+TODOS.md, landed as the base for the tessercheck merge waves. Behavior on
+every input is message-for-message identical (proven differentially and by
+the ratchet holding at exactly 148/148); the one visible change is finding
+*order* on a module whose body interleaves class and statement violations,
+where class findings now print first.
+
+### Changed
+
+- One `_tesser_import_violations` replaces the five inline copies of the
+  exactly-once-as-ts walk (bootstrap, srv, protocol, role, test), and one
+  `_statement_violations` replaces the four statement-totality loops; each
+  caller keeps only its own class handling. Clause texts ride as call-site
+  literals because `rules.py` renders RULES.md rows from them.
+- `ImportEdge` and `TesserImport` value objects replace the
+  positionally-decoded 4-tuples for import edges. The alias slot is now
+  `as_ts: bool`, honest for from-form imports.
+- The cross-context legality sentinel (`len(found) == before`) is an
+  explicit `denied` list in both import walkers.
+- `Module` freezes every accessor collection once at construction.
+- `rules.py` resolves call-site bindings before `HOLE_NAMES`, derives the
+  conftest/`__main__` exemption bullets from the code's own AST guards (so
+  governing either forces a RULES.md diff), and distinguishes a missing
+  `TOOLING_MODULES` from a malformed one.
+
+### Fixed
+
+- Pre-landing review findings: a provably-dead sub-condition in the
+  absent-imports guard, and direct test coverage for the paths the batch
+  introduced (edge-record construction guards, a test module owing no
+  `tesser.testing` import, a denied srv edge suppressing the form rule,
+  and both new generator tripwires).
+
 ## [0.0.19.0] - 2026-08-08
 
 The srv signature matrix, ruled by building it. Three questions had been
