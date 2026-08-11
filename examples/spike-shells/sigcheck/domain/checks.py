@@ -602,8 +602,8 @@ class Codebase(ts.AggregateRoot):
             for stmt in module.body()
         )
 
+    @staticmethod
     def _tesser_import_violations(
-        self,
         module: Module,
         subject: str,
         package: str,
@@ -639,7 +639,7 @@ class Codebase(ts.AggregateRoot):
                             f"{once_clause}"
                         )
                     )
-        if absent_clause is not None and not seen_own and not seen_any:
+        if absent_clause is not None and not seen_any:
             found.append(Violation(f"{module.name()} never imports {package}; {absent_clause}"))
         return tuple(found)
 
