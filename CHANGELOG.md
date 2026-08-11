@@ -5,6 +5,44 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.21.0] - 2026-08-11
+
+The sigcheck harness wave — the consumer-facing prerequisites for
+graduating the spike into tessercheck-py. A finding is now editor-clickable
+(`path:line: TB0xx message; clause`), a broken file is a finding instead of
+a crashed run, and the only opt-out mechanism is per instance, at the site.
+
+### Added
+
+- Family codes on every finding (TB040 totality through TB090 ignore
+  hygiene), rendered as RULES.md's new Code column. Codes are reporting
+  affordances: CI stays zero-findings and there is no code-level off
+  switch.
+- Inline opt-outs: a trailing `# tessercheck:ignore` suppresses the
+  reported line, `# tessercheck:ignore TB052` exactly that family
+  (several codes may follow, space- or comma-separated), and
+  `# tessercheck:ignore-file TB040` the family module-wide — the file
+  form requires codes. An ignore that suppresses nothing is itself a
+  TB090 finding, TB090 cannot be ignored, and the grammar is strict: a
+  typo'd marker or an unknown code token makes the comment inert rather
+  than silently suppressing.
+- Per-file reader isolation: an unparseable module, an unreadable file,
+  or a module defined twice (`domain.py` beside `domain/__init__.py`) is
+  a TB043 finding; the standard tooling directories (`.venv`, `build`,
+  `node_modules`, …) are pruned; UTF-8-BOM files check normally.
+- Optional construction data: `X | None` is accepted wherever `X` is, in
+  specs, DTOs, and value-object constructors — and only that union
+  shape (`str | int` stays a finding).
+
+### Changed
+
+- The finding format moved the line number out of the message text into
+  the structured `path:line:` slot; message heads keep their dotted
+  locators. The python-app ratchet baseline is regenerated for the new
+  format and carries four named TB090 entries — python-app's existing
+  bare markers aimed at tessercheck-py's TB030, transitional until that
+  check ports into sigcheck.
+
 ## [0.0.20.0] - 2026-08-11
 
 The sigcheck internal cleanup batch — the deferred pre-landing items from
