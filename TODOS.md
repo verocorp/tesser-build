@@ -267,32 +267,39 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   (its `campaign/application/__init__.py` is empty) — so the sanctioned
   shape is one no tree in the repo can actually use. Either teach the
   classifier to follow re-exports or stop sanctioning them.
-- [ ] **sigcheck internal cleanups (pre-landing review, deferred as a batch;
-  re-scoped 2026-08-07 after the srv-wire wave restructured the methods).**
-  (1) the exactly-once-as-ts walk: the srv-wire wave extracted
-  `_shell_import_violations` (parameterized, covers the srv/bootstrap/wire
-  branch), but `_import_violations` and `_test_module_violations` still carry
-  their own copies; the statement-totality loop now exists at FOUR sites
-  (`_bootstrap_module_violations`, `_srv_module_violations`,
-  `_wire_module_violations`, `_role_module_violations`) — extract without
-  breaking the generator's literal-clause guard; (2) `import_edges()`/
-  `tesser_imports()` return positionally-decoded 4-tuples with different
-  slot meanings — make both NamedTuples, and make `has_alias` honest (or
-  unrepresentable) for from-edges; (3) hardcoded `"tesser.context"`/
-  `"tesser.testing"`/`"tesser"` comparison literals → Final constants;
-  (4) the `len(found) == before` legality sentinel → an explicit `denied`
-  list; (5) rules.py: derive the conftest/`__main__` exemption bullets from
-  the AST guards (like TOOLING_MODULES and WIRE_SUFFIX now are) so
-  governing conftest forces the RULES.md diff, and split the
-  TOOLING_MODULES not-found vs wrong-shape errors; (6) `Module` accessors
-  (`body()`/`import_edges()`/`function_names()`/`class_defs()`) rebuild
-  their tuple/frozenset on every call and `_delegation_violations` calls
-  `function_names()` inside its walk loop — cache on the immutable Module
-  (measured immaterial today: ~60ms whole-tree); (7) the rule-coverage
-  meta-test is clause-granular, not branch-granular — branches sharing a
-  clause collapse into one RULES.md row, so a fixture covering one branch
-  reports the row covered (found 2026-08-07; all such branches were probed
-  correct, so this is a guard-precision gap, not a bug).
+- [x] **sigcheck internal cleanups — RESOLVED 2026-08-11 (cleanup-batch wave)
+  except item (7), which stays open below.** What landed, and the shapes the
+  constraints forced: (1) one `_tesser_import_violations` covers all five
+  exactly-once-as-ts sites (bootstrap/srv/protocol/role/test) — clause texts
+  are passed as positional literals at each call site because the RULES.md
+  generator binds call-site string constants into message holes, and the
+  test row passes `absent_clause=None` to keep at-most-once semantics (the
+  generator skips the never-imports row for a None binding); the
+  statement-totality loop is one `_statement_violations`, with each caller
+  keeping only its own ClassDef branch; (2) `ImportEdge` and `TesserImport`
+  are `ts.ValueObject`s, NOT NamedTuples — a NamedTuple class declares no
+  ts.* base and a type alias has no sigcheck-clean spelling (the documented
+  alias hard collision), so the domain shape was the only conformant one;
+  `alias: str | None` also has no conformant VO field form, so the slot is
+  `as_ts: bool`, which is honest for from-edges (a from-import is never the
+  module aliased as ts); (3) the `"tesser"` root comparisons are the
+  `TESSER` constant; the package strings (`tesser.context` etc.) stay as
+  call-site literals by design — the generator needs them literal to render
+  rows; (4) legality sentinel → explicit `denied` list in
+  `_import_violations`/`_app_import_violations`; (5) rules.py derives the
+  conftest/`__main__` bullets from the `_module_violations` AST guards
+  (`ungoverned_basenames`, cross-checked against `UNGOVERNED_PROSE`), and
+  the TOOLING_MODULES not-found/wrong-shape errors are split; (6) `Module`
+  freezes every accessor collection in `__init__`. One cosmetic RULES.md
+  diff: the bootstrap module-contents row's two shapes swapped order.
+- [ ] **sigcheck rule-coverage meta-test is clause-granular, not
+  branch-granular** (item 7 of the cleanup batch, kept open) — branches
+  sharing a clause collapse into one RULES.md row, so a fixture covering one
+  branch reports the row covered (found 2026-08-07; all such branches were
+  probed correct, so this is a guard-precision gap, not a bug). Unchanged by
+  the extraction wave: clauses are parameterized per call site, so each
+  caller still renders its own rows — the collapse is still branches WITHIN
+  one row (again/from-names/no-alias share a clause), same as before.
 - [x] **Two clauses claim more than the code enforces** — RESOLVED 2026-08-06,
   Chris ruling: "the code should enforce what I specified." The code moved,
   not the wording: (1) presence is unconditional — every role and
