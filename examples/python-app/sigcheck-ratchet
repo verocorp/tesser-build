@@ -1,148 +1,152 @@
-bootstrap.bootstrap imports names from campaign.adapters.gateways.target_policy; a context module is imported as an aliased module, never its members
-bootstrap.bootstrap never imports tesser.context; a bootstrap module imports tesser.context exactly once, as ts
-bootstrap.bootstrap.App is a class; a bootstrap module holds only imports, declared functions, and Final constants
-bootstrap.bootstrap.CleanupStack is a class; a bootstrap module holds only imports, declared functions, and Final constants
-bootstrap.bootstrap.new is an undeclared module function; a bootstrap function declares itself with @ts.function
-bootstrap.config declares a module constant without Final; a bootstrap constant is Final
-bootstrap.config imports names from campaign.wiring.config; a context module is imported as an aliased module, never its members
-bootstrap.config imports names from linkpolicy.wiring.config; a context module is imported as an aliased module, never its members
-bootstrap.config imports names from reports.wiring.config; a context module is imported as an aliased module, never its members
-bootstrap.config never imports tesser.context; a bootstrap module imports tesser.context exactly once, as ts
-bootstrap.config.Config is a class; a bootstrap module holds only imports, declared functions, and Final constants
-bootstrap.config.HttpConfig is a class; a bootstrap module holds only imports, declared functions, and Final constants
-bootstrap.config._port is an undeclared module function; a bootstrap function declares itself with @ts.function
-bootstrap.config.from_env is an undeclared module function; a bootstrap function declares itself with @ts.function
-campaign.adapters.gateways.repo_memory imports names from campaign.application.parts; a context module is imported as an aliased module, never its members
-campaign.adapters.gateways.target_policy imports names from campaign.application.parts; a context module is imported as an aliased module, never its members
-campaign.adapters.gateways.target_policy imports names from linkpolicy.client.client; a context module is imported as an aliased module, never its members
-campaign.adapters.gateways.target_policy imports names from linkpolicy.client.client; a context module is imported as an aliased module, never its members
-campaign.adapters.handlers.cli imports names from campaign.client.client; a context module is imported as an aliased module, never its members
-campaign.adapters.handlers.http imports names from campaign.client.client; a context module is imported as an aliased module, never its members
-campaign.application.parts imports names from campaign.domain.campaign; a context module is imported as an aliased module, never its members
-campaign.application.parts imports names from campaign.domain.short_link; a context module is imported as an aliased module, never its members
-campaign.application.service imports errors; domain, client, and application import only their context, their tesser package, and the pure stdlib
-campaign.application.service imports names from campaign.application.parts; a context module is imported as an aliased module, never its members
-campaign.application.service imports names from campaign.application.views; a context module is imported as an aliased module, never its members
-campaign.application.service imports names from campaign.client.client; a context module is imported as an aliased module, never its members
-campaign.application.service imports names from campaign.domain.campaign; a context module is imported as an aliased module, never its members
-campaign.application.service imports names from campaign.domain.money; a context module is imported as an aliased module, never its members
-campaign.application.service imports names from campaign.domain.short_link; a context module is imported as an aliased module, never its members
-campaign.application.service imports names from campaign.domain.values; a context module is imported as an aliased module, never its members
-campaign.application.service imports secrets; domain, client, and application import only their context, their tesser package, and the pure stdlib
-campaign.application.views imports errors; domain, client, and application import only their context, their tesser package, and the pure stdlib
-campaign.application.views imports names from campaign.application.parts; a context module is imported as an aliased module, never its members
-campaign.application.views imports names from campaign.client.client; a context module is imported as an aliased module, never its members
-campaign.application.views imports names from campaign.domain.campaign; a context module is imported as an aliased module, never its members
-campaign.application.views imports names from campaign.domain.money; a context module is imported as an aliased module, never its members
-campaign.application.views imports names from campaign.domain.short_link; a context module is imported as an aliased module, never its members
-campaign.application.views imports names from campaign.domain.values; a context module is imported as an aliased module, never its members
-campaign.domain.campaign imports errors; domain, client, and application import only their context, their tesser package, and the pure stdlib
-campaign.domain.campaign imports names from campaign.domain.money; a context module is imported as an aliased module, never its members
-campaign.domain.campaign imports names from campaign.domain.short_link; a context module is imported as an aliased module, never its members
-campaign.domain.campaign imports names from campaign.domain.values; a context module is imported as an aliased module, never its members
-campaign.domain.money imports errors; domain, client, and application import only their context, their tesser package, and the pure stdlib
-campaign.domain.money imports serialization; domain, client, and application import only their context, their tesser package, and the pure stdlib
-campaign.domain.short_link imports copy; domain, client, and application import only their context, their tesser package, and the pure stdlib
-campaign.domain.short_link imports names from campaign.domain.values; a context module is imported as an aliased module, never its members
-campaign.domain.values imports errors; domain, client, and application import only their context, their tesser package, and the pure stdlib
-campaign.domain.values imports serialization; domain, client, and application import only their context, their tesser package, and the pure stdlib
-campaign.domain.values imports urllib.parse; domain, client, and application import only their context, their tesser package, and the pure stdlib
-campaign.wiring.wire imports names from campaign.adapters.gateways.repo_memory; a context module is imported as an aliased module, never its members
-campaign.wiring.wire imports names from campaign.application.service; a context module is imported as an aliased module, never its members
-campaign.wiring.wire imports names from campaign.client.client; a context module is imported as an aliased module, never its members
-campaign.wiring.wire imports names from campaign.wiring.config; a context module is imported as an aliased module, never its members
-errors belongs to no governed package; every module belongs to a context, srv, bootstrap, tests, or the protocol package
-lifecycle belongs to no governed package; every module belongs to a context, srv, bootstrap, tests, or the protocol package
-linkpolicy.adapters.gateways.repo_memory imports names from linkpolicy.application.service; a context module is imported as an aliased module, never its members
-linkpolicy.application.service imports names from linkpolicy.client.client; a context module is imported as an aliased module, never its members
-linkpolicy.application.service imports names from linkpolicy.domain.policy; a context module is imported as an aliased module, never its members
-linkpolicy.domain.policy imports errors; domain, client, and application import only their context, their tesser package, and the pure stdlib
-linkpolicy.domain.policy imports serialization; domain, client, and application import only their context, their tesser package, and the pure stdlib
-linkpolicy.domain.policy imports urllib.parse; domain, client, and application import only their context, their tesser package, and the pure stdlib
-linkpolicy.wiring.wire imports names from linkpolicy.adapters.gateways.repo_memory; a context module is imported as an aliased module, never its members
-linkpolicy.wiring.wire imports names from linkpolicy.application.service; a context module is imported as an aliased module, never its members
-linkpolicy.wiring.wire imports names from linkpolicy.client.client; a context module is imported as an aliased module, never its members
-linkpolicy.wiring.wire imports names from linkpolicy.wiring.config; a context module is imported as an aliased module, never its members
-protocol.http declares a module constant without Final; a protocol constant is Final
-reports.adapters.gateways.campaign_links imports names from reports.application.service; a context module is imported as an aliased module, never its members
-reports.adapters.gateways.policy_verdicts imports names from reports.application.service; a context module is imported as an aliased module, never its members
-reports.adapters.handlers.http imports names from reports.client.client; a context module is imported as an aliased module, never its members
-reports.application.service imports names from reports.client.client; a context module is imported as an aliased module, never its members
-reports.application.service imports names from reports.domain.report; a context module is imported as an aliased module, never its members
-reports.domain.values imports errors; domain, client, and application import only their context, their tesser package, and the pure stdlib
-reports.domain.values imports serialization; domain, client, and application import only their context, their tesser package, and the pure stdlib
-reports.wiring.wire imports names from reports.adapters.gateways.campaign_links; a context module is imported as an aliased module, never its members
-reports.wiring.wire imports names from reports.adapters.gateways.policy_verdicts; a context module is imported as an aliased module, never its members
-reports.wiring.wire imports names from reports.application.service; a context module is imported as an aliased module, never its members
-reports.wiring.wire imports names from reports.client.client; a context module is imported as an aliased module, never its members
-reports.wiring.wire imports names from reports.wiring.config; a context module is imported as an aliased module, never its members
-serialization belongs to no governed package; every module belongs to a context, srv, bootstrap, tests, or the protocol package
-srv.cli.main has a loose module-level statement; a srv module holds only imports, declared classes and functions, and Final constants
-srv.cli.main imports names from campaign.adapters.handlers.cli; a context module is imported as an aliased module, never its members
-srv.http.host imports names from campaign.adapters.handlers.http; a context module is imported as an aliased module, never its members
-srv.http.host imports names from reports.adapters.handlers.http; a context module is imported as an aliased module, never its members
-srv.http.main has a loose module-level statement; a srv module holds only imports, declared classes and functions, and Final constants
-srv.http.main never imports tesser.srv; a srv module imports tesser.srv exactly once, as ts
-srv.http.main.main is an undeclared module function; a srv function declares itself with @ts.function
-srv.http.router never imports tesser.srv; a srv module imports tesser.srv exactly once, as ts
-srv.http.router.Match declares no ts.* base; a srv class declares its block
-srv.http.router.Route declares no ts.* base; a srv class declares its block
-srv.http.router._path_params is an undeclared module function; a srv function declares itself with @ts.function
-srv.http.router.match is an undeclared module function; a srv function declares itself with @ts.function
-srv.http.router.split is an undeclared module function; a srv function declares itself with @ts.function
-srv.run never imports tesser.srv; a srv module imports tesser.srv exactly once, as ts
-srv.run.run_until_signal is an undeclared module function; a srv function declares itself with @ts.function
-tests.discovery is neither a test module nor conftest; a tests package holds only test modules and conftest
-tests.support is neither a test module nor conftest; a tests package holds only test modules and conftest
-tests.test_bootstrap_once imports names from campaign.application.service; a context module is imported as an aliased module, never its members
-tests.test_bootstrap_once imports names from campaign.client.client; a context module is imported as an aliased module, never its members
-tests.test_bootstrap_once imports names from campaign.wiring.config; a context module is imported as an aliased module, never its members
-tests.test_bootstrap_once imports names from campaign.wiring.wire; a context module is imported as an aliased module, never its members
-tests.test_call_fail_closed imports names from campaign.application.parts; a context module is imported as an aliased module, never its members
-tests.test_call_fail_closed imports names from campaign.application.service; a context module is imported as an aliased module, never its members
-tests.test_call_fail_closed imports names from campaign.client.client; a context module is imported as an aliased module, never its members
-tests.test_campaign_lifecycle imports names from campaign.adapters.gateways.repo_memory; a context module is imported as an aliased module, never its members
-tests.test_campaign_lifecycle imports names from campaign.adapters.handlers.http; a context module is imported as an aliased module, never its members
-tests.test_campaign_lifecycle imports names from campaign.application.parts; a context module is imported as an aliased module, never its members
-tests.test_campaign_lifecycle imports names from campaign.application.service; a context module is imported as an aliased module, never its members
-tests.test_campaign_lifecycle imports names from campaign.application.service; a context module is imported as an aliased module, never its members
-tests.test_campaign_lifecycle imports names from campaign.client.client; a context module is imported as an aliased module, never its members
-tests.test_campaign_lifecycle imports names from campaign.domain.campaign; a context module is imported as an aliased module, never its members
-tests.test_campaign_lifecycle imports names from campaign.domain.money; a context module is imported as an aliased module, never its members
-tests.test_campaign_lifecycle imports names from campaign.domain.short_link; a context module is imported as an aliased module, never its members
-tests.test_campaign_lifecycle imports names from campaign.domain.values; a context module is imported as an aliased module, never its members
-tests.test_canonical imports names from campaign.domain.campaign; a context module is imported as an aliased module, never its members
-tests.test_canonical imports names from campaign.domain.money; a context module is imported as an aliased module, never its members
-tests.test_canonical imports names from campaign.domain.short_link; a context module is imported as an aliased module, never its members
-tests.test_cleanup imports names from campaign.wiring.config; a context module is imported as an aliased module, never its members
-tests.test_cleanup imports names from linkpolicy.client.client; a context module is imported as an aliased module, never its members
-tests.test_cleanup imports names from linkpolicy.wiring.config; a context module is imported as an aliased module, never its members
-tests.test_cleanup imports names from reports.client.client; a context module is imported as an aliased module, never its members
-tests.test_cleanup imports names from reports.wiring.config; a context module is imported as an aliased module, never its members
-tests.test_cli imports names from campaign.adapters.handlers.cli; a context module is imported as an aliased module, never its members
-tests.test_cli imports names from campaign.wiring.config; a context module is imported as an aliased module, never its members
-tests.test_cli imports names from linkpolicy.wiring.config; a context module is imported as an aliased module, never its members
-tests.test_cli imports names from reports.wiring.config; a context module is imported as an aliased module, never its members
-tests.test_impl_selection imports names from campaign.wiring.config; a context module is imported as an aliased module, never its members
-tests.test_impl_selection imports names from campaign.wiring.wire; a context module is imported as an aliased module, never its members
-tests.test_impl_selection imports names from linkpolicy.wiring.config; a context module is imported as an aliased module, never its members
-tests.test_impl_selection imports names from linkpolicy.wiring.wire; a context module is imported as an aliased module, never its members
-tests.test_impl_selection imports names from reports.wiring.config; a context module is imported as an aliased module, never its members
-tests.test_reports imports names from campaign.client.client; a context module is imported as an aliased module, never its members
-tests.test_reports imports names from reports.client.client; a context module is imported as an aliased module, never its members
-tests.test_reports imports names from reports.domain.report; a context module is imported as an aliased module, never its members
-tests.test_roundtrip_law imports names from campaign.domain.money; a context module is imported as an aliased module, never its members
-tests.test_roundtrip_law imports names from campaign.domain.values; a context module is imported as an aliased module, never its members
-tests.test_serialization_edges imports names from campaign.adapters.gateways.repo_memory; a context module is imported as an aliased module, never its members
-tests.test_serialization_edges imports names from campaign.adapters.handlers.http; a context module is imported as an aliased module, never its members
-tests.test_serialization_edges imports names from campaign.application.parts; a context module is imported as an aliased module, never its members
-tests.test_serialization_edges imports names from campaign.application.service; a context module is imported as an aliased module, never its members
-tests.test_serialization_edges imports names from campaign.application.views; a context module is imported as an aliased module, never its members
-tests.test_serialization_edges imports names from campaign.domain.campaign; a context module is imported as an aliased module, never its members
-tests.test_serialization_edges imports names from campaign.domain.money; a context module is imported as an aliased module, never its members
-tests.test_serialization_edges imports names from campaign.domain.short_link; a context module is imported as an aliased module, never its members
-tests.test_shape imports names from campaign.adapters.handlers.http; a context module is imported as an aliased module, never its members
-tests.test_shape imports names from campaign.client.client; a context module is imported as an aliased module, never its members
-tests.test_shape imports names from reports.adapters.handlers.http; a context module is imported as an aliased module, never its members
-tests.test_shape imports names from reports.client.client; a context module is imported as an aliased module, never its members
-tests.test_shape imports tesser.context; a test module imports only tesser.testing
+bootstrap/bootstrap.py: TB050 bootstrap.bootstrap never imports tesser.context; a bootstrap module imports tesser.context exactly once, as ts
+bootstrap/bootstrap.py: TB051 bootstrap.bootstrap.App is a class; a bootstrap module holds only imports, declared functions, and Final constants
+bootstrap/bootstrap.py: TB051 bootstrap.bootstrap.CleanupStack is a class; a bootstrap module holds only imports, declared functions, and Final constants
+bootstrap/bootstrap.py: TB051 bootstrap.bootstrap.new is an undeclared module function; a bootstrap function declares itself with @ts.function
+bootstrap/bootstrap.py: TB053 bootstrap.bootstrap imports names from campaign.adapters.gateways.target_policy; a context module is imported as an aliased module, never its members
+bootstrap/config.py: TB050 bootstrap.config never imports tesser.context; a bootstrap module imports tesser.context exactly once, as ts
+bootstrap/config.py: TB051 bootstrap.config declares a module constant without Final; a bootstrap constant is Final
+bootstrap/config.py: TB051 bootstrap.config.Config is a class; a bootstrap module holds only imports, declared functions, and Final constants
+bootstrap/config.py: TB051 bootstrap.config.HttpConfig is a class; a bootstrap module holds only imports, declared functions, and Final constants
+bootstrap/config.py: TB051 bootstrap.config._port is an undeclared module function; a bootstrap function declares itself with @ts.function
+bootstrap/config.py: TB051 bootstrap.config.from_env is an undeclared module function; a bootstrap function declares itself with @ts.function
+bootstrap/config.py: TB053 bootstrap.config imports names from campaign.wiring.config; a context module is imported as an aliased module, never its members
+bootstrap/config.py: TB053 bootstrap.config imports names from linkpolicy.wiring.config; a context module is imported as an aliased module, never its members
+bootstrap/config.py: TB053 bootstrap.config imports names from reports.wiring.config; a context module is imported as an aliased module, never its members
+campaign/adapters/gateways/repo_memory.py: TB053 campaign.adapters.gateways.repo_memory imports names from campaign.application.parts; a context module is imported as an aliased module, never its members
+campaign/adapters/gateways/target_policy.py: TB053 campaign.adapters.gateways.target_policy imports names from campaign.application.parts; a context module is imported as an aliased module, never its members
+campaign/adapters/gateways/target_policy.py: TB053 campaign.adapters.gateways.target_policy imports names from linkpolicy.client.client; a context module is imported as an aliased module, never its members
+campaign/adapters/gateways/target_policy.py: TB053 campaign.adapters.gateways.target_policy imports names from linkpolicy.client.client; a context module is imported as an aliased module, never its members
+campaign/adapters/handlers/cli.py: TB053 campaign.adapters.handlers.cli imports names from campaign.client.client; a context module is imported as an aliased module, never its members
+campaign/adapters/handlers/http.py: TB053 campaign.adapters.handlers.http imports names from campaign.client.client; a context module is imported as an aliased module, never its members
+campaign/application/parts.py: TB053 campaign.application.parts imports names from campaign.domain.campaign; a context module is imported as an aliased module, never its members
+campaign/application/parts.py: TB053 campaign.application.parts imports names from campaign.domain.short_link; a context module is imported as an aliased module, never its members
+campaign/application/service.py: TB053 campaign.application.service imports names from campaign.application.parts; a context module is imported as an aliased module, never its members
+campaign/application/service.py: TB053 campaign.application.service imports names from campaign.application.views; a context module is imported as an aliased module, never its members
+campaign/application/service.py: TB053 campaign.application.service imports names from campaign.client.client; a context module is imported as an aliased module, never its members
+campaign/application/service.py: TB053 campaign.application.service imports names from campaign.domain.campaign; a context module is imported as an aliased module, never its members
+campaign/application/service.py: TB053 campaign.application.service imports names from campaign.domain.money; a context module is imported as an aliased module, never its members
+campaign/application/service.py: TB053 campaign.application.service imports names from campaign.domain.short_link; a context module is imported as an aliased module, never its members
+campaign/application/service.py: TB053 campaign.application.service imports names from campaign.domain.values; a context module is imported as an aliased module, never its members
+campaign/application/service.py: TB062 campaign.application.service imports errors; domain, client, and application import only their context, their tesser package, and the pure stdlib
+campaign/application/service.py: TB062 campaign.application.service imports secrets; domain, client, and application import only their context, their tesser package, and the pure stdlib
+campaign/application/views.py: TB053 campaign.application.views imports names from campaign.application.parts; a context module is imported as an aliased module, never its members
+campaign/application/views.py: TB053 campaign.application.views imports names from campaign.client.client; a context module is imported as an aliased module, never its members
+campaign/application/views.py: TB053 campaign.application.views imports names from campaign.domain.campaign; a context module is imported as an aliased module, never its members
+campaign/application/views.py: TB053 campaign.application.views imports names from campaign.domain.money; a context module is imported as an aliased module, never its members
+campaign/application/views.py: TB053 campaign.application.views imports names from campaign.domain.short_link; a context module is imported as an aliased module, never its members
+campaign/application/views.py: TB053 campaign.application.views imports names from campaign.domain.values; a context module is imported as an aliased module, never its members
+campaign/application/views.py: TB062 campaign.application.views imports errors; domain, client, and application import only their context, their tesser package, and the pure stdlib
+campaign/domain/campaign.py: TB053 campaign.domain.campaign imports names from campaign.domain.money; a context module is imported as an aliased module, never its members
+campaign/domain/campaign.py: TB053 campaign.domain.campaign imports names from campaign.domain.short_link; a context module is imported as an aliased module, never its members
+campaign/domain/campaign.py: TB053 campaign.domain.campaign imports names from campaign.domain.values; a context module is imported as an aliased module, never its members
+campaign/domain/campaign.py: TB062 campaign.domain.campaign imports errors; domain, client, and application import only their context, their tesser package, and the pure stdlib
+campaign/domain/money.py: TB062 campaign.domain.money imports errors; domain, client, and application import only their context, their tesser package, and the pure stdlib
+campaign/domain/money.py: TB062 campaign.domain.money imports serialization; domain, client, and application import only their context, their tesser package, and the pure stdlib
+campaign/domain/short_link.py: TB053 campaign.domain.short_link imports names from campaign.domain.values; a context module is imported as an aliased module, never its members
+campaign/domain/short_link.py: TB062 campaign.domain.short_link imports copy; domain, client, and application import only their context, their tesser package, and the pure stdlib
+campaign/domain/values.py: TB062 campaign.domain.values imports errors; domain, client, and application import only their context, their tesser package, and the pure stdlib
+campaign/domain/values.py: TB062 campaign.domain.values imports serialization; domain, client, and application import only their context, their tesser package, and the pure stdlib
+campaign/domain/values.py: TB062 campaign.domain.values imports urllib.parse; domain, client, and application import only their context, their tesser package, and the pure stdlib
+campaign/wiring/wire.py: TB053 campaign.wiring.wire imports names from campaign.adapters.gateways.repo_memory; a context module is imported as an aliased module, never its members
+campaign/wiring/wire.py: TB053 campaign.wiring.wire imports names from campaign.application.service; a context module is imported as an aliased module, never its members
+campaign/wiring/wire.py: TB053 campaign.wiring.wire imports names from campaign.client.client; a context module is imported as an aliased module, never its members
+campaign/wiring/wire.py: TB053 campaign.wiring.wire imports names from campaign.wiring.config; a context module is imported as an aliased module, never its members
+errors.py: TB040 errors belongs to no governed package; every module belongs to a context, srv, bootstrap, tests, or the protocol package
+lifecycle.py: TB040 lifecycle belongs to no governed package; every module belongs to a context, srv, bootstrap, tests, or the protocol package
+linkpolicy/adapters/gateways/repo_memory.py: TB053 linkpolicy.adapters.gateways.repo_memory imports names from linkpolicy.application.service; a context module is imported as an aliased module, never its members
+linkpolicy/application/service.py: TB053 linkpolicy.application.service imports names from linkpolicy.client.client; a context module is imported as an aliased module, never its members
+linkpolicy/application/service.py: TB053 linkpolicy.application.service imports names from linkpolicy.domain.policy; a context module is imported as an aliased module, never its members
+linkpolicy/domain/policy.py: TB062 linkpolicy.domain.policy imports errors; domain, client, and application import only their context, their tesser package, and the pure stdlib
+linkpolicy/domain/policy.py: TB062 linkpolicy.domain.policy imports serialization; domain, client, and application import only their context, their tesser package, and the pure stdlib
+linkpolicy/domain/policy.py: TB062 linkpolicy.domain.policy imports urllib.parse; domain, client, and application import only their context, their tesser package, and the pure stdlib
+linkpolicy/wiring/wire.py: TB053 linkpolicy.wiring.wire imports names from linkpolicy.adapters.gateways.repo_memory; a context module is imported as an aliased module, never its members
+linkpolicy/wiring/wire.py: TB053 linkpolicy.wiring.wire imports names from linkpolicy.application.service; a context module is imported as an aliased module, never its members
+linkpolicy/wiring/wire.py: TB053 linkpolicy.wiring.wire imports names from linkpolicy.client.client; a context module is imported as an aliased module, never its members
+linkpolicy/wiring/wire.py: TB053 linkpolicy.wiring.wire imports names from linkpolicy.wiring.config; a context module is imported as an aliased module, never its members
+protocol/http.py: TB051 protocol.http declares a module constant without Final; a protocol constant is Final
+reports/adapters/gateways/campaign_links.py: TB053 reports.adapters.gateways.campaign_links imports names from reports.application.service; a context module is imported as an aliased module, never its members
+reports/adapters/gateways/policy_verdicts.py: TB053 reports.adapters.gateways.policy_verdicts imports names from reports.application.service; a context module is imported as an aliased module, never its members
+reports/adapters/handlers/http.py: TB053 reports.adapters.handlers.http imports names from reports.client.client; a context module is imported as an aliased module, never its members
+reports/application/service.py: TB053 reports.application.service imports names from reports.client.client; a context module is imported as an aliased module, never its members
+reports/application/service.py: TB053 reports.application.service imports names from reports.domain.report; a context module is imported as an aliased module, never its members
+reports/domain/values.py: TB062 reports.domain.values imports errors; domain, client, and application import only their context, their tesser package, and the pure stdlib
+reports/domain/values.py: TB062 reports.domain.values imports serialization; domain, client, and application import only their context, their tesser package, and the pure stdlib
+reports/wiring/wire.py: TB053 reports.wiring.wire imports names from reports.adapters.gateways.campaign_links; a context module is imported as an aliased module, never its members
+reports/wiring/wire.py: TB053 reports.wiring.wire imports names from reports.adapters.gateways.policy_verdicts; a context module is imported as an aliased module, never its members
+reports/wiring/wire.py: TB053 reports.wiring.wire imports names from reports.application.service; a context module is imported as an aliased module, never its members
+reports/wiring/wire.py: TB053 reports.wiring.wire imports names from reports.client.client; a context module is imported as an aliased module, never its members
+reports/wiring/wire.py: TB053 reports.wiring.wire imports names from reports.wiring.config; a context module is imported as an aliased module, never its members
+serialization.py: TB040 serialization belongs to no governed package; every module belongs to a context, srv, bootstrap, tests, or the protocol package
+srv/cli/main.py: TB051 srv.cli.main has a loose module-level statement; a srv module holds only imports, declared classes and functions, and Final constants
+srv/cli/main.py: TB053 srv.cli.main imports names from campaign.adapters.handlers.cli; a context module is imported as an aliased module, never its members
+srv/http/host.py: TB053 srv.http.host imports names from campaign.adapters.handlers.http; a context module is imported as an aliased module, never its members
+srv/http/host.py: TB053 srv.http.host imports names from reports.adapters.handlers.http; a context module is imported as an aliased module, never its members
+srv/http/main.py: TB050 srv.http.main never imports tesser.srv; a srv module imports tesser.srv exactly once, as ts
+srv/http/main.py: TB051 srv.http.main has a loose module-level statement; a srv module holds only imports, declared classes and functions, and Final constants
+srv/http/main.py: TB051 srv.http.main.main is an undeclared module function; a srv function declares itself with @ts.function
+srv/http/router.py: TB050 srv.http.router never imports tesser.srv; a srv module imports tesser.srv exactly once, as ts
+srv/http/router.py: TB051 srv.http.router._path_params is an undeclared module function; a srv function declares itself with @ts.function
+srv/http/router.py: TB051 srv.http.router.match is an undeclared module function; a srv function declares itself with @ts.function
+srv/http/router.py: TB051 srv.http.router.split is an undeclared module function; a srv function declares itself with @ts.function
+srv/http/router.py: TB052 srv.http.router.Match declares no ts.* base; a srv class declares its block
+srv/http/router.py: TB052 srv.http.router.Route declares no ts.* base; a srv class declares its block
+srv/run.py: TB050 srv.run never imports tesser.srv; a srv module imports tesser.srv exactly once, as ts
+srv/run.py: TB051 srv.run.run_until_signal is an undeclared module function; a srv function declares itself with @ts.function
+tests/discovery.py: TB041 tests.discovery is neither a test module nor conftest; a tests package holds only test modules and conftest
+tests/support.py: TB041 tests.support is neither a test module nor conftest; a tests package holds only test modules and conftest
+tests/test_bootstrap_once.py: TB053 tests.test_bootstrap_once imports names from campaign.application.service; a context module is imported as an aliased module, never its members
+tests/test_bootstrap_once.py: TB053 tests.test_bootstrap_once imports names from campaign.client.client; a context module is imported as an aliased module, never its members
+tests/test_bootstrap_once.py: TB053 tests.test_bootstrap_once imports names from campaign.wiring.config; a context module is imported as an aliased module, never its members
+tests/test_bootstrap_once.py: TB053 tests.test_bootstrap_once imports names from campaign.wiring.wire; a context module is imported as an aliased module, never its members
+tests/test_bootstrap_once.py: TB090 tests.test_bootstrap_once carries an ignore that suppresses nothing; an ignore comment suppresses an actual finding
+tests/test_call_fail_closed.py: TB053 tests.test_call_fail_closed imports names from campaign.application.parts; a context module is imported as an aliased module, never its members
+tests/test_call_fail_closed.py: TB053 tests.test_call_fail_closed imports names from campaign.application.service; a context module is imported as an aliased module, never its members
+tests/test_call_fail_closed.py: TB053 tests.test_call_fail_closed imports names from campaign.client.client; a context module is imported as an aliased module, never its members
+tests/test_campaign_lifecycle.py: TB053 tests.test_campaign_lifecycle imports names from campaign.adapters.gateways.repo_memory; a context module is imported as an aliased module, never its members
+tests/test_campaign_lifecycle.py: TB053 tests.test_campaign_lifecycle imports names from campaign.adapters.handlers.http; a context module is imported as an aliased module, never its members
+tests/test_campaign_lifecycle.py: TB053 tests.test_campaign_lifecycle imports names from campaign.application.parts; a context module is imported as an aliased module, never its members
+tests/test_campaign_lifecycle.py: TB053 tests.test_campaign_lifecycle imports names from campaign.application.service; a context module is imported as an aliased module, never its members
+tests/test_campaign_lifecycle.py: TB053 tests.test_campaign_lifecycle imports names from campaign.application.service; a context module is imported as an aliased module, never its members
+tests/test_campaign_lifecycle.py: TB053 tests.test_campaign_lifecycle imports names from campaign.client.client; a context module is imported as an aliased module, never its members
+tests/test_campaign_lifecycle.py: TB053 tests.test_campaign_lifecycle imports names from campaign.domain.campaign; a context module is imported as an aliased module, never its members
+tests/test_campaign_lifecycle.py: TB053 tests.test_campaign_lifecycle imports names from campaign.domain.money; a context module is imported as an aliased module, never its members
+tests/test_campaign_lifecycle.py: TB053 tests.test_campaign_lifecycle imports names from campaign.domain.short_link; a context module is imported as an aliased module, never its members
+tests/test_campaign_lifecycle.py: TB053 tests.test_campaign_lifecycle imports names from campaign.domain.values; a context module is imported as an aliased module, never its members
+tests/test_canonical.py: TB053 tests.test_canonical imports names from campaign.domain.campaign; a context module is imported as an aliased module, never its members
+tests/test_canonical.py: TB053 tests.test_canonical imports names from campaign.domain.money; a context module is imported as an aliased module, never its members
+tests/test_canonical.py: TB053 tests.test_canonical imports names from campaign.domain.short_link; a context module is imported as an aliased module, never its members
+tests/test_cleanup.py: TB053 tests.test_cleanup imports names from campaign.wiring.config; a context module is imported as an aliased module, never its members
+tests/test_cleanup.py: TB053 tests.test_cleanup imports names from linkpolicy.client.client; a context module is imported as an aliased module, never its members
+tests/test_cleanup.py: TB053 tests.test_cleanup imports names from linkpolicy.wiring.config; a context module is imported as an aliased module, never its members
+tests/test_cleanup.py: TB053 tests.test_cleanup imports names from reports.client.client; a context module is imported as an aliased module, never its members
+tests/test_cleanup.py: TB053 tests.test_cleanup imports names from reports.wiring.config; a context module is imported as an aliased module, never its members
+tests/test_cleanup.py: TB090 tests.test_cleanup carries an ignore that suppresses nothing; an ignore comment suppresses an actual finding
+tests/test_cleanup.py: TB090 tests.test_cleanup carries an ignore that suppresses nothing; an ignore comment suppresses an actual finding
+tests/test_cleanup.py: TB090 tests.test_cleanup carries an ignore that suppresses nothing; an ignore comment suppresses an actual finding
+tests/test_cli.py: TB053 tests.test_cli imports names from campaign.adapters.handlers.cli; a context module is imported as an aliased module, never its members
+tests/test_cli.py: TB053 tests.test_cli imports names from campaign.wiring.config; a context module is imported as an aliased module, never its members
+tests/test_cli.py: TB053 tests.test_cli imports names from linkpolicy.wiring.config; a context module is imported as an aliased module, never its members
+tests/test_cli.py: TB053 tests.test_cli imports names from reports.wiring.config; a context module is imported as an aliased module, never its members
+tests/test_impl_selection.py: TB053 tests.test_impl_selection imports names from campaign.wiring.config; a context module is imported as an aliased module, never its members
+tests/test_impl_selection.py: TB053 tests.test_impl_selection imports names from campaign.wiring.wire; a context module is imported as an aliased module, never its members
+tests/test_impl_selection.py: TB053 tests.test_impl_selection imports names from linkpolicy.wiring.config; a context module is imported as an aliased module, never its members
+tests/test_impl_selection.py: TB053 tests.test_impl_selection imports names from linkpolicy.wiring.wire; a context module is imported as an aliased module, never its members
+tests/test_impl_selection.py: TB053 tests.test_impl_selection imports names from reports.wiring.config; a context module is imported as an aliased module, never its members
+tests/test_reports.py: TB053 tests.test_reports imports names from campaign.client.client; a context module is imported as an aliased module, never its members
+tests/test_reports.py: TB053 tests.test_reports imports names from reports.client.client; a context module is imported as an aliased module, never its members
+tests/test_reports.py: TB053 tests.test_reports imports names from reports.domain.report; a context module is imported as an aliased module, never its members
+tests/test_roundtrip_law.py: TB053 tests.test_roundtrip_law imports names from campaign.domain.money; a context module is imported as an aliased module, never its members
+tests/test_roundtrip_law.py: TB053 tests.test_roundtrip_law imports names from campaign.domain.values; a context module is imported as an aliased module, never its members
+tests/test_serialization_edges.py: TB053 tests.test_serialization_edges imports names from campaign.adapters.gateways.repo_memory; a context module is imported as an aliased module, never its members
+tests/test_serialization_edges.py: TB053 tests.test_serialization_edges imports names from campaign.adapters.handlers.http; a context module is imported as an aliased module, never its members
+tests/test_serialization_edges.py: TB053 tests.test_serialization_edges imports names from campaign.application.parts; a context module is imported as an aliased module, never its members
+tests/test_serialization_edges.py: TB053 tests.test_serialization_edges imports names from campaign.application.service; a context module is imported as an aliased module, never its members
+tests/test_serialization_edges.py: TB053 tests.test_serialization_edges imports names from campaign.application.views; a context module is imported as an aliased module, never its members
+tests/test_serialization_edges.py: TB053 tests.test_serialization_edges imports names from campaign.domain.campaign; a context module is imported as an aliased module, never its members
+tests/test_serialization_edges.py: TB053 tests.test_serialization_edges imports names from campaign.domain.money; a context module is imported as an aliased module, never its members
+tests/test_serialization_edges.py: TB053 tests.test_serialization_edges imports names from campaign.domain.short_link; a context module is imported as an aliased module, never its members
+tests/test_shape.py: TB050 tests.test_shape imports tesser.context; a test module imports only tesser.testing
+tests/test_shape.py: TB053 tests.test_shape imports names from campaign.adapters.handlers.http; a context module is imported as an aliased module, never its members
+tests/test_shape.py: TB053 tests.test_shape imports names from campaign.client.client; a context module is imported as an aliased module, never its members
+tests/test_shape.py: TB053 tests.test_shape imports names from reports.adapters.handlers.http; a context module is imported as an aliased module, never its members
+tests/test_shape.py: TB053 tests.test_shape imports names from reports.client.client; a context module is imported as an aliased module, never its members

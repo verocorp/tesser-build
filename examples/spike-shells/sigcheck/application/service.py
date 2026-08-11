@@ -8,7 +8,7 @@ import sigcheck.domain.checks as domain
 
 class SourceReader(ts.Port, Protocol):
 
-    def sources(self, root: str) -> tuple[tuple[str, str, bool], ...]: ...
+    def sources(self, root: str) -> tuple[tuple[str, str, str | None, bool], ...]: ...
 
 
 class SigcheckService(ts.ApplicationService):

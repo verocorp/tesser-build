@@ -104,9 +104,9 @@ run_tesser_py() {
   pytest -q || return 1
   step "built wheel ships every subpackage"
   # Clean before and after: `pip wheel` leaves build/ and *.egg-info/ behind,
-  # and build/lib/ is a full duplicate of the source tree. CI never notices
-  # (fresh checkout), but locally that duplicate is live — sigcheck walks every
-  # .py under its root with no exclusion list, so a stray copy changes findings.
+  # and build/lib/ is a full duplicate of the source tree. sigcheck's reader
+  # now prunes build/ and dist/, but *.egg-info is not in the skip set and a
+  # clean tree is the honest baseline either way.
   rm -rf dist build ./*.egg-info
   trap 'rm -rf "$ROOT/tesser-py/dist" "$ROOT/tesser-py/build" "$ROOT"/tesser-py/*.egg-info' RETURN
   pip wheel --no-deps -w dist . > /dev/null || return 1

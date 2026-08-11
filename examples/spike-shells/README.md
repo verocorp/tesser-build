@@ -34,14 +34,21 @@ sigcheck() {
 }
 ```
 
-Exit 0 when clean; exit 1 with one finding per line:
+Exit 0 when clean; exit 1 with one finding per line, flake8-style:
 
 ```
-module.Class.method:line <specifics>; <normative clause>
+path/to/file.py:line: TB0xx <module.Class.method> <specifics>; <normative clause>
 ```
 
 The clause after the semicolon is the rule — the same text as its RULES.md
-row.
+row — and the `TB0xx` code names the rule family (RULES.md's Code column).
+Codes are reporting affordances, not an adoption mechanism: CI is always
+zero-findings, and the only opt-out is per instance, at the site. A trailing
+`# tessercheck:ignore` suppresses that line's findings;
+`# tessercheck:ignore TB052` suppresses exactly that family on the line; a
+`# tessercheck:ignore-file TB040` anywhere in a file suppresses the family
+module-wide. An ignore that suppresses nothing is itself a finding (TB090),
+so opt-outs cannot outlive their reason.
 
 ## What to expect on an arbitrary tree
 
@@ -58,16 +65,19 @@ row.
   `test_*.py` anywhere is held to the tests / `@ts.helper` / `@ts.fake`
   rules. The per-role rules (placement, imports, signatures) reach only the
   modules the layout already names as a role.
-- **Point it at a source directory, not a repo root.** The spike-grade reader
-  walks every `.py` under the root with no skip list — a `.venv` or
-  `node_modules` in scope will be audited too.
-- **All-or-nothing per run.** sigcheck has no `--exclude` flag and no built-in
-  ratchet — a run audits the whole tree. Adoption is possible *around* the
-  tool: freeze today's findings as a baseline and fail only on ones outside
-  it. `examples/python-app` does exactly that in CI (`sigcheck-ratchet`, a
-  finding set with line numbers stripped) while it burns its bill down. An
-  in-tool incremental rollout arrives when these rules graduate into
-  `tessercheck-py`.
+- **The reader prunes tooling directories** (`.venv`, `node_modules`,
+  `build`, `__pycache__`, and the rest of the standard skip set) and fails
+  soft per file: an unparseable module, a non-UTF-8 file, or a module defined
+  twice (`domain.py` beside `domain/__init__.py`) is a TB043 finding, never a
+  crashed run.
+- **Whole-tree per run, opt-out per instance.** sigcheck audits everything
+  under the root; there is no `--exclude` and no code-family off switch.
+  A finding is either fixed or carries a site-level
+  `# tessercheck:ignore` (see above). `examples/python-app` still runs the
+  transitional CI ratchet (`sigcheck-ratchet`, a finding set with line
+  numbers stripped) while it burns its bill down; the ratchet retires when
+  these rules graduate into `tessercheck-py` and the remaining debt becomes
+  inline opt-outs.
 
 ## Verify this tree
 
