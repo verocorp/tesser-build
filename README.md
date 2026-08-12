@@ -89,14 +89,13 @@ Classification is declared, never inferred — a class is judged by the
 serialization (`TB002`–`TB018` — value equality only, no representation
 leak, one construction door, one canonical exit per backing type),
 module/class structure (`TB040`–`TB043`), import form and the tier matrices
-(`TB050`–`TB066` — every module carries an import row keyed on where it
-sits, with no exempt modules), test placement and module totality
-(`TB070`–`TB073`), construction
-doors and boundary signatures (`TB080`–`TB082`), and the tree-wide **norm
-checks** with no test exemption: zero comments (`TB020`), fakes-only test
-doubles (`TB030`), and ignore hygiene (`TB090` — a suppression that
-suppresses nothing is itself a finding). The full per-code table is
-[`tessercheck-py/RULES.md`](tessercheck-py/RULES.md), generated from the
+(`TB050`–`TB066` — every module carries an import row keyed on where it sits,
+with no exempt modules), test placement and module totality (`TB070`–`TB073`),
+construction doors and boundary signatures (`TB080`–`TB082`), and the
+tree-wide **norm checks** with no test exemption: zero comments (`TB020`),
+fakes-only test doubles (`TB030`), and ignore hygiene (`TB090` — a
+suppression that suppresses nothing is itself a finding). The full per-code
+table is [`tessercheck-py/RULES.md`](tessercheck-py/RULES.md), generated from the
 implementation. Run `python -m tessercheck path/to/tree`; flake8-style
 output; suppress a single finding with a trailing
 `# tessercheck:ignore TB0xx`.
