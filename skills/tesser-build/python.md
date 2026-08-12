@@ -9,208 +9,218 @@ mechanics live here alongside the objects they orchestrate and persist. Section
 headings here are stable anchors; the resolver and the coverage matrix link to
 them.
 
-> **Verification status — verified.** The patterns these examples exercise —
-> value objects (simple, compound, collection), the entity and aggregate
-> lifecycle, the application-service boundary, the repository, and the composition
-> root — are backed by runnable, type-checked worked examples. The domain
-> mechanics live under `examples/python/` (`campaign` value objects, entity, and
-> aggregate; the **`catalog`** package with the compound value object `Money`
-> backed by `decimal.Decimal` and the collection value object `Labels`). The
-> service, repository, public-interface, and composition-root mechanics — and the
-> app-level anatomy of `bootstrap` + per-context `client.py`/`wiring` + `srv`
-> hosts + inbound handlers — are backed by `examples/python-app/` (multi-context,
-> self-enforcing tests). Both trees pass `mypy --strict` and `pytest` in CI, the
-> same bar the Go mechanics meet. (The earlier two-package
-> interface/implementation rendering of the public contract was dropped as
-> superseded by per-context `client.py`.) A few variants are stated below for completeness but shown for
-> shape only — the examples here are all *lifecycle* and *1:1*, so they do not
-> exercise a **fact** aggregate/entity that returns a new instance on change, an
-> explicit **reshaping** `Client`, or a hand-written `__eq__`/`__hash__`; each is
-> marked where it appears. Where a Go/Python difference is load-bearing —
-> frozen-dataclass equality vs Go's `Equal`, `Protocol` structural typing vs
-> Go's struct embedding, the absence of `context.Context` — it is called out
-> inline.
+> **Verification status — verified.** Every pattern here is backed by runnable,
+> type-checked worked examples in the **shell idiom**: `tesser-py`'s classes
+> (`ts.ValueObject`, `ts.Entity`, `ts.AggregateRoot`, `ts.Spec`,
+> `ts.ApplicationService`, `ts.Port`, `ts.Repository`, `ts.Gateway`,
+> `ts.Handler`, `ts.Client`, `ts.Request`, `ts.Response`) carry no behavior —
+> subclassing one is a *declaration* of what a class is — and **tessercheck**
+> (`tessercheck-py/`) verifies everything against its declaration, at zero
+> findings in CI. The domain mechanics live in
+> `examples/python-app/campaign/domain/` (leaf value objects in `values.py`,
+> the compound `Money` backed by `decimal.Decimal` in `money.py`, the
+> collection value object `Labels` in `labels.py`, the entity `ShortLink`, the
+> aggregate `Campaign`). The service, repository, public-interface, and
+> composition-root mechanics — and the app-level anatomy of `bootstrap` +
+> per-context `client.py`/`wiring` + `srv` hosts + inbound handlers — are
+> `examples/python-app/` end to end (multi-context, self-enforcing tests).
+> `examples/spike-shells/` is the second exemplar (two contexts, the
+> declare-then-verify arc). All trees pass `mypy --strict`, `pytest`, and the
+> analyzer in CI, the same bar the Go mechanics meet. The examples here are
+> all *lifecycle* and *1:1*, so they do not exercise a **fact**
+> aggregate/entity that returns a new instance on change or an explicit
+> **reshaping** `Client`; each is marked where it appears. Where a Go/Python
+> difference is load-bearing — base-owned equality vs Go's `Equal`, `Protocol`
+> structural typing vs Go's struct embedding, the absence of
+> `context.Context` — it is called out inline.
+
+**What the shell buys, once.** `ts.ValueObject` owns immutability and value
+equality at runtime: assignment and deletion raise, `__eq__`/`__hash__`
+compare by type and content, and a subclass that tries to override
+`__eq__`/`__hash__`/`__setattr__`/`__delattr__` (or declare `__slots__`)
+raises `TypeError` **at class-definition time** — the identity contract
+cannot drift. `ts.Entity` owns identity equality the same way: the subclass
+declares an `identity` property, the base compares and hashes by it, and an
+attempted override raises at import. What the runtime cannot see — placement,
+imports, representation leaks, construction doors, serialization exits — the
+analyzer enforces (`tessercheck-py/RULES.md`, one row per rule with its
+family code).
 
 ## Value objects
 
-**Simple (wraps a single value) — frozen dataclass, validation in
-`__post_init__`:**
+**Simple (wraps a single value) — a leaf: declare the base, hide the field,
+validate at the one door:**
 
 ```python
-from dataclasses import dataclass
+# campaign/domain/values.py (verified impl)
+import tesser.domain as ts
 
+from errors import invalid
 from serialization import canonical_str
 
-@dataclass(frozen=True)
-class EmailAddress:
-    _value: str           # hidden — the primitive never leaks (TB010)
 
-    def __post_init__(self) -> None:
-        if "@" not in self._value:
-            raise ValueError(f"invalid email address: {self._value!r}")
+class CampaignID(ts.ValueObject):
+
+    def __init__(self, value: str) -> None:
+        if not _CAMPAIGN_ID_RE.fullmatch(value):
+            raise invalid("invalid_campaign_id", f"campaign id {value!r} must be 16 lowercase hex chars")
+        object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
-        return canonical_str(self._value)   # canonical exit: one-line delegation to the policy helper
+        return canonical_str(self._value)   # canonical exit: one-line delegation to the policy
+
+    _value: str
 ```
 
-`frozen=True` gives immutability (assignment raises) and a field-wise
-`__eq__`/`__hash__`. `__post_init__` is the **single validation site**: it
-runs on every construction path, so an invalid instance is unrepresentable —
-there is no bypassable factory. The field is **hidden and stays hidden**: a
-leaf value object gets **no accessor at all** — no public field, no `value`
-property handing the raw string back (a passthrough accessor is the same
-leak as the public field, and TB010 flags both). The leaf's **canonical
-exit** is the one conversion dunder matching its backing primitive —
-str-backed → `__str__` (as here), int-backed → `__int__`, float-backed →
-`__float__`, bytes-backed → `__bytes__`; `Decimal`/`datetime` exit as
-canonical text via `__str__` under the explicit per-type policy in
-`serialization.md` rule 3. One dunder per leaf, matching its
-representation — a second or mismatched one is a disguise. The canonical
-form is what the serialization layer carries (`serialization.md`); display
-formatting is a presentation concern and never the value object's job. The
-round-trip law locks the exit: `EmailAddress(str(email)) == email`, asserted
-in a test per leaf.
+The base gives immutability (assignment raises) and content equality;
+`object.__setattr__` inside `__init__` is the **only** sanctioned assignment
+site, so `__init__` is the **single validation site**: it runs on every
+construction path, and an invalid instance is unrepresentable — there is no
+bypassable factory. Declare the field at class level (`_value: str`) — the
+analyzer reads representation from those annotations, and `mypy --strict`
+needs them. The field is **hidden and stays hidden**: a leaf value object
+gets **no accessor at all** — no public field, no `value` property handing
+the raw string back (a passthrough accessor is the same leak as the public
+field, and TB010 flags both). The leaf's **canonical exit** is the one
+conversion dunder matching its backing primitive — str-backed → `__str__`
+(as here), int-backed → `__int__`, float-backed → `__float__`, bytes-backed
+→ `__bytes__`; `Decimal`/`datetime` exit as canonical text via `__str__`
+under the explicit per-type policy in `serialization.md` rule 3. One dunder
+per leaf, matching its representation — a second or mismatched one is a
+disguise (TB015), and the dunder body is a **one-line delegation** to the
+app-level `canonical_*` policy helper (TB018), so each canonical form has
+exactly one implementation site. The canonical form is what the
+serialization layer carries (`serialization.md`); display formatting is a
+presentation concern and never the value object's job. The round-trip law
+locks the exit: `CampaignID(str(id)) == id`, asserted in a test per leaf.
 
 **Compound (two or more fields): the components are child value objects.**
 Not hidden raw primitives — child VOs (maintainer rulings 2026-07-19/20:
 `rect.x` returning `"1"` is primitive obsession wearing an accessor; `x` and
-`y` are value objects, held and exposed as such). Single-concept behavior
-migrates into the child (`MoneyAmount.add` owns the arithmetic — the
-reference discipline's `quanta.Decimal` pattern); what remains the
-compound's own is exactly the **cross-field invariants** (currency match on
-`Money.add`). This is what gives each component's rules one home, makes
-same-primitive transposition a type error, and gives serialization a
-conformant path (`serialization.md` rule 5).
-
-*The construction REVISIT is closed (2026-07-20, revised same day to
-(b)-uniform):* **every structured type has ONE door, and that door is its
-own `__init__` taking the spec** — `@dataclass(frozen=True, init=False)`
-with `__init__(self, spec)` assigning child VOs via `object.__setattr__`
-(TB003 sanctions exactly this site). This is the same single door an entity
-has (TB013), and the same shape as Go's `NewMoney(spec)` — one construction
-story across types and languages. There is **no `from_spec`** (a factory
-classmethod is a second public idiom for the same job) and no reliance on
-the dataclass auto-init. On a value object this is machine-enforced and
-name-agnostic: **any** classmethod or staticmethod returning its own type is
-a second door (TB017) — `from_spec`, `parse`, `new`, `require`, `of` alike.
-A leaf whose construction involves conversion
-(str → Decimal) takes the **canonical form** at its one door and converts
-inside — no `parse` classmethod, no union-typed door (ruled 2026-07-20: a
-union adds special cases for what is only a performance benefit). The
-cost, priced in deliberately: behavior methods — leaf and compound alike —
-that produce new instances re-enter **through the door** via canonical
-forms (`MoneyAmount(canonical_decimal(total))`), lossless by the round-trip law, so
-every instance that exists passed the one validating door. Revisit only on
-a measured performance problem (`TODOS.md`: behavior-rebuild ergonomics).
-
-**Warning — hiding a field breaks keyword construction.** Renaming `amount` to
-`_amount` renames the auto-generated `__init__` parameter, so
-`Money(amount=..., currency=...)` raises `TypeError` at every call site the
-moment you comply with TB010. Don't reach for `Money(_amount=...)` (leaks the
-private name) or positional args (unreadable past two fields) — **route
-construction through the spec** (`Money(MoneySpec(...))` — the one door), which is
-the construction path tests should exercise
-anyway. Field data (consumer pilot, 2026-07-19): the field rename itself is
-minutes; the construction-site fallout is the real cost, and spec-routing is the
-shape that survives it.
+`y` are value objects, held and exposed as such — TB016 flags a bare
+wrappable primitive field on a compound, TB019 flags any public method
+handing back a non-domain type). Single-concept behavior migrates into the
+child; what remains the compound's own is exactly the **cross-field
+invariants**.
 
 ```python
-from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+# campaign/domain/money.py (verified impl)
+class MoneySpec(ts.Spec):
 
-from serialization import canonical_decimal, canonical_str
+    def __init__(self, amount: str, currency: str) -> None:
+        self.amount = amount
+        self.currency = currency
 
-@dataclass(frozen=True)
-class MoneySpec:          # spec: primitive leaves only — the inbound door
-    amount: str
-    currency: str
 
-@dataclass(frozen=True, init=False)
-class MoneyAmount:        # child VO: owns the single-concept rules + behavior
-    _value: Decimal
+class MoneyAmount(ts.ValueObject):
 
-    def __init__(self, value: str) -> None:   # ONE door: the canonical form in
+    def __init__(self, value: str) -> None:       # ONE door: the canonical form in
         try:
             parsed = Decimal(value)
         except InvalidOperation as e:
-            raise ValueError(f"invalid amount: {value!r}") from e
+            raise invalid("invalid_budget_amount", f"budget amount {value!r} is not a number") from e
         if parsed < 0:
-            raise ValueError(f"amount must not be negative: {parsed}")
+            raise invalid("invalid_budget_amount", f"budget amount must not be negative: {parsed}")
         object.__setattr__(self, "_value", parsed)
 
-    def add(self, other: "MoneyAmount") -> "MoneyAmount":
-        return MoneyAmount(canonical_decimal(self._value + other._value))   # re-enter the door
-
-    def __str__(self) -> str:               # canonical exit: the Decimal text policy, one site
+    def __str__(self) -> str:                     # canonical exit: the Decimal text policy, one site
         return canonical_decimal(self._value)
 
-@dataclass(frozen=True)
-class MoneyCurrency:                        # no conversion needed → the auto-init IS the one door
-    _value: str
+    _value: Decimal
 
-    def __post_init__(self) -> None:
-        if not self._value:
-            raise ValueError("currency is required")
+
+class MoneyCurrency(ts.ValueObject):
+
+    def __init__(self, value: str) -> None:
+        if not _CURRENCY_RE.fullmatch(value):
+            raise invalid("invalid_budget_currency", f"budget currency {value!r} must be 3 uppercase letters")
+        object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
         return canonical_str(self._value)
 
-@dataclass(frozen=True, init=False)
-class Money:
-    _amount: MoneyAmount   # child VOs — invalid Money is unrepresentable by types
-    _currency: MoneyCurrency
+    _value: str
 
-    def __init__(self, spec: MoneySpec) -> None:   # the one door: spec in, child VOs built
-        object.__setattr__(self, "_amount", MoneyAmount(spec.amount))
-        object.__setattr__(self, "_currency", MoneyCurrency(spec.currency))
+
+class Money(ts.ValueObject):
+
+    def __init__(self, amount: str, currency: str) -> None:   # the one door: primitives in, child VOs built
+        object.__setattr__(self, "_amount", MoneyAmount(amount))
+        object.__setattr__(self, "_currency", MoneyCurrency(currency))
 
     @property
-    def amount(self) -> MoneyAmount:        # components exposed as VOs, never primitives
+    def amount(self) -> MoneyAmount:              # components exposed as VOs, never primitives
         return self._amount
 
     @property
     def currency(self) -> MoneyCurrency:
         return self._currency
 
-    def add(self, other: "Money") -> "Money":
-        if self._currency != other._currency:   # cross-field invariant: the compound's own job
-            raise ValueError(f"cannot add {self._currency} and {other._currency}")
-        total = self._amount.add(other._amount)
-        return Money(MoneySpec(amount=str(total), currency=str(self._currency)))  # re-enter the door
+    _amount: MoneyAmount
+    _currency: MoneyCurrency
 ```
 
 Note what `Money` does **not** define: any conversion dunder. A compound has
-zero — no `__str__`, no "debug display" (`serialization.md` rule 5); the
-default `repr` is the debug surface, and logging is its own norm
-(`logging.md`).
+zero — no `__str__`, no "debug display" (`serialization.md` rule 5, enforced
+as TB015); the base's `repr` is the debug surface, and logging is its own
+norm (`logging.md`).
 
-**Each rule lives on the type that owns it** — the child's `__post_init__`
-guards the child; the compound's methods guard only cross-field relations —
-so no construction path can skip a rule, and no rule has two homes.
-Verified impl: `examples/python/catalog/money.py`.
+**Each rule lives on the type that owns it** — the child's `__init__` guards
+the child; the compound's methods guard only cross-field relations — so no
+construction path can skip a rule, and no rule has two homes. Verified impl:
+`examples/python-app/campaign/domain/money.py`.
 
-**Collection (wraps a dict/list):**
+**The construction doors, revised for the shells (supersedes the 2026-07-20
+(b)-uniform spec-door-for-compound-VOs ruling):** a **value object's** one
+door is its own `__init__` taking **primitives and child value objects**
+(the analyzer's construction rule) — `Money("9.99", "USD")`, no spec. A
+**structured domain object** — entity or aggregate — constructs from
+**exactly one `ts.Spec`** (the same shape as Go's `NewCampaign(spec)`).
+There is **no `from_spec`** and no factory of any spelling: on a value
+object, **any** classmethod or staticmethod returning its own type
+(`Self`, quoted, or inferred from a body that constructs `cls`) is a second
+door (TB017) — `from_spec`, `parse`, `new`, `require`, `of` alike. A leaf
+whose construction involves conversion (str → Decimal) takes the
+**canonical form** at its one door and converts inside — no `parse`
+classmethod, no union-typed door (ruled 2026-07-20: a union adds special
+cases for what is only a performance benefit; the one union the analyzer
+admits in construction data is `X | None`, optionality). Behavior methods
+that produce new instances re-enter **through the door** via canonical
+forms, lossless by the round-trip law, so every instance that exists passed
+the one validating door.
+
+**Collection (wraps a mapping/sequence):**
 
 ```python
-@dataclass(frozen=True, init=False)
-class Labels:
-    _values: tuple[tuple[str, str], ...]        # immutable, hashable storage
+# campaign/domain/labels.py (verified impl)
+class Labels(ts.ValueObject):
 
-    def __init__(self, values: Mapping[str, str]) -> None:
-        # ONE door: the collection VO takes the collection, and canonicalizes
-        # (sort) on the only path in.
-        object.__setattr__(self, "_values", tuple(sorted(values.items())))
+    def __init__(self, values: tuple[tuple[str, str], ...]) -> None:
+        for key, _ in values:
+            if not key:
+                raise invalid("invalid_label", "label key must not be empty")
+        object.__setattr__(self, "_values", tuple(sorted(values)))   # canonicalize at the one door
 
-    def as_dict(self) -> dict[str, str]:        # copy out, never a reference
-        return dict(self._values)
+    def get(self, key: str) -> LabelValue | None:   # entries come back as VOs
+        raw = dict(self._values).get(key)
+        return LabelValue(raw) if raw is not None else None
+
+    def __len__(self) -> int:                        # language-fixed dunder: licensed
+        return len(self._values)
+
+    _values: tuple[tuple[str, str], ...]
 ```
 
-Go wraps a `map` and must add `Equal` (a map-backed struct is non-comparable);
-Python stores an immutable, **sorted** tuple instead, so the frozen dataclass's
-default equality is content-based *and* the value is hashable. `init=False`
-plus a hand-written `__init__` is what makes the canonicalization unskippable:
-there is exactly ONE way in, so no caller can hold a non-canonical value.
-Verified impl: `examples/python/catalog/labels.py`.
+Go wraps a `map` and must add `Equal` (a map-backed struct is
+non-comparable); the shell stores an immutable, **sorted** tuple instead, so
+the base's content equality is canonical *and* the value is hashable
+(TB002: a `list`/`dict`/`set` field would make `__hash__` raise — back a
+collection with a tuple). The one door takes the plain tuple-of-pairs, not a
+`Mapping` — construction data is primitives and value objects, and the sort
+at the door is what makes the canonical form unskippable: there is exactly
+ONE way in, so no caller can hold a non-canonical value. Reads come back as
+value objects (`LabelValue`), never raw entries. Verified impl:
+`examples/python-app/campaign/domain/labels.py`.
 
 **No `new`/`require` factory pair** (TB017). A second door is a second set of
 invariants: if `new` is permissive and `require` demands non-empty, what the
@@ -220,124 +230,141 @@ with its own invariant, not a second factory on this one.
 
 **Rules of the section:**
 
-- `frozen=True` always; no setters, no mutation — behavior methods return new
-  instances. This is total, not domain-scoped: **every dataclass in the tree
-  is frozen** — specs, DTOs, and adapter wire shapes included (TB001). Frozen
-  costs an inert carrier nothing, and a non-frozen dataclass is invisible to
-  the VO classifier, so any scope carve-out would let a would-be domain value
-  hide. A boundary shape that genuinely must mutate declares itself with an
-  inline `# tessercheck:ignore`.
+- Subclass `ts.ValueObject`; the base owns immutability and equality and
+  refuses overrides at class-definition time. No setters, no mutation —
+  behavior methods return new instances through the one door.
+- Declare every field at class level (`_value: str`); assign only via
+  `object.__setattr__` inside `__init__`.
 - **The primitive never escapes** (TB010): no public primitive field, and no
   passthrough accessor returning one — a leaf VO exposes nothing but its
   canonical exit; a compound VO's components are child value objects, held
-  and exposed as such. Defensive copy-outs of a collection VO's entries
-  (`as_dict`) remain the sanctioned collection read.
+  and exposed as such; a value object's public behavior hands back domain
+  objects (TB019 — the licensed exits are the language-fixed dunders, the
+  canonical exit, and a `-> None` transition; quoting an annotation is not
+  an escape hatch).
+- **`bool` and `complex` are not value-object material** (TB016), at any
+  field count — a bool is atomic (model the raw value where it lives, or
+  reach for a richer type when it is really more than binary; a validated
+  multi-valued leaf is the shell idiom's enum), and neither has a canonical
+  conversion exit.
 - No `Must*` twin is needed: construction already raises on invalid input.
   The Go `New/MustNew` split exists because Go returns errors; Python's
   exception IS the panic path — in tests, construct directly with known-valid
   literals.
-- A leaf's conversion dunder is its **canonical form**, not display —
-  locked by the round-trip law. The dunder body is a one-line delegation to
-  the app-level per-type `canonical_*` policy helper (`canonical_str`,
-  `canonical_decimal`, `canonical_datetime`, …); edges consume it via the
-  conversion protocol (`str(vo)`, `int(vo)`); display formatting
-  belongs to the presentation edge (`serialization.md`). A compound,
-  entity, or aggregate defines **no conversion dunder at all** — `repr` is
-  the debug surface. Never compare domain objects via `str(a) == str(b)`.
+- A leaf's conversion dunder is its **canonical form**, not display — locked
+  by the round-trip law, delegated to the one `canonical_*` policy site
+  (TB018; module-qualified delegation counts). Never compare domain objects
+  via `str(a) == str(b)` (TB004).
 
-**Equality — pick the correct path:**
+**Equality — the base decides:**
 
-- **Frozen dataclass default** (`__eq__` field-wise) is correct when each
-  logical value has one representation. Note `Decimal("1.5") ==
-  Decimal("1.50")` is numerically `True`, but the two hash the same only
-  because Python normalizes numeric hashing — verify equality AND hashing in
-  the equality test whenever a field type has multiple representations.
-- **Custom equality needed:** implement `__eq__` and `__hash__` **together**,
-  never one without the other. This is the entity case — comparison by identity,
-  not attributes (see the Entities section, where every entity does exactly
-  this). For a *value object* whose field would otherwise compare wrong (a
-  case-insensitive code, say), prefer **normalizing on input** in
-  `__post_init__` so the default field-wise equality stays correct (this is what
-  the collection VO above does — it sorts its entries at its one door). Reach
-  for a hand-written `__eq__`/`__hash__` (with `eq=False`) only in the rare case
-  where the original representation must be preserved *and* compared by a
-  normalized form.
+- `ts.ValueObject` compares by type and content; each logical value should
+  have one representation, and the way to guarantee that is **normalizing at
+  the one door** (the collection VO above sorts on the way in; a
+  case-insensitive code lowercases in `__init__`). There is no hand-written
+  `__eq__` on a shell value object — the base raises if you try; if the
+  default is wrong, fix the representation, not the comparison.
+- Note `Decimal("1.5") == Decimal("1.50")` is numerically `True` and hashes
+  consistently only because Python normalizes numeric hashing — verify
+  equality AND hashing in the equality test whenever a field type has
+  multiple representations.
 
 ## Entities
 
 ```python
-@dataclass(frozen=True)
-class TransferSpec:       # primitive leaves, nested specs
-    id: str
-    from_account: AccountRefSpec
-    to_account: AccountRefSpec
-    amount: MoneySpec
+# campaign/domain/short_link.py (verified impl)
+class ShortLinkSpec(ts.Spec):
 
-class Transfer:
-    def __init__(self, spec: TransferSpec) -> None:
-        # The single construction path: the constructor takes the spec, builds
-        # each child value object via its own constructor (error context added),
-        # and enforces any cross-field invariant. There is no second constructor.
-        try:
-            self._id = TransferID(spec.id)
-        except ValueError as e:
-            raise ValueError(f"invalid transfer ID: {e}") from e
-        # ... each remaining child via its own constructor, error context added ...
+    def __init__(self, slug: str, target_url: str, active: bool) -> None:
+        self.slug = slug
+        self.target_url = target_url
+        self.active = active
+
+
+class ShortLink(ts.Entity):
+
+    def __init__(self, spec: ShortLinkSpec) -> None:       # the single construction path
+        self._slug = values.Slug(spec.slug)
+        self._target_url = values.TargetURL(spec.target_url)
+        self._status = values.LinkStatus("active" if spec.active else "inactive")
 
     @property
-    def id(self) -> TransferID:
-        return self._id
+    def slug(self) -> values.Slug:
+        return self._slug
 
-    def __eq__(self, other: object) -> bool:      # identity, not attributes
-        return isinstance(other, Transfer) and other._id == self._id
+    @property
+    def status(self) -> values.LinkStatus:
+        return self._status
 
-    def __hash__(self) -> int:
-        return hash(self._id)
+    def deactivate(self) -> None:                          # lifecycle transition
+        self._status = values.LinkStatus("inactive")
+
+    @property
+    def identity(self) -> values.Slug:                     # the base compares and hashes by this
+        return self._slug
 ```
 
 - Fields are value objects, never raw primitives; underscore-private with
-  read-only `@property` accessors, no setters.
-- Equality is **identity**: `__eq__`/`__hash__` by ID, defined together.
+  read-only `@property` accessors returning value objects, no setters. An
+  accessor must never hand back a backing mutable collection — return a
+  defensive copy (TB011).
+- Equality is **identity**, and the base owns it: declare the `identity`
+  property (the ID value object) and `ts.Entity` compares and hashes by it —
+  a hand-written `__eq__`/`__hash__` raises at class definition.
+- The constructor takes **exactly one spec** and builds each child value
+  object via its own constructor; there is no second constructor.
 - **Fact entities:** no mutation methods; a state change returns a new
-  instance.
-- **Lifecycle entities:** transition methods that guard state:
-
-```python
-def activate(self) -> None:
-    if self._status is not Status.DRAFT:
-        raise InvalidTransition("can only activate a draft contract")
-    self._status = Status.ACTIVE
-```
-
-Two states → a guard like this; more → a transition table, not stacked
-conditionals.
+  instance. **Lifecycle entities:** transition methods that guard state
+  (`deactivate` above; two states → a guard, more → a transition table, not
+  stacked conditionals).
 
 ## Aggregates
 
 ```python
-class Operation:
-    def __init__(self, id: OperationID, transfers: list[Transfer]) -> None:
-        if not balanced(transfers):                 # the cross-object invariant
-            raise ValueError("operation does not balance")
-        self._id = id
-        self._transfers = list(transfers)           # own your copy
+# campaign/domain/campaign.py (verified impl)
+class Campaign(ts.AggregateRoot):
+
+    def __init__(self, spec: CampaignSpec) -> None:
+        self._id = values.CampaignID(spec.id)
+        self._budget = money.Money(spec.budget.amount, spec.budget.currency)
+        admitted: list[short_link.ShortLink] = []
+        for i, link_spec in enumerate(spec.links):
+            try:
+                link = short_link.ShortLink(link_spec)
+            except DomainError as e:
+                raise invalid("invalid_short_link", f"invalid short link at index {i}: {e}") from e
+            admitted = _admit(admitted, link)              # the cross-object invariant, one site
+        self._links = admitted
 
     @property
-    def transfers(self) -> tuple[Transfer, ...]:    # defensive copy out
-        return tuple(self._transfers)
+    def links(self) -> tuple[short_link.ShortLink, ...]:   # defensive copy out
+        return tuple(link._clone() for link in self._links)
 
-    __eq__ = None  # type: ignore[assignment]  # comparing aggregates is a bug
+    def add_short_link(self, spec: short_link.ShortLinkSpec) -> None:
+        self._links = _admit(self._links, short_link.ShortLink(spec))
+
+    def deactivate_short_link(self, slug: values.Slug) -> None:
+        for link in self._links:
+            if link.slug == slug:
+                link.deactivate()
+                return
+        raise not_found("link_missing", f"no short link with slug {slug} in campaign {self._id}")
+
+    __eq__ = None  # type: ignore[assignment]              # comparing aggregates is a bug
     __hash__ = None  # type: ignore[assignment]
 ```
 
-- The invariant is checked in `__init__` — an unbalanced Operation is
+- The invariant is checked at construction and re-established by every
+  transition (`_admit` — slug uniqueness) — an invalid Campaign is
   unrepresentable.
 - Setting `__eq__ = None` makes comparison raise `TypeError` at runtime — the
-  closest Python gets to Go's compile-time non-comparability. (If the
-  aggregate must live in sets/dicts, use identity equality by ID instead,
-  like an entity — never field-wise.)
-- Children are copied in and copied out (`tuple(...)`); the backing list never
-  escapes.
+  closest Python gets to Go's compile-time non-comparability, and the one
+  override the base permits (it blocks replacements, not removal). If the
+  aggregate must live in sets/dicts, declare `identity` like an entity —
+  never field-wise.
+- Children are copied in and cloned out; the backing list never escapes
+  (TB011), and another aggregate root is referenced by its ID value object,
+  never held (TB012).
 - **Fact aggregates:** state changes return new instances. **Lifecycle
   aggregates:** root-guarded transitions that re-establish the invariant
   before returning.
@@ -345,214 +372,165 @@ class Operation:
 ## Application services
 
 Coordination only — no business logic. Four named steps
-(`application-services.md`): convert → delegate → persist → respond. The
-repository is injected as a `Protocol` (see `python.md#repositories`).
+(`application-services.md`): convert → delegate → persist → respond. Every
+dependency is a `ts.Port` `Protocol` (the analyzer requires it), every public
+method takes exactly one `ts.Request` and returns a `ts.Response`, and the
+method inlines its logic — no delegation chains, at most ten source lines,
+one level of branching, a condition satisfied by one domain call.
 
 ```python
-class CreditService:
-    def __init__(self, repo: JournalRepository) -> None:  # injected, never built here
-        self._repo = repo
+# campaign/application/service.py (verified impl)
+class CampaignRepository(ts.Port, Protocol):
 
-    # Create use case: Delegate constructs a new aggregate.
-    def record_payment(self, req: RecordPaymentRequest) -> RecordPaymentResponse:
-        spec = to_payment_spec(req)                 # 1. Convert (DTO → spec)
-        payment = Payment(spec)                     # 2. Delegate (construct; raises on invalid)
-        self._repo.save_payment(payment)            # 3. Persist (whole aggregate)
-        return to_payment_response(payment)         # 4. Respond (domain → DTO)
+    def save(self, parts: cparts.CampaignParts) -> None: ...
 
-    # Change use case: Delegate LOADS an aggregate and calls its guarded transition.
-    def apply_refund(self, req: ApplyRefundRequest) -> ApplyRefundResponse:
-        payment = self._repo.load_payment(PaymentID(req.payment_id))  # 1+2a. convert + load
-        payment.refund(to_refund_spec(req))         # 2b. guarded transition (raises on illegal)
-        self._repo.save_payment(payment)            # 3. Persist
-        return to_refund_response(payment)          # 4. Respond
+    def find(self, id: str) -> cparts.FoundCampaign | cparts.MissingCampaign: ...
+
+    def slug_taken(self, slug: str) -> bool: ...
+
+
+class TargetPolicy(ts.Port, Protocol):
+
+    def check(self, target_url: str) -> cparts.PolicyOutcome: ...
+
+
+class CampaignService(ts.ApplicationService):
+
+    def __init__(self, repo: CampaignRepository, policy: TargetPolicy) -> None:
+        self._repo = repo                                  # injected ports, never built here
+        self._policy = policy
+
+    def create_campaign(self, req: client.CreateCampaignRequest) -> client.CampaignView:
+        budget = money.MoneySpec(amount=req.budget_amount, currency=req.budget_currency)
+        c = campaign.Campaign(campaign.CampaignSpec(id=secrets.token_hex(8), budget=budget, links=()))
+        self._repo.save(cparts.campaign_parts(c))
+        return campaign_views.campaign_view(cparts.campaign_parts(c))
 ```
 
-- **No `for` over domain objects, no arithmetic on domain quantities, no `if` on
-  domain state** in the method — the leakage checks
-  (`application-services.md#domain-logic-leakage-checks`). A comprehension
-  mapping `req.items → [Spec]` is pure conversion; put it in `to_payment_spec`.
-- **Return a DTO**, never the domain object.
+- **No `for` over domain objects, no arithmetic on domain quantities, no `if`
+  on domain state** in the method — the leakage checks
+  (`application-services.md#domain-logic-leakage-checks`).
+- **Return a DTO** (a `client.py` view), never the domain object.
+- **Ports speak `ts.Parts` records and primitives, never domain objects**
+  (TB081) — the service decomposes the aggregate to parts
+  (`cparts.campaign_parts(c)`) on the way to persistence, and views build
+  DTOs from parts on the way out.
 - **Transaction / session boundary is consumer-specific.** Where the unit of
   work opens and commits — a SQLAlchemy `Session`, an async transaction, a
-  FastAPI dependency — is a decision for the consuming codebase, not this skill.
-  Wrap the use case in one unit of work; do **not** invent an ORM lifecycle
-  here. Record what your codebase actually does and feed the friction back —
-  the transaction boundary is genuinely a consuming-codebase decision, not a gap
-  in this skill.
+  FastAPI dependency — is a decision for the consuming codebase, not this
+  skill. Wrap the use case in one unit of work; do **not** invent an ORM
+  lifecycle here.
 
 ## Repositories
 
-Interface as a `Protocol` (structural typing, like Go's implicit satisfaction);
-whole aggregate in, reconstructed aggregate out, no business logic
-(`repositories.md`). How the aggregate decomposes on the way out — the
-per-context parts module, and when a repo-private record suffices — is the
-serialization norm (`serialization.md` rules 6-8).
+The port is defined **with the service** (above), as a `ts.Port` `Protocol`
+speaking parts records; the adapter subclasses `ts.Repository` and satisfies
+it structurally (like Go's implicit satisfaction). Whole aggregate in — as
+parts — reconstructed aggregate out, no business logic (`repositories.md`).
+How the aggregate decomposes — the per-context parts module, and when a
+repo-private record suffices — is the serialization norm
+(`serialization.md` rules 6-8).
 
 ```python
-from typing import Protocol
+# campaign/adapters/gateways/repo_memory.py (verified impl)
+class InMemoryCampaignRepository(ts.Repository):
 
-class OrderRepository(Protocol):          # defined with the service, not the DB
-    def save(self, order: Order) -> None: ...            # whole aggregate in
-    def load(self, id: OrderID) -> Order: ...            # reconstructed out
-    def find(self, q: OrderQuery) -> list[OrderSummary]: ...  # read projection
-
-@dataclass(frozen=True)
-class OrderQuery:                          # selection criteria — VOs, NOT a spec
-    customer: CustomerID
-    period: Period
-
-class InMemoryOrderRepo:                   # satisfies the Protocol structurally
     def __init__(self) -> None:
-        self._rows: dict[str, OrderRecord] = {}
+        self._rows: dict[str, cparts.CampaignParts] = {}
 
-    def save(self, order: Order) -> None:
-        self._rows[str(order.id)] = decompose(order)  # repo decomposes, not the caller
+    def save(self, parts: cparts.CampaignParts) -> None:   # parts in — never the root itself
+        self._rows[parts.id] = parts
 
-    def load(self, id: OrderID) -> Order:
-        rec = self._rows.get(str(id))
-        if rec is None:
-            raise LookupError(f"order {id} not found")
-        return Order(rec.to_spec())                   # reconstruct THROUGH the constructor
+    def find(self, id: str) -> cparts.FoundCampaign | cparts.MissingCampaign:
+        row = self._rows.get(id)
+        return cparts.FoundCampaign(parts=row) if row is not None else cparts.MissingCampaign()
 ```
 
-- **`save` takes the root**; `decompose` (private) flattens it. The service
-  never extracts children to save them.
-- **`load` reconstructs through the constructor** (spec in), so invariants
-  re-run — never build the aggregate by assigning attributes.
-- **No domain math.** `find` may filter/order (persistence selection); summing
-  or rule-checking is a leak
-  (`application-services.md#domain-logic-leakage-checks`).
-- **Query fields are value objects.** (Persistence backends — SQLAlchemy,
-  async drivers — are consumer-specific; the `Protocol` is the stable contract,
-  the backing store is not this skill's decision. The worked example uses an
-  in-memory repository; a database-backed one satisfies the same `Protocol`.)
+- **The adapter speaks records** (TB081): parts and primitives cross the
+  port; the *application layer* reconstructs the aggregate through its spec
+  (`Campaign(campaign_spec(parts))`), so invariants re-run — never build a
+  domain object by assigning attributes.
+- **No domain math.** A finder may filter/order (persistence selection);
+  summing or rule-checking is a leak.
+- Persistence backends — SQLAlchemy, async drivers — are consumer-specific;
+  the `Protocol` is the stable contract, the backing store is not this
+  skill's decision. The worked example uses an in-memory repository; a
+  database-backed one satisfies the same port.
 
 ## The composition root
 
-The public interface + the wiring site (`public-interface.md`, `bootstrap.md`). The `Client`
-`Protocol` and its DTOs live in a public package; the application service
-**satisfies the Protocol structurally** (no inheritance, no adapter code); a
-hand-wired entry point chooses the concrete implementations and injects the
-`Client` into the handler.
+The public interface + the wiring site (`public-interface.md`,
+`bootstrap.md`). The context's `client.py` holds the `ts.Client` `Protocol`
+and its `ts.Request`/`ts.Response` DTOs; the application service **satisfies
+the Protocol structurally** (no inheritance, no adapter code); the app-level
+`bootstrap` chooses the concretes and injects the `Client` into the handlers.
 
-**The public package — a `Protocol` + DTOs, no implementation:**
-
-```python
-# orders/client.py — the public surface of the component
-# (get_order's DTOs elided).
-from dataclasses import dataclass
-from typing import Protocol
-
-
-@dataclass(frozen=True)
-class ItemInput:
-    sku: str
-    quantity: int
-
-
-@dataclass(frozen=True)
-class PlaceOrderRequest:
-    customer_id: str
-    items: tuple[ItemInput, ...]
-
-
-@dataclass(frozen=True)
-class PlaceOrderResponse:          # DTO — never a domain object
-    order_id: str
-    total: str
-
-
-class Client(Protocol):
-    def place_order(self, req: PlaceOrderRequest) -> PlaceOrderResponse: ...
-    def get_order(self, req: GetOrderRequest) -> GetOrderResponse: ...
-```
-
-**Satisfy it structurally — no forwarding code, no inheritance.** Because
-`Client` is a `Protocol`, any object whose methods match its names and
-signatures satisfies it. The application service already has exactly those
-methods, taking and returning the **public package's DTO types**
-(`python.md#application-services`), so it *is* a `Client` — Python's analog of
-Go's embed-to-satisfy:
+**The public surface — a `Protocol` + DTOs, no implementation:**
 
 ```python
-# ordersimpl/client.py
-from orders import Client
-from ordersapp import OrderService
+# campaign/client/client.py (verified impl)
+class CreateCampaignRequest(ts.Request):
+
+    def __init__(self, budget_amount: str, budget_currency: str) -> None:
+        self.budget_amount = budget_amount
+        self.budget_currency = budget_currency
 
 
-def new_client(svc: OrderService) -> Client:
-    return svc      # the service satisfies the Protocol structurally
+class CampaignView(ts.Response):
+    ...                                     # DTO — primitive fields, never a domain object
+
+
+class Client(ts.Client, Protocol):
+    def create_campaign(self, req: CreateCampaignRequest) -> CampaignView: ...
+    def resolve(self, req: ResolveRequest) -> ResolveResponse: ...
 ```
 
-The `-> Client` return annotation is the compile-time proof (mypy's analog of
-Go's `var _ orders.Client = (*client)(nil)`): if a service method's signature
-drifts from the Protocol, type checking stops here.
-
-**Reshape only when the surface must differ.** When you must rename a method,
-expose a subset, or compose several internal services into one contract (the
-decoupling boundary's real purpose), write an explicit class that holds the
-component(s) and delegates — the analog of Go's explicit reshape method:
-
-```python
-class _OrdersClient:                # explicit only to reshape
-    def __init__(self, svc: OrderService) -> None:
-        self._svc = svc
-
-    def place_order(self, req: PlaceOrderRequest) -> PlaceOrderResponse:
-        return self._svc.create_order(req)   # expose create_order as place_order
-    # ... the rest of the Client's methods ...
-
-
-def new_client(svc: OrderService) -> Client:
-    return _OrdersClient(svc)
-```
+Because `Client` is a `Protocol`, any object whose methods match satisfies
+it — the service *is* a `Client`, Python's analog of Go's embed-to-satisfy.
+The wiring function's `-> client.Client` return annotation is the
+compile-time proof (mypy's analog of Go's `var _ orders.Client =
+(*client)(nil)`): if a service method's signature drifts from the Protocol,
+type checking stops there. **Reshape only when the surface must differ**
+(rename, subset, composition) — then an explicit class that holds the
+service and delegates.
 
 **The composition root — the settled app anatomy** (`bootstrap.md`,
 `wiring.md`; verified impl `examples/python-app/`). Each context owns a
-`wiring/` package (its spec-shaped `Config` + a `build` contract); the app-level
-`bootstrap` nests the configs and calls each context's `build` in dependency
-order, onto a cleanup stack:
+`wiring/` package (its spec-shaped `Config` + a `build` contract); the
+app-level `bootstrap` nests the configs and calls each context's `build` in
+dependency order, onto a cleanup stack. Module-level functions declare
+themselves with `@ts.function`; module constants are `Final`; a context
+module is imported **as an aliased module, never its members** (TB053).
 
 ```python
-# <context>/wiring/config.py — the context's OWN construction config
-@dataclass(frozen=True)
-class Config:
-    storage: str          # the resource coordinate; "memory" for in-process
-
-
-# <context>/wiring/wire.py — coordinate-driven, fail-fast, uniform build contract
-def repo_for(cfg: Config) -> tuple[CampaignRepository, Closeable]:
+# campaign/wiring/wire.py (verified impl) — coordinate-driven, fail-fast, uniform
+@ts.function
+def repo_for(cfg: config.Config) -> tuple[service.CampaignRepository, Closeable]:
     if cfg.storage == "memory":
-        repo = InMemoryCampaignRepository()
+        repo = repo_memory.InMemoryCampaignRepository()
         return repo, repo
     if not cfg.storage:
         raise invalid("missing_coordinate", "campaign storage coordinate is required")
     raise invalid("unknown_backend", f"campaign storage {cfg.storage!r} not supported")
 
 
-def build(cfg: Config, policy: TargetPolicy) -> tuple[Client, Closeable]:
+@ts.function
+def build(cfg: config.Config, policy: service.TargetPolicy) -> tuple[client.Client, Closeable]:
     repo, closeable = repo_for(cfg)
-    return CampaignService(repo, policy), closeable
+    return service.CampaignService(repo, policy), closeable
 
 
-# bootstrap/config.py — the app Config nests the per-context ones
-@dataclass(frozen=True)
-class Config:
-    campaign: CampaignConfig
-    linkpolicy: LinkPolicyConfig
-
-
-# bootstrap/bootstrap.py — new(cfg): build ONCE, in dependency order
-def new(cfg: Config) -> App:
+# bootstrap/bootstrap.py (verified impl) — new(cfg): build ONCE, in dependency order
+@ts.function
+def new(cfg: config.Config) -> App:
     stack = CleanupStack()
     try:
         policy_client, policy_closeable = linkpolicy_wire.build(cfg.linkpolicy)
         stack.push(policy_closeable)
-        policy = LinkPolicyTargetPolicy(policy_client)   # cross-context adapter:
+        policy = target_policy.LinkPolicyTargetPolicy(policy_client)   # cross-context adapter:
         campaign_client, c_closeable = campaign_wire.build(cfg.campaign, policy)
-        stack.push(c_closeable)                            # built HERE, injected
-        return App(campaign_client, policy_client, stack)  # App owns close()
+        stack.push(c_closeable)                                        # built HERE, injected
+        return App(campaign_client, policy_client, stack)              # App owns close()
     except Exception:
         stack.close_all()      # partial construction unwinds — no leaked pools
         raise
@@ -563,21 +541,20 @@ def new(cfg: Config) -> App:
   resources returns a named no-op closeable; the build contract stays uniform.
 - **Each context gets only its slice** (`cfg.campaign`), and cross-context
   adapters are constructed in `new` and injected — only the root knows two
-  contexts at once.
+  contexts at once. The import matrix is machine-enforced: bootstrap builds
+  from wiring, clients, and adapters, never domain or application (TB063);
+  a context reaches another context only through its client, and only from
+  gateways and wiring (TB061).
 - **`App.close()` is idempotent** and pops the stack in reverse; a close that
   raises must not orphan the rest (`CleanupStack.close_all` collects errors).
-- **Only bootstrap/wiring import the concretes.** That boundary is a
-  *convention* in Python; an `__all__`/naming discipline is the analog of
-  Go's compiler-enforced `internal/` (`bootstrap.md`).
 - **No `context.Context`.** A plain synchronous Python service has no such
-  idiom; thread a unit-of-work/session where your codebase already does (see
-  the application-services note above).
+  idiom; thread a unit-of-work/session where your codebase already does.
 - **The degenerate case:** a single-context app can collapse this to one
   hand-wired `main` that chooses the repo, builds the service, and composes
-  the `Client` (the `examples/python/` running arc does exactly that) — the
-  rules are unchanged: one place chooses, the contract crosses, nothing else
-  imports the concretes. Grow the full `bootstrap`/`wiring` shape when a
-  second context (or a second host) arrives.
+  the `Client` — the rules are unchanged: one place chooses, the contract
+  crosses, nothing else imports the concretes. Grow the full
+  `bootstrap`/`wiring` shape when a second context (or a second host)
+  arrives.
 
 ## Inbound handlers and hosts
 
@@ -590,107 +567,106 @@ loader, builds the graph once, and runs under a runner that installs SIGTERM. Th
 per-context handler owns the content — raw bytes ↔ `Client` DTOs, and the
 response's `Content-Type` — through one respond path.
 
+**The protocol package is the app-owned vocabulary**: handlers define it,
+hosts conform to it. Its records are `ts.Request`/`ts.Response` subclasses
+(frozen wire records — one-shot construction, kwargs checked against the
+class's annotations, value equality, no subclass overrides), its refusals
+are `ts.Rejection`s, and the endpoint contract is a `ts.Port`:
+
 ```python
-# protocol/http.py — the app-owned protocol: handlers define it, hosts conform to it
-@dataclass(frozen=True)
-class HttpRequest:
-    method: str = "GET"
-    path: str = "/"
-    path_params: Mapping[str, str] = field(default_factory=dict)
-    query_params: Mapping[str, str] = field(default_factory=dict)
-    headers: Mapping[str, str] = field(default_factory=dict)
-    body: bytes = b""                               # raw; the handler interprets it
+# protocol/http.py (verified impl)
+class BadRequest(ts.Rejection): ...
+class PayloadTooLarge(ts.Rejection): ...
+class StreamingUnsupported(ts.Rejection): ...
 
 
-@dataclass(frozen=True)
-class Response:
+class HttpRequest(ts.Request):
+
+    method: str
+    path: str
+    path_params: Mapping[str, str]
+    query_params: Mapping[str, str]
+    headers: Mapping[str, str]
+    body: bytes                                   # raw; the handler interprets it
+
+    def json_body(self) -> JSONObject:            # the record carries its readers
+        return _json_object(self.body)
+
+    def path_param(self, name: str) -> str: ...
+
+
+class HttpResponse(ts.Response):
+
     status_code: int
-    body: bytes                                     # raw; the handler serialized it
-    headers: Mapping[str, str] = field(default_factory=dict)
+    body: bytes                                   # raw; the handler serialized it
+    headers: Mapping[str, str]
+
+    @classmethod
+    def json(cls, status_code: int, body: JSONObject, headers: Mapping[str, str] | None = None) -> HttpResponse: ...
+
+    @classmethod
+    def problem(cls, status_code: int, code: str, detail: str) -> HttpResponse:
+        return cls.json(status_code, {"type": f"/problems/{code}", "detail": detail})
+
+    @classmethod
+    def redirect(cls, url: str, status_code: int = 302) -> HttpResponse: ...
 
 
-Endpoint = Callable[[HttpRequest], Response]        # every endpoint, one type
-
-
-def json_response(status_code: int, body: JSONObject,
-                  headers: Mapping[str, str] | None = None) -> Response:
-    payload = json.dumps(body).encode("utf-8")      # the handler encodes + owns the type
-    return Response(status_code, payload, {"Content-Type": "application/json", **(headers or {})})
-
-
-def respond(run: Callable[[], Response]) -> Response:
-    try:
-        return run()
-    except BadRequest as e:                          # malformed body / wrong-shaped field -> 400
-        return json_response(400, problem("malformed_request", str(e)))
-    except PayloadTooLarge as e:                     # framing guard, at the host -> 413
-        return json_response(413, problem("payload_too_large", str(e)))
-    except StreamingUnsupported as e:                # framing guard, at the host -> 411
-        return json_response(411, problem("length_required", str(e)))
-    except DomainError as e:                         # the one closed-Kind mapper
-        return json_response(status_for(e.kind), problem(e.code, e.message))
-    except InfraError:
-        return json_response(503, problem("unavailable", "a dependency is unavailable; please retry"))
-    except Exception:
-        return json_response(500, problem("internal", "unexpected error"))
-
-
-# <context>/adapters/handlers/http.py
-class Handler:
-    def __init__(self, client: Client) -> None:
-        self._client = client                       # injected; never constructed
-
-    def add_link(self, req: HttpRequest) -> Response:
-        def run() -> Response:
-            body = decode_body(req.body)            # raw bytes -> JSON; the handler's call
-            view = self._client.add_link(
-                AddLinkRequest(campaign_id=string_field(body.get("campaign_id")),
-                               slug=string_field(body.get("slug")),
-                               target_url=string_field(body.get("target_url")))
-            )
-            return json_response(200, _campaign_body(view))  # encode + set Content-Type
-
-        return respond(run)
-
-    def resolve(self, req: HttpRequest) -> Response:
-        def run() -> Response:
-            resp = self._client.resolve(ResolveRequest(slug=path_param(req, "slug")))
-            return redirect(resp.target_url)        # 302 + Location, empty body
-
-        return respond(run)
+class Endpoint(ts.Port, Protocol):
+    def __call__(self, request: HttpRequest, /) -> HttpResponse: ...
 ```
 
-- **The names mirror FastAPI/Starlette, stripped down** — `path_params`,
-  `query_params`, `headers`, `status_code` — so the shape is recognizable and
-  moving onto a real framework is mechanical rather than a rewrite. What is
-  *not* mirrored: no async, no `await request.json()`, no media-type
-  negotiation, no `RedirectResponse` class (a `redirect` helper instead).
+```python
+# campaign/adapters/handlers/http.py (verified impl)
+class Handler(ts.Handler):
+    def __init__(self, client: client.Client) -> None:
+        self._client = client                     # injected; never constructed
+
+    def add_link(self, req: HttpRequest) -> HttpResponse:
+        body = req.json_body()                    # raw bytes -> JSON; the handler's call
+        view = self._client.add_link(
+            client.AddLinkRequest(
+                campaign_id=string_field(body.get("campaign_id")),
+                slug=string_field(body.get("slug")),
+                target_url=string_field(body.get("target_url")),
+            )
+        )
+        return HttpResponse.json(200, _campaign_body(view))
+
+    def resolve(self, req: HttpRequest) -> HttpResponse:
+        resp = self._client.resolve(client.ResolveRequest(slug=req.path_param("slug")))
+        return HttpResponse.redirect(resp.target_url)   # 302 + Location, empty body
+```
+
+- **Wire records carry their behavior** (the srv-vocabulary ruling,
+  2026-08-08): `json_body`/`path_param` live on `HttpRequest`,
+  `json`/`problem`/`redirect` on `HttpResponse` — not as loose module
+  functions. The DTO-purity objection dissolves on the package-scoped kind
+  grammar: `ts.srv.Request`/`Response` are distinct kinds from the context
+  DTOs, which keep carrying data and nothing else.
 - **The body is `bytes` on both sides**, so the edge is content-type-agnostic:
-  the handler calls `decode_body(req.body)` for JSON (or reads the bytes as an
-  image), and `json_response`/`redirect` serialize and set the `Content-Type`
-  on the way out. The host neither parses nor serializes — that is what makes a
-  `.png` in or out expressible without touching it.
-- **Every endpoint has the one signature** `(HttpRequest) -> Response`, so the
-  host can hold them all as `Endpoint` and route by table instead of growing a
-  branch per endpoint.
-- **The handler never sees transport.** No socket, no `self.path`, no framework
-  request — everything it needs rides in the one `HttpRequest`, so a test builds
-  one by hand (bytes body included) and asserts on the returned `Response`.
-- **`respond` is the whole error table for the mechanism**: shape guard → 400,
-  domain kind → status through the one pure mapper (`status_for` over the
-  closed `Kind` set), infra → 503, unexpected → 500 with a generic body — plus
-  the host's own framing rejections (413, 411) through the same table.
-  `problem` renders the RFC 9457-shaped object (`type` from the open `Code`,
-  `detail`) — decided once, at this path.
-- **Headers are part of the response DTO**, which is what lets a redirect be a
-  real redirect: `redirect(url)` sets `Location` and an empty body. A 302 whose
-  destination is a JSON field is not a redirect — no client follows it.
+  the handler reads `req.json_body()` (or the bytes as an image), and
+  `HttpResponse.json`/`redirect` serialize and set the `Content-Type` on the
+  way out. The host neither parses nor serializes.
+- **Every endpoint has the one signature** (`Endpoint`), so the host can hold
+  them all in a table and route by it instead of growing a branch per
+  endpoint.
+- **The handler never sees transport.** Everything it needs rides in the one
+  `HttpRequest`, so a test builds one by hand (bytes body included) and
+  asserts on the returned `HttpResponse`. Only a handler imports its own
+  context's client (TB060).
+- **`respond` is the whole error table for the mechanism** (it lives with the
+  host, `srv/http/host.py`): shape guard → 400, domain kind → status through
+  the one pure mapper (`status_for` over the closed `Kind` set), infra → 503,
+  unexpected → 500 — plus the host's own framing rejections (413, 411)
+  through the same table. `HttpResponse.problem` renders the RFC 9457-shaped
+  object — decided once, at this path.
 
 ```python
-# srv/http/host.py — the route table: the whole URL surface, one place
+# srv/http/host.py (verified impl) — the route table: the whole URL surface, one place
 def routes_for(app: App) -> tuple[Route, ...]:
-    campaign = CampaignHandler(app.campaign)        # one handler per exposed context,
-    reports = ReportsHandler(app.reports)           # built once from the single App
+    campaign = http.Handler(app.campaign)         # one handler per exposed context,
+    reports = reports_http.Handler(app.reports)   # built once from the single App
     return (
         Route("POST", "/campaigns", campaign.create_campaign),
         Route("GET", "/campaigns/{campaign_id}", campaign.get_campaign),
@@ -699,23 +675,24 @@ def routes_for(app: App) -> tuple[Route, ...]:
     )
 
 
-def _dispatch(self, method: str) -> Response:       # the host's entire request path
-    def run() -> Response:
-        found = match(routes, method, self.path)    # router: URL knowledge lives there
-        if found is None:
-            return json_response(404, problem("not_found", "unknown route"))
-        headers = {n: v for n, v in self.headers.items()}
-        body = self.rfile.read(content_length(headers))  # transport read; raises 413/411 on bad framing
-        return found.endpoint(HttpRequest(
-            method=method, path=self.path,
-            path_params=found.path_params, query_params=found.query_params,
-            headers=headers, body=body,             # raw bytes; the host never decodes
-        ))
+        def _dispatch(self, method: str) -> HttpResponse:   # the host's entire request path
+            def run() -> HttpResponse:
+                found = match(routes, method, self.path)     # router: URL knowledge lives there
+                if found is None:
+                    return HttpResponse.problem(404, "not_found", "unknown route")
+                headers = {name.lower(): value for name, value in self.headers.items()}
+                body = self.rfile.read(buffered_length(self.headers.items()))
+                return found.endpoint(HttpRequest(
+                    method=method, path=self.path,
+                    path_params=found.path_params, query_params=found.query_params,
+                    headers=headers, body=body,              # raw bytes; the host never decodes
+                ))
 
-    return respond(run)
+            return respond(run)
 
 
-# srv/http/main.py — the host: env edge, build once, hand to the runner
+# srv/http/main.py (verified impl) — the host: env edge, build once, hand to the runner
+@ts.function
 def main() -> None:
     cfg = from_env(os.getenv)            # the ONE config loader (bootstrap/config)
     app = new(cfg)                       # ONCE per process; validates fail-fast
@@ -724,106 +701,64 @@ def main() -> None:
 ```
 
 - **Route, read bytes, call, write bytes — nothing between the steps.** No
-  `json.loads`, no `json.dumps`, no hardcoded `Content-Type`, no field name, no
-  `Client` call. `content_length` decides the framing from the headers (finite
-  and under-cap → read it; chunked → 411; over cap → 413); `_send` writes the
-  `status_code`, the raw `body` bytes, and copies the handler's `headers`. That
-  is the host's entire share of the wire.
-- **Buffered, with the streaming boundary named.** `content_length` reads a
-  declared, bounded body and refuses a `Transfer-Encoding: chunked` one with a
-  411 — the honest in-code marker that a live/large stream needs a different
-  shape (the request exposing a `stream()` pull-source, the host de-chunking),
-  which is **documented, not built**. Reach for a framework when you need
-  streaming, multipart, or content negotiation.
+  `json.loads`, no hardcoded `Content-Type`, no field name, no `Client` call.
+  `buffered_length` (a reader on the request's headers) decides the framing
+  (finite and under-cap → read it; chunked → 411; over cap → 413); `_send`
+  writes the `status_code`, the raw `body` bytes, and copies the handler's
+  `headers`. That is the host's entire share of the wire.
+- **Buffered, with the streaming boundary named.** A declared, bounded body is
+  read; `Transfer-Encoding: chunked` is refused with 411 — the honest in-code
+  marker that a live/large stream needs a different shape, which is
+  **documented, not built**. Reach for a framework when you need streaming,
+  multipart, or content negotiation.
 - **The route table is app-level.** URLs are the app's decision, not a
-  context's: one table names every exposed endpoint, so a context can be
-  mounted, prefixed, or versioned without editing it. Pattern matching and
-  parameter extraction live in `srv/http/router.py` — the only component that
-  knows `/campaigns/{campaign_id}` has a parameter in it.
-- **The host's own failures use the same vocabulary.** An unmatched route (404),
-  an oversized body (413), a streaming body it won't buffer (411) — all the
-  host's own rejections render through the same `respond`/`problem` path a
-  handler uses, so a client sees one error format from the whole process, not
-  the framework's default HTML for the host and problem-JSON for the handler.
-- **One loader, one env read.** The host passes its own `os.getenv` to
-  `from_env` (`bootstrap/config.py`) — the single place the app reads the
-  environment. `from_env` loads app config **and** the host's launch config
-  (`cfg.http`) into one `Config`; nothing below the host reads env. It stays a
-  pure function (`getenv` injected), so it's testable with a dict and the
-  env-edge check still holds.
-- **`run_until_signal` owns the process lifecycle**: it installs SIGINT/SIGTERM
-  and calls `app.close()` in a `finally`. This is the lifecycle **minimum, and
-  it is load-bearing** — a bare `finally: app.close()` does **not** survive
-  Python's default SIGTERM (the process dies without unwinding), so the host
-  installs the handler. Drain ordering, readiness, and health stay the host's
-  fill-in (`examples/python-app/srv/run.py`, `srv/http/host.py`).
-- **A CLI host** is the same split for a different mechanism — env edge minus
-  the `Host`/runner (it is not long-running). `srv/cli/main.py` routes a command
-  name through a table to a `(CliRequest) -> CliResponse` transform in
-  `campaign/adapters/handlers/cli.py`, then prints `stdout`/`stderr` and
-  `sys.exit`s the `exit_code`; the handler never touches `argv`, `print`, or the
-  process. The shared vocabulary is `protocol/cli.py` (`CliRequest`,
-  `CliResponse`), the analog of `protocol/http.py`, and the host's error
-  table maps the closed
-  domain `Kind` to an exit code via `errors.exit_code_for` — the CLI's `status_for`.
-
-```python
-# protocol/cli.py — the CLI mechanism's shared vocabulary
-@dataclass(frozen=True)
-class CliRequest:
-    args: tuple[str, ...] = ()
-
-@dataclass(frozen=True)
-class CliResponse:
-    exit_code: int
-    stdout: str = ""
-    stderr: str = ""
-
-def respond(run: Callable[[], CliResponse]) -> CliResponse:
-    try:
-        return run()
-    except UsageError as e:                          # bad/missing args -> exit 2
-        return CliResponse(2, stderr=str(e))
-    except DomainError as e:                          # same Kind set, mapped to an exit code
-        return CliResponse(exit_code_for(e.kind), stderr=f"[{e.code}] {e.message}")
-    except InfraError:
-        return CliResponse(1, stderr="a dependency is unavailable; please retry")
-    except Exception:
-        return CliResponse(1, stderr="unexpected error")
-
-
-# srv/cli/main.py — the host: a command route table, dispatch, print, exit
-def dispatch(commands: dict[str, Command], argv: list[str]) -> CliResponse:
-    if not argv or argv[0] not in commands:
-        return CliResponse(2, stderr=_USAGE)         # the host's own failure, same vocabulary
-    return commands[argv[0]](CliRequest(args=tuple(argv[1:])))
-```
-
-  This resolves the earlier open question in the affirmative: the CLI
-  request/response DTO **is** the right shape, and a multi-command CLI gets the
-  handler split (a single-command CLI may still translate inline —
-  `handlers.md#decisions-you-must-make`, decision 2). Piped **stdin** would be
-  the CLI's "body" and reopens the same buffered-vs-stream question as HTTP; none
-  of these commands read it, so it stays a named boundary.
+  context's: one table names every exposed endpoint. Pattern matching lives
+  in `srv/http/router.py` — the only component that knows
+  `/campaigns/{campaign_id}` has a parameter in it. A host reaches a context
+  only through its handlers (TB063), and a srv module imports `tesser.srv`
+  exactly once, as `ts` (TB050).
+- **The host's own failures use the same vocabulary** — an unmatched route
+  (404), an oversized body (413), a streaming body (411) all render through
+  the same `respond`/`problem` path a handler uses, so a client sees one
+  error format from the whole process.
+- **One loader, one env read.** `from_env` (`bootstrap/config.py`) is the
+  single place the app reads the environment, loading app config **and** the
+  host's launch config into one `Config`; it stays a pure function (`getenv`
+  injected), so it's testable with a dict.
+- **`run_until_signal` owns the process lifecycle**: it installs
+  SIGINT/SIGTERM and calls `app.close()` in a `finally` — a bare
+  `finally: app.close()` does **not** survive Python's default SIGTERM.
+- **A CLI host** is the same split for a different mechanism. The shared
+  vocabulary is `protocol/cli.py`: `CliRequest` carries its arg readers
+  (`arg`, `no_extra_args` — `UsageError`, a `ts.Rejection`, on violation),
+  `CliResponse` its `ok` builder, and `Command` is the endpoint port.
+  `srv/cli/main.py` routes a command name through a table, prints
+  `stdout`/`stderr`, exits the `exit_code`; the handler
+  (`campaign/adapters/handlers/cli.py`) never touches `argv`, `print`, or
+  the process, and the host's error table maps the closed domain `Kind` to
+  an exit code via `errors.exit_code_for` — the CLI's `status_for`. Piped
+  **stdin** would be the CLI's "body" and reopens the same
+  buffered-vs-stream question as HTTP; none of these commands read it, so it
+  stays a named boundary.
 
 ## The Spec pattern
 
-Specs are frozen dataclasses with **primitive leaves** that carry construction
-data across the layer boundary. A structured domain object's **constructor takes
-its spec** — that is the single construction path (no separate factory); it
-converts each primitive to a value object and `__post_init__`/the constructor
-validates.
+Specs are `ts.Spec` subclasses with **primitive leaves** (and nested child
+specs) that carry construction data across the layer boundary — plain
+attribute assignment in `__init__`, no behavior (a spec only carries
+construction data; a method on one is a finding). A structured domain
+object's **constructor takes its spec** — that is the single construction
+path; it converts each primitive to a value object and validates.
 
-- A spec field is never a domain value object — the caller shouldn't have to
-  step inside the domain to build one, and validation must run in one place.
-- **Nesting mirrors composition:** `TransferSpec` holds `AccountRefSpec`,
-  never flattened prefixed fields. Ubiquitous child types are embedded in many
-  parents; nesting means a change to the child's construction touches the
-  child's spec only.
-- **1 primitive field → no spec; the constructor takes the raw primitive**
-  (`Slug(value)`). **2+ fields (or embedded domain objects) → the constructor
-  takes the spec** (`Transfer(spec)`).
-- Enums cross the boundary as enums (`NormalBalance.CREDIT`), not strings.
+- A spec field is a primitive, a value object, or a child spec — never a
+  domain object the caller must construct, and the one admissible union is
+  `X | None` (optionality).
+- **Nesting mirrors composition:** `CampaignSpec` holds `MoneySpec` and
+  `ShortLinkSpec`s, never flattened prefixed fields; a change to the child's
+  construction touches the child's spec only.
+- **Value objects take primitives/child VOs at their own door — no spec**
+  (`Slug(value)`, `Money(amount, currency)`). **Entities and aggregates take
+  exactly one spec** (`ShortLink(spec)`, `Campaign(spec)`).
 
 **Return types:** domain functions return domain types. If callers must
 sum/filter/group a returned list before it's useful, introduce the type that
@@ -832,30 +767,37 @@ represents the finished result.
 ## Testing patterns
 
 ```python
-def test_money_equality():
-    a = Money(MoneySpec("1.5", "USD"))
-    b = Money(MoneySpec("1.50", "USD"))
-    assert a == b            # equal logical values, across representations
+def test_money_equality() -> None:
+    a = money.Money("1.50", "USD")
+    b = money.Money("1.50", "USD")
+    assert a == b
     assert hash(a) == hash(b)
 
-def test_money_rejects_missing_currency():
-    with pytest.raises(ValueError, match="currency is required"):
-        Money(MoneySpec("1.00", ""))
+def test_money_rejects_a_malformed_currency() -> None:
+    with pytest.raises(DomainError):
+        money.Money("1.00", "usd")
 
-def test_operation_rejects_unbalanced():
-    with pytest.raises(ValueError, match="does not balance"):
-        Operation(op_id, [debit_only])
+def test_campaign_rejects_a_duplicate_slug() -> None:
+    with pytest.raises(DomainError):
+        campaign.Campaign(campaign.CampaignSpec(id=CID, budget=BUDGET, links=(LINK, LINK)))
 
-def test_operation_transfers_are_defensive():
-    op = Operation(op_id, transfers)
-    assert isinstance(op.transfers, tuple)   # callers can't mutate the root
+def test_campaign_links_are_defensive() -> None:
+    c = campaign.Campaign(campaign.CampaignSpec(id=CID, budget=BUDGET, links=(LINK,)))
+    assert isinstance(c.links, tuple)     # callers can't mutate the root
 ```
 
-- One equality test per VO (`test_*_equality`) locking `__eq__` AND
-  `__hash__` semantics.
-- One rejection test per validation rule (`pytest.raises`, matching the
-  message).
+- One equality test per VO locking `__eq__` AND `__hash__` semantics (the
+  base owns them; the test locks the *representation* — normalization at the
+  door).
+- One rejection test per validation rule (`pytest.raises`).
 - One invariant-violation test per aggregate — its reason to exist.
 - Defensive-copy assertions on every collection accessor.
-- Never `str(a) == str(b)` as an equality assertion; each leaf's canonical
-  exit gets its own round-trip test (`serialization.md#tests-you-must-write`).
+- One round-trip test per leaf: `Leaf(str(leaf)) == leaf` locks the canonical
+  exit.
+- Never `str(a) == str(b)` as an equality assertion (TB004).
+- **Placement carries the tier** (`testing.md`): a sibling test lives inside
+  the role it exercises (`campaign/domain/test_labels.py`), imports what its
+  subject may import plus the subject itself; a test double is a hand-written
+  `@ts.fake` implementing the port or client it doubles, never a mocking
+  library (TB030); a builder is a `@ts.helper` that takes defaulted
+  primitives and returns a spec.

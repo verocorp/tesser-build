@@ -100,9 +100,9 @@ recurs is a carve-out candidate to bring here, with its evidence.
   `# tessercheck:ignore` (itself a directive).
 - **Go: the `comments` analyzer** in `tessercheck` flags every
   non-directive comment; generated files are skipped.
-- CI gates the norm on the example trees (`examples/ddd` via `tessercheck`;
-  `examples/python` via the tessercheck-py acceptance gate;
-  `examples/python-app` and `examples/errorspy` via `--select TB020`).
+- CI gates the norm on the example trees (`examples/ddd` via the Go
+  `tessercheck`; every `ts.*` tree via the Python analyzer's zero-findings
+  gate — TB020 runs universally, no test exemption).
 
 ## Common mistakes
 

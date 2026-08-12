@@ -212,8 +212,8 @@ grain. `primitiveaccessor`, first dropped as theater, is **reinstated** as
 pass that classifies each class as value_object / spec / identity_object / other.
 Its own meta-test (`tessercheck-py-legacy/tests/test_meta.py`) is the Python analog of this
 matrix's silent-gap guard: it fails if a registered check has no good/bad
-fixture, if an unregistered code is emitted, or if the analyzer is not clean on
-the canonical `examples/python` tree. Full rationale:
+fixture or if an unregistered code is emitted. (The graduated analyzer's
+equivalent is `tessercheck-py/RULES.md`'s fixture column and its drift gate.) Full rationale:
 [`docs/design-python-analyzer.md`](../docs/design-python-analyzer.md) and the
 classifier design
 [`docs/design-python-domain-detection.md`](../docs/design-python-domain-detection.md).

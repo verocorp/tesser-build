@@ -51,23 +51,6 @@ jobs:
       - name: Plugin bundling smoke test
         run: go test ./gclplugin/ -run CustomGCL -v
 
-  python-example:
-    # Gates the Python worked example at the same bar as the Go mechanics:
-    # mypy --strict and pytest must both be clean, so skills/tesser-build/python.md never
-    # encodes a pattern that isn't backed by running, type-checked code.
-    # examples/python is the reference rendering.
-    name: python example (mypy --strict + pytest)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install dev tooling
-        run: pip install -r examples/python/requirements-dev.txt
-      - name: examples/python — mypy --strict + pytest
-        run: scripts/verify python
-
   spike-shells:
     name: spike-shells (tessercheck zero findings + mypy --strict + pytest + import-linter)
     runs-on: ubuntu-latest
@@ -248,7 +231,7 @@ jobs:
     # and examples/errorspy. Those four are why this job can fail on a change
     # that touches no file under tessercheck-py-legacy — a layout change in
     # python-app broke discovery in PR #56 exactly that way.
-    name: tessercheck-py-legacy (mypy --strict + pytest + the four CLI gates)
+    name: tessercheck-py-legacy (mypy --strict + pytest + the three CLI gates)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -257,5 +240,5 @@ jobs:
           python-version: '3.12'
       - name: Install dev tooling
         run: pip install -r tessercheck-py-legacy/requirements-dev.txt
-      - name: tessercheck-py-legacy — mypy --strict + pytest + the four CLI gates
+      - name: tessercheck-py-legacy — mypy --strict + pytest + the three CLI gates
         run: scripts/verify tessercheck-py-legacy

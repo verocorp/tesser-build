@@ -253,7 +253,7 @@ belongs to the edge, recorded where its golden test lives.
 
 - Python mechanics: `python.md#value-objects` (canonical exits, child VOs),
   `python.md#the-spec-pattern` (inbound door). Compound shape verified in
-  `examples/python/catalog/money.py`; parts verified impl:
+  `examples/python-app/campaign/domain/money.py`; parts verified impl:
   `examples/python-app/campaign/application/parts.py`.
 - The all-cases worked example: `examples/serdepy/` — every backing type's
   exit (all four conversion dunders, the Decimal and datetime text

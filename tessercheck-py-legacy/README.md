@@ -105,14 +105,14 @@ module) resolves without import analysis.
 ```bash
 pip install -r requirements-dev.txt
 mypy            # --strict, configured in pyproject.toml
-pytest -q       # unit checks + the examples/python acceptance gate + self-dogfood
+pytest -q       # unit checks + self-dogfood
 ```
 
 `testdata/<code>/{good,bad}.py` holds a conformant/violating fixture per
 file-scoped check (`good_tree/`/`bad_tree/` directory pairs for tree-scoped
 ones); the meta-test (`tests/test_meta.py`) fails if a registered check lacks
 its fixtures, if an unregistered code is emitted, or if the analyzer is not
-clean on `examples/python` (the canonical conformant tree) or on its own
+clean on the gated example trees or on its own
 source (TB020 excluded there by ruling: the comments norm governs
 constructed-app code and the example templates, not the toolkit's internals).
 

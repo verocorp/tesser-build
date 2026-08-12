@@ -1,5 +1,6 @@
 """Meta-tests — the Python analog of ``TestEveryAnalyzerIsTested`` /
-``TestNoUnregisteredAnalyzer``, plus the acceptance gate on ``examples/python``.
+``TestNoUnregisteredAnalyzer``. (The acceptance gate retired with the
+canonical frozen-dataclass tree.)
 """
 
 import ast
@@ -12,7 +13,6 @@ from tessercheck.run import run_paths
 _ROOT = Path(__file__).resolve().parents[2]
 _PKG = Path(__file__).resolve().parents[1] / "tessercheck"
 _TESTDATA = Path(__file__).resolve().parents[1] / "testdata"
-_EXAMPLES = _ROOT / "examples" / "python"
 
 
 def test_every_check_has_a_good_and_bad_fixture() -> None:
@@ -122,15 +122,6 @@ def test_no_unregistered_code_is_emitted() -> None:
     for bad in _TESTDATA.glob("*/bad.py"):
         for f in check_source(str(bad), bad.read_text(encoding="utf-8"), is_test=False):
             assert f.code in registered, f"{bad} emitted unregistered {f.code}"
-
-
-def test_acceptance_gate_examples_python_is_clean() -> None:
-    # The examples are the canonical conformant tree — the analyzer must pass
-    # clean on them, exactly as tessercheck gates examples/ddd on the Go side.
-    assert _EXAMPLES.is_dir(), f"examples tree not found at {_EXAMPLES}"
-    findings, errors = run_paths([str(_EXAMPLES)])
-    assert findings == [], "\n".join(f.render() for f in findings)
-    assert errors == [], "\n".join(errors)
 
 
 def test_analyzer_passes_its_own_checks() -> None:
