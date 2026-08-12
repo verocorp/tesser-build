@@ -31,6 +31,14 @@ The test-tier walk becomes total over in-context placements (#64).
   unrecognized adapters subrole, and a test under an unknown role package all
   report instead of passing. This closes the issue's stated failure mode for
   the next unrecognized directory name, not just the two it documented.
+- **Tests under `bootstrap/` and `protocol/` were the same leak one level
+  up** — a `test_*` basename diverts to the test-module rules before the app
+  package rules run, and only `srv` had a test tier, so a test parked in
+  either package escaped both rule sets. Both now mirror their production
+  import rules: a bootstrap test reaches a context only through its wiring,
+  client, and adapters (the TB063 rule); a protocol test reaches no context
+  at all. A root-level `tests/` directory stays placement-free on purpose —
+  it is the app tier, where the integration tests live.
 
 ## [0.0.27.0] - 2026-08-12
 

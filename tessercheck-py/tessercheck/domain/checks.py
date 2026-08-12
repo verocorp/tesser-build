@@ -191,6 +191,10 @@ ADAPTER_TEST_TIERS: Final[frozenset[str]] = frozenset({"handlers", "gateways", "
 
 SRV_TIER: Final[str] = "srv"
 
+BOOTSTRAP_TIER: Final[str] = "bootstrap"
+
+PROTOCOL_TIER: Final[str] = "protocol"
+
 STRAY_TIER: Final[str] = "stray"
 
 PRIMITIVES: Final[frozenset[str]] = frozenset({"str", "int", "float", "bool", "bytes"})
@@ -2211,6 +2215,10 @@ class Codebase(ts.AggregateRoot):
         parts = module.name().split(".")
         if parts[0] == "srv" and len(parts) >= 2:
             return ("", SRV_TIER)
+        if parts[0] == "bootstrap" and len(parts) >= 2:
+            return ("", BOOTSTRAP_TIER)
+        if parts[0] == PROTOCOL_PACKAGE and len(parts) >= 2:
+            return ("", PROTOCOL_TIER)
         if len(parts) < 3 or parts[0] not in contexts:
             return None
         if parts[1] == TESTS_ROLE:
@@ -2258,6 +2266,45 @@ class Codebase(ts.AggregateRoot):
                         "TB070",
                         f"{module.name()} imports {target}, but a test placed in "
                         "srv reaches a context only through its handlers; "
+                        "a test reaches only what its placement allows",
+                    )
+                )
+            return tuple(found)
+        if tier == BOOTSTRAP_TIER:
+            for edge in module.import_edges():
+                target = str(edge._target)
+                lineno = int(edge._lineno)
+                pieces = target.split(".")
+                if pieces[0] not in contexts:
+                    continue
+                if len(pieces) >= 2 and pieces[1] in ("wiring", "client", "adapters"):
+                    continue
+                found.append(
+                    Violation(
+                        module.path(),
+                        lineno,
+                        "TB070",
+                        f"{module.name()} imports {target}, but a test placed in "
+                        "bootstrap reaches a context only through its wiring, client, "
+                        "and adapters; "
+                        "a test reaches only what its placement allows",
+                    )
+                )
+            return tuple(found)
+        if tier == PROTOCOL_TIER:
+            for edge in module.import_edges():
+                target = str(edge._target)
+                lineno = int(edge._lineno)
+                pieces = target.split(".")
+                if pieces[0] not in contexts:
+                    continue
+                found.append(
+                    Violation(
+                        module.path(),
+                        lineno,
+                        "TB070",
+                        f"{module.name()} imports {target}, but a test placed in "
+                        "protocol reaches no context; "
                         "a test reaches only what its placement allows",
                     )
                 )

@@ -722,6 +722,44 @@ def test_a_client_sibling_test_reaches_only_its_own_client(tmp_path: Path) -> No
     )
     assert not any("test_client.py:1:" in f for f in findings)
 
+def test_a_bootstrap_test_reaches_a_context_like_production_bootstrap(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "bootstrap/test_boot.py",
+        "import app.client.client as client\n"
+        "import app.domain.thing as thing\n"
+        "def test_x() -> None:\n"
+        "    assert True\n",
+    )
+    write_module(tmp_path, "bootstrap/__init__.py", "")
+    findings = check_tree(tmp_path)
+    assert any(
+        "bootstrap.test_boot imports app.domain.thing, but a test placed in "
+        "bootstrap reaches a context only through its wiring, client, and adapters; "
+        "a test reaches only what its placement allows" in f
+        for f in findings
+    )
+    assert not any("test_boot.py:1:" in f for f in findings)
+
+def test_a_protocol_test_reaches_no_context(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "protocol/test_proto.py",
+        "import app.client.client as client\n"
+        "def test_x() -> None:\n"
+        "    assert True\n",
+    )
+    write_module(tmp_path, "protocol/__init__.py", "")
+    findings = check_tree(tmp_path)
+    assert any(
+        "protocol.test_proto imports app.client.client, but a test placed in "
+        "protocol reaches no context; "
+        "a test reaches only what its placement allows" in f
+        for f in findings
+    )
+
 def test_a_test_that_resolves_to_no_tier_is_itself_a_finding(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
