@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__ import annotations  # tessercheck:ignore-file TB040
 
 import enum
 from typing import assert_never

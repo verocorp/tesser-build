@@ -5,12 +5,12 @@ import tesser.testing as ts
 import campaign.client.client as campaign_client
 from bootstrap.bootstrap import new
 from bootstrap.config import Config
-from campaign.adapters.handlers.cli import Handler
-from campaign.wiring.config import Config as CampaignConfig
+import campaign.adapters.handlers.cli as cli
+import campaign.wiring.config as config
 from protocol.cli import CliRequest, CliResponse, UsageError
 from errors import InfraError, conflict, invalid, not_found
-from linkpolicy.wiring.config import Config as LinkPolicyConfig
-from reports.wiring.config import Config as ReportsConfig
+import linkpolicy.wiring.config as linkpolicy_config
+import reports.wiring.config as reports_config
 from srv.cli.main import commands_for, dispatch, respond
 
 
@@ -60,7 +60,7 @@ def test_create_campaign_transforms_args_to_a_success_line() -> None:
     client = FakeCampaignClientScripted(
         campaign_client.CampaignView("0123456789abcdef", "100.00", "USD", ())
     )
-    resp = Handler(client).create_campaign(CliRequest(("100.00", "USD")))
+    resp = cli.Handler(client).create_campaign(CliRequest(("100.00", "USD")))
     assert resp.exit_code == 0
     assert resp.stdout.startswith("created campaign ")
     assert "budget 100.00 USD" in resp.stdout
@@ -73,7 +73,7 @@ def test_create_campaign_transforms_args_to_a_success_line() -> None:
 
 def test_a_domain_rejection_becomes_an_exit_code_not_a_traceback() -> None:
     client = FakeCampaignClientScripted(error=invalid("bad_amount", "must be positive"))
-    resp = dispatch({"create-campaign": Handler(client).create_campaign}, ["create-campaign", "-5", "USD"])
+    resp = dispatch({"create-campaign": cli.Handler(client).create_campaign}, ["create-campaign", "-5", "USD"])
     assert resp.exit_code == 2
     assert resp.stdout == ""
     assert resp.stderr.startswith("[")
@@ -81,21 +81,21 @@ def test_a_domain_rejection_becomes_an_exit_code_not_a_traceback() -> None:
 
 def test_a_missing_argument_is_a_usage_error() -> None:
     client = FakeCampaignClientScripted()
-    resp = dispatch({"create-campaign": Handler(client).create_campaign}, ["create-campaign", "100.00"])
+    resp = dispatch({"create-campaign": cli.Handler(client).create_campaign}, ["create-campaign", "100.00"])
     assert resp.exit_code == 2
     assert "usage: create-campaign" in resp.stderr
 
 
 def test_an_empty_argument_is_a_usage_error() -> None:
     client = FakeCampaignClientScripted()
-    resp = dispatch({"create-campaign": Handler(client).create_campaign}, ["create-campaign", "", "USD"])
+    resp = dispatch({"create-campaign": cli.Handler(client).create_campaign}, ["create-campaign", "", "USD"])
     assert resp.exit_code == 2
     assert "missing argument <budget_amount>" in resp.stderr
 
 
 def test_extra_arguments_are_a_usage_error() -> None:
     client = FakeCampaignClientScripted()
-    resp = dispatch({"create-campaign": Handler(client).create_campaign}, ["create-campaign", "100.00", "USD", "surplus"])
+    resp = dispatch({"create-campaign": cli.Handler(client).create_campaign}, ["create-campaign", "100.00", "USD", "surplus"])
     assert resp.exit_code == 2
     assert "usage: create-campaign" in resp.stderr
 
@@ -152,9 +152,9 @@ def test_dispatch_rejects_no_command_with_usage() -> None:
 def test_commands_for_wires_the_campaign_commands_end_to_end() -> None:
     app = new(
         Config(
-            campaign=CampaignConfig("memory"),
-            linkpolicy=LinkPolicyConfig("memory"),
-            reports=ReportsConfig(),
+            campaign=config.Config("memory"),
+            linkpolicy=linkpolicy_config.Config("memory"),
+            reports=reports_config.Config(),
         )
     )
     try:

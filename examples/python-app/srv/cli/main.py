@@ -9,7 +9,7 @@ import tesser.srv as ts
 
 from bootstrap.bootstrap import App, new
 from bootstrap.config import from_env
-from campaign.adapters.handlers.cli import Handler as CampaignHandler
+import campaign.adapters.handlers.cli as cli
 from protocol.cli import CliRequest, CliResponse, Command, UsageError
 from errors import DomainError, InfraError, exit_code_for
 
@@ -24,7 +24,7 @@ _USAGE: Final[str] = (
 
 @ts.function
 def commands_for(app: App) -> dict[str, Command]:
-    campaign = CampaignHandler(app.campaign)
+    campaign = cli.Handler(app.campaign)
     return {
         "create-campaign": campaign.create_campaign,
         "add-link": campaign.add_link,
@@ -67,5 +67,5 @@ def run(argv: list[str]) -> int:
         app.close()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # tessercheck:ignore TB051
     raise SystemExit(run(sys.argv[1:]))

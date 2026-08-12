@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import copy
+import copy  # tessercheck:ignore TB062
 
 import tesser.domain as ts
 
-from campaign.domain.values import LinkStatus, Slug, TargetURL
+import campaign.domain.values as values
 
 
 class ShortLinkSpec(ts.Spec):
@@ -18,28 +18,28 @@ class ShortLinkSpec(ts.Spec):
 class ShortLink(ts.Entity):
 
     def __init__(self, spec: ShortLinkSpec) -> None:
-        self._slug = Slug(spec.slug)
-        self._target_url = TargetURL(spec.target_url)
-        self._status = LinkStatus("active" if spec.active else "inactive")
+        self._slug = values.Slug(spec.slug)
+        self._target_url = values.TargetURL(spec.target_url)
+        self._status = values.LinkStatus("active" if spec.active else "inactive")
 
     @property
-    def slug(self) -> Slug:
+    def slug(self) -> values.Slug:
         return self._slug
 
     @property
-    def target_url(self) -> TargetURL:
+    def target_url(self) -> values.TargetURL:
         return self._target_url
 
     @property
-    def status(self) -> LinkStatus:
+    def status(self) -> values.LinkStatus:
         return self._status
 
     def deactivate(self) -> None:
-        self._status = LinkStatus("inactive")
+        self._status = values.LinkStatus("inactive")
 
     def _clone(self) -> "ShortLink":
         return copy.copy(self)
 
     @property
-    def identity(self) -> Slug:
+    def identity(self) -> values.Slug:
         return self._slug

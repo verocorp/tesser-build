@@ -9,19 +9,13 @@ import reports.client.client as reports_client
 import reports.wiring.wire as reports_wire
 from bootstrap.bootstrap import CleanupStack, new
 from bootstrap.config import Config
-from campaign.wiring.config import Config as CampaignConfig
+import campaign.wiring.config as config
 from errors import DomainError
 from lifecycle import Closeable
-from linkpolicy.client.client import (
-    CheckRequest,
-    CheckResponse,
-    Client,
-    ListVerdictsRequest,
-    ListVerdictsResponse,
-)
-from linkpolicy.wiring.config import Config as LinkPolicyConfig
-from reports.client.client import LinksByVerdictRequest, LinksByVerdictResponse
-from reports.wiring.config import Config as ReportsConfig
+import linkpolicy.client.client as client
+import linkpolicy.wiring.config as linkpolicy_config
+import reports.client.client as reports_client2
+import reports.wiring.config as reports_config
 
 
 @ts.fake
@@ -52,19 +46,19 @@ def test_stack_closes_reverse_order_and_all_despite_error() -> None:
 
 
 @ts.fake
-class FakeLinkPolicyClientAllowAll(Client):
-    def check(self, req: CheckRequest) -> CheckResponse:
-        return CheckResponse(True, "ok")
+class FakeLinkPolicyClientAllowAll(client.Client):
+    def check(self, req: client.CheckRequest) -> client.CheckResponse:
+        return client.CheckResponse(True, "ok")
 
-    def list_verdicts(self, req: ListVerdictsRequest) -> ListVerdictsResponse:
-        return ListVerdictsResponse(verdicts=())
+    def list_verdicts(self, req: client.ListVerdictsRequest) -> client.ListVerdictsResponse:
+        return client.ListVerdictsResponse(verdicts=())
 
 
-def test_new_closes_already_built_deps_on_partial_failure(monkeypatch: pytest.MonkeyPatch) -> None:  # tessercheck:ignore
+def test_new_closes_already_built_deps_on_partial_failure(monkeypatch: pytest.MonkeyPatch) -> None:  # tessercheck:ignore TB030
     order: list[str] = []
     spy = FakeCloseableSpy("linkpolicy", order)
 
-    def fake_build(cfg: LinkPolicyConfig) -> tuple[Client, Closeable]:
+    def fake_build(cfg: linkpolicy_config.Config) -> tuple[client.Client, Closeable]:
         return FakeLinkPolicyClientAllowAll(), spy
 
     monkeypatch.setattr(linkpolicy_wire, "build", fake_build)
@@ -72,9 +66,9 @@ def test_new_closes_already_built_deps_on_partial_failure(monkeypatch: pytest.Mo
     with pytest.raises(DomainError):
         new(
             Config(
-                campaign=CampaignConfig(""),
-                linkpolicy=LinkPolicyConfig("memory"),
-                reports=ReportsConfig(),
+                campaign=config.Config(""),
+                linkpolicy=linkpolicy_config.Config("memory"),
+                reports=reports_config.Config(),
             )
         )
     assert spy.closed, "the already-built linkpolicy resource was not cleaned up"
@@ -82,46 +76,46 @@ def test_new_closes_already_built_deps_on_partial_failure(monkeypatch: pytest.Mo
 
 @ts.fake
 class FakeReportsClientEmpty(reports_client.Client):
-    def links_by_verdict(self, req: LinksByVerdictRequest) -> LinksByVerdictResponse:
-        return LinksByVerdictResponse(links=())
+    def links_by_verdict(self, req: reports_client2.LinksByVerdictRequest) -> reports_client2.LinksByVerdictResponse:
+        return reports_client2.LinksByVerdictResponse(links=())
 
 
-def test_reports_closeable_is_on_the_cleanup_stack(monkeypatch: pytest.MonkeyPatch) -> None:  # tessercheck:ignore
+def test_reports_closeable_is_on_the_cleanup_stack(monkeypatch: pytest.MonkeyPatch) -> None:  # tessercheck:ignore TB030
     order: list[str] = []
     spy = FakeCloseableSpy("reports", order)
 
     def fake_build(
-        cfg: ReportsConfig, campaign_client: campaign_client.Client, policy_client: Client
+        cfg: reports_config.Config, campaign_client: campaign_client.Client, policy_client: client.Client
     ) -> tuple[reports_client.Client, Closeable]:
         return FakeReportsClientEmpty(), spy
 
     monkeypatch.setattr(reports_wire, "build", fake_build)
     app = new(
         Config(
-            campaign=CampaignConfig("memory"),
-            linkpolicy=LinkPolicyConfig("memory"),
-            reports=ReportsConfig(),
+            campaign=config.Config("memory"),
+            linkpolicy=linkpolicy_config.Config("memory"),
+            reports=reports_config.Config(),
         )
     )
     app.close()
     assert spy.closed, "reports' closeable was not on the cleanup stack"
 
 
-def test_app_close_surfaces_errors_instead_of_dropping(monkeypatch: pytest.MonkeyPatch) -> None:  # tessercheck:ignore
+def test_app_close_surfaces_errors_instead_of_dropping(monkeypatch: pytest.MonkeyPatch) -> None:  # tessercheck:ignore TB030
     order: list[str] = []
     failing = FakeCloseableSpy("reports", order, fail=True)
 
     def fake_build(
-        cfg: ReportsConfig, campaign_client: campaign_client.Client, policy_client: Client
+        cfg: reports_config.Config, campaign_client: campaign_client.Client, policy_client: client.Client
     ) -> tuple[reports_client.Client, Closeable]:
         return FakeReportsClientEmpty(), failing
 
     monkeypatch.setattr(reports_wire, "build", fake_build)
     app = new(
         Config(
-            campaign=CampaignConfig("memory"),
-            linkpolicy=LinkPolicyConfig("memory"),
-            reports=ReportsConfig(),
+            campaign=config.Config("memory"),
+            linkpolicy=linkpolicy_config.Config("memory"),
+            reports=reports_config.Config(),
         )
     )
     app.close()

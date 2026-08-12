@@ -4,8 +4,8 @@ from typing import Protocol
 
 import tesser.application as ts
 
-from reports.client.client import LinksByVerdictRequest, LinksByVerdictResponse, LinkVerdictView
-from reports.domain.report import Link, RecordedVerdict, join_links_with_verdicts
+import reports.client.client as client
+import reports.domain.report as report
 
 
 class LinkFact(ts.Parts):
@@ -39,14 +39,14 @@ class ReportsService(ts.ApplicationService):
         self._links = links
         self._verdicts = verdicts
 
-    def links_by_verdict(self, req: LinksByVerdictRequest) -> LinksByVerdictResponse:
-        links = tuple(Link(slug=f.slug, target_url=f.target_url) for f in self._links.links())
+    def links_by_verdict(self, req: client.LinksByVerdictRequest) -> client.LinksByVerdictResponse:
+        links = tuple(report.Link(slug=f.slug, target_url=f.target_url) for f in self._links.links())
         verdicts = tuple(
-            RecordedVerdict(f.target_url, f.allowed, f.reason) for f in self._verdicts.verdicts()
+            report.RecordedVerdict(f.target_url, f.allowed, f.reason) for f in self._verdicts.verdicts()
         )
-        rows = join_links_with_verdicts(links, verdicts)
+        rows = report.join_links_with_verdicts(links, verdicts)
         views = tuple(
-            LinkVerdictView(str(r.slug), str(r.target_url), str(r.allowed) == "allowed", str(r.reason))
+            client.LinkVerdictView(str(r.slug), str(r.target_url), str(r.allowed) == "allowed", str(r.reason))
             for r in rows
         )
-        return LinksByVerdictResponse(links=views)
+        return client.LinksByVerdictResponse(links=views)

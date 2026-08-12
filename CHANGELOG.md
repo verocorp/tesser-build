@@ -5,6 +5,30 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.24.0] - 2026-08-12
+
+python-app reaches zero findings and the last ratchet retires — every
+gated tree now holds the same bar: zero findings, with ruling-blocked
+sites carrying coded site-level ignores that self-report when stale.
+
+### Changed
+
+- All ~104 member-form context imports in `examples/python-app` converted
+  to aliased module imports; srv and bootstrap functions declared with
+  `@ts.function`; the missing `tesser.*` imports added. The 20
+  ruling-blocked sites (homeless root modules, host-machinery and
+  bootstrap classes, the alias hard collisions, the `__main__` guards,
+  the pure-core allowlist candidates) carry coded `# tessercheck:ignore`
+  markers, each tied to its open TODOS.md ruling.
+- The `test_parts_module_never_touches_specs` guard reads attribute
+  references too, so the aliased-module style cannot slip a Spec past it.
+
+### Removed
+
+- `scripts/sigcheck-ratchet` and the accepted-debt baseline — and with
+  them the branch-controlled-baseline soundness hole. The python-app CI
+  step is a plain zero-findings gate.
+
 ## [0.0.23.0] - 2026-08-12
 
 sigcheck graduates. The declare-then-verify engine that grew up in

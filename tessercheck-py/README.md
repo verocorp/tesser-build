@@ -71,11 +71,9 @@ cannot read cannot carry a working marker, so those are fixed, not excused.
   defined twice is a TB043 finding, never a crashed run.
 - **Whole-tree per run, opt-out per instance.** There is no `--exclude` and
   no code-family off switch. A finding is either fixed or carries a
-  site-level `# tessercheck:ignore` (see above). `examples/python-app`
-  still runs the transitional CI ratchet (`scripts/sigcheck-ratchet`, a
-  finding set with line numbers stripped) while it burns its bill down; the
-  ratchet retires when the remaining debt becomes fixes and inline
-  opt-outs.
+  site-level `# tessercheck:ignore` (see above) — every gated tree,
+  `examples/python-app` included, runs at zero findings with its
+  ruling-blocked sites carrying coded ignores that TB090 keeps honest.
 
 ## Verify this tree
 

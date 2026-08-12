@@ -4,14 +4,8 @@ from typing import Protocol
 
 import tesser.application as ts
 
-from linkpolicy.client.client import (
-    CheckRequest,
-    CheckResponse,
-    ListVerdictsRequest,
-    ListVerdictsResponse,
-    VerdictView,
-)
-from linkpolicy.domain.policy import Policy
+import linkpolicy.client.client as client
+import linkpolicy.domain.policy as policy
 
 
 class VerdictParts(ts.Parts):
@@ -33,17 +27,17 @@ class LinkPolicyService(ts.ApplicationService):
 
     def __init__(self, repo: VerdictRepository) -> None:
         self._repo = repo
-        self._policy = Policy()
+        self._policy = policy.Policy()
 
-    def check(self, req: CheckRequest) -> CheckResponse:
+    def check(self, req: client.CheckRequest) -> client.CheckResponse:
         verdict = self._policy.evaluate(req.target_url)
         self._repo.record(
             VerdictParts(
                 str(verdict.target_url), str(verdict.allowed) == "allowed", str(verdict.reason)
             )
         )
-        return CheckResponse(allowed=str(verdict.allowed) == "allowed", reason=str(verdict.reason))
+        return client.CheckResponse(allowed=str(verdict.allowed) == "allowed", reason=str(verdict.reason))
 
-    def list_verdicts(self, req: ListVerdictsRequest) -> ListVerdictsResponse:
-        views = tuple(VerdictView(p.target_url, p.allowed, p.reason) for p in self._repo.all())
-        return ListVerdictsResponse(verdicts=views)
+    def list_verdicts(self, req: client.ListVerdictsRequest) -> client.ListVerdictsResponse:
+        views = tuple(client.VerdictView(p.target_url, p.allowed, p.reason) for p in self._repo.all())
+        return client.ListVerdictsResponse(verdicts=views)

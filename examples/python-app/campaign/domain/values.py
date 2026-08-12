@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import re
 from typing import Final
-from urllib.parse import urlparse
+from urllib.parse import urlparse  # tessercheck:ignore TB062
 
 import tesser.domain as ts
 
-from errors import invalid
-from serialization import canonical_str
+from errors import invalid  # tessercheck:ignore TB062
+from serialization import canonical_str  # tessercheck:ignore TB062
 
 _SLUG_RE: Final[re.Pattern[str]] = re.compile(r"[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?")
 _CAMPAIGN_ID_RE: Final[re.Pattern[str]] = re.compile(r"[a-f0-9]{16}")

@@ -6,14 +6,14 @@ import json
 import campaign.client.client as campaign_client
 import linkpolicy.client.client as linkpolicy_client
 import reports.client.client as reports_client
-import tesser.context
+import tesser.context  # tessercheck:ignore TB050
 import tesser.testing as ts
-from campaign.adapters.handlers.http import Handler
-from campaign.client.client import LinkView, ResolveResponse
+import campaign.adapters.handlers.http as http
+import campaign.client.client as client
 from errors import InfraError
 from protocol.http import HttpRequest
-from reports.adapters.handlers.http import Handler as ReportsHandler
-from reports.client.client import LinksByVerdictRequest, LinksByVerdictResponse, LinkVerdictView
+import reports.adapters.handlers.http as reports_http
+import reports.client.client as reports_client2
 from srv.http.host import respond
 from tests.discovery import discovered_contexts
 
@@ -35,7 +35,7 @@ def test_public_interface_is_client_plus_dtos_in_the_client_module() -> None:
     for ctx in discovered_contexts():
         init_source = (ROOT / ctx / "__init__.py").read_text()
         assert init_source == "", f"{ctx}/__init__.py must be empty; the interface lives in the client role"
-    for dto in (ResolveResponse, LinkView, LinkVerdictView):
+    for dto in (client.ResolveResponse, client.LinkView, reports_client2.LinkVerdictView):
         assert tesser.context.Response in dto.__mro__, f"{dto.__name__} must declare ts.Response"
         params = inspect.signature(dto.__init__).parameters
         for name, param in params.items():
@@ -80,7 +80,7 @@ class FakeCampaignClientScripted(campaign_client.Client):
     ) -> campaign_client.CampaignView:
         return self._next(req)
 
-    def resolve(self, req: campaign_client.ResolveRequest) -> ResolveResponse:
+    def resolve(self, req: campaign_client.ResolveRequest) -> client.ResolveResponse:
         raise AssertionError("resolve is not under test here")
 
     def list_links(
@@ -96,10 +96,10 @@ def test_handler_translates_wire_to_client_dtos() -> None:
             "0123456789abcdef",
             "100.00",
             "USD",
-            (LinkView("promo", "https://ok.example/x", True),),
+            (client.LinkView("promo", "https://ok.example/x", True),),
         ),
     )
-    handler = Handler(scripted)
+    handler = http.Handler(scripted)
     created = handler.create_campaign(
         HttpRequest(
             "POST", "/", {}, {}, {},
@@ -142,20 +142,20 @@ def test_handler_translates_wire_to_client_dtos() -> None:
 
 @ts.fake
 class FakeReportsClientStub(reports_client.Client):
-    def links_by_verdict(self, req: LinksByVerdictRequest) -> LinksByVerdictResponse:
-        return LinksByVerdictResponse(
-            links=(LinkVerdictView("promo", "https://ok.example/x", False, "host blocked"),)
+    def links_by_verdict(self, req: reports_client2.LinksByVerdictRequest) -> reports_client2.LinksByVerdictResponse:
+        return reports_client2.LinksByVerdictResponse(
+            links=(reports_client2.LinkVerdictView("promo", "https://ok.example/x", False, "host blocked"),)
         )
 
 
 @ts.fake
 class FakeReportsClientFailing(reports_client.Client):
-    def links_by_verdict(self, req: LinksByVerdictRequest) -> LinksByVerdictResponse:
+    def links_by_verdict(self, req: reports_client2.LinksByVerdictRequest) -> reports_client2.LinksByVerdictResponse:
         raise InfraError("the campaign store is unreachable")
 
 
 def test_reports_handler_translates_client_dtos_to_wire() -> None:
-    resp = ReportsHandler(FakeReportsClientStub()).links_by_verdict(HttpRequest("GET", "/", {}, {}, {}, b""))
+    resp = reports_http.Handler(FakeReportsClientStub()).links_by_verdict(HttpRequest("GET", "/", {}, {}, {}, b""))
     assert resp.status_code == 200
     assert resp.json_body() == {
         "links": [
@@ -170,7 +170,7 @@ def test_reports_handler_translates_client_dtos_to_wire() -> None:
 
 
 def test_reports_handler_maps_a_failure_to_a_problem_document() -> None:
-    resp = respond(lambda: ReportsHandler(FakeReportsClientFailing()).links_by_verdict(HttpRequest("GET", "/", {}, {}, {}, b"")))
+    resp = respond(lambda: reports_http.Handler(FakeReportsClientFailing()).links_by_verdict(HttpRequest("GET", "/", {}, {}, {}, b"")))
     assert resp.status_code == 503
     assert resp.json_body() == {
         "type": "/problems/unavailable",

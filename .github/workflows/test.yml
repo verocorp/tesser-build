@@ -110,7 +110,7 @@ jobs:
     # the import direction, and the example's own AST tests keep what no tool
     # covers (import-time side effects, host-routes-never-translates, context
     # discovery). A Go mirror (examples/app) is planned, not yet built.
-    name: python-app example (ruff + import-linter + mypy --strict + pytest + sigcheck ratchet)
+    name: python-app example (ruff + import-linter + mypy --strict + pytest + tessercheck)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -119,13 +119,9 @@ jobs:
           python-version: '3.12'
       - name: Install dev tooling
         run: pip install -r examples/python-app/requirements-dev.txt
-      - name: examples/python-app — ruff + import-linter + mypy --strict + pytest + sigcheck ratchet
-        # The sigcheck step is a ratchet, not a zero-findings gate: the
-        # import-totality wave landed after this tree reached zero, so
-        # examples/python-app/sigcheck-ratchet carries the accepted debt until
-        # the conformance wave burns it down (TODOS.md "Import-totality wave
-        # followups"). The gate logic and how to regenerate the baseline live
-        # in scripts/sigcheck-ratchet.
+      - name: examples/python-app — ruff + import-linter + mypy --strict + pytest + tessercheck
+        # Zero findings, no ratchet: the conformance wave burned the accepted
+        # debt to fixes plus site-level ignores (the only opt-out mechanism).
         run: scripts/verify python-app
 
   serdepy-example:
