@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 import sigcheck.domain.checks as domain
 from tests.conftest import check_tree, conforming_tree, write_module
 
@@ -1946,3 +1948,34 @@ def test_a_dotted_module_base_resolves(tmp_path: Path) -> None:
         "FakePort" in f and "a fake implements the port or client it doubles" in f
         for f in findings
     )
+
+
+def test_edge_records_reject_an_empty_target() -> None:
+    with pytest.raises(ValueError):
+        domain.ImportEdge("", 1, False, False)
+    with pytest.raises(ValueError):
+        domain.TesserImport("", 1, False, False)
+
+
+def test_a_test_module_may_omit_tesser_testing(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(tmp_path, "tests/test_bare.py", "def test_bare() -> None:\n    assert True\n")
+    findings = check_tree(tmp_path)
+    assert not any("test_bare" in f for f in findings)
+
+
+def test_a_denied_app_edge_is_not_form_checked(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "srv/host.py",
+        "import tesser.srv as ts\n"
+        "from app.domain import thing\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "srv.host:2 imports app.domain" in f
+        and "a host reaches a context only through its handlers" in f
+        for f in findings
+    )
+    assert not any("srv.host" in f and "never its members" in f for f in findings)
