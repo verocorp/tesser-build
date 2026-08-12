@@ -163,24 +163,35 @@ EVAL_HOME: Final[str] = "gateways"
 TEST_TIER_HOME: Final[dict[str, tuple[str, str | None]]] = {
     "domain": ("domain", None),
     "application": ("application", None),
+    "client": ("client", None),
+    "wiring": ("wiring", None),
     "handlers": ("adapters", "handlers"),
     "gateways": ("adapters", "gateways"),
+    "repositories": ("adapters", "repositories"),
 }
 
 TEST_TIER_REACH: Final[dict[str, tuple[str, ...]]] = {
     "domain": SAME_CONTEXT_IMPORTS["domain"],
     "application": SAME_CONTEXT_IMPORTS["application"],
+    "client": SAME_CONTEXT_IMPORTS["client"],
+    "wiring": SAME_CONTEXT_IMPORTS["wiring"],
     "handlers": ("client",),
     "gateways": SAME_CONTEXT_IMPORTS["adapters"],
+    "repositories": SAME_CONTEXT_IMPORTS["adapters"],
     TESTS_ROLE: ROLES,
 }
 
 TEST_TIER_FOREIGN: Final[dict[str, tuple[str, ...]]] = {
     "gateways": ("client",),
+    "wiring": ("client",),
     TESTS_ROLE: ("application", "client"),
 }
 
+ADAPTER_TEST_TIERS: Final[frozenset[str]] = frozenset({"handlers", "gateways", "repositories"})
+
 SRV_TIER: Final[str] = "srv"
+
+STRAY_TIER: Final[str] = "stray"
 
 PRIMITIVES: Final[frozenset[str]] = frozenset({"str", "int", "float", "bool", "bytes"})
 
@@ -2205,11 +2216,11 @@ class Codebase(ts.AggregateRoot):
         if parts[1] == TESTS_ROLE:
             return (parts[0], TESTS_ROLE)
         if parts[1] not in ROLES:
-            return None
+            return (parts[0], STRAY_TIER)
         if parts[1] == "adapters":
-            if len(parts) >= 4 and parts[2] in ("handlers", "gateways"):
+            if len(parts) >= 4 and parts[2] in ADAPTER_TEST_TIERS:
                 return (parts[0], parts[2])
-            return None
+            return (parts[0], STRAY_TIER)
         return (parts[0], parts[1])
 
     def _test_placement_violations(
@@ -2220,6 +2231,17 @@ class Codebase(ts.AggregateRoot):
         contexts: frozenset[str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
+        if tier == STRAY_TIER:
+            return (
+                Violation(
+                    module.path(),
+                    1,
+                    "TB070",
+                    f"{module.name()} resolves to no test tier; "
+                    "a sibling test lives in a role package or an adapter kind package "
+                    "(handlers, gateways, repositories)",
+                ),
+            )
         if tier == SRV_TIER:
             for edge in module.import_edges():
                 target = str(edge._target)
