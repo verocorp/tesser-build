@@ -36,6 +36,7 @@ HOLE_NAMES: dict[str, str] = {
     "field": "⟨field⟩",
     "item.name": "⟨method⟩",
     "leaf": "⟨scalar⟩",
+    "head": "⟨scalar⟩",
     "named": "⟨types⟩",
 }
 

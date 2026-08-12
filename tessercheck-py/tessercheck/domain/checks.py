@@ -363,6 +363,45 @@ class Target(ts.ValueObject):
         return canonical_str(self._value)
 
 
+class EdgeForm(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        if value not in ("member", "aliased", "bare"):
+            raise ValueError("edge form must be member, aliased, or bare")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return canonical_str(self._value)
+
+
+class ImportForm(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        if value not in ("from", "ts", "alias"):
+            raise ValueError("import form must be from, ts, or alias")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return canonical_str(self._value)
+
+
+class IgnoreScope(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        if value not in ("line", "file"):
+            raise ValueError("ignore scope must be line or file")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return canonical_str(self._value)
+
+
 class Violation(ts.ValueObject):
 
     _path: Path
@@ -393,47 +432,52 @@ class Ignore(ts.ValueObject):
 
     _line: Line
     _codes: tuple[Code, ...]
-    _file_level: bool
+    _scope: IgnoreScope
 
     def __init__(self, line: int, codes: tuple[str, ...], file_level: bool) -> None:
         object.__setattr__(self, "_line", Line(line))
         object.__setattr__(self, "_codes", tuple(Code(code) for code in codes))
-        object.__setattr__(self, "_file_level", file_level)
+        object.__setattr__(self, "_scope", IgnoreScope("file" if file_level else "line"))
 
     def _suppresses(self, violation: Violation) -> bool:
-        if self._file_level and not self._codes:
+        file_wide = str(self._scope) == "file"
+        if file_wide and not self._codes:
             return False
         if self._codes and violation.code() not in self._codes:
             return False
-        return self._file_level or violation.line() == self._line
+        return file_wide or violation.line() == self._line
 
 
 class ImportEdge(ts.ValueObject):
 
     _target: Target
     _lineno: Line
-    _member_form: bool
-    _aliased: bool
+    _form: EdgeForm
 
     def __init__(self, target: str, lineno: int, member_form: bool, aliased: bool) -> None:
         object.__setattr__(self, "_target", Target(target))
         object.__setattr__(self, "_lineno", Line(lineno))
-        object.__setattr__(self, "_member_form", member_form)
-        object.__setattr__(self, "_aliased", aliased)
+        object.__setattr__(
+            self,
+            "_form",
+            EdgeForm("member" if member_form else "aliased" if aliased else "bare"),
+        )
 
 
 class TesserImport(ts.ValueObject):
 
     _target: Target
     _lineno: Line
-    _as_ts: bool
-    _from_form: bool
+    _form: ImportForm
 
     def __init__(self, target: str, lineno: int, as_ts: bool, from_form: bool) -> None:
         object.__setattr__(self, "_target", Target(target))
         object.__setattr__(self, "_lineno", Line(lineno))
-        object.__setattr__(self, "_as_ts", as_ts)
-        object.__setattr__(self, "_from_form", from_form)
+        object.__setattr__(
+            self,
+            "_form",
+            ImportForm("from" if from_form else "ts" if as_ts else "alias"),
+        )
 
 
 class Comment(ts.ValueObject):
@@ -965,7 +1009,7 @@ class Codebase(ts.AggregateRoot):
                 )
             else:
                 seen_own = True
-                if imp._from_form:
+                if str(imp._form) == "from":
                     found.append(
                         Violation(
                             module.path(),
@@ -974,7 +1018,7 @@ class Codebase(ts.AggregateRoot):
                             f"{module.name()} imports names from {target}; {once_clause}",
                         )
                     )
-                elif not imp._as_ts:
+                elif str(imp._form) == "alias":
                     found.append(
                         Violation(
                             module.path(),
@@ -1307,9 +1351,12 @@ class Codebase(ts.AggregateRoot):
             if not isinstance(item, ast.FunctionDef) or item.name.startswith("_"):
                 continue
             attr = self._bare_field_return(item)
-            if attr is None or attr not in by_name:
+            if attr is None:
                 continue
-            if self._annotation_scalar_names(by_name[attr]) & (
+            returned_ann = item.returns if item.returns is not None else by_name.get(attr)
+            if returned_ann is None:
+                continue
+            if self._annotation_scalar_names(returned_ann) & (
                 WRAPPABLE_SCALARS | NON_WRAPPABLE_SCALARS
             ):
                 found.append(
@@ -1332,17 +1379,19 @@ class Codebase(ts.AggregateRoot):
         leaf: str | None,
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        if leaf is not None and leaf in NON_WRAPPABLE_SCALARS:
-            found.append(
-                Violation(
-                    module.path(),
-                    cls.lineno,
-                    "TB016",
-                    f"{module.name()}.{cls.name} wraps {leaf}; "
-                    "bool and complex are not value-object material — "
-                    "model the raw value or reach for an enum",
+        for field, ann, lineno in fields:
+            head = self._annotation_head(ann)
+            if head in NON_WRAPPABLE_SCALARS:
+                found.append(
+                    Violation(
+                        module.path(),
+                        lineno,
+                        "TB016",
+                        f"{module.name()}.{cls.name} field {field} is a {head}; "
+                        "bool and complex are not value-object material — "
+                        "model the raw value or reach for an enum",
+                    )
                 )
-            )
         if len(fields) >= 2:
             for field, ann, lineno in fields:
                 if self._annotation_scalar_names(ann) & WRAPPABLE_SCALARS:
@@ -1369,9 +1418,15 @@ class Codebase(ts.AggregateRoot):
             }
             if not decorators & {"classmethod", "staticmethod"}:
                 continue
-            if item.returns is not None and cls.name in self._annotation_scalar_names(
-                item.returns, keep_all=True
-            ):
+            produced: frozenset[str] = frozenset()
+            if item.returns is not None:
+                produced = frozenset(
+                    name for name, _ in self._produced_names(module, item.returns)
+                )
+            second_door = bool(produced & {cls.name, "Self"})
+            if not produced and self._constructs_own_type(item, cls.name):
+                second_door = True
+            if second_door:
                 found.append(
                     Violation(
                         module.path(),
@@ -1382,6 +1437,51 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
         return tuple(found)
+
+    @staticmethod
+    def _constructs_own_type(fn: ast.FunctionDef, own: str) -> bool:
+        for node in ast.walk(fn):
+            if not isinstance(node, ast.Call):
+                continue
+            callee = node.func
+            if isinstance(callee, ast.Name) and callee.id in ("cls", own):
+                return True
+        return False
+
+    def _produced_names(
+        self, module: Module, root: ast.expr
+    ) -> list[tuple[str, ast.expr]]:
+        produced: list[tuple[str, ast.expr]] = []
+        stack: list[ast.expr] = [root]
+        while stack:
+            node = stack.pop()
+            if isinstance(node, ast.Subscript):
+                head = self._annotation_head(node.value)
+                if head in ("type", "Type", "Callable"):
+                    continue
+                stack.append(node.slice)
+                continue
+            if isinstance(node, ast.Constant):
+                if isinstance(node.value, str):
+                    try:
+                        parsed = ast.parse(node.value, mode="eval")
+                    except SyntaxError:
+                        continue
+                    if not isinstance(parsed.body, ast.Constant):
+                        stack.append(parsed.body)
+                continue
+            if isinstance(node, ast.Attribute):
+                produced.append((node.attr, node))
+                continue
+            if isinstance(node, ast.Name):
+                produced.append((node.id, node))
+                continue
+            stack.extend(
+                child
+                for child in ast.iter_child_nodes(node)
+                if isinstance(child, ast.expr)
+            )
+        return produced
 
     def _exit_violations(
         self,
@@ -1461,9 +1561,14 @@ class Codebase(ts.AggregateRoot):
             if not isinstance(item, ast.FunctionDef) or item.name.startswith("_"):
                 continue
             attr = self._bare_field_return(item)
-            if attr is None or attr not in by_name:
+            if attr is None:
                 continue
-            if self._annotation_head(by_name[attr]) in MUTABLE_COLLECTIONS:
+            returned = (
+                self._annotation_head(item.returns) if item.returns is not None else None
+            )
+            if returned is None and attr in by_name:
+                returned = self._annotation_head(by_name[attr])
+            if returned in MUTABLE_COLLECTIONS:
                 found.append(
                     Violation(
                         module.path(),
@@ -1524,30 +1629,16 @@ class Codebase(ts.AggregateRoot):
                 continue
             spec_return = False
             offenders: list[str] = []
-            claimed: set[int] = set()
-            for node in ast.walk(item.returns):
-                if id(node) in claimed:
+            for name, node in self._produced_names(module, item.returns):
+                if name in RETURN_WRAPPERS or name in SELF_NAMES or name == cls.name:
                     continue
-                if isinstance(node, ast.Attribute):
-                    for sub in ast.walk(node):
-                        if sub is not node:
-                            claimed.add(id(sub))
-                    key = module._resolve(node)
-                    if key is not None and blocks.get(key) == "spec":
-                        spec_return = True
-                    elif key is None or blocks.get(key) not in DOMAIN_BLOCKS:
-                        offenders.append(node.attr)
-                elif isinstance(node, ast.Name):
-                    name = node.id
-                    if name in RETURN_WRAPPERS or name in SELF_NAMES or name == cls.name:
-                        continue
-                    key = module._resolve(node)
-                    if key is not None and blocks.get(key) == "spec":
-                        spec_return = True
-                        continue
-                    if key is not None and blocks.get(key) in DOMAIN_BLOCKS:
-                        continue
-                    offenders.append(name)
+                key = module._resolve(node)
+                if key is not None and blocks.get(key) == "spec":
+                    spec_return = True
+                    continue
+                if key is not None and blocks.get(key) in DOMAIN_BLOCKS:
+                    continue
+                offenders.append(name)
             if spec_return:
                 found.append(
                     Violation(
@@ -1579,7 +1670,9 @@ class Codebase(ts.AggregateRoot):
         return [
             (stmt.target.id, stmt.annotation, stmt.lineno)
             for stmt in cls.body
-            if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
+            if isinstance(stmt, ast.AnnAssign)
+            and isinstance(stmt.target, ast.Name)
+            and Codebase._annotation_head(stmt.annotation) != "ClassVar"
         ]
 
     def _leaf_scalar(self, fields: list[tuple[str, ast.expr, int]]) -> str | None:
@@ -1628,11 +1721,16 @@ class Codebase(ts.AggregateRoot):
         if len(fn.body) != 1 or not isinstance(fn.body[0], ast.Return):
             return False
         value = fn.body[0].value
+        if not isinstance(value, ast.Call) or len(value.args) != 1:
+            return False
+        callee = value.func
+        named = (
+            callee.id
+            if isinstance(callee, ast.Name)
+            else callee.attr if isinstance(callee, ast.Attribute) else None
+        )
         return (
-            isinstance(value, ast.Call)
-            and isinstance(value.func, ast.Name)
-            and value.func.id == helper
-            and len(value.args) == 1
+            named == helper
             and isinstance(value.args[0], ast.Attribute)
             and isinstance(value.args[0].value, ast.Name)
             and value.args[0].value.id == "self"
@@ -2820,7 +2918,7 @@ class Codebase(ts.AggregateRoot):
     def _form_violations(module: Module, edge: ImportEdge) -> tuple[Violation, ...]:
         target = str(edge._target)
         lineno = int(edge._lineno)
-        if edge._member_form:
+        if str(edge._form) == "member":
             return (
                 Violation(
                     module.path(),
@@ -2830,7 +2928,7 @@ class Codebase(ts.AggregateRoot):
                     "a context module is imported as an aliased module, never its members",
                 ),
             )
-        if not edge._aliased:
+        if str(edge._form) == "bare":
             return (
                 Violation(
                     module.path(),

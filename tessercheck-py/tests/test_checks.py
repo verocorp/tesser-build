@@ -2375,8 +2375,8 @@ def test_composition_norms(tmp_path: Path) -> None:
     )
     findings = check_tree(tmp_path)
     assert any(
-        "TB016" in f and "Flag wraps bool; bool and complex are not value-object "
-        "material — model the raw value or reach for an enum" in f
+        "TB016" in f and "Flag field _value is a bool; bool and complex are not "
+        "value-object material — model the raw value or reach for an enum" in f
         for f in findings
     )
     assert any(
@@ -2384,7 +2384,7 @@ def test_composition_norms(tmp_path: Path) -> None:
         "itself with child value objects" in f
         for f in findings
     )
-    assert not any("field _on" in f for f in findings)
+    assert any("TB016" in f and "Mixed field _on is a bool" in f for f in findings)
 
 
 def test_a_value_object_has_one_construction_door(tmp_path: Path) -> None:
@@ -2446,3 +2446,102 @@ def test_domain_returns_and_spec_returns(tmp_path: Path) -> None:
         for f in findings
     )
     assert not any("Widget.touch" in f for f in findings)
+
+
+def test_review_pins_for_the_shape_norms(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/domain/pins.py",
+        "import tesser.domain as ts\n"
+        "from typing import ClassVar, Self\n"
+        "@ts.function\n"
+        "def canonical_str(value: str) -> str:\n"
+        "    return value\n"
+        "class SelfDoor(ts.ValueObject):\n"
+        "    _value: str\n"
+        "    def __init__(self, value: str) -> None:\n"
+        "        object.__setattr__(self, '_value', value)\n"
+        "    def __str__(self) -> str:\n"
+        "        return canonical_str(self._value)\n"
+        "    @classmethod\n"
+        "    def parse(cls, raw: str) -> Self:\n"
+        "        return cls(raw)\n"
+        "    @classmethod\n"
+        "    def bare_door(cls, raw):  # type: ignore[no-untyped-def]\n"
+        "        return cls(raw)\n"
+        "    @classmethod\n"
+        "    def kind(cls) -> type['SelfDoor']:\n"
+        "        return cls\n"
+        "class Quoted(ts.ValueObject):\n"
+        "    _value: str\n"
+        "    def __init__(self, value: str) -> None:\n"
+        "        object.__setattr__(self, '_value', value)\n"
+        "    def __str__(self) -> str:\n"
+        "        return canonical_str(self._value)\n"
+        "    def label(self) -> 'str':\n"
+        "        return self._value.upper()\n"
+        "class Marked(ts.ValueObject):\n"
+        "    _kinds: ClassVar[tuple[str, ...]] = ()\n"
+        "    _value: str\n"
+        "    def __init__(self, value: str) -> None:\n"
+        "        object.__setattr__(self, '_value', value)\n"
+        "    def __str__(self) -> str:\n"
+        "        return canonical_str(self._value)\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any("SelfDoor.parse is a second construction door" in f for f in findings)
+    assert any("SelfDoor.bare_door is a second construction door" in f for f in findings)
+    assert not any("SelfDoor.kind" in f for f in findings)
+    assert any(
+        "Quoted.label returns str" in f and "TB019" in f for f in findings
+    )
+    assert not any("Marked" in f for f in findings)
+
+
+def test_module_qualified_canonical_delegation_passes(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/domain/policy.py",
+        "import tesser.domain as ts\n"
+        "@ts.function\n"
+        "def canonical_str(value: str) -> str:\n"
+        "    return value\n",
+    )
+    write_module(
+        tmp_path,
+        "app/domain/word.py",
+        "import tesser.domain as ts\n"
+        "import app.domain.policy as policy\n"
+        "class Word(ts.ValueObject):\n"
+        "    _value: str\n"
+        "    def __init__(self, value: str) -> None:\n"
+        "        object.__setattr__(self, '_value', value)\n"
+        "    def __str__(self) -> str:\n"
+        "        return policy.canonical_str(self._value)\n",
+    )
+    findings = check_tree(tmp_path)
+    assert not any("Word" in f for f in findings)
+
+
+def test_undeclared_backing_collection_is_still_caught(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/domain/sack.py",
+        "import tesser.domain as ts\n"
+        "class SackSpec(ts.Spec):\n"
+        "    def __init__(self, item: str) -> None:\n"
+        "        self.item = item\n"
+        "class Sack(ts.AggregateRoot):\n"
+        "    def __init__(self, spec: SackSpec) -> None:\n"
+        "        self._items = [spec.item]\n"
+        "    def items(self) -> list[str]:\n"
+        "        return self._items\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "TB011" in f and "Sack.items hands back its backing collection" in f
+        for f in findings
+    )

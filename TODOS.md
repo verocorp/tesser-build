@@ -325,7 +325,12 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   (Module.name() -> str) remain unjudged — the reference analyzer had the
   same carve-out (bare returns route to TB010/TB011, which are VO/mutable
   scoped); if the ruling should reach those too, that is a new rule, not
-  this port. TB031 still carries separately.
+  this port. TB031 still carries separately. One reference shape is NOT
+  ported and is named debt: TB015's emit-a-sink half (a public `-> None`
+  method streaming private fields into a sink parameter — the reference's
+  `_emits_private_field`); the port covers the spec-return and
+  conversion-dunder halves. Port it or rule it out of contract when the
+  serialization norm gets its shells re-derivation pass.
 - [ ] (superseded — kept for the original framing) **the remaining tessercheck
   ports** (opened 2026-08-12, ports wave — blocks merge-plan PR 3b).
   TB010–TB012, TB015–TB018, and TB019 were derived on the frozen-dataclass
