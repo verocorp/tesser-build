@@ -2783,7 +2783,8 @@ def test_a_placed_conftest_carries_its_tier(tmp_path: Path) -> None:
     findings = conftest.check_tree(tmp_path)
     assert any(
         "tests.conftest imports app.domain.thing, but a test placed in "
-        "the root tests package reaches a context only through its wiring and client" in f
+        "the root tests package reaches a context only through its wiring and client; "
+        "a test reaches only what its placement allows" in f
         for f in findings
     )
     assert not any("tests.conftest imports bootstrap.wire" in f for f in findings)
@@ -2826,12 +2827,22 @@ def test_a_context_main_composes_only_its_own_context(tmp_path: Path) -> None:
         tmp_path,
         "app/__main__.py",
         "import app.application.service as service\n"
+        "import app.adapters.handlers as handlers\n"
+        "import app.wiring.wire as wire\n"
         "import app.client.client as client\n"
         "import app.domain.thing as thing\n"
         "import two.client.client as two_client\n"
-        "import srv.http\n",
+        "import srv.http\n"
+        "import protocol.http\n"
+        "import tests.test_ok\n"
+        "import helpers\n",
     )
     conftest.write_module(tmp_path, "srv/http.py", "")
+    conftest.write_module(tmp_path, "protocol/http.py", "import tesser.srv as ts\n")
+    conftest.write_module(
+        tmp_path, "tests/test_ok.py", "def test_ok() -> None:\n    assert True\n"
+    )
+    conftest.write_module(tmp_path, "helpers.py", "X = 1\n")
     findings = conftest.check_tree(tmp_path)
     clause = "a context __main__ composes from its own application, adapters, client, and wiring"
     assert any(
@@ -2843,8 +2854,13 @@ def test_a_context_main_composes_only_its_own_context(tmp_path: Path) -> None:
         f"app.__main__ imports two.client.client; {clause}" in f for f in findings
     )
     assert any(f"app.__main__ imports srv.http; {clause}" in f for f in findings)
+    assert any(f"app.__main__ imports protocol.http; {clause}" in f for f in findings)
+    assert any(f"app.__main__ imports tests.test_ok; {clause}" in f for f in findings)
     assert not any("app.__main__ imports app.application.service" in f for f in findings)
+    assert not any("app.__main__ imports app.adapters.handlers" in f for f in findings)
+    assert not any("app.__main__ imports app.wiring.wire" in f for f in findings)
     assert not any("app.__main__ imports app.client.client" in f for f in findings)
+    assert not any("app.__main__ imports helpers" in f for f in findings)
 
 
 def test_a_protocol_module_imports_nothing_else_from_its_tree(tmp_path: Path) -> None:
@@ -2963,7 +2979,9 @@ def test_a_root_test_reaches_a_context_only_through_wiring_and_client(tmp_path: 
         "a test reaches only what its placement allows"
     )
     assert any(
-        f"tests.test_app imports app.domain.thing, but a test placed in the root tests package {reach}" in f
+        "tests.test_app imports app.domain.thing, but a test placed in "
+        "the root tests package reaches a context only through its wiring and client; "
+        "a test reaches only what its placement allows" in f
         for f in findings
     )
     assert any(
@@ -3007,7 +3025,9 @@ def test_a_placed_test_reaches_the_app_shell_only_where_its_placement_does(tmp_p
     findings = conftest.check_tree(tmp_path)
     clause = "does not reach that package; a test reaches only what its placement allows"
     assert any(
-        f"app.domain.test_thing imports srv.http, but a test placed in domain {clause}" in f
+        "app.domain.test_thing imports srv.http, but a test placed in domain "
+        "does not reach that package; "
+        "a test reaches only what its placement allows" in f
         for f in findings
     )
     assert not any("srv.test_host imports bootstrap.wire" in f for f in findings)
@@ -3024,8 +3044,216 @@ def test_a_context_tests_module_reaches_its_own_tests_package(tmp_path: Path) ->
         tmp_path,
         "app/tests/test_thing.py",
         "import app.tests.conftest as helpers\n"
+        "import two.tests.test_two as foreign\n"
         "def test_ok() -> None:\n    assert True\n",
     )
     conftest.write_module(tmp_path, "app/tests/conftest.py", "")
+    conftest.write_module(tmp_path, "two/client/client.py", "import tesser.context as ts\n")
+    conftest.write_module(tmp_path, "two/tests/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "two/tests/test_two.py",
+        "def test_ok() -> None:\n    assert True\n",
+    )
     findings = conftest.check_tree(tmp_path)
     assert not any("app.tests.test_thing imports app.tests.conftest" in f for f in findings)
+    assert any(
+        "app.tests.test_thing imports two.tests.test_two, but a test placed in tests "
+        "reaches only application, client of a neighbouring context; "
+        "a test reaches only what its placement allows" in f
+        for f in findings
+    )
+
+
+def test_an_unplaced_test_module_is_still_governed(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "weird/test_nested.py",
+        "import app.domain.thing as thing\n"
+        "def test_ok() -> None:\n    assert True\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "test_solo.py",
+        "def test_ok() -> None:\n    assert True\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "weird.test_nested resolves to no test tier; "
+        "a sibling test lives in a role package or an adapter kind package "
+        "(handlers, gateways, repositories)" in f
+        for f in findings
+    )
+    assert any("test_solo resolves to no test tier" in f for f in findings)
+
+
+def test_a_conftest_off_the_tier_map_is_a_leaf(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "app/adapters/conftest.py",
+        "import os\nimport app.domain.thing\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "app/conftest.py",
+        "import app.domain.thing\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.adapters.conftest imports app.domain.thing; "
+        "a conftest is a leaf that imports nothing from its tree" in f
+        for f in findings
+    )
+    assert any(
+        "app.conftest imports app.domain.thing; "
+        "a conftest is a leaf that imports nothing from its tree" in f
+        for f in findings
+    )
+    assert not any("app.adapters.conftest resolves to no test tier" in f for f in findings)
+    assert not any("app.adapters.conftest imports os" in f for f in findings)
+
+
+def test_adapter_kind_and_protocol_tests_shell_reach(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "protocol/http.py", "import tesser.srv as ts\n")
+    conftest.write_module(tmp_path, "srv/http.py", "")
+    for kind in ("handlers", "gateways", "repositories"):
+        conftest.write_module(tmp_path, f"app/adapters/{kind}/__init__.py", "")
+        conftest.write_module(
+            tmp_path,
+            f"app/adapters/{kind}/test_{kind}.py",
+            "import protocol.http as http\n"
+            "import srv.http\n"
+            "def test_ok() -> None:\n    assert True\n",
+        )
+    conftest.write_module(
+        tmp_path,
+        "protocol/test_http.py",
+        "import protocol.http as http\n"
+        "import srv.http\n"
+        "def test_ok() -> None:\n    assert True\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    for kind in ("handlers", "gateways", "repositories"):
+        assert not any(
+            f"app.adapters.{kind}.test_{kind} imports protocol.http" in f for f in findings
+        )
+        assert any(
+            f"app.adapters.{kind}.test_{kind} imports srv.http" in f
+            and "does not reach that package; "
+            "a test reaches only what its placement allows" in f
+            for f in findings
+        )
+    assert not any("protocol.test_http imports protocol.http" in f for f in findings)
+    assert any(
+        "protocol.test_http imports srv.http, but a test placed in protocol "
+        "does not reach that package" in f
+        for f in findings
+    )
+
+
+def test_an_eval_in_a_gateway_carries_the_gateway_shell_reach(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "protocol/http.py", "import tesser.srv as ts\n")
+    conftest.write_module(tmp_path, "srv/http.py", "")
+    conftest.write_module(tmp_path, "app/adapters/gateways/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/adapters/gateways/eval_model.py",
+        "import protocol.http as http\n"
+        "import srv.http\n"
+        "def test_ok() -> None:\n    assert True\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert not any(
+        "app.adapters.gateways.eval_model imports protocol.http" in f for f in findings
+    )
+    assert any(
+        "app.adapters.gateways.eval_model imports srv.http, but a test placed in gateways "
+        "does not reach that package" in f
+        for f in findings
+    )
+
+
+def test_a_context_tests_helper_answers_for_its_imports(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/tests/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/tests/support.py",
+        "import app.domain.thing as thing\nimport srv.http\n",
+    )
+    conftest.write_module(tmp_path, "srv/http.py", "")
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.tests.support is neither a test module nor conftest" in f for f in findings
+    )
+    assert any(
+        "app.tests.support imports srv.http, but a test placed in tests "
+        "does not reach that package" in f
+        for f in findings
+    )
+    assert not any("app.tests.support imports app.domain.thing" in f for f in findings)
+
+
+def test_a_main_below_the_context_root_is_a_governed_module(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "app/domain/__main__.py",
+        "import app.application.service as service\n",
+    )
+    conftest.write_module(tmp_path, "app/tests/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/tests/__main__.py",
+        "import app.application.service as service\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.domain.__main__ imports app.application.service; the same-context matrix is" in f
+        for f in findings
+    )
+    assert any(
+        "app.tests.__main__ is neither a test module nor conftest" in f for f in findings
+    )
+
+
+def test_a_shell_name_missing_from_the_tree_is_not_the_shell(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "app/domain/test_thing.py",
+        "import protocol.thirdparty\n"
+        "def test_ok() -> None:\n    assert True\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "app/wiring/wire.py",
+        "import tesser.context as ts\nimport bootstrap\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert not any("app.domain.test_thing imports protocol.thirdparty" in f for f in findings)
+    assert not any("app.wiring.wire imports bootstrap" in f for f in findings)
+
+
+def test_a_vendored_tesser_package_is_not_the_tree(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "tesser/testing.py", "X = 1\n")
+    conftest.write_module(tmp_path, "conftest.py", "import tesser.testing\n")
+    findings = conftest.check_tree(tmp_path)
+    assert not any(
+        "conftest imports tesser.testing; "
+        "a conftest is a leaf that imports nothing from its tree" in f
+        for f in findings
+    )
+
+
+def test_every_test_tier_has_a_shell_row() -> None:
+    tiers = (
+        set(domain.TEST_TIER_REACH)
+        | {domain.SRV_TIER, domain.BOOTSTRAP_TIER, domain.PROTOCOL_TIER, domain.APP_TIER}
+    )
+    assert tiers <= set(domain.TEST_TIER_SHELL)

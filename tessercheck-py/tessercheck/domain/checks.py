@@ -199,10 +199,10 @@ STRAY_TIER: Final[str] = "stray"
 
 APP_TIER: Final[str] = "the root tests package"
 
-SHELL_PACKAGES: Final[frozenset[str]] = frozenset({"srv", "bootstrap", "protocol", "tests"})
+SHELL_PACKAGES: Final[frozenset[str]] = frozenset(APP_PACKAGES) | {PROTOCOL_PACKAGE, TESTS_ROLE}
 
 TEST_TIER_SHELL: Final[dict[str, frozenset[str]]] = {
-    APP_TIER: frozenset({"srv", "bootstrap", "protocol", "tests"}),
+    APP_TIER: SHELL_PACKAGES,
     SRV_TIER: frozenset({"srv", "bootstrap", "protocol"}),
     BOOTSTRAP_TIER: frozenset({"bootstrap"}),
     PROTOCOL_TIER: frozenset({"protocol"}),
@@ -835,7 +835,7 @@ class Codebase(ts.AggregateRoot):
             if len(parts) == 1:
                 return self._conftest_leaf_violations(module)
             placement = self._test_tier(module, contexts)
-            if placement is None:
+            if placement is None or placement[1] == STRAY_TIER:
                 return self._conftest_leaf_violations(module)
             return self._test_placement_violations(module, placement[0], placement[1], contexts)
         if basename.startswith("test_"):
@@ -861,7 +861,7 @@ class Codebase(ts.AggregateRoot):
             return self._homeless_violations(module) + self._root_leaf_violations(module)
         if len(parts) == 1:
             return self._context_init_violations(module)
-        if basename == "__main__":
+        if basename == "__main__" and len(parts) == 2:
             return self._main_violations(module, parts[0], contexts)
         if len(parts) >= 2 and parts[1] == TESTS_ROLE:
             if module.is_package():
@@ -874,7 +874,7 @@ class Codebase(ts.AggregateRoot):
                     f"{module.name()} is neither a test module nor conftest; "
                     "a context tests package holds only test modules and conftest",
                 ),
-            )
+            ) + self._test_placement_violations(module, parts[0], TESTS_ROLE, contexts)
         if len(parts) >= 2 and parts[1] in ROLES:
             if module.is_package():
                 return self._role_init_violations(module)
@@ -937,7 +937,7 @@ class Codebase(ts.AggregateRoot):
         return frozenset(module.name().split(".")[0] for module in self._modules)
 
     def _tree_edges(self, module: Module) -> tuple[tuple[str, int], ...]:
-        tops = self._tree_tops()
+        tops = self._tree_tops() - {TESSER}
         return tuple(
             (str(edge._target), int(edge._lineno))
             for edge in module.import_edges()
@@ -2257,8 +2257,10 @@ class Codebase(ts.AggregateRoot):
                         "import only their context, their tesser package, and the pure stdlib",
                     )
                 )
-            elif pieces[0] in SHELL_PACKAGES and not (
-                role == "adapters" and pieces[0] == PROTOCOL_PACKAGE
+            elif (
+                pieces[0] in SHELL_PACKAGES
+                and pieces[0] in self._tree_tops()
+                and not (role == "adapters" and pieces[0] == PROTOCOL_PACKAGE)
             ):
                 found.append(
                     Violation(
@@ -2320,7 +2322,7 @@ class Codebase(ts.AggregateRoot):
                         f"{module.name()} imports {target}; the composition root never imports a host",
                     )
                 )
-            elif pieces[0] == TESTS_ROLE:
+            elif pieces[0] == TESTS_ROLE and pieces[0] in self._tree_tops():
                 found.append(
                     Violation(
                         module.path(),
@@ -2367,12 +2369,13 @@ class Codebase(ts.AggregateRoot):
 
     def _shell_reach_violations(self, module: Module, tier: str) -> tuple[Violation, ...]:
         allowed = TEST_TIER_SHELL[tier]
+        tops = self._tree_tops()
         found: list[Violation] = []
         for edge in module.import_edges():
             target = str(edge._target)
             lineno = int(edge._lineno)
             top = target.split(".")[0]
-            if top not in SHELL_PACKAGES or top in allowed:
+            if top not in SHELL_PACKAGES or top not in tops or top in allowed:
                 continue
             found.append(
                 Violation(
@@ -2577,8 +2580,9 @@ class Codebase(ts.AggregateRoot):
         found: list[Violation] = []
         found.extend(self._stray_import_violations(module))
         placement = self._test_tier(module, contexts)
-        if placement is not None:
-            found.extend(self._test_placement_violations(module, placement[0], placement[1], contexts))
+        if placement is None:
+            placement = ("", STRAY_TIER)
+        found.extend(self._test_placement_violations(module, placement[0], placement[1], contexts))
         for edge in module.import_edges():
             if str(edge._target).split(".")[0] in contexts:
                 found.extend(self._form_violations(module, edge))
