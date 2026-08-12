@@ -63,7 +63,9 @@ cannot read cannot carry a working marker, so those are fixed, not excused.
   class's kind is its declared `ts.*` base. A tree that declares nothing
   still answers to the rules that need no declaration: whole-tree totality
   (every module belongs to a context, `srv`, `bootstrap`, `tests`, or the
-  protocol package), test totality, and the universal norms (comments,
+  protocol package), the import rows (every module carries one, keyed on
+  where it sits — a root module and a `conftest` are leaves that import
+  nothing from the tree), test totality, and the universal norms (comments,
   test doubles, shadowed builtins, string-form equality).
 - **The reader prunes tooling directories** (`.venv`, `node_modules`,
   `build`, `__pycache__`, and the rest of the standard skip set) and fails
