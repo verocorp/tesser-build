@@ -6,7 +6,7 @@ One row per rule: the normative clause every violation message ends
 with. ⟨…⟩ marks a value filled in per violation. Fixture coverage is
 exact: a test covers a rule when an assert literal contains the clause.
 
-## sigcheck rules (from the violation messages in sigcheck/domain/checks.py)
+## tessercheck rules (from the violation messages in tessercheck/domain/checks.py)
 
 | Code | The rule | Applies to | Fires when | Source | Fixtures |
 |---|---|---|---|---|---|
@@ -106,14 +106,14 @@ exact: a test covers a rule when an assert literal contains the clause.
   the test-organization work).
 - a context `__main__` is ungoverned (named ruling, PR #48).
 - tooling modules outside the taxonomy: `rules` (TOOLING_MODULES in
-  sigcheck/domain/checks.py — the whole-tree totality rule skips them).
+  tessercheck/domain/checks.py — the whole-tree totality rule skips them).
 - modules under the top-level `protocol/` package are the protocol
-  modules (PROTOCOL_PACKAGE in sigcheck/domain/checks.py) — package membership
+  modules (PROTOCOL_PACKAGE in tessercheck/domain/checks.py) — package membership
   is the declaration; no suffix opts a module in, so a stray `*wire.py`
   is homeless.
 - srv and protocol kinds carry placement and import rules only — no
   signature or body rules yet (deliberate: the srv signature matrix
-  ruled the kinds and their invariants, not sigcheck rules over
+  ruled the kinds and their invariants, not tessercheck rules over
   their members — see TODOS.md).
 
 ## Import contracts (from .importlinter)

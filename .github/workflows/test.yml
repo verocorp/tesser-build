@@ -69,7 +69,7 @@ jobs:
         run: scripts/verify python
 
   spike-shells:
-    name: spike-shells (sigcheck self-check + RULES.md drift + mypy --strict + pytest + import-linter)
+    name: spike-shells (tessercheck zero findings + mypy --strict + pytest + import-linter)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -78,18 +78,18 @@ jobs:
           python-version: '3.12'
       - name: Install dev tooling
         run: pip install -r examples/spike-shells/requirements-dev.txt
-      - name: examples/spike-shells — sigcheck self-check + RULES.md drift + mypy --strict + pytest + import contracts
+      - name: examples/spike-shells — tessercheck + mypy --strict + pytest + import contracts
         run: scripts/verify spike-shells
 
   spike-llmport:
-    # Gates the LLM tool-call port spike at the spike-shells bar: sigcheck
+    # Gates the LLM tool-call port spike at the spike-shells bar: tessercheck
     # zero findings over the whole tree (the srv-vocabulary + wire-module
     # rules resolved the two findings the ratchet used to carry), then
     # mypy --strict + pytest on the pure modules, including the srv router
-    # (it imports no livekit). srv/voice/agent.py is in sigcheck's walk
+    # (it imports no livekit). srv/voice/agent.py is in tessercheck's walk
     # (pure AST) but outside the mypy crawl — livekit-agents is not
     # installed in CI; the spike README records that boundary.
-    name: spike-llmport (sigcheck + mypy --strict + pytest)
+    name: spike-llmport (tessercheck + mypy --strict + pytest)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -98,7 +98,7 @@ jobs:
           python-version: '3.12'
       - name: Install dev tooling
         run: pip install -r examples/spike-llmport/requirements-dev.txt
-      - name: examples/spike-llmport — sigcheck + mypy --strict + pytest
+      - name: examples/spike-llmport — tessercheck + mypy --strict + pytest
         run: scripts/verify spike-llmport
 
   python-app-example:
@@ -214,21 +214,20 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install dev tooling
-        run: pip install -r tessercheck-py/requirements-dev.txt
+        run: pip install -r tessercheck-py-legacy/requirements-dev.txt
       - name: Generated roadmap is current (drift check)
         run: python3 roadmap/generate.py --check
       - name: roadmap generator — mypy --strict + pytest
         working-directory: roadmap
         run: |
-          MYPYPATH=../tessercheck-py mypy --strict generate.py tests/test_generate.py
+          MYPYPATH=../tessercheck-py-legacy mypy --strict generate.py tests/test_generate.py
           pytest tests -q
 
   tessercheck-py:
-    # The Python analog of tessercheck: gates tessercheck-py at the same bar as the Go
-    # analyzers (mypy --strict + pytest). Its pytest suite includes the
-    # acceptance gate that the analyzer is clean on examples/python — the Python
-    # counterpart of "tessercheck on examples/ddd" in the go job above.
-    name: tessercheck-py (mypy --strict + pytest + examples/python gate)
+    # The merged analyzer (the sigcheck engine, graduated): self-check over its
+    # own tree, the RULES.md drift gate, mypy --strict, pytest, and the import
+    # contracts — the same bar spike-shells held it to before the move.
+    name: tessercheck-py (self-check + RULES.md drift + mypy --strict + pytest + import-linter)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -237,12 +236,30 @@ jobs:
           python-version: '3.12'
       - name: Install dev tooling
         run: pip install -r tessercheck-py/requirements-dev.txt
-      # mypy + pytest, then the four CLI gates that run the SHIPPED analyzer
-      # over the example trees: examples/python, the --app-root full gate on
-      # examples/python-app (discovery must find campaign, linkpolicy, reports
-      # with zero configuration; discovery errors exit 2), examples/serdepy,
-      # and examples/errorspy. Those four are why this job can fail on a change
-      # that touches no file under tessercheck-py — a layout change in
-      # python-app broke discovery in PR #56 exactly that way.
-      - name: tessercheck-py — mypy --strict + pytest + the four CLI gates
+      - name: tessercheck-py — self-check + RULES.md drift + mypy --strict + pytest + import contracts
         run: scripts/verify tessercheck-py
+
+  tessercheck-py-legacy:
+    # The pre-merge analyzer, parked while examples/python, serdepy, errorspy,
+    # and python-app's domain are still frozen-dataclass trees — its checks are
+    # what validate them. PR 5 of the merge plan migrates those trees to the
+    # shells and deletes this directory and this job.
+    #
+    # mypy + pytest, then the four CLI gates that run the LEGACY analyzer
+    # over the example trees: examples/python, the --app-root full gate on
+    # examples/python-app (discovery must find campaign, linkpolicy, reports
+    # with zero configuration; discovery errors exit 2), examples/serdepy,
+    # and examples/errorspy. Those four are why this job can fail on a change
+    # that touches no file under tessercheck-py-legacy — a layout change in
+    # python-app broke discovery in PR #56 exactly that way.
+    name: tessercheck-py-legacy (mypy --strict + pytest + the four CLI gates)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dev tooling
+        run: pip install -r tessercheck-py-legacy/requirements-dev.txt
+      - name: tessercheck-py-legacy — mypy --strict + pytest + the four CLI gates
+        run: scripts/verify tessercheck-py-legacy

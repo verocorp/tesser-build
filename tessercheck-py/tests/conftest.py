@@ -1,12 +1,12 @@
 from pathlib import Path
 
-from sigcheck.adapters.repositories import FilesystemSourceReader
-from sigcheck.application.service import SigcheckService
-from sigcheck.client.client import CheckRequest
+from tessercheck.adapters.repositories import FilesystemSourceReader
+from tessercheck.application.service import TessercheckService
+from tessercheck.client.client import CheckRequest
 
 
 def check_tree(root: Path) -> tuple[str, ...]:
-    service = SigcheckService(FilesystemSourceReader())
+    service = TessercheckService(FilesystemSourceReader())
     return service.check(CheckRequest(root=str(root))).findings
 
 

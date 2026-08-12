@@ -202,7 +202,7 @@ go test -bench=. -benchmem ./rationale/ # the adversarial cost (collection-VO de
 ## Python enforcement (tessercheck-py)
 
 The Go analyzers above are `go/analysis`; they do not run on Python. The Python
-analog is [`tessercheck-py`](../tessercheck-py/) — a zero-dependency stdlib-`ast` tool
+analog is [`tessercheck-py-legacy`](../tessercheck-py-legacy/) — a zero-dependency stdlib-`ast` tool
 that enforces the *syntactically decidable* subset on the frozen-dataclass
 substrate `skills/tesser-build/python.md` teaches. Roughly half the Go ruleset dissolves
 (`mustnew` — Python constructors raise) and the rest reframe to the dataclass
@@ -210,7 +210,7 @@ grain. `primitiveaccessor`, first dropped as theater, is **reinstated** as
 `TB010`: it is the load-bearing spec/VO discriminator, keyed on the
 **identity-taxonomy classifier** (`tessercheck/classify.py`) — a whole-tree two-pass
 pass that classifies each class as value_object / spec / identity_object / other.
-Its own meta-test (`tessercheck-py/tests/test_meta.py`) is the Python analog of this
+Its own meta-test (`tessercheck-py-legacy/tests/test_meta.py`) is the Python analog of this
 matrix's silent-gap guard: it fails if a registered check has no good/bad
 fixture, if an unregistered code is emitted, or if the analyzer is not clean on
 the canonical `examples/python` tree. Full rationale:
@@ -218,7 +218,7 @@ the canonical `examples/python` tree. Full rationale:
 classifier design
 [`docs/design-python-domain-detection.md`](../docs/design-python-domain-detection.md).
 
-| Go analyzer | Python check | python.md rule | Fixture (`tessercheck-py/testdata/`) |
+| Go analyzer | Python check | python.md rule | Fixture (`tessercheck-py-legacy/testdata/`) |
 |---|---|---|---|
 | `vofields` | `TB001` frozen-dataclass | "`frozen=True` always" — deliberately total (specs/DTOs too): a non-frozen dataclass is invisible to the VO classifier, so any scope gate would be a hiding hole; the message states the total scope | `tb001/{good,bad}.py` |
 | `comparability` | `TB002` hashable-fields | collection VO backs itself with a sorted tuple (classification-aware: fires only on a `VALUE_OBJECT`, so a spec / persistence row is exempt) | `tb002/{good,bad}.py` |

@@ -2,8 +2,8 @@ from typing import Protocol
 
 import tesser.application as ts
 
-import sigcheck.client.client as client
-import sigcheck.domain.checks as domain
+import tessercheck.client.client as client
+import tessercheck.domain.checks as domain
 
 
 class SourceReader(ts.Port, Protocol):
@@ -11,7 +11,7 @@ class SourceReader(ts.Port, Protocol):
     def sources(self, root: str) -> tuple[tuple[str, str, str | None, bool], ...]: ...
 
 
-class SigcheckService(ts.ApplicationService):
+class TessercheckService(ts.ApplicationService):
 
     def __init__(self, reader: SourceReader) -> None:
         self._reader = reader

@@ -126,7 +126,7 @@ declares itself with the `ts.*` shells, so `tesser-py` is on both paths and
 **sigcheck** (`examples/spike-shells`) audits it:
 
 ```
-PYTHONPATH=../spike-shells:../../tesser-py python3 -m sigcheck .
+PYTHONPATH=../../tessercheck-py:../../tesser-py python3 -m tessercheck .
 ```
 
 That exits 1 with 176 findings today — the import-totality wave billed this

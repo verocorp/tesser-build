@@ -5,6 +5,27 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.23.0] - 2026-08-12
+
+sigcheck graduates. The declare-then-verify engine that grew up in
+`examples/spike-shells` is now the `tessercheck-py` package, run as
+`python -m tessercheck` — one analyzer name for the toolkit's Python half.
+
+### Changed
+
+- The analyzer package renamed sigcheck → tessercheck and moved to
+  `tessercheck-py/` with its rule set (RULES.md), generator, tests, and
+  import contracts; `examples/spike-shells` returns to being the worked
+  example, gated at zero findings by the analyzer it hatched.
+- The pre-merge analyzer is parked byte-identical at
+  `tessercheck-py-legacy/`, its four CLI gates intact, while
+  `examples/python`, `serdepy`, `errorspy`, and `python-app`'s domain are
+  still frozen-dataclass trees — no enforcement gap opens. The
+  tree-migration wave deletes it.
+- `scripts/verify` gains the legacy tree (ten trees total); the python-app
+  ratchet drives the new binary with an unchanged baseline; CI jobs and the
+  roadmap generator's registry import follow the moves.
+
 ## [0.0.22.0] - 2026-08-12
 
 The first tessercheck→sigcheck check ports — the five whose semantics

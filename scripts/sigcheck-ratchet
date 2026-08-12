@@ -28,13 +28,13 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
 cd "$APP" || exit 1
-PYTHONPATH=../spike-shells:../../tesser-py python3 -m sigcheck . \
+PYTHONPATH=../../tessercheck-py:../../tesser-py python3 -m tessercheck . \
   > "$work/findings.txt" 2> "$work/stderr.txt" || true
 
 if [ -s "$work/stderr.txt" ]; then
   cat "$work/stderr.txt"
   if grep -q "Traceback" "$work/stderr.txt"; then
-    echo "sigcheck crashed — failing closed"
+    echo "tessercheck crashed — failing closed"
     exit 1
   fi
 fi

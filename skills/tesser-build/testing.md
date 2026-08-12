@@ -183,7 +183,7 @@ file says *how*, and it is the cross-cutting layer they assume.
   entirely. That is tracked as a follow-up, not a blessed pattern to copy.
 - **`TB031` (construction-completeness)** — rule 2. **Not shipped yet:** its
   contract is fixed by the reviewed fixture pair
-  (`tessercheck-py/testdata/tb031/{good_tree,bad_tree}/`), authored before the
+  (`tessercheck-py-legacy/testdata/tb031/{good_tree,bad_tree}/`), authored before the
   checker per the fixtures-first discipline. When it lands it will compare a
   spec-constructed type's field set against the fields asserted in its
   completeness test and flag the difference. Until then rule 2 is enforced by
