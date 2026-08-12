@@ -107,8 +107,10 @@ IGNORE_FILE_MARKER: Final[str] = "tessercheck:ignore-file"
 CODE_SHAPE: Final[re.Pattern[str]] = re.compile(r"TB[0-9]{3}\Z")
 
 DIRECTIVE: Final[re.Pattern[str]] = re.compile(
-    r"^#\s*(!|type:|noqa|tessercheck:ignore|tesser-category:|pragma|fmt:|isort:|ruff:)"
+    r"^#\s*(!|type:|noqa|tessercheck:ignore|pragma|fmt:|isort:|ruff:)"
 )
+
+CATEGORY_MARKER: Final[re.Pattern[str]] = re.compile(r"^#\s*tesser-category:\s*[a-z_]+\s*$")
 
 CODING_DECL: Final[re.Pattern[str]] = re.compile(r"^#.*?coding[:=]\s*[-\w.]+")
 
@@ -126,6 +128,7 @@ MUTABLE_COLLECTIONS: Final[frozenset[str]] = frozenset(
         "Counter",
         "MutableMapping",
         "MutableSequence",
+        "MutableSet",
     }
 )
 
@@ -961,7 +964,7 @@ class Codebase(ts.AggregateRoot):
     def _comment_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for comment in module.comments():
-            if DIRECTIVE.match(comment.text()):
+            if DIRECTIVE.match(comment.text()) or CATEGORY_MARKER.match(comment.text()):
                 continue
             if comment.line() <= 2 and CODING_DECL.match(comment.text()):
                 continue
@@ -1261,6 +1264,14 @@ class Codebase(ts.AggregateRoot):
             return node.attr
         if isinstance(node, ast.Subscript):
             return Codebase._annotation_head(node.value)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            try:
+                parsed = ast.parse(node.value, mode="eval")
+            except SyntaxError:
+                return None
+            if isinstance(parsed.body, ast.Constant):
+                return None
+            return Codebase._annotation_head(parsed.body)
         return None
 
     def _bootstrap_module_violations(self, module: Module) -> tuple[Violation, ...]:

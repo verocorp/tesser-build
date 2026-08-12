@@ -2184,3 +2184,41 @@ def test_a_value_object_mutable_collection_field_is_flagged(tmp_path: Path) -> N
         for f in findings
     )
     assert not any("_names" in f for f in findings)
+
+
+def test_mutable_set_and_quoted_annotations_are_still_mutable_collections(
+    tmp_path: Path,
+) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/domain/holder.py",
+        "import tesser.domain as ts\n"
+        "from typing import MutableSet\n"
+        "class Holder(ts.ValueObject):\n"
+        "    _mset: MutableSet[str]\n"
+        "    _quoted: 'list[str]'\n"
+        "    def __init__(self, item: str) -> None:\n"
+        "        object.__setattr__(self, '_mset', {item})\n"
+        "        object.__setattr__(self, '_quoted', [item])\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any("field _mset is a mutable collection" in f for f in findings)
+    assert any("field _quoted is a mutable collection" in f for f in findings)
+
+
+def test_a_category_marker_with_trailing_prose_is_a_comment(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "tests/test_marked.py",
+        "# tesser-category: spec\n"
+        "# tesser-category: spec because it builds one\n"
+        "def test_ok() -> None:\n"
+        "    assert True\n",
+    )
+    findings = check_tree(tmp_path)
+    assert not any("test_marked.py:1:" in f for f in findings)
+    assert any(
+        "test_marked.py:2: TB020" in f and "carries a code comment" in f for f in findings
+    )
