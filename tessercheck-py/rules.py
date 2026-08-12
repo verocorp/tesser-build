@@ -4,8 +4,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parent
-DOMAIN = ROOT / "sigcheck" / "domain" / "checks.py"
-TESTS = ROOT / "tests" / "test_sigcheck.py"
+DOMAIN = ROOT / "tessercheck" / "domain" / "checks.py"
+TESTS = ROOT / "tests" / "test_checks.py"
 CONTRACTS = ROOT / ".importlinter"
 OUTPUT = ROOT / "RULES.md"
 
@@ -422,7 +422,7 @@ def render() -> str:
         "with. ⟨…⟩ marks a value filled in per violation. Fixture coverage is",
         "exact: a test covers a rule when an assert literal contains the clause.",
         "",
-        "## sigcheck rules (from the violation messages in sigcheck/domain/checks.py)",
+        "## tessercheck rules (from the violation messages in tessercheck/domain/checks.py)",
         "",
         "| Code | The rule | Applies to | Fires when | Source | Fixtures |",
         "|---|---|---|---|---|---|",
@@ -443,14 +443,14 @@ def render() -> str:
         "",
         *ungoverned_bullets(tree),
         f"- tooling modules outside the taxonomy: {tooling} (TOOLING_MODULES in",
-        "  sigcheck/domain/checks.py — the whole-tree totality rule skips them).",
+        "  tessercheck/domain/checks.py — the whole-tree totality rule skips them).",
         f"- modules under the top-level `{package}/` package are the protocol",
-        "  modules (PROTOCOL_PACKAGE in sigcheck/domain/checks.py) — package membership",
+        "  modules (PROTOCOL_PACKAGE in tessercheck/domain/checks.py) — package membership",
         "  is the declaration; no suffix opts a module in, so a stray `*wire.py`",
         "  is homeless.",
         "- srv and protocol kinds carry placement and import rules only — no",
         "  signature or body rules yet (deliberate: the srv signature matrix",
-        "  ruled the kinds and their invariants, not sigcheck rules over",
+        "  ruled the kinds and their invariants, not tessercheck rules over",
         "  their members — see TODOS.md).",
         "",
         "## Import contracts (from .importlinter)",

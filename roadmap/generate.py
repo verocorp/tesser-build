@@ -98,7 +98,7 @@ DISCLAIMER_PHRASES = ("not yet materialized", "don't invent a convention")
 # Directories scanned for tb-cell / tb-status markers. roadmap/ itself and
 # docs/ are excluded on purpose: the schema documentation and the test
 # fixtures both quote the grammar without being annotations.
-MARKER_SCAN_DIRS = ("skills", "examples", "rationale", "passes", "tessercheck-py")
+MARKER_SCAN_DIRS = ("skills", "examples", "rationale", "passes", "tessercheck-py", "tessercheck-py-legacy")
 MARKER_SCAN_EXTS = (".md", ".go", ".py")
 SKIP_DIR_NAMES = {"__pycache__", ".git", ".claude", "testdata"}
 
@@ -113,7 +113,7 @@ LIVING_SURFACES = (
     "examples",
 )
 PATH_TOKEN_RE = re.compile(
-    r"`((?:examples|skills|docs|rationale|tessercheck-py|cmd|internal|passes|gclplugin)"
+    r"`((?:examples|skills|docs|rationale|tessercheck-py-legacy|tessercheck-py|cmd|internal|passes|gclplugin)"
     r"/[A-Za-z0-9_./-]*)`"
 )
 
@@ -243,7 +243,7 @@ def go_analyzer_names(root: Path, cmd: list[str]) -> set[str]:
 
 
 def py_check_codes(root: Path) -> set[str]:
-    sys.path.insert(0, str(root / "tessercheck-py"))
+    sys.path.insert(0, str(root / "tessercheck-py-legacy"))
     try:
         from tessercheck.finding import CHECKS  # noqa: PLC0415 — lazy by design
     except ImportError as e:

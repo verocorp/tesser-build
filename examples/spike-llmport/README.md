@@ -165,7 +165,7 @@ typed assertion in the handler tests is a plain assignment.
 ## Run it
 
 ```sh
-PYTHONPATH=examples/spike-shells:tesser-py python3 -m sigcheck examples/spike-llmport
+PYTHONPATH=tessercheck-py:tesser-py python3 -m tessercheck examples/spike-llmport
 cd examples/spike-llmport
 MYPYPATH=.:../../tesser-py mypy --strict scheduling protocol srv/voice/router.py tests
 pytest -q

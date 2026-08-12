@@ -4,24 +4,27 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tessercheck-py"
-version = "0.1.0"
-description = "Zero-dependency stdlib-ast analyzer for the tesser-build domain-construction conventions (Python)"
+version = "0.2.0"
+description = "The tesser-build construction analyzer for Python: declare-then-verify over the tesser shell classes"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["tesser"]
 
 [project.scripts]
-tessercheck = "tessercheck.cli:main"
+tessercheck = "tessercheck.__main__:main"
 
 [tool.setuptools]
-packages = ["tessercheck"]
+packages = [
+    "tessercheck",
+    "tessercheck.domain",
+    "tessercheck.application",
+    "tessercheck.adapters",
+    "tessercheck.client",
+]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
-# testdata/ holds analyzer fixtures, not tests — some are deliberately
-# non-conformant and must never be collected or imported.
-norecursedirs = ["testdata"]
 
 [tool.mypy]
 strict = true
-files = ["tessercheck", "tests"]
+files = ["tessercheck", "tests", "rules.py"]

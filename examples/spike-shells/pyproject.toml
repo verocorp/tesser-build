@@ -2,4 +2,4 @@
 # Placement carries the tier, so discovery has to follow placement: sibling
 # tests live inside the role they exercise (spike/domain/test_notes.py), the
 # context tier lives in <context>/tests/, and the app tier stays in tests/.
-testpaths = ["tests", "spike", "digest", "sigcheck"]
+testpaths = ["spike", "digest"]
