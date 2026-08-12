@@ -313,17 +313,30 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   the reader's `is_package` bit instead of the child-name prefix, closing
   soundness hole (7) below.
 
-- [ ] **Shared ignore-marker namespace during the merge transition** (opened
-  2026-08-11, harness wave). sigcheck now honors `# tessercheck:ignore`
-  (scoped: `TB0xx` codes; file form: `tessercheck:ignore-file`; a marker
-  that suppresses nothing is a TB090 finding). python-app carries four
-  pre-existing bare markers aimed at tessercheck-py's TB030 monkeypatch
-  rule; sigcheck sees them, they suppress no sigcheck finding, so four
-  TB090 entries sit in the ratchet baseline as named transitional debt.
-  They burn off when TB030 ports into sigcheck (merge-plan PR 3): the
-  ported finding lands on the same def line and the markers become
-  load-bearing again. If PR 3 slips, revisit — a marker namespace split
-  (`sigcheck:ignore`) is the fallback, at the cost of renaming at PR 4.
+- [x] **Shared ignore-marker namespace during the merge transition** —
+  RESOLVED 2026-08-12 (ports wave): TB030 ported into sigcheck, its
+  fixture-param finding lands on the def line python-app's four markers
+  sit on, so the markers are load-bearing again and the four TB090
+  baseline entries burned off (ratchet 152 → 148).
+- [ ] **Shells-substrate re-derivation ruling for the remaining tessercheck
+  ports** (opened 2026-08-12, ports wave — blocks merge-plan PR 3b).
+  TB010–TB012, TB015–TB018, and TB019 were derived on the frozen-dataclass
+  substrate, and their core terms do not transfer to the shell idiom
+  without rulings: (a) TB010/TB019 ban primitive exposure and primitive
+  returns, but every shell VO in the gated trees exposes its slots through
+  accessor methods — sigcheck's own `ImportEdge.target() -> str`,
+  `Violation.path()`, `Module.name()` would all be findings, so either the
+  analyzer's domain wraps every slot in VOs, or accessors get a ruled
+  exemption class, or the norm stays consumer-domain-only; (b) TB015's
+  leaf/compound discrimination counts annotated fields, and a shell VO's
+  private `_x` annotations make `Violation` a four-field compound whose
+  `__str__` — the finding renderer itself — would be a banned conversion
+  dunder; (c) TB018's canonical_* policy helpers do not exist in any shell
+  tree. Decide the shell-substrate meanings first (what is a field, what
+  is a leaf, which exits are licensed), then port; porting first would
+  bury the decision under a pile of inline opt-outs. TB031's tree-scope
+  contract (`testdata/tb031/`) carries over unchanged whenever its
+  implementation lands.
 
 ## Toolkit
 

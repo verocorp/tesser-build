@@ -1,8 +1,9 @@
 import ast
+import builtins
 import io
 import re
 import tokenize
-from typing import Final
+from typing import Final, TypeGuard
 
 import tesser.domain as ts
 
@@ -105,6 +106,40 @@ IGNORE_FILE_MARKER: Final[str] = "tessercheck:ignore-file"
 
 CODE_SHAPE: Final[re.Pattern[str]] = re.compile(r"TB[0-9]{3}\Z")
 
+DIRECTIVE: Final[re.Pattern[str]] = re.compile(
+    r"^#\s*(!|type:|noqa|tessercheck:ignore|pragma|fmt:|isort:|ruff:)"
+)
+
+CATEGORY_MARKER: Final[re.Pattern[str]] = re.compile(r"^#\s*tesser-category:\s*[a-z_]+\s*$")
+
+CODING_DECL: Final[re.Pattern[str]] = re.compile(r"^#.*?coding[:=]\s*[-\w.]+")
+
+MUTABLE_COLLECTIONS: Final[frozenset[str]] = frozenset(
+    {
+        "list",
+        "dict",
+        "set",
+        "List",
+        "Dict",
+        "Set",
+        "DefaultDict",
+        "defaultdict",
+        "OrderedDict",
+        "Counter",
+        "MutableMapping",
+        "MutableSequence",
+        "MutableSet",
+    }
+)
+
+MOCK_MODULES: Final[frozenset[str]] = frozenset({"unittest.mock", "mock"})
+
+PATCHER_FIXTURES: Final[frozenset[str]] = frozenset({"monkeypatch", "mocker"})
+
+BUILTIN_NAMES: Final[frozenset[str]] = frozenset(
+    name for name in dir(builtins) if not name.startswith("_")
+)
+
 ROLE_TESSER_PACKAGE: Final[dict[str, str]] = {
     "domain": "tesser.domain",
     "application": "tesser.application",
@@ -123,34 +158,10 @@ SAME_CONTEXT_IMPORTS: Final[dict[str, tuple[str, ...]]] = {
 
 TESTS_ROLE: Final[str] = "tests"
 
-# `eval_` is the one path-visible special category: a sampled test that calls a
-# real model, so it is neither free nor deterministic and CI selects it by name.
-# A gateway is its ONLY home. Dropping context-tier evals was safe rather than
-# free — the argument for a through-the-service eval was closing the
-# input-assembly drift gap, and that gap is closed structurally only while
-# schema and prompt assembly stay single-sourced at the edge. If anyone ever
-# hand-builds a prompt inside an eval, the tier deleted here was the safety net.
 EVAL_PREFIX: Final[str] = "eval_"
 
 EVAL_HOME: Final[str] = "gateways"
 
-# A test's tier is its PLACEMENT, and a sibling test may import what its
-# SUBJECT may import, plus the subject itself. The ladder (Chris, 2026-08-09):
-# each layer imports and fakes exactly one layer down — srv fakes handlers,
-# handlers fake the client, an application service fakes the gateways and repos
-# through the ports application itself defines, and gateways/repos fake
-# nothing (their correctness is meaningless without the real counterpart).
-#
-# So the rows are DERIVED from the production import matrix, not hand-written:
-# a looser test row than the production row for the same layer licenses
-# reach-through the architecture forbids. The one deliberate divergence is
-# handlers: SAME_CONTEXT_IMPORTS["adapters"] admits application because
-# GATEWAYS need it (parts in their signatures); a handler's production imports
-# are client only (the handler carve-out), so its test row is too.
-#
-# TEST_TIER_HOME names the subject's own role — importing your subject is the
-# self-reference every production role has implicitly. The subrole pins
-# adapters tests to their own kind: a handler test may not reach gateways.
 TEST_TIER_HOME: Final[dict[str, tuple[str, str | None]]] = {
     "domain": ("domain", None),
     "application": ("application", None),
@@ -166,28 +177,11 @@ TEST_TIER_REACH: Final[dict[str, tuple[str, ...]]] = {
     TESTS_ROLE: ROLES,
 }
 
-# Which tiers may reach a neighbouring context, and through what.
-#
-# The context tier needs the neighbour's APPLICATION, not just its client. The
-# sanctioned cross-context test wires the REAL neighbour service with the
-# neighbour's own ports faked — NoteGateway(NoteService(DroppedNotes())) — which
-# needs the service class and its port protocol, both of which live in
-# application. A clients-only row would ban that and force a hand-written fake
-# client instead, reintroducing the drift the pattern exists to remove: nothing
-# proves a fake client still matches the real service.
-#
-# The gateway tier gets the neighbour's client because production gateways
-# already may ("a context reaches another context only through its client, and
-# only from gateways and wiring") — a gateway's sibling test has to construct
-# what the gateway takes.
 TEST_TIER_FOREIGN: Final[dict[str, tuple[str, ...]]] = {
     "gateways": ("client",),
     TESTS_ROLE: ("application", "client"),
 }
 
-# The srv tier: a router/host test fakes handlers, so it reaches a context
-# only through adapters.handlers — the same door production srv gets ("a host
-# reaches a context only through its handlers").
 SRV_TIER: Final[str] = "srv"
 
 PRIMITIVES: Final[frozenset[str]] = frozenset({"str", "int", "float", "bool"})
@@ -208,6 +202,7 @@ CORE_STDLIB: Final[dict[str, frozenset[str]]] = {
             "ast",
             "io",
             "tokenize",
+            "builtins",
         }
     ),
     "client": frozenset({"__future__", "typing"}),
@@ -337,6 +332,26 @@ class TesserImport(ts.ValueObject):
         return self._from_form
 
 
+class Comment(ts.ValueObject):
+
+    _line: int
+    _text: str
+
+    def __init__(self, line: int, text: str) -> None:
+        if line < 1:
+            raise ValueError("line must be positive")
+        if not text:
+            raise ValueError("text must be non-empty")
+        object.__setattr__(self, "_line", line)
+        object.__setattr__(self, "_text", text)
+
+    def line(self) -> int:
+        return self._line
+
+    def text(self) -> str:
+        return self._text
+
+
 class ModuleSpec(ts.Spec):
 
     def __init__(self, path: str, name: str, source: str, is_package: bool) -> None:
@@ -355,7 +370,8 @@ class Module(ts.Entity):
             raise ValueError("module path must be non-empty")
         tree = ast.parse(spec.source)
         self._path = spec.path
-        self._ignores = self._scan_ignores(spec.source)
+        self._comments = self._scan_comments(spec.source)
+        self._ignores = self._ignores_from(self._comments)
         self._name = spec.name
         self._is_package = spec.is_package
         parts = spec.name.split(".")
@@ -426,16 +442,22 @@ class Module(ts.Entity):
         )
 
     @staticmethod
-    def _scan_ignores(source: str) -> tuple[Ignore, ...]:
-        found: list[Ignore] = []
+    def _scan_comments(source: str) -> tuple[Comment, ...]:
         try:
             tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
         except (tokenize.TokenError, IndentationError):
             return ()
-        for token in tokens:
-            if token.type != tokenize.COMMENT:
-                continue
-            text = token.string.lstrip("#").strip()
+        return tuple(
+            Comment(line=token.start[0], text=token.string)
+            for token in tokens
+            if token.type == tokenize.COMMENT
+        )
+
+    @staticmethod
+    def _ignores_from(comments: tuple[Comment, ...]) -> tuple[Ignore, ...]:
+        found: list[Ignore] = []
+        for comment in comments:
+            text = comment.text().lstrip("#").strip()
             if text.startswith(IGNORE_FILE_MARKER):
                 rest = text[len(IGNORE_FILE_MARKER) :]
                 file_level = True
@@ -449,7 +471,7 @@ class Module(ts.Entity):
             codes = tuple(part for part in rest.replace(",", " ").split() if part)
             if any(not CODE_SHAPE.match(code) for code in codes):
                 continue
-            found.append(Ignore(line=token.start[0], codes=codes, file_level=file_level))
+            found.append(Ignore(line=comment.line(), codes=codes, file_level=file_level))
         return tuple(found)
 
     def _relative_base(self, level: int) -> tuple[str, ...]:
@@ -465,6 +487,9 @@ class Module(ts.Entity):
 
     def ignores(self) -> tuple[Ignore, ...]:
         return self._ignores
+
+    def comments(self) -> tuple[Comment, ...]:
+        return self._comments
 
     def is_package(self) -> bool:
         return self._is_package
@@ -595,6 +620,7 @@ class Codebase(ts.AggregateRoot):
         contexts = self._contexts()
         found: list[Violation] = []
         for module in self._modules:
+            found.extend(self._universal_violations(module))
             found.extend(self._module_violations(module, blocks, contexts))
             for cls in module.class_defs():
                 block = blocks.get((module.name(), cls.name))
@@ -604,6 +630,7 @@ class Codebase(ts.AggregateRoot):
                     found.extend(self._constructor_violations(module, cls, blocks, "an entity"))
                 elif block == "valueobject":
                     found.extend(self._valueobject_violations(module, cls, blocks))
+                    found.extend(self._vo_field_violations(module, cls))
                 elif block == "spec":
                     found.extend(self._spec_violations(module, cls, blocks))
                 elif block in ("request", "response"):
@@ -662,11 +689,6 @@ class Codebase(ts.AggregateRoot):
         if basename == "__main__":
             return ()
         if len(parts) >= 2 and parts[1] == TESTS_ROLE:
-            # The context tier. A context may hold a tests package alongside its
-            # five roles: the multi-boundary test constructs adapters and wiring,
-            # not just one role, so it needs a home whose implied import scope it
-            # does not immediately violate. Its members are test modules, reached
-            # by the test branch above; anything else is a finding.
             if module.is_package():
                 return self._context_tests_init_violations(module)
             return (
@@ -928,6 +950,329 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
         return tuple(found)
+
+    def _universal_violations(self, module: Module) -> tuple[Violation, ...]:
+        if module.name() in TOOLING_MODULES:
+            return ()
+        found: list[Violation] = []
+        found.extend(self._comment_violations(module))
+        found.extend(self._double_violations(module))
+        found.extend(self._shadowing_violations(module))
+        found.extend(self._string_equality_violations(module))
+        return tuple(found)
+
+    def _comment_violations(self, module: Module) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for comment in module.comments():
+            if DIRECTIVE.match(comment.text()) or CATEGORY_MARKER.match(comment.text()):
+                continue
+            if comment.line() <= 2 and CODING_DECL.match(comment.text()):
+                continue
+            found.append(
+                Violation(
+                    module.path(),
+                    comment.line(),
+                    "TB020",
+                    f"{module.name()} carries a code comment; code speaks for itself — "
+                    "comments, docstrings, and loose strings belong in the doc layer",
+                )
+            )
+        doc_ids: set[int] = set()
+        body = module.body()
+        if body and self._is_bare_string(body[0]):
+            doc_ids.add(id(body[0]))
+        for stmt in body:
+            for node in ast.walk(stmt):
+                if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                    if node.body and self._is_bare_string(node.body[0]):
+                        doc_ids.add(id(node.body[0]))
+        for stmt in body:
+            for node in ast.walk(stmt):
+                if not self._is_bare_string(node):
+                    continue
+                kind = "a docstring" if id(node) in doc_ids else "a bare string statement"
+                found.append(
+                    Violation(
+                        module.path(),
+                        node.lineno,
+                        "TB020",
+                        f"{module.name()} carries {kind}; code speaks for itself — "
+                        "comments, docstrings, and loose strings belong in the doc layer",
+                    )
+                )
+        return tuple(found)
+
+    def _double_violations(self, module: Module) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for stmt in module.body():
+            for node in ast.walk(stmt):
+                if isinstance(node, ast.ImportFrom):
+                    target = node.module or ""
+                    if self._is_mock_module(target) or (
+                        target == "unittest" and any(alias.name == "mock" for alias in node.names)
+                    ):
+                        found.append(
+                            Violation(
+                                module.path(),
+                                node.lineno,
+                                "TB030",
+                                f"{module.name()} imports a mocking library; a test double is "
+                                "a hand-written fake, never a mocking library or a runtime patcher",
+                            )
+                        )
+                    elif target in ("pytest", "_pytest.monkeypatch") and any(
+                        alias.name == "MonkeyPatch" for alias in node.names
+                    ):
+                        found.append(
+                            Violation(
+                                module.path(),
+                                node.lineno,
+                                "TB030",
+                                f"{module.name()} reaches for pytest MonkeyPatch; a test double is "
+                                "a hand-written fake, never a mocking library or a runtime patcher",
+                            )
+                        )
+                elif isinstance(node, ast.Import):
+                    if any(self._is_mock_module(alias.name) for alias in node.names):
+                        found.append(
+                            Violation(
+                                module.path(),
+                                node.lineno,
+                                "TB030",
+                                f"{module.name()} imports a mocking library; a test double is "
+                                "a hand-written fake, never a mocking library or a runtime patcher",
+                            )
+                        )
+                elif isinstance(node, ast.Attribute):
+                    if (
+                        node.attr == "mock"
+                        and isinstance(node.value, ast.Name)
+                        and node.value.id == "unittest"
+                    ):
+                        found.append(
+                            Violation(
+                                module.path(),
+                                node.lineno,
+                                "TB030",
+                                f"{module.name()} imports a mocking library; a test double is "
+                                "a hand-written fake, never a mocking library or a runtime patcher",
+                            )
+                        )
+                    elif (
+                        node.attr == "MonkeyPatch"
+                        and isinstance(node.value, ast.Name)
+                        and node.value.id == "pytest"
+                    ):
+                        found.append(
+                            Violation(
+                                module.path(),
+                                node.lineno,
+                                "TB030",
+                                f"{module.name()} reaches for pytest MonkeyPatch; a test double is "
+                                "a hand-written fake, never a mocking library or a runtime patcher",
+                            )
+                        )
+                elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    if not self._pytest_shaped(node):
+                        continue
+                    args = node.args
+                    for arg in (*args.posonlyargs, *args.args, *args.kwonlyargs):
+                        if arg.arg in PATCHER_FIXTURES:
+                            found.append(
+                                Violation(
+                                    module.path(),
+                                    arg.lineno,
+                                    "TB030",
+                                    f"{module.name()}.{node.name} takes the {arg.arg} fixture; "
+                                    "a test double is a hand-written fake, never a mocking "
+                                    "library or a runtime patcher",
+                                )
+                            )
+        return tuple(found)
+
+    def _shadowing_violations(self, module: Module) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        scopes: list[tuple[ast.AST | None, list[ast.AST]]] = [
+            (None, [stmt for stmt in module.body()])
+        ]
+        for stmt in module.body():
+            for node in ast.walk(stmt):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    scopes.append((node, list(node.body)))
+                elif isinstance(node, ast.Lambda):
+                    scopes.append((node, [node.body]))
+        for holder, roots in scopes:
+            items = self._scope_items(roots)
+            bound = self._shadow_bound(holder, items)
+            if not bound:
+                continue
+            for child in items:
+                if (
+                    isinstance(child, ast.Call)
+                    and isinstance(child.func, ast.Name)
+                    and child.func.id in bound
+                ):
+                    found.append(
+                        Violation(
+                            module.path(),
+                            child.lineno,
+                            "TB033",
+                            f"{module.name()} binds {child.func.id} and calls it in the same "
+                            "scope; a shadowed builtin is never called — rename the binding",
+                        )
+                    )
+        return tuple(found)
+
+    def _string_equality_violations(self, module: Module) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for stmt in module.body():
+            for node in ast.walk(stmt):
+                if (
+                    isinstance(node, ast.Compare)
+                    and len(node.ops) == 1
+                    and isinstance(node.ops[0], ast.Eq)
+                    and self._is_str_call(node.left)
+                    and self._is_str_call(node.comparators[0])
+                ):
+                    found.append(
+                        Violation(
+                            module.path(),
+                            node.lineno,
+                            "TB004",
+                            f"{module.name()} equates two str() calls; compare value objects "
+                            "by value, never by their string form",
+                        )
+                    )
+        return tuple(found)
+
+    def _vo_field_violations(self, module: Module, cls: ast.ClassDef) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for stmt in cls.body:
+            if not isinstance(stmt, ast.AnnAssign) or not isinstance(stmt.target, ast.Name):
+                continue
+            if self._annotation_head(stmt.annotation) in MUTABLE_COLLECTIONS:
+                field = stmt.target.id
+                found.append(
+                    Violation(
+                        module.path(),
+                        stmt.lineno,
+                        "TB002",
+                        f"{module.name()}.{cls.name} field {field} is a mutable collection; "
+                        "a value object's field is hashable — a tuple or frozenset, never "
+                        "a mutable collection",
+                    )
+                )
+        return tuple(found)
+
+    @staticmethod
+    def _is_bare_string(node: ast.AST) -> TypeGuard[ast.Expr]:
+        return (
+            isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+        )
+
+    @staticmethod
+    def _is_mock_module(target: str) -> bool:
+        return any(
+            target == banned or target.startswith(banned + ".") for banned in MOCK_MODULES
+        )
+
+    @staticmethod
+    def _pytest_shaped(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+        if node.name.startswith("test_"):
+            return True
+        for decorator in node.decorator_list:
+            target = decorator.func if isinstance(decorator, ast.Call) else decorator
+            if isinstance(target, ast.Attribute) and target.attr == "fixture":
+                return True
+            if isinstance(target, ast.Name) and target.id == "fixture":
+                return True
+        return False
+
+    @staticmethod
+    def _scope_items(roots: list[ast.AST]) -> list[ast.AST]:
+        out: list[ast.AST] = []
+        stack: list[ast.AST] = list(roots)
+        while stack:
+            child = stack.pop()
+            if isinstance(
+                child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+            ):
+                continue
+            out.append(child)
+            stack.extend(ast.iter_child_nodes(child))
+        return out
+
+    @staticmethod
+    def _shadow_bound(holder: ast.AST | None, items: list[ast.AST]) -> frozenset[str]:
+        bound: set[str] = set()
+        if isinstance(holder, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            args = holder.args
+            for arg in (*args.posonlyargs, *args.args, *args.kwonlyargs):
+                if arg.arg in BUILTIN_NAMES:
+                    bound.add(arg.arg)
+            for extra in (args.vararg, args.kwarg):
+                if extra is not None and extra.arg in BUILTIN_NAMES:
+                    bound.add(extra.arg)
+        elsewhere: set[str] = set()
+        for child in items:
+            if isinstance(child, (ast.Global, ast.Nonlocal)):
+                elsewhere.update(child.names)
+            if (
+                isinstance(child, ast.ExceptHandler)
+                and child.name is not None
+                and child.name in BUILTIN_NAMES
+            ):
+                bound.add(child.name)
+        for child in items:
+            targets: list[ast.expr] = []
+            if isinstance(child, ast.Assign):
+                targets = list(child.targets)
+            elif isinstance(child, (ast.AnnAssign, ast.AugAssign)):
+                targets = [child.target]
+            elif isinstance(child, (ast.For, ast.AsyncFor)):
+                targets = [child.target]
+            elif isinstance(child, ast.NamedExpr):
+                targets = [child.target]
+            elif isinstance(child, ast.withitem):
+                targets = [child.optional_vars] if child.optional_vars else []
+            for target in targets:
+                for name in ast.walk(target):
+                    if (
+                        isinstance(name, ast.Name)
+                        and isinstance(name.ctx, ast.Store)
+                        and name.id in BUILTIN_NAMES
+                    ):
+                        bound.add(name.id)
+        return frozenset(bound - elsewhere)
+
+    @staticmethod
+    def _is_str_call(node: ast.expr) -> bool:
+        if not isinstance(node, ast.Call):
+            return False
+        func = node.func
+        if isinstance(func, ast.Name) and func.id == "str" and len(node.args) == 1:
+            return True
+        return isinstance(func, ast.Attribute) and func.attr == "__str__"
+
+    @staticmethod
+    def _annotation_head(node: ast.expr) -> str | None:
+        if isinstance(node, ast.Name):
+            return node.id
+        if isinstance(node, ast.Attribute):
+            return node.attr
+        if isinstance(node, ast.Subscript):
+            return Codebase._annotation_head(node.value)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            try:
+                parsed = ast.parse(node.value, mode="eval")
+            except SyntaxError:
+                return None
+            if isinstance(parsed.body, ast.Constant):
+                return None
+            return Codebase._annotation_head(parsed.body)
+        return None
 
     def _bootstrap_module_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
@@ -1282,12 +1627,6 @@ class Codebase(ts.AggregateRoot):
 
     @staticmethod
     def _test_tier(module: Module, contexts: frozenset[str]) -> tuple[str, str] | None:
-        """The (context, tier) a test module's PLACEMENT puts it in.
-
-        None for the app tier — a top-level tests package, which is free: what
-        it wires is everything, and which counterparts are real on a given run
-        is the environment's property, not the tree's.
-        """
         parts = module.name().split(".")
         if parts[0] == "srv" and len(parts) >= 2:
             return ("", SRV_TIER)
@@ -1298,10 +1637,6 @@ class Codebase(ts.AggregateRoot):
         if parts[1] not in ROLES:
             return None
         if parts[1] == "adapters":
-            # adapters/handlers/test_*.py and adapters/gateways/test_*.py are
-            # different tiers: an inbound handler is a total transform testable
-            # with no transport, an outbound gateway is meaningless without its
-            # real counterpart.
             if len(parts) >= 4 and parts[2] in ("handlers", "gateways"):
                 return (parts[0], parts[2])
             return None
@@ -1397,18 +1732,6 @@ class Codebase(ts.AggregateRoot):
         blocks: dict[tuple[str, str], str],
         contexts: frozenset[str],
     ) -> tuple[Violation, ...]:
-        """An eval is a sampled test, and a gateway is its only home.
-
-        Both gateway forms take one: flat beside the gateway
-        (gateways/eval_llm.py) and nested under an escalated one
-        (gateways/<vendor>/evals/eval_*.py). The eval_ prefix alone carries the
-        category, so evals follow the same flat-by-default escalation as
-        everything else.
-
-        Contents are the test-module ruleset — an eval holds tests, @ts.helper
-        builders, and @ts.fake doubles — and its reach is the gateway tier's,
-        because that is where it lives.
-        """
         parts = module.name().split(".")
         at_home = (
             len(parts) >= 4
@@ -1427,9 +1750,6 @@ class Codebase(ts.AggregateRoot):
                     "call is honest",
                 ),
             )
-        # No placement call here: _test_tier already resolves an eval under
-        # gateways/ (flat or nested) to the gateways tier, so
-        # _test_module_violations applies the row. Adding it again double-reports.
         return self._test_module_violations(module, blocks, contexts)
 
     def _test_module_violations(

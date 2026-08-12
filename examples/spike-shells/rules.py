@@ -30,11 +30,20 @@ HOLE_NAMES: dict[str, str] = {
     "name": "⟨module⟩",
     "others": "⟨paths⟩",
     "error.msg": "⟨error⟩",
+    "kind": "⟨kind⟩",
+    "node.name": "⟨function⟩",
+    "child.func.id": "⟨builtin⟩",
+    "field": "⟨field⟩",
 }
 
 APPLIES_TO: dict[str, str] = {
     "Codebase.__init__": "checked source file",
     "Codebase.violations": "ignore comment",
+    "Codebase._comment_violations": "every module (tooling exempt)",
+    "Codebase._double_violations": "every module (tooling exempt)",
+    "Codebase._shadowing_violations": "every module (tooling exempt)",
+    "Codebase._string_equality_violations": "every module (tooling exempt)",
+    "Codebase._vo_field_violations": "value object class",
     "a service method": "public service method",
     "a client method": "client protocol method",
     "a domain constructor": "aggregate or entity `__init__`",

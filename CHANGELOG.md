@@ -5,6 +5,42 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.22.0] - 2026-08-12
+
+The first tessercheck→sigcheck check ports — the five whose semantics
+survive the frozen-dataclass → shell substrate change unaltered, keeping
+their original codes.
+
+### Added
+
+- **TB020, the comments norm**, now enforced by sigcheck tree-wide with no
+  test exemption: no comments, docstrings, or bare string statements;
+  machine directives exempt (shebang, coding cookies on lines 1-2,
+  `type:`/`noqa`/`pragma`/formatter controls, `tessercheck:ignore`, and the
+  exact `tesser-category:` marker grammar — prose trailing the marker is
+  still a comment). sigcheck's own rationale comment blocks are deleted
+  per the ruling: the rules live in RULES.md, the why lives in sessions
+  and git history.
+- **TB030, the fakes-only norm**: mocking-library imports in every shape
+  (including the `import unittest` → `unittest.mock` chain), pytest
+  `MonkeyPatch`, and `monkeypatch`/`mocker` fixture parameters in
+  pytest-shaped functions. python-app's four existing seam markers are
+  load-bearing again; their transitional TB090 baseline entries burned
+  off.
+- **TB033** (a builtin bound and then called in the same scope), **TB004**
+  (equality with `str()` on both sides), and **TB002** (a value object's
+  field must be hashable — including `MutableSet` and quoted forward-ref
+  annotations) — all with tessercheck's scope semantics preserved and
+  probe-verified against the reference implementations.
+
+### Changed
+
+- The remaining ports (TB010–TB012, TB015–TB019) are deliberately deferred
+  to a named ruling: their core terms (field, leaf, canonical exit,
+  primitive accessor) were derived on the frozen-dataclass substrate and
+  collide with the shell idiom. TODOS.md carries the re-derivation
+  question.
+
 ## [0.0.21.0] - 2026-08-11
 
 The sigcheck harness wave — the consumer-facing prerequisites for

@@ -6,12 +6,6 @@ import scheduling.application.parts as parts
 
 
 class MemoryBookingRepository(ts.Repository):
-    """The in-memory booking store — a real adapter, not a test double.
-
-    Promoted from a @ts.fake declared byte-identically in two test modules;
-    see directory_memory.py for the reasoning.
-    """
-
     def __init__(self) -> None:
         self.stored: dict[str, parts.BookingParts] = {}
 
