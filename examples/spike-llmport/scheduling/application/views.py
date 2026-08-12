@@ -14,12 +14,23 @@ def loaded(stored: parts.BookingParts) -> domain.Booking:
 
 @ts.function
 def parts_of(booking: domain.Booking) -> parts.BookingParts:
-    return parts.BookingParts(step=booking.step_label(), name=booking.name_label(), chosen=booking.slot_label(), offered=booking.offered_labels())
+    name = booking.name()
+    chosen = booking.chosen()
+    return parts.BookingParts(
+        step=str(booking.step()),
+        name="" if name is None else str(name),
+        chosen="" if chosen is None else str(chosen),
+        offered=tuple(str(slot) for slot in booking.offered()),
+    )
 
 
 @ts.function
 def state(booking: domain.Booking, reply: str) -> client.BookingStateResponse:
-    return client.BookingStateResponse(step=booking.step_label(), offered_slots=booking.offered_labels(), reply=reply)
+    return client.BookingStateResponse(
+        step=str(booking.step()),
+        offered_slots=tuple(str(slot) for slot in booking.offered()),
+        reply=reply,
+    )
 
 
 @ts.function

@@ -4,6 +4,11 @@ from typing import Final
 
 import tesser.domain as ts
 
+
+@ts.function
+def canonical_str(value: str) -> str:
+    return value
+
 COLLECT_NAME: Final[str] = "collect_name"
 CHOOSE_SLOT: Final[str] = "choose_slot"
 CONFIRM: Final[str] = "confirm"
@@ -21,7 +26,7 @@ class Step(ts.ValueObject):
         object.__setattr__(self, "_label", label)
 
     def __str__(self) -> str:
-        return self._label
+        return canonical_str(self._label)
 
 
 class CustomerName(ts.ValueObject):
@@ -36,7 +41,7 @@ class CustomerName(ts.ValueObject):
         object.__setattr__(self, "_value", value.strip())
 
     def __str__(self) -> str:
-        return self._value
+        return canonical_str(self._value)
 
 
 class Slot(ts.ValueObject):
@@ -51,7 +56,7 @@ class Slot(ts.ValueObject):
         object.__setattr__(self, "_label", label.strip())
 
     def __str__(self) -> str:
-        return self._label
+        return canonical_str(self._label)
 
 
 class BookingSpec(ts.Spec):
@@ -85,17 +90,17 @@ class Booking(ts.AggregateRoot):
         if self._chosen is not None and self._chosen not in self._offered:
             raise ValueError("the chosen slot must be among the offered slots")
 
-    def step_label(self) -> str:
-        return str(self._step)
+    def step(self) -> Step:
+        return self._step
 
-    def name_label(self) -> str:
-        return "" if self._name is None else str(self._name)
+    def name(self) -> CustomerName | None:
+        return self._name
 
-    def slot_label(self) -> str:
-        return "" if self._chosen is None else str(self._chosen)
+    def chosen(self) -> Slot | None:
+        return self._chosen
 
-    def offered_labels(self) -> tuple[str, ...]:
-        return tuple(str(slot) for slot in self._offered)
+    def offered(self) -> tuple[Slot, ...]:
+        return self._offered
 
     def provide_name(self, name: CustomerName, offered: tuple[Slot, ...]) -> None:
         self._require(COLLECT_NAME)

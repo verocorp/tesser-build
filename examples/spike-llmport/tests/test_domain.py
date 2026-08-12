@@ -55,19 +55,19 @@ def test_the_booking_walks_its_steps() -> None:
     booking = domain.Booking(
         domain.BookingSpec(step="collect_name", name="", chosen="", offered=())
     )
-    assert booking.step_label() == "collect_name"
+    assert str(booking.step()) == "collect_name"
 
     booking.provide_name(
         domain.CustomerName("Ada"), (domain.Slot("mon-9am"), domain.Slot("tue-2pm"))
     )
-    assert booking.step_label() == "choose_slot"
+    assert str(booking.step()) == "choose_slot"
 
     booking.choose_slot(domain.Slot("mon-9am"))
-    assert booking.step_label() == "confirm"
-    assert booking.slot_label() == "mon-9am"
+    assert str(booking.step()) == "confirm"
+    assert str(booking.chosen()) == "mon-9am"
 
     booking.confirm()
-    assert booking.step_label() == "booked"
+    assert str(booking.step()) == "booked"
 
 
 def test_the_booking_reconstructs_from_its_parts() -> None:
@@ -76,10 +76,10 @@ def test_the_booking_reconstructs_from_its_parts() -> None:
     )
     booking = domain.Booking(spec)
 
-    assert booking.step_label() == "confirm"
-    assert booking.name_label() == "Ada"
-    assert booking.slot_label() == "mon-9am"
-    assert booking.offered_labels() == ("mon-9am", "tue-2pm")
+    assert str(booking.step()) == "confirm"
+    assert str(booking.name()) == "Ada"
+    assert str(booking.chosen()) == "mon-9am"
+    assert tuple(str(s) for s in booking.offered()) == ("mon-9am", "tue-2pm")
 
 
 def test_an_unoffered_slot_is_rejected_naming_the_offered() -> None:
@@ -95,7 +95,7 @@ def test_an_unoffered_slot_is_rejected_naming_the_offered() -> None:
 
     assert "mon-9am" in str(excinfo.value)
     assert "tue-2pm" in str(excinfo.value)
-    assert booking.step_label() == "choose_slot"
+    assert str(booking.step()) == "choose_slot"
 
 
 def test_rechoosing_at_confirm_overwrites_the_choice() -> None:
@@ -109,8 +109,8 @@ def test_rechoosing_at_confirm_overwrites_the_choice() -> None:
 
     booking.choose_slot(domain.Slot("tue-2pm"))
 
-    assert booking.step_label() == "confirm"
-    assert booking.slot_label() == "tue-2pm"
+    assert str(booking.step()) == "confirm"
+    assert str(booking.chosen()) == "tue-2pm"
 
 
 def test_a_step_out_of_order_is_rejected() -> None:
@@ -133,9 +133,9 @@ def test_reoffer_replaces_slots_and_returns_to_choosing() -> None:
 
     booking.reoffer((domain.Slot("tue-2pm"),))
 
-    assert booking.step_label() == "choose_slot"
-    assert booking.offered_labels() == ("tue-2pm",)
-    assert booking.slot_label() == ""
+    assert str(booking.step()) == "choose_slot"
+    assert tuple(str(s) for s in booking.offered()) == ("tue-2pm",)
+    assert booking.chosen() is None
 
 
 def test_every_step_constant_constructs() -> None:
@@ -152,7 +152,7 @@ def test_provide_name_with_no_slots_available_is_rejected() -> None:
         booking.provide_name(domain.CustomerName("Ada"), ())
 
     assert "no slots are available" in str(excinfo.value)
-    assert booking.step_label() == "collect_name"
+    assert str(booking.step()) == "collect_name"
 
 
 def test_reoffer_with_no_slots_available_is_rejected() -> None:
@@ -166,7 +166,7 @@ def test_reoffer_with_no_slots_available_is_rejected() -> None:
         booking.reoffer(())
 
     assert "no slots are available" in str(excinfo.value)
-    assert booking.step_label() == "confirm"
+    assert str(booking.step()) == "confirm"
 
 
 def test_choosing_before_any_offer_or_after_booking_is_rejected() -> None:

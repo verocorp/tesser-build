@@ -211,145 +211,283 @@ CORE_STDLIB: Final[dict[str, frozenset[str]]] = {
 
 DOMAIN_BLOCKS: Final[frozenset[str]] = frozenset({"aggregate", "entity", "valueobject"})
 
+WRAPPABLE_SCALARS: Final[frozenset[str]] = frozenset(
+    {"str", "int", "float", "bytes", "Decimal", "date", "datetime", "time"}
+)
+
+NON_WRAPPABLE_SCALARS: Final[frozenset[str]] = frozenset({"bool", "complex"})
+
+CANONICAL_EXIT: Final[dict[str, str]] = {
+    "str": "__str__",
+    "int": "__int__",
+    "float": "__float__",
+    "bytes": "__bytes__",
+    "Decimal": "__str__",
+    "date": "__str__",
+    "datetime": "__str__",
+    "time": "__str__",
+}
+
+CONVERSION_DUNDERS: Final[frozenset[str]] = frozenset(
+    {"__str__", "__int__", "__float__", "__bytes__"}
+)
+
+CANONICAL_HELPER: Final[dict[str, str]] = {
+    "str": "canonical_str",
+    "int": "canonical_int",
+    "float": "canonical_float",
+    "bytes": "canonical_bytes",
+    "Decimal": "canonical_decimal",
+    "datetime": "canonical_datetime",
+}
+
+LANGUAGE_FIXED: Final[frozenset[str]] = frozenset(
+    {
+        "__init__",
+        "__hash__",
+        "__str__",
+        "__repr__",
+        "__bool__",
+        "__len__",
+        "__contains__",
+        "__int__",
+        "__float__",
+        "__bytes__",
+        "__index__",
+        "__format__",
+    }
+)
+
+COMPARISON_DUNDERS: Final[frozenset[str]] = frozenset(
+    {"__eq__", "__ne__", "__lt__", "__le__", "__gt__", "__ge__"}
+)
+
+RETURN_WRAPPERS: Final[frozenset[str]] = frozenset(
+    {
+        "tuple",
+        "Tuple",
+        "list",
+        "List",
+        "set",
+        "Set",
+        "frozenset",
+        "FrozenSet",
+        "dict",
+        "Dict",
+        "Mapping",
+        "Sequence",
+        "Iterable",
+        "Iterator",
+        "Collection",
+        "Optional",
+        "Union",
+        "Final",
+    }
+)
+
+SELF_NAMES: Final[frozenset[str]] = frozenset({"Self", "Never", "NoReturn", "None"})
+
+
+@ts.function
+def canonical_str(value: str) -> str:
+    return value
+
+
+@ts.function
+def canonical_int(value: int) -> int:
+    return value
+
+
+class Path(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        if not value:
+            raise ValueError("path must be non-empty")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return canonical_str(self._value)
+
+
+class Line(ts.ValueObject):
+
+    _value: int
+
+    def __init__(self, value: int) -> None:
+        if value < 1:
+            raise ValueError("line must be positive")
+        object.__setattr__(self, "_value", value)
+
+    def __int__(self) -> int:
+        return canonical_int(self._value)
+
+
+class Code(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        if not CODE_SHAPE.match(value):
+            raise ValueError("code must be a TB0xx family code")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return canonical_str(self._value)
+
+
+class Text(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        if not value:
+            raise ValueError("text must be non-empty")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return canonical_str(self._value)
+
+
+class Target(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        if not value:
+            raise ValueError("target must be non-empty")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return canonical_str(self._value)
+
+
+class EdgeForm(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        if value not in ("member", "aliased", "bare"):
+            raise ValueError("edge form must be member, aliased, or bare")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return canonical_str(self._value)
+
+
+class ImportForm(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        if value not in ("from", "ts", "alias"):
+            raise ValueError("import form must be from, ts, or alias")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return canonical_str(self._value)
+
+
+class IgnoreScope(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        if value not in ("line", "file"):
+            raise ValueError("ignore scope must be line or file")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return canonical_str(self._value)
+
 
 class Violation(ts.ValueObject):
 
-    _path: str
-    _line: int
-    _code: str
-    _message: str
+    _path: Path
+    _line: Line
+    _code: Code
+    _text: Text
 
     def __init__(self, path: str, line: int, code: str, message: str) -> None:
-        if not path:
-            raise ValueError("path must be non-empty")
-        if line < 1:
-            raise ValueError("line must be positive")
-        if not code:
-            raise ValueError("code must be non-empty")
-        if not message:
-            raise ValueError("message must be non-empty")
-        object.__setattr__(self, "_path", path)
-        object.__setattr__(self, "_line", line)
-        object.__setattr__(self, "_code", code)
-        object.__setattr__(self, "_message", message)
+        object.__setattr__(self, "_path", Path(path))
+        object.__setattr__(self, "_line", Line(line))
+        object.__setattr__(self, "_code", Code(code))
+        object.__setattr__(self, "_text", Text(message))
 
-    def path(self) -> str:
+    def path(self) -> Path:
         return self._path
 
-    def line(self) -> int:
+    def line(self) -> Line:
         return self._line
 
-    def code(self) -> str:
+    def code(self) -> Code:
         return self._code
 
-    def __str__(self) -> str:
-        return f"{self._path}:{self._line}: {self._code} {self._message}"
+    def text(self) -> Text:
+        return self._text
 
 
 class Ignore(ts.ValueObject):
 
-    _line: int
-    _codes: tuple[str, ...]
-    _file_level: bool
+    _line: Line
+    _codes: tuple[Code, ...]
+    _scope: IgnoreScope
 
     def __init__(self, line: int, codes: tuple[str, ...], file_level: bool) -> None:
-        if line < 1:
-            raise ValueError("line must be positive")
-        object.__setattr__(self, "_line", line)
-        object.__setattr__(self, "_codes", codes)
-        object.__setattr__(self, "_file_level", file_level)
+        object.__setattr__(self, "_line", Line(line))
+        object.__setattr__(self, "_codes", tuple(Code(code) for code in codes))
+        object.__setattr__(self, "_scope", IgnoreScope("file" if file_level else "line"))
 
-    def line(self) -> int:
-        return self._line
-
-    def codes(self) -> tuple[str, ...]:
-        return self._codes
-
-    def file_level(self) -> bool:
-        return self._file_level
-
-    def suppresses(self, violation: Violation) -> bool:
-        if self._file_level and not self._codes:
+    def _suppresses(self, violation: Violation) -> bool:
+        file_wide = str(self._scope) == "file"
+        if file_wide and not self._codes:
             return False
         if self._codes and violation.code() not in self._codes:
             return False
-        return self._file_level or violation.line() == self._line
+        return file_wide or violation.line() == self._line
 
 
 class ImportEdge(ts.ValueObject):
 
-    _target: str
-    _lineno: int
-    _member_form: bool
-    _aliased: bool
+    _target: Target
+    _lineno: Line
+    _form: EdgeForm
 
     def __init__(self, target: str, lineno: int, member_form: bool, aliased: bool) -> None:
-        if not target:
-            raise ValueError("target must be non-empty")
-        object.__setattr__(self, "_target", target)
-        object.__setattr__(self, "_lineno", lineno)
-        object.__setattr__(self, "_member_form", member_form)
-        object.__setattr__(self, "_aliased", aliased)
-
-    def target(self) -> str:
-        return self._target
-
-    def lineno(self) -> int:
-        return self._lineno
-
-    def member_form(self) -> bool:
-        return self._member_form
-
-    def aliased(self) -> bool:
-        return self._aliased
+        object.__setattr__(self, "_target", Target(target))
+        object.__setattr__(self, "_lineno", Line(lineno))
+        object.__setattr__(
+            self,
+            "_form",
+            EdgeForm("member" if member_form else "aliased" if aliased else "bare"),
+        )
 
 
 class TesserImport(ts.ValueObject):
 
-    _target: str
-    _lineno: int
-    _as_ts: bool
-    _from_form: bool
+    _target: Target
+    _lineno: Line
+    _form: ImportForm
 
     def __init__(self, target: str, lineno: int, as_ts: bool, from_form: bool) -> None:
-        if not target:
-            raise ValueError("target must be non-empty")
-        object.__setattr__(self, "_target", target)
-        object.__setattr__(self, "_lineno", lineno)
-        object.__setattr__(self, "_as_ts", as_ts)
-        object.__setattr__(self, "_from_form", from_form)
-
-    def target(self) -> str:
-        return self._target
-
-    def lineno(self) -> int:
-        return self._lineno
-
-    def as_ts(self) -> bool:
-        return self._as_ts
-
-    def from_form(self) -> bool:
-        return self._from_form
+        object.__setattr__(self, "_target", Target(target))
+        object.__setattr__(self, "_lineno", Line(lineno))
+        object.__setattr__(
+            self,
+            "_form",
+            ImportForm("from" if from_form else "ts" if as_ts else "alias"),
+        )
 
 
 class Comment(ts.ValueObject):
 
-    _line: int
-    _text: str
+    _line: Line
+    _text: Text
 
     def __init__(self, line: int, text: str) -> None:
-        if line < 1:
-            raise ValueError("line must be positive")
-        if not text:
-            raise ValueError("text must be non-empty")
-        object.__setattr__(self, "_line", line)
-        object.__setattr__(self, "_text", text)
-
-    def line(self) -> int:
-        return self._line
-
-    def text(self) -> str:
-        return self._text
+        object.__setattr__(self, "_line", Line(line))
+        object.__setattr__(self, "_text", Text(text))
 
 
 class ModuleSpec(ts.Spec):
@@ -457,7 +595,7 @@ class Module(ts.Entity):
     def _ignores_from(comments: tuple[Comment, ...]) -> tuple[Ignore, ...]:
         found: list[Ignore] = []
         for comment in comments:
-            text = comment.text().lstrip("#").strip()
+            text = str(comment._text).lstrip("#").strip()
             if text.startswith(IGNORE_FILE_MARKER):
                 rest = text[len(IGNORE_FILE_MARKER) :]
                 file_level = True
@@ -471,7 +609,7 @@ class Module(ts.Entity):
             codes = tuple(part for part in rest.replace(",", " ").split() if part)
             if any(not CODE_SHAPE.match(code) for code in codes):
                 continue
-            found.append(Ignore(line=comment.line(), codes=codes, file_level=file_level))
+            found.append(Ignore(line=int(comment._line), codes=codes, file_level=file_level))
         return tuple(found)
 
     def _relative_base(self, level: int) -> tuple[str, ...]:
@@ -518,7 +656,7 @@ class Module(ts.Entity):
     def bound_names(self) -> tuple[tuple[str, str, str], ...]:
         return self._bound_names
 
-    def resolve(self, node: ast.expr) -> tuple[str, str] | None:
+    def _resolve(self, node: ast.expr) -> tuple[str, str] | None:
         if isinstance(node, ast.Attribute) and isinstance(node.value, (ast.Name, ast.Attribute)):
             package = self._package_aliases.get(ast.unparse(node.value))
             if package is not None:
@@ -588,26 +726,26 @@ class Codebase(ts.AggregateRoot):
         found = list(self._broken)
         found.extend(self._rule_violations())
         kept: list[Violation] = []
-        used: set[tuple[str, int]] = set()
+        used: set[tuple[str, Line]] = set()
         by_path = {module.path(): module for module in self._modules}
         for violation in found:
-            module = by_path.get(violation.path())
+            module = by_path.get(str(violation.path()))
             suppressed = False
             if module is not None:
                 for ignore in module.ignores():
-                    if ignore.suppresses(violation):
-                        used.add((module.path(), ignore.line()))
+                    if ignore._suppresses(violation):
+                        used.add((module.path(), ignore._line))
                         suppressed = True
                 if suppressed:
                     continue
             kept.append(violation)
         for module in self._modules:
             for ignore in module.ignores():
-                if (module.path(), ignore.line()) not in used:
+                if (module.path(), ignore._line) not in used:
                     kept.append(
                         Violation(
                             module.path(),
-                            ignore.line(),
+                            int(ignore._line),
                             "TB090",
                             f"{module.name()} carries an ignore that suppresses nothing; "
                             "an ignore comment suppresses an actual finding",
@@ -631,6 +769,8 @@ class Codebase(ts.AggregateRoot):
                 elif block == "valueobject":
                     found.extend(self._valueobject_violations(module, cls, blocks))
                     found.extend(self._vo_field_violations(module, cls))
+                if block in DOMAIN_BLOCKS:
+                    found.extend(self._shape_norm_violations(module, cls, block, blocks))
                 elif block == "spec":
                     found.extend(self._spec_violations(module, cls, blocks))
                 elif block in ("request", "response"):
@@ -807,8 +947,8 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
         for edge in module.import_edges():
-            target = edge.target()
-            lineno = edge.lineno()
+            target = str(edge._target)
+            lineno = int(edge._lineno)
             if not target.startswith(module.name() + "."):
                 found.append(
                     Violation(
@@ -846,8 +986,8 @@ class Codebase(ts.AggregateRoot):
         seen_own = False
         seen_any = False
         for imp in module.tesser_imports():
-            target = imp.target()
-            lineno = imp.lineno()
+            target = str(imp._target)
+            lineno = int(imp._lineno)
             seen_any = True
             if target != package:
                 found.append(
@@ -869,7 +1009,7 @@ class Codebase(ts.AggregateRoot):
                 )
             else:
                 seen_own = True
-                if imp.from_form():
+                if str(imp._form) == "from":
                     found.append(
                         Violation(
                             module.path(),
@@ -878,7 +1018,7 @@ class Codebase(ts.AggregateRoot):
                             f"{module.name()} imports names from {target}; {once_clause}",
                         )
                     )
-                elif not imp.as_ts():
+                elif str(imp._form) == "alias":
                     found.append(
                         Violation(
                             module.path(),
@@ -964,14 +1104,14 @@ class Codebase(ts.AggregateRoot):
     def _comment_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for comment in module.comments():
-            if DIRECTIVE.match(comment.text()) or CATEGORY_MARKER.match(comment.text()):
+            if DIRECTIVE.match(str(comment._text)) or CATEGORY_MARKER.match(str(comment._text)):
                 continue
-            if comment.line() <= 2 and CODING_DECL.match(comment.text()):
+            if int(comment._line) <= 2 and CODING_DECL.match(str(comment._text)):
                 continue
             found.append(
                 Violation(
                     module.path(),
-                    comment.line(),
+                    int(comment._line),
                     "TB020",
                     f"{module.name()} carries a code comment; code speaks for itself — "
                     "comments, docstrings, and loose strings belong in the doc layer",
@@ -1163,6 +1303,438 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
         return tuple(found)
+
+    def _shape_norm_violations(
+        self,
+        module: Module,
+        cls: ast.ClassDef,
+        block: str,
+        blocks: dict[tuple[str, str], str],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        fields = self._declared_fields(cls)
+        leaf = self._leaf_scalar(fields)
+        if block == "valueobject":
+            found.extend(self._exposure_violations(module, cls, fields))
+            found.extend(self._composition_violations(module, cls, fields, leaf))
+            found.extend(self._door_violations(module, cls))
+            found.extend(self._exit_violations(module, cls, leaf))
+        else:
+            found.extend(self._copy_violations(module, cls, fields))
+            found.extend(self._held_root_violations(module, cls, fields, blocks))
+            found.extend(self._structured_exit_violations(module, cls))
+        found.extend(self._domain_return_violations(module, cls, blocks))
+        return tuple(found)
+
+    def _exposure_violations(
+        self,
+        module: Module,
+        cls: ast.ClassDef,
+        fields: list[tuple[str, ast.expr, int]],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        by_name = {name: ann for name, ann, _ in fields}
+        for field, ann, lineno in fields:
+            if field.startswith("_"):
+                continue
+            if self._annotation_scalar_names(ann) & (WRAPPABLE_SCALARS | NON_WRAPPABLE_SCALARS):
+                found.append(
+                    Violation(
+                        module.path(),
+                        lineno,
+                        "TB010",
+                        f"{module.name()}.{cls.name} exposes field {field}; "
+                        "a value object hides its representation — a public field belongs on a spec",
+                    )
+                )
+        for item in cls.body:
+            if not isinstance(item, ast.FunctionDef) or item.name.startswith("_"):
+                continue
+            attr = self._bare_field_return(item)
+            if attr is None:
+                continue
+            returned_ann = item.returns if item.returns is not None else by_name.get(attr)
+            if returned_ann is None:
+                continue
+            if self._annotation_scalar_names(returned_ann) & (
+                WRAPPABLE_SCALARS | NON_WRAPPABLE_SCALARS
+            ):
+                found.append(
+                    Violation(
+                        module.path(),
+                        item.lineno,
+                        "TB010",
+                        f"{module.name()}.{cls.name}.{item.name} passes the raw primitive through; "
+                        "a value object's accessor returns a value object — "
+                        "the canonical exit is the only primitive door",
+                    )
+                )
+        return tuple(found)
+
+    def _composition_violations(
+        self,
+        module: Module,
+        cls: ast.ClassDef,
+        fields: list[tuple[str, ast.expr, int]],
+        leaf: str | None,
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for field, ann, lineno in fields:
+            head = self._annotation_head(ann)
+            if head in NON_WRAPPABLE_SCALARS:
+                found.append(
+                    Violation(
+                        module.path(),
+                        lineno,
+                        "TB016",
+                        f"{module.name()}.{cls.name} field {field} is a {head}; "
+                        "bool and complex are not value-object material — "
+                        "model the raw value or reach for an enum",
+                    )
+                )
+        if len(fields) >= 2:
+            for field, ann, lineno in fields:
+                if self._annotation_scalar_names(ann) & WRAPPABLE_SCALARS:
+                    found.append(
+                        Violation(
+                            module.path(),
+                            lineno,
+                            "TB016",
+                            f"{module.name()}.{cls.name} field {field} is a bare primitive; "
+                            "a compound backs itself with child value objects",
+                        )
+                    )
+        return tuple(found)
+
+    def _door_violations(self, module: Module, cls: ast.ClassDef) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for item in cls.body:
+            if not isinstance(item, ast.FunctionDef):
+                continue
+            decorators = {
+                target.id
+                for decorator in item.decorator_list
+                if isinstance(target := (decorator.func if isinstance(decorator, ast.Call) else decorator), ast.Name)
+            }
+            if not decorators & {"classmethod", "staticmethod"}:
+                continue
+            produced: frozenset[str] = frozenset()
+            if item.returns is not None:
+                produced = frozenset(
+                    name for name, _ in self._produced_names(module, item.returns)
+                )
+            second_door = bool(produced & {cls.name, "Self"})
+            if not produced and self._constructs_own_type(item, cls.name):
+                second_door = True
+            if second_door:
+                found.append(
+                    Violation(
+                        module.path(),
+                        item.lineno,
+                        "TB017",
+                        f"{module.name()}.{cls.name}.{item.name} is a second construction door; "
+                        "a value object has one door — its own __init__",
+                    )
+                )
+        return tuple(found)
+
+    @staticmethod
+    def _constructs_own_type(fn: ast.FunctionDef, own: str) -> bool:
+        for node in ast.walk(fn):
+            if not isinstance(node, ast.Call):
+                continue
+            callee = node.func
+            if isinstance(callee, ast.Name) and callee.id in ("cls", own):
+                return True
+        return False
+
+    def _produced_names(
+        self, module: Module, root: ast.expr
+    ) -> list[tuple[str, ast.expr]]:
+        produced: list[tuple[str, ast.expr]] = []
+        stack: list[ast.expr] = [root]
+        while stack:
+            node = stack.pop()
+            if isinstance(node, ast.Subscript):
+                head = self._annotation_head(node.value)
+                if head in ("type", "Type", "Callable"):
+                    continue
+                stack.append(node.slice)
+                continue
+            if isinstance(node, ast.Constant):
+                if isinstance(node.value, str):
+                    try:
+                        parsed = ast.parse(node.value, mode="eval")
+                    except SyntaxError:
+                        continue
+                    if not isinstance(parsed.body, ast.Constant):
+                        stack.append(parsed.body)
+                continue
+            if isinstance(node, ast.Attribute):
+                produced.append((node.attr, node))
+                continue
+            if isinstance(node, ast.Name):
+                produced.append((node.id, node))
+                continue
+            stack.extend(
+                child
+                for child in ast.iter_child_nodes(node)
+                if isinstance(child, ast.expr)
+            )
+        return produced
+
+    def _exit_violations(
+        self,
+        module: Module,
+        cls: ast.ClassDef,
+        leaf: str | None,
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        conversions = [
+            item
+            for item in cls.body
+            if isinstance(item, ast.FunctionDef) and item.name in CONVERSION_DUNDERS
+        ]
+        if leaf is not None and leaf in WRAPPABLE_SCALARS:
+            expected = CANONICAL_EXIT[leaf]
+            helper = CANONICAL_HELPER.get(leaf)
+            for item in conversions:
+                if item.name != expected:
+                    found.append(
+                        Violation(
+                            module.path(),
+                            item.lineno,
+                            "TB015",
+                            f"{module.name()}.{cls.name}.{item.name} is a mismatched exit; "
+                            "a leaf defines exactly its backing type's conversion dunder",
+                        )
+                    )
+                elif helper is not None and not self._delegates_to(item, helper):
+                    found.append(
+                        Violation(
+                            module.path(),
+                            item.lineno,
+                            "TB018",
+                            f"{module.name()}.{cls.name}.{item.name} hand-rolls its exit; "
+                            "a canonical exit is a one-line delegation to its canonical_* policy",
+                        )
+                    )
+            return tuple(found)
+        for item in conversions:
+            found.append(
+                Violation(
+                    module.path(),
+                    item.lineno,
+                    "TB015",
+                    f"{module.name()}.{cls.name}.{item.name} is a primitive exit; "
+                    "a structured domain object has no primitive exit — "
+                    "decompose through leaf components",
+                )
+            )
+        return tuple(found)
+
+    def _structured_exit_violations(
+        self, module: Module, cls: ast.ClassDef
+    ) -> tuple[Violation, ...]:
+        return tuple(
+            Violation(
+                module.path(),
+                item.lineno,
+                "TB015",
+                f"{module.name()}.{cls.name}.{item.name} is a primitive exit; "
+                "a structured domain object has no primitive exit — "
+                "decompose through leaf components",
+            )
+            for item in cls.body
+            if isinstance(item, ast.FunctionDef) and item.name in CONVERSION_DUNDERS
+        )
+
+    def _copy_violations(
+        self,
+        module: Module,
+        cls: ast.ClassDef,
+        fields: list[tuple[str, ast.expr, int]],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        by_name = {name: ann for name, ann, _ in fields}
+        for item in cls.body:
+            if not isinstance(item, ast.FunctionDef) or item.name.startswith("_"):
+                continue
+            attr = self._bare_field_return(item)
+            if attr is None:
+                continue
+            returned = (
+                self._annotation_head(item.returns) if item.returns is not None else None
+            )
+            if returned is None and attr in by_name:
+                returned = self._annotation_head(by_name[attr])
+            if returned in MUTABLE_COLLECTIONS:
+                found.append(
+                    Violation(
+                        module.path(),
+                        item.lineno,
+                        "TB011",
+                        f"{module.name()}.{cls.name}.{item.name} hands back its backing collection; "
+                        "an accessor returns a defensive copy, never the backing store",
+                    )
+                )
+        return tuple(found)
+
+    def _held_root_violations(
+        self,
+        module: Module,
+        cls: ast.ClassDef,
+        fields: list[tuple[str, ast.expr, int]],
+        blocks: dict[tuple[str, str], str],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for field, ann, lineno in fields:
+            for node in ast.walk(ann):
+                if not isinstance(node, (ast.Name, ast.Attribute)):
+                    continue
+                key = module._resolve(node)
+                if key is None or key[1] == cls.name:
+                    continue
+                if blocks.get(key) == "aggregate":
+                    found.append(
+                        Violation(
+                            module.path(),
+                            lineno,
+                            "TB012",
+                            f"{module.name()}.{cls.name} field {field} holds another aggregate root; "
+                            "an aggregate is referenced by its ID value object, never held",
+                        )
+                    )
+        return tuple(found)
+
+    def _domain_return_violations(
+        self,
+        module: Module,
+        cls: ast.ClassDef,
+        blocks: dict[tuple[str, str], str],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for item in cls.body:
+            if not isinstance(item, ast.FunctionDef):
+                continue
+            if item.name in LANGUAGE_FIXED:
+                continue
+            if item.name.startswith("_") and item.name not in COMPARISON_DUNDERS:
+                continue
+            if item.returns is None:
+                continue
+            if isinstance(item.returns, ast.Constant) and item.returns.value is None:
+                continue
+            if self._bare_field_return(item) is not None:
+                continue
+            spec_return = False
+            offenders: list[str] = []
+            for name, node in self._produced_names(module, item.returns):
+                if name in RETURN_WRAPPERS or name in SELF_NAMES or name == cls.name:
+                    continue
+                key = module._resolve(node)
+                if key is not None and blocks.get(key) == "spec":
+                    spec_return = True
+                    continue
+                if key is not None and blocks.get(key) in DOMAIN_BLOCKS:
+                    continue
+                offenders.append(name)
+            if spec_return:
+                found.append(
+                    Violation(
+                        module.path(),
+                        item.lineno,
+                        "TB015",
+                        f"{module.name()}.{cls.name}.{item.name} returns a spec; "
+                        "a domain object never serializes itself — "
+                        "a spec is construction data, not an exit",
+                    )
+                )
+            if offenders:
+                named = ", ".join(sorted(set(offenders)))
+                found.append(
+                    Violation(
+                        module.path(),
+                        item.lineno,
+                        "TB019",
+                        f"{module.name()}.{cls.name}.{item.name} returns {named}; "
+                        "a domain object's public behavior hands back domain objects — "
+                        "the licensed exits are the protocol dunders, the canonical exit, "
+                        "and a -> None transition",
+                    )
+                )
+        return tuple(found)
+
+    @staticmethod
+    def _declared_fields(cls: ast.ClassDef) -> list[tuple[str, ast.expr, int]]:
+        return [
+            (stmt.target.id, stmt.annotation, stmt.lineno)
+            for stmt in cls.body
+            if isinstance(stmt, ast.AnnAssign)
+            and isinstance(stmt.target, ast.Name)
+            and Codebase._annotation_head(stmt.annotation) != "ClassVar"
+        ]
+
+    def _leaf_scalar(self, fields: list[tuple[str, ast.expr, int]]) -> str | None:
+        if len(fields) != 1:
+            return None
+        head = self._annotation_head(fields[0][1])
+        if head in WRAPPABLE_SCALARS or head in NON_WRAPPABLE_SCALARS:
+            return head
+        return None
+
+    def _annotation_scalar_names(
+        self, node: ast.expr, keep_all: bool = False
+    ) -> frozenset[str]:
+        names: set[str] = set()
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.Name):
+                names.add(sub.id)
+            elif isinstance(sub, ast.Attribute):
+                names.add(sub.attr)
+            elif isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+                try:
+                    parsed = ast.parse(sub.value, mode="eval")
+                except SyntaxError:
+                    continue
+                if not isinstance(parsed.body, ast.Constant):
+                    names |= self._annotation_scalar_names(parsed.body, keep_all=keep_all)
+        if keep_all:
+            return frozenset(names)
+        return frozenset(names - RETURN_WRAPPERS - SELF_NAMES)
+
+    @staticmethod
+    def _bare_field_return(fn: ast.FunctionDef) -> str | None:
+        if len(fn.body) != 1 or not isinstance(fn.body[0], ast.Return):
+            return None
+        value = fn.body[0].value
+        if (
+            isinstance(value, ast.Attribute)
+            and isinstance(value.value, ast.Name)
+            and value.value.id == "self"
+        ):
+            return value.attr
+        return None
+
+    @staticmethod
+    def _delegates_to(fn: ast.FunctionDef, helper: str) -> bool:
+        if len(fn.body) != 1 or not isinstance(fn.body[0], ast.Return):
+            return False
+        value = fn.body[0].value
+        if not isinstance(value, ast.Call) or len(value.args) != 1:
+            return False
+        callee = value.func
+        named = (
+            callee.id
+            if isinstance(callee, ast.Name)
+            else callee.attr if isinstance(callee, ast.Attribute) else None
+        )
+        return (
+            named == helper
+            and isinstance(value.args[0], ast.Attribute)
+            and isinstance(value.args[0].value, ast.Name)
+            and value.args[0].value.id == "self"
+        )
 
     @staticmethod
     def _is_bare_string(node: ast.AST) -> TypeGuard[ast.Expr]:
@@ -1374,8 +1946,8 @@ class Codebase(ts.AggregateRoot):
             )
         )
         for edge in module.import_edges():
-            target = edge.target()
-            lineno = edge.lineno()
+            target = str(edge._target)
+            lineno = int(edge._lineno)
             head = target.split(".")[0]
             if head in contexts:
                 found.append(
@@ -1514,8 +2086,8 @@ class Codebase(ts.AggregateRoot):
             )
         )
         for edge in module.import_edges():
-            target = edge.target()
-            lineno = edge.lineno()
+            target = str(edge._target)
+            lineno = int(edge._lineno)
             pieces = target.split(".")
             if pieces[0] == TESSER:
                 continue
@@ -1583,8 +2155,8 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for edge in module.import_edges():
-            target = edge.target()
-            lineno = edge.lineno()
+            target = str(edge._target)
+            lineno = int(edge._lineno)
             pieces = target.split(".")
             tail = pieces[1] if len(pieces) > 1 else ""
             if pieces[0] in contexts:
@@ -1652,8 +2224,8 @@ class Codebase(ts.AggregateRoot):
         found: list[Violation] = []
         if tier == SRV_TIER:
             for edge in module.import_edges():
-                target = edge.target()
-                lineno = edge.lineno()
+                target = str(edge._target)
+                lineno = int(edge._lineno)
                 pieces = target.split(".")
                 if pieces[0] not in contexts:
                     continue
@@ -1681,8 +2253,8 @@ class Codebase(ts.AggregateRoot):
             own_roles = ", ".join((f"{home[0]}.{home[1]}", *reach))
         foreign_roles = ", ".join(foreign)
         for edge in module.import_edges():
-            target = edge.target()
-            lineno = edge.lineno()
+            target = str(edge._target)
+            lineno = int(edge._lineno)
             pieces = target.split(".")
             if pieces[0] == TESSER or pieces[0] not in contexts:
                 continue
@@ -1764,7 +2336,7 @@ class Codebase(ts.AggregateRoot):
         if placement is not None:
             found.extend(self._test_placement_violations(module, placement[0], placement[1], contexts))
         for edge in module.import_edges():
-            if edge.target().split(".")[0] in contexts:
+            if str(edge._target).split(".")[0] in contexts:
                 found.extend(self._form_violations(module, edge))
         found.extend(
             self._tesser_import_violations(
@@ -2111,7 +2683,7 @@ class Codebase(ts.AggregateRoot):
                     if key in blocks:
                         continue
                     for base in cls.bases:
-                        base_key = module.resolve(base)
+                        base_key = module._resolve(base)
                         if base_key is not None and base_key in blocks:
                             blocks[key] = blocks[base_key]
                             changed = True
@@ -2344,9 +2916,9 @@ class Codebase(ts.AggregateRoot):
 
     @staticmethod
     def _form_violations(module: Module, edge: ImportEdge) -> tuple[Violation, ...]:
-        target = edge.target()
-        lineno = edge.lineno()
-        if edge.member_form():
+        target = str(edge._target)
+        lineno = int(edge._lineno)
+        if str(edge._form) == "member":
             return (
                 Violation(
                     module.path(),
@@ -2356,7 +2928,7 @@ class Codebase(ts.AggregateRoot):
                     "a context module is imported as an aliased module, never its members",
                 ),
             )
-        if not edge.aliased():
+        if str(edge._form) == "bare":
             return (
                 Violation(
                     module.path(),
@@ -2380,7 +2952,7 @@ class Codebase(ts.AggregateRoot):
     @staticmethod
     def _declared(module: Module, node: ast.ClassDef | ast.FunctionDef, kind: str) -> bool:
         for decorator in node.decorator_list:
-            key = module.resolve(decorator)
+            key = module._resolve(decorator)
             if key is not None and TESSER_DECORATORS.get(key) == kind:
                 return True
         return False
@@ -2394,7 +2966,7 @@ class Codebase(ts.AggregateRoot):
     def _base_keys(module: Module, cls: ast.ClassDef) -> tuple[tuple[str, str], ...]:
         found: list[tuple[str, str]] = []
         for base in cls.bases:
-            key = module.resolve(base)
+            key = module._resolve(base)
             if key is not None:
                 found.append(key)
         return tuple(found)
@@ -2409,7 +2981,7 @@ class Codebase(ts.AggregateRoot):
             return None
         for sub in ast.walk(node):
             if isinstance(sub, (ast.Name, ast.Attribute)):
-                key = module.resolve(sub)
+                key = module._resolve(sub)
                 if key is not None and blocks.get(key) in DOMAIN_BLOCKS:
                     return blocks[key]
         return None
@@ -2441,7 +3013,7 @@ class Codebase(ts.AggregateRoot):
                     self._allowed_annotation(module, element, blocks, allowed_blocks) for element in elements
                 )
             return False
-        key = module.resolve(node)
+        key = module._resolve(node)
         return key is not None and blocks.get(key) in allowed_blocks
 
     def _annotation_block(
@@ -2452,7 +3024,7 @@ class Codebase(ts.AggregateRoot):
     ) -> str | None:
         if node is None:
             return None
-        key = module.resolve(node)
+        key = module._resolve(node)
         if key is None:
             return None
         return blocks.get(key)

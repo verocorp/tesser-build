@@ -310,7 +310,28 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   fixture-param finding lands on the def line python-app's four markers
   sit on, so the markers are load-bearing again and the four TB090
   baseline entries burned off (ratchet 152 → 148).
-- [ ] **Shells-substrate re-derivation ruling for the remaining tessercheck
+- [x] **Shells-substrate re-derivation ruling — RESOLVED by Chris ruling
+  2026-08-12: "value objects only return other value objects", no tooling
+  exemption.** Landed in the shell-norms wave: TB010–TB012 and TB015–TB019
+  enforce on every ts.* tree; the analyzer's own Violation decomposed into
+  Path/Line/Code/Text leaf VOs with canonical_str/canonical_int policy
+  exits, the finding renderer moved from Violation.__str__ (a banned
+  compound exit) to the application service composing from leaves, internal
+  records (ImportEdge/TesserImport/Ignore/Comment) wrapped their slots and
+  dropped their public accessors (same-module attribute reads — the rules
+  judge public surface, and nothing outside the domain touches them), and
+  spike-llmport's Booking exposes Step/CustomerName/Slot leaves with the
+  ""-for-None mapping at the views boundary. Entity BARE field accessors
+  (Module.name() -> str) remain unjudged — the reference analyzer had the
+  same carve-out (bare returns route to TB010/TB011, which are VO/mutable
+  scoped); if the ruling should reach those too, that is a new rule, not
+  this port. TB031 still carries separately. One reference shape is NOT
+  ported and is named debt: TB015's emit-a-sink half (a public `-> None`
+  method streaming private fields into a sink parameter — the reference's
+  `_emits_private_field`); the port covers the spec-return and
+  conversion-dunder halves. Port it or rule it out of contract when the
+  serialization norm gets its shells re-derivation pass.
+- [ ] (superseded — kept for the original framing) **the remaining tessercheck
   ports** (opened 2026-08-12, ports wave — blocks merge-plan PR 3b).
   TB010–TB012, TB015–TB018, and TB019 were derived on the frozen-dataclass
   substrate, and their core terms do not transfer to the shell idiom
@@ -329,6 +350,26 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   bury the decision under a pile of inline opt-outs. TB031's tree-scope
   contract (`testdata/tb031/`) carries over unchanged whenever its
   implementation lands.
+
+- [ ] **The final coupled wave: tree migrations + legacy deletion + the
+  docs sweep** (scoped 2026-08-12 after the shell-norms wave; deferred
+  together per Chris — "leave skill docs for later"). These cannot land
+  separately: `skills/tesser-build/python.md` teaches from
+  `examples/python` (9 path references), `serialization.md` from
+  `examples/serdepy`, and migrating the trees to shells while their
+  teaching docs still show the frozen-dataclass idiom breaks the
+  docs↔example sync (and the roadmap living-surface link gate).
+  Contents, in order: (1) migrate `examples/python`, `serdepy`,
+  `errorspy` (and rule whether `examples/python`'s catalog/campaign
+  frozen-dataclass example survives at all now that spike-shells and
+  python-app are the canonical shell examples); (2) delete
+  `tessercheck-py-legacy/` + its verify tree + CI job; (3) rework
+  `roadmap/generate.py`'s py_checks registry import (it reads the legacy
+  `CHECKS`; the new analyzer's registry is RULES.md); (4) the skill-docs
+  sweep (python.md onto shells, srv/wire vocabulary graduation from the
+  earlier TODOS item, coverage.md rows, comments.md/serialization.md/
+  testing.md path retargets) with the `rationale/coverage.md` walk and
+  the `skill-version` bump; (5) CLAUDE.md's convention section rewrite.
 
 ## Toolkit
 

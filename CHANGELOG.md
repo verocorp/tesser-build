@@ -5,6 +5,38 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.25.0] - 2026-08-12
+
+The seven shape norms land on shells, under the ruling: value objects only
+return other value objects — no tooling exemption. The analyzer now
+enforces the full identity-and-serialization taxonomy on every `ts.*` tree,
+itself included.
+
+### Added
+
+- **TB010** (a value object hides its representation), **TB011** (an
+  accessor never hands back the backing collection), **TB012** (an
+  aggregate is referenced by ID, never held), **TB015** (no spec-returning
+  method; a leaf defines exactly its backing type's conversion dunder; a
+  structured domain object has no primitive exit), **TB016** (bool/complex
+  are not value-object material at any field count; a compound backs
+  itself with child value objects), **TB017** (one construction door —
+  `Self`, quoted, and unannotated factories included), **TB018** (a
+  canonical exit is a one-line delegation to its `canonical_*` policy,
+  module-qualified delegation accepted), **TB019** (a domain object's
+  public behavior hands back domain objects; quoted annotations are no
+  escape; the six comparison dunders are genuinely in scope).
+
+### Changed
+
+- The analyzer conforms to its own norms: `Violation` decomposes into
+  `Path`/`Line`/`Code`/`Text` leaves with canonical policy exits, the
+  finding renderer moves from the (banned) compound `__str__` into the
+  application service, and the internal records model their former bool
+  pairs as validated three-valued form leaves.
+- spike-llmport's `Booking` exposes its `Step`/`CustomerName`/`Slot`
+  leaves instead of label strings, with the boundary mapping in views.
+
 ## [0.0.24.0] - 2026-08-12
 
 python-app reaches zero findings and the last ratchet retires — every

@@ -49,17 +49,17 @@ class BookingService(ts.ApplicationService):
         booking = views.loaded(self._repository.get(request.booking_id))
         booking.choose_slot(domain.Slot(request.slot))
         self._repository.save(request.booking_id, views.parts_of(booking))
-        return views.state(booking, f"slot {booking.slot_label()} selected; ask the caller to confirm")
+        return views.state(booking, f"slot {booking.chosen()} selected; ask the caller to confirm")
 
     def confirm(self, request: client.ConfirmBookingRequest) -> client.BookingStateResponse:
         stored = self._repository.get(request.booking_id)
         booking = views.loaded(stored)
         booking.confirm()
-        match self._directory.reserve(booking.slot_label(), booking.name_label()):
+        match self._directory.reserve(str(booking.chosen()), str(booking.name())):
             case parts.Reserved():
-                settled, reply = booking, f"booked {booking.slot_label()} for {booking.name_label()}"
+                settled, reply = booking, f"booked {booking.chosen()} for {booking.name()}"
             case parts.SlotTaken(available=fresh):
-                settled, reply = views.reoffered(stored, fresh), f"{booking.slot_label()} was just taken; offer the caller the updated slots"
+                settled, reply = views.reoffered(stored, fresh), f"{booking.chosen()} was just taken; offer the caller the updated slots"
         self._repository.save(request.booking_id, views.parts_of(settled))
         return views.state(settled, reply)
 
