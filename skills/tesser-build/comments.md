@@ -87,7 +87,7 @@ type, not a test, not a doc. Each carve-out lands in this file with:
 2. the **principle** (the rule that makes it recognizable next time),
 3. the **enforcement update** (the checkers' exemption ledgers extended in
    the same change — `passes/comments/` and
-   `tessercheck-py/tessercheck/comments_check.py`).
+   `tessercheck-py-legacy/tessercheck/comments_check.py`).
 
 Until a case is in this file, it is not an exception. `# tessercheck:ignore`
 / `//nolint:comments` exist for the one-off emergency; a suppression that
