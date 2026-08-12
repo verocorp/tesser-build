@@ -1,6 +1,8 @@
 import os
 import sys
 
+collect_ignore_glob = ["testdata/*", "testdata/**/*"]
+
 _root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _root)
 for _rel in (("..",), ("..", ".."), ("..", "..", "..")):

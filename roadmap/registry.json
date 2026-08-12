@@ -16,7 +16,8 @@
       "python.md": "language guide (Python rendering of every component), cross-cutting by construction — no single row owns it"
     },
     "py_checks": {
-      "TB033": "language-level correctness, not a construction convention — it flags a builtin name bound and CALLED in one scope, which is a latent TypeError/UnboundLocalError rather than a rule anyone is taught. It has no skill doc because there is no convention to teach beyond 'do not write a crash', and no component or norm row owns it: the same bug is equally wrong in a value object, a handler, and a test. Ruled 2026-07-26 as the collision shape specifically, NOT the name-based ban (ruff A001/A002 already does that one, and on this repo it flags a BaseHTTPRequestHandler.log_message override whose signature the stdlib fixes)."
+      "TB033": "language-level correctness, not a construction convention — it flags a builtin name bound and CALLED in one scope, which is a latent TypeError/UnboundLocalError rather than a rule anyone is taught. It has no skill doc because there is no convention to teach beyond 'do not write a crash', and no component or norm row owns it: the same bug is equally wrong in a value object, a handler, and a test. Ruled 2026-07-26 as the collision shape specifically, NOT the name-based ban (ruff A001/A002 already does that one, and on this repo it flags a BaseHTTPRequestHandler.log_message override whose signature the stdlib fixes).",
+      "TB090": "the analyzer's own suppression hygiene, not a taught convention — it flags a tessercheck:ignore that suppresses nothing (stale or mistyped), so the opt-out ledger can never rot silently. No component or norm row owns it because it governs the tool's markers, not application code; it is also the one code an ignore cannot suppress."
     }
   },
   "rows": [
@@ -44,11 +45,10 @@
         "comparability"
       ],
       "py_checks": [
-        "TB001",
         "TB002",
-        "TB003",
         "TB004",
-        "TB010"
+        "TB010",
+        "TB080"
       ],
       "rationale": [
         "rationale/*_test.go"
@@ -65,10 +65,7 @@
         "examples/ddd"
       ],
       "go_analyzers": [],
-      "py_checks": [
-        "TB013",
-        "TB014"
-      ],
+      "py_checks": [],
       "rationale": []
     },
     {
@@ -110,7 +107,10 @@
         "examples/lending"
       ],
       "go_analyzers": [],
-      "py_checks": [],
+      "py_checks": [
+        "TB081",
+        "TB082"
+      ],
       "rationale": [
         "rationale/changeability/nooutward/*_test.go"
       ]
@@ -255,6 +255,14 @@
       "key": "map",
       "title": "The map",
       "skill": "map.md",
+      "py_checks": [
+        "TB040",
+        "TB041",
+        "TB042",
+        "TB043",
+        "TB051",
+        "TB052"
+      ],
       "rationale": []
     },
     {
@@ -289,7 +297,10 @@
       "rationale": [],
       "py_checks": [
         "TB030",
-        "TB032"
+        "TB070",
+        "TB071",
+        "TB072",
+        "TB073"
       ]
     },
     {
@@ -367,7 +378,15 @@
       "py_example": [],
       "go_example": [],
       "go_analyzers": [],
-      "py_checks": [],
+      "py_checks": [
+        "TB050",
+        "TB053",
+        "TB060",
+        "TB061",
+        "TB062",
+        "TB063",
+        "TB064"
+      ],
       "rationale": []
     },
     {

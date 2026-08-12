@@ -9,11 +9,11 @@ Legend: ✅ done · 🟡 partial · ❌ absent · — intentionally n/a.
 
 | Row | Py example | Go example | Skill doc | Checker | Rationale |
 |---|---|---|---|---|---|
-| Value objects | ✅ | ✅ | ✅ | ✅ 7 Go + 5 Py | ✅ |
-| Entities | ✅ | ✅ | ✅ | 🟡 Py only (TB013, TB014) | ❌ |
+| Value objects | ✅ | ✅ | ✅ | ✅ 7 Go + 4 Py | ✅ |
+| Entities | ✅ | ✅ | ✅ | ❌ | ❌ |
 | Aggregates | ✅ | ✅ | ✅ | 🟡 Py only (TB011, TB012) | ❌ |
 | Domain services | ❌ | ❌ | 🟡 stub | ❌ | ❌ |
-| Application services | ✅ | ✅ | ✅ | ❌ | 🟡 D3 (no outward representation) won; D1 (app-SRP) pending |
+| Application services | ✅ | ✅ | ✅ | 🟡 Py only (TB081, TB082) | 🟡 D3 (no outward representation) won; D1 (app-SRP) pending |
 | Public interface | ✅ | 🟡 v3 single-main shape; settled anatomy's Go mirror (examples/app) pending | ✅ | 🟡 in-example | ✅ |
 | Handlers | ✅ | 🟡 v3 transport/ shape; adapters/handlers layout pending the Go mirror | ✅ | 🟡 in-example | ❌ |
 | Gateway: repository | ✅ | ✅ | ✅ | ❌ | ❌ D4 (repo speaks domain objects) pending |
@@ -22,15 +22,15 @@ Legend: ✅ done · 🟡 partial · ❌ absent · — intentionally n/a.
 | Context wiring | ✅ | ❌ | ✅ | 🟡 in-example | ❌ |
 | bootstrap + app config + lifecycle | ✅ | ❌ | ✅ | 🟡 in-example | ❌ |
 | srv hosts | ✅ | ❌ | ✅ | 🟡 in-example | ❌ |
-| The map | — | — | ✅ | — | ❌ |
+| The map | — | — | ✅ | 🟡 Py only (TB040, TB041, TB042, TB043, TB051, TB052) | ❌ |
 | Strategic design | — | — | ✅ | — | ❌ |
 | Norm: errors | ✅ | ❌ | ❌ | 🟡 in-example | ❌ the errorspy example matrix is the proof; no changeability contender |
-| Norm: testing | ❌ | ❌ | 🟡 partial | 🟡 Py only (TB030, TB032) | ❌ |
+| Norm: testing | ❌ | ❌ | 🟡 partial | 🟡 Py only (TB030, TB070, TB071, TB072, TB073) | ❌ |
 | Norm: comments | ✅ | ✅ | ✅ | ✅ 1 Go + 1 Py | ❌ |
 | Norm: serialization | ✅ | ❌ | ✅ | 🟡 Py only (TB015, TB016, TB017, TB018) | ❌ |
 | Norm: domain return | ✅ | ❌ | ✅ | 🟡 Py only (TB019) | ❌ |
 | Norm: logging | ❌ | ❌ | 🟡 stub | ❌ | ❌ |
-| Norm: imports | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Norm: imports | ❌ | ❌ | ❌ | 🟡 Py only (TB050, TB053, TB060, TB061, TB062, TB063, TB064) | ❌ |
 
 ## Pay-now rules
 
