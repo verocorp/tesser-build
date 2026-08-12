@@ -34,6 +34,12 @@ them.
 > structural typing vs Go's struct embedding, the absence of
 > `context.Context` — it is called out inline.
 
+(One transcription note: the excerpts below drop the inline
+`# tessercheck:ignore TB062` markers the verified files carry on their
+`errors`/`serialization` imports — app-level policy modules sit outside the
+pure-core allowlist pending its ruling, and each such import is opted out at
+its site. Copy the marker with the import.)
+
 **What the shell buys, once.** `ts.ValueObject` owns immutability and value
 equality at runtime: assignment and deletion raise, `__eq__`/`__hash__`
 compare by type and content, and a subclass that tries to override
@@ -196,9 +202,15 @@ the one validating door.
 class Labels(ts.ValueObject):
 
     def __init__(self, values: tuple[tuple[str, str], ...]) -> None:
-        for key, _ in values:
+        seen: set[str] = set()
+        for key, value in values:
             if not key:
                 raise invalid("invalid_label", "label key must not be empty")
+            if not value:
+                raise invalid("invalid_label", f"label {key!r} carries an empty value")
+            if key in seen:
+                raise invalid("invalid_label", f"label {key!r} appears twice")
+            seen.add(key)
         object.__setattr__(self, "_values", tuple(sorted(values)))   # canonicalize at the one door
 
     def get(self, key: str) -> LabelValue | None:   # entries come back as VOs
@@ -302,6 +314,8 @@ class ShortLink(ts.Entity):
     @property
     def identity(self) -> values.Slug:                     # the base compares and hashes by this
         return self._slug
+
+    def _clone(self) -> "ShortLink": ...                   # the aggregate's defensive copy-out
 ```
 
 - Fields are value objects, never raw primitives; underscore-private with
@@ -387,6 +401,7 @@ class CampaignRepository(ts.Port, Protocol):
     def find(self, id: str) -> cparts.FoundCampaign | cparts.MissingCampaign: ...
 
     def slug_taken(self, slug: str) -> bool: ...
+    ...                                                # find_by_slug, all — elided
 
 
 class TargetPolicy(ts.Port, Protocol):
@@ -432,18 +447,29 @@ repo-private record suffices — is the serialization norm
 (`serialization.md` rules 6-8).
 
 ```python
-# campaign/adapters/gateways/repo_memory.py (verified impl)
+# campaign/adapters/gateways/repo_memory.py (verified impl; the down-guard
+# lines that simulate an unavailable store are elided)
 class InMemoryCampaignRepository(ts.Repository):
 
-    def __init__(self) -> None:
-        self._rows: dict[str, cparts.CampaignParts] = {}
+    def __init__(self, *, down: bool = False) -> None:
+        self._rows: dict[str, parts.CampaignParts] = {}
+        ...
 
-    def save(self, parts: cparts.CampaignParts) -> None:   # parts in — never the root itself
+    def save(self, parts: parts.CampaignParts) -> None:    # parts in — never the root itself
+        ...
         self._rows[parts.id] = parts
 
-    def find(self, id: str) -> cparts.FoundCampaign | cparts.MissingCampaign:
+    def find(self, id: str) -> parts.FoundCampaign | parts.MissingCampaign:
+        ...
         row = self._rows.get(id)
-        return cparts.FoundCampaign(parts=row) if row is not None else cparts.MissingCampaign()
+        return parts.MissingCampaign() if row is None else parts.FoundCampaign(parts=row)
+
+    def find_by_slug(self, slug: str) -> parts.FoundCampaign | parts.MissingCampaign: ...
+    def slug_taken(self, slug: str) -> bool: ...
+    def all(self) -> tuple[parts.CampaignParts, ...]: ...
+
+    def close(self) -> None:                               # the repo doubles as its Closeable
+        ...
 ```
 
 - **The adapter speaks records** (TB081): parts and primitives cross the
@@ -483,6 +509,7 @@ class CampaignView(ts.Response):
 class Client(ts.Client, Protocol):
     def create_campaign(self, req: CreateCampaignRequest) -> CampaignView: ...
     def resolve(self, req: ResolveRequest) -> ResolveResponse: ...
+    ...                                     # add_link, deactivate_link, get_campaign, list_links
 ```
 
 Because `Client` is a `Protocol`, any object whose methods match satisfies
@@ -522,15 +549,19 @@ def build(cfg: config.Config, policy: service.TargetPolicy) -> tuple[client.Clie
 
 # bootstrap/bootstrap.py (verified impl) — new(cfg): build ONCE, in dependency order
 @ts.function
-def new(cfg: config.Config) -> App:
+def new(cfg: Config) -> App:
     stack = CleanupStack()
     try:
         policy_client, policy_closeable = linkpolicy_wire.build(cfg.linkpolicy)
         stack.push(policy_closeable)
+
         policy = target_policy.LinkPolicyTargetPolicy(policy_client)   # cross-context adapter:
-        campaign_client, c_closeable = campaign_wire.build(cfg.campaign, policy)
-        stack.push(c_closeable)                                        # built HERE, injected
-        return App(campaign_client, policy_client, stack)              # App owns close()
+        campaign_client, campaign_closeable = campaign_wire.build(cfg.campaign, policy)
+        stack.push(campaign_closeable)                                 # built HERE, injected
+
+        reports_client, reports_closeable = reports_wire.build(cfg.reports, campaign_client, policy_client)
+        stack.push(reports_closeable)
+        return App(campaign_client, policy_client, reports_client, stack)   # App owns close()
     except Exception:
         stack.close_all()      # partial construction unwinds — no leaked pools
         raise
@@ -669,6 +700,8 @@ def routes_for(app: App) -> tuple[Route, ...]:
     reports = reports_http.Handler(app.reports)   # built once from the single App
     return (
         Route("POST", "/campaigns", campaign.create_campaign),
+        Route("POST", "/links", campaign.add_link),
+        Route("POST", "/links/deactivate", campaign.deactivate_link),
         Route("GET", "/campaigns/{campaign_id}", campaign.get_campaign),
         Route("GET", "/r/{slug}", campaign.resolve),
         Route("GET", "/reports/links-by-verdict", reports.links_by_verdict),
@@ -680,8 +713,9 @@ def routes_for(app: App) -> tuple[Route, ...]:
                 found = match(routes, method, self.path)     # router: URL knowledge lives there
                 if found is None:
                     return HttpResponse.problem(404, "not_found", "unknown route")
-                headers = {name.lower(): value for name, value in self.headers.items()}
-                body = self.rfile.read(buffered_length(self.headers.items()))
+                declared = self.headers.items()
+                headers = {name.lower(): value for name, value in declared}
+                body = self.rfile.read(buffered_length(declared))
                 return found.endpoint(HttpRequest(
                     method=method, path=self.path,
                     path_params=found.path_params, query_params=found.query_params,
@@ -798,6 +832,6 @@ def test_campaign_links_are_defensive() -> None:
 - **Placement carries the tier** (`testing.md`): a sibling test lives inside
   the role it exercises (`campaign/domain/test_labels.py`), imports what its
   subject may import plus the subject itself; a test double is a hand-written
-  `@ts.fake` implementing the port or client it doubles, never a mocking
-  library (TB030); a builder is a `@ts.helper` that takes defaulted
+  `@ts.fake` implementing the port or client it doubles (TB072), never a
+  mocking library (TB030); a builder is a `@ts.helper` that takes defaulted
   primitives and returns a spec.

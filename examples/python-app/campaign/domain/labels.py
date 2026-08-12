@@ -22,9 +22,15 @@ class LabelValue(ts.ValueObject):
 class Labels(ts.ValueObject):
 
     def __init__(self, values: tuple[tuple[str, str], ...]) -> None:
-        for key, _ in values:
+        seen: set[str] = set()
+        for key, value in values:
             if not key:
                 raise invalid("invalid_label", "label key must not be empty")
+            if not value:
+                raise invalid("invalid_label", f"label {key!r} carries an empty value")
+            if key in seen:
+                raise invalid("invalid_label", f"label {key!r} appears twice")
+            seen.add(key)
         object.__setattr__(self, "_values", tuple(sorted(values)))
 
     def get(self, key: str) -> LabelValue | None:

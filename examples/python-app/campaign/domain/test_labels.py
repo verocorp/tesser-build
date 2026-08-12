@@ -24,7 +24,14 @@ def test_labels_reject_empty_keys_and_values() -> None:
     with pytest.raises(DomainError):
         labels.Labels((("", "prod"),))
     with pytest.raises(DomainError):
+        labels.Labels((("env", ""),))
+    with pytest.raises(DomainError):
         labels.LabelValue("")
+
+
+def test_labels_reject_a_duplicate_key() -> None:
+    with pytest.raises(DomainError):
+        labels.Labels((("env", "prod"), ("env", "dev")))
 
 
 def test_labels_length_counts_entries() -> None:
