@@ -5,20 +5,20 @@ from decimal import Decimal
 
 import pytest
 
-from parcel import DeclaredValue, ScannedAt
+import parcel.domain.parcel as parcel
 from serialization import canonical_datetime, canonical_decimal
 
 
 def test_decimal_policy_is_the_string_form() -> None:
     assert canonical_decimal(Decimal("199.99")) == "199.99"
-    assert str(DeclaredValue("1.50")) == "1.50"
+    assert str(parcel.DeclaredValue("1.50")) == "1.50"
 
 
 def test_equal_decimals_may_have_distinct_canonical_forms() -> None:
-    a, b = DeclaredValue("1.5"), DeclaredValue("1.50")
+    a, b = parcel.DeclaredValue("1.5"), parcel.DeclaredValue("1.50")
     assert a == b
     assert str(a) != str(b)
-    assert DeclaredValue(str(a)) == DeclaredValue(str(b))
+    assert parcel.DeclaredValue(str(a)) == parcel.DeclaredValue(str(b))
 
 
 def test_datetime_policy_is_aware_utc_iso8601_microseconds() -> None:
@@ -34,4 +34,4 @@ def test_datetime_policy_rejects_naive() -> None:
     with pytest.raises(ValueError, match="naive"):
         canonical_datetime(datetime(2026, 7, 20, 15, 0, 0))
     with pytest.raises(ValueError, match="timezone-aware"):
-        ScannedAt("2026-07-20T15:00:00")
+        parcel.ScannedAt("2026-07-20T15:00:00")

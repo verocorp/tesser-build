@@ -184,7 +184,7 @@ TEST_TIER_FOREIGN: Final[dict[str, tuple[str, ...]]] = {
 
 SRV_TIER: Final[str] = "srv"
 
-PRIMITIVES: Final[frozenset[str]] = frozenset({"str", "int", "float", "bool"})
+PRIMITIVES: Final[frozenset[str]] = frozenset({"str", "int", "float", "bool", "bytes"})
 
 TOOLING_MODULES: Final[frozenset[str]] = frozenset({"rules"})
 

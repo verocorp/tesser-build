@@ -2545,3 +2545,20 @@ def test_undeclared_backing_collection_is_still_caught(tmp_path: Path) -> None:
         "TB011" in f and "Sack.items hands back its backing collection" in f
         for f in findings
     )
+
+
+def test_bytes_is_construction_primitive(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/domain/digest.py",
+        "import tesser.domain as ts\n"
+        "class Digest(ts.ValueObject):\n"
+        "    _value: bytes\n"
+        "    def __init__(self, value: bytes) -> None:\n"
+        "        object.__setattr__(self, '_value', value)\n"
+        "    def __bytes__(self) -> bytes:\n"
+        "        return self._value\n",
+    )
+    findings = check_tree(tmp_path)
+    assert not any("parameter 'value' is not allowed" in f for f in findings)

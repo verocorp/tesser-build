@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from parcel import Parcel, ParcelSpec
-from parts import parcel_parts
-from wire import to_payload
+import parcel.adapters.wire as wire
+import parcel.application.parts as parts
+import parcel.domain.parcel as parcel
 
 
 def test_wire_golden_locks_the_payload_shape() -> None:
-    parcel = Parcel(
-        ParcelSpec(
+    built = parcel.Parcel(
+        parcel.ParcelSpec(
             code="PKG-2026-0042",
             items=3,
             weight_kg=21.5,
@@ -16,7 +16,7 @@ def test_wire_golden_locks_the_payload_shape() -> None:
             scanned_at="2026-07-20T10:16:15.123456-05:00",
         )
     )
-    assert to_payload(parcel_parts(parcel)) == {
+    assert wire.to_payload(parts.parcel_parts(built)) == {
         "parcelCode": "PKG-2026-0042",
         "itemCount": 3,
         "weightKg": 21.5,
