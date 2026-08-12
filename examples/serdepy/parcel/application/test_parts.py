@@ -48,8 +48,8 @@ def test_parts_record_is_total() -> None:
 
 
 def test_parts_module_never_touches_specs() -> None:
-    root = pathlib.Path(__file__).resolve().parent.parent
-    source = (root / "parcel" / "application" / "parts.py").read_text(encoding="utf-8")
+    here = pathlib.Path(__file__).resolve().parent
+    source = (here / "parts.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
     imported = {
         alias.name

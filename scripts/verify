@@ -51,7 +51,7 @@ run_spike_llmport() {
   step "tessercheck (zero findings over the whole tree)"
   PYTHONPATH=../../tessercheck-py:../../tesser-py python3 -m tessercheck . || return 1
   step "mypy --strict"
-  MYPYPATH=.:../../tesser-py mypy --strict scheduling protocol srv/voice/router.py tests || return 1
+  MYPYPATH=.:../../tesser-py mypy --strict scheduling protocol srv/voice/router.py || return 1
   step "pytest"
   pytest -q || return 1
 }
@@ -75,7 +75,7 @@ run_serdepy() {
   step "tessercheck (zero findings over the whole tree)"
   PYTHONPATH=../../tessercheck-py:../../tesser-py python3 -m tessercheck . || return 1
   step "mypy --strict"
-  MYPYPATH=.:../../tesser-py mypy --strict serialization.py conftest.py parcel tests || return 1
+  MYPYPATH=.:../../tesser-py mypy --strict serialization.py conftest.py parcel || return 1
   step "pytest"
   pytest -q || return 1
 }

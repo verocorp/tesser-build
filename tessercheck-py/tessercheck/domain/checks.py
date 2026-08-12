@@ -178,7 +178,7 @@ TEST_TIER_REACH: Final[dict[str, tuple[str, ...]]] = {
     "handlers": ("client",),
     "gateways": SAME_CONTEXT_IMPORTS["adapters"],
     "repositories": SAME_CONTEXT_IMPORTS["adapters"],
-    TESTS_ROLE: ROLES,
+    TESTS_ROLE: ROLES + (TESTS_ROLE,),
 }
 
 TEST_TIER_FOREIGN: Final[dict[str, tuple[str, ...]]] = {
@@ -197,9 +197,26 @@ PROTOCOL_TIER: Final[str] = "protocol"
 
 STRAY_TIER: Final[str] = "stray"
 
-PRIMITIVES: Final[frozenset[str]] = frozenset({"str", "int", "float", "bool", "bytes"})
+APP_TIER: Final[str] = "the root tests package"
 
-TOOLING_MODULES: Final[frozenset[str]] = frozenset({"rules"})
+SHELL_PACKAGES: Final[frozenset[str]] = frozenset({"srv", "bootstrap", "protocol", "tests"})
+
+TEST_TIER_SHELL: Final[dict[str, frozenset[str]]] = {
+    APP_TIER: frozenset({"srv", "bootstrap", "protocol", "tests"}),
+    SRV_TIER: frozenset({"srv", "bootstrap", "protocol"}),
+    BOOTSTRAP_TIER: frozenset({"bootstrap"}),
+    PROTOCOL_TIER: frozenset({"protocol"}),
+    "domain": frozenset(),
+    "application": frozenset(),
+    "client": frozenset(),
+    "wiring": frozenset(),
+    "handlers": frozenset({"protocol"}),
+    "gateways": frozenset({"protocol"}),
+    "repositories": frozenset({"protocol"}),
+    TESTS_ROLE: frozenset({"protocol"}),
+}
+
+PRIMITIVES: Final[frozenset[str]] = frozenset({"str", "int", "float", "bool", "bytes"})
 
 CORE_STDLIB: Final[dict[str, frozenset[str]]] = {
     "domain": frozenset(
@@ -815,7 +832,12 @@ class Codebase(ts.AggregateRoot):
         parts = module.name().split(".")
         basename = parts[-1]
         if basename == "conftest":
-            return ()
+            if len(parts) == 1:
+                return self._conftest_leaf_violations(module)
+            placement = self._test_tier(module, contexts)
+            if placement is None:
+                return self._conftest_leaf_violations(module)
+            return self._test_placement_violations(module, placement[0], placement[1], contexts)
         if basename.startswith("test_"):
             return self._test_module_violations(module, blocks, contexts)
         if basename.startswith(EVAL_PREFIX):
@@ -830,17 +852,17 @@ class Codebase(ts.AggregateRoot):
             )
             return body + self._app_import_violations(module, parts[0], contexts, blocks)
         if parts[0] == "tests":
-            return self._tests_package_violations(module)
+            return self._tests_package_violations(module, contexts)
         if parts[0] == PROTOCOL_PACKAGE:
             if module.is_package():
                 return self._protocol_init_violations(module)
             return self._protocol_module_violations(module, blocks, contexts)
         if parts[0] not in contexts:
-            return self._homeless_violations(module)
+            return self._homeless_violations(module) + self._root_leaf_violations(module)
         if len(parts) == 1:
             return self._context_init_violations(module)
         if basename == "__main__":
-            return ()
+            return self._main_violations(module, parts[0], contexts)
         if len(parts) >= 2 and parts[1] == TESTS_ROLE:
             if module.is_package():
                 return self._context_tests_init_violations(module)
@@ -901,8 +923,6 @@ class Codebase(ts.AggregateRoot):
         )
 
     def _homeless_violations(self, module: Module) -> tuple[Violation, ...]:
-        if module.name() in TOOLING_MODULES:
-            return ()
         return (
             Violation(
                 module.path(),
@@ -913,7 +933,79 @@ class Codebase(ts.AggregateRoot):
             ),
         )
 
-    def _tests_package_violations(self, module: Module) -> tuple[Violation, ...]:
+    def _tree_tops(self) -> frozenset[str]:
+        return frozenset(module.name().split(".")[0] for module in self._modules)
+
+    def _tree_edges(self, module: Module) -> tuple[tuple[str, int], ...]:
+        tops = self._tree_tops()
+        return tuple(
+            (str(edge._target), int(edge._lineno))
+            for edge in module.import_edges()
+            if str(edge._target).split(".")[0] in tops
+        )
+
+    def _conftest_leaf_violations(self, module: Module) -> tuple[Violation, ...]:
+        return tuple(
+            Violation(
+                module.path(),
+                lineno,
+                "TB065",
+                f"{module.name()} imports {target}; "
+                "a conftest is a leaf that imports nothing from its tree",
+            )
+            for target, lineno in self._tree_edges(module)
+        )
+
+    def _root_leaf_violations(self, module: Module) -> tuple[Violation, ...]:
+        return tuple(
+            Violation(
+                module.path(),
+                lineno,
+                "TB065",
+                f"{module.name()} imports {target}; "
+                "a root module is a leaf that imports nothing from its tree",
+            )
+            for target, lineno in self._tree_edges(module)
+        )
+
+    def _main_violations(
+        self,
+        module: Module,
+        context: str,
+        contexts: frozenset[str],
+    ) -> tuple[Violation, ...]:
+        tops = self._tree_tops()
+        found: list[Violation] = []
+        for edge in module.import_edges():
+            target = str(edge._target)
+            lineno = int(edge._lineno)
+            pieces = target.split(".")
+            if pieces[0] == TESSER or pieces[0] not in tops:
+                continue
+            tail = pieces[1] if len(pieces) > 1 else ""
+            if pieces[0] == context and tail in ("application", "adapters", "client", "wiring"):
+                continue
+            if pieces[0] not in contexts and pieces[0] not in APP_PACKAGES and pieces[0] not in (
+                PROTOCOL_PACKAGE,
+                TESTS_ROLE,
+            ):
+                continue
+            found.append(
+                Violation(
+                    module.path(),
+                    lineno,
+                    "TB063",
+                    f"{module.name()} imports {target}; a context __main__ composes from "
+                    "its own application, adapters, client, and wiring",
+                )
+            )
+        return tuple(found)
+
+    def _tests_package_violations(
+        self,
+        module: Module,
+        contexts: frozenset[str],
+    ) -> tuple[Violation, ...]:
         if len(module.name().split(".")) == 1:
             return tuple(
                 Violation(
@@ -933,7 +1025,7 @@ class Codebase(ts.AggregateRoot):
                 f"{module.name()} is neither a test module nor conftest; "
                 "a tests package holds only test modules and conftest",
             ),
-        )
+        ) + self._test_placement_violations(module, "", APP_TIER, contexts)
 
     def _context_tests_init_violations(self, module: Module) -> tuple[Violation, ...]:
         return tuple(
@@ -1105,8 +1197,6 @@ class Codebase(ts.AggregateRoot):
         return tuple(found)
 
     def _universal_violations(self, module: Module) -> tuple[Violation, ...]:
-        if module.name() in TOOLING_MODULES:
-            return ()
         found: list[Violation] = []
         found.extend(self._comment_violations(module))
         found.extend(self._double_violations(module))
@@ -1982,6 +2072,16 @@ class Codebase(ts.AggregateRoot):
                         "a protocol module never imports srv or bootstrap",
                     )
                 )
+            elif head != PROTOCOL_PACKAGE and head in self._tree_tops():
+                found.append(
+                    Violation(
+                        module.path(),
+                        lineno,
+                        "TB064",
+                        f"{module.name()} imports {target}; "
+                        "a protocol module imports nothing else from its tree",
+                    )
+                )
         for stmt in module.body():
             if isinstance(stmt, ast.ClassDef):
                 block = blocks.get((module.name(), stmt.name))
@@ -2157,6 +2257,18 @@ class Codebase(ts.AggregateRoot):
                         "import only their context, their tesser package, and the pure stdlib",
                     )
                 )
+            elif pieces[0] in SHELL_PACKAGES and not (
+                role == "adapters" and pieces[0] == PROTOCOL_PACKAGE
+            ):
+                found.append(
+                    Violation(
+                        module.path(),
+                        lineno,
+                        "TB066",
+                        f"{module.name()} imports {target}; of the app shell a context "
+                        "imports only protocol, and only from its adapters",
+                    )
+                )
         return tuple(found)
 
     def _app_import_violations(
@@ -2208,6 +2320,26 @@ class Codebase(ts.AggregateRoot):
                         f"{module.name()} imports {target}; the composition root never imports a host",
                     )
                 )
+            elif pieces[0] == TESTS_ROLE:
+                found.append(
+                    Violation(
+                        module.path(),
+                        lineno,
+                        "TB066",
+                        f"{module.name()} imports {target}; "
+                        "production code never imports the tests package",
+                    )
+                )
+            elif package == "bootstrap" and pieces[0] == PROTOCOL_PACKAGE:
+                found.append(
+                    Violation(
+                        module.path(),
+                        lineno,
+                        "TB066",
+                        f"{module.name()} imports {target}; "
+                        "bootstrap composes the application and never imports protocol",
+                    )
+                )
         return tuple(found)
 
     @staticmethod
@@ -2219,6 +2351,8 @@ class Codebase(ts.AggregateRoot):
             return ("", BOOTSTRAP_TIER)
         if parts[0] == PROTOCOL_PACKAGE and len(parts) >= 2:
             return ("", PROTOCOL_TIER)
+        if parts[0] == TESTS_ROLE and len(parts) >= 2:
+            return ("", APP_TIER)
         if len(parts) < 3 or parts[0] not in contexts:
             return None
         if parts[1] == TESTS_ROLE:
@@ -2230,6 +2364,27 @@ class Codebase(ts.AggregateRoot):
                 return (parts[0], parts[2])
             return (parts[0], STRAY_TIER)
         return (parts[0], parts[1])
+
+    def _shell_reach_violations(self, module: Module, tier: str) -> tuple[Violation, ...]:
+        allowed = TEST_TIER_SHELL[tier]
+        found: list[Violation] = []
+        for edge in module.import_edges():
+            target = str(edge._target)
+            lineno = int(edge._lineno)
+            top = target.split(".")[0]
+            if top not in SHELL_PACKAGES or top in allowed:
+                continue
+            found.append(
+                Violation(
+                    module.path(),
+                    lineno,
+                    "TB070",
+                    f"{module.name()} imports {target}, but a test placed in {tier} "
+                    "does not reach that package; "
+                    "a test reaches only what its placement allows",
+                )
+            )
+        return tuple(found)
 
     def _test_placement_violations(
         self,
@@ -2250,6 +2405,28 @@ class Codebase(ts.AggregateRoot):
                     "(handlers, gateways, repositories)",
                 ),
             )
+        found.extend(self._shell_reach_violations(module, tier))
+        if tier == APP_TIER:
+            for edge in module.import_edges():
+                target = str(edge._target)
+                lineno = int(edge._lineno)
+                pieces = target.split(".")
+                if pieces[0] not in contexts:
+                    continue
+                if len(pieces) >= 2 and pieces[1] in ("wiring", "client"):
+                    continue
+                found.append(
+                    Violation(
+                        module.path(),
+                        lineno,
+                        "TB070",
+                        f"{module.name()} imports {target}, but a test placed in "
+                        "the root tests package reaches a context only through its "
+                        "wiring and client; "
+                        "a test reaches only what its placement allows",
+                    )
+                )
+            return tuple(found)
         if tier == SRV_TIER:
             for edge in module.import_edges():
                 target = str(edge._target)

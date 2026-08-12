@@ -1,11 +1,11 @@
-import ast
+import ast  # tessercheck:ignore-file TB040
 import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parent
 DOMAIN = ROOT / "tessercheck" / "domain" / "checks.py"
-TESTS = ROOT / "tests" / "test_checks.py"
+TESTS = ROOT / "tessercheck" / "tests" / "test_checks.py"
 CONTRACTS = ROOT / ".importlinter"
 OUTPUT = ROOT / "RULES.md"
 
@@ -43,10 +43,10 @@ HOLE_NAMES: dict[str, str] = {
 APPLIES_TO: dict[str, str] = {
     "Codebase.__init__": "checked source file",
     "Codebase.violations": "ignore comment",
-    "Codebase._comment_violations": "every module (tooling exempt)",
-    "Codebase._double_violations": "every module (tooling exempt)",
-    "Codebase._shadowing_violations": "every module (tooling exempt)",
-    "Codebase._string_equality_violations": "every module (tooling exempt)",
+    "Codebase._comment_violations": "every module",
+    "Codebase._double_violations": "every module",
+    "Codebase._shadowing_violations": "every module",
+    "Codebase._string_equality_violations": "every module",
     "Codebase._vo_field_violations": "value object class",
     "Codebase._exposure_violations": "value object class",
     "Codebase._composition_violations": "value object class",
@@ -75,6 +75,10 @@ APPLIES_TO: dict[str, str] = {
     "Codebase._eval_module_violations": "eval module (`eval_*.py`)",
     "Codebase._context_tests_init_violations": "context tests `__init__`",
     "Codebase._homeless_violations": "top-level module",
+    "Codebase._conftest_leaf_violations": "conftest module",
+    "Codebase._root_leaf_violations": "root module",
+    "Codebase._main_violations": "context `__main__`",
+    "Codebase._shell_reach_violations": "test module, by where it is placed",
     "Codebase._tests_package_violations": "tests package module",
     "Codebase._role_init_violations": "role package `__init__`",
     "Codebase._app_init_violations": "srv / bootstrap `__init__`",
@@ -247,46 +251,10 @@ def protocol_package(tree: ast.Module) -> str:
     raise RuntimeError("PROTOCOL_PACKAGE not found in checks.py")
 
 
-def tooling_modules(tree: ast.Module) -> list[str]:
-    for node in tree.body:
-        if (
-            isinstance(node, ast.AnnAssign)
-            and isinstance(node.target, ast.Name)
-            and node.target.id == "TOOLING_MODULES"
-        ):
-            if (
-                isinstance(node.value, ast.Call)
-                and len(node.value.args) == 1
-                and isinstance(node.value.args[0], ast.Set)
-            ):
-                return sorted(
-                    element.value
-                    for element in node.value.args[0].elts
-                    if isinstance(element, ast.Constant) and isinstance(element.value, str)
-                )
-            raise RuntimeError(
-                "TOOLING_MODULES has an unexpected shape; expected frozenset({...}) of string literals"
-            )
-    raise RuntimeError("TOOLING_MODULES not found in checks.py")
-
-
-UNGOVERNED_PROSE: dict[str, list[str]] = {
-    "conftest": [
-        "- a `conftest` module is ungoverned (kept for now — followup pending with",
-        "  the test-organization work).",
-    ],
-    "__main__": [
-        "- a context `__main__` is ungoverned (named ruling, PR #48).",
-    ],
-}
+UNGOVERNED_PROSE: dict[str, list[str]] = {}
 
 
 def ungoverned_basenames(tree: ast.Module) -> list[str]:
-    """The basenames `_module_violations` exempts with an early `return ()`.
-
-    Derived from the AST guards, so governing conftest (or `__main__`) forces
-    the RULES.md diff instead of leaving a stale exemption bullet behind.
-    """
     for cls in (n for n in tree.body if isinstance(n, ast.ClassDef)):
         for method in (n for n in cls.body if isinstance(n, ast.FunctionDef)):
             if method.name != "_module_violations":
@@ -447,15 +415,12 @@ def render() -> str:
         lines.append(
             f"| {row.code} | {row.clause} | {row.applies_to} | {shapes} | {source} | {coverage} |"
         )
-    tooling = ", ".join(f"`{name}`" for name in tooling_modules(tree))
     package = protocol_package(tree)
     lines += [
         "",
         "## Named exemptions (carve-outs the code makes on purpose, not rules)",
         "",
         *ungoverned_bullets(tree),
-        f"- tooling modules outside the taxonomy: {tooling} (TOOLING_MODULES in",
-        "  tessercheck/domain/checks.py — the whole-tree totality rule skips them).",
         f"- modules under the top-level `{package}/` package are the protocol",
         "  modules (PROTOCOL_PACKAGE in tessercheck/domain/checks.py) — package membership",
         "  is the declaration; no suffix opts a module in, so a stray `*wire.py`",

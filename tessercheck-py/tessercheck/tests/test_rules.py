@@ -23,14 +23,6 @@ def test_every_rule_has_a_fixture() -> None:
     assert uncovered == [], f"rules with no fixture (NONE rows): {uncovered}"
 
 
-def test_tooling_modules_wrong_shape_is_its_own_error() -> None:
-    tree = ast.parse(
-        "from typing import Final\nTOOLING_MODULES: Final[frozenset[str]] = frozenset([1])\n"
-    )
-    with pytest.raises(RuntimeError, match="unexpected shape"):
-        rules.tooling_modules(tree)
-
-
 def test_an_underived_exemption_guard_fails_the_render() -> None:
     tree = ast.parse(
         "class Codebase:\n"

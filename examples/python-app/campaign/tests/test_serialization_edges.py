@@ -16,7 +16,13 @@ import campaign.domain.money as money
 import campaign.domain.short_link as short_link
 from errors import DomainError
 from protocol.http import HttpRequest
-from tests.support import parts_tuple
+def parts_tuple(campaign_parts: parts.CampaignParts) -> tuple[object, ...]:  # tessercheck:ignore TB071
+    return (
+        campaign_parts.id,
+        campaign_parts.budget.amount,
+        campaign_parts.budget.currency,
+        tuple((link.slug, link.target_url, link.active) for link in campaign_parts.links),
+    )
 
 
 
@@ -92,7 +98,6 @@ def test_store_holds_rows_not_live_objects() -> None:
 def test_parts_module_never_touches_specs() -> None:
     source = (
         pathlib.Path(__file__).resolve().parent.parent
-        / "campaign"
         / "application"
         / "parts.py"
     ).read_text(encoding="utf-8")

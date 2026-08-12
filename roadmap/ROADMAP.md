@@ -30,7 +30,7 @@ Legend: ✅ done · 🟡 partial · ❌ absent · — intentionally n/a.
 | Norm: serialization | ✅ | ❌ | ✅ | 🟡 Py only (TB015, TB016, TB017, TB018) | ❌ |
 | Norm: domain return | ✅ | ❌ | ✅ | 🟡 Py only (TB019) | ❌ |
 | Norm: logging | ❌ | ❌ | 🟡 stub | ❌ | ❌ |
-| Norm: imports | ❌ | ❌ | ❌ | 🟡 Py only (TB050, TB053, TB060, TB061, TB062, TB063, TB064) | ❌ |
+| Norm: imports | ❌ | ❌ | ❌ | 🟡 Py only (TB050, TB053, TB060, TB061, TB062, TB063, TB064, TB065, TB066) | ❌ |
 
 ## Pay-now rules
 

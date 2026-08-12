@@ -25,8 +25,8 @@ def test_the_entity_defines_no_conversion_dunders() -> None:
 
 
 def test_every_conversion_dunder_routes_through_a_canonical_helper() -> None:
-    root = pathlib.Path(__file__).resolve().parent.parent
-    tree = ast.parse((root / "parcel" / "domain" / "parcel.py").read_text(encoding="utf-8"))
+    here = pathlib.Path(__file__).resolve().parent
+    tree = ast.parse((here / "parcel.py").read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if not (isinstance(node, ast.FunctionDef) and node.name in ("__str__", "__int__", "__float__", "__bytes__")):
             continue
