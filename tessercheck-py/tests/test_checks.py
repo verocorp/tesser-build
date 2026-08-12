@@ -2207,20 +2207,18 @@ def test_mutable_set_and_quoted_annotations_are_still_mutable_collections(
     assert any("field _quoted is a mutable collection" in f for f in findings)
 
 
-def test_a_category_marker_with_trailing_prose_is_a_comment(tmp_path: Path) -> None:
+def test_the_retired_category_marker_is_an_ordinary_comment(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
         tmp_path,
         "tests/test_marked.py",
         "# tesser-category: spec\n"
-        "# tesser-category: spec because it builds one\n"
         "def test_ok() -> None:\n"
         "    assert True\n",
     )
     findings = check_tree(tmp_path)
-    assert not any("test_marked.py:1:" in f for f in findings)
     assert any(
-        "test_marked.py:2: TB020" in f and "carries a code comment" in f for f in findings
+        "test_marked.py:1: TB020" in f and "carries a code comment" in f for f in findings
     )
 
 
@@ -2545,3 +2543,20 @@ def test_undeclared_backing_collection_is_still_caught(tmp_path: Path) -> None:
         "TB011" in f and "Sack.items hands back its backing collection" in f
         for f in findings
     )
+
+
+def test_bytes_is_construction_primitive(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/domain/digest.py",
+        "import tesser.domain as ts\n"
+        "class Digest(ts.ValueObject):\n"
+        "    _value: bytes\n"
+        "    def __init__(self, value: bytes) -> None:\n"
+        "        object.__setattr__(self, '_value', value)\n"
+        "    def __bytes__(self) -> bytes:\n"
+        "        return self._value\n",
+    )
+    findings = check_tree(tmp_path)
+    assert not any("parameter 'value' is not allowed" in f for f in findings)

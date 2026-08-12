@@ -96,7 +96,8 @@ resources, empty config, uniform build contract kept).
 
 The `wiring/` role directory is part of the prescribed anatomy asserted by the
 verified impl's shape checks (`examples/python-app/tests/test_shape.py`), and
-context discovery is interface-driven (`tessercheck --app-root`, TB001).
+the analyzer walks every context and judges each module's declared role
+(`python -m tessercheck .`, TB040/TB043).
 Coordinate-driven selection and the fail-fast are locked by
 `examples/python-app/tests/test_impl_selection.py` (the `"memory"` coordinate
 builds; an absent coordinate errors at construction). The review-side tells:

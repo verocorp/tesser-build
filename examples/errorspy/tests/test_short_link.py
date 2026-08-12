@@ -1,25 +1,27 @@
 from __future__ import annotations
 
 import pytest
+import tesser.testing as ts
 
-from domain.short_link import ShortLink, ShortLinkSpec
-from domain.values import LinkStatus
+import campaign.domain.short_link as short_link
+import campaign.domain.values as values
 from errors import DomainError, DomainKind
 
 
-def _spec(slug: str = "spring-sale") -> ShortLinkSpec:
-    return ShortLinkSpec(slug=slug, target_url="https://x.com")
+@ts.helper
+def _spec(slug: str = "spring-sale", url: str = "https://x.com") -> short_link.ShortLinkSpec:
+    return short_link.ShortLinkSpec(slug=slug, target_url=url)
 
 
 def test_short_link_valid() -> None:
-    link = ShortLink(_spec())
+    link = short_link.ShortLink(_spec())
     assert str(link.slug) == "spring-sale"
-    assert link.status == LinkStatus("active")
+    assert link.status == values.LinkStatus("active")
 
 
 def test_child_error_propagates_unchanged() -> None:
     with pytest.raises(DomainError) as ei:
-        ShortLink(ShortLinkSpec(slug="BAD", target_url="https://x.com"))
+        short_link.ShortLink(_spec(slug="BAD"))
     e = ei.value
     assert e.kind is DomainKind.VALIDATION
     assert e.code == "bad_slug"
@@ -27,9 +29,9 @@ def test_child_error_propagates_unchanged() -> None:
 
 
 def test_deactivate_then_deactivate_is_conflict() -> None:
-    link = ShortLink(_spec())
+    link = short_link.ShortLink(_spec())
     link.deactivate()
-    assert link.status == LinkStatus("inactive")
+    assert link.status == values.LinkStatus("inactive")
     with pytest.raises(DomainError) as ei:
         link.deactivate()
     assert ei.value.kind is DomainKind.CONFLICT
@@ -37,7 +39,7 @@ def test_deactivate_then_deactivate_is_conflict() -> None:
 
 
 def test_identity_equality_by_slug() -> None:
-    a = ShortLink(_spec())
-    b = ShortLink(ShortLinkSpec(slug="spring-sale", target_url="https://y.com"))
+    a = short_link.ShortLink(_spec())
+    b = short_link.ShortLink(_spec(url="https://y.com"))
     assert a == b
     assert hash(a) == hash(b)

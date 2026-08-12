@@ -28,8 +28,8 @@ behavior may return. (Maintainer ruling 2026-08-08.)
 
    **Enforced by the base, not by TB019.** `ValueObject.__init_subclass__` and
    `Entity.__init_subclass__` raise `TypeError` when a subclass overrides
-   `__eq__`/`__hash__` — at import time, which beats lint time — and equality
-   shape is TB014's subject end to end. TB019 governs the ORDINARY methods,
+   `__eq__`/`__hash__` — at import time, which beats lint time — so equality
+   shape needs no checker at all. TB019 governs the ORDINARY methods,
    where nothing else is watching.
 3. **Two exits, because the rule cannot reach them.**
    - **Language-fixed dunders.** CPython raises `TypeError` if these return

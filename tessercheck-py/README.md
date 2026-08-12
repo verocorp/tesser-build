@@ -14,11 +14,11 @@ clause, with a family code and exact fixture coverage. `python3 rules.py
 --check` (and a test) fails when it drifts.
 
 The pre-merge analyzer (the frozen-dataclass-era `TB001`–`TB033` checks with
-the structural classifier) is parked at
-[`../tessercheck-py-legacy/`](../tessercheck-py-legacy/) while
-`examples/serdepy` and `examples/errorspy` are still frozen-dataclass
-trees — its checks
-are what validate them. The tree-migration wave deletes it.
+the structural classifier) is gone: every example tree now declares its
+blocks with `ts.*` shells, and this analyzer validates all of them. Its one
+surviving artifact is the reviewed `TB031` fixture pair
+([`testdata/tb031/`](testdata/tb031/)), which fixes that unshipped checker's
+contract.
 
 ## Running tessercheck on any tree
 

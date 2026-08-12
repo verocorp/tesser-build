@@ -25,16 +25,13 @@ judgment call made inline at write time (Chris ruling 2026-07-19).
      `# noqa...` (a reason may ride the directive), `# tessercheck:ignore`,
      the roadmap marker grammar (`tb-cell` / `tb-status` /
      `tb-allow-missing` lines, `docs/skill-authoring.md`),
-     `# tesser-category: <name>` (the test-helper marker TB032 reads,
-     `testing.md`), `# pragma...`, and formatter/linter controls
+     `# pragma...`, and formatter/linter controls
      (`# fmt:`, `# isort:`, `# ruff:`).
 
-     The `tesser-category:` exemption is on the marker's **shape**, not on a
-     valid name — a typo'd category is TB032's finding to report, and flagging
-     it here too would tell you that you wrote a banned comment when what you
-     wrote was a misspelled directive. Prose trailing the marker
-     (`# tesser-category: spec because it builds one`) is *not* a marker and
-     stays banned; a directive is not cover for a sentence.
+     The `# tesser-category:` marker left the ledger with the analyzer that
+     read it: a test module's members now declare themselves with
+     `@ts.helper`/`@ts.fake` decorators (`testing.md` rule 9), so the comment
+     form is dead and writing one is an ordinary TB020 finding.
    - Go: `//go:` directives, build constraints (`// +build`), `//line`,
      `//nolint...`, `//export` / `//extern` / `//sys`, the roadmap marker
      grammar (same three, `//`-wrapped), the cgo preamble attached to an
@@ -86,8 +83,8 @@ type, not a test, not a doc. Each carve-out lands in this file with:
 1. the **case** (what kept needing prose at the code site),
 2. the **principle** (the rule that makes it recognizable next time),
 3. the **enforcement update** (the checkers' exemption ledgers extended in
-   the same change — `passes/comments/` and
-   `tessercheck-py-legacy/tessercheck/comments_check.py`).
+   the same change — `passes/comments/` and the TB020 rule in
+   `tessercheck-py/tessercheck/domain/checks.py`).
 
 Until a case is in this file, it is not an exception. `# tessercheck:ignore`
 / `//nolint:comments` exist for the one-off emergency; a suppression that

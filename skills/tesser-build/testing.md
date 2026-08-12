@@ -183,38 +183,40 @@ file says *how*, and it is the cross-cutting layer they assume.
   entirely. That is tracked as a follow-up, not a blessed pattern to copy.
 - **`TB031` (construction-completeness)** — rule 2. **Not shipped yet:** its
   contract is fixed by the reviewed fixture pair
-  (`tessercheck-py-legacy/testdata/tb031/{good_tree,bad_tree}/`), authored before the
+  (`tessercheck-py/testdata/tb031/{good_tree,bad_tree}/`), authored before the
   checker per the fixtures-first discipline. When it lands it will compare a
   spec-constructed type's field set against the fields asserted in its
   completeness test and flag the difference. Until then rule 2 is enforced by
   review.
-- **`TB032` (test-helper-totality)** — rule 9, and the analyzer's first
-  **totality** check. Every other check hunts a known-bad shape and stays quiet
+- **`TB071` + `TB073` (test-module totality)** — rule 9, and the analyzer's
+  first **totality** check (they superseded the frozen-dataclass era's
+  `TB032`). Every other check hunts a known-bad shape and stays quiet
   otherwise. That is the wrong instrument here, because the failure mode is
   *variety* — there is no single bad helper to match, and new ways to smuggle
   logic into a test module arrive with every feature. So this one inverts it:
   **every module-level function in a test module must classify**, and what does
   not is reported. Read the output as a worklist, not an accusation.
 
-  Two categories are decided for you, so conformant code needs no annotation: a
-  function whose return type is a **spec** (resolved against the whole tree
-  *and* the file's own classes, so a DTO declared beside its tests is fine), and
-  a function decorated **`@pytest.fixture`**. Anything else declares itself with
-  `# tesser-category: <spec|dto|fixture>` on the line above the definition or
-  trailing its `def`. The category set is closed and small on purpose: a
-  category added to silence a flag converts a true report into a permanent
-  blind spot.
+  Classification is declared, never inferred: a test module holds tests,
+  **`@ts.helper`** builders, and **`@ts.fake`** doubles, and a module-level
+  function that is none of those is a `TB071` finding. `TB073` is the shape
+  half: a declared helper takes only defaulted primitives, has no control
+  flow, and builds a spec. A helper that legitimately builds something else —
+  a wired object graph for an end-to-end test, a JSON payload — declares
+  itself with `@ts.helper` and opts out of the shape rule with a per-instance
+  `# tessercheck:ignore TB073` at each line a finding lands on (the `def`
+  line for parameter/return shape; a control-flow finding reports at the
+  offending statement); the declaration half is never optional.
 
   Two scope facts worth knowing before you argue with a finding:
   **methods are not judged** — every non-test method on a class in a test file
   is a hand-written double, which rule 1 *requires*, so judging them would
   report the norm's own mandated shape as a violation. And **a test module is
-  one that defines a `test_*` function anywhere**, including on a `Test*` class,
-  never one merely living under `tests/`.
-
-  **Known hole:** a module that defines no test at all — a helper-only module
-  beside the tests, or a `conftest.py` — is never judged. Putting helpers there
-  is not a sanctioned way around the rule; it is a gap we have not closed.
+  one whose basename starts with `test_`**; a helper-only module beside the
+  tests is not a sanctioned parking spot — a non-test, non-conftest module
+  under a `tests` package is a placement finding outright (TB041), and a
+  `conftest.py` still answers to the universal checks (TB004, TB020, TB030,
+  TB033).
 
 - Rules 3-8 are **guidance, not checked.** Each is either a semantic judgment
   (3, 4, 5) or not mechanically decidable in a way worth the false positives

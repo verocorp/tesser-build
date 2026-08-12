@@ -188,9 +188,9 @@ belongs to the edge, recorded where its golden test lives.
   invariant sets on one type: if `new` is permissive and `require` demands
   non-empty, what the type guarantees depends on which door the caller picked.
   A factory returning some *other* type is not a door and is left alone; specs
-  are inert carriers and out of scope; entities and aggregates keep TB013,
-  which is deliberately narrower (the `from_spec` name only) for migration
-  reasons, not principled ones.
+  are inert carriers and out of scope; entities and aggregates fall under
+  TB080, whose door rule is the spec itself — a domain constructor takes
+  exactly one `ts.Spec`.
 - **TB018** (the canonical-exit-routing check) flags rule 3's delegation half:
   a leaf's conversion dunder must be a one-line delegation to the
   `canonical_*` helper matching its backing type. Two shapes — not a

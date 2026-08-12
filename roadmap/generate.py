@@ -9,8 +9,8 @@ Derivation is deterministic and non-LLM (design 2026-07-18, Wave 2 item 10):
 - **Mechanical cells** are computed: skill-file presence + ``tb-status``
   markers, example-path existence, the Go analyzer registry (via the
   ``cmd/analyzers-json`` JSON bridge — a dead bridge is a LOUD error, never an
-  empty column), the tessercheck-py ``CHECKS`` registry (direct import), and
-  rationale-test globs.
+  empty column), the tessercheck-py rule registry (the ``rules.py``
+  extraction ``RULES.md`` is generated from), and rationale-test globs.
 - **Judgment cells** are ``tb-cell`` annotations at the source they describe
   (schema: ``docs/skill-authoring.md``); a malformed marker is a named error
   with file:line.
@@ -30,6 +30,8 @@ fails on any drift between the committed rendering and the derivation.
 from __future__ import annotations
 
 import argparse
+import ast
+import importlib.util
 import json
 import re
 import subprocess
@@ -98,7 +100,7 @@ DISCLAIMER_PHRASES = ("not yet materialized", "don't invent a convention")
 # Directories scanned for tb-cell / tb-status markers. roadmap/ itself and
 # docs/ are excluded on purpose: the schema documentation and the test
 # fixtures both quote the grammar without being annotations.
-MARKER_SCAN_DIRS = ("skills", "examples", "rationale", "passes", "tessercheck-py", "tessercheck-py-legacy")
+MARKER_SCAN_DIRS = ("skills", "examples", "rationale", "passes", "tessercheck-py")
 MARKER_SCAN_EXTS = (".md", ".go", ".py")
 SKIP_DIR_NAMES = {"__pycache__", ".git", ".claude", "testdata"}
 
@@ -113,7 +115,7 @@ LIVING_SURFACES = (
     "examples",
 )
 PATH_TOKEN_RE = re.compile(
-    r"`((?:examples|skills|docs|rationale|tessercheck-py-legacy|tessercheck-py|cmd|internal|passes|gclplugin)"
+    r"`((?:examples|skills|docs|rationale|tessercheck-py|cmd|internal|passes|gclplugin)"
     r"/[A-Za-z0-9_./-]*)`"
 )
 
@@ -243,14 +245,24 @@ def go_analyzer_names(root: Path, cmd: list[str]) -> set[str]:
 
 
 def py_check_codes(root: Path) -> set[str]:
-    sys.path.insert(0, str(root / "tessercheck-py-legacy"))
+    """The shipped Python check codes, from the same extraction RULES.md is
+    generated with: rules.py's rule_rows over the Violation call sites in
+    tessercheck/domain/checks.py. Loaded by file path (not sys.path) so the
+    top-level module name ``rules`` cannot collide with anything else."""
+    rules_path = root / "tessercheck-py" / "rules.py"
+    spec = importlib.util.spec_from_file_location("tessercheck_rules", rules_path)
+    if spec is None or spec.loader is None:
+        raise RoadmapError(f"cannot load the tessercheck-py rule extractor at {rules_path}")
+    module = importlib.util.module_from_spec(spec)
     try:
-        from tessercheck.finding import CHECKS  # noqa: PLC0415 — lazy by design
-    except ImportError as e:
-        raise RoadmapError(f"cannot import tessercheck-py check registry from {root}: {e}") from e
-    finally:
-        sys.path.pop(0)
-    return {c.code for c in CHECKS}
+        spec.loader.exec_module(module)
+        tree = ast.parse(Path(module.DOMAIN).read_text(encoding="utf-8"))
+        codes = {row.code for row in module.rule_rows(tree)}
+    except (OSError, SyntaxError, AttributeError) as e:
+        raise RoadmapError(f"cannot extract tessercheck-py check codes via {rules_path}: {e}") from e
+    if not codes:
+        raise RoadmapError(f"{rules_path} extracted zero check codes — refusing an empty column")
+    return codes
 
 
 def _row_location(path: Path, key: object) -> str:
@@ -478,7 +490,7 @@ def checker_cell(
         assert py_codes is not None
         missing = sorted(set(py_listed) - py_codes)
         if missing:
-            raise RoadmapError(f"registry row {key!r} lists Python checks not in tessercheck CHECKS: {missing}")
+            raise RoadmapError(f"registry row {key!r} lists Python checks the analyzer does not ship: {missing}")
     if go_listed and py_listed:
         return cell(SYMBOL_DONE, f"{len(go_listed)} Go + {len(py_listed)} Py")
     if py_listed:
@@ -666,7 +678,7 @@ def generate(root: Path, registry_path: Path, analyzers_cmd: list[str]) -> str:
     # lists a check yet" must not be the reason the guard sees nothing.
     need_go = any(_str_list(r, "go_analyzers") for r in rows) or (root / "cmd" / "analyzers-json").is_dir()
     need_py = any(_str_list(r, "py_checks") for r in rows) or (
-        root / "tessercheck-py" / "tessercheck" / "finding.py"
+        root / "tessercheck-py" / "rules.py"
     ).is_file()
     go_names = go_analyzer_names(root, analyzers_cmd) if need_go else None
     py_codes = py_check_codes(root) if need_py else None

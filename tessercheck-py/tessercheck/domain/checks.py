@@ -110,8 +110,6 @@ DIRECTIVE: Final[re.Pattern[str]] = re.compile(
     r"^#\s*(!|type:|noqa|tessercheck:ignore|pragma|fmt:|isort:|ruff:)"
 )
 
-CATEGORY_MARKER: Final[re.Pattern[str]] = re.compile(r"^#\s*tesser-category:\s*[a-z_]+\s*$")
-
 CODING_DECL: Final[re.Pattern[str]] = re.compile(r"^#.*?coding[:=]\s*[-\w.]+")
 
 MUTABLE_COLLECTIONS: Final[frozenset[str]] = frozenset(
@@ -184,7 +182,7 @@ TEST_TIER_FOREIGN: Final[dict[str, tuple[str, ...]]] = {
 
 SRV_TIER: Final[str] = "srv"
 
-PRIMITIVES: Final[frozenset[str]] = frozenset({"str", "int", "float", "bool"})
+PRIMITIVES: Final[frozenset[str]] = frozenset({"str", "int", "float", "bool", "bytes"})
 
 TOOLING_MODULES: Final[frozenset[str]] = frozenset({"rules"})
 
@@ -1104,7 +1102,7 @@ class Codebase(ts.AggregateRoot):
     def _comment_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for comment in module.comments():
-            if DIRECTIVE.match(str(comment._text)) or CATEGORY_MARKER.match(str(comment._text)):
+            if DIRECTIVE.match(str(comment._text)):
                 continue
             if int(comment._line) <= 2 and CODING_DECL.match(str(comment._text)):
                 continue

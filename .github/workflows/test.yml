@@ -109,12 +109,12 @@ jobs:
 
   serdepy-example:
     # Gates the serialization-norm worked example (Python) at the same bar:
-    # mypy --strict + pytest. Shows every canonical-exit case in running code
-    # (all four conversion dunders, the Decimal and datetime text policies,
-    # zero-dunder compound, parts with a derived field diverging from the
-    # spec, an edge golden) — the all-cases companion to python-app's
-    # production-shaped parts impl.
-    name: serdepy example (mypy --strict + pytest)
+    # tessercheck zero findings + mypy --strict + pytest. Shows every
+    # canonical-exit case in running code (all four conversion dunders, the
+    # Decimal and datetime text policies, zero-dunder compound, parts with a
+    # derived field diverging from the spec, an edge golden) — the all-cases
+    # companion to python-app's production-shaped parts impl.
+    name: serdepy example (tessercheck + mypy --strict + pytest)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -123,15 +123,16 @@ jobs:
           python-version: '3.12'
       - name: Install dev tooling
         run: pip install -r examples/serdepy/requirements-dev.txt
-      - name: examples/serdepy — mypy --strict + pytest
+      - name: examples/serdepy — tessercheck + mypy --strict + pytest
         run: scripts/verify serdepy
 
   errorspy-example:
-    # Gates the error-norms worked example (Python) at the same bar: mypy
-    # --strict + pytest. Proves the error-handling conventions in running,
-    # type-checked code before they are taught. A Go mirror (examples/errorsgo)
-    # is in progress on branch errorsgo-mirror, not yet on main.
-    name: errorspy example (mypy --strict + pytest)
+    # Gates the error-norms worked example (Python) at the same bar:
+    # tessercheck zero findings + mypy --strict + pytest. Proves the
+    # error-handling conventions in running, type-checked code before they are
+    # taught. A Go mirror (examples/errorsgo) is in progress on branch
+    # errorsgo-mirror, not yet on main.
+    name: errorspy example (tessercheck + mypy --strict + pytest)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -140,7 +141,7 @@ jobs:
           python-version: '3.12'
       - name: Install dev tooling
         run: pip install -r examples/errorspy/requirements-dev.txt
-      - name: examples/errorspy — mypy --strict + pytest
+      - name: examples/errorspy — tessercheck + mypy --strict + pytest
         run: scripts/verify errorspy
 
   tesser-py:
@@ -193,13 +194,13 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install dev tooling
-        run: pip install -r tessercheck-py-legacy/requirements-dev.txt
+        run: pip install -r tessercheck-py/requirements-dev.txt
       - name: Generated roadmap is current (drift check)
         run: python3 roadmap/generate.py --check
       - name: roadmap generator — mypy --strict + pytest
         working-directory: roadmap
         run: |
-          MYPYPATH=../tessercheck-py-legacy mypy --strict generate.py tests/test_generate.py
+          mypy --strict generate.py tests/test_generate.py
           pytest tests -q
 
   tessercheck-py:
@@ -217,28 +218,3 @@ jobs:
         run: pip install -r tessercheck-py/requirements-dev.txt
       - name: tessercheck-py — self-check + RULES.md drift + mypy --strict + pytest + import contracts
         run: scripts/verify tessercheck-py
-
-  tessercheck-py-legacy:
-    # The pre-merge analyzer, parked while examples/python, serdepy, errorspy,
-    # and python-app's domain are still frozen-dataclass trees — its checks are
-    # what validate them. PR 5 of the merge plan migrates those trees to the
-    # shells and deletes this directory and this job.
-    #
-    # mypy + pytest, then the four CLI gates that run the LEGACY analyzer
-    # over the example trees: examples/python, the --app-root full gate on
-    # examples/python-app (discovery must find campaign, linkpolicy, reports
-    # with zero configuration; discovery errors exit 2), examples/serdepy,
-    # and examples/errorspy. Those four are why this job can fail on a change
-    # that touches no file under tessercheck-py-legacy — a layout change in
-    # python-app broke discovery in PR #56 exactly that way.
-    name: tessercheck-py-legacy (mypy --strict + pytest + the three CLI gates)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install dev tooling
-        run: pip install -r tessercheck-py-legacy/requirements-dev.txt
-      - name: tessercheck-py-legacy — mypy --strict + pytest + the three CLI gates
-        run: scripts/verify tessercheck-py-legacy

@@ -2,22 +2,36 @@ from __future__ import annotations
 
 import json
 
-from app.repository import StorageCampaignRepository
-from app.service import CampaignService
-from app.storage import FakeStorage
-from transport.handler import Handler
+import tesser.testing as ts
 
-_CREATE = json.dumps(
-    {
-        "window": {"start": "2026-01-01", "end": "2026-02-01"},
-        "links": [{"slug": "spring-sale", "target_url": "https://x.com"}],
-    }
-)
+import campaign.adapters.gateways.repo_storage as repo_storage
+import campaign.adapters.handlers.http as handlers
+import campaign.application.service as service
+from storage import FakeStorage
+
+
+@ts.helper
+def _handler(*, down: bool = False) -> handlers.Handler:  # tessercheck:ignore TB073
+    return handlers.Handler(
+        service.CampaignService(
+            repo_storage.StorageCampaignRepository(FakeStorage(down=down))
+        )
+    )
+
+
+@ts.helper
+def _create_body() -> str:  # tessercheck:ignore TB073
+    return json.dumps(
+        {
+            "window": {"start": "2026-01-01", "end": "2026-02-01"},
+            "links": [{"slug": "spring-sale", "target_url": "https://x.com"}],
+        }
+    )
 
 
 def test_happy_path_create_get_add_deactivate() -> None:
-    h = Handler(CampaignService(StorageCampaignRepository(FakeStorage())))
-    assert h.create_campaign("c1", _CREATE).status == 201
+    h = _handler()
+    assert h.create_campaign("c1", _create_body()).status == 201
 
     got = h.get_campaign("c1")
     assert got.status == 200
@@ -34,8 +48,8 @@ def test_happy_path_create_get_add_deactivate() -> None:
 
 
 def test_every_status_is_reachable_with_a_problem_body() -> None:
-    h = Handler(CampaignService(StorageCampaignRepository(FakeStorage())))
-    h.create_campaign("c1", _CREATE)
+    h = _handler()
+    h.create_campaign("c1", _create_body())
 
     seen: dict[int, str] = {}
     seen[400] = str(h.create_campaign("c2", "{bad").body["type"])
@@ -46,8 +60,7 @@ def test_every_status_is_reachable_with_a_problem_body() -> None:
     seen[422] = str(
         h.add_link("c1", json.dumps({"slug": "BAD", "target_url": "ftp://n"})).body["type"]
     )
-    down = Handler(CampaignService(StorageCampaignRepository(FakeStorage(down=True))))
-    seen[503] = str(down.get_campaign("c1").body["type"])
+    seen[503] = str(_handler(down=True).get_campaign("c1").body["type"])
 
     assert set(seen) == {400, 404, 409, 422, 503}
     assert all(t.startswith("/problems/") for t in seen.values())
