@@ -98,7 +98,6 @@ tests/test_bootstrap_once.py: TB053 tests.test_bootstrap_once imports names from
 tests/test_bootstrap_once.py: TB053 tests.test_bootstrap_once imports names from campaign.client.client; a context module is imported as an aliased module, never its members
 tests/test_bootstrap_once.py: TB053 tests.test_bootstrap_once imports names from campaign.wiring.config; a context module is imported as an aliased module, never its members
 tests/test_bootstrap_once.py: TB053 tests.test_bootstrap_once imports names from campaign.wiring.wire; a context module is imported as an aliased module, never its members
-tests/test_bootstrap_once.py: TB090 tests.test_bootstrap_once carries an ignore that suppresses nothing; an ignore comment suppresses an actual finding
 tests/test_call_fail_closed.py: TB053 tests.test_call_fail_closed imports names from campaign.application.parts; a context module is imported as an aliased module, never its members
 tests/test_call_fail_closed.py: TB053 tests.test_call_fail_closed imports names from campaign.application.service; a context module is imported as an aliased module, never its members
 tests/test_call_fail_closed.py: TB053 tests.test_call_fail_closed imports names from campaign.client.client; a context module is imported as an aliased module, never its members
@@ -120,9 +119,6 @@ tests/test_cleanup.py: TB053 tests.test_cleanup imports names from linkpolicy.cl
 tests/test_cleanup.py: TB053 tests.test_cleanup imports names from linkpolicy.wiring.config; a context module is imported as an aliased module, never its members
 tests/test_cleanup.py: TB053 tests.test_cleanup imports names from reports.client.client; a context module is imported as an aliased module, never its members
 tests/test_cleanup.py: TB053 tests.test_cleanup imports names from reports.wiring.config; a context module is imported as an aliased module, never its members
-tests/test_cleanup.py: TB090 tests.test_cleanup carries an ignore that suppresses nothing; an ignore comment suppresses an actual finding
-tests/test_cleanup.py: TB090 tests.test_cleanup carries an ignore that suppresses nothing; an ignore comment suppresses an actual finding
-tests/test_cleanup.py: TB090 tests.test_cleanup carries an ignore that suppresses nothing; an ignore comment suppresses an actual finding
 tests/test_cli.py: TB053 tests.test_cli imports names from campaign.adapters.handlers.cli; a context module is imported as an aliased module, never its members
 tests/test_cli.py: TB053 tests.test_cli imports names from campaign.wiring.config; a context module is imported as an aliased module, never its members
 tests/test_cli.py: TB053 tests.test_cli imports names from linkpolicy.wiring.config; a context module is imported as an aliased module, never its members

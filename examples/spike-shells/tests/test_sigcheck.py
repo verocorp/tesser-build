@@ -5,12 +5,10 @@ import pytest
 import sigcheck.domain.checks as domain
 from tests.conftest import check_tree, conforming_tree, write_module
 
-
 def test_every_declared_block_has_a_name_and_a_home() -> None:
     blocks = set(domain.TESSER_BASE_BLOCKS.values())
     assert set(domain.KIND_NAME) == blocks
     assert set(domain.KIND_ROLE) == blocks - domain.SRV_KINDS
-
 
 def test_every_kind_row_names_a_real_tesser_export() -> None:
     root = Path(__file__).resolve().parents[3] / "tesser-py"
@@ -19,11 +17,9 @@ def test_every_kind_row_names_a_real_tesser_export() -> None:
         exports = (root / package.replace(".", "/") / "__init__.py").read_text()
         assert f" {name} as {name}" in exports
 
-
 def test_conforming_tree_is_clean(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     assert check_tree(tmp_path) == ()
-
 
 def test_primitive_parameter_and_return_are_flagged(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -38,7 +34,6 @@ def test_primitive_parameter_and_return_are_flagged(tmp_path: Path) -> None:
     findings = check_tree(tmp_path)
     assert any("parameter 'text' is not a ts.Request; a service method takes exactly one ts.Request" in f for f in findings)
     assert any("does not return a ts.Response; a service method returns a ts.Response" in f for f in findings)
-
 
 def test_arity_and_missing_annotations_are_flagged(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -59,7 +54,6 @@ def test_arity_and_missing_annotations_are_flagged(tmp_path: Path) -> None:
     assert any("takes 2 parameters; a service method takes exactly one ts.Request" in f for f in findings)
     assert any("parameter 'request' is not a ts.Request; a service method takes exactly one ts.Request" in f for f in findings)
     assert any("uses *args/**kwargs; a service method takes exactly one ts.Request" in f for f in findings)
-
 
 def test_aggregate_constructor_violations_are_flagged(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -93,7 +87,6 @@ def test_aggregate_constructor_violations_are_flagged(tmp_path: Path) -> None:
         and "defines no __init__; an aggregate constructs from exactly one ts.Spec" in f
         for f in findings
     )
-
 
 def test_service_body_rules_are_flagged(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -143,7 +136,6 @@ def test_service_body_rules_are_flagged(tmp_path: Path) -> None:
         for f in findings
     )
 
-
 def test_service_delegation_is_flagged(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
@@ -173,7 +165,6 @@ def test_service_delegation_is_flagged(tmp_path: Path) -> None:
         for f in findings
     )
 
-
 def test_elif_chain_is_one_level(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
@@ -192,7 +183,6 @@ def test_elif_chain_is_one_level(tmp_path: Path) -> None:
     findings = check_tree(tmp_path)
     assert not any("ChainService" in f and "a service method branches one level deep" in f for f in findings)
 
-
 def test_indirect_subclass_still_classifies(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
@@ -210,7 +200,6 @@ def test_indirect_subclass_still_classifies(tmp_path: Path) -> None:
         and "does not return a ts.Response; a service method returns a ts.Response" in f
         for f in findings
     )
-
 
 def test_placement_totality_is_flagged(tmp_path: Path) -> None:
     write_module(
@@ -242,7 +231,6 @@ def test_placement_totality_is_flagged(tmp_path: Path) -> None:
         for f in findings
     )
 
-
 def test_declared_function_and_final_constant_pass(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
@@ -264,7 +252,6 @@ def test_declared_function_and_final_constant_pass(tmp_path: Path) -> None:
     assert not any("plain.domain.thing" in f and "@ts.function" in f for f in findings)
     assert not any("plain.domain.thing" in f and "a module constant is Final" in f for f in findings)
 
-
 def test_non_context_module_and_nonempty_init_are_flagged(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(tmp_path, "app/util.py", "def anything() -> None:\n    return None\n")
@@ -276,7 +263,6 @@ def test_non_context_module_and_nonempty_init_are_flagged(tmp_path: Path) -> Non
         for f in findings
     )
     assert any("app" in f and "a context __init__ is empty" in f for f in findings)
-
 
 def test_import_matrix_is_flagged(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -324,7 +310,6 @@ def test_import_matrix_is_flagged(tmp_path: Path) -> None:
     )
     assert not any("two.adapters.gateways" in f and "imports app.client.client" in f for f in findings)
 
-
 def test_test_module_totality_is_flagged(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
@@ -352,7 +337,6 @@ def test_test_module_totality_is_flagged(tmp_path: Path) -> None:
         for f in findings
     )
 
-
 def test_helper_rules_are_flagged(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
@@ -378,7 +362,6 @@ def test_helper_rules_are_flagged(tmp_path: Path) -> None:
     assert any("bad_builder" in f and "does not return a ts.Spec; a helper builds a spec" in f for f in findings)
     assert any("bad_builder" in f and "has control flow" in f and "a helper only constructs" in f for f in findings)
 
-
 def test_service_dependencies_must_be_ports(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
@@ -397,7 +380,6 @@ def test_service_dependencies_must_be_ports(tmp_path: Path) -> None:
         "NeedyService.__init__" in f and "parameter 'db' is not a ts.Port; a service depends only on ports" in f
         for f in findings
     )
-
 
 def test_client_method_rules_are_flagged(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -418,7 +400,6 @@ def test_client_method_rules_are_flagged(tmp_path: Path) -> None:
         "BadClient.ask" in f and "does not return a ts.Response; a client method returns a ts.Response" in f
         for f in findings
     )
-
 
 def test_records_never_carry_domain_objects(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -443,7 +424,6 @@ def test_records_never_carry_domain_objects(tmp_path: Path) -> None:
         "LoadingPort.fetch" in f and "a port speaks records, never domain objects" in f
         for f in findings
     )
-
 
 def test_domain_field_rules_are_flagged(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -485,16 +465,7 @@ def test_domain_field_rules_are_flagged(tmp_path: Path) -> None:
     )
     assert any("WireRequest.validate" in f and "a DTO carries data and nothing else" in f for f in findings)
 
-
 def test_an_eval_lives_only_in_a_gateway(tmp_path: Path) -> None:
-    """`eval_` is the one path-visible special category, and gateways own it.
-
-    Dropping context-tier evals was safe rather than free: the argument for a
-    through-the-service eval was closing the input-assembly drift gap, and that
-    gap is closed structurally only while schema and prompt assembly stay
-    single-sourced at the edge. Both gateway forms take an eval — flat beside
-    the gateway, and nested under an escalated one.
-    """
     conforming_tree(tmp_path)
     body = "import tesser.testing as ts\ndef test_model_picks_a_tool() -> None:\n    assert True\n"
     write_module(tmp_path, "app/adapters/eval_flat.py", body)
@@ -509,8 +480,6 @@ def test_an_eval_lives_only_in_a_gateway(tmp_path: Path) -> None:
             for f in findings
         ), outside
 
-    # Both gateway forms are its home: flat beside the gateway, and nested
-    # under one that escalated.
     write_module(tmp_path, "app/adapters/gateways/__init__.py", "")
     write_module(tmp_path, "app/adapters/gateways/eval_llm.py", body)
     write_module(tmp_path, "app/adapters/gateways/llm/__init__.py", "")
@@ -520,16 +489,7 @@ def test_an_eval_lives_only_in_a_gateway(tmp_path: Path) -> None:
     assert not any("eval_llm is an eval outside a gateway" in f for f in housed)
     assert not any("eval_tools is an eval outside a gateway" in f for f in housed)
 
-
 def test_a_handler_sibling_fakes_only_the_client(tmp_path: Path) -> None:
-    """The ladder: each layer imports and fakes exactly one layer down.
-
-    A handler's production imports are client only (the handler carve-out), so
-    its sibling test reaches client only — reaching application licenses
-    wiring the real service through the handler, which is the reach-through
-    the ladder forbids. The test row is DERIVED from the production row; it
-    cannot be looser than the thing it governs.
-    """
     conforming_tree(tmp_path)
     write_module(
         tmp_path,
@@ -574,11 +534,7 @@ def test_a_handler_sibling_fakes_only_the_client(tmp_path: Path) -> None:
     assert not any("test_http:2" in f for f in findings)
     assert not any("test_http:3" in f for f in findings)
 
-
 def test_a_srv_test_reaches_a_context_only_through_its_handlers(tmp_path: Path) -> None:
-    """The top of the ladder: srv fakes handlers, so a srv test reaches a
-    context only through adapters.handlers — the same door production srv gets
-    ("a host reaches a context only through its handlers")."""
     conforming_tree(tmp_path)
     write_module(
         tmp_path,
@@ -609,15 +565,7 @@ def test_a_srv_test_reaches_a_context_only_through_its_handlers(tmp_path: Path) 
     )
     assert not any("test_router:2" in f for f in findings)
 
-
 def test_a_test_reaches_only_what_its_placement_allows(tmp_path: Path) -> None:
-    """Placement IS the tier — the same import walker decides both.
-
-    A test inside domain/ inherits domain's reach, so the isolation tier stops
-    being convention-plus-discipline and becomes checkable structure. Before
-    this rule a test module was matched on its NAME before its LOCATION was
-    ever considered, so a test in domain/ could import anything.
-    """
     conforming_tree(tmp_path)
     write_module(
         tmp_path,
@@ -659,18 +607,9 @@ def test_a_test_reaches_only_what_its_placement_allows(tmp_path: Path) -> None:
         for f in findings
     )
 
-
 def test_a_context_tier_test_reaches_its_whole_context_and_a_neighbours_application(
     tmp_path: Path,
 ) -> None:
-    """The row that keeps "real neighbour, faked ports" legal.
-
-    The sanctioned cross-context test wires the REAL neighbour service with the
-    neighbour's own ports faked, which needs the neighbour's APPLICATION, not
-    just its client. A clients-only row would ban it and force a hand-written
-    fake client instead — reintroducing the drift the pattern removes, since
-    nothing proves a fake client still matches the real service.
-    """
     conforming_tree(tmp_path)
     write_module(tmp_path, "near/tests/__init__.py", "")
     write_module(
@@ -715,16 +654,7 @@ def test_a_context_tier_test_reaches_its_whole_context_and_a_neighbours_applicat
         for f in check_tree(tmp_path)
     )
 
-
 def test_a_role_must_be_a_package(tmp_path: Path) -> None:
-    """The module form of a role is retired — a role is always a package.
-
-    Placement is what carries a test's tier under the test-organization
-    ruling (a test inside domain/ inherits domain's import rule, and that IS
-    the isolation tier), so a role has to be a directory for sibling tests to
-    have anywhere to live. Both forms being legal is what made that
-    impossible.
-    """
     conforming_tree(tmp_path)
     write_module(
         tmp_path,
@@ -748,7 +678,6 @@ def test_a_role_must_be_a_package(tmp_path: Path) -> None:
         for f in findings
     )
     assert not any("flat.client" in f for f in findings)
-
 
 def test_a_role_may_be_a_package(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -795,7 +724,6 @@ def test_a_role_may_be_a_package(tmp_path: Path) -> None:
         for f in findings
     )
 
-
 def test_wiring_is_a_role(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
@@ -827,7 +755,6 @@ def test_wiring_is_a_role(tmp_path: Path) -> None:
         and "a context reaches another context only through its client, and only from gateways and wiring" in f
         for f in findings
     )
-
 
 def test_srv_and_bootstrap_import_rows(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -895,7 +822,6 @@ def test_srv_and_bootstrap_import_rows(tmp_path: Path) -> None:
         for f in findings
     )
 
-
 def test_only_a_handler_imports_its_own_client(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
@@ -931,7 +857,6 @@ def test_only_a_handler_imports_its_own_client(tmp_path: Path) -> None:
         for f in findings
     )
 
-
 def test_only_a_gateway_reaches_a_foreign_client(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
@@ -956,7 +881,6 @@ def test_only_a_gateway_reaches_a_foreign_client(tmp_path: Path) -> None:
         and "a context reaches another context only through its client, and only from gateways and wiring" in f
         for f in findings
     )
-
 
 def test_role_module_tesser_import_is_exactly_once_as_ts(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -1013,7 +937,6 @@ def test_role_module_tesser_import_is_exactly_once_as_ts(tmp_path: Path) -> None
         for f in findings
     )
 
-
 def test_reexport_only_role_init_needs_no_tesser_import(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
@@ -1031,7 +954,6 @@ def test_reexport_only_role_init_needs_no_tesser_import(tmp_path: Path) -> None:
     )
     findings = check_tree(tmp_path)
     assert not any("deep.domain" in f and "exactly once, as ts" in f for f in findings)
-
 
 def test_test_module_tesser_import_rules(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -1072,7 +994,6 @@ def test_test_module_tesser_import_rules(tmp_path: Path) -> None:
         for f in findings
     )
 
-
 def test_homeless_modules_are_flagged(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(tmp_path, "loose.py", "def anything() -> None:\n    return None\n")
@@ -1091,7 +1012,6 @@ def test_homeless_modules_are_flagged(tmp_path: Path) -> None:
     )
     assert not any("rules belongs to no governed package" in f for f in findings)
 
-
 def test_tests_package_totality_is_flagged(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(tmp_path, "tests/__init__.py", "X = 1\n")
@@ -1109,7 +1029,6 @@ def test_tests_package_totality_is_flagged(tmp_path: Path) -> None:
         for f in findings
     )
     assert not any("tests.test_ok" in f and "a tests package holds" in f for f in findings)
-
 
 def test_role_init_only_reexports_its_own_role(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -1145,7 +1064,6 @@ def test_role_init_only_reexports_its_own_role(tmp_path: Path) -> None:
         for f in findings
     )
 
-
 def test_a_role_init_may_import_a_module_but_never_a_class(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
@@ -1174,7 +1092,6 @@ def test_a_role_init_may_import_a_module_but_never_a_class(tmp_path: Path) -> No
         "a context module is imported as an aliased module, never its members" in f
         for f in check_tree(tmp_path)
     )
-
 
 def test_srv_and_bootstrap_statement_totality(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -1258,7 +1175,6 @@ def test_srv_and_bootstrap_statement_totality(tmp_path: Path) -> None:
         for f in findings
     )
 
-
 def test_pure_core_stdlib_allowlist(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
@@ -1304,7 +1220,6 @@ def test_pure_core_stdlib_allowlist(tmp_path: Path) -> None:
     assert not any("imports __future__" in f for f in findings)
     assert not any("io1.adapters.gateways" in f and "the pure stdlib" in f for f in findings)
 
-
 def test_context_module_import_form(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
@@ -1340,7 +1255,6 @@ def test_context_module_import_form(tmp_path: Path) -> None:
         "a context module is imported as an aliased module, never its members" in f
         for f in findings
     )
-
 
 def test_relative_imports_resolve_against_the_package(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -1410,7 +1324,6 @@ def test_relative_imports_resolve_against_the_package(tmp_path: Path) -> None:
         for f in findings
     )
 
-
 def test_nested_imports_neither_classify_nor_satisfy_presence(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
@@ -1458,7 +1371,6 @@ def test_nested_imports_neither_classify_nor_satisfy_presence(tmp_path: Path) ->
         "a tesser import is module-level" in f
         for f in findings
     )
-
 
 def test_srv_and_bootstrap_tesser_form_modes(tmp_path: Path) -> None:
     write_module(
@@ -1561,7 +1473,6 @@ def test_srv_and_bootstrap_tesser_form_modes(tmp_path: Path) -> None:
     )
     assert not any("bootstrap __init__ declares code" in f for f in findings)
 
-
 def test_protocol_module_totality_is_flagged(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
@@ -1653,7 +1564,6 @@ def test_protocol_module_totality_is_flagged(tmp_path: Path) -> None:
         for f in findings
     )
 
-
 def test_protocol_module_tesser_import_is_exactly_once_as_ts(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
@@ -1702,7 +1612,6 @@ def test_protocol_module_tesser_import_is_exactly_once_as_ts(tmp_path: Path) -> 
         for f in findings
     )
 
-
 def test_only_the_top_level_protocol_package_holds_protocol_modules(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(tmp_path, "protocol/__init__.py", "")
@@ -1715,7 +1624,6 @@ def test_only_the_top_level_protocol_package_holds_protocol_modules(tmp_path: Pa
     assert any("boxwire belongs to no governed package" in f for f in findings)
     assert any("wire belongs to no governed package" in f for f in findings)
 
-
 def test_a_protocol_init_is_empty(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(tmp_path, "protocol/__init__.py", "LIMIT = 3\n")
@@ -1725,7 +1633,6 @@ def test_a_protocol_init_is_empty(tmp_path: Path) -> None:
         "protocol __init__ declares code; a protocol __init__ is empty" in f
         for f in findings
     )
-
 
 def test_a_fake_may_implement_a_protocol_port(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -1751,7 +1658,6 @@ def test_a_fake_may_implement_a_protocol_port(tmp_path: Path) -> None:
     )
     findings = check_tree(tmp_path)
     assert not any("app.test_doors.FakeDoor" in f for f in findings)
-
 
 def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -1829,7 +1735,6 @@ def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv(tmp_path: P
         for f in findings
     )
 
-
 def test_form_rule_fires_in_tests_and_srv_and_skips_illegal_edges(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
@@ -1881,7 +1786,6 @@ def test_form_rule_fires_in_tests_and_srv_and_skips_illegal_edges(tmp_path: Path
         for f in findings
     )
 
-
 def test_pure_core_allowlist_covers_application_and_domain_future(tmp_path: Path) -> None:
     write_module(
         tmp_path,
@@ -1912,7 +1816,6 @@ def test_pure_core_allowlist_covers_application_and_domain_future(tmp_path: Path
     assert not any("io2.application.service:1" in f for f in findings)
     assert not any("io2.application.service:2" in f for f in findings)
 
-
 def test_an_adapters_module_holds_one_kind(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
@@ -1929,7 +1832,6 @@ def test_an_adapters_module_holds_one_kind(tmp_path: Path) -> None:
         "app.adapters.gateways mixes adapter kinds" in f and "an adapters module holds one adapter kind" in f
         for f in findings
     )
-
 
 def test_a_dotted_module_base_resolves(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -1949,20 +1851,17 @@ def test_a_dotted_module_base_resolves(tmp_path: Path) -> None:
         for f in findings
     )
 
-
 def test_edge_records_reject_an_empty_target() -> None:
     with pytest.raises(ValueError):
         domain.ImportEdge("", 1, False, False)
     with pytest.raises(ValueError):
         domain.TesserImport("", 1, False, False)
 
-
 def test_a_test_module_may_omit_tesser_testing(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(tmp_path, "tests/test_bare.py", "def test_bare() -> None:\n    assert True\n")
     findings = check_tree(tmp_path)
     assert not any("test_bare" in f for f in findings)
-
 
 def test_a_denied_app_edge_is_not_form_checked(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -1980,7 +1879,6 @@ def test_a_denied_app_edge_is_not_form_checked(tmp_path: Path) -> None:
     )
     assert not any("srv.host" in f and "never its members" in f for f in findings)
 
-
 def test_a_colliding_module_definition_is_a_finding_not_a_crash(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(tmp_path, "col.py", "import tesser.srv as ts\n")
@@ -1994,7 +1892,6 @@ def test_a_colliding_module_definition_is_a_finding_not_a_crash(tmp_path: Path) 
         for f in findings
     )
 
-
 def test_an_unparseable_module_is_a_finding_not_a_crash(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(tmp_path, "broken.py", "def f(:\n")
@@ -2003,7 +1900,6 @@ def test_an_unparseable_module_is_a_finding_not_a_crash(tmp_path: Path) -> None:
         "broken.py:1: TB043" in f and "every checked module parses" in f for f in findings
     )
     assert any("app/domain/thing.py" not in f for f in findings)
-
 
 def test_a_non_utf8_file_is_a_finding_not_a_crash(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -2014,20 +1910,17 @@ def test_a_non_utf8_file_is_a_finding_not_a_crash(tmp_path: Path) -> None:
         for f in findings
     )
 
-
 def test_skip_dirs_are_not_walked(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(tmp_path, ".venv/lib/junk.py", "def f(:\n")
     write_module(tmp_path, "node_modules/pkg/mod.py", "x = 1\n")
     assert check_tree(tmp_path) == ()
 
-
 def test_an_ignore_suppresses_exactly_its_finding(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(tmp_path, "stray.py", "import os  # tessercheck:ignore TB040\n")
     findings = check_tree(tmp_path)
     assert not any("stray" in f for f in findings)
-
 
 def test_a_scoped_ignore_leaves_other_codes_alone(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -2041,7 +1934,6 @@ def test_a_scoped_ignore_leaves_other_codes_alone(tmp_path: Path) -> None:
         and "an ignore comment suppresses an actual finding" in f
         for f in findings
     )
-
 
 def test_a_stale_ignore_is_itself_a_finding(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -2057,7 +1949,6 @@ def test_a_stale_ignore_is_itself_a_finding(tmp_path: Path) -> None:
         for f in findings
     )
 
-
 def test_a_file_level_ignore_covers_the_whole_module(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(
@@ -2069,7 +1960,6 @@ def test_a_file_level_ignore_covers_the_whole_module(tmp_path: Path) -> None:
     assert not any("never imports tesser.srv" in f for f in findings)
     assert not any("TB090" in f and "srv/host.py" in f for f in findings)
 
-
 def test_a_marker_suppresses_several_codes_space_or_comma_separated(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(tmp_path, "stray.py", "import os  # tessercheck:ignore TB040 TB050\n")
@@ -2078,14 +1968,12 @@ def test_a_marker_suppresses_several_codes_space_or_comma_separated(tmp_path: Pa
     assert not any("stray" in f for f in findings)
     assert not any("loose" in f for f in findings)
 
-
 def test_a_file_level_ignore_requires_codes(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(tmp_path, "stray.py", "import os  # tessercheck:ignore-file\n")
     findings = check_tree(tmp_path)
     assert any("stray belongs to no governed package" in f for f in findings)
     assert any("stray.py:1: TB090" in f for f in findings)
-
 
 def test_a_typo_or_junk_token_makes_the_marker_inert(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -2095,7 +1983,6 @@ def test_a_typo_or_junk_token_makes_the_marker_inert(tmp_path: Path) -> None:
     assert any("stray belongs to no governed package" in f for f in findings)
     assert any("loose belongs to no governed package" in f for f in findings)
     assert not any("TB090" in f for f in findings)
-
 
 def test_a_bare_line_ignore_is_line_scoped(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -2107,7 +1994,6 @@ def test_a_bare_line_ignore_is_line_scoped(tmp_path: Path) -> None:
     findings = check_tree(tmp_path)
     assert any("app.domain.extra imports os" in f and " TB062 " in f for f in findings)
     assert any("app/domain/extra.py:2: TB090" in f for f in findings)
-
 
 def test_tb090_itself_cannot_be_ignored(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -2123,7 +2009,6 @@ def test_tb090_itself_cannot_be_ignored(tmp_path: Path) -> None:
         for f in findings
     )
 
-
 def test_reader_findings_are_never_inline_suppressible(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     write_module(tmp_path, "broken.py", "# tessercheck:ignore-file TB043\ndef f(:\n")
@@ -2132,7 +2017,6 @@ def test_reader_findings_are_never_inline_suppressible(tmp_path: Path) -> None:
         "broken.py:2: TB043" in f and "every checked module parses" in f for f in findings
     )
     assert not any("TB090" in f for f in findings)
-
 
 def test_a_colliding_unparseable_file_reports_the_collision(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -2144,7 +2028,6 @@ def test_a_colliding_unparseable_file_reports_the_collision(tmp_path: Path) -> N
     )
     assert not any("every checked module parses" in f for f in findings)
 
-
 def test_a_utf8_bom_file_is_checked_normally(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
     (tmp_path / "app" / "domain" / "bom.py").write_bytes(
@@ -2152,7 +2035,6 @@ def test_a_utf8_bom_file_is_checked_normally(tmp_path: Path) -> None:
     )
     findings = check_tree(tmp_path)
     assert not any("bom" in f for f in findings)
-
 
 def test_optional_construction_data_is_the_only_union(tmp_path: Path) -> None:
     conforming_tree(tmp_path)
@@ -2174,3 +2056,131 @@ def test_optional_construction_data_is_the_only_union(tmp_path: Path) -> None:
         for f in findings
     )
     assert any("parameter 'mix' is not allowed" in f for f in findings)
+
+
+def test_comments_docstrings_and_bare_strings_are_flagged(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "tests/test_prose.py",
+        '"""A docstring."""\n'
+        "# a prose comment\n"
+        "x: int = 1  # type: ignore\n"
+        "def test_ok() -> None:\n"
+        "    y = 1\n"
+        '    "a bare string"\n'
+        "    assert y\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "test_prose.py:1: TB020" in f and "carries a docstring; "
+        "code speaks for itself — comments, docstrings, and loose strings "
+        "belong in the doc layer" in f
+        for f in findings
+    )
+    assert any("test_prose.py:2: TB020" in f and "carries a code comment" in f for f in findings)
+    assert any(
+        "test_prose.py:6: TB020" in f and "carries a bare string statement" in f
+        for f in findings
+    )
+    assert not any("test_prose.py:3:" in f and "TB020" in f for f in findings)
+
+
+def test_mocking_library_and_patcher_fixtures_are_flagged(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "tests/test_mocky.py",
+        "from unittest.mock import patch\n"
+        "import pytest\n"
+        "def test_a(monkeypatch: pytest.MonkeyPatch) -> None:\n"
+        "    assert patch\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "test_mocky.py:1: TB030" in f and "imports a mocking library; a test double is "
+        "a hand-written fake, never a mocking library or a runtime patcher" in f
+        for f in findings
+    )
+    assert any(
+        "test_mocky.py:3: TB030" in f and "takes the monkeypatch fixture" in f
+        for f in findings
+    )
+    assert any(
+        "test_mocky.py:3: TB030" in f and "reaches for pytest MonkeyPatch" in f
+        for f in findings
+    )
+
+
+def test_a_marked_patcher_seam_is_suppressed(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "tests/test_seam.py",
+        "def test_a(monkeypatch) -> None:  # tessercheck:ignore TB030\n"
+        "    assert monkeypatch\n",
+    )
+    findings = check_tree(tmp_path)
+    assert not any("test_seam" in f for f in findings)
+
+
+def test_a_called_shadowed_builtin_is_flagged(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "tests/test_shadow.py",
+        "def test_a() -> None:\n"
+        "    id = 'x'\n"
+        "    assert id(3)\n"
+        "def test_b(len: int = 0) -> None:\n"
+        "    assert len == 0\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "test_shadow.py:3: TB033" in f and "binds id and calls it in the same scope; "
+        "a shadowed builtin is never called — rename the binding" in f
+        for f in findings
+    )
+    assert not any("test_shadow.py:5:" in f and "TB033" in f for f in findings)
+
+
+def test_string_form_equality_is_flagged(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "tests/test_streq.py",
+        "def test_a() -> None:\n"
+        "    a, b = 1, 2\n"
+        "    assert str(a) == str(b)\n"
+        "    assert str(a) == 'one'\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "test_streq.py:3: TB004" in f and "compare value objects by value, "
+        "never by their string form" in f
+        for f in findings
+    )
+    assert not any("test_streq.py:4:" in f for f in findings)
+
+
+def test_a_value_object_mutable_collection_field_is_flagged(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/domain/bag.py",
+        "import tesser.domain as ts\n"
+        "class Bag(ts.ValueObject):\n"
+        "    _items: list[str]\n"
+        "    _names: tuple[str, ...]\n"
+        "    def __init__(self, item: str) -> None:\n"
+        "        object.__setattr__(self, '_items', [item])\n"
+        "        object.__setattr__(self, '_names', (item,))\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "bag.py:3: TB002" in f and "field _items is a mutable collection; "
+        "a value object's field is hashable — a tuple or frozenset, never "
+        "a mutable collection" in f
+        for f in findings
+    )
+    assert not any("_names" in f for f in findings)

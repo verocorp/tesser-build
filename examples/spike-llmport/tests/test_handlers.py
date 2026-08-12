@@ -13,14 +13,6 @@ import protocol.voice as voice
 
 @ts.fake
 class FakeSchedulingClientScripted(client.SchedulingClient):
-    """The handler tier fakes exactly one layer down: the client.
-
-    Scripted, not simulated — it answers every call with the states it was
-    handed, in order, and records the requests so a test can assert the
-    handler's DTO translation. The choreography those states came from is the
-    application tier's business, not this file's.
-    """
-
     def __init__(self, *states: client.BookingStateResponse) -> None:
         self.pending = list(states)
         self.requests: list[object] = []
