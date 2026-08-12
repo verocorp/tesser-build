@@ -18,4 +18,10 @@ class TessercheckService(ts.ApplicationService):
 
     def check(self, request: client.CheckRequest) -> client.CheckResponse:
         codebase = domain.Codebase(domain.CodebaseSpec(sources=self._reader.sources(request.root)))
-        return client.CheckResponse(findings=tuple(str(violation) for violation in codebase.violations()))
+        return client.CheckResponse(
+            findings=tuple(
+                f"{violation.path()}:{int(violation.line())}: "
+                f"{violation.code()} {violation.text()}"
+                for violation in codebase.violations()
+            )
+        )

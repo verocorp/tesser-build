@@ -2183,7 +2183,7 @@ def test_a_value_object_mutable_collection_field_is_flagged(tmp_path: Path) -> N
         "a mutable collection" in f
         for f in findings
     )
-    assert not any("_names" in f for f in findings)
+    assert not any("_names" in f and "TB002" in f for f in findings)
 
 
 def test_mutable_set_and_quoted_annotations_are_still_mutable_collections(
@@ -2222,3 +2222,227 @@ def test_a_category_marker_with_trailing_prose_is_a_comment(tmp_path: Path) -> N
     assert any(
         "test_marked.py:2: TB020" in f and "carries a code comment" in f for f in findings
     )
+
+
+def test_a_value_object_hides_its_representation(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/domain/leaky.py",
+        "import tesser.domain as ts\n"
+        "class Leaky(ts.ValueObject):\n"
+        "    amount: int\n"
+        "    _kept: int\n"
+        "    def __init__(self, amount: int) -> None:\n"
+        "        object.__setattr__(self, 'amount', amount)\n"
+        "        object.__setattr__(self, '_kept', amount)\n"
+        "    def kept(self) -> int:\n"
+        "        return self._kept\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "leaky.py:3: TB010" in f and "exposes field amount; a value object hides its "
+        "representation — a public field belongs on a spec" in f
+        for f in findings
+    )
+    assert any(
+        "TB010" in f and "Leaky.kept passes the raw primitive through; "
+        "a value object's accessor returns a value object — "
+        "the canonical exit is the only primitive door" in f
+        for f in findings
+    )
+
+
+def test_an_accessor_never_hands_back_the_backing_collection(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/domain/box.py",
+        "import tesser.domain as ts\n"
+        "class BoxSpec(ts.Spec):\n"
+        "    def __init__(self, item: str) -> None:\n"
+        "        self.item = item\n"
+        "class Box(ts.AggregateRoot):\n"
+        "    _items: list[str]\n"
+        "    def __init__(self, spec: BoxSpec) -> None:\n"
+        "        self._items = [spec.item]\n"
+        "    def items(self) -> list[str]:\n"
+        "        return self._items\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "TB011" in f and "Box.items hands back its backing collection; an accessor "
+        "returns a defensive copy, never the backing store" in f
+        for f in findings
+    )
+
+
+def test_an_aggregate_is_referenced_by_id_never_held(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/domain/pair.py",
+        "import tesser.domain as ts\n"
+        "import app.domain.thing as thing\n"
+        "class PairSpec(ts.Spec):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n"
+        "class Pair(ts.AggregateRoot):\n"
+        "    _other: thing.Thing\n"
+        "    def __init__(self, spec: PairSpec) -> None:\n"
+        "        self._other = thing.Thing(thing.ThingSpec(text=spec.text))\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "TB012" in f and "Pair field _other holds another aggregate root; an aggregate "
+        "is referenced by its ID value object, never held" in f
+        for f in findings
+    )
+
+
+def test_exit_norms_leaf_and_structured(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/domain/exits.py",
+        "import tesser.domain as ts\n"
+        "@ts.function\n"
+        "def canonical_str(value: str) -> str:\n"
+        "    return value\n"
+        "class GoodLeaf(ts.ValueObject):\n"
+        "    _value: str\n"
+        "    def __init__(self, value: str) -> None:\n"
+        "        object.__setattr__(self, '_value', value)\n"
+        "    def __str__(self) -> str:\n"
+        "        return canonical_str(self._value)\n"
+        "class WrongExit(ts.ValueObject):\n"
+        "    _value: str\n"
+        "    def __init__(self, value: str) -> None:\n"
+        "        object.__setattr__(self, '_value', value)\n"
+        "    def __int__(self) -> int:\n"
+        "        return 0\n"
+        "class HandRolled(ts.ValueObject):\n"
+        "    _value: str\n"
+        "    def __init__(self, value: str) -> None:\n"
+        "        object.__setattr__(self, '_value', value)\n"
+        "    def __str__(self) -> str:\n"
+        "        return self._value.upper()\n"
+        "class Compound(ts.ValueObject):\n"
+        "    _a: GoodLeaf\n"
+        "    _b: GoodLeaf\n"
+        "    def __init__(self, a: str, b: str) -> None:\n"
+        "        object.__setattr__(self, '_a', GoodLeaf(a))\n"
+        "        object.__setattr__(self, '_b', GoodLeaf(b))\n"
+        "    def __str__(self) -> str:\n"
+        "        return 'x'\n",
+    )
+    findings = check_tree(tmp_path)
+    assert not any("GoodLeaf" in f and "TB015" in f for f in findings)
+    assert not any("GoodLeaf" in f and "TB018" in f for f in findings)
+    assert any(
+        "TB015" in f and "WrongExit.__int__ is a mismatched exit; a leaf defines exactly "
+        "its backing type's conversion dunder" in f
+        for f in findings
+    )
+    assert any(
+        "TB018" in f and "HandRolled.__str__ hand-rolls its exit; a canonical exit is a "
+        "one-line delegation to its canonical_* policy" in f
+        for f in findings
+    )
+    assert any(
+        "TB015" in f and "Compound.__str__ is a primitive exit; a structured domain "
+        "object has no primitive exit — decompose through leaf components" in f
+        for f in findings
+    )
+
+
+def test_composition_norms(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/domain/shapes.py",
+        "import tesser.domain as ts\n"
+        "class Flag(ts.ValueObject):\n"
+        "    _value: bool\n"
+        "    def __init__(self, value: bool) -> None:\n"
+        "        object.__setattr__(self, '_value', value)\n"
+        "class Mixed(ts.ValueObject):\n"
+        "    _raw: str\n"
+        "    _on: bool\n"
+        "    def __init__(self, raw: str, on: bool) -> None:\n"
+        "        object.__setattr__(self, '_raw', raw)\n"
+        "        object.__setattr__(self, '_on', on)\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "TB016" in f and "Flag wraps bool; bool and complex are not value-object "
+        "material — model the raw value or reach for an enum" in f
+        for f in findings
+    )
+    assert any(
+        "TB016" in f and "Mixed field _raw is a bare primitive; a compound backs "
+        "itself with child value objects" in f
+        for f in findings
+    )
+    assert not any("field _on" in f for f in findings)
+
+
+def test_a_value_object_has_one_construction_door(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/domain/doors.py",
+        "import tesser.domain as ts\n"
+        "@ts.function\n"
+        "def canonical_str(value: str) -> str:\n"
+        "    return value\n"
+        "class Slug(ts.ValueObject):\n"
+        "    _value: str\n"
+        "    def __init__(self, value: str) -> None:\n"
+        "        object.__setattr__(self, '_value', value)\n"
+        "    def __str__(self) -> str:\n"
+        "        return canonical_str(self._value)\n"
+        "    @classmethod\n"
+        "    def parse(cls, raw: str) -> 'Slug':\n"
+        "        return cls(raw.strip())\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "TB017" in f and "Slug.parse is a second construction door; a value object has "
+        "one door — its own __init__" in f
+        for f in findings
+    )
+
+
+def test_domain_returns_and_spec_returns(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/domain/returns.py",
+        "import tesser.domain as ts\n"
+        "class WidgetSpec(ts.Spec):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n"
+        "class Widget(ts.Entity):\n"
+        "    def __init__(self, spec: WidgetSpec) -> None:\n"
+        "        self._text = spec.text\n"
+        "    def label(self) -> str:\n"
+        "        return self._text.upper()\n"
+        "    def snapshot(self) -> WidgetSpec:\n"
+        "        return WidgetSpec(text=self._text)\n"
+        "    def touch(self) -> None:\n"
+        "        return None\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "TB019" in f and "Widget.label returns str; a domain object's public behavior "
+        "hands back domain objects — the licensed exits are the protocol dunders, "
+        "the canonical exit, and a -> None transition" in f
+        for f in findings
+    )
+    assert any(
+        "TB015" in f and "Widget.snapshot returns a spec; a domain object never "
+        "serializes itself — a spec is construction data, not an exit" in f
+        for f in findings
+    )
+    assert not any("Widget.touch" in f for f in findings)

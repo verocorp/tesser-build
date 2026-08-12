@@ -310,7 +310,23 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   fixture-param finding lands on the def line python-app's four markers
   sit on, so the markers are load-bearing again and the four TB090
   baseline entries burned off (ratchet 152 → 148).
-- [ ] **Shells-substrate re-derivation ruling for the remaining tessercheck
+- [x] **Shells-substrate re-derivation ruling — RESOLVED by Chris ruling
+  2026-08-12: "value objects only return other value objects", no tooling
+  exemption.** Landed in the shell-norms wave: TB010–TB012 and TB015–TB019
+  enforce on every ts.* tree; the analyzer's own Violation decomposed into
+  Path/Line/Code/Text leaf VOs with canonical_str/canonical_int policy
+  exits, the finding renderer moved from Violation.__str__ (a banned
+  compound exit) to the application service composing from leaves, internal
+  records (ImportEdge/TesserImport/Ignore/Comment) wrapped their slots and
+  dropped their public accessors (same-module attribute reads — the rules
+  judge public surface, and nothing outside the domain touches them), and
+  spike-llmport's Booking exposes Step/CustomerName/Slot leaves with the
+  ""-for-None mapping at the views boundary. Entity BARE field accessors
+  (Module.name() -> str) remain unjudged — the reference analyzer had the
+  same carve-out (bare returns route to TB010/TB011, which are VO/mutable
+  scoped); if the ruling should reach those too, that is a new rule, not
+  this port. TB031 still carries separately.
+- [ ] (superseded — kept for the original framing) **the remaining tessercheck
   ports** (opened 2026-08-12, ports wave — blocks merge-plan PR 3b).
   TB010–TB012, TB015–TB018, and TB019 were derived on the frozen-dataclass
   substrate, and their core terms do not transfer to the shell idiom

@@ -34,6 +34,9 @@ HOLE_NAMES: dict[str, str] = {
     "node.name": "⟨function⟩",
     "child.func.id": "⟨builtin⟩",
     "field": "⟨field⟩",
+    "item.name": "⟨method⟩",
+    "leaf": "⟨scalar⟩",
+    "named": "⟨types⟩",
 }
 
 APPLIES_TO: dict[str, str] = {
@@ -44,6 +47,14 @@ APPLIES_TO: dict[str, str] = {
     "Codebase._shadowing_violations": "every module (tooling exempt)",
     "Codebase._string_equality_violations": "every module (tooling exempt)",
     "Codebase._vo_field_violations": "value object class",
+    "Codebase._exposure_violations": "value object class",
+    "Codebase._composition_violations": "value object class",
+    "Codebase._door_violations": "value object class",
+    "Codebase._exit_violations": "value object conversion dunder",
+    "Codebase._structured_exit_violations": "entity or aggregate conversion dunder",
+    "Codebase._copy_violations": "entity or aggregate accessor",
+    "Codebase._held_root_violations": "entity or aggregate field",
+    "Codebase._domain_return_violations": "domain object public method",
     "a service method": "public service method",
     "a client method": "client protocol method",
     "a domain constructor": "aggregate or entity `__init__`",
