@@ -121,10 +121,10 @@ python3 roadmap/generate.py --check      # ROADMAP.md is generated — never han
 (cd roadmap && pytest tests -q)          # the generator's own suite (needs Go)
 ```
 
-The python-app sigcheck gate is a **ratchet**, not a zero-findings check.
-`scripts/sigcheck-ratchet --regenerate` rewrites the accepted-debt baseline
-after you fix findings; review its diff, since the baseline is
-branch-controlled.
+Every tessercheck gate is a plain zero-findings check — there is no ratchet
+and no code-family off switch. A finding is either fixed or carries a
+site-level `# tessercheck:ignore [TB0xx]` at the line it excuses (an ignore
+that suppresses nothing is itself a finding).
 
 ## Git & shipping
 

@@ -18,34 +18,28 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 
 ## Import-totality wave followups (2026-08-06, branch `worktree-io-import-restrictions`)
 
-- [ ] **python-app conformance + remove the sigcheck CI ratchet.** The wave's
-  rules (tesser exactly-once-as-ts, whole-tree totality, pure-core allowlist,
-  module-only aliased context imports) fired 173 findings on the freshly
-  migrated tree, so the zero-findings CI step became a ratchet
-  (`examples/python-app/sigcheck-ratchet` — the accepted-debt baseline as a
-  normalized finding set, not a scalar count: any finding outside the baseline
-  fails even at an equal total, and an analyzer crash fails closed). The
-  srv-wire-vocabulary wave rebased the baseline to 176 (clause re-wordings;
-  wire modules migrated, leaving 5 named-debt lines). It is the only ratchet:
-  spike-llmport's burned to zero in the same wave.
-  - **Mechanical (~145):** 123 import-form conversions (`from x.client import Y`
-    → `import x.client as client`), 13 `@ts.function` declarations + 7
-    `import tesser.srv as ts` in srv (bootstrap keeps `tesser.context`),
-    2 Final constants.
-  - **Blocked on the rulings below:** srv host-machinery classes
-    (`Route`/`Match`/`HttpHost`), bootstrap's `App`/`Config`/`HttpConfig`/
-    `CleanupStack` (the `tesser.app` question), 3 homeless modules
-    (`errors`/`serialization`/`lifecycle`), 4 wire exception classes +
-    1 wire type alias (the `ts.Error` track and the alias-declaration story
-    — and these 5 are HARD COLLISIONS, not conformance debt: an exception
-    must subclass Exception so "a wire class declares its block" has no
-    satisfiable form, and the only sigcheck-clean alias spelling
-    (`JSONObject: Final = ...`) is rejected by mypy --strict [valid-type];
-    burning them requires a rule change, verified 2026-08-07),
-    several pure-core hits.
-  - **Then:** regenerate the baseline per fix (the sed|sort pipeline in
-    test.yml); at zero findings delete `sigcheck-ratchet` and restore the plain
-    zero-findings step.
+- [x] **python-app conformance + remove the sigcheck CI ratchet** — RESOLVED
+  2026-08-12 (zero-findings wave, merge-plan PR 4b). The ~104 member-form
+  imports converted to aliased module imports, the srv/bootstrap functions
+  declared with `@ts.function`, and the missing `tesser.*` imports added;
+  the ratchet script and baseline are deleted and the CI step is a plain
+  zero-findings gate. The ruling-blocked residue is now 20 site-level
+  ignores instead of baseline entries, each still tracked by its own open
+  item below: 3 homeless modules (TB040 ignore-file), 2 tests-package
+  helper modules (TB041 ignore-file, conftest-governance followup), 6
+  host-machinery/bootstrap classes (TB051/TB052 — the `tesser.app`
+  question), 2 type aliases with no conformant spelling (TB051, the alias
+  hard collision), 2 `if __name__ == "__main__"` guards (TB051 — a
+  module-level `if` has no conformant form), 15 pure-core imports (TB062 —
+  the allowlist candidates), and 1 shape test importing `tesser.context`
+  (TB050). Burning an ignore = resolving its ruling; TB090 keeps the set
+  honest.
+  The hard-collision detail preserved from the ratchet era: an exception
+  must subclass `Exception`, so a declares-its-block rule has no satisfiable
+  form for wire exception classes (the `ts.Error` track), and the only
+  analyzer-clean alias spelling (`JSONObject: Final = ...`) is rejected by
+  `mypy --strict` [valid-type] — verified 2026-08-07. Those carry ignores
+  until their rule changes land.
 - [ ] **Host-class vocabulary — PARTIALLY RESOLVED (srv-wire-vocabulary wave,
   2026-08-07).** `tesser.srv` now exists (Host, Port, Record, Request,
   Response — package-scoped kinds per the errors-ruling grammar; `Record`
@@ -78,11 +72,9 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `FilesystemSourceReader` prunes the standard skip set (`.venv`, `build`,
   `node_modules`, …), and an unparseable module, a non-UTF-8 file, or a
   module defined twice is a per-file TB043 finding instead of a crashed
-  run. (3) the ratchet baseline is
-  branch-controlled — a PR can regenerate `sigcheck-ratchet` upward and pass;
-  accepted while the ratchet is temporary because the file's diff is itself
-  reviewed, but a shrink-only comparison against the base branch is the
-  durable fix if the ratchet outlives the conformance wave. (4) quoted
+  run. (3) MOOT 2026-08-12: the ratchet is deleted — the zero-findings wave
+  replaced the baseline with site-level ignores, which are reviewed in the
+  diff like any code and self-report when stale (TB090). (4) quoted
   annotations (`money: 'domain.Money'`) bypass every classification-based
   rule — the exact bug class PR #44 / v0.0.13.1 fixed in tessercheck-py with
   one shared walk; sigcheck needs the same treatment. (5) `async def` is

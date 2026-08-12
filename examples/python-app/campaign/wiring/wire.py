@@ -2,18 +2,18 @@ from __future__ import annotations
 
 import tesser.context as ts
 
-from campaign.adapters.gateways.repo_memory import InMemoryCampaignRepository
-from campaign.application.service import CampaignRepository, CampaignService, TargetPolicy
-from campaign.client.client import Client
-from campaign.wiring.config import Config
+import campaign.adapters.gateways.repo_memory as repo_memory
+import campaign.application.service as service
+import campaign.client.client as client
+import campaign.wiring.config as config
 from errors import invalid
 from lifecycle import Closeable
 
 
 @ts.function
-def repo_for(cfg: Config) -> tuple[CampaignRepository, Closeable]:
+def repo_for(cfg: config.Config) -> tuple[service.CampaignRepository, Closeable]:
     if cfg.storage == "memory":
-        repo = InMemoryCampaignRepository()
+        repo = repo_memory.InMemoryCampaignRepository()
         return repo, repo
     if not cfg.storage:
         raise invalid("missing_coordinate", "campaign storage coordinate is required")
@@ -21,6 +21,6 @@ def repo_for(cfg: Config) -> tuple[CampaignRepository, Closeable]:
 
 
 @ts.function
-def build(cfg: Config, policy: TargetPolicy) -> tuple[Client, Closeable]:
+def build(cfg: config.Config, policy: service.TargetPolicy) -> tuple[client.Client, Closeable]:
     repo, closeable = repo_for(cfg)
-    return CampaignService(repo, policy), closeable
+    return service.CampaignService(repo, policy), closeable

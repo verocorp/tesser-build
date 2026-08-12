@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import tesser.application as ts
 
-from campaign.domain.campaign import Campaign
-from campaign.domain.short_link import ShortLink
+import campaign.domain.campaign as campaign
+import campaign.domain.short_link as short_link
 
 
 class MoneyParts(ts.Parts):
@@ -52,7 +52,7 @@ class PolicyOutcome(ts.Parts):
 
 
 @ts.function
-def campaign_parts(c: Campaign) -> CampaignParts:
+def campaign_parts(c: campaign.Campaign) -> CampaignParts:
     return CampaignParts(
         id=str(c.id),
         budget=MoneyParts(
@@ -64,7 +64,7 @@ def campaign_parts(c: Campaign) -> CampaignParts:
 
 
 @ts.function
-def short_link_parts(link: ShortLink) -> ShortLinkParts:
+def short_link_parts(link: short_link.ShortLink) -> ShortLinkParts:
     return ShortLinkParts(
         slug=str(link.slug),
         target_url=str(link.target_url),

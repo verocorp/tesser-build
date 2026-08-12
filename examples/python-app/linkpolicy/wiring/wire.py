@@ -4,16 +4,16 @@ import tesser.context as ts
 
 from errors import invalid
 from lifecycle import Closeable
-from linkpolicy.adapters.gateways.repo_memory import InMemoryVerdictRepository
-from linkpolicy.application.service import LinkPolicyService, VerdictRepository
-from linkpolicy.client.client import Client
-from linkpolicy.wiring.config import Config
+import linkpolicy.adapters.gateways.repo_memory as repo_memory
+import linkpolicy.application.service as service
+import linkpolicy.client.client as client
+import linkpolicy.wiring.config as config
 
 
 @ts.function
-def repo_for(cfg: Config) -> tuple[VerdictRepository, Closeable]:
+def repo_for(cfg: config.Config) -> tuple[service.VerdictRepository, Closeable]:
     if cfg.storage == "memory":
-        repo = InMemoryVerdictRepository()
+        repo = repo_memory.InMemoryVerdictRepository()
         return repo, repo
     if not cfg.storage:
         raise invalid("missing_coordinate", "linkpolicy storage coordinate is required")
@@ -21,6 +21,6 @@ def repo_for(cfg: Config) -> tuple[VerdictRepository, Closeable]:
 
 
 @ts.function
-def build(cfg: Config) -> tuple[Client, Closeable]:
+def build(cfg: config.Config) -> tuple[client.Client, Closeable]:
     repo, closeable = repo_for(cfg)
-    return LinkPolicyService(repo), closeable
+    return service.LinkPolicyService(repo), closeable

@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__ import annotations  # tessercheck:ignore-file TB040
 
 import threading
 from typing import Protocol

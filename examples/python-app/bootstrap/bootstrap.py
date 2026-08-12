@@ -6,12 +6,14 @@ import linkpolicy.client.client as linkpolicy_client
 import linkpolicy.wiring.wire as linkpolicy_wire
 import reports.client.client as reports_client
 import reports.wiring.wire as reports_wire
+import tesser.context as ts
+
 from bootstrap.config import Config
-from campaign.adapters.gateways.target_policy import LinkPolicyTargetPolicy
+import campaign.adapters.gateways.target_policy as target_policy
 from lifecycle import Closeable
 
 
-class CleanupStack:
+class CleanupStack:  # tessercheck:ignore TB051
 
     def __init__(self) -> None:
         self._resources: list[Closeable] = []
@@ -30,7 +32,7 @@ class CleanupStack:
         return errors
 
 
-class App:
+class App:  # tessercheck:ignore TB051
 
     def __init__(
         self,
@@ -53,13 +55,14 @@ class App:
         self.close_errors = tuple(self._stack.close_all())
 
 
+@ts.function
 def new(cfg: Config) -> App:
     stack = CleanupStack()
     try:
         policy_client, policy_closeable = linkpolicy_wire.build(cfg.linkpolicy)
         stack.push(policy_closeable)
 
-        policy = LinkPolicyTargetPolicy(policy_client)
+        policy = target_policy.LinkPolicyTargetPolicy(policy_client)
         campaign_client, campaign_closeable = campaign_wire.build(cfg.campaign, policy)
         stack.push(campaign_closeable)
 

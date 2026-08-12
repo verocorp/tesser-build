@@ -5,9 +5,12 @@ import threading
 from types import FrameType
 from typing import Optional
 
+import tesser.srv as ts
+
 from lifecycle import Closeable, Host
 
 
+@ts.function
 def run_until_signal(host: Host, app: Closeable) -> None:
     stop = threading.Event()
 

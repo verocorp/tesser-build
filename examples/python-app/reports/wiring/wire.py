@@ -5,11 +5,11 @@ import tesser.context as ts
 import campaign.client.client as campaign_client
 import linkpolicy.client.client as linkpolicy_client
 from lifecycle import Closeable
-from reports.adapters.gateways.campaign_links import CampaignLinkGateway
-from reports.adapters.gateways.policy_verdicts import PolicyVerdictGateway
-from reports.application.service import ReportsService
-from reports.client.client import Client
-from reports.wiring.config import Config
+import reports.adapters.gateways.campaign_links as campaign_links
+import reports.adapters.gateways.policy_verdicts as policy_verdicts
+import reports.application.service as reports_service
+import reports.client.client as client
+import reports.wiring.config as config
 
 
 class NoResources(ts.Wiring):
@@ -20,7 +20,7 @@ class NoResources(ts.Wiring):
 
 @ts.function
 def build(
-    cfg: Config, campaign_client: campaign_client.Client, policy_client: linkpolicy_client.Client
-) -> tuple[Client, Closeable]:
-    service = ReportsService(CampaignLinkGateway(campaign_client), PolicyVerdictGateway(policy_client))
+    cfg: config.Config, campaign_client: campaign_client.Client, policy_client: linkpolicy_client.Client
+) -> tuple[client.Client, Closeable]:
+    service = reports_service.ReportsService(campaign_links.CampaignLinkGateway(campaign_client), policy_verdicts.PolicyVerdictGateway(policy_client))
     return service, NoResources()

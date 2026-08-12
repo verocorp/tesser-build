@@ -74,8 +74,8 @@ run_python_app() {
   MYPYPATH=.:../../tesser-py mypy --strict errors.py lifecycle.py serialization.py protocol campaign linkpolicy reports bootstrap srv tests conftest.py || return 1
   step "pytest"
   pytest -q || return 1
-  step "tessercheck ratchet (python-app accepted debt)"
-  "$ROOT/scripts/sigcheck-ratchet" || return 1
+  step "tessercheck (zero findings over the whole tree)"
+  PYTHONPATH=../../tessercheck-py:../../tesser-py python3 -m tessercheck . || return 1
 }
 
 run_serdepy() {

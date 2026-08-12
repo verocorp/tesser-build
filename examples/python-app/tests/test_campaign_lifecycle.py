@@ -3,24 +3,18 @@ from __future__ import annotations
 import json
 import pytest
 
-from campaign.adapters.gateways.repo_memory import InMemoryCampaignRepository
-from campaign.adapters.handlers.http import Handler
-from campaign.application.service import CampaignService
+import campaign.adapters.gateways.repo_memory as repo_memory
+import campaign.adapters.handlers.http as http
+import campaign.application.service as service
 import tesser.testing as ts
 
-from campaign.application.parts import PolicyOutcome
-from campaign.application.service import TargetPolicy
-from campaign.client.client import (
-    AddLinkRequest,
-    CreateCampaignRequest,
-    DeactivateLinkRequest,
-    GetCampaignRequest,
-    ResolveRequest,
-)
-from campaign.domain.campaign import Campaign, CampaignSpec
-from campaign.domain.money import Money, MoneyAmount, MoneyCurrency, MoneySpec
-from campaign.domain.short_link import ShortLinkSpec
-from campaign.domain.values import CampaignID
+import campaign.application.parts as parts
+import campaign.application.service as campaign_service
+import campaign.client.client as client
+import campaign.domain.campaign as campaign
+import campaign.domain.money as money
+import campaign.domain.short_link as short_link
+import campaign.domain.values as values
 from errors import DomainError, Kind
 from protocol.http import HttpRequest
 from srv.http.host import respond
@@ -28,67 +22,67 @@ from srv.http.host import respond
 
 
 @ts.fake
-class FakeTargetPolicyAllowAll(TargetPolicy):
-    def check(self, target_url: str) -> PolicyOutcome:
-        return PolicyOutcome(True, "ok")
+class FakeTargetPolicyAllowAll(campaign_service.TargetPolicy):
+    def check(self, target_url: str) -> parts.PolicyOutcome:
+        return parts.PolicyOutcome(True, "ok")
 
 
 def test_deactivate_link_flips_the_link_inactive() -> None:
-    svc = CampaignService(InMemoryCampaignRepository(), FakeTargetPolicyAllowAll())
-    id = svc.create_campaign(CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
-    svc.add_link(AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
-    view = svc.deactivate_link(DeactivateLinkRequest(campaign_id=id, slug="promo"))
+    svc = service.CampaignService(repo_memory.InMemoryCampaignRepository(), FakeTargetPolicyAllowAll())
+    id = svc.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
+    svc.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
+    view = svc.deactivate_link(client.DeactivateLinkRequest(campaign_id=id, slug="promo"))
     assert [link.active for link in view.links] == [False]
 
 
 def test_deactivate_link_survives_a_reload() -> None:
-    svc = CampaignService(InMemoryCampaignRepository(), FakeTargetPolicyAllowAll())
-    id = svc.create_campaign(CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
-    svc.add_link(AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
-    svc.deactivate_link(DeactivateLinkRequest(campaign_id=id, slug="promo"))
-    view = svc.get_campaign(GetCampaignRequest(campaign_id=id))
+    svc = service.CampaignService(repo_memory.InMemoryCampaignRepository(), FakeTargetPolicyAllowAll())
+    id = svc.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
+    svc.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
+    svc.deactivate_link(client.DeactivateLinkRequest(campaign_id=id, slug="promo"))
+    view = svc.get_campaign(client.GetCampaignRequest(campaign_id=id))
     assert [link.active for link in view.links] == [False]
 
 
 def test_resolve_refuses_a_deactivated_link() -> None:
-    svc = CampaignService(InMemoryCampaignRepository(), FakeTargetPolicyAllowAll())
-    id = svc.create_campaign(CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
-    svc.add_link(AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
-    assert svc.resolve(ResolveRequest(slug="promo")).target_url == "https://ok.example/x"
-    svc.deactivate_link(DeactivateLinkRequest(campaign_id=id, slug="promo"))
+    svc = service.CampaignService(repo_memory.InMemoryCampaignRepository(), FakeTargetPolicyAllowAll())
+    id = svc.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
+    svc.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
+    assert svc.resolve(client.ResolveRequest(slug="promo")).target_url == "https://ok.example/x"
+    svc.deactivate_link(client.DeactivateLinkRequest(campaign_id=id, slug="promo"))
     with pytest.raises(DomainError) as e:
-        svc.resolve(ResolveRequest(slug="promo"))
+        svc.resolve(client.ResolveRequest(slug="promo"))
     assert e.value.kind is Kind.NOT_FOUND
     assert e.value.code == "link_missing"
 
 
 def test_deactivate_link_rejects_an_unknown_slug() -> None:
-    svc = CampaignService(InMemoryCampaignRepository(), FakeTargetPolicyAllowAll())
-    id = svc.create_campaign(CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
-    svc.add_link(AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
+    svc = service.CampaignService(repo_memory.InMemoryCampaignRepository(), FakeTargetPolicyAllowAll())
+    id = svc.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
+    svc.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     with pytest.raises(DomainError) as e:
-        svc.deactivate_link(DeactivateLinkRequest(campaign_id=id, slug="nosuch"))
+        svc.deactivate_link(client.DeactivateLinkRequest(campaign_id=id, slug="nosuch"))
     assert e.value.kind is Kind.NOT_FOUND
     assert e.value.code == "link_missing"
 
 
 def test_deactivate_link_rejects_an_unknown_campaign() -> None:
-    svc = CampaignService(InMemoryCampaignRepository(), FakeTargetPolicyAllowAll())
-    id = svc.create_campaign(CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
-    svc.add_link(AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
+    svc = service.CampaignService(repo_memory.InMemoryCampaignRepository(), FakeTargetPolicyAllowAll())
+    id = svc.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
+    svc.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     with pytest.raises(DomainError) as e:
         svc.deactivate_link(
-            DeactivateLinkRequest(campaign_id="fedcba9876543210", slug="promo")
+            client.DeactivateLinkRequest(campaign_id="fedcba9876543210", slug="promo")
         )
     assert e.value.kind is Kind.NOT_FOUND
     assert e.value.code == "campaign_missing"
 
 
 def test_deactivate_link_endpoint_returns_the_campaign_payload() -> None:
-    svc = CampaignService(InMemoryCampaignRepository(), FakeTargetPolicyAllowAll())
-    id = svc.create_campaign(CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
-    svc.add_link(AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
-    handler = Handler(svc)
+    svc = service.CampaignService(repo_memory.InMemoryCampaignRepository(), FakeTargetPolicyAllowAll())
+    id = svc.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
+    svc.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
+    handler = http.Handler(svc)
     resp = handler.deactivate_link(
         HttpRequest("POST", "/", {}, {}, {}, json.dumps({"campaign_id": id, "slug": "promo"}).encode("utf-8"))
     )
@@ -99,10 +93,10 @@ def test_deactivate_link_endpoint_returns_the_campaign_payload() -> None:
 
 
 def test_deactivate_link_endpoint_maps_a_missing_link_to_404() -> None:
-    svc = CampaignService(InMemoryCampaignRepository(), FakeTargetPolicyAllowAll())
-    id = svc.create_campaign(CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
-    svc.add_link(AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
-    handler = Handler(svc)
+    svc = service.CampaignService(repo_memory.InMemoryCampaignRepository(), FakeTargetPolicyAllowAll())
+    id = svc.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
+    svc.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
+    handler = http.Handler(svc)
     resp = respond(
         lambda: handler.deactivate_link(
             HttpRequest("POST", "/", {}, {}, {}, json.dumps({"campaign_id": id, "slug": "nosuch"}).encode("utf-8"))
@@ -112,11 +106,11 @@ def test_deactivate_link_endpoint_maps_a_missing_link_to_404() -> None:
 
 
 def test_resolve_endpoint_maps_a_deactivated_link_to_404() -> None:
-    svc = CampaignService(InMemoryCampaignRepository(), FakeTargetPolicyAllowAll())
-    id = svc.create_campaign(CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
-    svc.add_link(AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
-    handler = Handler(svc)
-    svc.deactivate_link(DeactivateLinkRequest(campaign_id=id, slug="promo"))
+    svc = service.CampaignService(repo_memory.InMemoryCampaignRepository(), FakeTargetPolicyAllowAll())
+    id = svc.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
+    svc.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
+    handler = http.Handler(svc)
+    svc.deactivate_link(client.DeactivateLinkRequest(campaign_id=id, slug="promo"))
     resp = respond(lambda: handler.resolve(HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b"")))
     assert resp.status_code == 404
 
@@ -124,45 +118,45 @@ def test_resolve_endpoint_maps_a_deactivated_link_to_404() -> None:
 @pytest.mark.parametrize("value", ["", "0123456789ABCDEF", "0123456789abcde", "0123456789abcdefa", "zzz"])
 def test_campaign_id_rejects_a_non_hex16_value(value: str) -> None:
     with pytest.raises(DomainError) as e:
-        CampaignID(value)
+        values.CampaignID(value)
     assert e.value.code == "invalid_campaign_id"
 
 
 @pytest.mark.parametrize("value", ["", "abc", "1.2.3"])
 def test_money_amount_rejects_an_unparseable_value(value: str) -> None:
     with pytest.raises(DomainError) as e:
-        MoneyAmount(value)
+        money.MoneyAmount(value)
     assert e.value.code == "invalid_budget_amount"
 
 
 def test_money_amount_rejects_a_negative_value() -> None:
     with pytest.raises(DomainError) as e:
-        MoneyAmount("-0.01")
+        money.MoneyAmount("-0.01")
     assert e.value.code == "invalid_budget_amount"
 
 
 @pytest.mark.parametrize("value", ["", "us", "usd", "USDD", "US1"])
 def test_money_currency_rejects_a_non_iso_code(value: str) -> None:
     with pytest.raises(DomainError) as e:
-        MoneyCurrency(value)
+        money.MoneyCurrency(value)
     assert e.value.code == "invalid_budget_currency"
 
 
 def test_money_propagates_a_child_rejection() -> None:
     with pytest.raises(DomainError) as e:
-        Money("1.00", "nope")
+        money.Money("1.00", "nope")
     assert e.value.code == "invalid_budget_currency"
 
 
 def test_campaign_rejects_a_duplicate_slug() -> None:
     with pytest.raises(DomainError) as e:
-        Campaign(
-            CampaignSpec(
+        campaign.Campaign(
+            campaign.CampaignSpec(
                 id="0123456789abcdef",
-                budget=MoneySpec(amount="1.00", currency="USD"),
+                budget=money.MoneySpec(amount="1.00", currency="USD"),
                 links=(
-                    ShortLinkSpec(slug="promo", target_url="https://ok.example/a", active=True),
-                    ShortLinkSpec(slug="promo", target_url="https://ok.example/b", active=True),
+                    short_link.ShortLinkSpec(slug="promo", target_url="https://ok.example/a", active=True),
+                    short_link.ShortLinkSpec(slug="promo", target_url="https://ok.example/b", active=True),
                 ),
             )
         )
@@ -172,13 +166,13 @@ def test_campaign_rejects_a_duplicate_slug() -> None:
 
 def test_campaign_wraps_an_invalid_link_with_its_index() -> None:
     with pytest.raises(DomainError) as e:
-        Campaign(
-            CampaignSpec(
+        campaign.Campaign(
+            campaign.CampaignSpec(
                 id="0123456789abcdef",
-                budget=MoneySpec(amount="1.00", currency="USD"),
+                budget=money.MoneySpec(amount="1.00", currency="USD"),
                 links=(
-                    ShortLinkSpec(slug="ok", target_url="https://ok.example/a", active=True),
-                    ShortLinkSpec(slug="BAD SLUG", target_url="https://ok.example/b", active=True),
+                    short_link.ShortLinkSpec(slug="ok", target_url="https://ok.example/a", active=True),
+                    short_link.ShortLinkSpec(slug="BAD SLUG", target_url="https://ok.example/b", active=True),
                 ),
             )
         )
@@ -187,7 +181,7 @@ def test_campaign_wraps_an_invalid_link_with_its_index() -> None:
 
 
 def test_create_campaign_endpoint_rejects_a_non_object_budget() -> None:
-    handler = Handler(CampaignService(InMemoryCampaignRepository(), FakeTargetPolicyAllowAll()))
+    handler = http.Handler(service.CampaignService(repo_memory.InMemoryCampaignRepository(), FakeTargetPolicyAllowAll()))
     resp = respond(
         lambda: handler.create_campaign(
             HttpRequest("POST", "/", {}, {}, {}, json.dumps({"budget": "100.00"}).encode("utf-8"))

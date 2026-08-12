@@ -123,20 +123,18 @@ pytest -q
 
 One more gate runs in CI and does **not** pass on a bare run yet. The tree
 declares itself with the `ts.*` shells, so `tesser-py` is on both paths and
-**sigcheck** (`examples/spike-shells`) audits it:
+**tessercheck** (`tessercheck-py/`) audits it:
 
 ```
 PYTHONPATH=../../tessercheck-py:../../tesser-py python3 -m tessercheck .
 ```
 
-That exits 1 with 176 findings today — the import-totality wave billed this
-tree after it had already reached zero. So CI gates the *difference*, not the
-count: the run is compared against `sigcheck-ratchet`, a frozen finding set
-with line numbers stripped. A finding outside the baseline fails even at an
-equal total, and a baseline entry that stops firing fails as stale, so a fix
-cannot buy a fresh violation. The baseline shrinks to nothing as the
-conformance wave lands (TODOS.md, "Import-totality wave followups"), and then
-the step goes back to plain zero findings.
+That exits 0 — the conformance wave burned the import-totality bill down to
+fixes plus site-level `# tessercheck:ignore` markers on the ruling-blocked
+sites (the homeless root modules, the host-machinery and bootstrap classes,
+the type aliases with no conformant spelling, and the pure-core allowlist
+candidates — each named in TODOS.md). An ignore that stops suppressing
+anything is itself a finding, so the opt-outs cannot outlive their reasons.
 
 `mypy --strict` + `pytest` are the same bar the other examples meet. On top of
 them, the architecture rules are **executable spec** — they fail on the violations

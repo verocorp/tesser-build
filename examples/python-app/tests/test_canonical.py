@@ -6,9 +6,9 @@ from decimal import Decimal
 
 import pytest
 
-from campaign.domain.campaign import Campaign
-from campaign.domain.money import Money
-from campaign.domain.short_link import ShortLink
+import campaign.domain.campaign as campaign
+import campaign.domain.money as money
+import campaign.domain.short_link as short_link
 from serialization import canonical_datetime, canonical_decimal, canonical_str
 from tests.support import CONVERSION_DUNDERS, DOMAIN_DIR
 
@@ -44,7 +44,7 @@ def test_canonical_datetime_rejects_naive() -> None:
 
 
 def test_structured_types_define_no_conversion_dunders() -> None:
-    for cls in (Money, ShortLink, Campaign):
+    for cls in (money.Money, short_link.ShortLink, campaign.Campaign):
         for name in CONVERSION_DUNDERS:
             assert name not in cls.__dict__, f"{cls.__name__} defines {name}"
 

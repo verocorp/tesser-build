@@ -8,10 +8,10 @@ from typing import Any, Final
 import tesser.srv as ts
 
 from bootstrap.bootstrap import App
-from campaign.adapters.handlers.http import Handler as CampaignHandler
+import campaign.adapters.handlers.http as http
 from errors import DomainError, InfraError, status_for
 from protocol.http import BadRequest, HttpRequest, HttpResponse, PayloadTooLarge, StreamingUnsupported
-from reports.adapters.handlers.http import Handler as ReportsHandler
+import reports.adapters.handlers.http as reports_http
 from srv.http.router import Route, match
 
 MAX_BUFFERED_BODY: Final[int] = 1_048_576
@@ -64,8 +64,8 @@ def respond(run: Callable[[], HttpResponse]) -> HttpResponse:
 
 @ts.function
 def routes_for(app: App) -> tuple[Route, ...]:
-    campaign = CampaignHandler(app.campaign)
-    reports = ReportsHandler(app.reports)
+    campaign = http.Handler(app.campaign)
+    reports = reports_http.Handler(app.reports)
     return (
         Route("POST", "/campaigns", campaign.create_campaign),
         Route("POST", "/links", campaign.add_link),

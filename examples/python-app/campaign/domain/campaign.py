@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import tesser.domain as ts
 
-from campaign.domain.money import Money, MoneySpec
-from campaign.domain.short_link import ShortLink, ShortLinkSpec
-from campaign.domain.values import CampaignID, Slug
-from errors import DomainError, conflict, invalid, not_found
+import campaign.domain.money as money
+import campaign.domain.short_link as short_link
+import campaign.domain.values as values
+from errors import DomainError, conflict, invalid, not_found  # tessercheck:ignore TB062
 
 
 class CampaignSpec(ts.Spec):
 
-    def __init__(self, id: str, budget: MoneySpec, links: tuple[ShortLinkSpec, ...]) -> None:
+    def __init__(self, id: str, budget: money.MoneySpec, links: tuple[short_link.ShortLinkSpec, ...]) -> None:
         self.id = id
         self.budget = budget
         self.links = links
@@ -19,33 +19,33 @@ class CampaignSpec(ts.Spec):
 class Campaign(ts.AggregateRoot):
 
     def __init__(self, spec: CampaignSpec) -> None:
-        self._id = CampaignID(spec.id)
-        self._budget = Money(spec.budget.amount, spec.budget.currency)
-        admitted: list[ShortLink] = []
+        self._id = values.CampaignID(spec.id)
+        self._budget = money.Money(spec.budget.amount, spec.budget.currency)
+        admitted: list[short_link.ShortLink] = []
         for i, link_spec in enumerate(spec.links):
             try:
-                link = ShortLink(link_spec)
+                link = short_link.ShortLink(link_spec)
             except DomainError as e:
                 raise invalid("invalid_short_link", f"invalid short link at index {i}: {e}") from e
             admitted = _admit(admitted, link)
         self._links = admitted
 
     @property
-    def id(self) -> CampaignID:
+    def id(self) -> values.CampaignID:
         return self._id
 
     @property
-    def budget(self) -> Money:
+    def budget(self) -> money.Money:
         return self._budget
 
     @property
-    def links(self) -> tuple[ShortLink, ...]:
+    def links(self) -> tuple[short_link.ShortLink, ...]:
         return tuple(link._clone() for link in self._links)
 
-    def add_short_link(self, spec: ShortLinkSpec) -> None:
-        self._links = _admit(self._links, ShortLink(spec))
+    def add_short_link(self, spec: short_link.ShortLinkSpec) -> None:
+        self._links = _admit(self._links, short_link.ShortLink(spec))
 
-    def deactivate_short_link(self, slug: Slug) -> None:
+    def deactivate_short_link(self, slug: values.Slug) -> None:
         for link in self._links:
             if link.slug == slug:
                 link.deactivate()
@@ -57,7 +57,7 @@ class Campaign(ts.AggregateRoot):
 
 
 @ts.function
-def _admit(links: list[ShortLink], link: ShortLink) -> list[ShortLink]:
+def _admit(links: list[short_link.ShortLink], link: short_link.ShortLink) -> list[short_link.ShortLink]:
     for existing in links:
         if existing.slug == link.slug:
             raise conflict("duplicate_slug", f"duplicate slug {link.slug} in campaign")

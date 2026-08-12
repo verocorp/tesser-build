@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import os
 
+import tesser.srv as ts
+
 from bootstrap.bootstrap import new
 from bootstrap.config import from_env
 from srv.http.host import HttpHost
 from srv.run import run_until_signal
 
 
+@ts.function
 def main() -> None:
     cfg = from_env(os.getenv)
     app = new(cfg)
@@ -16,5 +19,5 @@ def main() -> None:
     run_until_signal(host, app)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # tessercheck:ignore TB051
     main()
