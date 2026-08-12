@@ -607,6 +607,189 @@ def test_a_test_reaches_only_what_its_placement_allows(tmp_path: Path) -> None:
         for f in findings
     )
 
+def test_a_repository_sibling_test_reaches_its_kind_and_application_only(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/adapters/repositories/words.py",
+        "import tesser.adapters as ts\n"
+        "class WordsRepository(ts.Repository):\n"
+        "    def __init__(self) -> None:\n"
+        "        self._rows: dict[str, str] = {}\n",
+    )
+    write_module(tmp_path, "app/adapters/repositories/__init__.py", "")
+    write_module(tmp_path, "app/adapters/__init__.py", "")
+    write_module(
+        tmp_path,
+        "app/adapters/repositories/test_words.py",
+        "import app.adapters.repositories.words as words\n"
+        "import app.application.service as service\n"
+        "import app.domain.thing as thing\n"
+        "import far.client.client as farclient\n"
+        "def test_x() -> None:\n"
+        "    assert True\n",
+    )
+    write_module(
+        tmp_path,
+        "far/client/client.py",
+        "import tesser.context as ts\n"
+        "class Ping(ts.Request):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    write_module(tmp_path, "far/client/__init__.py", "")
+    write_module(
+        tmp_path,
+        "far/domain/thing.py",
+        "import tesser.domain as ts\n"
+        "class Tag(ts.ValueObject):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        object.__setattr__(self, '_text', text)\n",
+    )
+    write_module(tmp_path, "far/domain/__init__.py", "")
+    findings = check_tree(tmp_path)
+    assert any(
+        "app.adapters.repositories.test_words imports app.domain.thing, but a test placed "
+        "in repositories reaches only adapters.repositories, application of its own context; "
+        "a test reaches only what its placement allows" in f
+        for f in findings
+    )
+    assert any(
+        "app.adapters.repositories.test_words imports far.client.client, but a test placed "
+        "in repositories reaches no neighbouring context; "
+        "a test reaches only what its placement allows" in f
+        for f in findings
+    )
+    assert not any("test_words.py:1:" in f for f in findings)
+    assert not any("test_words.py:2:" in f for f in findings)
+
+def test_a_wiring_sibling_test_mirrors_production_wiring_reach(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(tmp_path, "app/wiring/__init__.py", "")
+    write_module(
+        tmp_path,
+        "app/wiring/test_wire.py",
+        "import app.application.service as service\n"
+        "import far.client.client as farclient\n"
+        "import app.domain.thing as thing\n"
+        "def test_x() -> None:\n"
+        "    assert True\n",
+    )
+    write_module(
+        tmp_path,
+        "far/client/client.py",
+        "import tesser.context as ts\n"
+        "class Ping(ts.Request):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    write_module(tmp_path, "far/client/__init__.py", "")
+    write_module(
+        tmp_path,
+        "far/domain/thing.py",
+        "import tesser.domain as ts\n"
+        "class Tag(ts.ValueObject):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        object.__setattr__(self, '_text', text)\n",
+    )
+    write_module(tmp_path, "far/domain/__init__.py", "")
+    findings = check_tree(tmp_path)
+    assert any(
+        "app.wiring.test_wire imports app.domain.thing, but a test placed in wiring "
+        "reaches only wiring, application, adapters, client of its own context; "
+        "a test reaches only what its placement allows" in f
+        for f in findings
+    )
+    assert not any("test_wire.py:1:" in f for f in findings)
+    assert not any("test_wire.py:2:" in f for f in findings)
+
+def test_a_client_sibling_test_reaches_only_its_own_client(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/client/test_client.py",
+        "import app.client.client as client\n"
+        "import app.domain.thing as thing\n"
+        "def test_x() -> None:\n"
+        "    assert True\n",
+    )
+    findings = check_tree(tmp_path)
+    assert any(
+        "app.client.test_client imports app.domain.thing, but a test placed in client "
+        "reaches only client of its own context; "
+        "a test reaches only what its placement allows" in f
+        for f in findings
+    )
+    assert not any("test_client.py:1:" in f for f in findings)
+
+def test_a_bootstrap_test_reaches_a_context_like_production_bootstrap(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "bootstrap/test_boot.py",
+        "import app.client.client as client\n"
+        "import app.domain.thing as thing\n"
+        "def test_x() -> None:\n"
+        "    assert True\n",
+    )
+    write_module(tmp_path, "bootstrap/__init__.py", "")
+    findings = check_tree(tmp_path)
+    assert any(
+        "bootstrap.test_boot imports app.domain.thing, but a test placed in "
+        "bootstrap reaches a context only through its wiring, client, and adapters; "
+        "a test reaches only what its placement allows" in f
+        for f in findings
+    )
+    assert not any("test_boot.py:1:" in f for f in findings)
+
+def test_a_protocol_test_reaches_no_context(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "protocol/test_proto.py",
+        "import app.client.client as client\n"
+        "def test_x() -> None:\n"
+        "    assert True\n",
+    )
+    write_module(tmp_path, "protocol/__init__.py", "")
+    findings = check_tree(tmp_path)
+    assert any(
+        "protocol.test_proto imports app.client.client, but a test placed in "
+        "protocol reaches no context; "
+        "a test reaches only what its placement allows" in f
+        for f in findings
+    )
+
+def test_a_test_that_resolves_to_no_tier_is_itself_a_finding(tmp_path: Path) -> None:
+    conforming_tree(tmp_path)
+    write_module(
+        tmp_path,
+        "app/adapters/test_flat.py",
+        "def test_x() -> None:\n"
+        "    assert True\n",
+    )
+    write_module(
+        tmp_path,
+        "app/adapters/blobs/test_blob.py",
+        "def test_x() -> None:\n"
+        "    assert True\n",
+    )
+    write_module(tmp_path, "app/adapters/blobs/__init__.py", "")
+    write_module(tmp_path, "app/adapters/__init__.py", "")
+    findings = check_tree(tmp_path)
+    assert any(
+        "app.adapters.test_flat resolves to no test tier; "
+        "a sibling test lives in a role package or an adapter kind package "
+        "(handlers, gateways, repositories)" in f
+        for f in findings
+    )
+    assert any(
+        "app.adapters.blobs.test_blob resolves to no test tier; "
+        "a sibling test lives in a role package or an adapter kind package "
+        "(handlers, gateways, repositories)" in f
+        for f in findings
+    )
+
 def test_a_context_tier_test_reaches_its_whole_context_and_a_neighbours_application(
     tmp_path: Path,
 ) -> None:

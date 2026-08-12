@@ -5,6 +5,41 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.28.0] - 2026-08-12
+
+The test-tier walk becomes total over in-context placements (#64).
+
+### Fixed
+- **A sibling test under `adapters/repositories/` was silently ungoverned**:
+  the adapters branch of the tier walk recognized only `handlers` and
+  `gateways`, so a repository's sibling test resolved to no tier and the
+  placement rules never ran on it — zero findings from non-coverage,
+  indistinguishable from conformance. `repositories` is now a tier mirroring
+  the gateway row's derivation: home `adapters.repositories`, reach
+  `application`, and no foreign row (a production repository fronts a backing
+  store inside its own context and never reaches a neighbour).
+- **A test under `wiring/` or `client/` crashed the whole run**: both roles
+  resolved to a tier the reach table had no row for, so `TEST_TIER_REACH[tier]`
+  raised `KeyError` and one misplaced test file took down the analyzer for the
+  entire tree. Both rows now derive from the production import matrix — wiring
+  reaches `application`, `adapters`, `client` plus a neighbour's client
+  (mirroring `TB061`'s "gateways and wiring" rule); client reaches only its
+  own client.
+- **A test that resolves to no tier is now itself a TB070 finding** ("a
+  sibling test lives in a role package or an adapter kind package") instead
+  of silently escaping the placement rules — a flat `adapters/test_x.py`, an
+  unrecognized adapters subrole, and a test under an unknown role package all
+  report instead of passing. This closes the issue's stated failure mode for
+  the next unrecognized directory name, not just the two it documented.
+- **Tests under `bootstrap/` and `protocol/` were the same leak one level
+  up** — a `test_*` basename diverts to the test-module rules before the app
+  package rules run, and only `srv` had a test tier, so a test parked in
+  either package escaped both rule sets. Both now mirror their production
+  import rules: a bootstrap test reaches a context only through its wiring,
+  client, and adapters (the TB063 rule); a protocol test reaches no context
+  at all. A root-level `tests/` directory stays placement-free on purpose —
+  it is the app tier, where the integration tests live.
+
 ## [0.0.27.0] - 2026-08-12
 
 One analyzer, every tree: the last two frozen-dataclass examples move onto
