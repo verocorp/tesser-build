@@ -107,11 +107,12 @@ scripts/verify python-app spike-shells   # or just the ones you touched
 
 Two things to know:
 
-- **`scripts/verify` covers more than the tree you are editing.** The four
-  `tessercheck` CLI gates run the *shipped* analyzer over `examples/python`,
-  `examples/python-app`, `examples/serdepy`, and `examples/errorspy`, so a
-  layout change in an example can break the analyzer without touching a file
-  under `tessercheck-py/`. That is not hypothetical — it is how PR #56 failed.
+- **`scripts/verify` covers more than the tree you are editing.** The
+  analyzer gates run over every `ts.*` tree, and the parked legacy analyzer's
+  CLI gates still run over `examples/python-app`, `examples/serdepy`, and
+  `examples/errorspy`, so a layout change in an example can break an analyzer
+  without touching a file under either analyzer tree. That is not
+  hypothetical — it is how PR #56 failed.
 - **`roadmap` is not in it.** `generate.py --check` and 2 of its 32 tests shell
   out to `go run ./cmd/analyzers-json`, so it is a Go/Python hybrid, not a
   Python tree. It stays a workflow job:

@@ -151,4 +151,4 @@ future increment; the import-boundary side lives with the composition root,
 - Go: `go.md#the-composition-root` (the public package + the embedding struct)
 - Python: `python.md#the-composition-root` — a `typing.Protocol` for the
   `Client` (satisfied structurally, no adapter code), backed by the
-  `examples/python/` and `examples/python-app/` worked examples.
+  `examples/python-app/` worked example.

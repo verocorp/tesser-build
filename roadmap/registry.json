@@ -25,8 +25,9 @@
       "title": "Value objects",
       "skill": "value-objects.md",
       "py_example": [
-        "examples/python/campaign",
-        "examples/python/catalog"
+        "examples/python-app/campaign/domain/values.py",
+        "examples/python-app/campaign/domain/money.py",
+        "examples/python-app/campaign/domain/labels.py"
       ],
       "go_example": [
         "examples/ddd",
@@ -58,7 +59,7 @@
       "title": "Entities",
       "skill": "entities.md",
       "py_example": [
-        "examples/python"
+        "examples/python-app/campaign/domain/short_link.py"
       ],
       "go_example": [
         "examples/ddd"
@@ -75,7 +76,7 @@
       "title": "Aggregates",
       "skill": "aggregates.md",
       "py_example": [
-        "examples/python"
+        "examples/python-app/campaign/domain/campaign.py"
       ],
       "go_example": [
         "examples/ddd"
@@ -102,7 +103,7 @@
       "title": "Application services",
       "skill": "application-services.md",
       "py_example": [
-        "examples/python"
+        "examples/python-app/campaign/application"
       ],
       "go_example": [
         "examples/ddd",
@@ -157,7 +158,6 @@
       "title": "Gateway: repository",
       "skill": "repositories.md",
       "py_example": [
-        "examples/python",
         "examples/python-app/campaign/adapters/gateways"
       ],
       "go_example": [
@@ -297,7 +297,6 @@
       "title": "Norm: comments",
       "skill": "comments.md",
       "py_example": [
-        "examples/python",
         "examples/python-app",
         "examples/errorspy"
       ],
@@ -340,7 +339,6 @@
       "title": "Norm: domain return",
       "skill": "domain-return.md",
       "py_example": [
-        "examples/python",
         "examples/python-app",
         "examples/serdepy",
         "examples/errorspy"

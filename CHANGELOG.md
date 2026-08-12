@@ -5,6 +5,32 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.26.0] - 2026-08-12
+
+The Python skill teaches what the analyzer enforces, from the code CI
+verifies — and the frozen-dataclass founding example retires.
+
+### Changed
+
+- `skills/tesser-build/python.md` rewritten end to end onto the shell
+  idiom: every code block mirrors `examples/python-app` (fidelity-audited
+  block against file), the analyzer's family codes are cited inline, the
+  construction-door ruling is recorded as revised for the shells (a value
+  object's one door takes primitives and child VOs; entities and
+  aggregates take exactly one spec), and the srv/wire vocabulary
+  graduation is folded in. skill-version 30.
+- `examples/python-app` gains the collection value object `Labels`
+  (`campaign/domain/labels.py`): sorted-tuple canonicalization at the one
+  door, duplicate keys and empty values rejected, entries read back as
+  `LabelValue` value objects.
+
+### Removed
+
+- `examples/python` — the frozen-dataclass founding example. Its two
+  unique derivations live on in the shell idiom (`Money` and the new
+  `Labels`, both in python-app), every doc and registry reference is
+  repointed, and the legacy analyzer's acceptance gate retired with it.
+
 ## [0.0.25.0] - 2026-08-12
 
 The seven shape norms land on shells, under the ruling: value objects only

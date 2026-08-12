@@ -28,19 +28,11 @@ set -uo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT" || exit 1
 
-TREES=(python spike-shells spike-llmport python-app serdepy errorspy tesser-py vobase tessercheck-py tessercheck-py-legacy)
+TREES=(spike-shells spike-llmport python-app serdepy errorspy tesser-py vobase tessercheck-py tessercheck-py-legacy)
 
 failed=()
 
 step() { echo "  → $*"; }
-
-run_python() {
-  cd "$ROOT/examples/python" || return 1
-  step "mypy --strict"
-  MYPYPATH=. mypy --strict campaign catalog serialization.py tests conftest.py || return 1
-  step "pytest"
-  pytest -q || return 1
-}
 
 run_spike_shells() {
   cd "$ROOT/examples/spike-shells" || return 1
@@ -152,11 +144,11 @@ run_tessercheck_py_legacy() {
   step "pytest"
   pytest -q || return 1
   cd "$ROOT" || return 1
-  # These four gate the LEGACY analyzer against the example trees. They used to
+  # These three gate the LEGACY analyzer against the example trees. They used to
   # live only in the tessercheck-py CI job, so a layout change in python-app
   # could pass every python-app gate and still break discovery — which is
   # exactly what happened in PR #56.
-  for target in "examples/python" "--app-root examples/python-app" "examples/serdepy" "examples/errorspy"; do
+  for target in "--app-root examples/python-app" "examples/serdepy" "examples/errorspy"; do
     step "tessercheck-legacy $target"
     # shellcheck disable=SC2086
     PYTHONPATH=tessercheck-py-legacy python3 -m tessercheck $target || return 1
@@ -168,7 +160,6 @@ run_tree() {
   echo
   echo "=== $tree ==="
   case "$tree" in
-    python)         run_python ;;
     spike-shells)   run_spike_shells ;;
     spike-llmport)  run_spike_llmport ;;
     python-app)     run_python_app ;;

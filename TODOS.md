@@ -351,8 +351,26 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   contract (`testdata/tb031/`) carries over unchanged whenever its
   implementation lands.
 
-- [ ] **The final coupled wave: tree migrations + legacy deletion + the
-  docs sweep** (scoped 2026-08-12 after the shell-norms wave; deferred
+- [ ] **The final coupled wave — REMAINING HALF (serdepy/errorspy +
+  legacy retirement).** Landed 2026-08-12 (docs wave): `python.md` rewritten
+  onto the shells end to end (every code block mirrors
+  `examples/python-app`; the srv/wire vocabulary graduation item is folded
+  in), `examples/python` DELETED — its two unique derivations found shell
+  homes (`Money` was already `python-app/campaign/domain/money.py`;
+  `Labels` ported as `python-app/campaign/domain/labels.py` with a sibling
+  test), every doc reference repointed (testing/serialization/comments/
+  public-interface/coverage/CLAUDE/READMEs), the roadmap registry's
+  py_example rows repointed and ROADMAP.md regenerated, the legacy
+  analyzer's acceptance gate and tree-fixture classification test retired
+  with the tree, and skill-version bumped to 30. Still open, in order:
+  (1) migrate `examples/serdepy` and `examples/errorspy` to shells and
+  sweep `serialization.md`/`errors.md` the way `python.md` was swept;
+  (2) then delete `tessercheck-py-legacy/` + its verify tree + CI job,
+  rework `roadmap/generate.py`'s py_checks import onto the graduated
+  analyzer's registry (RULES.md), and finish the `rationale/coverage.md`
+  Python-column rework.
+- [x] ~~superseded framing~~ **tree migrations + legacy deletion + docs
+  sweep as one unit** (scoped 2026-08-12 after the shell-norms wave; deferred
   together per Chris — "leave skill docs for later"). These cannot land
   separately: `skills/tesser-build/python.md` teaches from
   `examples/python` (9 path references), `serialization.md` from

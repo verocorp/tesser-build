@@ -238,7 +238,7 @@ is ruled.
   class, and at what grain ("unit" = a type, a callable, or a concern). Cut
   from v0: too ambiguous on the right shape to encode as doctrine.
 - **Table tests / `@pytest.mark.parametrize`.** Prior art points both ways.
-  Currently used for rejection cases in `examples/python`; not ruled.
+  Currently used for rejection cases in the worked trees; not ruled.
 - **Coverage stance.** No percentage gate anywhere, and v0 inherits that —
   binary pass/fail. Revisit only if live use shows coverage gaming.
 - **An equality-test tripwire.** A checker requiring each value object to carry

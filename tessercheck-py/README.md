@@ -16,8 +16,8 @@ clause, with a family code and exact fixture coverage. `python3 rules.py
 The pre-merge analyzer (the frozen-dataclass-era `TB001`–`TB033` checks with
 the structural classifier) is parked at
 [`../tessercheck-py-legacy/`](../tessercheck-py-legacy/) while
-`examples/python`, `examples/serdepy`, `examples/errorspy`, and
-`examples/python-app`'s domain are still frozen-dataclass trees — its checks
+`examples/serdepy` and `examples/errorspy` are still frozen-dataclass
+trees — its checks
 are what validate them. The tree-migration wave deletes it.
 
 ## Running tessercheck on any tree
