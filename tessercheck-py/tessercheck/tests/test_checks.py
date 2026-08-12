@@ -3012,6 +3012,12 @@ def test_a_placed_test_reaches_the_app_shell_only_where_its_placement_does(tmp_p
         tmp_path,
         "srv/test_host.py",
         "import bootstrap.wire\n"
+        "import tests.test_root\n"
+        "def test_ok() -> None:\n    assert True\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "tests/test_root.py",
         "def test_ok() -> None:\n    assert True\n",
     )
     conftest.write_module(
@@ -3031,6 +3037,11 @@ def test_a_placed_test_reaches_the_app_shell_only_where_its_placement_does(tmp_p
         for f in findings
     )
     assert not any("srv.test_host imports bootstrap.wire" in f for f in findings)
+    assert any(
+        "srv.test_host imports tests.test_root, but a test placed in srv "
+        "does not reach that package" in f
+        for f in findings
+    )
     assert any(
         f"bootstrap.test_wire imports srv.http, but a test placed in bootstrap {clause}" in f
         for f in findings
