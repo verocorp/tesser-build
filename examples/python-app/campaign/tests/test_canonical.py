@@ -51,7 +51,9 @@ def test_structured_types_define_no_conversion_dunders() -> None:
 
 def test_every_domain_conversion_dunder_routes_through_a_canonical_helper() -> None:
     domain_dir = pathlib.Path(__file__).resolve().parent.parent / "domain"
+    assert domain_dir.is_dir(), f"domain package not found at {domain_dir}"
     dunders = ("__str__", "__int__", "__float__", "__bytes__")
+    assert sorted(domain_dir.glob("*.py")), f"no domain modules under {domain_dir}"
     for path in sorted(domain_dir.glob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):

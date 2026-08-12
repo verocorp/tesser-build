@@ -5,6 +5,7 @@ import tesser.testing as ts
 
 import campaign.adapters.handlers.cli as cli
 import campaign.client.client as campaign_client
+from errors import DomainError, invalid
 from protocol.cli import CliRequest, UsageError
 
 
@@ -70,3 +71,10 @@ def test_a_missing_argument_raises_a_usage_error() -> None:
     with pytest.raises(UsageError):
         cli.Handler(client).create_campaign(CliRequest(("100.00",)))
     assert client.requests == []
+
+
+def test_a_client_failure_propagates_out_of_the_handler() -> None:
+    client = FakeCampaignClientScripted(error=invalid("bad_amount", "must be positive"))
+    with pytest.raises(DomainError):
+        cli.Handler(client).create_campaign(CliRequest(("-5", "USD")))
+    assert len(client.requests) == 1
