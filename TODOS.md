@@ -74,12 +74,11 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   resolution and top-level-only classification were fixed in-wave):**
   (1) the `conftest` and `__main__` exemptions are basename-anywhere — a
   production `campaign/domain/conftest.py` escapes all rules (fold into the
-  conftest-governance followup). (2) `FilesystemSourceReader` sweeps every
-  `*.py` under the root with no exclusions (`.venv`, `build`, generated
-  code), one unparseable or non-UTF-8 file crashes the whole run, and a role
-  FILE colliding with a role PACKAGE (`domain.py` + `domain/__init__.py`)
-  aborts on duplicate names — per-file isolation and an exclusion surface are
-  consumer-facing needs when sigcheck graduates. (3) the ratchet baseline is
+  conftest-governance followup). (2) RESOLVED 2026-08-11 (harness wave):
+  `FilesystemSourceReader` prunes the standard skip set (`.venv`, `build`,
+  `node_modules`, …), and an unparseable module, a non-UTF-8 file, or a
+  module defined twice is a per-file TB043 finding instead of a crashed
+  run. (3) the ratchet baseline is
   branch-controlled — a PR can regenerate `sigcheck-ratchet` upward and pass;
   accepted while the ratchet is temporary because the file's diff is itself
   reviewed, but a shrink-only comparison against the base branch is the
@@ -313,6 +312,18 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `import <context>.<role> as <alias>`. Role-`__init__` dispatch now keys on
   the reader's `is_package` bit instead of the child-name prefix, closing
   soundness hole (7) below.
+
+- [ ] **Shared ignore-marker namespace during the merge transition** (opened
+  2026-08-11, harness wave). sigcheck now honors `# tessercheck:ignore`
+  (scoped: `TB0xx` codes; file form: `tessercheck:ignore-file`; a marker
+  that suppresses nothing is a TB090 finding). python-app carries four
+  pre-existing bare markers aimed at tessercheck-py's TB030 monkeypatch
+  rule; sigcheck sees them, they suppress no sigcheck finding, so four
+  TB090 entries sit in the ratchet baseline as named transitional debt.
+  They burn off when TB030 ports into sigcheck (merge-plan PR 3): the
+  ported finding lands on the same def line and the markers become
+  load-bearing again. If PR 3 slips, revisit — a marker namespace split
+  (`sigcheck:ignore`) is the fallback, at the cost of renaming at PR 4.
 
 ## Toolkit
 

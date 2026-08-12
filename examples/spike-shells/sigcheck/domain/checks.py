@@ -1,4 +1,7 @@
 import ast
+import io
+import re
+import tokenize
 from typing import Final
 
 import tesser.domain as ts
@@ -96,6 +99,12 @@ PROTOCOL_PACKAGE: Final[str] = "protocol"
 
 TESSER: Final[str] = "tesser"
 
+IGNORE_MARKER: Final[str] = "tessercheck:ignore"
+
+IGNORE_FILE_MARKER: Final[str] = "tessercheck:ignore-file"
+
+CODE_SHAPE: Final[re.Pattern[str]] = re.compile(r"TB[0-9]{3}\Z")
+
 ROLE_TESSER_PACKAGE: Final[dict[str, str]] = {
     "domain": "tesser.domain",
     "application": "tesser.application",
@@ -187,7 +196,19 @@ TOOLING_MODULES: Final[frozenset[str]] = frozenset({"rules"})
 
 CORE_STDLIB: Final[dict[str, frozenset[str]]] = {
     "domain": frozenset(
-        {"__future__", "typing", "enum", "decimal", "fractions", "datetime", "math", "re", "ast"}
+        {
+            "__future__",
+            "typing",
+            "enum",
+            "decimal",
+            "fractions",
+            "datetime",
+            "math",
+            "re",
+            "ast",
+            "io",
+            "tokenize",
+        }
     ),
     "client": frozenset({"__future__", "typing"}),
     "application": frozenset({"__future__", "typing"}),
@@ -198,15 +219,66 @@ DOMAIN_BLOCKS: Final[frozenset[str]] = frozenset({"aggregate", "entity", "valueo
 
 class Violation(ts.ValueObject):
 
+    _path: str
+    _line: int
+    _code: str
     _message: str
 
-    def __init__(self, message: str) -> None:
+    def __init__(self, path: str, line: int, code: str, message: str) -> None:
+        if not path:
+            raise ValueError("path must be non-empty")
+        if line < 1:
+            raise ValueError("line must be positive")
+        if not code:
+            raise ValueError("code must be non-empty")
         if not message:
             raise ValueError("message must be non-empty")
+        object.__setattr__(self, "_path", path)
+        object.__setattr__(self, "_line", line)
+        object.__setattr__(self, "_code", code)
         object.__setattr__(self, "_message", message)
 
+    def path(self) -> str:
+        return self._path
+
+    def line(self) -> int:
+        return self._line
+
+    def code(self) -> str:
+        return self._code
+
     def __str__(self) -> str:
-        return self._message
+        return f"{self._path}:{self._line}: {self._code} {self._message}"
+
+
+class Ignore(ts.ValueObject):
+
+    _line: int
+    _codes: tuple[str, ...]
+    _file_level: bool
+
+    def __init__(self, line: int, codes: tuple[str, ...], file_level: bool) -> None:
+        if line < 1:
+            raise ValueError("line must be positive")
+        object.__setattr__(self, "_line", line)
+        object.__setattr__(self, "_codes", codes)
+        object.__setattr__(self, "_file_level", file_level)
+
+    def line(self) -> int:
+        return self._line
+
+    def codes(self) -> tuple[str, ...]:
+        return self._codes
+
+    def file_level(self) -> bool:
+        return self._file_level
+
+    def suppresses(self, violation: Violation) -> bool:
+        if self._file_level and not self._codes:
+            return False
+        if self._codes and violation.code() not in self._codes:
+            return False
+        return self._file_level or violation.line() == self._line
 
 
 class ImportEdge(ts.ValueObject):
@@ -267,7 +339,8 @@ class TesserImport(ts.ValueObject):
 
 class ModuleSpec(ts.Spec):
 
-    def __init__(self, name: str, source: str, is_package: bool) -> None:
+    def __init__(self, path: str, name: str, source: str, is_package: bool) -> None:
+        self.path = path
         self.name = name
         self.source = source
         self.is_package = is_package
@@ -278,10 +351,11 @@ class Module(ts.Entity):
     def __init__(self, spec: ModuleSpec) -> None:
         if not spec.name:
             raise ValueError("module name must be non-empty")
-        try:
-            tree = ast.parse(spec.source)
-        except SyntaxError as error:
-            raise ValueError(f"module {spec.name} does not parse: {error}") from error
+        if not spec.path:
+            raise ValueError("module path must be non-empty")
+        tree = ast.parse(spec.source)
+        self._path = spec.path
+        self._ignores = self._scan_ignores(spec.source)
         self._name = spec.name
         self._is_package = spec.is_package
         parts = spec.name.split(".")
@@ -351,6 +425,33 @@ class Module(ts.Entity):
             (local, target, original) for local, (target, original) in self._imported.items()
         )
 
+    @staticmethod
+    def _scan_ignores(source: str) -> tuple[Ignore, ...]:
+        found: list[Ignore] = []
+        try:
+            tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
+        except (tokenize.TokenError, IndentationError):
+            return ()
+        for token in tokens:
+            if token.type != tokenize.COMMENT:
+                continue
+            text = token.string.lstrip("#").strip()
+            if text.startswith(IGNORE_FILE_MARKER):
+                rest = text[len(IGNORE_FILE_MARKER) :]
+                file_level = True
+            elif text.startswith(IGNORE_MARKER):
+                rest = text[len(IGNORE_MARKER) :]
+                file_level = False
+            else:
+                continue
+            if rest and rest[0] not in " \t":
+                continue
+            codes = tuple(part for part in rest.replace(",", " ").split() if part)
+            if any(not CODE_SHAPE.match(code) for code in codes):
+                continue
+            found.append(Ignore(line=token.start[0], codes=codes, file_level=file_level))
+        return tuple(found)
+
     def _relative_base(self, level: int) -> tuple[str, ...]:
         if level == 0:
             return ()
@@ -358,6 +459,12 @@ class Module(ts.Entity):
 
     def name(self) -> str:
         return self._name
+
+    def path(self) -> str:
+        return self._path
+
+    def ignores(self) -> tuple[Ignore, ...]:
+        return self._ignores
 
     def is_package(self) -> bool:
         return self._is_package
@@ -401,23 +508,89 @@ class Module(ts.Entity):
 
 class CodebaseSpec(ts.Spec):
 
-    def __init__(self, sources: tuple[tuple[str, str, bool], ...]) -> None:
+    def __init__(self, sources: tuple[tuple[str, str, str | None, bool], ...]) -> None:
         self.sources = sources
 
 
 class Codebase(ts.AggregateRoot):
 
     def __init__(self, spec: CodebaseSpec) -> None:
-        modules = tuple(
-            Module(ModuleSpec(name=name, source=source, is_package=is_package))
-            for name, source, is_package in spec.sources
-        )
-        names = [module.name() for module in modules]
-        if len(names) != len(set(names)):
-            raise ValueError("module names must be unique")
-        self._modules = modules
+        modules: list[Module] = []
+        broken: list[Violation] = []
+        paths_by_name: dict[str, list[str]] = {}
+        for path, name, _, _ in spec.sources:
+            paths_by_name.setdefault(name, []).append(path)
+        for path, name, source, is_package in spec.sources:
+            others = ", ".join(other for other in paths_by_name[name] if other != path)
+            if others:
+                broken.append(
+                    Violation(
+                        path,
+                        1,
+                        "TB043",
+                        f"{name} is also defined by {others}; a module has one definition",
+                    )
+                )
+                continue
+            if source is None:
+                broken.append(
+                    Violation(
+                        path,
+                        1,
+                        "TB043",
+                        f"{name} could not be read as UTF-8 text; "
+                        "every checked module is readable UTF-8 Python",
+                    )
+                )
+                continue
+            try:
+                modules.append(
+                    Module(ModuleSpec(path=path, name=name, source=source, is_package=is_package))
+                )
+            except SyntaxError as error:
+                broken.append(
+                    Violation(
+                        path,
+                        error.lineno or 1,
+                        "TB043",
+                        f"{name} does not parse ({error.msg}); every checked module parses",
+                    )
+                )
+        self._modules = tuple(modules)
+        self._broken = tuple(broken)
 
     def violations(self) -> tuple[Violation, ...]:
+        found = list(self._broken)
+        found.extend(self._rule_violations())
+        kept: list[Violation] = []
+        used: set[tuple[str, int]] = set()
+        by_path = {module.path(): module for module in self._modules}
+        for violation in found:
+            module = by_path.get(violation.path())
+            suppressed = False
+            if module is not None:
+                for ignore in module.ignores():
+                    if ignore.suppresses(violation):
+                        used.add((module.path(), ignore.line()))
+                        suppressed = True
+                if suppressed:
+                    continue
+            kept.append(violation)
+        for module in self._modules:
+            for ignore in module.ignores():
+                if (module.path(), ignore.line()) not in used:
+                    kept.append(
+                        Violation(
+                            module.path(),
+                            ignore.line(),
+                            "TB090",
+                            f"{module.name()} carries an ignore that suppresses nothing; "
+                            "an ignore comment suppresses an actual finding",
+                        )
+                    )
+        return tuple(kept)
+
+    def _rule_violations(self) -> tuple[Violation, ...]:
         blocks = self._classify()
         contexts = self._contexts()
         found: list[Violation] = []
@@ -498,8 +671,11 @@ class Codebase(ts.AggregateRoot):
                 return self._context_tests_init_violations(module)
             return (
                 Violation(
+                    module.path(),
+                    1,
+                    "TB041",
                     f"{module.name()} is neither a test module nor conftest; "
-                    "a context tests package holds only test modules and conftest"
+                    "a context tests package holds only test modules and conftest",
                 ),
             )
         if len(parts) >= 2 and parts[1] in ROLES:
@@ -508,7 +684,10 @@ class Codebase(ts.AggregateRoot):
             if len(parts) == 2:
                 return (
                     Violation(
-                        f"{module.name()} is a role module; a role is a package, never a module"
+                        module.path(),
+                        1,
+                        "TB041",
+                        f"{module.name()} is a role module; a role is a package, never a module",
                     ),
                 )
             return self._role_module_violations(module, parts[1], blocks) + self._import_violations(
@@ -516,21 +695,32 @@ class Codebase(ts.AggregateRoot):
             )
         return (
             Violation(
+                module.path(),
+                1,
+                "TB041",
                 f"{module.name()} is not a context module; "
-                "a context holds only domain, application, client, adapters, wiring, and tests modules"
+                "a context holds only domain, application, client, adapters, wiring, and tests modules",
             ),
         )
 
     def _context_init_violations(self, module: Module) -> tuple[Violation, ...]:
         return tuple(
-            Violation(f"{module.name()} __init__ declares code at line {stmt.lineno}; a context __init__ is empty")
+            Violation(
+                module.path(),
+                stmt.lineno,
+                "TB042",
+                f"{module.name()} __init__ declares code; a context __init__ is empty",
+            )
             for stmt in module.body()
         )
 
     def _protocol_init_violations(self, module: Module) -> tuple[Violation, ...]:
         return tuple(
             Violation(
-                f"{module.name()} __init__ declares code at line {stmt.lineno}; a protocol __init__ is empty"
+                module.path(),
+                stmt.lineno,
+                "TB042",
+                f"{module.name()} __init__ declares code; a protocol __init__ is empty",
             )
             for stmt in module.body()
         )
@@ -540,8 +730,11 @@ class Codebase(ts.AggregateRoot):
             return ()
         return (
             Violation(
+                module.path(),
+                1,
+                "TB040",
                 f"{module.name()} belongs to no governed package; "
-                "every module belongs to a context, srv, bootstrap, tests, or the protocol package"
+                "every module belongs to a context, srv, bootstrap, tests, or the protocol package",
             ),
         )
 
@@ -549,23 +742,31 @@ class Codebase(ts.AggregateRoot):
         if len(module.name().split(".")) == 1:
             return tuple(
                 Violation(
-                    f"{module.name()} __init__ declares code at line {stmt.lineno}; "
-                    "a tests package holds only test modules and conftest"
+                    module.path(),
+                    stmt.lineno,
+                    "TB041",
+                    f"{module.name()} __init__ declares code; "
+                    "a tests package holds only test modules and conftest",
                 )
                 for stmt in module.body()
             )
         return (
             Violation(
+                module.path(),
+                1,
+                "TB041",
                 f"{module.name()} is neither a test module nor conftest; "
-                "a tests package holds only test modules and conftest"
+                "a tests package holds only test modules and conftest",
             ),
         )
 
     def _context_tests_init_violations(self, module: Module) -> tuple[Violation, ...]:
         return tuple(
             Violation(
-                f"{module.name()} __init__ declares code at line {stmt.lineno}; "
-                "a context tests __init__ is empty"
+                module.path(),
+                stmt.lineno,
+                "TB042",
+                f"{module.name()} __init__ declares code; a context tests __init__ is empty",
             )
             for stmt in module.body()
         )
@@ -576,8 +777,11 @@ class Codebase(ts.AggregateRoot):
             if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
                 found.append(
                     Violation(
-                        f"{module.name()} __init__ declares code at line {stmt.lineno}; "
-                        "a role __init__ only re-exports from its own role"
+                        module.path(),
+                        stmt.lineno,
+                        "TB042",
+                        f"{module.name()} __init__ declares code; "
+                        "a role __init__ only re-exports from its own role",
                     )
                 )
         for edge in module.import_edges():
@@ -586,8 +790,11 @@ class Codebase(ts.AggregateRoot):
             if not target.startswith(module.name() + "."):
                 found.append(
                     Violation(
-                        f"{module.name()}:{lineno} imports {target}; "
-                        "a role __init__ only re-exports from its own role"
+                        module.path(),
+                        lineno,
+                        "TB042",
+                        f"{module.name()} imports {target}; "
+                        "a role __init__ only re-exports from its own role",
                     )
                 )
             found.extend(self._form_violations(module, edge))
@@ -596,8 +803,10 @@ class Codebase(ts.AggregateRoot):
     def _app_init_violations(self, module: Module) -> tuple[Violation, ...]:
         return tuple(
             Violation(
-                f"{module.name()} __init__ declares code at line {stmt.lineno}; "
-                "a srv or bootstrap __init__ is empty"
+                module.path(),
+                stmt.lineno,
+                "TB042",
+                f"{module.name()} __init__ declares code; a srv or bootstrap __init__ is empty",
             )
             for stmt in module.body()
         )
@@ -619,28 +828,52 @@ class Codebase(ts.AggregateRoot):
             lineno = imp.lineno()
             seen_any = True
             if target != package:
-                found.append(Violation(f"{module.name()}:{lineno} imports {target}; {only_clause}"))
+                found.append(
+                    Violation(
+                        module.path(),
+                        lineno,
+                        "TB050",
+                        f"{module.name()} imports {target}; {only_clause}",
+                    )
+                )
             elif seen_own:
                 found.append(
-                    Violation(f"{module.name()}:{lineno} imports {target} again; {once_clause}")
+                    Violation(
+                        module.path(),
+                        lineno,
+                        "TB050",
+                        f"{module.name()} imports {target} again; {once_clause}",
+                    )
                 )
             else:
                 seen_own = True
                 if imp.from_form():
                     found.append(
                         Violation(
-                            f"{module.name()}:{lineno} imports names from {target}; {once_clause}"
+                            module.path(),
+                            lineno,
+                            "TB050",
+                            f"{module.name()} imports names from {target}; {once_clause}",
                         )
                     )
                 elif not imp.as_ts():
                     found.append(
                         Violation(
-                            f"{module.name()}:{lineno} imports {target} without the ts alias; "
-                            f"{once_clause}"
+                            module.path(),
+                            lineno,
+                            "TB050",
+                            f"{module.name()} imports {target} without the ts alias; {once_clause}",
                         )
                     )
         if absent_clause is not None and not seen_any:
-            found.append(Violation(f"{module.name()} never imports {package}; {absent_clause}"))
+            found.append(
+                Violation(
+                    module.path(),
+                    1,
+                    "TB050",
+                    f"{module.name()} never imports {package}; {absent_clause}",
+                )
+            )
         return tuple(found)
 
     def _statement_violations(
@@ -657,29 +890,41 @@ class Codebase(ts.AggregateRoot):
                 if not self._declared(module, stmt, "function"):
                     found.append(
                         Violation(
-                            f"{module.name()}.{stmt.name}:{stmt.lineno} is an undeclared module function; "
-                            f"a {subject} function declares itself with @ts.function"
+                            module.path(),
+                            stmt.lineno,
+                            "TB051",
+                            f"{module.name()}.{stmt.name} is an undeclared module function; "
+                            f"a {subject} function declares itself with @ts.function",
                         )
                     )
             elif isinstance(stmt, ast.AnnAssign):
                 if not self._is_final(stmt.annotation):
                     found.append(
                         Violation(
-                            f"{module.name()}:{stmt.lineno} declares a module constant without Final; "
-                            f"a {subject} constant is Final"
+                            module.path(),
+                            stmt.lineno,
+                            "TB051",
+                            f"{module.name()} declares a module constant without Final; "
+                            f"a {subject} constant is Final",
                         )
                     )
             elif isinstance(stmt, ast.Assign):
                 found.append(
                     Violation(
-                        f"{module.name()}:{stmt.lineno} declares a module constant without Final; "
-                        f"a {subject} constant is Final"
+                        module.path(),
+                        stmt.lineno,
+                        "TB051",
+                        f"{module.name()} declares a module constant without Final; "
+                        f"a {subject} constant is Final",
                     )
                 )
             else:
                 found.append(
                     Violation(
-                        f"{module.name()}:{stmt.lineno} has a loose module-level statement; {loose_clause}"
+                        module.path(),
+                        stmt.lineno,
+                        "TB051",
+                        f"{module.name()} has a loose module-level statement; {loose_clause}",
                     )
                 )
         return tuple(found)
@@ -701,8 +946,11 @@ class Codebase(ts.AggregateRoot):
             if isinstance(stmt, ast.ClassDef):
                 found.append(
                     Violation(
-                        f"{module.name()}.{stmt.name}:{stmt.lineno} is a class; "
-                        "a bootstrap module holds only imports, declared functions, and Final constants"
+                        module.path(),
+                        stmt.lineno,
+                        "TB051",
+                        f"{module.name()}.{stmt.name} is a class; "
+                        "a bootstrap module holds only imports, declared functions, and Final constants",
                     )
                 )
         found.extend(
@@ -734,12 +982,24 @@ class Codebase(ts.AggregateRoot):
         for stmt in module.body():
             if isinstance(stmt, ast.ClassDef):
                 block = blocks.get((module.name(), stmt.name))
-                where = f"{module.name()}.{stmt.name}:{stmt.lineno}"
+                where = f"{module.name()}.{stmt.name}"
                 if block is None:
-                    found.append(Violation(f"{where} declares no ts.* base; a srv class declares its block"))
+                    found.append(
+                        Violation(
+                            module.path(),
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} declares no ts.* base; a srv class declares its block",
+                        )
+                    )
                 elif block != "host":
                     found.append(
-                        Violation(f"{where} is {KIND_NAME[block]}; only a host class lives in a srv module")
+                        Violation(
+                            module.path(),
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} is {KIND_NAME[block]}; only a host class lives in a srv module",
+                        )
                     )
         found.extend(
             self._statement_violations(
@@ -775,28 +1035,44 @@ class Codebase(ts.AggregateRoot):
             if head in contexts:
                 found.append(
                     Violation(
-                        f"{module.name()}:{lineno} imports {target}; "
-                        "a protocol module is context-generic and imports no context"
+                        module.path(),
+                        lineno,
+                        "TB064",
+                        f"{module.name()} imports {target}; "
+                        "a protocol module is context-generic and imports no context",
                     )
                 )
             elif head in APP_PACKAGES:
                 found.append(
                     Violation(
-                        f"{module.name()}:{lineno} imports {target}; "
-                        "a protocol module never imports srv or bootstrap"
+                        module.path(),
+                        lineno,
+                        "TB064",
+                        f"{module.name()} imports {target}; "
+                        "a protocol module never imports srv or bootstrap",
                     )
                 )
         for stmt in module.body():
             if isinstance(stmt, ast.ClassDef):
                 block = blocks.get((module.name(), stmt.name))
-                where = f"{module.name()}.{stmt.name}:{stmt.lineno}"
+                where = f"{module.name()}.{stmt.name}"
                 if block is None:
-                    found.append(Violation(f"{where} declares no ts.* base; a protocol class declares its block"))
+                    found.append(
+                        Violation(
+                            module.path(),
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} declares no ts.* base; a protocol class declares its block",
+                        )
+                    )
                 elif block not in PROTOCOL_KINDS:
                     found.append(
                         Violation(
+                            module.path(),
+                            stmt.lineno,
+                            "TB052",
                             f"{where} is {KIND_NAME[block]}; only protocol ports, protocol records, "
-                            "protocol rejections, protocol requests, and protocol responses live in a protocol module"
+                            "protocol rejections, protocol requests, and protocol responses live in a protocol module",
                         )
                     )
         found.extend(
@@ -818,21 +1094,34 @@ class Codebase(ts.AggregateRoot):
         for stmt in module.body():
             if isinstance(stmt, ast.ClassDef):
                 block = blocks.get((module.name(), stmt.name))
-                where = f"{module.name()}.{stmt.name}:{stmt.lineno}"
+                where = f"{module.name()}.{stmt.name}"
                 if block is None:
-                    found.append(Violation(f"{where} declares no ts.* base; every context class declares its block"))
+                    found.append(
+                        Violation(
+                            module.path(),
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} declares no ts.* base; every context class declares its block",
+                        )
+                    )
                 elif block in SRV_KINDS:
                     found.append(
                         Violation(
+                            module.path(),
+                            stmt.lineno,
+                            "TB052",
                             f"{where} is {KIND_NAME[block]}; "
-                            "a host lives in srv and a protocol kind in a protocol module, never a context"
+                            "a host lives in srv and a protocol kind in a protocol module, never a context",
                         )
                     )
                 elif KIND_ROLE[block] != role:
                     found.append(
                         Violation(
+                            module.path(),
+                            stmt.lineno,
+                            "TB052",
                             f"{where} is {KIND_NAME[block]}, whose home is {KIND_ROLE[block]}.py; "
-                            "a kind lives only in its role module"
+                            "a kind lives only in its role module",
                         )
                     )
         found.extend(
@@ -848,7 +1137,12 @@ class Codebase(ts.AggregateRoot):
             } & {"handler", "gateway", "repository"}
             if len(kinds) > 1:
                 found.append(
-                    Violation(f"{module.name()} mixes adapter kinds; an adapters module holds one adapter kind")
+                    Violation(
+                        module.path(),
+                        1,
+                        "TB052",
+                        f"{module.name()} mixes adapter kinds; an adapters module holds one adapter kind",
+                    )
                 )
         return tuple(found)
 
@@ -888,23 +1182,32 @@ class Codebase(ts.AggregateRoot):
                         if not holds_handler:
                             denied.append(
                                 Violation(
-                                    f"{module.name()}:{lineno} imports {target}; "
-                                    "only a handler imports its own context's client"
+                                    module.path(),
+                                    lineno,
+                                    "TB060",
+                                    f"{module.name()} imports {target}; "
+                                    "only a handler imports its own context's client",
                                 )
                             )
                     elif tail != role and tail not in SAME_CONTEXT_IMPORTS[role]:
                         denied.append(
                             Violation(
-                                f"{module.name()}:{lineno} imports {target}; the same-context matrix is "
+                                module.path(),
+                                lineno,
+                                "TB060",
+                                f"{module.name()} imports {target}; the same-context matrix is "
                                 "a role to itself, application to domain and client, adapters to "
-                                "application, wiring to application, adapters, and client"
+                                "application, wiring to application, adapters, and client",
                             )
                         )
                 elif tail != "client" or not (role == "wiring" or (role == "adapters" and holds_gateway)):
                     denied.append(
                         Violation(
-                            f"{module.name()}:{lineno} imports {target}; a context reaches another context "
-                            "only through its client, and only from gateways and wiring"
+                            module.path(),
+                            lineno,
+                            "TB061",
+                            f"{module.name()} imports {target}; a context reaches another context "
+                            "only through its client, and only from gateways and wiring",
                         )
                     )
                 found.extend(denied)
@@ -917,8 +1220,11 @@ class Codebase(ts.AggregateRoot):
             ):
                 found.append(
                     Violation(
-                        f"{module.name()}:{lineno} imports {target}; domain, client, and application "
-                        "import only their context, their tesser package, and the pure stdlib"
+                        module.path(),
+                        lineno,
+                        "TB062",
+                        f"{module.name()} imports {target}; domain, client, and application "
+                        "import only their context, their tesser package, and the pure stdlib",
                     )
                 )
         return tuple(found)
@@ -943,15 +1249,21 @@ class Codebase(ts.AggregateRoot):
                 ):
                     denied.append(
                         Violation(
-                            f"{module.name()}:{lineno} imports {target}; "
-                            "a host reaches a context only through its handlers"
+                            module.path(),
+                            lineno,
+                            "TB063",
+                            f"{module.name()} imports {target}; "
+                            "a host reaches a context only through its handlers",
                         )
                     )
                 elif package == "bootstrap" and tail not in ("wiring", "client", "adapters"):
                     denied.append(
                         Violation(
-                            f"{module.name()}:{lineno} imports {target}; bootstrap builds from "
-                            "wiring, clients, and adapters, never domain or application"
+                            module.path(),
+                            lineno,
+                            "TB063",
+                            f"{module.name()} imports {target}; bootstrap builds from "
+                            "wiring, clients, and adapters, never domain or application",
                         )
                     )
                 found.extend(denied)
@@ -960,7 +1272,10 @@ class Codebase(ts.AggregateRoot):
             elif package == "bootstrap" and pieces[0] == "srv":
                 found.append(
                     Violation(
-                        f"{module.name()}:{lineno} imports {target}; the composition root never imports a host"
+                        module.path(),
+                        lineno,
+                        "TB063",
+                        f"{module.name()} imports {target}; the composition root never imports a host",
                     )
                 )
         return tuple(found)
@@ -1011,9 +1326,12 @@ class Codebase(ts.AggregateRoot):
                     continue
                 found.append(
                     Violation(
-                        f"{module.name()}:{lineno} imports {target}, but a test placed in "
+                        module.path(),
+                        lineno,
+                        "TB070",
+                        f"{module.name()} imports {target}, but a test placed in "
                         "srv reaches a context only through its handlers; "
-                        "a test reaches only what its placement allows"
+                        "a test reaches only what its placement allows",
                     )
                 )
             return tuple(found)
@@ -1041,25 +1359,34 @@ class Codebase(ts.AggregateRoot):
                 if not allowed:
                     found.append(
                         Violation(
-                            f"{module.name()}:{lineno} imports {target}, but a test placed in "
+                            module.path(),
+                            lineno,
+                            "TB070",
+                            f"{module.name()} imports {target}, but a test placed in "
                             f"{tier} reaches only {own_roles} of its own context; "
-                            "a test reaches only what its placement allows"
+                            "a test reaches only what its placement allows",
                         )
                     )
             elif not foreign:
                 found.append(
                     Violation(
-                        f"{module.name()}:{lineno} imports {target}, but a test placed in "
+                        module.path(),
+                        lineno,
+                        "TB070",
+                        f"{module.name()} imports {target}, but a test placed in "
                         f"{tier} reaches no neighbouring context; "
-                        "a test reaches only what its placement allows"
+                        "a test reaches only what its placement allows",
                     )
                 )
             elif tail not in foreign:
                 found.append(
                     Violation(
-                        f"{module.name()}:{lineno} imports {target}, but a test placed in "
+                        module.path(),
+                        lineno,
+                        "TB070",
+                        f"{module.name()} imports {target}, but a test placed in "
                         f"{tier} reaches only {foreign_roles} of a neighbouring context; "
-                        "a test reaches only what its placement allows"
+                        "a test reaches only what its placement allows",
                     )
                 )
         return tuple(found)
@@ -1092,9 +1419,12 @@ class Codebase(ts.AggregateRoot):
         if not at_home:
             return (
                 Violation(
+                    module.path(),
+                    1,
+                    "TB070",
                     f"{module.name()} is an eval outside a gateway; "
                     "an eval lives only in a gateway, the one place a sampled real-model "
-                    "call is honest"
+                    "call is honest",
                 ),
             )
         # No placement call here: _test_tier already resolves an eval under
@@ -1130,23 +1460,31 @@ class Codebase(ts.AggregateRoot):
             if isinstance(stmt, (ast.Import, ast.ImportFrom)):
                 continue
             if isinstance(stmt, ast.FunctionDef):
-                where = f"{module.name()}.{stmt.name}:{stmt.lineno}"
+                where = f"{module.name()}.{stmt.name}"
                 if stmt.name.startswith("test_"):
                     continue
                 if self._declared(module, stmt, "helper"):
-                    found.extend(self._helper_violations(module, where, stmt, blocks))
+                    found.extend(self._helper_violations(module, where, stmt.lineno, stmt, blocks))
                     continue
                 found.append(
                     Violation(
+                        module.path(),
+                        stmt.lineno,
+                        "TB071",
                         f"{where} is neither a test nor a declared helper; a test module holds "
-                        "tests, @ts.helper builders, and @ts.fake doubles"
+                        "tests, @ts.helper builders, and @ts.fake doubles",
                     )
                 )
             elif isinstance(stmt, ast.ClassDef):
-                where = f"{module.name()}.{stmt.name}:{stmt.lineno}"
+                where = f"{module.name()}.{stmt.name}"
                 if not self._declared(module, stmt, "fake"):
                     found.append(
-                        Violation(f"{where} is an undeclared class; a test double declares itself with @ts.fake")
+                        Violation(
+                            module.path(),
+                            stmt.lineno,
+                            "TB072",
+                            f"{where} is an undeclared class; a test double declares itself with @ts.fake",
+                        )
                     )
                 elif not any(
                     blocks.get(key) in ("port", "client", "protocol_port")
@@ -1154,15 +1492,21 @@ class Codebase(ts.AggregateRoot):
                 ):
                     found.append(
                         Violation(
+                            module.path(),
+                            stmt.lineno,
+                            "TB072",
                             f"{where} implements no application port, protocol port, or client; "
-                            "a fake implements the port or client it doubles"
+                            "a fake implements the port or client it doubles",
                         )
                     )
             else:
                 found.append(
                     Violation(
-                        f"{module.name()}:{stmt.lineno} has a loose module-level statement; "
-                        "a test module holds only imports, tests, helpers, and fakes"
+                        module.path(),
+                        stmt.lineno,
+                        "TB071",
+                        f"{module.name()} has a loose module-level statement; "
+                        "a test module holds only imports, tests, helpers, and fakes",
                     )
                 )
         return tuple(found)
@@ -1171,6 +1515,7 @@ class Codebase(ts.AggregateRoot):
         self,
         module: Module,
         where: str,
+        line: int,
         fn: ast.FunctionDef,
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
@@ -1180,8 +1525,11 @@ class Codebase(ts.AggregateRoot):
             if not self._allowed_annotation(module, arg.annotation, blocks, frozenset()):
                 found.append(
                     Violation(
+                        module.path(),
+                        line,
+                        "TB073",
                         f"{where} parameter {arg.arg!r} is not a primitive; "
-                        "a helper takes only defaulted primitives"
+                        "a helper takes only defaulted primitives",
                     )
                 )
         positional = fn.args.posonlyargs + fn.args.args
@@ -1192,14 +1540,32 @@ class Codebase(ts.AggregateRoot):
         for arg in missing:
             found.append(
                 Violation(
-                    f"{where} parameter {arg.arg!r} has no default; a helper takes only defaulted primitives"
+                    module.path(),
+                    line,
+                    "TB073",
+                    f"{where} parameter {arg.arg!r} has no default; "
+                    "a helper takes only defaulted primitives",
                 )
             )
         if self._annotation_block(module, fn.returns, blocks) != "spec":
-            found.append(Violation(f"{where} does not return a ts.Spec; a helper builds a spec"))
+            found.append(
+                Violation(
+                    module.path(),
+                    line,
+                    "TB073",
+                    f"{where} does not return a ts.Spec; a helper builds a spec",
+                )
+            )
         for node in ast.walk(fn):
             if isinstance(node, (ast.If, ast.Match, ast.For, ast.While, ast.Try)):
-                found.append(Violation(f"{where} has control flow at line {node.lineno}; a helper only constructs"))
+                found.append(
+                    Violation(
+                        module.path(),
+                        node.lineno,
+                        "TB073",
+                        f"{where} has control flow; a helper only constructs",
+                    )
+                )
         return tuple(found)
 
     def _service_violations(
@@ -1212,23 +1578,26 @@ class Codebase(ts.AggregateRoot):
         methods = [item for item in cls.body if isinstance(item, ast.FunctionDef)]
         method_names = frozenset(method.name for method in methods)
         for item in methods:
-            where = f"{module.name()}.{cls.name}.{item.name}:{item.lineno}"
+            where = f"{module.name()}.{cls.name}.{item.name}"
             found.extend(self._delegation_violations(module, method_names, where, item))
             if item.name == "__init__":
-                found.extend(self._dependency_violations(module, where, item, blocks))
+                found.extend(self._dependency_violations(module, where, item.lineno, item, blocks))
                 continue
             if item.name.startswith("_"):
                 continue
             found.extend(
-                self._signature_violations(module, where, item, "request", "response", "a service method", blocks)
+                self._signature_violations(
+                    module, where, item.lineno, item, "request", "response", "a service method", "TB081", blocks
+                )
             )
-            found.extend(self._body_violations(where, item))
+            found.extend(self._body_violations(module, where, item))
         return tuple(found)
 
     def _dependency_violations(
         self,
         module: Module,
         where: str,
+        line: int,
         fn: ast.FunctionDef,
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
@@ -1238,7 +1607,13 @@ class Codebase(ts.AggregateRoot):
                 continue
             if self._annotation_block(module, arg.annotation, blocks) != "port":
                 found.append(
-                    Violation(f"{where} parameter {arg.arg!r} is not a ts.Port; a service depends only on ports")
+                    Violation(
+                        module.path(),
+                        line,
+                        "TB081",
+                        f"{where} parameter {arg.arg!r} is not a ts.Port; "
+                        "a service depends only on ports",
+                    )
                 )
         return tuple(found)
 
@@ -1252,9 +1627,11 @@ class Codebase(ts.AggregateRoot):
         for item in cls.body:
             if not isinstance(item, ast.FunctionDef) or item.name.startswith("_"):
                 continue
-            where = f"{module.name()}.{cls.name}.{item.name}:{item.lineno}"
+            where = f"{module.name()}.{cls.name}.{item.name}"
             found.extend(
-                self._signature_violations(module, where, item, "request", "response", "a client method", blocks)
+                self._signature_violations(
+                    module, where, item.lineno, item, "request", "response", "a client method", "TB081", blocks
+                )
             )
         return tuple(found)
 
@@ -1269,7 +1646,7 @@ class Codebase(ts.AggregateRoot):
         for item in cls.body:
             if not isinstance(item, ast.FunctionDef):
                 continue
-            where = f"{module.name()}.{cls.name}.{item.name}:{item.lineno}"
+            where = f"{module.name()}.{cls.name}.{item.name}"
             annotations = [
                 arg.annotation for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
             ]
@@ -1279,8 +1656,11 @@ class Codebase(ts.AggregateRoot):
                 if touched is not None:
                     found.append(
                         Violation(
+                            module.path(),
+                            item.lineno,
+                            "TB081",
                             f"{where} carries {KIND_NAME[touched]} in its signature; "
-                            f"{subject} speaks records, never domain objects"
+                            f"{subject} speaks records, never domain objects",
                         )
                     )
         return tuple(found)
@@ -1295,13 +1675,16 @@ class Codebase(ts.AggregateRoot):
         init = self._init_of(cls)
         if init is None:
             return ()
-        where = f"{module.name()}.{cls.name}.__init__:{init.lineno}"
+        where = f"{module.name()}.{cls.name}.__init__"
         for arg in self._params(init):
             if not self._allowed_annotation(module, arg.annotation, blocks, frozenset({"valueobject"})):
                 found.append(
                     Violation(
+                        module.path(),
+                        init.lineno,
+                        "TB080",
                         f"{where} parameter {arg.arg!r} is not allowed; "
-                        "a value object constructs from primitives and value objects"
+                        "a value object constructs from primitives and value objects",
                     )
                 )
         return tuple(found)
@@ -1316,18 +1699,26 @@ class Codebase(ts.AggregateRoot):
         for item in cls.body:
             if not isinstance(item, ast.FunctionDef):
                 continue
-            where = f"{module.name()}.{cls.name}.{item.name}:{item.lineno}"
+            where = f"{module.name()}.{cls.name}.{item.name}"
             if item.name != "__init__":
                 found.append(
-                    Violation(f"{where} defines a method on a spec; a spec only carries construction data")
+                    Violation(
+                        module.path(),
+                        item.lineno,
+                        "TB080",
+                        f"{where} defines a method on a spec; a spec only carries construction data",
+                    )
                 )
                 continue
             for arg in self._params(item):
                 if not self._allowed_annotation(module, arg.annotation, blocks, frozenset({"valueobject", "spec"})):
                     found.append(
                         Violation(
+                            module.path(),
+                            item.lineno,
+                            "TB080",
                             f"{where} parameter {arg.arg!r} is not allowed; "
-                            "a spec field is a primitive, a value object, or a child spec"
+                            "a spec field is a primitive, a value object, or a child spec",
                         )
                     )
         return tuple(found)
@@ -1342,16 +1733,26 @@ class Codebase(ts.AggregateRoot):
         for item in cls.body:
             if not isinstance(item, ast.FunctionDef):
                 continue
-            where = f"{module.name()}.{cls.name}.{item.name}:{item.lineno}"
+            where = f"{module.name()}.{cls.name}.{item.name}"
             if item.name != "__init__":
-                found.append(Violation(f"{where} defines a method on a DTO; a DTO carries data and nothing else"))
+                found.append(
+                    Violation(
+                        module.path(),
+                        item.lineno,
+                        "TB080",
+                        f"{where} defines a method on a DTO; a DTO carries data and nothing else",
+                    )
+                )
                 continue
             for arg in self._params(item):
                 if not self._allowed_annotation(module, arg.annotation, blocks, frozenset({"request", "response"})):
                     found.append(
                         Violation(
+                            module.path(),
+                            item.lineno,
+                            "TB080",
                             f"{where} parameter {arg.arg!r} is not allowed; "
-                            "a DTO field is a primitive or another DTO"
+                            "a DTO field is a primitive or another DTO",
                         )
                     )
         return tuple(found)
@@ -1367,12 +1768,17 @@ class Codebase(ts.AggregateRoot):
         if init is None:
             return (
                 Violation(
-                    f"{module.name()}.{cls.name}:{cls.lineno} defines no __init__; "
-                    f"{subject} constructs from exactly one ts.Spec"
+                    module.path(),
+                    cls.lineno,
+                    "TB080",
+                    f"{module.name()}.{cls.name} defines no __init__; "
+                    f"{subject} constructs from exactly one ts.Spec",
                 ),
             )
-        where = f"{module.name()}.{cls.name}.__init__:{init.lineno}"
-        return self._signature_violations(module, where, init, "spec", None, "a domain constructor", blocks)
+        where = f"{module.name()}.{cls.name}.__init__"
+        return self._signature_violations(
+            module, where, init.lineno, init, "spec", None, "a domain constructor", "TB080", blocks
+        )
 
     def _classify(self) -> dict[tuple[str, str], str]:
         blocks = dict(TESSER_BASE_BLOCKS)
@@ -1404,27 +1810,54 @@ class Codebase(ts.AggregateRoot):
         self,
         module: Module,
         where: str,
+        line: int,
         fn: ast.FunctionDef,
         param_block: str,
         return_block: str | None,
         subject: str,
+        code: str,
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         expected = TS_NAME_BY_BLOCK[param_block]
         found: list[Violation] = []
         params = self._params(fn)
         if fn.args.vararg is not None or fn.args.kwarg is not None:
-            found.append(Violation(f"{where} uses *args/**kwargs; {subject} takes exactly one {expected}"))
+            found.append(
+                Violation(
+                    module.path(),
+                    line,
+                    code,
+                    f"{where} uses *args/**kwargs; {subject} takes exactly one {expected}",
+                )
+            )
         if len(params) != 1:
-            found.append(Violation(f"{where} takes {len(params)} parameters; {subject} takes exactly one {expected}"))
+            found.append(
+                Violation(
+                    module.path(),
+                    line,
+                    code,
+                    f"{where} takes {len(params)} parameters; {subject} takes exactly one {expected}",
+                )
+            )
         for arg in params:
             if self._annotation_block(module, arg.annotation, blocks) != param_block:
-                found.append(Violation(f"{where} parameter {arg.arg!r} is not a {expected}; {subject} takes exactly one {expected}"))
+                found.append(
+                    Violation(
+                        module.path(),
+                        line,
+                        code,
+                        f"{where} parameter {arg.arg!r} is not a {expected}; "
+                        f"{subject} takes exactly one {expected}",
+                    )
+                )
         if return_block is not None and self._annotation_block(module, fn.returns, blocks) != return_block:
             found.append(
                 Violation(
+                    module.path(),
+                    line,
+                    code,
                     f"{where} does not return a {TS_NAME_BY_BLOCK[return_block]}; "
-                    f"{subject} returns a {TS_NAME_BY_BLOCK[return_block]}"
+                    f"{subject} returns a {TS_NAME_BY_BLOCK[return_block]}",
                 )
             )
         return tuple(found)
@@ -1448,29 +1881,81 @@ class Codebase(ts.AggregateRoot):
                 and callee.value.id == "self"
                 and callee.attr in method_names
             ):
-                found.append(Violation(f"{where} delegates to self.{callee.attr} at line {node.lineno}; a service inlines its logic"))
+                found.append(
+                    Violation(
+                        module.path(),
+                        node.lineno,
+                        "TB082",
+                        f"{where} delegates to self.{callee.attr}; a service inlines its logic",
+                    )
+                )
             elif isinstance(callee, ast.Name) and callee.id in functions:
-                found.append(Violation(f"{where} delegates to {callee.id} at line {node.lineno}; a service inlines its logic"))
+                found.append(
+                    Violation(
+                        module.path(),
+                        node.lineno,
+                        "TB082",
+                        f"{where} delegates to {callee.id}; a service inlines its logic",
+                    )
+                )
         return tuple(found)
 
-    def _body_violations(self, where: str, fn: ast.FunctionDef) -> tuple[Violation, ...]:
+    def _body_violations(self, module: Module, where: str, fn: ast.FunctionDef) -> tuple[Violation, ...]:
         found: list[Violation] = []
         first = fn.body[0].lineno
         last = fn.body[-1].end_lineno or fn.body[-1].lineno
         span = last - first + 1
         if span > 10:
-            found.append(Violation(f"{where} body spans {span} source lines; a service method body is at most 10 source lines"))
+            found.append(
+                Violation(
+                    module.path(),
+                    fn.lineno,
+                    "TB082",
+                    f"{where} body spans {span} source lines; "
+                    "a service method body is at most 10 source lines",
+                )
+            )
         for node in ast.walk(fn):
             if isinstance(node, ast.If):
                 if not isinstance(node.test, ast.Call):
-                    found.append(Violation(f"{where} if condition at line {node.lineno} is not a single call; a service method satisfies a condition with one domain call"))
+                    found.append(
+                        Violation(
+                            module.path(),
+                            node.lineno,
+                            "TB082",
+                            f"{where} if condition is not a single call; "
+                            "a service method satisfies a condition with one domain call",
+                        )
+                    )
                 if self._contains_conditional(self._governed_stmts(node)):
-                    found.append(Violation(f"{where} nests a conditional at line {node.lineno}; a service method branches one level deep"))
+                    found.append(
+                        Violation(
+                            module.path(),
+                            node.lineno,
+                            "TB082",
+                            f"{where} nests a conditional; a service method branches one level deep",
+                        )
+                    )
             elif isinstance(node, ast.Match):
                 if not isinstance(node.subject, ast.Call):
-                    found.append(Violation(f"{where} match subject at line {node.lineno} is not a single call; a service method satisfies a condition with one domain call"))
+                    found.append(
+                        Violation(
+                            module.path(),
+                            node.lineno,
+                            "TB082",
+                            f"{where} match subject is not a single call; "
+                            "a service method satisfies a condition with one domain call",
+                        )
+                    )
                 if self._contains_conditional([stmt for case in node.cases for stmt in case.body]):
-                    found.append(Violation(f"{where} nests a conditional at line {node.lineno}; a service method branches one level deep"))
+                    found.append(
+                        Violation(
+                            module.path(),
+                            node.lineno,
+                            "TB082",
+                            f"{where} nests a conditional; a service method branches one level deep",
+                        )
+                    )
         return tuple(found)
 
     @staticmethod
@@ -1518,15 +2003,21 @@ class Codebase(ts.AggregateRoot):
         for target, lineno in module.nested_tesser_imports():
             found.append(
                 Violation(
-                    f"{module.name()}:{lineno} imports {target} inside a function; "
-                    "a tesser import is module-level"
+                    module.path(),
+                    lineno,
+                    "TB050",
+                    f"{module.name()} imports {target} inside a function; "
+                    "a tesser import is module-level",
                 )
             )
         for target, lineno in module.broken_relative_imports():
             found.append(
                 Violation(
-                    f"{module.name()}:{lineno} imports {target} beyond the package root; "
-                    "a relative import resolves inside the tree"
+                    module.path(),
+                    lineno,
+                    "TB043",
+                    f"{module.name()} imports {target} beyond the package root; "
+                    "a relative import resolves inside the tree",
                 )
             )
         return tuple(found)
@@ -1538,15 +2029,21 @@ class Codebase(ts.AggregateRoot):
         if edge.member_form():
             return (
                 Violation(
-                    f"{module.name()}:{lineno} imports names from {target}; "
-                    "a context module is imported as an aliased module, never its members"
+                    module.path(),
+                    lineno,
+                    "TB053",
+                    f"{module.name()} imports names from {target}; "
+                    "a context module is imported as an aliased module, never its members",
                 ),
             )
         if not edge.aliased():
             return (
                 Violation(
-                    f"{module.name()}:{lineno} imports {target} without an alias; "
-                    "a context module is imported as an aliased module, never its members"
+                    module.path(),
+                    lineno,
+                    "TB053",
+                    f"{module.name()} imports {target} without an alias; "
+                    "a context module is imported as an aliased module, never its members",
                 ),
             )
         return ()
@@ -1610,6 +2107,13 @@ class Codebase(ts.AggregateRoot):
             return node.value is Ellipsis or node.value is None
         if isinstance(node, ast.Name) and node.id in PRIMITIVES:
             return True
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+            left_none = isinstance(node.left, ast.Constant) and node.left.value is None
+            right_none = isinstance(node.right, ast.Constant) and node.right.value is None
+            if left_none == right_none:
+                return False
+            wrapped = node.right if left_none else node.left
+            return self._allowed_annotation(module, wrapped, blocks, allowed_blocks)
         if isinstance(node, ast.Subscript):
             if isinstance(node.value, ast.Name) and node.value.id == "tuple":
                 elements = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]

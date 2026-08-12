@@ -10,13 +10,9 @@ CONTRACTS = ROOT / ".importlinter"
 OUTPUT = ROOT / "RULES.md"
 
 HOLE_NAMES: dict[str, str] = {
-    "where": "⟨module.Class.method:line⟩",
+    "where": "⟨module.Class.method⟩",
     "module.name()": "⟨module⟩",
     "cls.name": "⟨class⟩",
-    "cls.lineno": "⟨line⟩",
-    "stmt.lineno": "⟨line⟩",
-    "node.lineno": "⟨line⟩",
-    "lineno": "⟨line⟩",
     "callee.attr": "⟨method⟩",
     "callee.id": "⟨function⟩",
     "len(params)": "⟨count⟩",
@@ -31,9 +27,14 @@ HOLE_NAMES: dict[str, str] = {
     "KIND_NAME[block]": "⟨kind⟩",
     "KIND_ROLE[block]": "⟨role⟩",
     "KIND_NAME[touched]": "⟨kind⟩",
+    "name": "⟨module⟩",
+    "others": "⟨paths⟩",
+    "error.msg": "⟨error⟩",
 }
 
 APPLIES_TO: dict[str, str] = {
+    "Codebase.__init__": "checked source file",
+    "Codebase.violations": "ignore comment",
     "a service method": "public service method",
     "a client method": "client protocol method",
     "a domain constructor": "aggregate or entity `__init__`",
@@ -80,8 +81,9 @@ WHERE_PREFIX = re.compile(r"^(?:⟨[^⟩]+⟩[.:]*)+\s*")
 
 class RuleRow:
 
-    def __init__(self, clause: str, applies_to: str) -> None:
+    def __init__(self, clause: str, code: str, applies_to: str) -> None:
         self.clause = clause
+        self.code = code
         self.applies_to = applies_to
         self.shapes: list[str] = []
         self.linenos: list[int] = []
@@ -314,14 +316,30 @@ def rule_rows(tree: ast.Module) -> list[RuleRow]:
                 if isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Name)
                 and node.func.id == "Violation"
-                and node.args
             ]
             if not calls:
                 continue
             aliases = local_aliases(method)
             for binding in instantiations(tree, method):
                 for call in calls:
-                    message = render_message(call.args[0], binding, aliases, ts_map, call.lineno)
+                    if call.keywords or len(call.args) != 4:
+                        raise RuntimeError(
+                            f"checks.py:{call.lineno}: Violation takes exactly the four "
+                            "positional arguments (path, line, code, message)"
+                        )
+                    code_expr = call.args[2]
+                    if isinstance(code_expr, ast.Constant) and isinstance(code_expr.value, str):
+                        code: str | None = code_expr.value
+                    elif isinstance(code_expr, ast.Name) and code_expr.id in binding:
+                        code = binding[code_expr.id]
+                    else:
+                        raise RuntimeError(
+                            f"checks.py:{call.lineno}: violation code is neither a literal nor a "
+                            "literally-bound parameter"
+                        )
+                    if code is None:
+                        continue
+                    message = render_message(call.args[3], binding, aliases, ts_map, call.lineno)
                     if message is None:
                         continue
                     if "; " not in message:
@@ -338,7 +356,12 @@ def rule_rows(tree: ast.Module) -> list[RuleRow]:
                     key = subject if isinstance(subject, str) else f"{cls.name}.{method.name}"
                     if key not in APPLIES_TO:
                         raise RuntimeError(f"no APPLIES_TO entry for {key!r}; extend the map")
-                    row = rows.setdefault(clause, RuleRow(clause, APPLIES_TO[key]))
+                    row = rows.setdefault(clause, RuleRow(clause, code, APPLIES_TO[key]))
+                    if row.code != code:
+                        raise RuntimeError(
+                            f"checks.py:{call.lineno}: clause {clause!r} carries code {code}, "
+                            f"but an earlier site carries {row.code}; one clause has one code"
+                        )
                     row.add(shape, call.lineno)
     return list(rows.values())
 
@@ -392,15 +415,17 @@ def render() -> str:
         "",
         "## sigcheck rules (from the violation messages in sigcheck/domain/checks.py)",
         "",
-        "| The rule | Applies to | Fires when | Source | Fixtures |",
-        "|---|---|---|---|---|",
+        "| Code | The rule | Applies to | Fires when | Source | Fixtures |",
+        "|---|---|---|---|---|---|",
     ]
     for row in rule_rows(tree):
         covered = covering_tests(row.clause, assertions)
         coverage = ", ".join(covered) if covered else "NONE"
         shapes = " · ".join(row.shapes).replace("|", "\\|")
         source = "domain/checks.py:" + ",".join(str(n) for n in sorted(row.linenos))
-        lines.append(f"| {row.clause} | {row.applies_to} | {shapes} | {source} | {coverage} |")
+        lines.append(
+            f"| {row.code} | {row.clause} | {row.applies_to} | {shapes} | {source} | {coverage} |"
+        )
     tooling = ", ".join(f"`{name}`" for name in tooling_modules(tree))
     package = protocol_package(tree)
     lines += [
