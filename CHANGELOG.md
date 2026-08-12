@@ -5,6 +5,63 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.27.0] - 2026-08-12
+
+One analyzer, every tree: the last two frozen-dataclass examples move onto
+the shells and the parked legacy analyzer retires.
+
+### Changed
+- **`examples/serdepy` migrated to `ts.*` shells** as a `parcel` context
+  (`parcel/domain`, `parcel/application`, `parcel/adapters`): leaves on
+  `ts.ValueObject` with the all-four-exits matrix intact, `ParcelSpec` on
+  `ts.Spec`, `Parcel` on `ts.Entity`, `ParcelParts` on `ts.Parts`, the wire
+  payload builder as `@ts.function`. The analyzer gained `bytes` in the
+  construction-primitive set (with a pinned test) — `LabelDigest` exposed
+  the gap.
+- **`examples/errorspy` migrated to `ts.*` shells** as a `campaign` context.
+  The local `Entity` prototype (the class the shipped `ts.Entity` grew from)
+  is deleted in favor of the real thing; the service speaks client
+  request/response DTOs over a parts-speaking `ts.Port`; the aggregated
+  `errors.collect` validation moves from the handler into the service's
+  convert step; the repository keeps the tree's unique lesson (StorageMiss →
+  missing lookup, StorageUnavailable → InfraError) with the corrupted-record
+  → InfraError translation at the application rebuild step; the RFC 9457
+  problem mapping stays on the handler. Every norm-proof assertion survives
+  unchanged; `main.py`'s demo is covered by `test_e2e` and deleted.
+- **`roadmap/generate.py`'s Python column** now reads the graduated
+  analyzer: `py_check_codes` loads `tessercheck-py/rules.py` by file path
+  and uses the same `rule_rows` extraction `RULES.md` is generated from.
+  The registry claims all 34 shipped codes (construction doors under
+  value-objects, service signature/body under application-services,
+  module/class structure under the map, import form and matrices under
+  norm-imports, test totality under norm-testing; `TB090` exempted by name
+  as the tool's own suppression hygiene), and the five dead
+  frozen-dataclass-era codes (`TB001`, `TB003`, `TB013`, `TB014`, `TB032`)
+  leave their rows.
+- **`rationale/coverage.md`'s Python-enforcement section and
+  `testing.md`'s rule-9 bullet** rewritten onto the shell-declared analyzer
+  (declared bases instead of the structural classifier; `TB071`/`TB073` as
+  `TB032`'s successors; dissolved checks named as dissolved).
+
+### Removed
+- **The `# tesser-category:` directive** — the marker only the legacy
+  analyzer's TB032 read. Test-module members declare themselves with
+  `@ts.helper`/`@ts.fake` now, so the comment form leaves the TB020
+  exemption ledger (`comments.md` and the `CATEGORY_MARKER` pattern in
+  `checks.py` together); writing one is an ordinary TB020 finding. The
+  dead codes also leave every living doc surface — README's analyzer
+  blurbs, `wiring.md`'s discovery pointer, `serialization.md`'s and
+  `coverage.md`'s TB013 clauses, `domain-return.md`'s TB014 clause — and
+  `roadmap/generate.py` loses its last two `CHECKS`-era artifacts (the
+  `finding.py` universe probe and the stale error message).
+- **`tessercheck-py-legacy/`** — with serdepy and errorspy on shells,
+  nothing frozen-dataclass remained for the pre-merge analyzer to validate.
+  Its verify tree and CI job go with it. The serdepy/errorspy verify gates
+  gain the shipped analyzer's zero-findings step, so an example layout
+  change still breaks loudly (the PR #56 lesson). The reviewed `TB031`
+  fixture pair survives at `tessercheck-py/testdata/tb031/` with a
+  divergence guard.
+
 ## [0.0.26.0] - 2026-08-12
 
 The Python skill teaches what the analyzer enforces, from the code CI

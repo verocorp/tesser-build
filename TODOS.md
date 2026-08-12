@@ -351,8 +351,9 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   contract (`testdata/tb031/`) carries over unchanged whenever its
   implementation lands.
 
-- [ ] **The final coupled wave — REMAINING HALF (serdepy/errorspy +
-  legacy retirement).** Landed 2026-08-12 (docs wave): `python.md` rewritten
+- [x] **The final coupled wave — REMAINING HALF (serdepy/errorspy +
+  legacy retirement).** Landed 2026-08-12 in two waves. First (docs wave):
+  `python.md` rewritten
   onto the shells end to end (every code block mirrors
   `examples/python-app`; the srv/wire vocabulary graduation item is folded
   in), `examples/python` DELETED — its two unique derivations found shell
@@ -362,13 +363,16 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   public-interface/coverage/CLAUDE/READMEs), the roadmap registry's
   py_example rows repointed and ROADMAP.md regenerated, the legacy
   analyzer's acceptance gate and tree-fixture classification test retired
-  with the tree, and skill-version bumped to 30. Still open, in order:
-  (1) migrate `examples/serdepy` and `examples/errorspy` to shells and
-  sweep `serialization.md`/`errors.md` the way `python.md` was swept;
-  (2) then delete `tessercheck-py-legacy/` + its verify tree + CI job,
-  rework `roadmap/generate.py`'s py_checks import onto the graduated
-  analyzer's registry (RULES.md), and finish the `rationale/coverage.md`
-  Python-column rework.
+  with the tree, and skill-version bumped to 30. Second (retirement wave,
+  same date): `examples/serdepy` and `examples/errorspy` migrated to
+  shells (serdepy as a `parcel` context; errorspy as a `campaign` context
+  with every norm-proof assertion preserved), `tessercheck-py-legacy/`
+  DELETED with its verify tree and CI job (the TB031 fixture pair moved
+  to `tessercheck-py/testdata/` with a divergence guard),
+  `roadmap/generate.py`'s py_check_codes repointed at the graduated
+  analyzer's `rules.py` extraction with the registry claiming all 34
+  codes, and the `rationale/coverage.md` Python column reworked onto the
+  shell-declared analyzer.
 - [x] ~~superseded framing~~ **tree migrations + legacy deletion + docs
   sweep as one unit** (scoped 2026-08-12 after the shell-norms wave; deferred
   together per Chris — "leave skill docs for later"). These cannot land

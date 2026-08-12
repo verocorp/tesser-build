@@ -204,16 +204,19 @@ file says *how*, and it is the cross-cutting layer they assume.
   flow, and builds a spec. A helper that legitimately builds something else —
   a wired object graph for an end-to-end test, a JSON payload — declares
   itself with `@ts.helper` and opts out of the shape rule with a per-instance
-  `# tessercheck:ignore TB073` on its `def` line; the declaration half is
-  never optional.
+  `# tessercheck:ignore TB073` at each line a finding lands on (the `def`
+  line for parameter/return shape; a control-flow finding reports at the
+  offending statement); the declaration half is never optional.
 
   Two scope facts worth knowing before you argue with a finding:
   **methods are not judged** — every non-test method on a class in a test file
   is a hand-written double, which rule 1 *requires*, so judging them would
   report the norm's own mandated shape as a violation. And **a test module is
   one whose basename starts with `test_`**; a helper-only module beside the
-  tests (`tests/support.py`, a `conftest.py`) is judged as ordinary code under
-  the other rules, not under these, so parking helpers there buys nothing.
+  tests is not a sanctioned parking spot — a non-test, non-conftest module
+  under a `tests` package is a placement finding outright (TB041), and a
+  `conftest.py` still answers to the universal checks (TB004, TB020, TB030,
+  TB033).
 
 - Rules 3-8 are **guidance, not checked.** Each is either a semantic judgment
   (3, 4, 5) or not mechanically decidable in a way worth the false positives

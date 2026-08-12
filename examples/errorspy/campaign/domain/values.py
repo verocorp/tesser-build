@@ -78,6 +78,9 @@ class Day(ts.ValueObject):
     def __str__(self) -> str:
         return self._value.isoformat()
 
+    def _before(self, other: "Day") -> bool:
+        return self._value < other._value
+
     _value: date
 
 
@@ -93,7 +96,7 @@ class DateWindow(ts.ValueObject):
     def __init__(self, start_value: str, end_value: str) -> None:
         start = _day(start_value, field="start")
         end = _day(end_value, field="end")
-        if not str(start) < str(end):
+        if not start._before(end):
             raise invalid(
                 "window_order",
                 f"window start {start} must be before end {end}",

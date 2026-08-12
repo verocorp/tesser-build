@@ -9,8 +9,8 @@ Derivation is deterministic and non-LLM (design 2026-07-18, Wave 2 item 10):
 - **Mechanical cells** are computed: skill-file presence + ``tb-status``
   markers, example-path existence, the Go analyzer registry (via the
   ``cmd/analyzers-json`` JSON bridge — a dead bridge is a LOUD error, never an
-  empty column), the tessercheck-py ``CHECKS`` registry (direct import), and
-  rationale-test globs.
+  empty column), the tessercheck-py rule registry (the ``rules.py``
+  extraction ``RULES.md`` is generated from), and rationale-test globs.
 - **Judgment cells** are ``tb-cell`` annotations at the source they describe
   (schema: ``docs/skill-authoring.md``); a malformed marker is a named error
   with file:line.
@@ -490,7 +490,7 @@ def checker_cell(
         assert py_codes is not None
         missing = sorted(set(py_listed) - py_codes)
         if missing:
-            raise RoadmapError(f"registry row {key!r} lists Python checks not in tessercheck CHECKS: {missing}")
+            raise RoadmapError(f"registry row {key!r} lists Python checks the analyzer does not ship: {missing}")
     if go_listed and py_listed:
         return cell(SYMBOL_DONE, f"{len(go_listed)} Go + {len(py_listed)} Py")
     if py_listed:
@@ -678,7 +678,7 @@ def generate(root: Path, registry_path: Path, analyzers_cmd: list[str]) -> str:
     # lists a check yet" must not be the reason the guard sees nothing.
     need_go = any(_str_list(r, "go_analyzers") for r in rows) or (root / "cmd" / "analyzers-json").is_dir()
     need_py = any(_str_list(r, "py_checks") for r in rows) or (
-        root / "tessercheck-py" / "tessercheck" / "finding.py"
+        root / "tessercheck-py" / "rules.py"
     ).is_file()
     go_names = go_analyzer_names(root, analyzers_cmd) if need_go else None
     py_codes = py_check_codes(root) if need_py else None

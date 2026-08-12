@@ -200,7 +200,7 @@ jobs:
       - name: roadmap generator — mypy --strict + pytest
         working-directory: roadmap
         run: |
-          MYPYPATH=../tessercheck-py mypy --strict generate.py tests/test_generate.py
+          mypy --strict generate.py tests/test_generate.py
           pytest tests -q
 
   tessercheck-py:

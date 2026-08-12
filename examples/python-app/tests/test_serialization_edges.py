@@ -21,7 +21,7 @@ from tests.support import parts_tuple
 
 
 
-@ts.helper  # tesser-category: spec
+@ts.helper
 def campaign_spec(slug: str = "promo") -> campaign.CampaignSpec:
     return campaign.CampaignSpec(
         id="0123456789abcdef",
