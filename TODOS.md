@@ -351,6 +351,26 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   contract (`testdata/tb031/`) carries over unchanged whenever its
   implementation lands.
 
+- [ ] **The final coupled wave: tree migrations + legacy deletion + the
+  docs sweep** (scoped 2026-08-12 after the shell-norms wave; deferred
+  together per Chris — "leave skill docs for later"). These cannot land
+  separately: `skills/tesser-build/python.md` teaches from
+  `examples/python` (9 path references), `serialization.md` from
+  `examples/serdepy`, and migrating the trees to shells while their
+  teaching docs still show the frozen-dataclass idiom breaks the
+  docs↔example sync (and the roadmap living-surface link gate).
+  Contents, in order: (1) migrate `examples/python`, `serdepy`,
+  `errorspy` (and rule whether `examples/python`'s catalog/campaign
+  frozen-dataclass example survives at all now that spike-shells and
+  python-app are the canonical shell examples); (2) delete
+  `tessercheck-py-legacy/` + its verify tree + CI job; (3) rework
+  `roadmap/generate.py`'s py_checks registry import (it reads the legacy
+  `CHECKS`; the new analyzer's registry is RULES.md); (4) the skill-docs
+  sweep (python.md onto shells, srv/wire vocabulary graduation from the
+  earlier TODOS item, coverage.md rows, comments.md/serialization.md/
+  testing.md path retargets) with the `rationale/coverage.md` walk and
+  the `skill-version` bump; (5) CLAUDE.md's convention section rewrite.
+
 ## Toolkit
 
 - [ ] **ValueObject-shape adoption decision + classifier support** (shipped as
