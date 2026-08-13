@@ -5,6 +5,74 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.31.0] - 2026-08-13
+
+Application ports. Adapters could import the whole `application` role, so a
+gateway imported the service implementation it exists to be decoupled from.
+Ports move to a leaf `application/ports/` package and adapters reach only that.
+Which shape a port's answer takes was decided by measurement, not preference:
+seven trees over one domain, scored on the repo's silent-site metric.
+
+### Added
+- **`application/ports/` is a role-internal leaf package**, enforced by a new
+  ports rule family (`TB041`/`TB042`/`TB050`/`TB051`/`TB052`/`TB060`/`TB067`/
+  `TB068`/`TB069`/`TB080`/`TB081` — see `tessercheck-py/RULES.md`). A ports
+  module imports nothing from its tree, its own siblings included; holds
+  exactly one port plus the requests and responses it speaks; and runs nothing
+  at import. The leaf rule plus one-port-per-module makes two ports sharing a
+  DTO unrepresentable rather than merely forbidden.
+- **`TB069` gives the ports package a grammar instead of a denylist.** Anything
+  outside the permitted shape is a finding by default, named by its AST node
+  kind. Four review rounds had each found a different unenumerated slot
+  (`AsyncFunctionDef`, `AnnAssign`, class keywords, `type_params`, return
+  annotations, a `Call` nested in a base); enumerating forbidden syntax is not
+  a winnable game, so the ports module now declares what it permits.
+- **`TB068` flags a dynamic import**, which is an import the matrix cannot
+  read. It resolves the module rather than the member, so a rebound local,
+  `getattr`, `builtins.__import__` and a `sys.modules` lookup are all findings.
+- **`examples/ports/`** — the canonical tree: one context, two ports, an enum
+  outcome read with `match` + `typing.assert_never`, a collection answer as a
+  tuple. Gated by `scripts/verify` and its own CI job.
+- **`docs/design-application-ports.md`** — the measurements. Seven encodings of
+  one two-outcome answer; `enum` is the only union-free encoding that scores
+  zero silent sites when a third outcome arrives. The six rejected trees stay
+  executable on the `spike/application-ports` branch.
+
+### Changed
+- **`ts.Parts` retires for `tesser.application.Request` / `Response`**, matching
+  the client role's vocabulary. A port method takes exactly one request and
+  returns exactly one response; a port DTO field is never a union (optional
+  included), never a bare `bool`, never subclassed, and a ports enum is an
+  `enum.Enum` rather than a `StrEnum`. Each of those four turns a measured
+  result into a guarantee — without them the checker permitted both encodings
+  the experiment had just measured as silent.
+- **All five example trees plus `tessercheck-py` itself migrate.** Dogfooding
+  charged the toll immediately: the checker's own `SourceReader` moved to a
+  ports package, and two of its bools became enums — one of them in the value
+  object this change had just added.
+- **Every method rule now reads `async def`.** A one-keyword bypass applied to
+  client, adapter, service, spec and value-object rules repo-wide, not only to
+  ports.
+- **An ignore whose payload does not parse as codes is a finding**, and
+  `CLAUDE.md`'s documented `[TB0xx]` bracket form was itself one.
+- Skill and doc renderings walked per `CLAUDE.md`: `map.md` moves ports off
+  domain (a doc/checker contradiction that predates this change),
+  `python.md` gains an application-ports section and loses its union-returning
+  example, `serialization.md` reframes the parts module onto port DTOs, and
+  `repositories.md`, `gateway-cross-context.md`, `public-interface.md`,
+  `domain-return.md`, `application-services.md`, `prior-art-anatomy.md` and
+  `design-python-domain-detection.md` drop the "port beside its consumer"
+  language. `rationale/coverage.md` gains four rows; `skill-version` 32 -> 33.
+
+### Known gaps
+- **No Go mirror.** The ports rules are Python-only; the Go analyzer set does
+  not know about ports (`TODOS.md`).
+- **`TB068` is a speed bump, not a guarantee.** Reaching a module object at
+  runtime is not a closed set; the static import matrix is the guarantee.
+- Three encoding choices remain undecidable and are documented rather than
+  enforced: a bare `str` outcome field, 0-or-1 cardinality used as an outcome,
+  and a mandatory payload on an outcome arm that has none.
+
 ## [0.0.30.0] - 2026-08-13
 
 Classifier totality: the module walk's routing becomes one inspectable,
