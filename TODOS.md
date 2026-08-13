@@ -287,7 +287,9 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   rows; (4) legality sentinel → explicit `denied` list in
   `_import_violations`/`_app_import_violations`; (5) rules.py derives the
   conftest/`__main__` bullets from the `_module_violations` AST guards
-  (`ungoverned_basenames`, cross-checked against `UNGOVERNED_PROSE`), and
+  (`ungoverned_basenames`, cross-checked against `UNGOVERNED_PROSE`) —
+  since deleted in v0.0.30.0, dead once v0.0.29.0 emptied the exemption
+  list, so RULES.md's Named exemptions section is now static prose — and
   the TOOLING_MODULES not-found/wrong-shape errors are split; (6) `Module`
   freezes every accessor collection in `__init__`. One cosmetic RULES.md
   diff: the bootstrap module-contents row's two shapes swapped order.
