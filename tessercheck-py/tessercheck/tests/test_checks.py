@@ -300,7 +300,7 @@ def test_import_matrix_is_flagged(tmp_path: Path) -> None:
     findings = conftest.check_tree(tmp_path)
     assert any(
         "two.domain.thing" in f
-        and "the same-context matrix is a role to itself, application to domain and client, adapters to application, wiring to application, adapters, and client" in f
+        and "the same-context matrix is a role to itself, application to domain and client, adapters to application/ports, wiring to application, adapters, and client" in f
         for f in findings
     )
     assert any(
@@ -623,7 +623,7 @@ def test_a_repository_sibling_test_reaches_its_kind_and_application_only(tmp_pat
         tmp_path,
         "app/adapters/repositories/test_words.py",
         "import app.adapters.repositories.words as words\n"
-        "import app.application.service as service\n"
+        "import app.application.ports.words as words_port\n"
         "import app.domain.thing as thing\n"
         "import far.client.client as farclient\n"
         "def test_x() -> None:\n"
@@ -650,7 +650,7 @@ def test_a_repository_sibling_test_reaches_its_kind_and_application_only(tmp_pat
     findings = conftest.check_tree(tmp_path)
     assert any(
         "app.adapters.repositories.test_words imports app.domain.thing, but a test placed "
-        "in repositories reaches only adapters.repositories, application of its own context; "
+        "in repositories reaches only adapters.repositories, application.ports of its own context; "
         "a test reaches only what its placement allows" in f
         for f in findings
     )
@@ -3268,3 +3268,253 @@ def test_every_test_tier_has_a_shell_row() -> None:
         | {domain.SRV_TIER, domain.BOOTSTRAP_TIER, domain.PROTOCOL_TIER, domain.APP_TIER}
     )
     assert tiers <= set(domain.TEST_TIER_SHELL)
+
+
+def test_ports_is_a_package_never_a_module(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports.py",
+        "import tesser.application as ts\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports is a ports module; ports is a package, never a module" in f
+        for f in findings
+    )
+
+
+def test_a_ports_init_is_empty(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "X = 1\n")
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports __init__ declares code; a ports __init__ is empty" in f
+        for f in findings
+    )
+
+
+def test_a_ports_module_is_a_leaf(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/other.py",
+        "import tesser.application as ts\n"
+        "class OtherSink(ts.Port):\n"
+        "    pass\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "import tesser.application as ts\n"
+        "import app.domain.thing as thing\n"
+        "import app.application.ports.other as other\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink imports app.domain.thing; a ports module is a leaf "
+        "and imports nothing from its tree, its own siblings included" in f
+        for f in findings
+    )
+    assert any(
+        "app.application.ports.sink imports app.application.ports.other; a ports module is a leaf "
+        "and imports nothing from its tree, its own siblings included" in f
+        for f in findings
+    )
+
+
+def test_a_ports_module_stdlib_allowlist(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "import enum\n"
+        "import socket\n"
+        "import tesser.application as ts\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink imports socket; a ports module imports "
+        "only tesser.application and the pure stdlib" in f
+        for f in findings
+    )
+    assert not any("imports enum;" in f for f in findings)
+
+
+def test_a_ports_module_tesser_import_rules(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "import tesser.domain as ts\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/plain.py",
+        "import tesser.application\n"
+        "class Plain(tesser.application.Port):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink imports tesser.domain; "
+        "a ports module imports only tesser.application" in f
+        for f in findings
+    )
+    assert any(
+        "a ports module imports tesser.application exactly once, as ts" in f for f in findings
+    )
+
+
+def test_a_ports_module_holds_only_imports_and_classes(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "import tesser.application as ts\n"
+        "FOUND = 'found'\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink has a loose module-level statement; "
+        "a ports module holds only imports and classes" in f
+        for f in findings
+    )
+
+
+def test_a_ports_module_declares_exactly_one_port(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/two.py",
+        "import tesser.application as ts\n"
+        "class First(ts.Port):\n"
+        "    pass\n"
+        "class Second(ts.Port):\n"
+        "    pass\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/none.py",
+        "import tesser.application as ts\n"
+        "class Stray(ts.Request):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.two declares 2 ports; a ports module "
+        "declares exactly one port, so no two ports can share a request or a response" in f
+        for f in findings
+    )
+    assert any(
+        "app.application.ports.none declares no port; a ports module "
+        "declares exactly one port, so no two ports can share a request or a response" in f
+        for f in findings
+    )
+
+
+def test_a_ports_module_holds_only_port_kinds(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "import tesser.application as ts\n"
+        "class Bare:\n"
+        "    pass\n"
+        "class Leaked(ts.ApplicationService):\n"
+        "    pass\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.Bare declares no ts.* base; a ports class declares its block" in f
+        for f in findings
+    )
+    assert any(
+        "app.application.ports.sink.Leaked is a service; only a port and the requests "
+        "and responses it speaks live in a ports module" in f
+        for f in findings
+    )
+
+
+def test_a_port_method_speaks_one_request_and_one_response(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "import tesser.application as ts\n"
+        "class SaveRequest(ts.Request):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n"
+        "class SaveResponse(ts.Response):\n"
+        "    def __init__(self) -> None:\n"
+        "        return None\n"
+        "class Sink(ts.Port):\n"
+        "    def save(self, text: str) -> SaveResponse: ...\n"
+        "    def load(self, request: SaveRequest) -> str: ...\n"
+        "    def both(self, request: SaveRequest, extra: str) -> SaveResponse: ...\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.Sink.save parameter 'text' is not a ts.Request; "
+        "a port method takes exactly one ts.Request" in f
+        for f in findings
+    )
+    assert any(
+        "app.application.ports.sink.Sink.load does not return a ts.Response; "
+        "a port method returns a ts.Response" in f
+        for f in findings
+    )
+    assert any(
+        "app.application.ports.sink.Sink.both takes 2 parameters; "
+        "a port method takes exactly one ts.Request" in f
+        for f in findings
+    )
+
+
+def test_an_adapter_reaches_application_only_through_ports(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "import tesser.application as ts\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "app/adapters/gateways/memory.py",
+        "import tesser.adapters as ts\n"
+        "import app.application.ports.sink as sink\n"
+        "import app.application.service as service\n"
+        "class MemorySink(ts.Repository):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.adapters.gateways.memory imports app.application.service; "
+        "the same-context matrix is a role to itself, application to domain and client, "
+        "adapters to application/ports, wiring to application, adapters, and client" in f
+        for f in findings
+    )
+    assert not any("imports app.application.ports.sink;" in f for f in findings)

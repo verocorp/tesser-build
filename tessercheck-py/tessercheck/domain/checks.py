@@ -10,7 +10,8 @@ import tesser.domain as ts
 TESSER_BASE_BLOCKS: Final[dict[tuple[str, str], str]] = {
     ("tesser.application", "ApplicationService"): "service",
     ("tesser.application", "Port"): "port",
-    ("tesser.application", "Parts"): "parts",
+    ("tesser.application", "Request"): "port_request",
+    ("tesser.application", "Response"): "port_response",
     ("tesser.context", "Request"): "request",
     ("tesser.context", "Response"): "response",
     ("tesser.context", "Client"): "client",
@@ -43,10 +44,20 @@ TESSER_DECORATORS: Final[dict[tuple[str, str], str]] = {
 TS_NAME_BY_BLOCK: Final[dict[str, str]] = {
     "request": "ts.Request",
     "response": "ts.Response",
+    "port_request": "ts.Request",
+    "port_response": "ts.Response",
     "spec": "ts.Spec",
 }
 
 ROLES: Final[tuple[str, ...]] = ("domain", "application", "client", "adapters", "wiring")
+
+PORTS_PACKAGE: Final[str] = "ports"
+
+PORTS_ROLE: Final[str] = "application"
+
+PORTS_HOME: Final[str] = "application/ports"
+
+PORTS_KINDS: Final[frozenset[str]] = frozenset({"port", "port_request", "port_response"})
 
 APP_PACKAGES: Final[tuple[str, ...]] = ("srv", "bootstrap")
 
@@ -56,8 +67,9 @@ KIND_ROLE: Final[dict[str, str]] = {
     "valueobject": "domain",
     "spec": "domain",
     "service": "application",
-    "port": "application",
-    "parts": "application",
+    "port": PORTS_HOME,
+    "port_request": PORTS_HOME,
+    "port_response": PORTS_HOME,
     "request": "client",
     "response": "client",
     "client": "client",
@@ -74,7 +86,8 @@ KIND_NAME: Final[dict[str, str]] = {
     "spec": "a spec",
     "service": "a service",
     "port": "a port",
-    "parts": "a parts record",
+    "port_request": "a port request DTO",
+    "port_response": "a port response DTO",
     "request": "a request DTO",
     "response": "a response DTO",
     "client": "a client",
@@ -150,11 +163,13 @@ SAME_CONTEXT_IMPORTS: Final[dict[str, tuple[str, ...]]] = {
     "domain": (),
     "client": (),
     "application": ("domain", "client"),
-    "adapters": ("application",),
+    "adapters": (PORTS_HOME.replace("/", "."),),
     "wiring": ("application", "adapters", "client"),
 }
 
 TESTS_ROLE: Final[str] = "tests"
+
+PORTS_TIER: Final[str] = "ports"
 
 EVAL_PREFIX: Final[str] = "eval_"
 
@@ -178,6 +193,7 @@ TEST_TIER_REACH: Final[dict[str, tuple[str, ...]]] = {
     "handlers": ("client",),
     "gateways": SAME_CONTEXT_IMPORTS["adapters"],
     "repositories": SAME_CONTEXT_IMPORTS["adapters"],
+    PORTS_TIER: (PORTS_HOME.replace("/", "."),),
     TESTS_ROLE: ROLES + (TESTS_ROLE,),
 }
 
@@ -213,6 +229,7 @@ TEST_TIER_SHELL: Final[dict[str, frozenset[str]]] = {
     "handlers": frozenset({"protocol"}),
     "gateways": frozenset({"protocol"}),
     "repositories": frozenset({"protocol"}),
+    PORTS_TIER: frozenset(),
     TESTS_ROLE: frozenset({"protocol"}),
 }
 
@@ -238,6 +255,8 @@ CORE_STDLIB: Final[dict[str, frozenset[str]]] = {
     "client": frozenset({"__future__", "typing"}),
     "application": frozenset({"__future__", "typing"}),
 }
+
+PORTS_STDLIB: Final[frozenset[str]] = frozenset({"__future__", "typing", "enum"})
 
 DOMAIN_BLOCKS: Final[frozenset[str]] = frozenset({"aggregate", "entity", "valueobject"})
 
@@ -803,7 +822,7 @@ class Codebase(ts.AggregateRoot):
                     found.extend(self._shape_norm_violations(module, cls, block, blocks))
                 elif block == "spec":
                     found.extend(self._spec_violations(module, cls, blocks))
-                elif block in ("request", "response"):
+                elif block in ("request", "response", "port_request", "port_response"):
                     found.extend(self._dto_violations(module, cls, blocks))
                 elif block == "client":
                     found.extend(self._client_violations(module, cls, blocks))
@@ -811,6 +830,7 @@ class Codebase(ts.AggregateRoot):
                     found.extend(self._record_signature_violations(module, cls, blocks, "an adapter"))
                 elif block == "port":
                     found.extend(self._record_signature_violations(module, cls, blocks, "a port"))
+                    found.extend(self._port_violations(module, cls, blocks))
                 elif block == "service":
                     found.extend(self._service_violations(module, cls, blocks))
         return tuple(found)
@@ -845,6 +865,9 @@ class Codebase(ts.AggregateRoot):
         "role-init",
         "role-file",
         "role",
+        "ports-init",
+        "ports-file",
+        "ports",
         "context-stray",
     ]:
         parts = name.split(".")
@@ -874,6 +897,10 @@ class Codebase(ts.AggregateRoot):
         if parts[1] == TESTS_ROLE:
             return "context-tests-init" if is_package else "context-tests-stray"
         if parts[1] in ROLES:
+            if parts[1] == PORTS_ROLE and len(parts) >= 3 and parts[2] == PORTS_PACKAGE:
+                if is_package:
+                    return "ports-init"
+                return "ports-file" if len(parts) == 3 else "ports"
             if is_package:
                 return "role-init"
             return "role-file" if len(parts) == 2 else "role"
@@ -932,6 +959,20 @@ class Codebase(ts.AggregateRoot):
                     "a context tests package holds only test modules and conftest",
                 ),
             ) + self._test_placement_violations(module, parts[0], TESTS_ROLE, contexts)
+        if place == "ports-init":
+            return self._ports_init_violations(module)
+        if place == "ports-file":
+            return (
+                Violation(
+                    module.path(),
+                    1,
+                    "TB041",
+                    f"{module.name()} is a ports module; "
+                    "ports is a package, never a module",
+                ),
+            )
+        if place == "ports":
+            return self._ports_module_violations(module, blocks)
         if place == "role-init":
             return self._role_init_violations(module)
         if place == "role-file":
@@ -2171,6 +2212,168 @@ class Codebase(ts.AggregateRoot):
         )
         return tuple(found)
 
+    @staticmethod
+    def _is_enum_class(stmt: ast.ClassDef) -> bool:
+        return any(
+            isinstance(base, ast.Attribute)
+            and isinstance(base.value, ast.Name)
+            and base.value.id == "enum"
+            for base in stmt.bases
+        )
+
+    @classmethod
+    def _enum_names(cls, module: Module) -> frozenset[str]:
+        return frozenset(
+            stmt.name for stmt in module.class_defs() if cls._is_enum_class(stmt)
+        )
+
+    @staticmethod
+    def _names_enum(node: ast.expr | None, enums: frozenset[str]) -> bool:
+        return isinstance(node, ast.Name) and node.id in enums
+
+    def _ports_init_violations(self, module: Module) -> tuple[Violation, ...]:
+        return tuple(
+            Violation(
+                module.path(),
+                stmt.lineno,
+                "TB042",
+                f"{module.name()} __init__ declares code; a ports __init__ is empty",
+            )
+            for stmt in module.body()
+        )
+
+    def _ports_module_violations(
+        self,
+        module: Module,
+        blocks: dict[tuple[str, str], str],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        found.extend(self._stray_import_violations(module))
+        found.extend(
+            self._tesser_import_violations(
+                module,
+                "ports",
+                ROLE_TESSER_PACKAGE[PORTS_ROLE],
+                "a ports module imports only tesser.application",
+                "a ports module imports tesser.application exactly once, as ts",
+                "a ports module imports tesser.application exactly once, as ts",
+            )
+        )
+        for edge in module.import_edges():
+            target = str(edge._target)
+            lineno = int(edge._lineno)
+            head = target.split(".")[0]
+            if head == TESSER:
+                continue
+            if head in self._tree_tops():
+                found.append(
+                    Violation(
+                        module.path(),
+                        lineno,
+                        "TB067",
+                        f"{module.name()} imports {target}; a ports module is a leaf "
+                        "and imports nothing from its tree, its own siblings included",
+                    )
+                )
+            elif target not in PORTS_STDLIB and head not in PORTS_STDLIB:
+                found.append(
+                    Violation(
+                        module.path(),
+                        lineno,
+                        "TB067",
+                        f"{module.name()} imports {target}; a ports module imports "
+                        "only tesser.application and the pure stdlib",
+                    )
+                )
+        ports: list[ast.ClassDef] = []
+        for stmt in module.body():
+            if not isinstance(stmt, ast.ClassDef):
+                continue
+            block = blocks.get((module.name(), stmt.name))
+            where = f"{module.name()}.{stmt.name}"
+            if self._is_enum_class(stmt):
+                continue
+            if block is None:
+                found.append(
+                    Violation(
+                        module.path(),
+                        stmt.lineno,
+                        "TB052",
+                        f"{where} declares no ts.* base; a ports class declares its block",
+                    )
+                )
+            elif block not in PORTS_KINDS:
+                found.append(
+                    Violation(
+                        module.path(),
+                        stmt.lineno,
+                        "TB052",
+                        f"{where} is {KIND_NAME[block]}; only a port and the requests "
+                        "and responses it speaks live in a ports module",
+                    )
+                )
+            elif block == "port":
+                ports.append(stmt)
+        if len(ports) > 1:
+            found.append(
+                Violation(
+                    module.path(),
+                    ports[1].lineno,
+                    "TB052",
+                    f"{module.name()} declares {len(ports)} ports; a ports module "
+                    "declares exactly one port, so no two ports can share a request or a response",
+                )
+            )
+        if not ports and module.class_defs():
+            found.append(
+                Violation(
+                    module.path(),
+                    1,
+                    "TB052",
+                    f"{module.name()} declares no port; a ports module "
+                    "declares exactly one port, so no two ports can share a request or a response",
+                )
+            )
+        for stmt in module.body():
+            if isinstance(stmt, (ast.Import, ast.ImportFrom, ast.ClassDef)):
+                continue
+            found.append(
+                Violation(
+                    module.path(),
+                    stmt.lineno,
+                    "TB051",
+                    f"{module.name()} has a loose module-level statement; "
+                    "a ports module holds only imports and classes",
+                )
+            )
+        return tuple(found)
+
+    def _port_violations(
+        self,
+        module: Module,
+        cls: ast.ClassDef,
+        blocks: dict[tuple[str, str], str],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for item in cls.body:
+            if not isinstance(item, ast.FunctionDef) or item.name.startswith("_"):
+                continue
+            where = f"{module.name()}.{cls.name}.{item.name}"
+            found.extend(
+                self._signature_violations(
+                    module,
+                    where,
+                    item.lineno,
+                    item,
+                    "port_request",
+                    "port_response",
+                    "a port method",
+                    "TB081",
+                    blocks,
+                )
+            )
+        return tuple(found)
+
     def _role_module_violations(
         self,
         module: Module,
@@ -2233,6 +2436,18 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
+    @staticmethod
+    def _reaches(role: str, pieces: list[str]) -> bool:
+        if len(pieces) < 2:
+            return False
+        if pieces[1] == role:
+            return True
+        inner = ".".join(pieces[1:])
+        return any(
+            inner == allowed or inner.startswith(f"{allowed}.")
+            for allowed in SAME_CONTEXT_IMPORTS[role]
+        )
+
     def _import_violations(
         self,
         module: Module,
@@ -2276,7 +2491,7 @@ class Codebase(ts.AggregateRoot):
                                     "only a handler imports its own context's client",
                                 )
                             )
-                    elif tail != role and tail not in SAME_CONTEXT_IMPORTS[role]:
+                    elif not self._reaches(role, pieces):
                         denied.append(
                             Violation(
                                 module.path(),
@@ -2284,7 +2499,7 @@ class Codebase(ts.AggregateRoot):
                                 "TB060",
                                 f"{module.name()} imports {target}; the same-context matrix is "
                                 "a role to itself, application to domain and client, adapters to "
-                                "application, wiring to application, adapters, and client",
+                                "application/ports, wiring to application, adapters, and client",
                             )
                         )
                 elif tail != "client" or not (role == "wiring" or (role == "adapters" and holds_gateway)):
@@ -2422,6 +2637,8 @@ class Codebase(ts.AggregateRoot):
             if len(parts) >= 4 and parts[2] in ADAPTER_TEST_TIERS:
                 return (parts[0], parts[2])
             return (parts[0], STRAY_TIER)
+        if parts[1] == PORTS_ROLE and len(parts) >= 4 and parts[2] == PORTS_PACKAGE:
+            return (parts[0], PORTS_TIER)
         return (parts[0], parts[1])
 
     def _shell_reach_violations(self, module: Module, tier: str) -> tuple[Violation, ...]:
@@ -2564,7 +2781,10 @@ class Codebase(ts.AggregateRoot):
                 continue
             tail = pieces[1] if len(pieces) > 1 else ""
             if pieces[0] == context:
-                allowed = tail in reach
+                inner = ".".join(pieces[1:])
+                allowed = any(
+                    inner == entry or inner.startswith(f"{entry}.") for entry in reach
+                )
                 if not allowed and home is not None and tail == home[0]:
                     allowed = home[1] is None or (len(pieces) >= 3 and pieces[2] == home[1])
                 if not allowed:
@@ -2927,6 +3147,13 @@ class Codebase(ts.AggregateRoot):
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
+        own = blocks.get((module.name(), cls.name))
+        nested = (
+            frozenset({"port_request", "port_response"})
+            if own in ("port_request", "port_response")
+            else frozenset({"request", "response"})
+        )
+        enums = self._enum_names(module) if own in ("port_request", "port_response") else frozenset()
         for item in cls.body:
             if not isinstance(item, ast.FunctionDef):
                 continue
@@ -2942,7 +3169,9 @@ class Codebase(ts.AggregateRoot):
                 )
                 continue
             for arg in self._params(item):
-                if not self._allowed_annotation(module, arg.annotation, blocks, frozenset({"request", "response"})):
+                if self._names_enum(arg.annotation, enums):
+                    continue
+                if not self._allowed_annotation(module, arg.annotation, blocks, nested):
                     found.append(
                         Violation(
                             module.path(),

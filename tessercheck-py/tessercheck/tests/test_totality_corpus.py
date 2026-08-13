@@ -31,6 +31,8 @@ def test_no_module_shape_is_silent(tmp_path: Path) -> None:
         ("app/__main__.py", "import app.domain.thing\n"),
         ("app/domain/__main__.py", "import app.application.service\n"),
         ("app/adapters/gateways/__main__.py", "import app.domain.thing\n"),
+        ("app/application/ports/__main__.py", "import app.domain.thing\n"),
+        ("app/application/ports/sub/deep.py", "import app.domain.thing\n"),
         ("app/tests/__main__.py", bait),
         ("app/conftest.py", bait),
         ("app/adapters/conftest.py", bait),
@@ -45,6 +47,7 @@ def test_no_module_shape_is_silent(tmp_path: Path) -> None:
         ("protocol.py", bait),
         ("bootstrap.py", bait),
         ("app/tests.py", "import app.application.service\n"),
+        ("app/application/ports.py", "import app.domain.thing\n"),
         ("__main__.py", bait),
         ("weird/__init__.py", bait),
         ("srv/deep/__init__.py", bait),
@@ -73,7 +76,14 @@ def test_no_module_shape_is_silent(tmp_path: Path) -> None:
     )
     returned = conftest.returned_tokens(conftest.function_tree(checks.Codebase._locate))
     package_only = frozenset(
-        {"shell-init", "protocol-init", "role-init", "context-tests-init", "role-file"}
+        {
+            "shell-init",
+            "protocol-init",
+            "role-init",
+            "context-tests-init",
+            "role-file",
+            "ports-init",
+        }
     )
     uncovered = returned - package_only - covered
     assert uncovered == frozenset(), (
