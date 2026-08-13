@@ -213,6 +213,41 @@ not smuggle an unclassified logic class into the leaf.
 takes the `ts.Response` base, which is already the client convention
 (`LinkView(ts.Response)`).
 
+## The honest cost, measured on the five migrated trees
+
+Review raised three costs as unmeasured. They are measurable, so here they are.
+
+**Class count roughly triples.** 19 `ts.Parts` classes become 47 request and
+response DTOs plus 10 enums, across 11 ports and 531 lines of ports modules.
+That is the price of one-Request-in / one-Response-out, and it is real.
+
+**Ten DTOs are empty** — the zero-arg `all()` / `available()` family and the
+void `save()` family. `client.py` already ships this exact shape
+(`ListLinksRequest.__init__(self) -> None: return None`), so it is an
+established form rather than a new one, but a reader meeting it for the first
+time on a repository will find it strange. Named, not defended.
+
+**The no-shared-DTO rule costs nothing observable.** This was the loudest
+worry, and it did not survive measurement. Of 26 distinct field shapes across
+the migrated ports, 9 repeat — but every repeat is either the request/response
+direction split *inside one module* (`CampaignRecord` and `SaveCampaignRequest`
+carrying the same fields, which is the client role's existing convention), or a
+shape repeating *across contexts* (`LinkRecord` in `campaign` and in `reports`),
+where sharing was already forbidden by the cross-context rules and always had
+been. **No two ports in the same context were forced to duplicate a DTO.** The
+tax the rule was expected to levy is not present in any real tree here.
+
+Two costs that are real and are not the rule's fault to fix:
+
+- **A predicate now costs three classes.** `slug_taken(slug) -> bool` becomes a
+  request, a response, and an enum. That is right when the answer is an outcome
+  and heavy when it is genuinely a yes/no, and there is no decidable line
+  between the two.
+- **The low-ceremony path is gone.** A one-edge context used to be able to keep
+  the walk inline. `port_request` and `port_response` are pinned to the ports
+  package, so the smallest context pays the full package + DTO + mapping cost.
+  There is no graduation path, by construction.
+
 ## Not a CI gate
 
 These trees are a design record, not a governed example tree: `union/`, `flag/`,
