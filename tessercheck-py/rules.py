@@ -75,6 +75,7 @@ APPLIES_TO: dict[str, str] = {
     "Codebase._context_init_violations": "context `__init__`",
     "Codebase._dynamic_import_violations": "every module",
     "Codebase._ports_init_violations": "ports `__init__`",
+    "Codebase._decoration_violations": "ports module",
     "Codebase._ports_module_violations": "ports module",
     "Codebase._port_violations": "port protocol method",
     "Codebase._port_annotation_violations": "port protocol method",

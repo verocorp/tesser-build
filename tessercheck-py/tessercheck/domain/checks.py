@@ -2452,6 +2452,28 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
         for stmt in self._nested_class_defs(list(module.body())):
+            found.extend(self._decoration_violations(module, stmt.name, stmt))
+            for item in stmt.body:
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    found.extend(
+                        self._decoration_violations(module, f"{stmt.name}.{item.name}", item)
+                    )
+                if isinstance(item, ast.FunctionDef) and any(
+                    not isinstance(default, ast.Constant)
+                    for default in item.args.defaults + [
+                        value for value in item.args.kw_defaults if value is not None
+                    ]
+                ):
+                    found.append(
+                        Violation(
+                            module.path(),
+                            item.lineno,
+                            "TB051",
+                            f"{module.name()}.{stmt.name}.{item.name} carries a computed "
+                            "default; a ports module holds no expression that runs at "
+                            "import, because every adapter imports it",
+                        )
+                    )
             if self._enum_base(module, stmt) is not None:
                 for item in stmt.body:
                     if self._is_enum_member(item):
@@ -2641,6 +2663,22 @@ class Codebase(ts.AggregateRoot):
                 )
             )
         return tuple(found)
+
+    @staticmethod
+    def _decoration_violations(
+        module: Module, where: str, node: ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef
+    ) -> tuple[Violation, ...]:
+        return tuple(
+            Violation(
+                module.path(),
+                node.lineno,
+                "TB051",
+                f"{module.name()}.{where} is decorated; a ports module holds no "
+                "decorator, because a decorator is a call that runs at import in the "
+                "one application module adapters may import",
+            )
+            for _ in node.decorator_list
+        )
 
     @staticmethod
     def _is_enum_member(node: ast.stmt) -> bool:

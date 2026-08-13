@@ -4254,3 +4254,40 @@ def test_a_port_declares_only_the_calls_an_implementer_provides(tmp_path: Path) 
     ), f"an underscore prefix bought a rule-free port method: {findings}"
     assert any("Sink.__enter__ is not a call an implementer provides" in f for f in findings)
     assert not any("Sink.save" in f for f in findings)
+
+
+def test_a_ports_module_runs_nothing_at_import(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "import enum\n"
+        "import tesser.application as ts\n"
+        "@enum.unique\n"
+        "class Decorated(ts.Response):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
+        "class Defaulted(ts.Response):\n"
+        "    def __init__(self, id: str = str(enum.Enum)) -> None:\n"
+        "        self.id = id\n"
+        "class Plain(ts.Response):\n"
+        "    def __init__(self, id: str = 'none') -> None:\n"
+        "        self.id = id\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.Decorated is decorated; a ports module holds no "
+        "decorator, because a decorator is a call that runs at import in the one "
+        "application module adapters may import" in f
+        for f in findings
+    ), f"a decorator ran arbitrary code at import of the ports leaf: {findings}"
+    assert any(
+        "app.application.ports.sink.Defaulted.__init__ carries a computed default; a ports "
+        "module holds no expression that runs at import, because every adapter imports it" in f
+        for f in findings
+    ), f"a default parameter expression ran at import: {findings}"
+    assert not any("Plain" in f for f in findings)
