@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 import tesser.testing as ts
 
-import parcel.application.parts as parts
+import parcel.application.mapping as mapping
 import parcel.domain.parcel as parcel
 
 
@@ -33,7 +33,7 @@ def test_reconstruction_reruns_invariants_on_stale_data() -> None:
         parcel.Parcel(_spec(items=0))
 
 
-def test_parts_from_equal_parcels_render_identically() -> None:
-    a = parts.parcel_parts(parcel.Parcel(_spec()))
-    b = parts.parcel_parts(parcel.Parcel(_spec()))
-    assert (a.code, a.items, a.weight_kg, a.heavy) == (b.code, b.items, b.weight_kg, b.heavy)
+def test_record_from_equal_parcels_render_identically() -> None:
+    a = mapping.parcel_record(parcel.Parcel(_spec()))
+    b = mapping.parcel_record(parcel.Parcel(_spec()))
+    assert (a.code, a.items, a.weight_kg, a.weight_class) == (b.code, b.items, b.weight_kg, b.weight_class)
