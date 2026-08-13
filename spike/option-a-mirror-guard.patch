@@ -1,0 +1,45 @@
+diff --git a/tessercheck-py/tessercheck/domain/checks.py b/tessercheck-py/tessercheck/domain/checks.py
+index 029e094..979dedf 100644
+--- a/tessercheck-py/tessercheck/domain/checks.py
++++ b/tessercheck-py/tessercheck/domain/checks.py
+@@ -783,11 +783,40 @@ class Codebase(ts.AggregateRoot):
+                     )
+         return tuple(kept)
+ 
++    @staticmethod
++    def _accounted(module: Module, contexts: frozenset[str]) -> bool:
++        parts = module.name().split(".")
++        if parts[0] in APP_PACKAGES or parts[0] == TESTS_ROLE or parts[0] == PROTOCOL_PACKAGE:
++            return True
++        if parts[0] in contexts:
++            if len(parts) == 1 or parts[-1] == "conftest" or parts[-1].startswith("test_"):
++                return True
++            if parts[-1].startswith(EVAL_PREFIX) or parts[-1] == "__main__":
++                return True
++            return parts[1] in ROLES or parts[1] == TESTS_ROLE or len(parts) == 2
++        return len(parts) == 1 or parts[-1] == "conftest" or parts[-1].startswith("test_")
++
++    def _unaccounted_violations(
++        self, module: Module, contexts: frozenset[str]
++    ) -> tuple[Violation, ...]:
++        if self._accounted(module, contexts):
++            return ()
++        return (
++            Violation(
++                module.path(),
++                1,
++                "TB040",
++                f"{module.name()} matches no governed location; "
++                "every module resolves to a location the walk knows",
++            ),
++        )
++
+     def _rule_violations(self) -> tuple[Violation, ...]:
+         blocks = self._classify()
+         contexts = self._contexts()
+         found: list[Violation] = []
+         for module in self._modules:
++            found.extend(self._unaccounted_violations(module, contexts))
+             found.extend(self._universal_violations(module))
+             found.extend(self._module_violations(module, blocks, contexts))
+             for cls in module.class_defs():
