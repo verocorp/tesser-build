@@ -2827,6 +2827,11 @@ class Codebase(ts.AggregateRoot):
             found.extend(cls._unreadable(module, module.name(), stmt))
         for holder in module.class_defs():
             enum_member = cls._enum_base(module, holder) is not None
+            for base in holder.bases:
+                if not cls._is_readable_annotation(base):
+                    found.extend(
+                        cls._unreadable(module, f"{module.name()}.{holder.name}", base)
+                    )
             for item in holder.body:
                 where = f"{module.name()}.{holder.name}"
                 if isinstance(item, ast.Pass):
@@ -2864,11 +2869,7 @@ class Codebase(ts.AggregateRoot):
     @classmethod
     def _is_readable_annotation(cls, node: ast.expr) -> bool:
         if isinstance(node, ast.Constant):
-            return (
-                node.value is None
-                or node.value is Ellipsis
-                or isinstance(node.value, str)
-            )
+            return node.value is None or node.value is Ellipsis
         if isinstance(node, ast.Name):
             return True
         if isinstance(node, ast.Attribute):

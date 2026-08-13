@@ -4524,12 +4524,15 @@ def test_a_ports_module_holds_only_shapes_the_rules_can_read(tmp_path: Path) -> 
     conftest.write_module(
         tmp_path,
         "app/application/ports/sink.py",
-        "from typing import Protocol\n"
+        "from typing import Annotated, Protocol\n"
         "import tesser.application as ts\n"
         "class SaveRequest(ts.Request):\n"
         "    def __init__(self, id: str) -> None:\n"
         "        self.id = id\n"
         "        del id\n"
+        "class Header(ts.Response, tuple[Annotated[int, 1 if True else 2], ...]):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
         "class SaveResponse(ts.Response):\n"
         "    def __init__(self) -> None:\n"
         "        return None\n"
@@ -4543,3 +4546,6 @@ def test_a_ports_module_holds_only_shapes_the_rules_can_read(tmp_path: Path) -> 
         "default rather than a gap nobody enumerated" in f
         for f in findings
     ), f"a statement kind nobody enumerated passed silently: {findings}"
+    assert any(
+        "app.application.ports.sink.Header holds a Subscript" in f for f in findings
+    ), f"an expression in a class base ran at import: {findings}"
