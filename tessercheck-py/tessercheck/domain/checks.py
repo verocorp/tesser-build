@@ -2464,12 +2464,25 @@ class Codebase(ts.AggregateRoot):
                         "is logic every adapter imports",
                     )
                 )
+            for base in stmt.bases:
+                if isinstance(base, (ast.Name, ast.Attribute, ast.Subscript)):
+                    continue
+                found.append(
+                    Violation(
+                        module.path(),
+                        stmt.lineno,
+                        "TB051",
+                        f"{module.name()}.{stmt.name} computes a base; a ports module "
+                        "holds no expression that runs at import, and a base built by a "
+                        "call is logic every adapter imports",
+                    )
+                )
             for item in stmt.body:
                 if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     found.extend(
                         self._decoration_violations(module, f"{stmt.name}.{item.name}", item)
                     )
-                if isinstance(item, ast.FunctionDef) and any(
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and any(
                     not isinstance(default, ast.Constant)
                     for default in item.args.defaults + [
                         value for value in item.args.kw_defaults if value is not None
@@ -2727,14 +2740,18 @@ class Codebase(ts.AggregateRoot):
                 or (isinstance(stmt.value, ast.Constant) and stmt.value.value is None)
             ):
                 continue
+            target: ast.expr | None = None
+            value: ast.expr | None = None
+            if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
+                target, value = stmt.targets[0], stmt.value
+            elif isinstance(stmt, ast.AnnAssign):
+                target, value = stmt.target, stmt.value
             if (
-                isinstance(stmt, ast.Assign)
-                and len(stmt.targets) == 1
-                and isinstance(stmt.targets[0], ast.Attribute)
-                and isinstance(stmt.targets[0].value, ast.Name)
-                and stmt.targets[0].value.id == "self"
-                and isinstance(stmt.value, ast.Name)
-                and stmt.value.id in names
+                isinstance(target, ast.Attribute)
+                and isinstance(target.value, ast.Name)
+                and target.value.id == "self"
+                and isinstance(value, ast.Name)
+                and value.id in names
             ):
                 continue
             return False

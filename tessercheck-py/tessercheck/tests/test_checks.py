@@ -4272,6 +4272,9 @@ def test_a_ports_module_runs_nothing_at_import(tmp_path: Path) -> None:
         "class Defaulted(ts.Response):\n"
         "    def __init__(self, id: str = str(enum.Enum)) -> None:\n"
         "        self.id = id\n"
+        "class Computed(ts.Response, str(enum.Enum)):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id: str = id\n"
         "class Plain(ts.Response):\n"
         "    def __init__(self, id: str = 'none') -> None:\n"
         "        self.id = id\n"
@@ -4290,7 +4293,43 @@ def test_a_ports_module_runs_nothing_at_import(tmp_path: Path) -> None:
         "module holds no expression that runs at import, because every adapter imports it" in f
         for f in findings
     ), f"a default parameter expression ran at import: {findings}"
+    assert any(
+        "app.application.ports.sink.Computed computes a base; a ports module holds no "
+        "expression that runs at import, and a base built by a call is logic every "
+        "adapter imports" in f
+        for f in findings
+    ), f"a computed base ran at import: {findings}"
     assert not any("Plain" in f for f in findings)
+    assert not any("Computed.__init__ carries logic" in f for f in findings), (
+        f"an annotated self-assignment was rejected: {findings}"
+    )
+
+
+def test_an_async_port_method_runs_nothing_at_import(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "from typing import Protocol\n"
+        "import tesser.application as ts\n"
+        "class SaveRequest(ts.Request):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
+        "class SaveResponse(ts.Response):\n"
+        "    def __init__(self) -> None:\n"
+        "        return None\n"
+        "class Sink(ts.Port, Protocol):\n"
+        "    async def audit(self, request: SaveRequest = SaveRequest(id=open('x').read())) "
+        "-> SaveResponse: ...\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.Sink.audit carries a computed default; a ports module "
+        "holds no expression that runs at import, because every adapter imports it" in f
+        for f in findings
+    ), f"an async def default expression ran at import: {findings}"
 
 
 def test_a_port_dto_binds_only_its_own_parameters(tmp_path: Path) -> None:
