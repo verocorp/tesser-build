@@ -86,9 +86,10 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   reads as a loose statement, and evades the def-gated presence checks.
   (6) `TYPE_CHECKING` blocks and `try/except ImportError` optional imports
   have no conformant form (module-level `If`/`Try` are loose statements).
-  (7) a submodule appearing under a role FILE silently flips it to the
-  role-`__init__` ruleset (detection is name-prefix, not is_package — thread
-  the reader's `is_package` bit into the dispatch). (8) `__import__`/
+  (7) RESOLVED v0.0.30.0 (classifier-totality): the reader's `is_package`
+  bit is a parameter of `_locate`, and the package/module split per location
+  is pinned by the classification table in
+  `tessercheck-py/tessercheck/tests/test_locate.py`. (8) `__import__`/
   importlib evade the pure-core allowlist (statically unpreventable at
   reasonable cost — accept and note). (9) a member import from a re-export
   `__init__` (`from rel.domain import Money`) does not classify — blocks
@@ -287,7 +288,9 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   rows; (4) legality sentinel → explicit `denied` list in
   `_import_violations`/`_app_import_violations`; (5) rules.py derives the
   conftest/`__main__` bullets from the `_module_violations` AST guards
-  (`ungoverned_basenames`, cross-checked against `UNGOVERNED_PROSE`), and
+  (`ungoverned_basenames`, cross-checked against `UNGOVERNED_PROSE`) —
+  since deleted in v0.0.30.0, dead once v0.0.29.0 emptied the exemption
+  list, so RULES.md's Named exemptions section is now static prose — and
   the TOOLING_MODULES not-found/wrong-shape errors are split; (6) `Module`
   freezes every accessor collection in `__init__`. One cosmetic RULES.md
   diff: the bootstrap module-contents row's two shapes swapped order.

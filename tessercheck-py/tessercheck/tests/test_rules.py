@@ -23,18 +23,6 @@ def test_every_rule_has_a_fixture() -> None:
     assert uncovered == [], f"rules with no fixture (NONE rows): {uncovered}"
 
 
-def test_an_underived_exemption_guard_fails_the_render() -> None:
-    tree = ast.parse(
-        "class Codebase:\n"
-        "    def _module_violations(self, basename: str) -> tuple[str, ...]:\n"
-        "        if basename == 'stray':\n"
-        "            return ()\n"
-        "        return ()\n"
-    )
-    with pytest.raises(RuntimeError, match="do not match"):
-        rules.ungoverned_bullets(tree)
-
-
 def test_a_violation_call_takes_four_positional_args() -> None:
     tree = ast.parse(
         "TS_NAME_BY_BLOCK: dict = {}\n"

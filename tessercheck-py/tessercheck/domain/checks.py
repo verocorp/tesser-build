@@ -3,7 +3,7 @@ import builtins
 import io
 import re
 import tokenize
-from typing import Final, TypeGuard
+from typing import Final, Literal, TypeGuard
 
 import tesser.domain as ts
 
@@ -823,6 +823,62 @@ class Codebase(ts.AggregateRoot):
                 found.add(parts[0])
         return frozenset(found)
 
+    @staticmethod
+    def _locate(
+        name: str, is_package: bool, contexts: frozenset[str]
+    ) -> Literal[
+        "conftest-root",
+        "conftest",
+        "test",
+        "eval",
+        "shell-init",
+        "shell-srv",
+        "shell-bootstrap",
+        "root-tests",
+        "protocol-init",
+        "protocol",
+        "root",
+        "context-init",
+        "context-main",
+        "context-tests-init",
+        "context-tests-stray",
+        "role-init",
+        "role-file",
+        "role",
+        "context-stray",
+    ]:
+        parts = name.split(".")
+        basename = parts[-1]
+        if basename == "conftest":
+            return "conftest-root" if len(parts) == 1 else "conftest"
+        if basename.startswith("test_"):
+            return "test"
+        if basename.startswith(EVAL_PREFIX):
+            return "eval"
+        if parts[0] in APP_PACKAGES:
+            if is_package:
+                return "shell-init"
+            if parts[0] == "srv":
+                return "shell-srv"
+            return "shell-bootstrap"
+        if parts[0] == TESTS_ROLE:
+            return "root-tests"
+        if parts[0] == PROTOCOL_PACKAGE:
+            return "protocol-init" if is_package else "protocol"
+        if parts[0] not in contexts:
+            return "root"
+        if len(parts) == 1:
+            return "context-init"
+        if basename == "__main__" and len(parts) == 2:
+            return "context-main"
+        if parts[1] == TESTS_ROLE:
+            return "context-tests-init" if is_package else "context-tests-stray"
+        if parts[1] in ROLES:
+            if is_package:
+                return "role-init"
+            return "role-file" if len(parts) == 2 else "role"
+        return "context-stray"
+
     def _module_violations(
         self,
         module: Module,
@@ -830,42 +886,43 @@ class Codebase(ts.AggregateRoot):
         contexts: frozenset[str],
     ) -> tuple[Violation, ...]:
         parts = module.name().split(".")
-        basename = parts[-1]
-        if basename == "conftest":
-            if len(parts) == 1:
-                return self._conftest_leaf_violations(module)
+        place = self._locate(module.name(), module.is_package(), contexts)
+        if place == "conftest-root":
+            return self._conftest_leaf_violations(module)
+        if place == "conftest":
             placement = self._test_tier(module, contexts)
             if placement is None or placement[1] == STRAY_TIER:
                 return self._conftest_leaf_violations(module)
             return self._test_placement_violations(module, placement[0], placement[1], contexts)
-        if basename.startswith("test_"):
+        if place == "test":
             return self._test_module_violations(module, blocks, contexts)
-        if basename.startswith(EVAL_PREFIX):
+        if place == "eval":
             return self._eval_module_violations(module, blocks, contexts)
-        if parts[0] in APP_PACKAGES:
-            if module.is_package():
-                return self._app_init_violations(module)
-            body = (
-                self._srv_module_violations(module, blocks)
-                if parts[0] == "srv"
-                else self._bootstrap_module_violations(module)
+        if place == "shell-init":
+            return self._app_init_violations(module)
+        if place == "shell-srv":
+            return self._srv_module_violations(module, blocks) + self._app_import_violations(
+                module, parts[0], contexts, blocks
             )
-            return body + self._app_import_violations(module, parts[0], contexts, blocks)
-        if parts[0] == "tests":
+        if place == "shell-bootstrap":
+            return self._bootstrap_module_violations(module) + self._app_import_violations(
+                module, parts[0], contexts, blocks
+            )
+        if place == "root-tests":
             return self._tests_package_violations(module, contexts)
-        if parts[0] == PROTOCOL_PACKAGE:
-            if module.is_package():
-                return self._protocol_init_violations(module)
+        if place == "protocol-init":
+            return self._protocol_init_violations(module)
+        if place == "protocol":
             return self._protocol_module_violations(module, blocks, contexts)
-        if parts[0] not in contexts:
+        if place == "root":
             return self._homeless_violations(module) + self._root_leaf_violations(module)
-        if len(parts) == 1:
+        if place == "context-init":
             return self._context_init_violations(module)
-        if basename == "__main__" and len(parts) == 2:
+        if place == "context-main":
             return self._main_violations(module, parts[0], contexts)
-        if len(parts) >= 2 and parts[1] == TESTS_ROLE:
-            if module.is_package():
-                return self._context_tests_init_violations(module)
+        if place == "context-tests-init":
+            return self._context_tests_init_violations(module)
+        if place == "context-tests-stray":
             return (
                 Violation(
                     module.path(),
@@ -875,18 +932,18 @@ class Codebase(ts.AggregateRoot):
                     "a context tests package holds only test modules and conftest",
                 ),
             ) + self._test_placement_violations(module, parts[0], TESTS_ROLE, contexts)
-        if len(parts) >= 2 and parts[1] in ROLES:
-            if module.is_package():
-                return self._role_init_violations(module)
-            if len(parts) == 2:
-                return (
-                    Violation(
-                        module.path(),
-                        1,
-                        "TB041",
-                        f"{module.name()} is a role module; a role is a package, never a module",
-                    ),
-                )
+        if place == "role-init":
+            return self._role_init_violations(module)
+        if place == "role-file":
+            return (
+                Violation(
+                    module.path(),
+                    1,
+                    "TB041",
+                    f"{module.name()} is a role module; a role is a package, never a module",
+                ),
+            )
+        if place == "role":
             return self._role_module_violations(module, parts[1], blocks) + self._import_violations(
                 module, parts[0], parts[1], contexts, blocks
             )

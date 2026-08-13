@@ -251,49 +251,6 @@ def protocol_package(tree: ast.Module) -> str:
     raise RuntimeError("PROTOCOL_PACKAGE not found in checks.py")
 
 
-UNGOVERNED_PROSE: dict[str, list[str]] = {}
-
-
-def ungoverned_basenames(tree: ast.Module) -> list[str]:
-    for cls in (n for n in tree.body if isinstance(n, ast.ClassDef)):
-        for method in (n for n in cls.body if isinstance(n, ast.FunctionDef)):
-            if method.name != "_module_violations":
-                continue
-            found: list[str] = []
-            for node in ast.walk(method):
-                if not (
-                    isinstance(node, ast.If)
-                    and isinstance(node.test, ast.Compare)
-                    and isinstance(node.test.left, ast.Name)
-                    and node.test.left.id == "basename"
-                    and len(node.test.ops) == 1
-                    and isinstance(node.test.ops[0], ast.Eq)
-                    and len(node.test.comparators) == 1
-                    and isinstance(node.test.comparators[0], ast.Constant)
-                    and isinstance(node.test.comparators[0].value, str)
-                ):
-                    continue
-                if (
-                    len(node.body) == 1
-                    and isinstance(node.body[0], ast.Return)
-                    and isinstance(node.body[0].value, ast.Tuple)
-                    and not node.body[0].value.elts
-                ):
-                    found.append(node.test.comparators[0].value)
-            return found
-    raise RuntimeError("_module_violations not found in checks.py")
-
-
-def ungoverned_bullets(tree: ast.Module) -> list[str]:
-    derived = ungoverned_basenames(tree)
-    if set(derived) != set(UNGOVERNED_PROSE):
-        raise RuntimeError(
-            f"ungoverned basenames in checks.py {sorted(derived)} do not match "
-            f"UNGOVERNED_PROSE {sorted(UNGOVERNED_PROSE)}; update rules.py"
-        )
-    return [line for name in derived for line in UNGOVERNED_PROSE[name]]
-
-
 def rule_rows(tree: ast.Module) -> list[RuleRow]:
     ts_map = ts_name_map(tree)
     rows: dict[str, RuleRow] = {}
@@ -420,7 +377,6 @@ def render() -> str:
         "",
         "## Named exemptions (carve-outs the code makes on purpose, not rules)",
         "",
-        *ungoverned_bullets(tree),
         f"- modules under the top-level `{package}/` package are the protocol",
         "  modules (PROTOCOL_PACKAGE in tessercheck/domain/checks.py) — package membership",
         "  is the declaration; no suffix opts a module in, so a stray `*wire.py`",

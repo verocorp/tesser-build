@@ -1,3 +1,7 @@
+import ast
+import inspect
+import textwrap
+from collections.abc import Callable
 from pathlib import Path
 
 from tessercheck.adapters.repositories import FilesystemSourceReader
@@ -49,4 +53,20 @@ def conforming_tree(root: Path) -> None:
         "        return client.AskResponse(text=request.text)\n"
         "    def _helper(self, anything: int) -> int:\n"
         "        return anything\n",
+    )
+
+
+def function_tree(func: Callable[..., object]) -> ast.FunctionDef:
+    tree = ast.parse(textwrap.dedent(inspect.getsource(func)))
+    node = next(n for n in tree.body if isinstance(n, ast.FunctionDef))
+    return node
+
+
+def returned_tokens(func: ast.FunctionDef) -> frozenset[str]:
+    return frozenset(
+        value.value
+        for node in ast.walk(func)
+        if isinstance(node, ast.Return) and node.value is not None
+        for value in ast.walk(node.value)
+        if isinstance(value, ast.Constant) and isinstance(value.value, str)
     )
