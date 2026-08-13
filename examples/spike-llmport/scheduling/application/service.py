@@ -1,67 +1,54 @@
 from __future__ import annotations
 
-from typing import Protocol
-
 import tesser.application as ts
 
-import scheduling.application.parts as parts
+import scheduling.application.ports.booking_repository as booking_repository
+import scheduling.application.ports.slot_directory as slot_directory
 import scheduling.application.views as views
 import scheduling.client.client as client
 import scheduling.domain.scheduling as domain
 
 
-class SlotDirectory(ts.Port, Protocol):
-
-    def available(self) -> tuple[str, ...]: ...
-
-    def reserve(self, slot: str, name: str) -> parts.Reserved | parts.SlotTaken: ...
-
-
-class BookingRepository(ts.Port, Protocol):
-
-    def has(self, booking_id: str) -> bool: ...
-
-    def get(self, booking_id: str) -> parts.BookingParts: ...
-
-    def save(self, booking_id: str, stored: parts.BookingParts) -> None: ...
-
-
 class BookingService(ts.ApplicationService):
 
-    def __init__(self, directory: SlotDirectory, repository: BookingRepository) -> None:
+    def __init__(
+        self, directory: slot_directory.SlotDirectory, repository: booking_repository.BookingRepository
+    ) -> None:
         self._directory = directory
         self._repository = repository
 
     def begin(self, request: client.BeginBookingRequest) -> client.BookingStateResponse:
-        if self._repository.has(request.booking_id):
-            return views.state(views.loaded(self._repository.get(request.booking_id)), "continue the booking")
-        booking = domain.Booking(domain.BookingSpec(step=domain.COLLECT_NAME, name="", chosen="", offered=()))
-        self._repository.save(request.booking_id, views.parts_of(booking))
-        return views.state(booking, "ask the caller for their name")
+        found = self._repository.find(booking_repository.FindBookingRequest(booking_id=request.booking_id))
+        booking = views.began(found)
+        self._repository.save(views.save_request(request.booking_id, booking))
+        return views.state(booking, views.begin_reply(found))
 
     def provide_name(self, request: client.ProvideNameRequest) -> client.BookingStateResponse:
-        booking = views.loaded(self._repository.get(request.booking_id))
-        booking.provide_name(domain.CustomerName(request.name), tuple(domain.Slot(label) for label in self._directory.available()))
-        self._repository.save(request.booking_id, views.parts_of(booking))
+        found = self._repository.find(booking_repository.FindBookingRequest(booking_id=request.booking_id))
+        booking = views.loaded(found)
+        available = self._directory.available(slot_directory.AvailableSlotsRequest())
+        offered = tuple(domain.Slot(label) for label in available.slots)
+        booking.provide_name(domain.CustomerName(request.name), offered)
+        self._repository.save(views.save_request(request.booking_id, booking))
         return views.state(booking, "offer the caller the available slots")
 
     def choose_slot(self, request: client.ChooseSlotRequest) -> client.BookingStateResponse:
-        booking = views.loaded(self._repository.get(request.booking_id))
+        found = self._repository.find(booking_repository.FindBookingRequest(booking_id=request.booking_id))
+        booking = views.loaded(found)
         booking.choose_slot(domain.Slot(request.slot))
-        self._repository.save(request.booking_id, views.parts_of(booking))
+        self._repository.save(views.save_request(request.booking_id, booking))
         return views.state(booking, f"slot {booking.chosen()} selected; ask the caller to confirm")
 
     def confirm(self, request: client.ConfirmBookingRequest) -> client.BookingStateResponse:
-        stored = self._repository.get(request.booking_id)
-        booking = views.loaded(stored)
+        found = self._repository.find(booking_repository.FindBookingRequest(booking_id=request.booking_id))
+        booking = views.loaded(found)
         booking.confirm()
-        match self._directory.reserve(str(booking.chosen()), str(booking.name())):
-            case parts.Reserved():
-                settled, reply = booking, f"booked {booking.chosen()} for {booking.name()}"
-            case parts.SlotTaken(available=fresh):
-                settled, reply = views.reoffered(stored, fresh), f"{booking.chosen()} was just taken; offer the caller the updated slots"
-        self._repository.save(request.booking_id, views.parts_of(settled))
-        return views.state(settled, reply)
+        slot, name = str(booking.chosen()), str(booking.name())
+        reserved = self._directory.reserve(slot_directory.ReserveSlotRequest(slot=slot, name=name))
+        settled = views.confirmed(reserved, booking, found.booking)
+        self._repository.save(views.save_request(request.booking_id, settled))
+        return views.state(settled, views.confirm_reply(reserved, booking))
 
     def status(self, request: client.StatusRequest) -> client.BookingStateResponse:
-        return views.state(views.loaded(self._repository.get(request.booking_id)), "continue the booking")
+        found = self._repository.find(booking_repository.FindBookingRequest(booking_id=request.booking_id))
+        return views.state(views.loaded(found), "continue the booking")

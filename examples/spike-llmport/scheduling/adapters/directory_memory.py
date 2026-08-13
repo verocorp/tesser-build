@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tesser.adapters as ts
 
-import scheduling.application.parts as parts
+import scheduling.application.ports.slot_directory as slot_directory
 
 
 class MemorySlotDirectory(ts.Gateway):
@@ -10,12 +10,16 @@ class MemorySlotDirectory(ts.Gateway):
         self.slots = list(slots)
         self.reserved: list[tuple[str, str]] = []
 
-    def available(self) -> tuple[str, ...]:
-        return tuple(self.slots)
+    def available(self, request: slot_directory.AvailableSlotsRequest) -> slot_directory.AvailableSlotsResponse:
+        return slot_directory.AvailableSlotsResponse(slots=tuple(self.slots))
 
-    def reserve(self, slot: str, name: str) -> parts.Reserved | parts.SlotTaken:
-        if slot not in self.slots:
-            return parts.SlotTaken(available=tuple(self.slots))
-        self.slots.remove(slot)
-        self.reserved.append((slot, name))
-        return parts.Reserved()
+    def reserve(self, request: slot_directory.ReserveSlotRequest) -> slot_directory.ReserveSlotResponse:
+        if request.slot not in self.slots:
+            return slot_directory.ReserveSlotResponse(
+                outcome=slot_directory.ReservationOutcome.SLOT_TAKEN, available=tuple(self.slots)
+            )
+        self.slots.remove(request.slot)
+        self.reserved.append((request.slot, request.name))
+        return slot_directory.ReserveSlotResponse(
+            outcome=slot_directory.ReservationOutcome.RESERVED, available=()
+        )

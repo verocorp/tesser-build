@@ -2,18 +2,26 @@ from __future__ import annotations
 
 import tesser.adapters as ts
 
-import scheduling.application.parts as parts
+import scheduling.application.ports.booking_repository as booking_repository
 
 
 class MemoryBookingRepository(ts.Repository):
     def __init__(self) -> None:
-        self.stored: dict[str, parts.BookingParts] = {}
+        self.stored: dict[str, booking_repository.BookingView] = {}
 
-    def has(self, booking_id: str) -> bool:
-        return booking_id in self.stored
+    def find(self, request: booking_repository.FindBookingRequest) -> booking_repository.FindBookingResponse:
+        row = self.stored.get(request.booking_id)
+        if row is None:
+            return booking_repository.FindBookingResponse(
+                presence=booking_repository.BookingPresence.ABSENT,
+                booking=booking_repository.BookingView(step="", name="", chosen="", offered=()),
+            )
+        return booking_repository.FindBookingResponse(
+            presence=booking_repository.BookingPresence.PRESENT, booking=row
+        )
 
-    def get(self, booking_id: str) -> parts.BookingParts:
-        return self.stored[booking_id]
-
-    def save(self, booking_id: str, booking: parts.BookingParts) -> None:
-        self.stored[booking_id] = booking
+    def save(self, request: booking_repository.SaveBookingRequest) -> booking_repository.SaveBookingResponse:
+        self.stored[request.booking_id] = booking_repository.BookingView(
+            step=request.step, name=request.name, chosen=request.chosen, offered=request.offered
+        )
+        return booking_repository.SaveBookingResponse()

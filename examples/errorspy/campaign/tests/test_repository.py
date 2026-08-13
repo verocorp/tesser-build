@@ -4,7 +4,7 @@ import pytest
 import tesser.testing as ts
 
 import campaign.adapters.gateways.repo_storage as repo_storage
-import campaign.application.parts as cparts
+import campaign.application.ports.campaign_repository as campaign_repository
 import campaign.application.views as views
 import campaign.domain.campaign as campaign
 import campaign.domain.short_link as short_link
@@ -24,16 +24,19 @@ def _spec(slug: str = "spring-sale") -> campaign.CampaignSpec:
 
 def test_save_then_find_roundtrip() -> None:
     repo = repo_storage.StorageCampaignRepository(FakeStorage())
-    repo.save(cparts.campaign_parts(campaign.Campaign(_spec())))
-    got = views.required_campaign(repo.find("c1"), "c1")
+    c = campaign.Campaign(_spec())
+    repo.save(views.save_request(c))
+    found = repo.find(campaign_repository.FindCampaignRequest(campaign_id="c1"))
+    got = views.required_campaign(found, "c1")
     assert got.id == "c1"
     assert str(got.links[0].slug) == "spring-sale"
 
 
 def test_missing_is_domain_not_found() -> None:
     repo = repo_storage.StorageCampaignRepository(FakeStorage())
+    found = repo.find(campaign_repository.FindCampaignRequest(campaign_id="nope"))
     with pytest.raises(DomainError) as ei:
-        views.required_campaign(repo.find("nope"), "nope")
+        views.required_campaign(found, "nope")
     assert ei.value.kind is DomainKind.NOT_FOUND
     assert ei.value.code == "campaign_missing"
 
@@ -41,7 +44,7 @@ def test_missing_is_domain_not_found() -> None:
 def test_outage_is_infra_not_domain() -> None:
     repo = repo_storage.StorageCampaignRepository(FakeStorage(down=True))
     with pytest.raises(InfraError) as ei:
-        repo.find("c1")
+        repo.find(campaign_repository.FindCampaignRequest(campaign_id="c1"))
     assert not isinstance(ei.value, DomainError)
     assert not isinstance(ei.value, StorageError)
 
@@ -56,8 +59,9 @@ def test_corrupted_record_is_infra_not_validation() -> None:
         },
     )
     repo = repo_storage.StorageCampaignRepository(storage)
+    found = repo.find(campaign_repository.FindCampaignRequest(campaign_id="c1"))
     with pytest.raises(InfraError) as ei:
-        views.required_campaign(repo.find("c1"), "c1")
+        views.required_campaign(found, "c1")
     assert not isinstance(ei.value, DomainError)
     assert isinstance(ei.value.__cause__, DomainError)
     assert ei.value.__cause__.kind is DomainKind.VALIDATION
