@@ -3604,7 +3604,7 @@ def test_a_conforming_ports_module_is_silent(tmp_path: Path) -> None:
     )
 
 
-def test_a_ports_sibling_test_reaches_only_ports(tmp_path: Path) -> None:
+def test_a_ports_package_holds_only_ports_modules(tmp_path: Path) -> None:
     conftest.conforming_tree(tmp_path)
     conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
     conftest.write_module(
@@ -3616,25 +3616,24 @@ def test_a_ports_sibling_test_reaches_only_ports(tmp_path: Path) -> None:
     )
     conftest.write_module(
         tmp_path,
-        "app/application/ports/test_sink.py",
+        "app/application/ports/test_support.py",
+        "import tesser.testing as ts\n"
         "import app.application.ports.sink as sink\n"
-        "import app.domain.thing as thing\n"
-        "import app.application.service as service\n"
+        "@ts.fake\n"
+        "class Lookup(sink.Sink):\n"
+        "    pass\n"
         "def test_x() -> None:\n"
         "    assert True\n",
     )
+    conftest.write_module(tmp_path, "app/application/ports/conftest.py", "")
     findings = conftest.check_tree(tmp_path)
     assert any(
-        "app.application.ports.test_sink imports app.domain.thing, but a test placed in "
-        "ports reaches only application.ports of its own context; "
-        "a test reaches only what its placement allows" in f
+        "app.application.ports.test_support is not a ports module; a ports package holds "
+        "only ports modules, because a protocol and its DTOs have no behaviour to test "
+        "and a fake here would be an implementation adapters may import" in f
         for f in findings
-    )
-    assert any(
-        "app.application.ports.test_sink imports app.application.service" in f
-        for f in findings
-    )
-    assert not any("test_sink.py:1:" in f for f in findings)
+    ), f"a fake could live in the package adapters may import: {findings}"
+    assert any("app.application.ports.conftest is not a ports module" in f for f in findings)
 
 
 def test_a_client_dto_with_a_sibling_enum_stays_strict(tmp_path: Path) -> None:
@@ -3936,3 +3935,119 @@ def test_a_dynamic_import_is_not_a_way_around_the_matrix(tmp_path: Path) -> None
         "an import is a statement the walk can read, never a call" in f
         for f in findings
     ), f"importlib walked around the import matrix: {findings}"
+
+
+def test_a_dto_declares_its_fields_where_the_rules_can_read_them(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "import tesser.application as ts\n"
+        "class ClassLevel(ts.Response):\n"
+        "    flag: bool\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
+        "class Splatted(ts.Response):\n"
+        "    def __init__(self, **fields: object) -> None:\n"
+        "        self.fields = fields\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.ClassLevel.flag is a class-level field; a DTO declares "
+        "its fields as __init__ parameters, where the field rules can read them" in f
+        for f in findings
+    ), f"a class-level bool field walked around the bare-bool rule: {findings}"
+    assert any(
+        "app.application.ports.sink.Splatted.__init__ uses *args/**kwargs; a DTO declares "
+        "its fields as named __init__ parameters, where the field rules can read them" in f
+        for f in findings
+    ), f"**kwargs walked around every DTO field rule: {findings}"
+
+
+def test_an_async_method_on_a_dto_is_still_a_method(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "import tesser.application as ts\n"
+        "class Loaded(ts.Response):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
+        "    async def resolve(self) -> str:\n"
+        "        return self.id\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.Loaded.resolve defines a method on a DTO; "
+        "a DTO carries data and nothing else" in f
+        for f in findings
+    ), f"async def carried logic onto a DTO: {findings}"
+
+
+def test_a_nested_class_cannot_hide_a_second_port(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "import tesser.application as ts\n"
+        "class First(ts.Port):\n"
+        "    pass\n"
+        "class Holder(ts.Response):\n"
+        "    class Second(ts.Port):\n"
+        "        pass\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.Holder.Second is a nested class; a ports module declares "
+        "its port and its DTOs at module level, where the one-port count can see them" in f
+        for f in findings
+    ), f"a nested class hid a second port sharing every DTO: {findings}"
+
+
+def test_a_dynamic_import_is_resolved_by_binding_not_spelling(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "import tesser.application as ts\nclass Sink(ts.Port):\n    pass\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "app/adapters/gateways/memory.py",
+        "from importlib import import_module\n"
+        "import tesser.adapters as ts\n"
+        "import app.application.ports.sink as sink\n"
+        "class MemorySink(ts.Repository):\n"
+        "    def __init__(self) -> None:\n"
+        "        self._service = import_module('app.application.service')\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "app/adapters/gateways/local.py",
+        "import tesser.adapters as ts\n"
+        "import app.application.ports.sink as sink\n"
+        "class LocalSink(ts.Repository):\n"
+        "    def __init__(self, importlib: object) -> None:\n"
+        "        self._loader = importlib\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.adapters.gateways.memory imports dynamically through importlib.import_module" in f
+        for f in findings
+    ), f"a from-import of import_module walked around TB068: {findings}"
+    assert not any("local" in f and "TB068" in f for f in findings), (
+        f"a local name spelled importlib false-positived: {findings}"
+    )

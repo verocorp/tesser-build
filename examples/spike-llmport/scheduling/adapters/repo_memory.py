@@ -13,11 +13,10 @@ class MemoryBookingRepository(ts.Repository):
         row = self.stored.get(request.booking_id)
         if row is None:
             return booking_repository.FindBookingResponse(
-                presence=booking_repository.BookingPresence.ABSENT,
-                booking=booking_repository.BookingView(step="", name="", chosen="", offered=()),
+                presence=booking_repository.BookingPresence.ABSENT, bookings=()
             )
         return booking_repository.FindBookingResponse(
-            presence=booking_repository.BookingPresence.PRESENT, booking=row
+            presence=booking_repository.BookingPresence.PRESENT, bookings=(row,)
         )
 
     def save(self, request: booking_repository.SaveBookingRequest) -> booking_repository.SaveBookingResponse:

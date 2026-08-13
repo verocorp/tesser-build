@@ -28,9 +28,9 @@ class FindBookingRequest(ts.Request):
 
 class FindBookingResponse(ts.Response):
 
-    def __init__(self, presence: BookingPresence, booking: BookingView) -> None:
+    def __init__(self, presence: BookingPresence, bookings: tuple[BookingView, ...]) -> None:
         self.presence = presence
-        self.booking = booking
+        self.bookings = bookings
 
 
 class SaveBookingRequest(ts.Request):

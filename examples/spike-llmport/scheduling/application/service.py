@@ -45,7 +45,7 @@ class BookingService(ts.ApplicationService):
         booking.confirm()
         slot, name = str(booking.chosen()), str(booking.name())
         reserved = self._directory.reserve(slot_directory.ReserveSlotRequest(slot=slot, name=name))
-        settled = views.confirmed(reserved, booking, found.booking)
+        settled = views.confirmed(reserved, booking, views.only(found))
         self._repository.save(views.save_request(request.booking_id, settled))
         return views.state(settled, views.confirm_reply(reserved, booking))
 

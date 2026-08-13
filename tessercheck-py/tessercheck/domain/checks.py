@@ -120,9 +120,11 @@ PROTOCOL_PACKAGE: Final[str] = "protocol"
 
 TESSER: Final[str] = "tesser"
 
-DYNAMIC_IMPORTS: Final[frozenset[str]] = frozenset(
-    {"__import__", "importlib.import_module", "importlib.__import__"}
-)
+IMPORTLIB: Final[str] = "importlib"
+
+BUILTIN_IMPORT: Final[str] = "__import__"
+
+DYNAMIC_MEMBERS: Final[frozenset[str]] = frozenset({"import_module", "__import__"})
 
 IGNORE_MARKER: Final[str] = "tessercheck:ignore"
 
@@ -180,8 +182,6 @@ SAME_CONTEXT_IMPORTS: Final[dict[str, tuple[str, ...]]] = {
 
 TESTS_ROLE: Final[str] = "tests"
 
-PORTS_TIER: Final[str] = "ports"
-
 EVAL_PREFIX: Final[str] = "eval_"
 
 EVAL_HOME: Final[str] = "gateways"
@@ -204,7 +204,6 @@ TEST_TIER_REACH: Final[dict[str, tuple[str, ...]]] = {
     "handlers": ("client",),
     "gateways": SAME_CONTEXT_IMPORTS["adapters"],
     "repositories": SAME_CONTEXT_IMPORTS["adapters"],
-    PORTS_TIER: (PORTS_IMPORT_PATH,),
     TESTS_ROLE: ROLES + (TESTS_ROLE,),
 }
 
@@ -240,7 +239,6 @@ TEST_TIER_SHELL: Final[dict[str, frozenset[str]]] = {
     "handlers": frozenset({"protocol"}),
     "gateways": frozenset({"protocol"}),
     "repositories": frozenset({"protocol"}),
-    PORTS_TIER: frozenset(),
     TESTS_ROLE: frozenset({"protocol"}),
 }
 
@@ -881,7 +879,10 @@ class Codebase(ts.AggregateRoot):
                     found.extend(self._record_signature_violations(module, cls, blocks, "an adapter"))
                 elif block == "port":
                     found.extend(self._record_signature_violations(module, cls, blocks, "a port"))
-                    if self._locate(module.name(), module.is_package(), contexts) == "ports":
+                    if self._locate(module.name(), module.is_package(), contexts) in (
+                        "ports",
+                        "ports-file",
+                    ):
                         found.extend(self._port_violations(module, cls, blocks))
                 elif block == "service":
                     found.extend(self._service_violations(module, cls, blocks))
@@ -920,10 +921,23 @@ class Codebase(ts.AggregateRoot):
         "ports-init",
         "ports-file",
         "ports",
+        "ports-stray",
         "context-stray",
     ]:
         parts = name.split(".")
         basename = parts[-1]
+        if (
+            len(parts) >= 4
+            and parts[0] in contexts
+            and parts[1] == PORTS_PARENT_ROLE
+            and parts[2] == PORTS_PACKAGE
+            and (
+                basename == "conftest"
+                or basename.startswith("test_")
+                or basename.startswith(EVAL_PREFIX)
+            )
+        ):
+            return "ports-stray"
         if basename == "conftest":
             return "conftest-root" if len(parts) == 1 else "conftest"
         if basename.startswith("test_"):
@@ -1011,6 +1025,17 @@ class Codebase(ts.AggregateRoot):
                     "a context tests package holds only test modules and conftest",
                 ),
             ) + self._test_placement_violations(module, parts[0], TESTS_ROLE, contexts)
+        if place == "ports-stray":
+            return (
+                Violation(
+                    module.path(),
+                    1,
+                    "TB041",
+                    f"{module.name()} is not a ports module; a ports package holds only "
+                    "ports modules, because a protocol and its DTOs have no behaviour to "
+                    "test and a fake here would be an implementation adapters may import",
+                ),
+            )
         if place == "ports-init":
             return self._ports_init_violations(module)
         if place == "ports-file":
@@ -1076,14 +1101,8 @@ class Codebase(ts.AggregateRoot):
         found: list[Violation] = []
         for node in module.calls():
             callee = node.func
-            named = (
-                callee.id
-                if isinstance(callee, ast.Name)
-                else f"{callee.value.id}.{callee.attr}"
-                if isinstance(callee, ast.Attribute) and isinstance(callee.value, ast.Name)
-                else ""
-            )
-            if named in DYNAMIC_IMPORTS:
+            named = self._dynamic_import_name(module, callee)
+            if named is not None:
                 found.append(
                     Violation(
                         module.path(),
@@ -1094,6 +1113,21 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
         return tuple(found)
+
+    @staticmethod
+    def _dynamic_import_name(module: Module, callee: ast.expr) -> str | None:
+        if isinstance(callee, ast.Attribute) and isinstance(callee.value, ast.Name):
+            package = module._package_aliases.get(callee.value.id)
+            if package == IMPORTLIB and callee.attr in DYNAMIC_MEMBERS:
+                return f"{package}.{callee.attr}"
+            return None
+        if isinstance(callee, ast.Name):
+            if callee.id == BUILTIN_IMPORT and callee.id not in module.function_names():
+                return callee.id
+            origin = module._imported.get(callee.id)
+            if origin is not None and origin[0] == IMPORTLIB and origin[1] in DYNAMIC_MEMBERS:
+                return f"{IMPORTLIB}.{origin[1]}"
+        return None
 
     def _homeless_violations(self, module: Module) -> tuple[Violation, ...]:
         return (
@@ -2287,6 +2321,15 @@ class Codebase(ts.AggregateRoot):
         )
         return tuple(found)
 
+    @classmethod
+    def _nested_class_defs(cls, body: list[ast.stmt]) -> list[ast.ClassDef]:
+        found: list[ast.ClassDef] = []
+        for stmt in body:
+            if isinstance(stmt, ast.ClassDef):
+                found.append(stmt)
+                found.extend(cls._nested_class_defs(stmt.body))
+        return found
+
     @staticmethod
     def _enum_base(module: Module, stmt: ast.ClassDef) -> str | None:
         for base in stmt.bases:
@@ -2380,10 +2423,22 @@ class Codebase(ts.AggregateRoot):
                         "only tesser.application and the pure stdlib",
                     )
                 )
-        ports: list[ast.ClassDef] = []
         for stmt in module.body():
             if not isinstance(stmt, ast.ClassDef):
                 continue
+            for inner in self._nested_class_defs(stmt.body):
+                found.append(
+                    Violation(
+                        module.path(),
+                        inner.lineno,
+                        "TB052",
+                        f"{module.name()}.{stmt.name}.{inner.name} is a nested class; "
+                        "a ports module declares its port and its DTOs at module level, "
+                        "where the one-port count can see them",
+                    )
+                )
+        ports: list[ast.ClassDef] = []
+        for stmt in self._nested_class_defs(list(module.body())):
             block = blocks.get((module.name(), stmt.name))
             where = f"{module.name()}.{stmt.name}"
             enum_base = self._enum_base(module, stmt)
@@ -2445,7 +2500,7 @@ class Codebase(ts.AggregateRoot):
                     "declares exactly one port, so no two ports can share a request or a response",
                 )
             )
-        if not ports and module.class_defs():
+        if not ports and self._nested_class_defs(list(module.body())):
             found.append(
                 Violation(
                     module.path(),
@@ -2782,8 +2837,6 @@ class Codebase(ts.AggregateRoot):
             if len(parts) >= 4 and parts[2] in ADAPTER_TEST_TIERS:
                 return (parts[0], parts[2])
             return (parts[0], STRAY_TIER)
-        if parts[1] == PORTS_PARENT_ROLE and len(parts) >= 4 and parts[2] == PORTS_PACKAGE:
-            return (parts[0], PORTS_TIER)
         return (parts[0], parts[1])
 
     def _shell_reach_violations(self, module: Module, tier: str) -> tuple[Violation, ...]:
@@ -3259,9 +3312,33 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for item in cls.body:
-            if not isinstance(item, ast.FunctionDef):
+            if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
+                where = f"{module.name()}.{cls.name}.{item.target.id}"
+                found.append(
+                    Violation(
+                        module.path(),
+                        item.lineno,
+                        "TB080",
+                        f"{where} is a class-level field; a DTO declares its fields "
+                        "as __init__ parameters, where the field rules can read them",
+                    )
+                )
+                continue
+            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             where = f"{module.name()}.{cls.name}.{item.name}"
+            if item.name == "__init__" and (
+                item.args.vararg is not None or item.args.kwarg is not None
+            ):
+                found.append(
+                    Violation(
+                        module.path(),
+                        item.lineno,
+                        "TB080",
+                        f"{where} uses *args/**kwargs; a DTO declares its fields "
+                        "as named __init__ parameters, where the field rules can read them",
+                    )
+                )
             if item.name != "__init__":
                 found.append(
                     Violation(
@@ -3301,9 +3378,33 @@ class Codebase(ts.AggregateRoot):
         )
         enums = self._enum_names(module) if port_dto else frozenset()
         for item in cls.body:
-            if not isinstance(item, ast.FunctionDef):
+            if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
+                where = f"{module.name()}.{cls.name}.{item.target.id}"
+                found.append(
+                    Violation(
+                        module.path(),
+                        item.lineno,
+                        "TB080",
+                        f"{where} is a class-level field; a DTO declares its fields "
+                        "as __init__ parameters, where the field rules can read them",
+                    )
+                )
+                continue
+            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             where = f"{module.name()}.{cls.name}.{item.name}"
+            if item.name == "__init__" and (
+                item.args.vararg is not None or item.args.kwarg is not None
+            ):
+                found.append(
+                    Violation(
+                        module.path(),
+                        item.lineno,
+                        "TB080",
+                        f"{where} uses *args/**kwargs; a DTO declares its fields "
+                        "as named __init__ parameters, where the field rules can read them",
+                    )
+                )
             if item.name != "__init__":
                 found.append(
                     Violation(

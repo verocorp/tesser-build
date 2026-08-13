@@ -18,10 +18,21 @@ def _booking(view: booking_repository.BookingView) -> domain.Booking:
 
 
 @ts.function
+def only(found: booking_repository.FindBookingResponse) -> booking_repository.BookingView:
+    match found.presence:
+        case booking_repository.BookingPresence.PRESENT:
+            return found.bookings[0]
+        case booking_repository.BookingPresence.ABSENT:
+            raise KeyError("booking not found")
+        case _ as unreachable:
+            typing.assert_never(unreachable)
+
+
+@ts.function
 def loaded(found: booking_repository.FindBookingResponse) -> domain.Booking:
     match found.presence:
         case booking_repository.BookingPresence.PRESENT:
-            return _booking(found.booking)
+            return _booking(found.bookings[0])
         case booking_repository.BookingPresence.ABSENT:
             raise KeyError("booking not found")
         case _ as unreachable:
@@ -32,7 +43,7 @@ def loaded(found: booking_repository.FindBookingResponse) -> domain.Booking:
 def began(found: booking_repository.FindBookingResponse) -> domain.Booking:
     match found.presence:
         case booking_repository.BookingPresence.PRESENT:
-            return _booking(found.booking)
+            return _booking(found.bookings[0])
         case booking_repository.BookingPresence.ABSENT:
             return domain.Booking(
                 domain.BookingSpec(step=domain.COLLECT_NAME, name="", chosen="", offered=())

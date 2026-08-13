@@ -33,6 +33,7 @@ def test_no_module_shape_is_silent(tmp_path: Path) -> None:
         ("app/adapters/gateways/__main__.py", "import app.domain.thing\n"),
         ("app/application/ports/__main__.py", "import app.domain.thing\n"),
         ("app/application/ports/sub/deep.py", "import app.domain.thing\n"),
+        ("app/application/ports/test_support.py", test_bait),
         ("app/tests/__main__.py", bait),
         ("app/conftest.py", bait),
         ("app/adapters/conftest.py", bait),

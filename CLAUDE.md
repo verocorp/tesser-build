@@ -128,8 +128,9 @@ python3 roadmap/generate.py --check      # ROADMAP.md is generated — never han
 
 Every tessercheck gate is a plain zero-findings check — there is no ratchet
 and no code-family off switch. A finding is either fixed or carries a
-site-level `# tessercheck:ignore [TB0xx]` at the line it excuses (an ignore
-that suppresses nothing is itself a finding).
+site-level `# tessercheck:ignore TB0xx` at the line it excuses. Bare codes, no
+brackets: an ignore whose payload does not parse as codes suppresses nothing,
+and an ignore that suppresses nothing is itself a finding.
 
 ## Git & shipping
 

@@ -19,6 +19,7 @@ HOLE_NAMES: dict[str, str] = {
     "len(ports)": "⟨count⟩",
     "arg.arg": "⟨name⟩",
     "stmt.name": "⟨name⟩",
+    "inner.name": "⟨class⟩",
     "span": "⟨count⟩",
     "target": "⟨import⟩",
     "package": "⟨package⟩",
