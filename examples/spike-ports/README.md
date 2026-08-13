@@ -216,6 +216,10 @@ Three of these carry their weight indirectly:
   a rule about spelling. `importlib.import_module("...application.service")` in
   a gateway is an import the matrix cannot see, so the call form is a finding.
 
+A `.pyi` stub is a finding anywhere in a governed tree, not only under ports: a
+stub is what the type checker reads and the walk cannot, so a governed tree
+cannot vendor one without a site-level ignore.
+
 `enum` classes are permitted in a ports module and as a port-DTO field — the one
 deliberate widening, bought by Experiment 1. The enum base is resolved through
 the module's import bindings, not its spelling, so `import typing as enum` does

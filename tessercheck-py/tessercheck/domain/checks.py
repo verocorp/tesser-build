@@ -849,6 +849,7 @@ class Codebase(ts.AggregateRoot):
                 if suppressed:
                     continue
             kept.append(violation)
+        kept = list(dict.fromkeys(kept))
         for module in self._modules:
             for ignore in module.ignores():
                 if (module.path(), ignore._line) not in used:
@@ -2452,6 +2453,20 @@ class Codebase(ts.AggregateRoot):
                 )
         for stmt in self._nested_class_defs(list(module.body())):
             if self._enum_base(module, stmt) is not None:
+                for item in stmt.body:
+                    if self._is_enum_member(item):
+                        continue
+                    found.append(
+                        Violation(
+                            module.path(),
+                            item.lineno,
+                            "TB051",
+                            f"{module.name()}.{stmt.name} carries more than its members; "
+                            "a ports enum is a closed set of names and nothing else, "
+                            "because a method or a decorator here is logic every "
+                            "adapter imports",
+                        )
+                    )
                 continue
             for item in stmt.body:
                 if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
@@ -2576,6 +2591,16 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
             if item.name.startswith("_") and item.name != "__call__":
+                found.append(
+                    Violation(
+                        module.path(),
+                        item.lineno,
+                        "TB081",
+                        f"{where} is not a call an implementer provides; a port declares "
+                        "only its public calls and __call__, because a private name is "
+                        "not private to anyone implementing or holding the port",
+                    )
+                )
                 continue
             found.extend(
                 self._signature_violations(
@@ -2616,6 +2641,40 @@ class Codebase(ts.AggregateRoot):
                 )
             )
         return tuple(found)
+
+    @staticmethod
+    def _is_enum_member(node: ast.stmt) -> bool:
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            return False
+        if not isinstance(node.targets[0], ast.Name):
+            return False
+        if isinstance(node.value, ast.Constant):
+            return True
+        return (
+            isinstance(node.value, ast.Call)
+            and isinstance(node.value.func, ast.Attribute)
+            and node.value.func.attr == "auto"
+        )
+
+    @staticmethod
+    def _is_carrier_body(body: list[ast.stmt]) -> bool:
+        for stmt in body:
+            if isinstance(stmt, ast.Return) and (
+                stmt.value is None
+                or (isinstance(stmt.value, ast.Constant) and stmt.value.value is None)
+            ):
+                continue
+            if (
+                isinstance(stmt, ast.Assign)
+                and len(stmt.targets) == 1
+                and isinstance(stmt.targets[0], ast.Attribute)
+                and isinstance(stmt.targets[0].value, ast.Name)
+                and stmt.targets[0].value.id == "self"
+                and isinstance(stmt.value, ast.Name)
+            ):
+                continue
+            return False
+        return True
 
     @staticmethod
     def _is_declaration_body(body: list[ast.stmt]) -> bool:
@@ -3446,6 +3505,16 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
                 continue
+            if port_dto and not self._is_carrier_body(item.body):
+                found.append(
+                    Violation(
+                        module.path(),
+                        item.lineno,
+                        "TB080",
+                        f"{where} carries logic; a port DTO constructor only assigns its "
+                        "parameters, because a ports module holds no logic to import",
+                    )
+                )
             for arg in self._params(item):
                 if port_dto and self._names_bool(arg.annotation):
                     found.append(

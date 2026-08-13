@@ -4163,3 +4163,94 @@ def test_a_stub_cannot_shadow_the_shape_the_rules_read(tmp_path: Path) -> None:
         "stub is what the type checker reads and the walk cannot" in f
         for f in findings
     ), f"a stub bypassed every ports rule at the type level: {findings}"
+
+
+def test_a_ports_enum_carries_nothing_but_its_members(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "import enum\n"
+        "import tesser.application as ts\n"
+        "class Outcome(enum.Enum):\n"
+        "    FOUND = 'found'\n"
+        "    NEXT = enum.auto()\n"
+        "    def normalise(self, raw: str) -> str:\n"
+        "        return raw.strip().lower()\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.Outcome carries more than its members; a ports enum "
+        "is a closed set of names and nothing else, because a method or a decorator here "
+        "is logic every adapter imports" in f
+        for f in findings
+    ), f"an enum smuggled logic into the ports leaf: {findings}"
+    assert not any("FOUND" in f or "NEXT" in f for f in findings)
+
+
+def test_a_port_dto_constructor_only_assigns_its_parameters(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "import tesser.application as ts\n"
+        "class Validating(ts.Response):\n"
+        "    def __init__(self, id: str, name: str) -> None:\n"
+        "        if not id:\n"
+        "            raise ValueError('empty id')\n"
+        "        self.id = id\n"
+        "        self.name = name.strip()\n"
+        "class Plain(ts.Response):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
+        "class Empty(ts.Response):\n"
+        "    def __init__(self) -> None:\n"
+        "        return None\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.Validating.__init__ carries logic; a port DTO "
+        "constructor only assigns its parameters, because a ports module holds no "
+        "logic to import" in f
+        for f in findings
+    ), f"domain validation lived in the ports leaf: {findings}"
+    assert not any("Plain" in f or "Empty" in f for f in findings)
+
+
+def test_a_port_declares_only_the_calls_an_implementer_provides(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "from typing import Protocol\n"
+        "import tesser.application as ts\n"
+        "class SaveRequest(ts.Request):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
+        "class SaveResponse(ts.Response):\n"
+        "    def __init__(self) -> None:\n"
+        "        return None\n"
+        "class Sink(ts.Port, Protocol):\n"
+        "    def _raw(self, sql: str, limit: int, flag: bool) -> tuple[str, ...]: ...\n"
+        "    def __enter__(self) -> str: ...\n"
+        "    def save(self, request: SaveRequest) -> SaveResponse: ...\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.Sink._raw is not a call an implementer provides; "
+        "a port declares only its public calls and __call__, because a private name is "
+        "not private to anyone implementing or holding the port" in f
+        for f in findings
+    ), f"an underscore prefix bought a rule-free port method: {findings}"
+    assert any("Sink.__enter__ is not a call an implementer provides" in f for f in findings)
+    assert not any("Sink.save" in f for f in findings)
