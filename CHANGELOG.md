@@ -30,9 +30,11 @@ Analyzer output is byte-identical — this is structure, not new rules.
 - The exploration that picked this design — four options built and measured,
   including the rejected runtime mirror guard — is preserved on the
   `spike/classifier-totality` branch; the PR description records the
-  evidence. The rule going forward: routing lives in `_locate` and nowhere
-  else — a basename or path check added elsewhere in the walk is the old
-  bug class returning.
+  evidence. The rule going forward: module routing lives in `_locate` and
+  nowhere else — a basename or path check added elsewhere in the walk is the
+  old bug class returning. The one sanctioned second resolver is
+  `_test_tier`, which answers a different question (which reach tier a
+  test-shaped module gets) for modules `_locate` has already routed.
 
 ## [0.0.29.0] - 2026-08-12
 

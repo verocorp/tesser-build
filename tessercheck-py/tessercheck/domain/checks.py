@@ -3,7 +3,7 @@ import builtins
 import io
 import re
 import tokenize
-from typing import Final, TypeGuard
+from typing import Final, Literal, TypeGuard
 
 import tesser.domain as ts
 
@@ -824,17 +824,43 @@ class Codebase(ts.AggregateRoot):
         return frozenset(found)
 
     @staticmethod
-    def _locate(name: str, is_package: bool, contexts: frozenset[str]) -> str:
+    def _locate(
+        name: str, is_package: bool, contexts: frozenset[str]
+    ) -> Literal[
+        "conftest-root",
+        "conftest",
+        "test",
+        "eval",
+        "shell-init",
+        "shell-srv",
+        "shell-bootstrap",
+        "root-tests",
+        "protocol-init",
+        "protocol",
+        "root",
+        "context-init",
+        "context-main",
+        "context-tests-init",
+        "context-tests-stray",
+        "role-init",
+        "role-file",
+        "role",
+        "context-stray",
+    ]:
         parts = name.split(".")
         basename = parts[-1]
         if basename == "conftest":
-            return "conftest"
+            return "conftest-root" if len(parts) == 1 else "conftest"
         if basename.startswith("test_"):
             return "test"
         if basename.startswith(EVAL_PREFIX):
             return "eval"
         if parts[0] in APP_PACKAGES:
-            return "shell-init" if is_package else "shell"
+            if is_package:
+                return "shell-init"
+            if parts[0] == "srv":
+                return "shell-srv"
+            return "shell-bootstrap"
         if parts[0] == TESTS_ROLE:
             return "root-tests"
         if parts[0] == PROTOCOL_PACKAGE:
@@ -861,9 +887,9 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         parts = module.name().split(".")
         place = self._locate(module.name(), module.is_package(), contexts)
+        if place == "conftest-root":
+            return self._conftest_leaf_violations(module)
         if place == "conftest":
-            if len(parts) == 1:
-                return self._conftest_leaf_violations(module)
             placement = self._test_tier(module, contexts)
             if placement is None or placement[1] == STRAY_TIER:
                 return self._conftest_leaf_violations(module)
@@ -874,13 +900,14 @@ class Codebase(ts.AggregateRoot):
             return self._eval_module_violations(module, blocks, contexts)
         if place == "shell-init":
             return self._app_init_violations(module)
-        if place == "shell":
-            body = (
-                self._srv_module_violations(module, blocks)
-                if parts[0] == "srv"
-                else self._bootstrap_module_violations(module)
+        if place == "shell-srv":
+            return self._srv_module_violations(module, blocks) + self._app_import_violations(
+                module, parts[0], contexts, blocks
             )
-            return body + self._app_import_violations(module, parts[0], contexts, blocks)
+        if place == "shell-bootstrap":
+            return self._bootstrap_module_violations(module) + self._app_import_violations(
+                module, parts[0], contexts, blocks
+            )
         if place == "root-tests":
             return self._tests_package_violations(module, contexts)
         if place == "protocol-init":

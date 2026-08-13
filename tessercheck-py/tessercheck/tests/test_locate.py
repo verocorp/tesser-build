@@ -1,26 +1,7 @@
 import ast
-import inspect
-import textwrap
-from collections.abc import Callable
 
 import tessercheck.domain.checks as checks
-
-
-def _function_tree(func: Callable[..., object]) -> ast.FunctionDef:  # tessercheck:ignore TB071
-    tree = ast.parse(textwrap.dedent(inspect.getsource(func)))
-    node = tree.body[0]
-    assert isinstance(node, ast.FunctionDef)
-    return node
-
-
-def _returned_tokens(func: ast.FunctionDef) -> frozenset[str]:  # tessercheck:ignore TB071
-    return frozenset(
-        value.value
-        for node in ast.walk(func)
-        if isinstance(node, ast.Return) and node.value is not None
-        for value in ast.walk(node.value)
-        if isinstance(value, ast.Constant) and isinstance(value.value, str)
-    )
+import tessercheck.tests.conftest as conftest
 
 
 def test_locate_is_the_single_routing_decision() -> None:
@@ -29,7 +10,8 @@ def test_locate_is_the_single_routing_decision() -> None:
         ("solo", False, "root"),
         ("test_solo", False, "test"),
         ("eval_solo", False, "eval"),
-        ("conftest", False, "conftest"),
+        ("conftest", False, "conftest-root"),
+        ("conftest", True, "conftest-root"),
         ("weird.util", False, "root"),
         ("weird.test_x", False, "test"),
         ("weird.eval_x", False, "eval"),
@@ -40,21 +22,27 @@ def test_locate_is_the_single_routing_decision() -> None:
         ("tests", False, "root-tests"),
         ("tests.util", False, "root-tests"),
         ("tests.sub.test_deep", False, "test"),
+        ("tests.test_utils", True, "test"),
         ("tests.__main__", False, "root-tests"),
         ("tests.eval_x", False, "eval"),
         ("tests.conftest", False, "conftest"),
         ("srv", True, "shell-init"),
-        ("srv.http", False, "shell"),
-        ("srv.__main__", False, "shell"),
+        ("srv", False, "shell-srv"),
+        ("srv.http", False, "shell-srv"),
+        ("srv.__main__", False, "shell-srv"),
         ("srv.conftest", False, "conftest"),
-        ("srv.deep.handler", False, "shell"),
-        ("bootstrap.wire", False, "shell"),
-        ("bootstrap.__main__", False, "shell"),
+        ("srv.deep.handler", False, "shell-srv"),
+        ("bootstrap", True, "shell-init"),
+        ("bootstrap", False, "shell-bootstrap"),
+        ("bootstrap.wire", False, "shell-bootstrap"),
+        ("bootstrap.__main__", False, "shell-bootstrap"),
         ("protocol", True, "protocol-init"),
+        ("protocol", False, "protocol"),
         ("protocol.http", False, "protocol"),
         ("protocol.__main__", False, "protocol"),
         ("protocol.conftest", False, "conftest"),
         ("app", True, "context-init"),
+        ("app", False, "context-init"),
         ("app.__main__", False, "context-main"),
         ("app.domain", True, "role-init"),
         ("app.domain", False, "role-file"),
@@ -63,9 +51,11 @@ def test_locate_is_the_single_routing_decision() -> None:
         ("app.domain.sub.deep", False, "role"),
         ("app.domain.test_thing", False, "test"),
         ("app.domain.eval_bad", False, "eval"),
+        ("app.domain.eval_pkg", True, "eval"),
         ("app.domain.conftest", False, "conftest"),
         ("app.adapters.gateways.__main__", False, "role"),
         ("app.adapters.conftest", False, "conftest"),
+        ("app.adapters.conftest", True, "conftest"),
         ("app.tests", True, "context-tests-init"),
         ("app.tests", False, "context-tests-stray"),
         ("app.tests.support", False, "context-tests-stray"),
@@ -81,23 +71,26 @@ def test_locate_is_the_single_routing_decision() -> None:
         assert got == expected, (
             f"_locate({name!r}, is_package={is_package}) = {got!r}, expected {expected!r}"
         )
-    returned = _returned_tokens(_function_tree(checks.Codebase._locate))
+    returned = conftest.returned_tokens(conftest.function_tree(checks.Codebase._locate))
     exercised = frozenset(expected for _, _, expected in table)
-    assert returned <= exercised, (
-        f"_locate can return tokens the classification table never exercises: "
-        f"{sorted(returned - exercised)}"
+    assert returned == exercised, (
+        f"the classification table and _locate's return set drifted apart: "
+        f"unexercised tokens {sorted(returned - exercised)}, "
+        f"stale table rows {sorted(exercised - returned)}"
     )
 
 
 def test_every_location_token_has_a_dispatch_arm() -> None:
-    tokens = _returned_tokens(_function_tree(checks.Codebase._locate))
-    dispatch = _function_tree(checks.Codebase._module_violations)
+    tokens = conftest.returned_tokens(conftest.function_tree(checks.Codebase._locate))
+    dispatch = conftest.function_tree(checks.Codebase._module_violations)
     handled = frozenset(
         node.comparators[0].value
         for node in ast.walk(dispatch)
         if isinstance(node, ast.Compare)
         and isinstance(node.left, ast.Name)
         and node.left.id == "place"
+        and len(node.ops) == 1
+        and isinstance(node.ops[0], ast.Eq)
         and len(node.comparators) == 1
         and isinstance(node.comparators[0], ast.Constant)
     )

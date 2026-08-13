@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import tessercheck.domain.checks as checks
 import tessercheck.tests.conftest as conftest
 
 
@@ -8,6 +9,7 @@ def test_no_module_shape_is_silent(tmp_path: Path) -> None:
     test_bait = "import app.domain.thing\ndef test_ok() -> None:\n    assert True\n"
     corpus = (
         ("solo.py", bait),
+        ("conftest.py", bait),
         ("test_solo.py", test_bait),
         ("eval_solo.py", test_bait),
         ("weird/util.py", bait),
@@ -39,20 +41,41 @@ def test_no_module_shape_is_silent(tmp_path: Path) -> None:
         ("app/domain/eval_bad.py", test_bait),
         ("tests.py", bait),
         ("srv.py", bait),
+        ("app.py", bait),
+        ("protocol.py", bait),
+        ("bootstrap.py", bait),
         ("app/tests.py", "import app.application.service\n"),
+        ("__main__.py", bait),
+        ("weird/__init__.py", bait),
+        ("srv/deep/__init__.py", bait),
+        ("app/stray_pkg/__init__.py", bait),
+        ("tests/test_utils/__init__.py", bait),
+        ("app/domain/eval_pkg/__init__.py", bait),
+        ("app/adapters/conftest/__init__.py", bait),
     )
     conftest.conforming_tree(tmp_path)
-    names = []
     for rel, source in corpus:
         conftest.write_module(tmp_path, rel, source)
-        names.append((rel, rel[:-3].replace("/", ".")))
     findings = conftest.check_tree(tmp_path)
     silent = [
         rel
-        for rel, name in names
-        if not any(f" {name} " in f or f.startswith(rel + ":") for f in findings)
+        for rel, _ in corpus
+        if not any(f.startswith(rel + ":") for f in findings)
     ]
     assert silent == [], (
         "these module shapes produced zero findings despite carrying an illegal "
         f"import — a location the walk does not govern: {silent}"
+    )
+    covered = frozenset(
+        checks.Codebase._locate(rel[:-3].replace("/", "."), False, frozenset({"app"}))
+        for rel, _ in corpus
+        if not rel.endswith("__init__.py")
+    )
+    returned = conftest.returned_tokens(conftest.function_tree(checks.Codebase._locate))
+    package_only = frozenset(
+        {"shell-init", "protocol-init", "role-init", "context-tests-init", "role-file"}
+    )
+    uncovered = returned - package_only - covered
+    assert uncovered == frozenset(), (
+        f"_locate tokens with no corpus shape exercising them end-to-end: {sorted(uncovered)}"
     )
