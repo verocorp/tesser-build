@@ -33,7 +33,7 @@ class FilesystemSourceReader(ts.Repository):
     ) -> source_reader.ReadSourcesResponse:
         found: list[source_reader.SourceFile] = []
         base = Path(request.root)
-        for path in sorted(base.rglob("*.py")):
+        for path in sorted(list(base.rglob("*.py")) + list(base.rglob("*.pyi"))):
             relative = path.relative_to(base)
             if SKIP_DIRS & set(relative.parts[:-1]):
                 continue

@@ -3629,8 +3629,8 @@ def test_a_ports_package_holds_only_ports_modules(tmp_path: Path) -> None:
     findings = conftest.check_tree(tmp_path)
     assert any(
         "app.application.ports.test_support is not a ports module; a ports package holds "
-        "only ports modules, because a protocol and its DTOs have no behaviour to test "
-        "and a fake here would be an implementation adapters may import" in f
+        "only ports modules, and test_/eval_/conftest are reserved names, because a fake "
+        "here would be an implementation adapters may import" in f
         for f in findings
     ), f"a fake could live in the package adapters may import: {findings}"
     assert any("app.application.ports.conftest is not a ports module" in f for f in findings)
@@ -3946,7 +3946,7 @@ def test_a_dto_declares_its_fields_where_the_rules_can_read_them(tmp_path: Path)
         "from __future__ import annotations\n"
         "import tesser.application as ts\n"
         "class ClassLevel(ts.Response):\n"
-        "    flag: bool\n"
+        "    flag = False\n"
         "    def __init__(self, id: str) -> None:\n"
         "        self.id = id\n"
         "class Splatted(ts.Response):\n"
@@ -3957,8 +3957,8 @@ def test_a_dto_declares_its_fields_where_the_rules_can_read_them(tmp_path: Path)
     )
     findings = conftest.check_tree(tmp_path)
     assert any(
-        "app.application.ports.sink.ClassLevel.flag is a class-level field; a DTO declares "
-        "its fields as __init__ parameters, where the field rules can read them" in f
+        "app.application.ports.sink.ClassLevel carries a class-level statement; a port DTO "
+        "declares its fields as __init__ parameters, where the field rules can read them" in f
         for f in findings
     ), f"a class-level bool field walked around the bare-bool rule: {findings}"
     assert any(
@@ -4051,3 +4051,115 @@ def test_a_dynamic_import_is_resolved_by_binding_not_spelling(tmp_path: Path) ->
     assert not any("local" in f and "TB068" in f for f in findings), (
         f"a local name spelled importlib false-positived: {findings}"
     )
+
+
+def test_a_port_speaks_shapes_it_declares_itself(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "from typing import Protocol\n"
+        "import tesser.application as ts\n"
+        "class SaveRequest(ts.Request):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
+        "class SaveResponse(ts.Response):\n"
+        "    def __init__(self) -> None:\n"
+        "        return None\n"
+        "class Sink(ts.Port, Protocol):\n"
+        "    def bare(self, request: ts.Request) -> ts.Response: ...\n"
+        "    def own(self, request: SaveRequest) -> SaveResponse: ...\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.Sink.bare names a shape it does not declare; a port "
+        "method speaks requests and responses declared in its own ports module, never a "
+        "bare ts.Request or ts.Response, which two ports would share" in f
+        for f in findings
+    ), f"two ports could share the base classes as their whole vocabulary: {findings}"
+    assert not any("Sink.own" in f for f in findings)
+
+
+def test_a_ports_class_carries_no_class_level_statement(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "import enum\n"
+        "from typing import Protocol\n"
+        "import tesser.application as ts\n"
+        "class Outcome(enum.Enum):\n"
+        "    YES = 'yes'\n"
+        "class SaveRequest(ts.Request):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
+        "class SaveResponse(ts.Response):\n"
+        "    def __init__(self) -> None:\n"
+        "        return None\n"
+        "class Sink(ts.Port, Protocol):\n"
+        "    RESERVED = tuple(sorted({'admin'}))\n"
+        "    def save(self, request: SaveRequest) -> SaveResponse: ...\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.Sink carries a class-level statement; only an enum "
+        "member is class-level data in a ports module, because anything else runs at "
+        "import in the one application module adapters may import" in f
+        for f in findings
+    ), f"import-time execution landed in the ports leaf: {findings}"
+    assert not any("Outcome" in f for f in findings), f"an enum member was flagged: {findings}"
+
+
+def test_a_private_port_method_carries_no_body(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "from typing import Protocol\n"
+        "import tesser.application as ts\n"
+        "class SaveRequest(ts.Request):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
+        "class SaveResponse(ts.Response):\n"
+        "    def __init__(self) -> None:\n"
+        "        return None\n"
+        "class Sink(ts.Port, Protocol):\n"
+        "    def _score(self, name: str) -> int:\n"
+        "        return len(name)\n"
+        "    def save(self, request: SaveRequest) -> SaveResponse: ...\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.Sink._score carries a body; a port method declares a "
+        "shape and never a body" in f
+        for f in findings
+    ), f"a private method carried logic every implementer inherits: {findings}"
+
+
+def test_a_stub_cannot_shadow_the_shape_the_rules_read(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "import tesser.application as ts\nclass Sink(ts.Port):\n    pass\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.pyi",
+        "import tesser.application as ts\n"
+        "class Loose(ts.Response):\n"
+        "    allowed: bool\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink is a stub; a module carries its own shape, because a "
+        "stub is what the type checker reads and the walk cannot" in f
+        for f in findings
+    ), f"a stub bypassed every ports rule at the type level: {findings}"

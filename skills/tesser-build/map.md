@@ -90,12 +90,13 @@ bootstrap ──▶ each context's wiring          (constructs, never the revers
 gateways ──implement──▶ ports in each context's application/ports
 ```
 
-**An adapter imports only protocols** — its own context's `application/ports`,
-the app shell's `protocol`, and peer `Client`s — never an implementation
-module. That is what moving the ports out of the service module bought: a
-gateway can no longer import the service it exists to be decoupled from,
-because the only part of `application` it may reach is the ports package
-(measured across six encodings in `examples/spike-ports/`).
+**Of `application`, an adapter reaches only the ports package** — alongside the
+app shell's `protocol` and peer `Client`s, all of them protocols. That is what
+moving the ports out of the service module bought: a gateway can no longer
+import the service it exists to be decoupled from. Sibling adapters remain
+importable, since every role may import itself, so the claim is about the
+`application` seam and not about adapters in general (measured across seven
+encodings in `examples/spike-ports/`).
 
 Declare this, don't review it. The direction is a `forbidden` contract per edge
 in import-linter — verified in-example at `examples/python-app/.importlinter`,

@@ -173,7 +173,12 @@ import catalog.application.ports.item_repository as item_repository
 
 That is the whole import block. Across `final/`, every adapter import is a
 protocol — its context's ports, the app shell's `protocol`, or a client. **No
-adapter imports an implementation module anywhere in the tree.**
+adapter imports an implementation module out of `application`.**
+
+The precise claim matters: adapter-to-adapter imports stay legal, because every
+role may import itself, so "an adapter imports only protocols" would be an
+overclaim. What closed is the seam this spike is about — the one where a gateway
+reached the service it exists to be decoupled from.
 
 ## The rule set (all enforced; see `tessercheck-py/RULES.md`)
 

@@ -120,6 +120,8 @@ PROTOCOL_PACKAGE: Final[str] = "protocol"
 
 TESSER: Final[str] = "tesser"
 
+STUB_SUFFIX: Final[str] = ".pyi"
+
 IMPORTLIB: Final[str] = "importlib"
 
 BUILTIN_IMPORT: Final[str] = "__import__"
@@ -781,6 +783,17 @@ class Codebase(ts.AggregateRoot):
         for path, name, _, _ in spec.sources:
             paths_by_name.setdefault(name, []).append(path)
         for path, name, source, is_package in spec.sources:
+            if path.endswith(STUB_SUFFIX):
+                broken.append(
+                    Violation(
+                        path,
+                        1,
+                        "TB043",
+                        f"{name} is a stub; a module carries its own shape, because a "
+                        "stub is what the type checker reads and the walk cannot",
+                    )
+                )
+                continue
             others = ", ".join(other for other in paths_by_name[name] if other != path)
             if others:
                 broken.append(
@@ -1032,8 +1045,8 @@ class Codebase(ts.AggregateRoot):
                     1,
                     "TB041",
                     f"{module.name()} is not a ports module; a ports package holds only "
-                    "ports modules, because a protocol and its DTOs have no behaviour to "
-                    "test and a fake here would be an implementation adapters may import",
+                    "ports modules, and test_/eval_/conftest are reserved names, because a "
+                    "fake here would be an implementation adapters may import",
                 ),
             )
         if place == "ports-init":
@@ -2437,6 +2450,23 @@ class Codebase(ts.AggregateRoot):
                         "where the one-port count can see them",
                     )
                 )
+        for stmt in self._nested_class_defs(list(module.body())):
+            if self._enum_base(module, stmt) is not None:
+                continue
+            for item in stmt.body:
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    continue
+                found.append(
+                    Violation(
+                        module.path(),
+                        item.lineno,
+                        "TB051",
+                        f"{module.name()}.{stmt.name} carries a class-level statement; "
+                        "only an enum member is class-level data in a ports module, "
+                        "because anything else runs at import in the one application "
+                        "module adapters may import",
+                    )
+                )
         ports: list[ast.ClassDef] = []
         for stmt in self._nested_class_defs(list(module.body())):
             block = blocks.get((module.name(), stmt.name))
@@ -2534,8 +2564,6 @@ class Codebase(ts.AggregateRoot):
         for item in cls.body:
             if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
-            if item.name.startswith("_") and item.name != "__call__":
-                continue
             where = f"{module.name()}.{cls.name}.{item.name}"
             if not self._is_declaration_body(item.body):
                 found.append(
@@ -2547,6 +2575,8 @@ class Codebase(ts.AggregateRoot):
                         "never a body, because a ports module holds no logic to import",
                     )
                 )
+            if item.name.startswith("_") and item.name != "__call__":
+                continue
             found.extend(
                 self._signature_violations(
                     module,
@@ -2558,6 +2588,31 @@ class Codebase(ts.AggregateRoot):
                     "a port method",
                     "TB081",
                     blocks,
+                )
+            )
+            found.extend(self._port_annotation_violations(module, where, item, blocks))
+        return tuple(found)
+
+    def _port_annotation_violations(
+        self,
+        module: Module,
+        where: str,
+        fn: ast.FunctionDef | ast.AsyncFunctionDef,
+        blocks: dict[tuple[str, str], str],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        declared = {stmt.name for stmt in module.class_defs()}
+        for node in [arg.annotation for arg in self._params(fn)] + [fn.returns]:
+            if isinstance(node, ast.Name) and node.id in declared:
+                continue
+            found.append(
+                Violation(
+                    module.path(),
+                    fn.lineno,
+                    "TB081",
+                    f"{where} names a shape it does not declare; a port method speaks "
+                    "requests and responses declared in its own ports module, never a "
+                    "bare ts.Request or ts.Response, which two ports would share",
                 )
             )
         return tuple(found)
@@ -3312,33 +3367,9 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for item in cls.body:
-            if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
-                where = f"{module.name()}.{cls.name}.{item.target.id}"
-                found.append(
-                    Violation(
-                        module.path(),
-                        item.lineno,
-                        "TB080",
-                        f"{where} is a class-level field; a DTO declares its fields "
-                        "as __init__ parameters, where the field rules can read them",
-                    )
-                )
-                continue
-            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if not isinstance(item, ast.FunctionDef):
                 continue
             where = f"{module.name()}.{cls.name}.{item.name}"
-            if item.name == "__init__" and (
-                item.args.vararg is not None or item.args.kwarg is not None
-            ):
-                found.append(
-                    Violation(
-                        module.path(),
-                        item.lineno,
-                        "TB080",
-                        f"{where} uses *args/**kwargs; a DTO declares its fields "
-                        "as named __init__ parameters, where the field rules can read them",
-                    )
-                )
             if item.name != "__init__":
                 found.append(
                     Violation(
@@ -3378,15 +3409,15 @@ class Codebase(ts.AggregateRoot):
         )
         enums = self._enum_names(module) if port_dto else frozenset()
         for item in cls.body:
-            if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
-                where = f"{module.name()}.{cls.name}.{item.target.id}"
+            if port_dto and not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 found.append(
                     Violation(
                         module.path(),
                         item.lineno,
                         "TB080",
-                        f"{where} is a class-level field; a DTO declares its fields "
-                        "as __init__ parameters, where the field rules can read them",
+                        f"{module.name()}.{cls.name} carries a class-level statement; "
+                        "a port DTO declares its fields as __init__ parameters, "
+                        "where the field rules can read them",
                     )
                 )
                 continue
