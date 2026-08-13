@@ -216,6 +216,11 @@ Three of these carry their weight indirectly:
   a rule about spelling. `importlib.import_module("...application.service")` in
   a gateway is an import the matrix cannot see, so the call form is a finding.
 
+One shape the rules deliberately forbid: a port cannot be a context manager,
+because it declares only its public calls and `__call__`. `__enter__`/`__exit__`
+on a port is a finding. A resource whose lifetime the caller manages is a
+wiring concern, not a port's vocabulary.
+
 A `.pyi` stub is a finding anywhere in a governed tree, not only under ports: a
 stub is what the type checker reads and the walk cannot, so a governed tree
 cannot vendor one without a site-level ignore.

@@ -4291,3 +4291,80 @@ def test_a_ports_module_runs_nothing_at_import(tmp_path: Path) -> None:
         for f in findings
     ), f"a default parameter expression ran at import: {findings}"
     assert not any("Plain" in f for f in findings)
+
+
+def test_a_port_dto_binds_only_its_own_parameters(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "import tesser.application as ts\n"
+        "class Capability(ts.Response):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
+        "        self.reach = __import__\n"
+        "class Plain(ts.Response):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self._id = id\n"
+        "        self.also = id\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.Capability.__init__ carries logic; a port DTO "
+        "constructor only assigns its parameters" in f
+        for f in findings
+    ), f"a DTO bound a live capability an adapter could call: {findings}"
+    assert not any("Plain" in f for f in findings)
+
+
+def test_a_ports_class_carries_no_keyword(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "import tesser.application as ts\n"
+        "class Meta(ts.Response, metaclass=type):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.Meta carries a class keyword; a ports module holds no "
+        "expression that runs at import, and a metaclass is logic every adapter imports" in f
+        for f in findings
+    ), f"a metaclass ran logic at import of the ports leaf: {findings}"
+
+
+def test_an_enum_member_may_be_negative_or_annotated(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "import enum\n"
+        "import tesser.application as ts\n"
+        "class Outcome(enum.Enum):\n"
+        "    UNKNOWN = -1\n"
+        "    ALLOWED: int = 1\n"
+        "    NEXT = enum.auto()\n"
+        "    __doc__ = 'the verdict'\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert not any("UNKNOWN" in f or "ALLOWED" in f or "NEXT" in f for f in findings), (
+        f"a legitimate enum member was rejected: {findings}"
+    )
+    assert any(
+        "app.application.ports.sink.Outcome carries more than its members" in f
+        for f in findings
+    ), f"a dunder assignment laundered prose past the comments norm: {findings}"

@@ -2453,6 +2453,17 @@ class Codebase(ts.AggregateRoot):
                 )
         for stmt in self._nested_class_defs(list(module.body())):
             found.extend(self._decoration_violations(module, stmt.name, stmt))
+            for keyword in stmt.keywords:
+                found.append(
+                    Violation(
+                        module.path(),
+                        stmt.lineno,
+                        "TB051",
+                        f"{module.name()}.{stmt.name} carries a class keyword; a ports "
+                        "module holds no expression that runs at import, and a metaclass "
+                        "is logic every adapter imports",
+                    )
+                )
             for item in stmt.body:
                 if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     found.extend(
@@ -2476,7 +2487,7 @@ class Codebase(ts.AggregateRoot):
                     )
             if self._enum_base(module, stmt) is not None:
                 for item in stmt.body:
-                    if self._is_enum_member(item):
+                    if self._is_enum_member(module, item):
                         continue
                     found.append(
                         Violation(
@@ -2681,21 +2692,35 @@ class Codebase(ts.AggregateRoot):
         )
 
     @staticmethod
-    def _is_enum_member(node: ast.stmt) -> bool:
-        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+    def _is_enum_member(module: Module, node: ast.stmt) -> bool:
+        target: ast.expr | None = None
+        value: ast.expr | None = None
+        if isinstance(node, ast.AnnAssign):
+            target, value = node.target, node.value
+        elif isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target, value = node.targets[0], node.value
+        if target is None:
             return False
-        if not isinstance(node.targets[0], ast.Name):
+        if not isinstance(target, ast.Name) or target.id.startswith("_"):
             return False
-        if isinstance(node.value, ast.Constant):
+        if isinstance(value, ast.Constant):
+            return True
+        if (
+            isinstance(value, ast.UnaryOp)
+            and isinstance(value.operand, ast.Constant)
+            and isinstance(value.operand.value, (int, float))
+        ):
             return True
         return (
-            isinstance(node.value, ast.Call)
-            and isinstance(node.value.func, ast.Attribute)
-            and node.value.func.attr == "auto"
+            isinstance(value, ast.Call)
+            and isinstance(value.func, ast.Attribute)
+            and isinstance(value.func.value, ast.Name)
+            and module._package_aliases.get(value.func.value.id) == ENUM_MODULE
+            and value.func.attr == "auto"
         )
 
     @staticmethod
-    def _is_carrier_body(body: list[ast.stmt]) -> bool:
+    def _is_carrier_body(body: list[ast.stmt], names: frozenset[str]) -> bool:
         for stmt in body:
             if isinstance(stmt, ast.Return) and (
                 stmt.value is None
@@ -2709,6 +2734,7 @@ class Codebase(ts.AggregateRoot):
                 and isinstance(stmt.targets[0].value, ast.Name)
                 and stmt.targets[0].value.id == "self"
                 and isinstance(stmt.value, ast.Name)
+                and stmt.value.id in names
             ):
                 continue
             return False
@@ -3543,7 +3569,9 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
                 continue
-            if port_dto and not self._is_carrier_body(item.body):
+            if port_dto and not self._is_carrier_body(
+                item.body, frozenset(arg.arg for arg in self._params(item))
+            ):
                 found.append(
                     Violation(
                         module.path(),
