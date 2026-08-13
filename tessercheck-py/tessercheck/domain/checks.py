@@ -120,6 +120,10 @@ PROTOCOL_PACKAGE: Final[str] = "protocol"
 
 TESSER: Final[str] = "tesser"
 
+DYNAMIC_IMPORTS: Final[frozenset[str]] = frozenset(
+    {"__import__", "importlib.import_module", "importlib.__import__"}
+)
+
 IGNORE_MARKER: Final[str] = "tessercheck:ignore"
 
 IGNORE_FILE_MARKER: Final[str] = "tessercheck:ignore-file"
@@ -245,6 +249,8 @@ PRIMITIVES: Final[frozenset[str]] = frozenset({"str", "int", "float", "bool", "b
 PORT_DTO_PRIMITIVES: Final[frozenset[str]] = PRIMITIVES - frozenset({"bool"})
 
 ENUM_BASES: Final[frozenset[str]] = frozenset({"Enum"})
+
+ENUM_MODULE: Final[str] = "enum"
 
 CORE_STDLIB: Final[dict[str, frozenset[str]]] = {
     "domain": frozenset(
@@ -493,13 +499,19 @@ class Ignore(ts.ValueObject):
     _line: Line
     _codes: tuple[Code, ...]
     _scope: IgnoreScope
+    _malformed: bool
 
-    def __init__(self, line: int, codes: tuple[str, ...], file_level: bool) -> None:
+    def __init__(
+        self, line: int, codes: tuple[str, ...], file_level: bool, malformed: bool = False
+    ) -> None:
         object.__setattr__(self, "_line", Line(line))
         object.__setattr__(self, "_codes", tuple(Code(code) for code in codes))
         object.__setattr__(self, "_scope", IgnoreScope("file" if file_level else "line"))
+        object.__setattr__(self, "_malformed", malformed)
 
     def _suppresses(self, violation: Violation) -> bool:
+        if self._malformed:
+            return False
         file_wide = str(self._scope) == "file"
         if file_wide and not self._codes:
             return False
@@ -578,6 +590,9 @@ class Module(ts.Entity):
         self._package_aliases: dict[str, str] = {}
         self._imported: dict[str, tuple[str, str]] = {}
         self._classes: dict[str, ast.ClassDef] = {}
+        self._calls: tuple[ast.Call, ...] = tuple(
+            node for node in ast.walk(tree) if isinstance(node, ast.Call)
+        )
         edges: list[ImportEdge] = []
         tesser_imports: list[TesserImport] = []
         nested_tesser: list[tuple[str, int]] = []
@@ -668,6 +683,14 @@ class Module(ts.Entity):
                 continue
             codes = tuple(part for part in rest.replace(",", " ").split() if part)
             if any(not CODE_SHAPE.match(code) for code in codes):
+                found.append(
+                    Ignore(
+                        line=int(comment._line),
+                        codes=(),
+                        file_level=file_level,
+                        malformed=True,
+                    )
+                )
                 continue
             found.append(Ignore(line=int(comment._line), codes=codes, file_level=file_level))
         return tuple(found)
@@ -712,6 +735,9 @@ class Module(ts.Entity):
 
     def class_defs(self) -> tuple[ast.ClassDef, ...]:
         return self._class_defs
+
+    def calls(self) -> tuple[ast.Call, ...]:
+        return self._calls
 
     def bound_names(self) -> tuple[tuple[str, str, str], ...]:
         return self._bound_names
@@ -819,6 +845,7 @@ class Codebase(ts.AggregateRoot):
         found: list[Violation] = []
         for module in self._modules:
             found.extend(self._universal_violations(module))
+            found.extend(self._dynamic_import_violations(module))
             found.extend(self._module_violations(module, blocks, contexts))
             for cls in module.class_defs():
                 block = blocks.get((module.name(), cls.name))
@@ -982,7 +1009,7 @@ class Codebase(ts.AggregateRoot):
                     f"{module.name()} is a ports module; "
                     "ports is a package, never a module",
                 ),
-            )
+            ) + self._ports_module_violations(module, blocks)
         if place == "ports":
             return self._ports_module_violations(module, blocks)
         if place == "role-init":
@@ -1031,6 +1058,29 @@ class Codebase(ts.AggregateRoot):
             )
             for stmt in module.body()
         )
+
+    def _dynamic_import_violations(self, module: Module) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for node in module.calls():
+            callee = node.func
+            named = (
+                callee.id
+                if isinstance(callee, ast.Name)
+                else f"{callee.value.id}.{callee.attr}"
+                if isinstance(callee, ast.Attribute) and isinstance(callee.value, ast.Name)
+                else ""
+            )
+            if named in DYNAMIC_IMPORTS:
+                found.append(
+                    Violation(
+                        module.path(),
+                        node.lineno,
+                        "TB068",
+                        f"{module.name()} imports dynamically through {named}; "
+                        "an import is a statement the walk can read, never a call",
+                    )
+                )
+        return tuple(found)
 
     def _homeless_violations(self, module: Module) -> tuple[Violation, ...]:
         return (
@@ -2225,23 +2275,25 @@ class Codebase(ts.AggregateRoot):
         return tuple(found)
 
     @staticmethod
-    def _enum_base(stmt: ast.ClassDef) -> str | None:
+    def _enum_base(module: Module, stmt: ast.ClassDef) -> str | None:
         for base in stmt.bases:
             if isinstance(base, ast.Attribute) and isinstance(base.value, ast.Name):
-                if base.value.id == "enum":
+                if module._package_aliases.get(base.value.id) == ENUM_MODULE:
                     return base.attr
-            elif isinstance(base, ast.Name) and base.id in ENUM_BASES:
-                return base.id
+            elif isinstance(base, ast.Name):
+                origin = module._imported.get(base.id)
+                if origin is not None and origin[0] == ENUM_MODULE:
+                    return origin[1]
         return None
 
     @staticmethod
-    def _is_enum_class(stmt: ast.ClassDef) -> bool:
-        return Codebase._enum_base(stmt) is not None
+    def _is_enum_class(module: Module, stmt: ast.ClassDef) -> bool:
+        return Codebase._enum_base(module, stmt) is not None
 
     @staticmethod
     def _enum_names(module: Module) -> frozenset[str]:
         return frozenset(
-            stmt.name for stmt in module.class_defs() if Codebase._is_enum_class(stmt)
+            stmt.name for stmt in module.class_defs() if Codebase._is_enum_class(module, stmt)
         )
 
     @staticmethod
@@ -2321,8 +2373,8 @@ class Codebase(ts.AggregateRoot):
                 continue
             block = blocks.get((module.name(), stmt.name))
             where = f"{module.name()}.{stmt.name}"
-            enum_base = self._enum_base(stmt)
-            if enum_base is not None:
+            enum_base = self._enum_base(module, stmt)
+            if enum_base is not None and block is None:
                 if enum_base not in ENUM_BASES:
                     found.append(
                         Violation(
@@ -2417,6 +2469,16 @@ class Codebase(ts.AggregateRoot):
             if item.name.startswith("_") and item.name != "__call__":
                 continue
             where = f"{module.name()}.{cls.name}.{item.name}"
+            if not self._is_declaration_body(item.body):
+                found.append(
+                    Violation(
+                        module.path(),
+                        item.lineno,
+                        "TB051",
+                        f"{where} carries a body; a port method declares a shape and "
+                        "never a body, because a ports module holds no logic to import",
+                    )
+                )
             found.extend(
                 self._signature_violations(
                     module,
@@ -2431,6 +2493,18 @@ class Codebase(ts.AggregateRoot):
                 )
             )
         return tuple(found)
+
+    @staticmethod
+    def _is_declaration_body(body: list[ast.stmt]) -> bool:
+        return all(
+            isinstance(stmt, ast.Pass)
+            or (
+                isinstance(stmt, ast.Expr)
+                and isinstance(stmt.value, ast.Constant)
+                and stmt.value.value is Ellipsis
+            )
+            for stmt in body
+        )
 
     def _role_module_violations(
         self,

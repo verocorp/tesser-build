@@ -28,7 +28,7 @@ set -uo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT" || exit 1
 
-TREES=(spike-shells spike-llmport python-app serdepy errorspy tesser-py vobase tessercheck-py)
+TREES=(spike-shells spike-llmport python-app serdepy errorspy spike-ports tesser-py vobase tessercheck-py)
 
 failed=()
 
@@ -68,6 +68,20 @@ run_python_app() {
   pytest -q || return 1
   step "tessercheck (zero findings over the whole tree)"
   PYTHONPATH=../../tessercheck-py:../../tesser-py python3 -m tessercheck . || return 1
+}
+
+# Only examples/spike-ports/final is gated. The sibling trees (union, flag,
+# outcome, split, cardinality, enum) are a design record: four of them exist
+# *because* they produce findings, so a zero-findings gate is the wrong shape
+# for them. Their evidence lives in examples/spike-ports/README.md.
+run_spike_ports() {
+  cd "$ROOT/examples/spike-ports/final" || return 1
+  step "tessercheck (zero findings over the whole tree)"
+  PYTHONPATH=../../../tessercheck-py:../../../tesser-py python3 -m tessercheck . || return 1
+  step "mypy --strict"
+  MYPYPATH=.:../../../tesser-py mypy --strict catalog || return 1
+  step "pytest"
+  pytest -q || return 1
 }
 
 run_serdepy() {
@@ -146,6 +160,7 @@ run_tree() {
     spike-llmport)  run_spike_llmport ;;
     python-app)     run_python_app ;;
     serdepy)        run_serdepy ;;
+    spike-ports)    run_spike_ports ;;
     errorspy)       run_errorspy ;;
     tesser-py)      run_tesser_py ;;
     vobase)         run_vobase ;;

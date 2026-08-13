@@ -2162,10 +2162,14 @@ def test_a_typo_or_junk_token_makes_the_marker_inert(tmp_path: Path) -> None:
     conftest.conforming_tree(tmp_path)
     conftest.write_module(tmp_path, "stray.py", "import os  # tessercheck:ignored TB040\n")
     conftest.write_module(tmp_path, "loose.py", "import os  # tessercheck:ignore TB040 permanent\n")
+    conftest.write_module(tmp_path, "bracket.py", "import os  # tessercheck:ignore [TB040]\n")
     findings = conftest.check_tree(tmp_path)
     assert any("stray belongs to no governed package" in f for f in findings)
     assert any("loose belongs to no governed package" in f for f in findings)
-    assert not any("TB090" in f for f in findings)
+    assert any("bracket belongs to no governed package" in f for f in findings)
+    assert not any("stray.py" in f and "TB090" in f for f in findings)
+    assert any("loose.py:1: TB090" in f for f in findings)
+    assert any("bracket.py:1: TB090" in f for f in findings)
 
 def test_a_bare_line_ignore_is_line_scoped(tmp_path: Path) -> None:
     conftest.conforming_tree(tmp_path)
@@ -3797,3 +3801,138 @@ def test_a_ports_enum_is_a_plain_enum(tmp_path: Path) -> None:
         for f in findings
     )
     assert not any("Tight" in f for f in findings)
+
+
+def test_a_port_method_declares_a_shape_and_never_a_body(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "from typing import Protocol\n"
+        "import tesser.application as ts\n"
+        "class SaveRequest(ts.Request):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
+        "class SaveResponse(ts.Response):\n"
+        "    def __init__(self) -> None:\n"
+        "        return None\n"
+        "class Sink(ts.Port, Protocol):\n"
+        "    def save(self, request: SaveRequest) -> SaveResponse:\n"
+        "        return SaveResponse()\n"
+        "    def drop(self, request: SaveRequest) -> SaveResponse: ...\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.Sink.save carries a body; a port method declares a shape "
+        "and never a body, because a ports module holds no logic to import" in f
+        for f in findings
+    )
+    assert not any("Sink.drop" in f for f in findings)
+
+
+def test_an_ignored_ports_file_is_still_governed(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports.py",
+        "import subprocess  # tessercheck:ignore TB067\n"
+        "import tesser.application as ts  # tessercheck:ignore-file TB041\n"
+        "import app.domain.thing as thing\n"
+        "class First(ts.Port):\n"
+        "    pass\n"
+        "class Second(ts.Port):\n"
+        "    pass\n"
+        "class Leaked(ts.ApplicationService):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports imports app.domain.thing; a ports module is a leaf" in f
+        for f in findings
+    ), f"an ignored TB041 unlocked the module: {findings}"
+    assert any("declares 2 ports" in f for f in findings)
+    assert any("app.application.ports.Leaked is a service" in f for f in findings)
+
+
+def test_an_enum_base_cannot_hide_a_second_port(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "import enum\n"
+        "import tesser.application as ts\n"
+        "class First(ts.Port):\n"
+        "    pass\n"
+        "class Second(ts.Port, enum.auto):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any("declares 2 ports" in f for f in findings), (
+        f"an enum base hid a second port, so two ports could share every DTO: {findings}"
+    )
+
+
+def test_an_enum_is_resolved_by_its_binding_not_its_spelling(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/masked.py",
+        "from __future__ import annotations\n"
+        "import typing as enum\n"
+        "import tesser.application as ts\n"
+        "class Rules(enum.Any):\n"
+        "    pass\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/aliased.py",
+        "from __future__ import annotations\n"
+        "import enum as e\n"
+        "import tesser.application as ts\n"
+        "class Outcome(e.Enum):\n"
+        "    YES = 'yes'\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.masked.Rules declares no ts.* base" in f for f in findings
+    ), f"a name bound to something else was accepted as an enum: {findings}"
+    assert not any("aliased.Outcome" in f for f in findings), (
+        f"a properly bound enum alias was rejected: {findings}"
+    )
+
+
+def test_a_dynamic_import_is_not_a_way_around_the_matrix(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "import tesser.application as ts\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "app/adapters/gateways/memory.py",
+        "import importlib\n"
+        "import tesser.adapters as ts\n"
+        "import app.application.ports.sink as sink\n"
+        "class MemorySink(ts.Repository):\n"
+        "    def __init__(self) -> None:\n"
+        "        self._service = importlib.import_module('app.application.service')\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.adapters.gateways.memory imports dynamically through importlib.import_module; "
+        "an import is a statement the walk can read, never a call" in f
+        for f in findings
+    ), f"importlib walked around the import matrix: {findings}"
