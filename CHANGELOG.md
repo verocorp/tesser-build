@@ -5,6 +5,35 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.30.0] - 2026-08-13
+
+Classifier totality: the module walk's routing becomes one inspectable,
+machine-guarded decision, so the "unenumerated shape falls through silently"
+bug class dies at dev time instead of surviving to adversarial review.
+Analyzer output is byte-identical — this is structure, not new rules.
+
+### Changed
+- **`_locate` is now the single routing decision.** The dispatch ladder in
+  `tessercheck/domain/checks.py` splits into a pure, total classification
+  function (module name + is-package → exactly one location token) and a
+  dispatcher over tokens. Behavior is unchanged on every tree; what changes
+  is that routing is directly assertable without building bait trees.
+
+### Added
+- **Two meta-tests guard the routing layer** (`tessercheck/tests/test_locate.py`):
+  every token `_locate` can return must have a dispatch arm, and must appear
+  in a ~50-row classification table. Adding a new module kind without
+  declaring what it is fails the suite by name.
+- **A totality corpus** (`tessercheck/tests/test_totality_corpus.py`): every
+  module shape that has ever produced a silent leak, each carrying an
+  illegal import, asserting none is silent end-to-end.
+- The exploration that picked this design — four options built and measured,
+  including the rejected runtime mirror guard — is preserved on the
+  `spike/classifier-totality` branch; the PR description records the
+  evidence. The rule going forward: routing lives in `_locate` and nowhere
+  else — a basename or path check added elsewhere in the walk is the old
+  bug class returning.
+
 ## [0.0.29.0] - 2026-08-12
 
 Import totality: every module in a checked tree now carries an import row —
