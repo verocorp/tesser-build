@@ -126,7 +126,9 @@ IMPORTLIB: Final[str] = "importlib"
 
 BUILTIN_IMPORT: Final[str] = "__import__"
 
-DYNAMIC_MEMBERS: Final[frozenset[str]] = frozenset({"import_module", "__import__"})
+BUILTINS: Final[str] = "builtins"
+
+SYS_MODULE: Final[str] = "sys"
 
 IGNORE_MARKER: Final[str] = "tessercheck:ignore"
 
@@ -606,6 +608,12 @@ class Module(ts.Entity):
         self._calls: tuple[ast.Call, ...] = tuple(
             node for node in ast.walk(tree) if isinstance(node, ast.Call)
         )
+        self._subscripts: tuple[ast.Subscript, ...] = tuple(
+            node for node in ast.walk(tree) if isinstance(node, ast.Subscript)
+        )
+        self._assignments: tuple[ast.Assign | ast.AnnAssign, ...] = tuple(
+            node for node in ast.walk(tree) if isinstance(node, (ast.Assign, ast.AnnAssign))
+        )
         edges: list[ImportEdge] = []
         tesser_imports: list[TesserImport] = []
         nested_tesser: list[tuple[str, int]] = []
@@ -751,6 +759,12 @@ class Module(ts.Entity):
 
     def calls(self) -> tuple[ast.Call, ...]:
         return self._calls
+
+    def subscripts(self) -> tuple[ast.Subscript, ...]:
+        return self._subscripts
+
+    def assignments(self) -> tuple[ast.Assign | ast.AnnAssign, ...]:
+        return self._assignments
 
     def bound_names(self) -> tuple[tuple[str, str, str], ...]:
         return self._bound_names
@@ -1113,9 +1127,25 @@ class Codebase(ts.AggregateRoot):
 
     def _dynamic_import_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
+        rebound = self._rebound_importers(module)
+        for lookup in module.subscripts():
+            if (
+                isinstance(lookup.value, ast.Attribute)
+                and lookup.value.attr == "modules"
+                and self._names_module(module, lookup.value.value, SYS_MODULE)
+            ):
+                found.append(
+                    Violation(
+                        module.path(),
+                        lookup.lineno,
+                        "TB068",
+                        f"{module.name()} imports dynamically through sys.modules; "
+                        "an import is a statement the walk can read, never a call",
+                    )
+                )
         for node in module.calls():
             callee = node.func
-            named = self._dynamic_import_name(module, callee)
+            named = self._dynamic_import_name(module, callee, rebound)
             if named is not None:
                 found.append(
                     Violation(
@@ -1128,19 +1158,61 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
+    @classmethod
+    def _reaches_importlib(cls, module: Module, node: ast.expr) -> bool:
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+            package = module._package_aliases.get(node.value.id)
+            if package == IMPORTLIB:
+                return True
+            return package == BUILTINS and node.attr == BUILTIN_IMPORT
+        if isinstance(node, ast.Name):
+            if node.id == BUILTIN_IMPORT and node.id not in module.function_names():
+                return True
+            origin = module._imported.get(node.id)
+            return origin is not None and (
+                origin[0] == IMPORTLIB
+                or (origin[0] == BUILTINS and origin[1] == BUILTIN_IMPORT)
+            )
+        if isinstance(node, ast.Call):
+            return cls._is_getattr_of_importlib(module, node)
+        return False
+
+    @classmethod
+    def _is_getattr_of_importlib(cls, module: Module, node: ast.Call) -> bool:
+        return (
+            isinstance(node.func, ast.Name)
+            and node.func.id == "getattr"
+            and bool(node.args)
+            and cls._names_module(module, node.args[0], IMPORTLIB)
+        )
+
     @staticmethod
-    def _dynamic_import_name(module: Module, callee: ast.expr) -> str | None:
-        if isinstance(callee, ast.Attribute) and isinstance(callee.value, ast.Name):
-            package = module._package_aliases.get(callee.value.id)
-            if package == IMPORTLIB and callee.attr in DYNAMIC_MEMBERS:
-                return f"{package}.{callee.attr}"
-            return None
-        if isinstance(callee, ast.Name):
-            if callee.id == BUILTIN_IMPORT and callee.id not in module.function_names():
-                return callee.id
-            origin = module._imported.get(callee.id)
-            if origin is not None and origin[0] == IMPORTLIB and origin[1] in DYNAMIC_MEMBERS:
-                return f"{IMPORTLIB}.{origin[1]}"
+    def _names_module(module: Module, node: ast.expr, package: str) -> bool:
+        return (
+            isinstance(node, ast.Name)
+            and module._package_aliases.get(node.id) == package
+        )
+
+    @classmethod
+    def _rebound_importers(cls, module: Module) -> frozenset[str]:
+        found: set[str] = set()
+        for node in module.assignments():
+            if node.value is None:
+                continue
+            if not cls._reaches_importlib(module, node.value):
+                continue
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            found.update(t.id for t in targets if isinstance(t, ast.Name))
+        return frozenset(found)
+
+    @classmethod
+    def _dynamic_import_name(
+        cls, module: Module, callee: ast.expr, rebound: frozenset[str]
+    ) -> str | None:
+        if isinstance(callee, ast.Name) and callee.id in rebound:
+            return f"{IMPORTLIB}.{callee.id}"
+        if cls._reaches_importlib(module, callee):
+            return f"{IMPORTLIB}.{ast.unparse(callee).rsplit('.', 1)[-1]}"
         return None
 
     def _homeless_violations(self, module: Module) -> tuple[Violation, ...]:
@@ -1672,7 +1744,7 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
         for item in cls.body:
-            if not isinstance(item, ast.FunctionDef) or item.name.startswith("_"):
+            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) or item.name.startswith("_"):
                 continue
             attr = self._bare_field_return(item)
             if attr is None:
@@ -1733,7 +1805,7 @@ class Codebase(ts.AggregateRoot):
     def _door_violations(self, module: Module, cls: ast.ClassDef) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for item in cls.body:
-            if not isinstance(item, ast.FunctionDef):
+            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             decorators = {
                 target.id
@@ -1763,7 +1835,7 @@ class Codebase(ts.AggregateRoot):
         return tuple(found)
 
     @staticmethod
-    def _constructs_own_type(fn: ast.FunctionDef, own: str) -> bool:
+    def _constructs_own_type(fn: ast.FunctionDef | ast.AsyncFunctionDef, own: str) -> bool:
         for node in ast.walk(fn):
             if not isinstance(node, ast.Call):
                 continue
@@ -1817,7 +1889,7 @@ class Codebase(ts.AggregateRoot):
         conversions = [
             item
             for item in cls.body
-            if isinstance(item, ast.FunctionDef) and item.name in CONVERSION_DUNDERS
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name in CONVERSION_DUNDERS
         ]
         if leaf is not None and leaf in WRAPPABLE_SCALARS:
             expected = CANONICAL_EXIT[leaf]
@@ -1870,7 +1942,7 @@ class Codebase(ts.AggregateRoot):
                 "decompose through leaf components",
             )
             for item in cls.body
-            if isinstance(item, ast.FunctionDef) and item.name in CONVERSION_DUNDERS
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name in CONVERSION_DUNDERS
         )
 
     def _copy_violations(
@@ -2464,6 +2536,32 @@ class Codebase(ts.AggregateRoot):
                         "is logic every adapter imports",
                     )
                 )
+            for item in stmt.body:
+                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                for _ in getattr(item, "type_params", ()):
+                    found.append(
+                        Violation(
+                            module.path(),
+                            item.lineno,
+                            "TB051",
+                            f"{module.name()}.{stmt.name}.{item.name} is generic; a ports "
+                            "module names concrete shapes, because a type parameter is a "
+                            "slot the shape rules cannot read and a bound is an expression",
+                        )
+                    )
+                annotations = [arg.annotation for arg in self._params(item)] + [item.returns]
+                if any(self._is_computed(node) for node in annotations):
+                    found.append(
+                        Violation(
+                            module.path(),
+                            item.lineno,
+                            "TB051",
+                            f"{module.name()}.{stmt.name}.{item.name} computes an "
+                            "annotation; a ports module holds no expression that runs at "
+                            "import, and an annotation is evaluated like any other",
+                        )
+                    )
             for _ in getattr(stmt, "type_params", ()):
                 found.append(
                     Violation(
@@ -2476,7 +2574,9 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
             for base in stmt.bases:
-                if isinstance(base, (ast.Name, ast.Attribute, ast.Subscript)):
+                if isinstance(base, (ast.Name, ast.Attribute, ast.Subscript)) and not (
+                    self._is_computed(base)
+                ):
                     continue
                 found.append(
                     Violation(
@@ -2526,7 +2626,9 @@ class Codebase(ts.AggregateRoot):
                     )
                 continue
             for item in stmt.body:
-                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                if isinstance(
+                    item, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Pass)
+                ):
                     continue
                 found.append(
                     Violation(
@@ -2624,6 +2726,7 @@ class Codebase(ts.AggregateRoot):
                     "a ports module holds only imports and classes",
                 )
             )
+        found.extend(self._ports_shape_violations(module))
         return tuple(found)
 
     def _port_violations(
@@ -2715,6 +2818,95 @@ class Codebase(ts.AggregateRoot):
             for _ in node.decorator_list
         )
 
+    @classmethod
+    def _ports_shape_violations(cls, module: Module) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for stmt in module.body():
+            if isinstance(stmt, (ast.Import, ast.ImportFrom, ast.ClassDef)):
+                continue
+            found.extend(cls._unreadable(module, module.name(), stmt))
+        for holder in module.class_defs():
+            enum_member = cls._enum_base(module, holder) is not None
+            for item in holder.body:
+                where = f"{module.name()}.{holder.name}"
+                if isinstance(item, ast.Pass):
+                    continue
+                if enum_member:
+                    if not cls._is_enum_member(module, item):
+                        found.extend(cls._unreadable(module, where, item))
+                    continue
+                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    found.extend(cls._unreadable(module, where, item))
+                    continue
+                found.extend(cls._ports_call_shape(module, f"{where}.{item.name}", item))
+        return tuple(found)
+
+    @classmethod
+    def _ports_call_shape(
+        cls, module: Module, where: str, fn: ast.FunctionDef | ast.AsyncFunctionDef
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for node in [arg.annotation for arg in cls._params(fn)] + [fn.returns]:
+            if node is not None and not cls._is_readable_annotation(node):
+                found.extend(cls._unreadable(module, where, node))
+        for stmt in fn.body:
+            if isinstance(stmt, (ast.Pass, ast.Return, ast.Assign, ast.AnnAssign)):
+                continue
+            if (
+                isinstance(stmt, ast.Expr)
+                and isinstance(stmt.value, ast.Constant)
+                and stmt.value.value is Ellipsis
+            ):
+                continue
+            found.extend(cls._unreadable(module, where, stmt))
+        return tuple(found)
+
+    @classmethod
+    def _is_readable_annotation(cls, node: ast.expr) -> bool:
+        if isinstance(node, ast.Constant):
+            return (
+                node.value is None
+                or node.value is Ellipsis
+                or isinstance(node.value, str)
+            )
+        if isinstance(node, ast.Name):
+            return True
+        if isinstance(node, ast.Attribute):
+            return cls._is_readable_annotation(node.value)
+        if isinstance(node, ast.Subscript):
+            inner = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
+            return cls._is_readable_annotation(node.value) and all(
+                cls._is_readable_annotation(element) for element in inner
+            )
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+            return cls._is_readable_annotation(node.left) and cls._is_readable_annotation(
+                node.right
+            )
+        return False
+
+    @staticmethod
+    def _unreadable(module: Module, where: str, node: ast.AST) -> tuple[Violation, ...]:
+        return (
+            Violation(
+                module.path(),
+                getattr(node, "lineno", 1),
+                "TB069",
+                f"{where} holds a {type(node).__name__}; a ports module holds only the "
+                "shapes its rules can read, so anything else is a finding by default "
+                "rather than a gap nobody enumerated",
+            ),
+        )
+
+    @staticmethod
+    def _is_computed(node: ast.expr | None) -> bool:
+        if node is None:
+            return False
+        return any(
+            isinstance(inner, (ast.Call, ast.Lambda, ast.Await, ast.NamedExpr))
+            or isinstance(inner, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp))
+            for inner in ast.walk(node)
+        )
+
     @staticmethod
     def _is_enum_member(module: Module, node: ast.stmt) -> bool:
         target: ast.expr | None = None
@@ -2726,6 +2918,8 @@ class Codebase(ts.AggregateRoot):
         if target is None:
             return False
         if not isinstance(target, ast.Name) or target.id.startswith("_"):
+            return False
+        if isinstance(node, ast.AnnAssign) and not isinstance(node.annotation, ast.Name):
             return False
         if isinstance(value, ast.Constant):
             return True
@@ -3280,7 +3474,7 @@ class Codebase(ts.AggregateRoot):
         for stmt in module.body():
             if isinstance(stmt, (ast.Import, ast.ImportFrom)):
                 continue
-            if isinstance(stmt, ast.FunctionDef):
+            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 where = f"{module.name()}.{stmt.name}"
                 if stmt.name.startswith("test_"):
                     continue
@@ -3337,7 +3531,7 @@ class Codebase(ts.AggregateRoot):
         module: Module,
         where: str,
         line: int,
-        fn: ast.FunctionDef,
+        fn: ast.FunctionDef | ast.AsyncFunctionDef,
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
@@ -3883,12 +4077,12 @@ class Codebase(ts.AggregateRoot):
         ]
 
     @staticmethod
-    def _init_of(cls: ast.ClassDef) -> ast.FunctionDef | None:
+    def _init_of(cls: ast.ClassDef) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
         return next(
             (
                 item
                 for item in cls.body
-                if isinstance(item, ast.FunctionDef) and item.name == "__init__"
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "__init__"
             ),
             None,
         )
@@ -3954,7 +4148,11 @@ class Codebase(ts.AggregateRoot):
         return any(blocks.get((module.name(), cls.name)) == kind for cls in module.class_defs())
 
     @staticmethod
-    def _declared(module: Module, node: ast.ClassDef | ast.FunctionDef, kind: str) -> bool:
+    def _declared(
+        module: Module,
+        node: ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef,
+        kind: str,
+    ) -> bool:
         for decorator in node.decorator_list:
             key = module._resolve(decorator)
             if key is not None and TESSER_DECORATORS.get(key) == kind:

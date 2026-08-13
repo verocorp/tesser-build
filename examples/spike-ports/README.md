@@ -214,7 +214,14 @@ Three of these carry their weight indirectly:
   adapters are allowed to import.
 - **TB068** exists because an import rule that only reads `import` statements is
   a rule about spelling. `importlib.import_module("...application.service")` in
-  a gateway is an import the matrix cannot see, so the call form is a finding.
+  a gateway is an import the matrix cannot see, so the call form is a finding —
+  in every spelling review could find: a rebound local, `getattr`,
+  `builtins.__import__`, and a `sys.modules` lookup. Be honest about what this
+  is, though: reaching a module object at runtime is not a closed set, so TB068
+  is a speed bump and the static import matrix is the guarantee. It resolves the
+  *module* rather than the member, so the surface is `importlib` entire,
+  `builtins.__import__`, and `sys.modules` — but a determined author can still
+  get a module handle, and no AST rule closes that.
 
 One shape the rules deliberately forbid: a port cannot be a context manager,
 because it declares only its public calls and `__call__`. `__enter__`/`__exit__`

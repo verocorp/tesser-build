@@ -4450,3 +4450,96 @@ def test_async_def_is_not_a_way_around_a_method_rule(tmp_path: Path) -> None:
         "app.adapters.gateways.async_repo.Loose.save carries an aggregate in its signature" in f
         for f in findings
     ), f"an async adapter method escaped the record rule: {findings}"
+
+
+def test_a_ports_module_computes_no_annotation(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from typing import Annotated, Protocol\n"
+        "import tesser.application as ts\n"
+        "class SaveRequest(ts.Request):\n"
+        "    def __init__(self, id: str) -> Annotated[None, open('x').read()]:\n"
+        "        self.id = id\n"
+        "class SaveResponse(ts.Response):\n"
+        "    def __init__(self) -> None:\n"
+        "        return None\n"
+        "class Sink(ts.Port, Protocol):\n"
+        "    def save[T](self, request: SaveRequest) -> SaveResponse: ...\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.SaveRequest.__init__ computes an annotation; a ports "
+        "module holds no expression that runs at import, and an annotation is evaluated "
+        "like any other" in f
+        for f in findings
+    ), f"an annotation ran code at import of the ports leaf: {findings}"
+    assert any(
+        "app.application.ports.sink.Sink.save is generic" in f for f in findings
+    ), f"a generic port method went ungoverned: {findings}"
+
+
+def test_every_spelling_of_a_dynamic_import_is_a_finding(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "import tesser.application as ts\nclass Sink(ts.Port):\n    pass\n",
+    )
+    for name, body in (
+        ("rebound", "import importlib\n_load = importlib.import_module\n"),
+        ("indirect", "import importlib\n"),
+        ("builtin", "import builtins\n"),
+        ("registry", "import sys\n"),
+    ):
+        conftest.write_module(
+            tmp_path,
+            f"app/adapters/gateways/{name}.py",
+            body
+            + "import tesser.adapters as ts\n"
+            + "import app.application.ports.sink as sink\n"
+            + f"class Reach{name.title()}(ts.Repository):\n"
+            + "    def __init__(self) -> None:\n"
+            + {
+                "rebound": "        self.svc = _load('app.application.service')\n",
+                "indirect": "        self.svc = getattr(importlib, 'import_module')"
+                "('app.application.service')\n",
+                "builtin": "        self.svc = builtins.__import__('app.application.service')\n",
+                "registry": "        self.svc = sys.modules['app.application.service']\n",
+            }[name],
+        )
+    findings = conftest.check_tree(tmp_path)
+    for name in ("rebound", "indirect", "builtin", "registry"):
+        assert any(f"app.adapters.gateways.{name} imports dynamically" in f for f in findings), (
+            f"the {name} spelling reached application with no import edge: {findings}"
+        )
+
+
+def test_a_ports_module_holds_only_shapes_the_rules_can_read(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from typing import Protocol\n"
+        "import tesser.application as ts\n"
+        "class SaveRequest(ts.Request):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
+        "        del id\n"
+        "class SaveResponse(ts.Response):\n"
+        "    def __init__(self) -> None:\n"
+        "        return None\n"
+        "class Sink(ts.Port, Protocol):\n"
+        "    def save(self, request: SaveRequest) -> SaveResponse: ...\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.SaveRequest.__init__ holds a Delete; a ports module "
+        "holds only the shapes its rules can read, so anything else is a finding by "
+        "default rather than a gap nobody enumerated" in f
+        for f in findings
+    ), f"a statement kind nobody enumerated passed silently: {findings}"
