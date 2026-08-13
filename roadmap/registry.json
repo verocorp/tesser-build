@@ -182,7 +182,7 @@
       "py_checks": [],
       "enforcement_tests": [
         "examples/python-app/tests/test_architecture_teeth.py",
-        "examples/python-app/tests/test_call_fail_closed.py"
+        "examples/python-app/campaign/tests/test_call_fail_closed.py"
       ],
       "rationale": []
     },
@@ -385,7 +385,9 @@
         "TB061",
         "TB062",
         "TB063",
-        "TB064"
+        "TB064",
+        "TB065",
+        "TB066"
       ],
       "rationale": []
     },

@@ -214,9 +214,12 @@ file says *how*, and it is the cross-cutting layer they assume.
   report the norm's own mandated shape as a violation. And **a test module is
   one whose basename starts with `test_`**; a helper-only module beside the
   tests is not a sanctioned parking spot — a non-test, non-conftest module
-  under a `tests` package is a placement finding outright (TB041), and a
-  `conftest.py` still answers to the universal checks (TB004, TB020, TB030,
-  TB033).
+  under a `tests` package is a placement finding outright (TB041), and even
+  an excused one still answers for its imports like a test placed there
+  (TB070). A `conftest.py` answers to the universal checks (TB004, TB020,
+  TB030, TB033) and carries its location's import row: at the tree root it
+  is a leaf that imports nothing from its tree (TB065); inside a tests
+  location it reaches exactly what a test placed there reaches (TB070).
 
 - Rules 3-8 are **guidance, not checked.** Each is either a semantic judgment
   (3, 4, 5) or not mechanically decidable in a way worth the false positives
@@ -231,11 +234,14 @@ silently filled by whatever the examples happen to do. If you hit one,
 **don't invent a convention**: ask, or leave the existing shape alone until it
 is ruled.
 
-- **Test file layout.** Colocated beside the module vs a separate `tests/`
-  tree. Go and Python differ on the axis itself — Go's question is the package
-  declaration (`package foo` vs `package foo_test`, same directory), Python's
-  is directory placement — so the Go convention does not port. Unresolved, and
-  we have declined once already to let a checker dictate test placement.
+- **Test file layout (Go).** Go's question is the package declaration
+  (`package foo` vs `package foo_test`, same directory), and it remains
+  unresolved there. For Python this is now ruled: placement carries the
+  tier — a test lives beside its subject (sibling in a role or adapter kind
+  package), in its context's `tests/` package, or in the root `tests/`
+  package, and each location fixes what the test may import (TB070). The
+  root tests package reaches a context only through its wiring and client;
+  everything else it drives through bootstrap, protocol, and srv.
 - **Test grouping / structure.** Whether a type's scenarios group under a test
   class, and at what grain ("unit" = a type, a callable, or a concern). Cut
   from v0: too ambiguous on the right shape to encode as doctrine.

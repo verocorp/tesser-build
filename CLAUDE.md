@@ -49,14 +49,18 @@ bump `skill-version` in `skills/tesser-build/SKILL.md`.
    (like rule 2) is not itself machine-enforced.
 
 These three are the value-object core, not the whole enforced set. The Python
-analyzer also carries the identity taxonomy (`TB010`–`TB014`), the
+analyzer also carries the identity taxonomy (`TB010`–`TB012`), the
 serialization norm (`TB015`–`TB018`), the comments norm (`TB020`, mirrored by
-the Go `comments` analyzer), and the testing norm (`TB030` — a test double is a
-hand-written fake, never a mocking library; `TB032` — a test helper builds a
-spec or DTO and nothing else, and is the analyzer's first *totality* check:
-every module-level function in a test module must classify or declare itself
-with `# tesser-category:`; `skills/tesser-build/testing.md`).
-The full check list with per-code rules is `tessercheck-py/README.md`; which
+the Go `comments` analyzer), the import norm (`TB050`–`TB066` — every module in
+the tree carries an import row keyed on where it sits; there are no exempt
+modules, so a root module and a `conftest` are leaves that import nothing from
+the tree), and the testing norm (`TB030` — a test double is a hand-written
+fake, never a mocking library; `TB070` — placement carries the tier, so where a
+test lives fixes what it may import; `TB071`/`TB073` — the totality check over
+test modules: every module-level function is a test, a declared `@ts.helper`,
+or a declared `@ts.fake`, and what does not classify is a finding;
+`skills/tesser-build/testing.md`).
+The full check list with per-code rules is `tessercheck-py/RULES.md`; which
 convention has a doc, an example, and a checker is `roadmap/ROADMAP.md`.
 
 Build a VO the canonical way: private fields, a single validating constructor as

@@ -8,11 +8,11 @@ import linkpolicy.client.client as linkpolicy_client
 import reports.client.client as reports_client
 import tesser.context  # tessercheck:ignore TB050
 import tesser.testing as ts
-import campaign.adapters.handlers.http as http
+import campaign.adapters.handlers.http as http  # tessercheck:ignore TB070
 import campaign.client.client as client
 from errors import InfraError
 from protocol.http import HttpRequest
-import reports.adapters.handlers.http as reports_http
+import reports.adapters.handlers.http as reports_http  # tessercheck:ignore TB070
 import reports.client.client as reports_client2
 from srv.http.host import respond
 from tests.discovery import discovered_contexts

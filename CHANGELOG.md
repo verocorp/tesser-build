@@ -5,6 +5,54 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.29.0] - 2026-08-12
+
+Import totality: every module in a checked tree now carries an import row —
+there is no location whose imports go unexamined (closes #71, widened by
+ruling from "give root `tests/` a rule" to "no leaks anywhere").
+
+### Added
+- **The root `tests/` package gets its derived tier** (`TB070`): a test
+  placed there — and any excused helper module beside it — reaches a context
+  only through its wiring and client, the built app's public face;
+  `bootstrap`, `protocol`, `srv`, the tests package itself, and root modules
+  stay in reach, while a context's domain, application, and adapters never
+  do. Before this, root tests were the one placement with no import rule.
+- **Leaf rows for the tree's edges** (`TB065`): a root module
+  (`errors.py`, `serialization.py`, `lifecycle.py`, …) is a leaf that
+  imports nothing from its tree — the `ignore-file TB040` that excuses its
+  homelessness no longer excuses its imports — and a tree-root `conftest`
+  is the same kind of leaf. A `conftest` inside a tests location instead
+  carries that location's row, exactly like a test placed there.
+- **A context `__main__` is governed** (`TB063`): it composes from its own
+  application, adapters, client, and wiring — never domain, never a foreign
+  context, never the app shell. It was previously exempt by name.
+- **The app-shell matrix closes** (`TB066`, plus a `TB064` clause): of the
+  shell a context imports only `protocol`, and only from its adapters;
+  production code never imports the tests package; bootstrap never imports
+  `protocol`; a protocol module imports nothing else from its tree. Every
+  test tier's shell reach now mirrors its subject's production row (srv
+  tests see srv/bootstrap/protocol, bootstrap tests see bootstrap, sibling
+  tests see none, adapter-kind and context tests see protocol), and a tier
+  may reach itself — a context tests module may import its own tests
+  package's conftest.
+
+### Changed
+- **The example trees migrate with the rules** (zero-failures policy —
+  no baseline, rule and migration in one change): misplaced sibling tests
+  move into their contexts across python-app, errorspy, serdepy, and
+  spike-llmport; python-app's `test_cli.py` splits into a handler-sibling
+  test and a `srv/cli` test that drives dispatch through
+  `bootstrap.from_env`; errorspy's e2e files turn out to be single-context
+  integration tests and live in `campaign/tests/` (no bootstrap needed);
+  the analyzer's own tests move to `tessercheck-py/tessercheck/tests/`.
+  Four deliberate survivors carry per-line `tessercheck:ignore` pins.
+- **`RULES.md` loses its "ungoverned" carve-out bullets** because the
+  carve-outs no longer exist: `TOOLING_MODULES` is deleted (`rules.py` is
+  now just another root module with an `ignore-file TB040`, a leaf row, and
+  the universal checks), and the conftest/`__main__` exemptions are gone.
+  The roadmap registry claims `TB065`/`TB066` under the imports norm.
+
 ## [0.0.28.0] - 2026-08-12
 
 The test-tier walk becomes total over in-context placements (#64).

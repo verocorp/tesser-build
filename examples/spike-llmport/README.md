@@ -14,17 +14,23 @@ host/handler split" below for the history — it lived as the "wire module"
 
 ```
 scheduling/
-  client.py       requests/responses (primitive DTOs) + SchedulingClient
-  domain.py       Step/CustomerName/Slot VOs, Booking aggregate, step constants
+  client/
+    client.py     requests/responses (primitive DTOs) + SchedulingClient
+  domain/
+    scheduling.py Step/CustomerName/Slot VOs, Booking aggregate, step constants
+    test_domain.py       sibling test — reaches the role it sits in
   application/
     parts.py      BookingParts + the Reserved | SlotTaken reservation outcomes
     views.py      loaded / parts_of / state / reoffered — the vocabulary the
                   service bodies are written in
     service.py    SlotDirectory + BookingRepository ports, BookingService
+    test_application.py  sibling test; declares its own @ts.fake port doubles
   adapters/
     handlers.py   LlmToolHandler — one endpoint method per tool, plus the schema
                   declarations the model sees
-tests/            domain/application/handler tests; each declares its own @ts.fake port doubles
+  tests/
+    test_handlers.py     the context tier — reaches the whole context
+conftest.py       the tree-root conftest: a leaf, imports nothing from the tree
 protocol/
   voice.py        the protocol module: ToolSurface + ToolEndpoint (ts.Port),
                   ToolCall (ts.Request), ToolTurn (ts.Response), Tool and Route
@@ -167,7 +173,7 @@ typed assertion in the handler tests is a plain assignment.
 ```sh
 PYTHONPATH=tessercheck-py:tesser-py python3 -m tessercheck examples/spike-llmport
 cd examples/spike-llmport
-MYPYPATH=.:../../tesser-py mypy --strict scheduling protocol srv/voice/router.py tests
+MYPYPATH=.:../../tesser-py mypy --strict scheduling protocol srv/voice/router.py conftest.py
 pytest -q
 ```
 

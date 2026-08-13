@@ -4,7 +4,7 @@ import pathlib
 
 
 def test_tb031_fixture_pair_holds_its_contract_before_the_checker_ships() -> None:
-    d = pathlib.Path(__file__).resolve().parent.parent / "testdata" / "tb031"
+    d = pathlib.Path(__file__).resolve().parent.parent.parent / "testdata" / "tb031"
     good = (d / "good_tree" / "test_shortlink.py").read_text(encoding="utf-8")
     bad = (d / "bad_tree" / "test_shortlink.py").read_text(encoding="utf-8")
     assert good != bad, "tb031 fixtures converged — the pair no longer specifies a violation"

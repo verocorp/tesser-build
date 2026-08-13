@@ -48,7 +48,7 @@ behind an interface the calling context owns?* Yes → cross-context gateway.
 4. **Synchronous calls are fail-closed.** A policy rejection *or* a peer outage
    fails the use case honestly — the gateway propagates the peer's infra error,
    it never swallows it into a default (locked by
-   `examples/python-app/tests/test_call_fail_closed.py`).
+   `examples/python-app/campaign/tests/test_call_fail_closed.py`).
 
 ## Now build it
 

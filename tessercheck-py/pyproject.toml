@@ -23,8 +23,8 @@ packages = [
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-testpaths = ["tests"]
+testpaths = ["tessercheck/tests"]
 
 [tool.mypy]
 strict = true
-files = ["tessercheck", "tests", "rules.py"]
+files = ["tessercheck", "rules.py"]

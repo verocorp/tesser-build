@@ -4,7 +4,7 @@ import pytest
 
 import campaign.wiring.wire as campaign_wire
 from bootstrap.bootstrap import new
-import campaign.application.service as service
+import campaign.application.service as service  # tessercheck:ignore TB070
 import campaign.client.client as client
 import campaign.wiring.config as config
 from lifecycle import Closeable

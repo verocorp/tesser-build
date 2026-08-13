@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 import tessercheck.domain.checks as domain
-from tests.conftest import check_tree, conforming_tree, write_module
+import tessercheck.tests.conftest as conftest
 
 def test_every_declared_block_has_a_name_and_a_home() -> None:
     blocks = set(domain.TESSER_BASE_BLOCKS.values())
@@ -11,19 +11,19 @@ def test_every_declared_block_has_a_name_and_a_home() -> None:
     assert set(domain.KIND_ROLE) == blocks - domain.SRV_KINDS
 
 def test_every_kind_row_names_a_real_tesser_export() -> None:
-    root = Path(__file__).resolve().parents[2] / "tesser-py"
+    root = Path(__file__).resolve().parents[3] / "tesser-py"
     rows = list(domain.TESSER_BASE_BLOCKS) + list(domain.TESSER_DECORATORS)
     for package, name in rows:
         exports = (root / package.replace(".", "/") / "__init__.py").read_text()
         assert f" {name} as {name}" in exports
 
 def test_conforming_tree_is_clean(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    assert check_tree(tmp_path) == ()
+    conftest.conforming_tree(tmp_path)
+    assert conftest.check_tree(tmp_path) == ()
 
 def test_primitive_parameter_and_return_are_flagged(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/bad.py",
         "import tesser.application as ts\n"
@@ -31,13 +31,13 @@ def test_primitive_parameter_and_return_are_flagged(tmp_path: Path) -> None:
         "    def ask(self, text: str) -> str:\n"
         "        return text\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any("parameter 'text' is not a ts.Request; a service method takes exactly one ts.Request" in f for f in findings)
     assert any("does not return a ts.Response; a service method returns a ts.Response" in f for f in findings)
 
 def test_arity_and_missing_annotations_are_flagged(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/bad.py",
         "import tesser.application as ts\n"
@@ -50,14 +50,14 @@ def test_arity_and_missing_annotations_are_flagged(tmp_path: Path) -> None:
         "    def spread(self, *args: object) -> AskResponse:\n"
         "        return AskResponse(text='')\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any("takes 2 parameters; a service method takes exactly one ts.Request" in f for f in findings)
     assert any("parameter 'request' is not a ts.Request; a service method takes exactly one ts.Request" in f for f in findings)
     assert any("uses *args/**kwargs; a service method takes exactly one ts.Request" in f for f in findings)
 
 def test_aggregate_constructor_violations_are_flagged(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/badroots.py",
         "import tesser.domain as ts\n"
@@ -71,7 +71,7 @@ def test_aggregate_constructor_violations_are_flagged(tmp_path: Path) -> None:
         "class NoConstructor(ts.AggregateRoot):\n"
         "    pass\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "Primitive.__init__" in f
         and "parameter 'text' is not a ts.Spec; a domain constructor takes exactly one ts.Spec" in f
@@ -89,8 +89,8 @@ def test_aggregate_constructor_violations_are_flagged(tmp_path: Path) -> None:
     )
 
 def test_service_body_rules_are_flagged(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/busy.py",
         "import tesser.application as ts\n"
@@ -113,7 +113,7 @@ def test_service_body_rules_are_flagged(tmp_path: Path) -> None:
         "            return AskResponse(text='')\n"
         "        return AskResponse(text='')\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "BusyService.long" in f
         and "body spans 12 source lines; a service method body is at most 10 source lines" in f
@@ -137,8 +137,8 @@ def test_service_body_rules_are_flagged(tmp_path: Path) -> None:
     )
 
 def test_service_delegation_is_flagged(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/helped.py",
         "import tesser.application as ts\n"
@@ -151,7 +151,7 @@ def test_service_delegation_is_flagged(tmp_path: Path) -> None:
         "    def _prep(self, request: AskRequest) -> AskResponse:\n"
         "        return AskResponse(text=shape(request.text))\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "HelpedService.ask" in f
         and "delegates to self._prep" in f
@@ -166,8 +166,8 @@ def test_service_delegation_is_flagged(tmp_path: Path) -> None:
     )
 
 def test_elif_chain_is_one_level(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/chained.py",
         "import tesser.application as ts\n"
@@ -180,12 +180,12 @@ def test_elif_chain_is_one_level(tmp_path: Path) -> None:
         "            return AskResponse(text='b')\n"
         "        return AskResponse(text='c')\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert not any("ChainService" in f and "a service method branches one level deep" in f for f in findings)
 
 def test_indirect_subclass_still_classifies(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/derived.py",
         "from app.application.service import AskService\n"
@@ -194,7 +194,7 @@ def test_indirect_subclass_still_classifies(tmp_path: Path) -> None:
         "    def again(self, request: AskRequest) -> AskRequest:\n"
         "        return request\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "DerivedService.again" in f
         and "does not return a ts.Response; a service method returns a ts.Response" in f
@@ -202,7 +202,7 @@ def test_indirect_subclass_still_classifies(tmp_path: Path) -> None:
     )
 
 def test_placement_totality_is_flagged(tmp_path: Path) -> None:
-    write_module(
+    conftest.write_module(
         tmp_path,
         "plain/domain/thing.py",
         "import tesser.domain as ts\n"
@@ -217,7 +217,7 @@ def test_placement_totality_is_flagged(tmp_path: Path) -> None:
         "LIMIT = 3\n"
         "print('hi')\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any("plain.domain.thing.Loose" in f and "every context class declares its block" in f for f in findings)
     assert any("plain.domain.thing.Ask" in f and "a kind lives only in its role module" in f for f in findings)
     assert any("plain.domain.thing.stray" in f and "a module function declares itself with @ts.function" in f for f in findings)
@@ -232,13 +232,13 @@ def test_placement_totality_is_flagged(tmp_path: Path) -> None:
     )
 
 def test_declared_function_and_final_constant_pass(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/domain2.py",
         "",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "plain/domain/thing.py",
         "from typing import Final\n"
@@ -248,15 +248,15 @@ def test_declared_function_and_final_constant_pass(tmp_path: Path) -> None:
         "def declared() -> None:\n"
         "    return None\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert not any("plain.domain.thing" in f and "@ts.function" in f for f in findings)
     assert not any("plain.domain.thing" in f and "a module constant is Final" in f for f in findings)
 
 def test_non_context_module_and_nonempty_init_are_flagged(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(tmp_path, "app/util.py", "def anything() -> None:\n    return None\n")
-    write_module(tmp_path, "app/__init__.py", "X = 1\n")
-    findings = check_tree(tmp_path)
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/util.py", "def anything() -> None:\n    return None\n")
+    conftest.write_module(tmp_path, "app/__init__.py", "X = 1\n")
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "app.util" in f
         and "a context holds only domain, application, client, adapters, wiring, and tests modules" in f
@@ -265,8 +265,8 @@ def test_non_context_module_and_nonempty_init_are_flagged(tmp_path: Path) -> Non
     assert any("app" in f and "a context __init__ is empty" in f for f in findings)
 
 def test_import_matrix_is_flagged(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "two/client/client.py",
         "import tesser.context as ts\n"
@@ -274,7 +274,7 @@ def test_import_matrix_is_flagged(tmp_path: Path) -> None:
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "two/adapters/gateways.py",
         "import tesser.adapters as ts\n"
@@ -282,7 +282,7 @@ def test_import_matrix_is_flagged(tmp_path: Path) -> None:
         "class Bridge(ts.Gateway):\n"
         "    pass\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "two/domain/thing.py",
         "import tesser.domain as ts\n"
@@ -291,13 +291,13 @@ def test_import_matrix_is_flagged(tmp_path: Path) -> None:
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "two/application/service.py",
         "import tesser.application as ts\n"
         "import app.domain.thing\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "two.domain.thing" in f
         and "the same-context matrix is a role to itself, application to domain and client, adapters to application, wiring to application, adapters, and client" in f
@@ -311,8 +311,8 @@ def test_import_matrix_is_flagged(tmp_path: Path) -> None:
     assert not any("two.adapters.gateways" in f and "imports app.client.client" in f for f in findings)
 
 def test_test_module_totality_is_flagged(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/test_junk.py",
         "import tesser.testing as th\n"
@@ -325,7 +325,7 @@ def test_test_module_totality_is_flagged(tmp_path: Path) -> None:
         "    pass\n"
         "COUNT = 2\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "test_junk.build" in f and "a test module holds tests, @ts.helper builders, and @ts.fake doubles" in f
         for f in findings
@@ -338,8 +338,8 @@ def test_test_module_totality_is_flagged(tmp_path: Path) -> None:
     )
 
 def test_helper_rules_are_flagged(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/test_helpers.py",
         "import tesser.testing as th\n"
@@ -350,7 +350,7 @@ def test_helper_rules_are_flagged(tmp_path: Path) -> None:
         "        return thing\n"
         "    return thing\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "bad_builder" in f and "parameter 'thing' is not a primitive; a helper takes only defaulted primitives" in f
         for f in findings
@@ -363,8 +363,8 @@ def test_helper_rules_are_flagged(tmp_path: Path) -> None:
     assert any("bad_builder" in f and "has control flow" in f and "a helper only constructs" in f for f in findings)
 
 def test_service_dependencies_must_be_ports(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/extra.py",
         "import tesser.application as ts\n"
@@ -375,15 +375,15 @@ def test_service_dependencies_must_be_ports(tmp_path: Path) -> None:
         "    def ask(self, request: AskRequest) -> AskResponse:\n"
         "        return AskResponse(text=request.text)\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "NeedyService.__init__" in f and "parameter 'db' is not a ts.Port; a service depends only on ports" in f
         for f in findings
     )
 
 def test_client_method_rules_are_flagged(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/extra2.py",
         "from typing import Protocol\n"
@@ -391,7 +391,7 @@ def test_client_method_rules_are_flagged(tmp_path: Path) -> None:
         "class BadClient(tc.Client, Protocol):\n"
         "    def ask(self, text: str) -> str: ...\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "BadClient.ask" in f and "parameter 'text' is not a ts.Request; a client method takes exactly one ts.Request" in f
         for f in findings
@@ -402,8 +402,8 @@ def test_client_method_rules_are_flagged(tmp_path: Path) -> None:
     )
 
 def test_records_never_carry_domain_objects(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/extra3.py",
         "from typing import Protocol\n"
@@ -415,7 +415,7 @@ def test_records_never_carry_domain_objects(tmp_path: Path) -> None:
         "class LoadingPort(tap.Port, Protocol):\n"
         "    def fetch(self) -> Thing: ...\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "LoadingRepo.load" in f and "an adapter speaks records, never domain objects" in f
         for f in findings
@@ -426,8 +426,8 @@ def test_records_never_carry_domain_objects(tmp_path: Path) -> None:
     )
 
 def test_domain_field_rules_are_flagged(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/extra4.py",
         "import tesser.domain as ts\n"
@@ -448,7 +448,7 @@ def test_domain_field_rules_are_flagged(tmp_path: Path) -> None:
         "    def validate(self) -> None:\n"
         "        return None\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "Money.__init__" in f and "a value object constructs from primitives and value objects" in f
         for f in findings
@@ -466,13 +466,13 @@ def test_domain_field_rules_are_flagged(tmp_path: Path) -> None:
     assert any("WireRequest.validate" in f and "a DTO carries data and nothing else" in f for f in findings)
 
 def test_an_eval_lives_only_in_a_gateway(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
+    conftest.conforming_tree(tmp_path)
     body = "import tesser.testing as ts\ndef test_model_picks_a_tool() -> None:\n    assert True\n"
-    write_module(tmp_path, "app/adapters/eval_flat.py", body)
-    write_module(tmp_path, "app/tests/__init__.py", "")
-    write_module(tmp_path, "app/tests/eval_tier.py", body)
-    write_module(tmp_path, "app/domain/eval_role.py", body)
-    findings = check_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/adapters/eval_flat.py", body)
+    conftest.write_module(tmp_path, "app/tests/__init__.py", "")
+    conftest.write_module(tmp_path, "app/tests/eval_tier.py", body)
+    conftest.write_module(tmp_path, "app/domain/eval_role.py", body)
+    findings = conftest.check_tree(tmp_path)
     for outside in ("app.adapters.eval_flat", "app.tests.eval_tier", "app.domain.eval_role"):
         assert any(
             f"{outside} is an eval outside a gateway; an eval lives only in a gateway, "
@@ -480,18 +480,18 @@ def test_an_eval_lives_only_in_a_gateway(tmp_path: Path) -> None:
             for f in findings
         ), outside
 
-    write_module(tmp_path, "app/adapters/gateways/__init__.py", "")
-    write_module(tmp_path, "app/adapters/gateways/eval_llm.py", body)
-    write_module(tmp_path, "app/adapters/gateways/llm/__init__.py", "")
-    write_module(tmp_path, "app/adapters/gateways/llm/evals/__init__.py", "")
-    write_module(tmp_path, "app/adapters/gateways/llm/evals/eval_tools.py", body)
-    housed = check_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/adapters/gateways/__init__.py", "")
+    conftest.write_module(tmp_path, "app/adapters/gateways/eval_llm.py", body)
+    conftest.write_module(tmp_path, "app/adapters/gateways/llm/__init__.py", "")
+    conftest.write_module(tmp_path, "app/adapters/gateways/llm/evals/__init__.py", "")
+    conftest.write_module(tmp_path, "app/adapters/gateways/llm/evals/eval_tools.py", body)
+    housed = conftest.check_tree(tmp_path)
     assert not any("eval_llm is an eval outside a gateway" in f for f in housed)
     assert not any("eval_tools is an eval outside a gateway" in f for f in housed)
 
 def test_a_handler_sibling_fakes_only_the_client(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/adapters/handlers/http.py",
         "import tesser.adapters as ts\n"
@@ -500,9 +500,9 @@ def test_a_handler_sibling_fakes_only_the_client(tmp_path: Path) -> None:
         "    def __init__(self, c: client.Client) -> None:\n"
         "        self._c = c\n",
     )
-    write_module(tmp_path, "app/adapters/handlers/__init__.py", "")
-    write_module(tmp_path, "app/adapters/__init__.py", "")
-    write_module(
+    conftest.write_module(tmp_path, "app/adapters/handlers/__init__.py", "")
+    conftest.write_module(tmp_path, "app/adapters/__init__.py", "")
+    conftest.write_module(
         tmp_path,
         "app/adapters/handlers/test_http.py",
         "import tesser.testing as ts\n"
@@ -513,12 +513,12 @@ def test_a_handler_sibling_fakes_only_the_client(tmp_path: Path) -> None:
         "def test_x() -> None:\n"
         "    assert True\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "app/adapters/gateways/__init__.py",
         "",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "app.adapters.handlers.test_http imports app.application.service, but a test "
         "placed in handlers reaches only adapters.handlers, client of its own context; "
@@ -535,8 +535,8 @@ def test_a_handler_sibling_fakes_only_the_client(tmp_path: Path) -> None:
     assert not any("test_http:3" in f for f in findings)
 
 def test_a_srv_test_reaches_a_context_only_through_its_handlers(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/adapters/handlers/http.py",
         "import tesser.adapters as ts\n"
@@ -545,9 +545,9 @@ def test_a_srv_test_reaches_a_context_only_through_its_handlers(tmp_path: Path) 
         "    def __init__(self, c: client.Client) -> None:\n"
         "        self._c = c\n",
     )
-    write_module(tmp_path, "app/adapters/handlers/__init__.py", "")
-    write_module(tmp_path, "app/adapters/__init__.py", "")
-    write_module(
+    conftest.write_module(tmp_path, "app/adapters/handlers/__init__.py", "")
+    conftest.write_module(tmp_path, "app/adapters/__init__.py", "")
+    conftest.write_module(
         tmp_path,
         "srv/test_router.py",
         "import tesser.testing as ts\n"
@@ -556,7 +556,7 @@ def test_a_srv_test_reaches_a_context_only_through_its_handlers(tmp_path: Path) 
         "def test_x() -> None:\n"
         "    assert True\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "srv.test_router imports app.application.service, but a test placed in "
         "srv reaches a context only through its handlers; "
@@ -566,8 +566,8 @@ def test_a_srv_test_reaches_a_context_only_through_its_handlers(tmp_path: Path) 
     assert not any("test_router:2" in f for f in findings)
 
 def test_a_test_reaches_only_what_its_placement_allows(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "far/domain/test_thing.py",
         "import tesser.testing as ts\n"
@@ -576,7 +576,7 @@ def test_a_test_reaches_only_what_its_placement_allows(tmp_path: Path) -> None:
         "def test_x() -> None:\n"
         "    assert True\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "far/domain/thing.py",
         "import tesser.domain as ts\n"
@@ -584,16 +584,16 @@ def test_a_test_reaches_only_what_its_placement_allows(tmp_path: Path) -> None:
         "    def __init__(self, text: str) -> None:\n"
         "        object.__setattr__(self, '_text', text)\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "far/client/client.py",
         "import tesser.context as ts\n"
         "class Client(ts.Client):\n"
         "    ...\n",
     )
-    write_module(tmp_path, "far/domain/__init__.py", "")
-    write_module(tmp_path, "far/client/__init__.py", "")
-    findings = check_tree(tmp_path)
+    conftest.write_module(tmp_path, "far/domain/__init__.py", "")
+    conftest.write_module(tmp_path, "far/client/__init__.py", "")
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "far.domain.test_thing imports far.client.client, but a test placed in domain "
         "reaches only domain of its own context; "
@@ -608,8 +608,8 @@ def test_a_test_reaches_only_what_its_placement_allows(tmp_path: Path) -> None:
     )
 
 def test_a_repository_sibling_test_reaches_its_kind_and_application_only(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/adapters/repositories/words.py",
         "import tesser.adapters as ts\n"
@@ -617,9 +617,9 @@ def test_a_repository_sibling_test_reaches_its_kind_and_application_only(tmp_pat
         "    def __init__(self) -> None:\n"
         "        self._rows: dict[str, str] = {}\n",
     )
-    write_module(tmp_path, "app/adapters/repositories/__init__.py", "")
-    write_module(tmp_path, "app/adapters/__init__.py", "")
-    write_module(
+    conftest.write_module(tmp_path, "app/adapters/repositories/__init__.py", "")
+    conftest.write_module(tmp_path, "app/adapters/__init__.py", "")
+    conftest.write_module(
         tmp_path,
         "app/adapters/repositories/test_words.py",
         "import app.adapters.repositories.words as words\n"
@@ -629,7 +629,7 @@ def test_a_repository_sibling_test_reaches_its_kind_and_application_only(tmp_pat
         "def test_x() -> None:\n"
         "    assert True\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "far/client/client.py",
         "import tesser.context as ts\n"
@@ -637,8 +637,8 @@ def test_a_repository_sibling_test_reaches_its_kind_and_application_only(tmp_pat
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n",
     )
-    write_module(tmp_path, "far/client/__init__.py", "")
-    write_module(
+    conftest.write_module(tmp_path, "far/client/__init__.py", "")
+    conftest.write_module(
         tmp_path,
         "far/domain/thing.py",
         "import tesser.domain as ts\n"
@@ -646,8 +646,8 @@ def test_a_repository_sibling_test_reaches_its_kind_and_application_only(tmp_pat
         "    def __init__(self, text: str) -> None:\n"
         "        object.__setattr__(self, '_text', text)\n",
     )
-    write_module(tmp_path, "far/domain/__init__.py", "")
-    findings = check_tree(tmp_path)
+    conftest.write_module(tmp_path, "far/domain/__init__.py", "")
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "app.adapters.repositories.test_words imports app.domain.thing, but a test placed "
         "in repositories reaches only adapters.repositories, application of its own context; "
@@ -664,9 +664,9 @@ def test_a_repository_sibling_test_reaches_its_kind_and_application_only(tmp_pat
     assert not any("test_words.py:2:" in f for f in findings)
 
 def test_a_wiring_sibling_test_mirrors_production_wiring_reach(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(tmp_path, "app/wiring/__init__.py", "")
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/wiring/__init__.py", "")
+    conftest.write_module(
         tmp_path,
         "app/wiring/test_wire.py",
         "import app.application.service as service\n"
@@ -675,7 +675,7 @@ def test_a_wiring_sibling_test_mirrors_production_wiring_reach(tmp_path: Path) -
         "def test_x() -> None:\n"
         "    assert True\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "far/client/client.py",
         "import tesser.context as ts\n"
@@ -683,8 +683,8 @@ def test_a_wiring_sibling_test_mirrors_production_wiring_reach(tmp_path: Path) -
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n",
     )
-    write_module(tmp_path, "far/client/__init__.py", "")
-    write_module(
+    conftest.write_module(tmp_path, "far/client/__init__.py", "")
+    conftest.write_module(
         tmp_path,
         "far/domain/thing.py",
         "import tesser.domain as ts\n"
@@ -692,8 +692,8 @@ def test_a_wiring_sibling_test_mirrors_production_wiring_reach(tmp_path: Path) -
         "    def __init__(self, text: str) -> None:\n"
         "        object.__setattr__(self, '_text', text)\n",
     )
-    write_module(tmp_path, "far/domain/__init__.py", "")
-    findings = check_tree(tmp_path)
+    conftest.write_module(tmp_path, "far/domain/__init__.py", "")
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "app.wiring.test_wire imports app.domain.thing, but a test placed in wiring "
         "reaches only wiring, application, adapters, client of its own context; "
@@ -704,8 +704,8 @@ def test_a_wiring_sibling_test_mirrors_production_wiring_reach(tmp_path: Path) -
     assert not any("test_wire.py:2:" in f for f in findings)
 
 def test_a_client_sibling_test_reaches_only_its_own_client(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/client/test_client.py",
         "import app.client.client as client\n"
@@ -713,7 +713,7 @@ def test_a_client_sibling_test_reaches_only_its_own_client(tmp_path: Path) -> No
         "def test_x() -> None:\n"
         "    assert True\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "app.client.test_client imports app.domain.thing, but a test placed in client "
         "reaches only client of its own context; "
@@ -723,8 +723,8 @@ def test_a_client_sibling_test_reaches_only_its_own_client(tmp_path: Path) -> No
     assert not any("test_client.py:1:" in f for f in findings)
 
 def test_a_bootstrap_test_reaches_a_context_like_production_bootstrap(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "bootstrap/test_boot.py",
         "import app.client.client as client\n"
@@ -732,8 +732,8 @@ def test_a_bootstrap_test_reaches_a_context_like_production_bootstrap(tmp_path: 
         "def test_x() -> None:\n"
         "    assert True\n",
     )
-    write_module(tmp_path, "bootstrap/__init__.py", "")
-    findings = check_tree(tmp_path)
+    conftest.write_module(tmp_path, "bootstrap/__init__.py", "")
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "bootstrap.test_boot imports app.domain.thing, but a test placed in "
         "bootstrap reaches a context only through its wiring, client, and adapters; "
@@ -743,16 +743,16 @@ def test_a_bootstrap_test_reaches_a_context_like_production_bootstrap(tmp_path: 
     assert not any("test_boot.py:1:" in f for f in findings)
 
 def test_a_protocol_test_reaches_no_context(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "protocol/test_proto.py",
         "import app.client.client as client\n"
         "def test_x() -> None:\n"
         "    assert True\n",
     )
-    write_module(tmp_path, "protocol/__init__.py", "")
-    findings = check_tree(tmp_path)
+    conftest.write_module(tmp_path, "protocol/__init__.py", "")
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "protocol.test_proto imports app.client.client, but a test placed in "
         "protocol reaches no context; "
@@ -761,22 +761,22 @@ def test_a_protocol_test_reaches_no_context(tmp_path: Path) -> None:
     )
 
 def test_a_test_that_resolves_to_no_tier_is_itself_a_finding(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/adapters/test_flat.py",
         "def test_x() -> None:\n"
         "    assert True\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "app/adapters/blobs/test_blob.py",
         "def test_x() -> None:\n"
         "    assert True\n",
     )
-    write_module(tmp_path, "app/adapters/blobs/__init__.py", "")
-    write_module(tmp_path, "app/adapters/__init__.py", "")
-    findings = check_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/adapters/blobs/__init__.py", "")
+    conftest.write_module(tmp_path, "app/adapters/__init__.py", "")
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "app.adapters.test_flat resolves to no test tier; "
         "a sibling test lives in a role package or an adapter kind package "
@@ -793,9 +793,9 @@ def test_a_test_that_resolves_to_no_tier_is_itself_a_finding(tmp_path: Path) -> 
 def test_a_context_tier_test_reaches_its_whole_context_and_a_neighbours_application(
     tmp_path: Path,
 ) -> None:
-    conforming_tree(tmp_path)
-    write_module(tmp_path, "near/tests/__init__.py", "")
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "near/tests/__init__.py", "")
+    conftest.write_module(
         tmp_path,
         "near/domain/thing.py",
         "import tesser.domain as ts\n"
@@ -803,16 +803,16 @@ def test_a_context_tier_test_reaches_its_whole_context_and_a_neighbours_applicat
         "    def __init__(self, text: str) -> None:\n"
         "        object.__setattr__(self, '_text', text)\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "near/client/client.py",
         "import tesser.context as ts\n"
         "class Client(ts.Client):\n"
         "    ...\n",
     )
-    write_module(tmp_path, "near/domain/__init__.py", "")
-    write_module(tmp_path, "near/client/__init__.py", "")
-    write_module(
+    conftest.write_module(tmp_path, "near/domain/__init__.py", "")
+    conftest.write_module(tmp_path, "near/client/__init__.py", "")
+    conftest.write_module(
         tmp_path,
         "near/tests/test_wiring.py",
         "import tesser.testing as ts\n"
@@ -821,25 +821,25 @@ def test_a_context_tier_test_reaches_its_whole_context_and_a_neighbours_applicat
         "def test_x() -> None:\n"
         "    assert True\n",
     )
-    assert not any("near.tests.test_wiring" in f for f in check_tree(tmp_path))
+    assert not any("near.tests.test_wiring" in f for f in conftest.check_tree(tmp_path))
 
-    write_module(tmp_path, "near/tests/__init__.py", "X = 1\n")
+    conftest.write_module(tmp_path, "near/tests/__init__.py", "X = 1\n")
     assert any(
         "near.tests __init__ declares code; a context tests __init__ is empty" in f
-        for f in check_tree(tmp_path)
+        for f in conftest.check_tree(tmp_path)
     )
 
-    write_module(tmp_path, "near/tests/__init__.py", "")
-    write_module(tmp_path, "near/tests/helpers.py", "VALUE = 1\n")
+    conftest.write_module(tmp_path, "near/tests/__init__.py", "")
+    conftest.write_module(tmp_path, "near/tests/helpers.py", "VALUE = 1\n")
     assert any(
         "near.tests.helpers is neither a test module nor conftest; "
         "a context tests package holds only test modules and conftest" in f
-        for f in check_tree(tmp_path)
+        for f in conftest.check_tree(tmp_path)
     )
 
 def test_a_role_must_be_a_package(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "flat/domain.py",
         "import tesser.domain as ts\n"
@@ -847,15 +847,15 @@ def test_a_role_must_be_a_package(tmp_path: Path) -> None:
         "    def __init__(self, text: str) -> None:\n"
         "        object.__setattr__(self, '_text', text)\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "flat/client/client.py",
         "import tesser.context as ts\n"
         "class Client(ts.Client):\n"
         "    ...\n",
     )
-    write_module(tmp_path, "flat/client/__init__.py", "")
-    findings = check_tree(tmp_path)
+    conftest.write_module(tmp_path, "flat/client/__init__.py", "")
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "flat.domain is a role module; a role is a package, never a module" in f
         for f in findings
@@ -863,13 +863,13 @@ def test_a_role_must_be_a_package(tmp_path: Path) -> None:
     assert not any("flat.client" in f for f in findings)
 
 def test_a_role_may_be_a_package(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "deep/domain/__init__.py",
         "from deep.domain.money import Money\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "deep/domain/money.py",
         "import tesser.domain as ts\n"
@@ -879,7 +879,7 @@ def test_a_role_may_be_a_package(tmp_path: Path) -> None:
         "        object.__setattr__(self, '_amount', amount)\n"
         "        object.__setattr__(self, '_unit', unit)\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "deep/domain/currency.py",
         "import tesser.domain as ts\n"
@@ -887,14 +887,14 @@ def test_a_role_may_be_a_package(tmp_path: Path) -> None:
         "    def __init__(self, code: str) -> None:\n"
         "        object.__setattr__(self, '_code', code)\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "deep/domain/svc.py",
         "import tesser.application as ts\n"
         "class SneakyService(ts.ApplicationService):\n"
         "    pass\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert not any("deep.domain.money" in f and "not a context module" in f for f in findings)
     assert not any("deep.domain.money" in f and "the same-context matrix" in f for f in findings)
     assert any(
@@ -908,8 +908,8 @@ def test_a_role_may_be_a_package(tmp_path: Path) -> None:
     )
 
 def test_wiring_is_a_role(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "two/client/client.py",
         "import tesser.context as ts\n"
@@ -917,7 +917,7 @@ def test_wiring_is_a_role(tmp_path: Path) -> None:
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "app/wiring/wire.py",
         "import tesser.context as ts\n"
@@ -928,7 +928,7 @@ def test_wiring_is_a_role(tmp_path: Path) -> None:
         "class AskWiring(ts.Wiring):\n"
         "    pass\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert not any("app.wiring.wire" in f and "not a context module" in f for f in findings)
     assert not any("app.wiring.wire" in f and "imports app.application.service" in f for f in findings)
     assert not any("app.wiring.wire" in f and "imports two.client.client" in f for f in findings)
@@ -940,15 +940,15 @@ def test_wiring_is_a_role(tmp_path: Path) -> None:
     )
 
 def test_srv_and_bootstrap_import_rows(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/adapters/gateways.py",
         "import tesser.adapters as ts\n"
         "class HttpHandler(ts.Handler):\n"
         "    pass\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "two/client/client.py",
         "import tesser.context as ts\n"
@@ -956,14 +956,14 @@ def test_srv_and_bootstrap_import_rows(tmp_path: Path) -> None:
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "two/adapters/gateways.py",
         "import tesser.adapters as ts\n"
         "class Bridge(ts.Gateway):\n"
         "    pass\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "srv/http.py",
         "import app.application.service\n"
@@ -971,7 +971,7 @@ def test_srv_and_bootstrap_import_rows(tmp_path: Path) -> None:
         "import two.adapters.gateways\n"
         "import bootstrap.wire\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "bootstrap/wire.py",
         "import app.domain.thing\n"
@@ -979,7 +979,7 @@ def test_srv_and_bootstrap_import_rows(tmp_path: Path) -> None:
         "import app.client.client as app_client\n"
         "import srv.http\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "srv.http" in f and "imports app.application.service" in f
         and "a host reaches a context only through its handlers" in f
@@ -1006,8 +1006,8 @@ def test_srv_and_bootstrap_import_rows(tmp_path: Path) -> None:
     )
 
 def test_only_a_handler_imports_its_own_client(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/adapters/gateways.py",
         "import tesser.adapters as ts\n"
@@ -1016,7 +1016,7 @@ def test_only_a_handler_imports_its_own_client(tmp_path: Path) -> None:
         "    def ask(self, body: str) -> str:\n"
         "        return app_client.AskRequest(text=body).text\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "two/client/client.py",
         "import tesser.context as ts\n"
@@ -1024,7 +1024,7 @@ def test_only_a_handler_imports_its_own_client(tmp_path: Path) -> None:
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "two/adapters/gateways.py",
         "import tesser.adapters as ts\n"
@@ -1032,7 +1032,7 @@ def test_only_a_handler_imports_its_own_client(tmp_path: Path) -> None:
         "class SneakyGateway(ts.Gateway):\n"
         "    pass\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert not any("app.adapters.gateways" in f and "imports app.client.client" in f for f in findings)
     assert any(
         "two.adapters.gateways" in f and "imports two.client.client" in f
@@ -1041,8 +1041,8 @@ def test_only_a_handler_imports_its_own_client(tmp_path: Path) -> None:
     )
 
 def test_only_a_gateway_reaches_a_foreign_client(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "two/client/client.py",
         "import tesser.context as ts\n"
@@ -1050,7 +1050,7 @@ def test_only_a_gateway_reaches_a_foreign_client(tmp_path: Path) -> None:
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "app/adapters/gateways.py",
         "import tesser.adapters as ts\n"
@@ -1058,7 +1058,7 @@ def test_only_a_gateway_reaches_a_foreign_client(tmp_path: Path) -> None:
         "class HttpHandler(ts.Handler):\n"
         "    pass\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "app.adapters.gateways" in f and "imports two.client.client" in f
         and "a context reaches another context only through its client, and only from gateways and wiring" in f
@@ -1066,14 +1066,14 @@ def test_only_a_gateway_reaches_a_foreign_client(tmp_path: Path) -> None:
     )
 
 def test_role_module_tesser_import_is_exactly_once_as_ts(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "lone/domain/thing.py",
         "class Bare:\n"
         "    pass\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "noalias/domain/thing.py",
         "import tesser.domain as td\n"
@@ -1081,7 +1081,7 @@ def test_role_module_tesser_import_is_exactly_once_as_ts(tmp_path: Path) -> None
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "fromform/domain/thing.py",
         "from tesser.domain import Spec\n"
@@ -1089,7 +1089,7 @@ def test_role_module_tesser_import_is_exactly_once_as_ts(tmp_path: Path) -> None
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "dup/domain/thing.py",
         "import tesser.domain as ts\n"
@@ -1098,7 +1098,7 @@ def test_role_module_tesser_import_is_exactly_once_as_ts(tmp_path: Path) -> None
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "lone.domain.thing never imports tesser.domain; "
         "a role module imports its tesser package exactly once, as ts" in f
@@ -1121,13 +1121,13 @@ def test_role_module_tesser_import_is_exactly_once_as_ts(tmp_path: Path) -> None
     )
 
 def test_reexport_only_role_init_needs_no_tesser_import(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "deep/domain/__init__.py",
         "from deep.domain.money import Money\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "deep/domain/money.py",
         "import tesser.domain as ts\n"
@@ -1135,12 +1135,12 @@ def test_reexport_only_role_init_needs_no_tesser_import(tmp_path: Path) -> None:
         "    def __init__(self, amount: str) -> None:\n"
         "        object.__setattr__(self, '_amount', amount)\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert not any("deep.domain" in f and "exactly once, as ts" in f for f in findings)
 
 def test_test_module_tesser_import_rules(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/test_imports.py",
         "import tesser.domain as ts\n"
@@ -1149,14 +1149,14 @@ def test_test_module_tesser_import_rules(tmp_path: Path) -> None:
         "def test_nothing() -> None:\n"
         "    assert True\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "app/test_fromform.py",
         "from tesser.testing import fake\n"
         "def test_nothing() -> None:\n"
         "    assert fake is not None\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "app.test_imports imports tesser.domain; a test module imports only tesser.testing" in f
         for f in findings
@@ -1178,11 +1178,11 @@ def test_test_module_tesser_import_rules(tmp_path: Path) -> None:
     )
 
 def test_homeless_modules_are_flagged(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(tmp_path, "loose.py", "def anything() -> None:\n    return None\n")
-    write_module(tmp_path, "stray/util.py", "def anything() -> None:\n    return None\n")
-    write_module(tmp_path, "rules.py", "def anything() -> None:\n    return None\n")
-    findings = check_tree(tmp_path)
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "loose.py", "def anything() -> None:\n    return None\n")
+    conftest.write_module(tmp_path, "stray/util.py", "def anything() -> None:\n    return None\n")
+    conftest.write_module(tmp_path, "rules.py", "def anything() -> None:\n    return None\n")
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "loose belongs to no governed package; "
         "every module belongs to a context, srv, bootstrap, tests, or the protocol package" in f
@@ -1193,14 +1193,14 @@ def test_homeless_modules_are_flagged(tmp_path: Path) -> None:
         "every module belongs to a context, srv, bootstrap, tests, or the protocol package" in f
         for f in findings
     )
-    assert not any("rules belongs to no governed package" in f for f in findings)
+    assert any("rules belongs to no governed package" in f for f in findings)
 
 def test_tests_package_totality_is_flagged(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(tmp_path, "tests/__init__.py", "X = 1\n")
-    write_module(tmp_path, "tests/util.py", "def anything() -> None:\n    return None\n")
-    write_module(tmp_path, "tests/test_ok.py", "def test_ok() -> None:\n    assert True\n")
-    findings = check_tree(tmp_path)
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "tests/__init__.py", "X = 1\n")
+    conftest.write_module(tmp_path, "tests/util.py", "def anything() -> None:\n    return None\n")
+    conftest.write_module(tmp_path, "tests/test_ok.py", "def test_ok() -> None:\n    assert True\n")
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "tests __init__ declares code; "
         "a tests package holds only test modules and conftest" in f
@@ -1214,15 +1214,15 @@ def test_tests_package_totality_is_flagged(tmp_path: Path) -> None:
     assert not any("tests.test_ok" in f and "a tests package holds" in f for f in findings)
 
 def test_role_init_only_reexports_its_own_role(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "pkg/domain/__init__.py",
         "import tesser.domain as ts\n"
         "from pkg.domain.vo import Tag\n"
         "LIMIT = 3\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "pkg/domain/vo.py",
         "import tesser.domain as ts\n"
@@ -1230,7 +1230,7 @@ def test_role_init_only_reexports_its_own_role(tmp_path: Path) -> None:
         "    def __init__(self, text: str) -> None:\n"
         "        object.__setattr__(self, '_text', text)\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "pkg.domain imports tesser.domain; a role __init__ only re-exports from its own role" in f
         for f in findings
@@ -1248,8 +1248,8 @@ def test_role_init_only_reexports_its_own_role(tmp_path: Path) -> None:
     )
 
 def test_a_role_init_may_import_a_module_but_never_a_class(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "mod/domain/vo.py",
         "import tesser.domain as ts\n"
@@ -1257,8 +1257,8 @@ def test_a_role_init_may_import_a_module_but_never_a_class(tmp_path: Path) -> No
         "    def __init__(self, text: str) -> None:\n"
         "        object.__setattr__(self, '_text', text)\n",
     )
-    write_module(tmp_path, "mod/domain/__init__.py", "import mod.domain.vo as vo\n")
-    write_module(
+    conftest.write_module(tmp_path, "mod/domain/__init__.py", "import mod.domain.vo as vo\n")
+    conftest.write_module(
         tmp_path,
         "mod/client/client.py",
         "import tesser.context as ts\n"
@@ -1266,19 +1266,19 @@ def test_a_role_init_may_import_a_module_but_never_a_class(tmp_path: Path) -> No
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n",
     )
-    write_module(tmp_path, "mod/client/__init__.py", "")
-    assert not any("mod.domain:" in f for f in check_tree(tmp_path))
+    conftest.write_module(tmp_path, "mod/client/__init__.py", "")
+    assert not any("mod.domain:" in f for f in conftest.check_tree(tmp_path))
 
-    write_module(tmp_path, "mod/domain/__init__.py", "from mod.domain.vo import Tag\n")
+    conftest.write_module(tmp_path, "mod/domain/__init__.py", "from mod.domain.vo import Tag\n")
     assert any(
         "mod.domain imports names from mod.domain.vo; "
         "a context module is imported as an aliased module, never its members" in f
-        for f in check_tree(tmp_path)
+        for f in conftest.check_tree(tmp_path)
     )
 
 def test_srv_and_bootstrap_statement_totality(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "srv/box.py",
         "import tesser.srv as ts\n"
@@ -1295,7 +1295,7 @@ def test_srv_and_bootstrap_statement_totality(tmp_path: Path) -> None:
         "LIMIT = 3\n"
         "print('hi')\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "bootstrap/wire.py",
         "def build() -> None:\n"
@@ -1305,7 +1305,7 @@ def test_srv_and_bootstrap_statement_totality(tmp_path: Path) -> None:
         "LIMIT = 3\n"
         "print('hi')\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "srv.box imports tesser.domain; a srv module imports only tesser.srv" in f
         for f in findings
@@ -1359,8 +1359,8 @@ def test_srv_and_bootstrap_statement_totality(tmp_path: Path) -> None:
     )
 
 def test_pure_core_stdlib_allowlist(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "io1/domain/thing.py",
         "import os\n"
@@ -1370,7 +1370,7 @@ def test_pure_core_stdlib_allowlist(tmp_path: Path) -> None:
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "io1/client/client.py",
         "from __future__ import annotations\n"
@@ -1380,7 +1380,7 @@ def test_pure_core_stdlib_allowlist(tmp_path: Path) -> None:
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "io1/adapters/gateways.py",
         "from pathlib import Path\n"
@@ -1388,7 +1388,7 @@ def test_pure_core_stdlib_allowlist(tmp_path: Path) -> None:
         "class DiskRepository(ts.Repository):\n"
         "    def load(self, key: str) -> str: ...\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "io1.domain.thing imports os; domain, client, and application "
         "import only their context, their tesser package, and the pure stdlib" in f
@@ -1404,8 +1404,8 @@ def test_pure_core_stdlib_allowlist(tmp_path: Path) -> None:
     assert not any("io1.adapters.gateways" in f and "the pure stdlib" in f for f in findings)
 
 def test_context_module_import_form(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "form/client/client.py",
         "import tesser.context as ts\n"
@@ -1413,13 +1413,13 @@ def test_context_module_import_form(tmp_path: Path) -> None:
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "form/application/service.py",
         "import tesser.application as ts\n"
         "from form.client.client import PingRequest\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "form/wiring/wire.py",
         "import tesser.context as ts\n"
@@ -1427,7 +1427,7 @@ def test_context_module_import_form(tmp_path: Path) -> None:
         "class PingWiring(ts.Wiring):\n"
         "    pass\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "form.application.service imports names from form.client.client; "
         "a context module is imported as an aliased module, never its members" in f
@@ -1440,13 +1440,13 @@ def test_context_module_import_form(tmp_path: Path) -> None:
     )
 
 def test_relative_imports_resolve_against_the_package(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "rel/domain/__init__.py",
         "from .money import Money\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "rel/domain/money.py",
         "import tesser.domain as ts\n"
@@ -1454,7 +1454,7 @@ def test_relative_imports_resolve_against_the_package(tmp_path: Path) -> None:
         "    def __init__(self, amount: str) -> None:\n"
         "        object.__setattr__(self, '_amount', amount)\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "rel/client/client.py",
         "import tesser.context as ts\n"
@@ -1462,7 +1462,7 @@ def test_relative_imports_resolve_against_the_package(tmp_path: Path) -> None:
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "rel/wiring/wire.py",
         "import tesser.context as ts\n"
@@ -1470,7 +1470,7 @@ def test_relative_imports_resolve_against_the_package(tmp_path: Path) -> None:
         "class RelWiring(ts.Wiring):\n"
         "    pass\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "rel/adapters/repo.py",
         "import tesser.adapters as ts\n"
@@ -1478,7 +1478,7 @@ def test_relative_imports_resolve_against_the_package(tmp_path: Path) -> None:
         "class LoadingRepo(ts.Repository):\n"
         "    def load(self, key: str) -> Money: ...\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "rel/adapters/beyond.py",
         "import tesser.adapters as ts\n"
@@ -1486,7 +1486,7 @@ def test_relative_imports_resolve_against_the_package(tmp_path: Path) -> None:
         "class BeyondRepo(ts.Repository):\n"
         "    pass\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert not any("rel.domain" in f and "a role __init__ only re-exports from its own role" in f for f in findings)
     assert any(
         "rel.adapters.beyond imports ...domain.money beyond the package root; "
@@ -1508,8 +1508,8 @@ def test_relative_imports_resolve_against_the_package(tmp_path: Path) -> None:
     )
 
 def test_nested_imports_neither_classify_nor_satisfy_presence(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "lazy/domain/thing.py",
         "class HiddenSpec(ts.Spec):\n"
@@ -1517,7 +1517,7 @@ def test_nested_imports_neither_classify_nor_satisfy_presence(tmp_path: Path) ->
         "        import tesser.domain as ts\n"
         "        self.text = text\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "lazy2/domain/thing.py",
         "import tesser.domain as ts\n"
@@ -1526,7 +1526,7 @@ def test_nested_imports_neither_classify_nor_satisfy_presence(tmp_path: Path) ->
         "        import os\n"
         "        self.text = text\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "lazy3/domain/thing.py",
         "import tesser.domain as ts\n"
@@ -1535,7 +1535,7 @@ def test_nested_imports_neither_classify_nor_satisfy_presence(tmp_path: Path) ->
         "        import tesser.context as tc\n"
         "        self.text = text\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "lazy.domain.thing never imports tesser.domain; "
         "a role module imports its tesser package exactly once, as ts" in f
@@ -1556,7 +1556,7 @@ def test_nested_imports_neither_classify_nor_satisfy_presence(tmp_path: Path) ->
     )
 
 def test_srv_and_bootstrap_tesser_form_modes(tmp_path: Path) -> None:
-    write_module(
+    conftest.write_module(
         tmp_path,
         "srv/dup.py",
         "import tesser.srv as ts\n"
@@ -1565,7 +1565,7 @@ def test_srv_and_bootstrap_tesser_form_modes(tmp_path: Path) -> None:
         "def go() -> None:\n"
         "    return None\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "srv/alias.py",
         "import tesser.srv as tc\n"
@@ -1573,7 +1573,7 @@ def test_srv_and_bootstrap_tesser_form_modes(tmp_path: Path) -> None:
         "def go() -> None:\n"
         "    return None\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "bootstrap/fromform.py",
         "from tesser.context import function\n"
@@ -1581,39 +1581,39 @@ def test_srv_and_bootstrap_tesser_form_modes(tmp_path: Path) -> None:
         "def go() -> None:\n"
         "    return None\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "bootstrap/wrongpkg.py",
         "import tesser.context as ts\n"
         "import tesser.domain as td\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "srv/consts.py",
         "from typing import Final\n"
         "LIMIT: Final[int] = 3\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "srv/annconst.py",
         "LIMIT: int = 3\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "srv/tfinal.py",
         "import tesser.srv as ts\n"
         "import typing\n"
         "LIMIT: typing.Final[int] = 3\n",
     )
-    write_module(tmp_path, "srv/__init__.py", "X = 1\n")
-    write_module(tmp_path, "bootstrap/__init__.py", "")
-    write_module(
+    conftest.write_module(tmp_path, "srv/__init__.py", "X = 1\n")
+    conftest.write_module(tmp_path, "bootstrap/__init__.py", "")
+    conftest.write_module(
         tmp_path,
         "konst/domain/thing.py",
         "from typing import Final\n"
         "LIMIT: Final[int] = 3\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "srv.dup imports tesser.srv again; "
         "a srv module imports tesser.srv exactly once, as ts" in f
@@ -1657,8 +1657,8 @@ def test_srv_and_bootstrap_tesser_form_modes(tmp_path: Path) -> None:
     assert not any("bootstrap __init__ declares code" in f for f in findings)
 
 def test_protocol_module_totality_is_flagged(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "protocol/box.py",
         "import tesser.srv as ts\n"
@@ -1697,8 +1697,8 @@ def test_protocol_module_totality_is_flagged(tmp_path: Path) -> None:
         "BARE = 3\n"
         "print('hi')\n",
     )
-    write_module(tmp_path, "srv/host.py", "import tesser.srv as ts\n")
-    findings = check_tree(tmp_path)
+    conftest.write_module(tmp_path, "srv/host.py", "import tesser.srv as ts\n")
+    findings = conftest.check_tree(tmp_path)
     assert not any("protocol.box.BoxRequest" in f for f in findings)
     assert not any("protocol.box.BoxResponse" in f for f in findings)
     assert not any("protocol.box.BoxLabel" in f for f in findings)
@@ -1748,30 +1748,30 @@ def test_protocol_module_totality_is_flagged(tmp_path: Path) -> None:
     )
 
 def test_protocol_module_tesser_import_is_exactly_once_as_ts(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "protocol/loud.py",
         "import tesser.context as ts\n",
     )
-    write_module(tmp_path, "protocol/quiet.py", "")
-    write_module(
+    conftest.write_module(tmp_path, "protocol/quiet.py", "")
+    conftest.write_module(
         tmp_path,
         "protocol/dup.py",
         "import tesser.srv as ts\n"
         "import tesser.srv as ts\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "protocol/form.py",
         "from tesser.srv import Request\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "protocol/alias.py",
         "import tesser.srv as tz\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "protocol.loud imports tesser.context; a protocol module imports only tesser.srv" in f
         for f in findings
@@ -1796,30 +1796,30 @@ def test_protocol_module_tesser_import_is_exactly_once_as_ts(tmp_path: Path) -> 
     )
 
 def test_only_the_top_level_protocol_package_holds_protocol_modules(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(tmp_path, "protocol/__init__.py", "")
-    write_module(tmp_path, "protocol/box.py", "import tesser.srv as ts\n")
-    write_module(tmp_path, "boxwire.py", "import tesser.srv as ts\n")
-    write_module(tmp_path, "wire.py", "import tesser.srv as ts\n")
-    findings = check_tree(tmp_path)
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "protocol/__init__.py", "")
+    conftest.write_module(tmp_path, "protocol/box.py", "import tesser.srv as ts\n")
+    conftest.write_module(tmp_path, "boxwire.py", "import tesser.srv as ts\n")
+    conftest.write_module(tmp_path, "wire.py", "import tesser.srv as ts\n")
+    findings = conftest.check_tree(tmp_path)
     assert not any("protocol/box.py" in f for f in findings)
     assert not any("protocol/__init__.py" in f for f in findings)
     assert any("boxwire belongs to no governed package" in f for f in findings)
     assert any("wire belongs to no governed package" in f for f in findings)
 
 def test_a_protocol_init_is_empty(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(tmp_path, "protocol/__init__.py", "LIMIT = 3\n")
-    write_module(tmp_path, "protocol/box.py", "import tesser.srv as ts\n")
-    findings = check_tree(tmp_path)
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "protocol/__init__.py", "LIMIT = 3\n")
+    conftest.write_module(tmp_path, "protocol/box.py", "import tesser.srv as ts\n")
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "protocol __init__ declares code; a protocol __init__ is empty" in f
         for f in findings
     )
 
 def test_a_fake_may_implement_a_protocol_port(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "protocol/box.py",
         "from typing import Protocol\n"
@@ -1827,7 +1827,7 @@ def test_a_fake_may_implement_a_protocol_port(tmp_path: Path) -> None:
         "class BoxDoor(ts.Port, Protocol):\n"
         "    def __call__(self) -> None: ...\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "app/test_doors.py",
         "import tesser.testing as ts\n"
@@ -1839,12 +1839,12 @@ def test_a_fake_may_implement_a_protocol_port(tmp_path: Path) -> None:
         "def test_door() -> None:\n"
         "    assert FakeDoor\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert not any("app.test_doors.FakeDoor" in f for f in findings)
 
 def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/adapters/gateways.py",
         "import tesser.adapters as ts\n"
@@ -1861,7 +1861,7 @@ def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv(tmp_path: P
         "class WireLabel(tesser.srv.Record):\n"
         "    pass\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "srv/box.py",
         "import tesser.srv as ts\n"
@@ -1873,7 +1873,7 @@ def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv(tmp_path: P
         "class Label(ts.Record):\n"
         "    pass\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "app.adapters.gateways.Sneaky" in f
         and "is a host; a host lives in srv and a protocol kind in a protocol module, never a context" in f
@@ -1919,27 +1919,27 @@ def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv(tmp_path: P
     )
 
 def test_form_rule_fires_in_tests_and_srv_and_skips_illegal_edges(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/test_forms.py",
         "from app.domain.thing import Thing\n"
         "def test_thing() -> None:\n"
         "    assert Thing\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "app/adapters/gateways.py",
         "import tesser.adapters as ts\n"
         "class HttpHandler(ts.Handler):\n"
         "    pass\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "srv/http.py",
         "from app.adapters.gateways import HttpHandler\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "skipctx/domain/thing.py",
         "import tesser.domain as ts\n"
@@ -1948,7 +1948,7 @@ def test_form_rule_fires_in_tests_and_srv_and_skips_illegal_edges(tmp_path: Path
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "app.test_forms imports names from app.domain.thing; "
         "a context module is imported as an aliased module, never its members" in f
@@ -1970,7 +1970,7 @@ def test_form_rule_fires_in_tests_and_srv_and_skips_illegal_edges(tmp_path: Path
     )
 
 def test_pure_core_allowlist_covers_application_and_domain_future(tmp_path: Path) -> None:
-    write_module(
+    conftest.write_module(
         tmp_path,
         "io2/domain/thing.py",
         "from __future__ import annotations\n"
@@ -1979,7 +1979,7 @@ def test_pure_core_allowlist_covers_application_and_domain_future(tmp_path: Path
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "io2/application/service.py",
         "from __future__ import annotations\n"
@@ -1989,7 +1989,7 @@ def test_pure_core_allowlist_covers_application_and_domain_future(tmp_path: Path
         "class NopService(ts.ApplicationService):\n"
         "    pass\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert not any("io2.domain.thing" in f and "the pure stdlib" in f for f in findings)
     assert any(
         "io2.application.service imports socket; domain, client, and application "
@@ -2000,8 +2000,8 @@ def test_pure_core_allowlist_covers_application_and_domain_future(tmp_path: Path
     assert not any("io2.application.service:2" in f for f in findings)
 
 def test_an_adapters_module_holds_one_kind(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/adapters/gateways.py",
         "import tesser.adapters as ts\n"
@@ -2010,15 +2010,15 @@ def test_an_adapters_module_holds_one_kind(tmp_path: Path) -> None:
         "class SideGateway(ts.Gateway):\n"
         "    pass\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "app.adapters.gateways mixes adapter kinds" in f and "an adapters module holds one adapter kind" in f
         for f in findings
     )
 
 def test_a_dotted_module_base_resolves(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/test_doubles.py",
         "import tesser.testing as th\n"
@@ -2027,7 +2027,7 @@ def test_a_dotted_module_base_resolves(tmp_path: Path) -> None:
         "class FakePort(app.application.service.AskService):\n"
         "    pass\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert not any("FakePort" in f and "implements no ts.Port" in f and "undeclared" in f for f in findings)
     assert any(
         "FakePort" in f and "a fake implements the port or client it doubles" in f
@@ -2041,20 +2041,20 @@ def test_edge_records_reject_an_empty_target() -> None:
         domain.TesserImport("", 1, False, False)
 
 def test_a_test_module_may_omit_tesser_testing(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(tmp_path, "tests/test_bare.py", "def test_bare() -> None:\n    assert True\n")
-    findings = check_tree(tmp_path)
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "tests/test_bare.py", "def test_bare() -> None:\n    assert True\n")
+    findings = conftest.check_tree(tmp_path)
     assert not any("test_bare" in f for f in findings)
 
 def test_a_denied_app_edge_is_not_form_checked(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "srv/host.py",
         "import tesser.srv as ts\n"
         "from app.domain import thing\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "srv.host imports app.domain" in f
         and "a host reaches a context only through its handlers" in f
@@ -2063,10 +2063,10 @@ def test_a_denied_app_edge_is_not_form_checked(tmp_path: Path) -> None:
     assert not any("srv.host" in f and "never its members" in f for f in findings)
 
 def test_a_colliding_module_definition_is_a_finding_not_a_crash(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(tmp_path, "col.py", "import tesser.srv as ts\n")
-    write_module(tmp_path, "col/__init__.py", "")
-    findings = check_tree(tmp_path)
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "col.py", "import tesser.srv as ts\n")
+    conftest.write_module(tmp_path, "col/__init__.py", "")
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "col.py:1: TB043" in f and "a module has one definition" in f for f in findings
     )
@@ -2076,39 +2076,39 @@ def test_a_colliding_module_definition_is_a_finding_not_a_crash(tmp_path: Path) 
     )
 
 def test_an_unparseable_module_is_a_finding_not_a_crash(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(tmp_path, "broken.py", "def f(:\n")
-    findings = check_tree(tmp_path)
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "broken.py", "def f(:\n")
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "broken.py:1: TB043" in f and "every checked module parses" in f for f in findings
     )
     assert any("app/domain/thing.py" not in f for f in findings)
 
 def test_a_non_utf8_file_is_a_finding_not_a_crash(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
+    conftest.conforming_tree(tmp_path)
     (tmp_path / "binary.py").write_bytes(b"\xff\xfe\x00junk")
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "binary.py:1: TB043" in f and "every checked module is readable UTF-8 Python" in f
         for f in findings
     )
 
 def test_skip_dirs_are_not_walked(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(tmp_path, ".venv/lib/junk.py", "def f(:\n")
-    write_module(tmp_path, "node_modules/pkg/mod.py", "x = 1\n")
-    assert check_tree(tmp_path) == ()
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, ".venv/lib/junk.py", "def f(:\n")
+    conftest.write_module(tmp_path, "node_modules/pkg/mod.py", "x = 1\n")
+    assert conftest.check_tree(tmp_path) == ()
 
 def test_an_ignore_suppresses_exactly_its_finding(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(tmp_path, "stray.py", "import os  # tessercheck:ignore TB040\n")
-    findings = check_tree(tmp_path)
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "stray.py", "import os  # tessercheck:ignore TB040\n")
+    findings = conftest.check_tree(tmp_path)
     assert not any("stray" in f for f in findings)
 
 def test_a_scoped_ignore_leaves_other_codes_alone(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(tmp_path, "stray.py", "import os  # tessercheck:ignore TB050\n")
-    findings = check_tree(tmp_path)
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "stray.py", "import os  # tessercheck:ignore TB050\n")
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "stray belongs to no governed package" in f and " TB040 " in f for f in findings
     )
@@ -2119,13 +2119,13 @@ def test_a_scoped_ignore_leaves_other_codes_alone(tmp_path: Path) -> None:
     )
 
 def test_a_stale_ignore_is_itself_a_finding(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/domain/extra.py",
         "import tesser.domain as ts  # tessercheck:ignore\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "app/domain/extra.py:1: TB090" in f
         and "an ignore comment suppresses an actual finding" in f
@@ -2133,59 +2133,59 @@ def test_a_stale_ignore_is_itself_a_finding(tmp_path: Path) -> None:
     )
 
 def test_a_file_level_ignore_covers_the_whole_module(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "srv/host.py",
         "# tessercheck:ignore-file TB050\nimport os\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert not any("never imports tesser.srv" in f for f in findings)
     assert not any("TB090" in f and "srv/host.py" in f for f in findings)
 
 def test_a_marker_suppresses_several_codes_space_or_comma_separated(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(tmp_path, "stray.py", "import os  # tessercheck:ignore TB040 TB050\n")
-    write_module(tmp_path, "loose.py", "import os  # tessercheck:ignore TB040, TB050\n")
-    findings = check_tree(tmp_path)
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "stray.py", "import os  # tessercheck:ignore TB040 TB050\n")
+    conftest.write_module(tmp_path, "loose.py", "import os  # tessercheck:ignore TB040, TB050\n")
+    findings = conftest.check_tree(tmp_path)
     assert not any("stray" in f for f in findings)
     assert not any("loose" in f for f in findings)
 
 def test_a_file_level_ignore_requires_codes(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(tmp_path, "stray.py", "import os  # tessercheck:ignore-file\n")
-    findings = check_tree(tmp_path)
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "stray.py", "import os  # tessercheck:ignore-file\n")
+    findings = conftest.check_tree(tmp_path)
     assert any("stray belongs to no governed package" in f for f in findings)
     assert any("stray.py:1: TB090" in f for f in findings)
 
 def test_a_typo_or_junk_token_makes_the_marker_inert(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(tmp_path, "stray.py", "import os  # tessercheck:ignored TB040\n")
-    write_module(tmp_path, "loose.py", "import os  # tessercheck:ignore TB040 permanent\n")
-    findings = check_tree(tmp_path)
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "stray.py", "import os  # tessercheck:ignored TB040\n")
+    conftest.write_module(tmp_path, "loose.py", "import os  # tessercheck:ignore TB040 permanent\n")
+    findings = conftest.check_tree(tmp_path)
     assert any("stray belongs to no governed package" in f for f in findings)
     assert any("loose belongs to no governed package" in f for f in findings)
     assert not any("TB090" in f for f in findings)
 
 def test_a_bare_line_ignore_is_line_scoped(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/domain/extra.py",
         "import os\nimport tesser.domain as ts  # tessercheck:ignore\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any("app.domain.extra imports os" in f and " TB062 " in f for f in findings)
     assert any("app/domain/extra.py:2: TB090" in f for f in findings)
 
 def test_tb090_itself_cannot_be_ignored(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/domain/extra.py",
         "import tesser.domain as ts  # tessercheck:ignore-file TB090\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "app/domain/extra.py:1: TB090" in f
         and "an ignore comment suppresses an actual finding" in f
@@ -2193,35 +2193,35 @@ def test_tb090_itself_cannot_be_ignored(tmp_path: Path) -> None:
     )
 
 def test_reader_findings_are_never_inline_suppressible(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(tmp_path, "broken.py", "# tessercheck:ignore-file TB043\ndef f(:\n")
-    findings = check_tree(tmp_path)
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "broken.py", "# tessercheck:ignore-file TB043\ndef f(:\n")
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "broken.py:2: TB043" in f and "every checked module parses" in f for f in findings
     )
     assert not any("TB090" in f for f in findings)
 
 def test_a_colliding_unparseable_file_reports_the_collision(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(tmp_path, "col.py", "def f(:\n")
-    write_module(tmp_path, "col/__init__.py", "")
-    findings = check_tree(tmp_path)
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "col.py", "def f(:\n")
+    conftest.write_module(tmp_path, "col/__init__.py", "")
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "col.py:1: TB043" in f and "a module has one definition" in f for f in findings
     )
     assert not any("every checked module parses" in f for f in findings)
 
 def test_a_utf8_bom_file_is_checked_normally(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
+    conftest.conforming_tree(tmp_path)
     (tmp_path / "app" / "domain" / "bom.py").write_bytes(
         b"\xef\xbb\xbfimport tesser.domain as ts\n"
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert not any("bom" in f for f in findings)
 
 def test_optional_construction_data_is_the_only_union(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/domain/opt.py",
         "import tesser.domain as ts\n"
@@ -2231,7 +2231,7 @@ def test_optional_construction_data_is_the_only_union(tmp_path: Path) -> None:
         "        self.items = items\n"
         "        self.mix = mix\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert not any("parameter 'text'" in f for f in findings)
     assert any(
         "parameter 'items' is not allowed; "
@@ -2242,8 +2242,8 @@ def test_optional_construction_data_is_the_only_union(tmp_path: Path) -> None:
 
 
 def test_comments_docstrings_and_bare_strings_are_flagged(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "tests/test_prose.py",
         '"""A docstring."""\n'
@@ -2254,7 +2254,7 @@ def test_comments_docstrings_and_bare_strings_are_flagged(tmp_path: Path) -> Non
         '    "a bare string"\n'
         "    assert y\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "test_prose.py:1: TB020" in f and "carries a docstring; "
         "code speaks for itself — comments, docstrings, and loose strings "
@@ -2270,8 +2270,8 @@ def test_comments_docstrings_and_bare_strings_are_flagged(tmp_path: Path) -> Non
 
 
 def test_mocking_library_and_patcher_fixtures_are_flagged(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "tests/test_mocky.py",
         "from unittest.mock import patch\n"
@@ -2279,7 +2279,7 @@ def test_mocking_library_and_patcher_fixtures_are_flagged(tmp_path: Path) -> Non
         "def test_a(monkeypatch: pytest.MonkeyPatch) -> None:\n"
         "    assert patch\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "test_mocky.py:1: TB030" in f and "imports a mocking library; a test double is "
         "a hand-written fake, never a mocking library or a runtime patcher" in f
@@ -2296,20 +2296,20 @@ def test_mocking_library_and_patcher_fixtures_are_flagged(tmp_path: Path) -> Non
 
 
 def test_a_marked_patcher_seam_is_suppressed(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "tests/test_seam.py",
         "def test_a(monkeypatch) -> None:  # tessercheck:ignore TB030\n"
         "    assert monkeypatch\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert not any("test_seam" in f for f in findings)
 
 
 def test_a_called_shadowed_builtin_is_flagged(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "tests/test_shadow.py",
         "def test_a() -> None:\n"
@@ -2318,7 +2318,7 @@ def test_a_called_shadowed_builtin_is_flagged(tmp_path: Path) -> None:
         "def test_b(len: int = 0) -> None:\n"
         "    assert len == 0\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "test_shadow.py:3: TB033" in f and "binds id and calls it in the same scope; "
         "a shadowed builtin is never called — rename the binding" in f
@@ -2328,8 +2328,8 @@ def test_a_called_shadowed_builtin_is_flagged(tmp_path: Path) -> None:
 
 
 def test_string_form_equality_is_flagged(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "tests/test_streq.py",
         "def test_a() -> None:\n"
@@ -2337,7 +2337,7 @@ def test_string_form_equality_is_flagged(tmp_path: Path) -> None:
         "    assert str(a) == str(b)\n"
         "    assert str(a) == 'one'\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "test_streq.py:3: TB004" in f and "compare value objects by value, "
         "never by their string form" in f
@@ -2347,8 +2347,8 @@ def test_string_form_equality_is_flagged(tmp_path: Path) -> None:
 
 
 def test_a_value_object_mutable_collection_field_is_flagged(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/domain/bag.py",
         "import tesser.domain as ts\n"
@@ -2359,7 +2359,7 @@ def test_a_value_object_mutable_collection_field_is_flagged(tmp_path: Path) -> N
         "        object.__setattr__(self, '_items', [item])\n"
         "        object.__setattr__(self, '_names', (item,))\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "bag.py:3: TB002" in f and "field _items is a mutable collection; "
         "a value object's field is hashable — a tuple or frozenset, never "
@@ -2372,8 +2372,8 @@ def test_a_value_object_mutable_collection_field_is_flagged(tmp_path: Path) -> N
 def test_mutable_set_and_quoted_annotations_are_still_mutable_collections(
     tmp_path: Path,
 ) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/domain/holder.py",
         "import tesser.domain as ts\n"
@@ -2385,29 +2385,29 @@ def test_mutable_set_and_quoted_annotations_are_still_mutable_collections(
         "        object.__setattr__(self, '_mset', {item})\n"
         "        object.__setattr__(self, '_quoted', [item])\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any("field _mset is a mutable collection" in f for f in findings)
     assert any("field _quoted is a mutable collection" in f for f in findings)
 
 
 def test_the_retired_category_marker_is_an_ordinary_comment(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "tests/test_marked.py",
         "# tesser-category: spec\n"
         "def test_ok() -> None:\n"
         "    assert True\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "test_marked.py:1: TB020" in f and "carries a code comment" in f for f in findings
     )
 
 
 def test_a_value_object_hides_its_representation(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/domain/leaky.py",
         "import tesser.domain as ts\n"
@@ -2420,7 +2420,7 @@ def test_a_value_object_hides_its_representation(tmp_path: Path) -> None:
         "    def kept(self) -> int:\n"
         "        return self._kept\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "leaky.py:3: TB010" in f and "exposes field amount; a value object hides its "
         "representation — a public field belongs on a spec" in f
@@ -2435,8 +2435,8 @@ def test_a_value_object_hides_its_representation(tmp_path: Path) -> None:
 
 
 def test_an_accessor_never_hands_back_the_backing_collection(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/domain/box.py",
         "import tesser.domain as ts\n"
@@ -2450,7 +2450,7 @@ def test_an_accessor_never_hands_back_the_backing_collection(tmp_path: Path) -> 
         "    def items(self) -> list[str]:\n"
         "        return self._items\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "TB011" in f and "Box.items hands back its backing collection; an accessor "
         "returns a defensive copy, never the backing store" in f
@@ -2459,8 +2459,8 @@ def test_an_accessor_never_hands_back_the_backing_collection(tmp_path: Path) -> 
 
 
 def test_an_aggregate_is_referenced_by_id_never_held(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/domain/pair.py",
         "import tesser.domain as ts\n"
@@ -2473,7 +2473,7 @@ def test_an_aggregate_is_referenced_by_id_never_held(tmp_path: Path) -> None:
         "    def __init__(self, spec: PairSpec) -> None:\n"
         "        self._other = thing.Thing(thing.ThingSpec(text=spec.text))\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "TB012" in f and "Pair field _other holds another aggregate root; an aggregate "
         "is referenced by its ID value object, never held" in f
@@ -2482,8 +2482,8 @@ def test_an_aggregate_is_referenced_by_id_never_held(tmp_path: Path) -> None:
 
 
 def test_exit_norms_leaf_and_structured(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/domain/exits.py",
         "import tesser.domain as ts\n"
@@ -2517,7 +2517,7 @@ def test_exit_norms_leaf_and_structured(tmp_path: Path) -> None:
         "    def __str__(self) -> str:\n"
         "        return 'x'\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert not any("GoodLeaf" in f and "TB015" in f for f in findings)
     assert not any("GoodLeaf" in f and "TB018" in f for f in findings)
     assert any(
@@ -2538,8 +2538,8 @@ def test_exit_norms_leaf_and_structured(tmp_path: Path) -> None:
 
 
 def test_composition_norms(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/domain/shapes.py",
         "import tesser.domain as ts\n"
@@ -2554,7 +2554,7 @@ def test_composition_norms(tmp_path: Path) -> None:
         "        object.__setattr__(self, '_raw', raw)\n"
         "        object.__setattr__(self, '_on', on)\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "TB016" in f and "Flag field _value is a bool; bool and complex are not "
         "value-object material — model the raw value or reach for an enum" in f
@@ -2569,8 +2569,8 @@ def test_composition_norms(tmp_path: Path) -> None:
 
 
 def test_a_value_object_has_one_construction_door(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/domain/doors.py",
         "import tesser.domain as ts\n"
@@ -2587,7 +2587,7 @@ def test_a_value_object_has_one_construction_door(tmp_path: Path) -> None:
         "    def parse(cls, raw: str) -> 'Slug':\n"
         "        return cls(raw.strip())\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "TB017" in f and "Slug.parse is a second construction door; a value object has "
         "one door — its own __init__" in f
@@ -2596,8 +2596,8 @@ def test_a_value_object_has_one_construction_door(tmp_path: Path) -> None:
 
 
 def test_domain_returns_and_spec_returns(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/domain/returns.py",
         "import tesser.domain as ts\n"
@@ -2614,7 +2614,7 @@ def test_domain_returns_and_spec_returns(tmp_path: Path) -> None:
         "    def touch(self) -> None:\n"
         "        return None\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "TB019" in f and "Widget.label returns str; a domain object's public behavior "
         "hands back domain objects — the licensed exits are the protocol dunders, "
@@ -2630,8 +2630,8 @@ def test_domain_returns_and_spec_returns(tmp_path: Path) -> None:
 
 
 def test_review_pins_for_the_shape_norms(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/domain/pins.py",
         "import tesser.domain as ts\n"
@@ -2670,7 +2670,7 @@ def test_review_pins_for_the_shape_norms(tmp_path: Path) -> None:
         "    def __str__(self) -> str:\n"
         "        return canonical_str(self._value)\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any("SelfDoor.parse is a second construction door" in f for f in findings)
     assert any("SelfDoor.bare_door is a second construction door" in f for f in findings)
     assert not any("SelfDoor.kind" in f for f in findings)
@@ -2681,8 +2681,8 @@ def test_review_pins_for_the_shape_norms(tmp_path: Path) -> None:
 
 
 def test_module_qualified_canonical_delegation_passes(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/domain/policy.py",
         "import tesser.domain as ts\n"
@@ -2690,7 +2690,7 @@ def test_module_qualified_canonical_delegation_passes(tmp_path: Path) -> None:
         "def canonical_str(value: str) -> str:\n"
         "    return value\n",
     )
-    write_module(
+    conftest.write_module(
         tmp_path,
         "app/domain/word.py",
         "import tesser.domain as ts\n"
@@ -2702,13 +2702,13 @@ def test_module_qualified_canonical_delegation_passes(tmp_path: Path) -> None:
         "    def __str__(self) -> str:\n"
         "        return policy.canonical_str(self._value)\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert not any("Word" in f for f in findings)
 
 
 def test_undeclared_backing_collection_is_still_caught(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/domain/sack.py",
         "import tesser.domain as ts\n"
@@ -2721,7 +2721,7 @@ def test_undeclared_backing_collection_is_still_caught(tmp_path: Path) -> None:
         "    def items(self) -> list[str]:\n"
         "        return self._items\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert any(
         "TB011" in f and "Sack.items hands back its backing collection" in f
         for f in findings
@@ -2729,8 +2729,8 @@ def test_undeclared_backing_collection_is_still_caught(tmp_path: Path) -> None:
 
 
 def test_bytes_is_construction_primitive(tmp_path: Path) -> None:
-    conforming_tree(tmp_path)
-    write_module(
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
         tmp_path,
         "app/domain/digest.py",
         "import tesser.domain as ts\n"
@@ -2741,5 +2741,530 @@ def test_bytes_is_construction_primitive(tmp_path: Path) -> None:
         "    def __bytes__(self) -> bytes:\n"
         "        return self._value\n",
     )
-    findings = check_tree(tmp_path)
+    findings = conftest.check_tree(tmp_path)
     assert not any("parameter 'value' is not allowed" in f for f in findings)
+
+
+def test_a_root_conftest_is_a_leaf(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "conftest.py",
+        "import os\nimport sys\nimport app.domain.thing\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "conftest imports app.domain.thing; "
+        "a conftest is a leaf that imports nothing from its tree" in f
+        for f in findings
+    )
+    assert not any("imports os" in f for f in findings)
+
+
+def test_a_placed_conftest_carries_its_tier(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "tests/conftest.py",
+        "import bootstrap.wire\nimport app.domain.thing\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "app/tests/__init__.py",
+        "",
+    )
+    conftest.write_module(
+        tmp_path,
+        "app/tests/conftest.py",
+        "import app.domain.thing as thing\nimport srv.http\n",
+    )
+    conftest.write_module(tmp_path, "bootstrap/wire.py", "")
+    conftest.write_module(tmp_path, "srv/http.py", "")
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "tests.conftest imports app.domain.thing, but a test placed in "
+        "the root tests package reaches a context only through its wiring and client; "
+        "a test reaches only what its placement allows" in f
+        for f in findings
+    )
+    assert not any("tests.conftest imports bootstrap.wire" in f for f in findings)
+    assert not any("app.tests.conftest imports app.domain.thing" in f for f in findings)
+    assert any(
+        "app.tests.conftest imports srv.http, but a test placed in tests "
+        "does not reach that package" in f
+        for f in findings
+    )
+
+
+def test_a_root_module_is_a_leaf(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "helpers.py",
+        "import app.domain.thing\nimport enum\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any("helpers belongs to no governed package" in f for f in findings)
+    assert any(
+        "helpers imports app.domain.thing; "
+        "a root module is a leaf that imports nothing from its tree" in f
+        for f in findings
+    )
+    assert not any("helpers imports enum" in f for f in findings)
+
+
+def test_a_context_main_composes_only_its_own_context(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "two/client/client.py",
+        "import tesser.context as ts\n"
+        "class PingRequest(ts.Request):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "app/__main__.py",
+        "import app.application.service as service\n"
+        "import app.adapters.handlers as handlers\n"
+        "import app.wiring.wire as wire\n"
+        "import app.client.client as client\n"
+        "import app.domain.thing as thing\n"
+        "import two.client.client as two_client\n"
+        "import srv.http\n"
+        "import protocol.http\n"
+        "import tests.test_ok\n"
+        "import helpers\n",
+    )
+    conftest.write_module(tmp_path, "srv/http.py", "")
+    conftest.write_module(tmp_path, "protocol/http.py", "import tesser.srv as ts\n")
+    conftest.write_module(
+        tmp_path, "tests/test_ok.py", "def test_ok() -> None:\n    assert True\n"
+    )
+    conftest.write_module(tmp_path, "helpers.py", "X = 1\n")
+    findings = conftest.check_tree(tmp_path)
+    clause = "a context __main__ composes from its own application, adapters, client, and wiring"
+    assert any(
+        "app.__main__ imports app.domain.thing; "
+        "a context __main__ composes from its own application, adapters, client, and wiring" in f
+        for f in findings
+    )
+    assert any(
+        f"app.__main__ imports two.client.client; {clause}" in f for f in findings
+    )
+    assert any(f"app.__main__ imports srv.http; {clause}" in f for f in findings)
+    assert any(f"app.__main__ imports protocol.http; {clause}" in f for f in findings)
+    assert any(f"app.__main__ imports tests.test_ok; {clause}" in f for f in findings)
+    assert not any("app.__main__ imports app.application.service" in f for f in findings)
+    assert not any("app.__main__ imports app.adapters.handlers" in f for f in findings)
+    assert not any("app.__main__ imports app.wiring.wire" in f for f in findings)
+    assert not any("app.__main__ imports app.client.client" in f for f in findings)
+    assert not any("app.__main__ imports helpers" in f for f in findings)
+
+
+def test_a_protocol_module_imports_nothing_else_from_its_tree(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "serialization.py", "X = 1\n")
+    conftest.write_module(
+        tmp_path,
+        "protocol/http.py",
+        "import tesser.srv as ts\nimport serialization\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "protocol.http imports serialization; "
+        "a protocol module imports nothing else from its tree" in f
+        for f in findings
+    )
+
+
+def test_a_context_role_reaches_the_app_shell_only_as_adapters_to_protocol(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "protocol/http.py",
+        "import tesser.srv as ts\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "app/adapters/handlers.py",
+        "import tesser.adapters as ts\n"
+        "import protocol.http as http\n"
+        "import srv.http as host\n"
+        "class HttpHandler(ts.Handler):\n"
+        "    pass\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "app/wiring/wire.py",
+        "import tesser.context as ts\n"
+        "import protocol.http as http\n",
+    )
+    conftest.write_module(tmp_path, "srv/http.py", "")
+    findings = conftest.check_tree(tmp_path)
+    clause = "of the app shell a context imports only protocol, and only from its adapters"
+    assert any(
+        "app.adapters.handlers imports srv.http; "
+        "of the app shell a context imports only protocol, and only from its adapters" in f
+        for f in findings
+    )
+    assert not any("app.adapters.handlers imports protocol.http" in f for f in findings)
+    assert any(f"app.wiring.wire imports protocol.http; {clause}" in f for f in findings)
+
+
+def test_production_never_imports_the_tests_package(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "tests/test_ok.py",
+        "def test_ok() -> None:\n    assert True\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "srv/http.py",
+        "import tests.test_ok\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "bootstrap/wire.py",
+        "import protocol.http\nimport tests.test_ok\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "protocol/http.py",
+        "import tesser.srv as ts\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "srv.http imports tests.test_ok; "
+        "production code never imports the tests package" in f
+        for f in findings
+    )
+    assert any(
+        "bootstrap.wire imports tests.test_ok; "
+        "production code never imports the tests package" in f
+        for f in findings
+    )
+    assert any(
+        "bootstrap.wire imports protocol.http; "
+        "bootstrap composes the application and never imports protocol" in f
+        for f in findings
+    )
+
+
+def test_a_root_test_reaches_a_context_only_through_wiring_and_client(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "app/wiring/wire.py",
+        "import tesser.context as ts\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "tests/test_app.py",
+        "import app.client.client as client\n"
+        "import app.wiring.wire as wire\n"
+        "import app.domain.thing as thing\n"
+        "import app.application.service as service\n"
+        "import bootstrap.wire\n"
+        "import tests.support\n"
+        "def test_ok() -> None:\n    assert True\n",
+    )
+    conftest.write_module(tmp_path, "tests/support.py", "import app.domain.thing as thing\n")
+    conftest.write_module(tmp_path, "bootstrap/wire.py", "")
+    findings = conftest.check_tree(tmp_path)
+    reach = (
+        "reaches a context only through its wiring and client; "
+        "a test reaches only what its placement allows"
+    )
+    assert any(
+        "tests.test_app imports app.domain.thing, but a test placed in "
+        "the root tests package reaches a context only through its wiring and client; "
+        "a test reaches only what its placement allows" in f
+        for f in findings
+    )
+    assert any(
+        "tests.test_app imports app.application.service" in f and reach in f for f in findings
+    )
+    assert not any("tests.test_app imports app.client.client" in f for f in findings)
+    assert not any("tests.test_app imports app.wiring.wire" in f for f in findings)
+    assert not any("tests.test_app imports bootstrap.wire" in f for f in findings)
+    assert not any("tests.test_app imports tests.support" in f for f in findings)
+    assert any(
+        "tests.support is neither a test module nor conftest" in f for f in findings
+    )
+    assert any(
+        f"tests.support imports app.domain.thing, but a test placed in the root tests package {reach}" in f
+        for f in findings
+    )
+
+
+def test_a_placed_test_reaches_the_app_shell_only_where_its_placement_does(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "app/domain/test_thing.py",
+        "import srv.http\n"
+        "def test_ok() -> None:\n    assert True\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "srv/test_host.py",
+        "import bootstrap.wire\n"
+        "import tests.test_root\n"
+        "def test_ok() -> None:\n    assert True\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "tests/test_root.py",
+        "def test_ok() -> None:\n    assert True\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "bootstrap/test_wire.py",
+        "import srv.http\n"
+        "def test_ok() -> None:\n    assert True\n",
+    )
+    conftest.write_module(tmp_path, "srv/http.py", "")
+    conftest.write_module(tmp_path, "bootstrap/wire.py", "")
+    findings = conftest.check_tree(tmp_path)
+    clause = "does not reach that package; a test reaches only what its placement allows"
+    assert any(
+        "app.domain.test_thing imports srv.http, but a test placed in domain "
+        "does not reach that package; "
+        "a test reaches only what its placement allows" in f
+        for f in findings
+    )
+    assert not any("srv.test_host imports bootstrap.wire" in f for f in findings)
+    assert any(
+        "srv.test_host imports tests.test_root, but a test placed in srv "
+        "does not reach that package" in f
+        for f in findings
+    )
+    assert any(
+        f"bootstrap.test_wire imports srv.http, but a test placed in bootstrap {clause}" in f
+        for f in findings
+    )
+
+
+def test_a_context_tests_module_reaches_its_own_tests_package(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/tests/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/tests/test_thing.py",
+        "import app.tests.conftest as helpers\n"
+        "import two.tests.test_two as foreign\n"
+        "def test_ok() -> None:\n    assert True\n",
+    )
+    conftest.write_module(tmp_path, "app/tests/conftest.py", "")
+    conftest.write_module(tmp_path, "two/client/client.py", "import tesser.context as ts\n")
+    conftest.write_module(tmp_path, "two/tests/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "two/tests/test_two.py",
+        "def test_ok() -> None:\n    assert True\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert not any("app.tests.test_thing imports app.tests.conftest" in f for f in findings)
+    assert any(
+        "app.tests.test_thing imports two.tests.test_two, but a test placed in tests "
+        "reaches only application, client of a neighbouring context; "
+        "a test reaches only what its placement allows" in f
+        for f in findings
+    )
+
+
+def test_an_unplaced_test_module_is_still_governed(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "weird/test_nested.py",
+        "import app.domain.thing as thing\n"
+        "def test_ok() -> None:\n    assert True\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "test_solo.py",
+        "def test_ok() -> None:\n    assert True\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "weird.test_nested resolves to no test tier; "
+        "a sibling test lives in a role package or an adapter kind package "
+        "(handlers, gateways, repositories)" in f
+        for f in findings
+    )
+    assert any("test_solo resolves to no test tier" in f for f in findings)
+
+
+def test_a_conftest_off_the_tier_map_is_a_leaf(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "app/adapters/conftest.py",
+        "import os\nimport app.domain.thing\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "app/conftest.py",
+        "import app.domain.thing\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.adapters.conftest imports app.domain.thing; "
+        "a conftest is a leaf that imports nothing from its tree" in f
+        for f in findings
+    )
+    assert any(
+        "app.conftest imports app.domain.thing; "
+        "a conftest is a leaf that imports nothing from its tree" in f
+        for f in findings
+    )
+    assert not any("app.adapters.conftest resolves to no test tier" in f for f in findings)
+    assert not any("app.adapters.conftest imports os" in f for f in findings)
+
+
+def test_adapter_kind_and_protocol_tests_shell_reach(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "protocol/http.py", "import tesser.srv as ts\n")
+    conftest.write_module(tmp_path, "srv/http.py", "")
+    for kind in ("handlers", "gateways", "repositories"):
+        conftest.write_module(tmp_path, f"app/adapters/{kind}/__init__.py", "")
+        conftest.write_module(
+            tmp_path,
+            f"app/adapters/{kind}/test_{kind}.py",
+            "import protocol.http as http\n"
+            "import srv.http\n"
+            "def test_ok() -> None:\n    assert True\n",
+        )
+    conftest.write_module(
+        tmp_path,
+        "protocol/test_http.py",
+        "import protocol.http as http\n"
+        "import srv.http\n"
+        "def test_ok() -> None:\n    assert True\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    for kind in ("handlers", "gateways", "repositories"):
+        assert not any(
+            f"app.adapters.{kind}.test_{kind} imports protocol.http" in f for f in findings
+        )
+        assert any(
+            f"app.adapters.{kind}.test_{kind} imports srv.http" in f
+            and "does not reach that package; "
+            "a test reaches only what its placement allows" in f
+            for f in findings
+        )
+    assert not any("protocol.test_http imports protocol.http" in f for f in findings)
+    assert any(
+        "protocol.test_http imports srv.http, but a test placed in protocol "
+        "does not reach that package" in f
+        for f in findings
+    )
+
+
+def test_an_eval_in_a_gateway_carries_the_gateway_shell_reach(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "protocol/http.py", "import tesser.srv as ts\n")
+    conftest.write_module(tmp_path, "srv/http.py", "")
+    conftest.write_module(tmp_path, "app/adapters/gateways/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/adapters/gateways/eval_model.py",
+        "import protocol.http as http\n"
+        "import srv.http\n"
+        "def test_ok() -> None:\n    assert True\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert not any(
+        "app.adapters.gateways.eval_model imports protocol.http" in f for f in findings
+    )
+    assert any(
+        "app.adapters.gateways.eval_model imports srv.http, but a test placed in gateways "
+        "does not reach that package" in f
+        for f in findings
+    )
+
+
+def test_a_context_tests_helper_answers_for_its_imports(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/tests/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/tests/support.py",
+        "import app.domain.thing as thing\nimport srv.http\n",
+    )
+    conftest.write_module(tmp_path, "srv/http.py", "")
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.tests.support is neither a test module nor conftest" in f for f in findings
+    )
+    assert any(
+        "app.tests.support imports srv.http, but a test placed in tests "
+        "does not reach that package" in f
+        for f in findings
+    )
+    assert not any("app.tests.support imports app.domain.thing" in f for f in findings)
+
+
+def test_a_main_below_the_context_root_is_a_governed_module(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "app/domain/__main__.py",
+        "import app.application.service as service\n",
+    )
+    conftest.write_module(tmp_path, "app/tests/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/tests/__main__.py",
+        "import app.application.service as service\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.domain.__main__ imports app.application.service; the same-context matrix is" in f
+        for f in findings
+    )
+    assert any(
+        "app.tests.__main__ is neither a test module nor conftest" in f for f in findings
+    )
+
+
+def test_a_shell_name_missing_from_the_tree_is_not_the_shell(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "app/domain/test_thing.py",
+        "import protocol.thirdparty\n"
+        "def test_ok() -> None:\n    assert True\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "app/wiring/wire.py",
+        "import tesser.context as ts\nimport bootstrap\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert not any("app.domain.test_thing imports protocol.thirdparty" in f for f in findings)
+    assert not any("app.wiring.wire imports bootstrap" in f for f in findings)
+
+
+def test_a_vendored_tesser_package_is_not_the_tree(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "tesser/testing.py", "X = 1\n")
+    conftest.write_module(tmp_path, "conftest.py", "import tesser.testing\n")
+    findings = conftest.check_tree(tmp_path)
+    assert not any(
+        "conftest imports tesser.testing; "
+        "a conftest is a leaf that imports nothing from its tree" in f
+        for f in findings
+    )
+
+
+def test_every_test_tier_has_a_shell_row() -> None:
+    tiers = (
+        set(domain.TEST_TIER_REACH)
+        | {domain.SRV_TIER, domain.BOOTSTRAP_TIER, domain.PROTOCOL_TIER, domain.APP_TIER}
+    )
+    assert tiers <= set(domain.TEST_TIER_SHELL)

@@ -49,13 +49,15 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   Still open: host machinery that is not itself a host (`Route`, `Match` —
   and whether `HttpHost` just declares `ts.Host`), and the whole `tesser.app`
   half (`App`, `Config`, `HttpConfig`, `CleanupStack`).
-- [ ] **Homeless root modules.** `errors`, `serialization`, `lifecycle`
-  belong to no governed package; ruling needed on where app-level shared
-  modules live. Same ruling resolves the pure-core hits where domain imports
-  `errors`/`serialization`. (`cliwire`/`httpwire`/`voicewire` left this list
-  in the srv-wire-vocabulary wave: a top-level `*wire.py` is a governed wire
-  module — imports `tesser.srv` exactly once as ts, holds wire kinds, is
-  context-generic, and never imports srv or bootstrap.)
+- [x] **Homeless root modules — RESOLVED v0.0.29.0 (import-totality wave,
+  2026-08-12).** The ruling: app-level shared modules stay at the root, the
+  `ignore-file TB040` is their declaration, and TB065 governs their imports —
+  a root module is a leaf that imports nothing from its tree. The pure-core
+  half (domain importing `errors`/`serialization` under TB062 ignores) stays
+  with the allowlist-candidates item below. (`cliwire`/`httpwire`/`voicewire`
+  left this list in the srv-wire-vocabulary wave: a top-level `*wire.py` is a
+  governed wire module — imports `tesser.srv` exactly once as ts, holds wire
+  kinds, is context-generic, and never imports srv or bootstrap.)
 - [ ] **Pure-core allowlist candidates (from dogfood evidence only):**
   `urllib.parse` in `campaign.domain.values` / `linkpolicy.domain.policy`
   (pure parsing — likely admit; the matcher accepts exact dotted entries, so
@@ -66,9 +68,11 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 - [ ] **Named soundness holes in the import walker (from the ship adversarial
   reviews — evasion paths, none live on the current trees; relative-import
   resolution and top-level-only classification were fixed in-wave):**
-  (1) the `conftest` and `__main__` exemptions are basename-anywhere — a
-  production `campaign/domain/conftest.py` escapes all rules (fold into the
-  conftest-governance followup). (2) RESOLVED 2026-08-11 (harness wave):
+  (1) RESOLVED v0.0.29.0 (import-totality wave): the `conftest` and
+  `__main__` exemptions are gone — a conftest carries its location's row (a
+  leaf at the tree root, a test tier's reach inside a tests location), and a
+  context `__main__` composes from its own application, adapters, client,
+  and wiring (TB063). (2) RESOLVED 2026-08-11 (harness wave):
   `FilesystemSourceReader` prunes the standard skip set (`.venv`, `build`,
   `node_modules`, …), and an unparseable module, a non-UTF-8 file, or a
   module defined twice is a per-file TB043 finding instead of a crashed
@@ -93,9 +97,10 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   (10) srv/bootstrap have no external-import allowlist, and a constants-only
   module can do import-time IO (`OUT: Final[bytes] = subprocess.check_output`)
   with zero findings — fold into the host-vocabulary ruling.
-  (11) `TOOLING_MODULES` and CORE_STDLIB's `ast` entry are name-keyed and
-  global — any consumer with a top-level `rules.py` inherits the bypass, and
-  the allowlist has no per-consumer config surface yet.
+  (11) PARTIALLY RESOLVED v0.0.29.0: `TOOLING_MODULES` is deleted — no
+  consumer inherits a name-keyed bypass anymore. Still open: CORE_STDLIB's
+  `ast` entry is global, and the allowlist has no per-consumer config
+  surface yet.
   (12) a top-level FILE sharing a context's name (context package without
   `__init__.py` + `<context>.py` beside it) falls through to
   `_context_init_violations` and is mislabeled "__init__ declares code" —
@@ -132,14 +137,17 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   (each names only `tesser.domain.ValueObject`, while the package ships
   `adapters`, `application`, `context`, `domain`, `srv`, and `testing` —
   pre-existing narrowness, widened by every srv wave; fold in here).
-- [ ] **Make rules.py conformant** (Chris 2026-08-06). The generator is
-  currently exempt via `TOOLING_MODULES` in the whole-tree totality rule;
-  make it conform (or rule where tooling lives) and shrink the exemption.
-- [ ] **conftest governance** (Chris 2026-08-06). The exemption is now named in
-  RULES.md; discuss governing conftest alongside the test-organization work.
-  Related: `tests.discovery` / `tests.support` fire the tests-package rule in
-  python-app, and `tests.test_shape` imports `tesser.context` — the same
-  test-organization pass should settle all three.
+- [x] **Make rules.py conformant — RESOLVED v0.0.29.0 (import-totality wave,
+  2026-08-12).** `TOOLING_MODULES` is deleted; `rules.py` is a root module
+  like any other — `ignore-file TB040` declares it, TB065 governs its
+  imports (stdlib only — passes), the universal checks run on it (its one
+  docstring is removed), and it appears in RULES.md's homeless-module row.
+- [x] **conftest governance — RESOLVED v0.0.29.0 (import-totality wave,
+  2026-08-12).** A tree-root conftest is a TB065 leaf; a conftest inside a
+  tests location carries that location's TB070 row. `tests.discovery` /
+  `tests.support` keep their TB041 ignore-files but now answer for their
+  imports under the root-tests tier; `tests.test_shape`'s `tesser.context`
+  import keeps its explicit TB050 pin.
 - [ ] **Test-module annotation.** When tests declare themselves, flip
   "a test module imports tesser.testing at most once, as ts" to exactly-once.
 - [ ] **Wire vocabulary — what the srv-matrix build wave left open**

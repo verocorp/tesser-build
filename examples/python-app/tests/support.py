@@ -4,7 +4,6 @@ import ast
 import pathlib
 
 from bootstrap.config import Config
-from campaign.application.parts import CampaignParts
 from campaign.wiring.config import Config as CampaignConfig
 from protocol.http import HttpRequest, HttpResponse
 from linkpolicy.wiring.config import Config as LinkPolicyConfig
@@ -12,9 +11,6 @@ from reports.wiring.config import Config as ReportsConfig
 from srv.http.router import Route
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-
-CONVERSION_DUNDERS = ("__str__", "__int__", "__float__", "__bytes__")
-DOMAIN_DIR = ROOT / "campaign" / "domain"
 
 CONFIG_OWNERS = frozenset({"cfg", "config"})
 
@@ -24,15 +20,6 @@ def app_config() -> Config:
         campaign=CampaignConfig("memory"),
         linkpolicy=LinkPolicyConfig("memory"),
         reports=ReportsConfig(),
-    )
-
-
-def parts_tuple(parts: CampaignParts) -> tuple[object, ...]:
-    return (
-        parts.id,
-        parts.budget.amount,
-        parts.budget.currency,
-        tuple((link.slug, link.target_url, link.active) for link in parts.links),
     )
 
 
