@@ -1,7 +1,26 @@
 import ast
 import inspect
+import textwrap
+from collections.abc import Callable
 
 import tessercheck.domain.checks as checks
+
+
+def _function_tree(func: Callable[..., object]) -> ast.FunctionDef:  # tessercheck:ignore TB071
+    tree = ast.parse(textwrap.dedent(inspect.getsource(func)))
+    node = tree.body[0]
+    assert isinstance(node, ast.FunctionDef)
+    return node
+
+
+def _returned_tokens(func: ast.FunctionDef) -> frozenset[str]:  # tessercheck:ignore TB071
+    return frozenset(
+        value.value
+        for node in ast.walk(func)
+        if isinstance(node, ast.Return) and node.value is not None
+        for value in ast.walk(node.value)
+        if isinstance(value, ast.Constant) and isinstance(value.value, str)
+    )
 
 
 def test_locate_is_the_single_routing_decision() -> None:
@@ -62,49 +81,29 @@ def test_locate_is_the_single_routing_decision() -> None:
         assert got == expected, (
             f"_locate({name!r}, is_package={is_package}) = {got!r}, expected {expected!r}"
         )
-    source = inspect.getsource(checks.Codebase._locate)
-    tree = ast.parse("def f() -> None:\n" + "\n".join("    " + line for line in source.splitlines()[2:]))
-    expected_tokens = {expected for _, _, expected in table}
-    returned = {
-        value.value
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Return) and node.value is not None
-        for value in ast.walk(node.value)
-        if isinstance(value, ast.Constant) and isinstance(value.value, str)
-    }
-    assert returned <= expected_tokens, (
+    returned = _returned_tokens(_function_tree(checks.Codebase._locate))
+    exercised = frozenset(expected for _, _, expected in table)
+    assert returned <= exercised, (
         f"_locate can return tokens the classification table never exercises: "
-        f"{sorted(returned - expected_tokens)}"
+        f"{sorted(returned - exercised)}"
     )
 
 
 def test_every_location_token_has_a_dispatch_arm() -> None:
-    locate_source = inspect.getsource(checks.Codebase._locate)
-    locate_tree = ast.parse(
-        "def f() -> None:\n" + "\n".join("    " + line for line in locate_source.splitlines()[2:])
-    )
-    tokens = {
-        value.value
-        for node in ast.walk(locate_tree)
-        if isinstance(node, ast.Return) and node.value is not None
-        for value in ast.walk(node.value)
-        if isinstance(value, ast.Constant) and isinstance(value.value, str)
-    }
-    dispatch_source = inspect.getsource(checks.Codebase._module_violations)
-    dispatch_tree = ast.parse(
-        "def f() -> None:\n" + "\n".join("    " + line for line in dispatch_source.splitlines()[6:])
-    )
-    handled = {
+    tokens = _returned_tokens(_function_tree(checks.Codebase._locate))
+    dispatch = _function_tree(checks.Codebase._module_violations)
+    handled = frozenset(
         node.comparators[0].value
-        for node in ast.walk(dispatch_tree)
+        for node in ast.walk(dispatch)
         if isinstance(node, ast.Compare)
         and isinstance(node.left, ast.Name)
         and node.left.id == "place"
+        and len(node.comparators) == 1
         and isinstance(node.comparators[0], ast.Constant)
-    }
+    )
     assert tokens, "no tokens extracted from _locate"
     unhandled = tokens - handled - {"context-stray"}
-    assert unhandled == set(), (
+    assert unhandled == frozenset(), (
         f"_locate can return tokens with no dispatch arm: {sorted(unhandled)} "
         "(context-stray is the dispatch's final return)"
     )
