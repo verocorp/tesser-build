@@ -4407,3 +4407,37 @@ def test_an_enum_member_may_be_negative_or_annotated(tmp_path: Path) -> None:
         "app.application.ports.sink.Outcome carries more than its members" in f
         for f in findings
     ), f"a dunder assignment laundered prose past the comments norm: {findings}"
+
+
+def test_async_def_is_not_a_way_around_a_method_rule(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "app/client/async_client.py",
+        "from __future__ import annotations\n"
+        "from typing import Protocol\n"
+        "import tesser.context as ts\n"
+        "class Ask(ts.Request):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
+        "class Loose(ts.Client, Protocol):\n"
+        "    async def ask(self, id: str, extra: int) -> str: ...\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "app/adapters/gateways/async_repo.py",
+        "from __future__ import annotations\n"
+        "import tesser.adapters as ts\n"
+        "import app.domain.thing as thing\n"
+        "class Loose(ts.Repository):\n"
+        "    async def save(self, entity: thing.Thing) -> None: ...\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.client.async_client.Loose.ask" in f and "a client method takes exactly one" in f
+        for f in findings
+    ), f"an async client method escaped the client shape rule: {findings}"
+    assert any(
+        "app.adapters.gateways.async_repo.Loose.save carries an aggregate in its signature" in f
+        for f in findings
+    ), f"an async adapter method escaped the record rule: {findings}"

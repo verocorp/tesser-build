@@ -1882,7 +1882,7 @@ class Codebase(ts.AggregateRoot):
         found: list[Violation] = []
         by_name = {name: ann for name, ann, _ in fields}
         for item in cls.body:
-            if not isinstance(item, ast.FunctionDef) or item.name.startswith("_"):
+            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) or item.name.startswith("_"):
                 continue
             attr = self._bare_field_return(item)
             if attr is None:
@@ -1939,7 +1939,7 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for item in cls.body:
-            if not isinstance(item, ast.FunctionDef):
+            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             if item.name in LANGUAGE_FIXED:
                 continue
@@ -2028,7 +2028,7 @@ class Codebase(ts.AggregateRoot):
         return frozenset(names - RETURN_WRAPPERS - SELF_NAMES)
 
     @staticmethod
-    def _bare_field_return(fn: ast.FunctionDef) -> str | None:
+    def _bare_field_return(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
         if len(fn.body) != 1 or not isinstance(fn.body[0], ast.Return):
             return None
         value = fn.body[0].value
@@ -2041,7 +2041,7 @@ class Codebase(ts.AggregateRoot):
         return None
 
     @staticmethod
-    def _delegates_to(fn: ast.FunctionDef, helper: str) -> bool:
+    def _delegates_to(fn: ast.FunctionDef | ast.AsyncFunctionDef, helper: str) -> bool:
         if len(fn.body) != 1 or not isinstance(fn.body[0], ast.Return):
             return False
         value = fn.body[0].value
@@ -3385,7 +3385,7 @@ class Codebase(ts.AggregateRoot):
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        methods = [item for item in cls.body if isinstance(item, ast.FunctionDef)]
+        methods = [item for item in cls.body if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))]
         method_names = frozenset(method.name for method in methods)
         for item in methods:
             where = f"{module.name()}.{cls.name}.{item.name}"
@@ -3408,7 +3408,7 @@ class Codebase(ts.AggregateRoot):
         module: Module,
         where: str,
         line: int,
-        fn: ast.FunctionDef,
+        fn: ast.FunctionDef | ast.AsyncFunctionDef,
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
@@ -3435,7 +3435,7 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for item in cls.body:
-            if not isinstance(item, ast.FunctionDef) or item.name.startswith("_"):
+            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) or item.name.startswith("_"):
                 continue
             where = f"{module.name()}.{cls.name}.{item.name}"
             found.extend(
@@ -3454,7 +3454,7 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for item in cls.body:
-            if not isinstance(item, ast.FunctionDef):
+            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             where = f"{module.name()}.{cls.name}.{item.name}"
             annotations = [
@@ -3507,7 +3507,7 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for item in cls.body:
-            if not isinstance(item, ast.FunctionDef):
+            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             where = f"{module.name()}.{cls.name}.{item.name}"
             if item.name != "__init__":
@@ -3750,7 +3750,7 @@ class Codebase(ts.AggregateRoot):
         module: Module,
         method_names: frozenset[str],
         where: str,
-        fn: ast.FunctionDef,
+        fn: ast.FunctionDef | ast.AsyncFunctionDef,
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         functions = module.function_names()
@@ -3783,7 +3783,9 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _body_violations(self, module: Module, where: str, fn: ast.FunctionDef) -> tuple[Violation, ...]:
+    def _body_violations(
+        self, module: Module, where: str, fn: ast.FunctionDef | ast.AsyncFunctionDef
+    ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         first = fn.body[0].lineno
         last = fn.body[-1].end_lineno or fn.body[-1].lineno
