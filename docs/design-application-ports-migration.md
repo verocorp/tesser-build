@@ -1,4 +1,4 @@
-# Migrating the five example trees
+# Migrating the five example trees to application/ports
 
 Measured, not estimated. Running the shipped ports checker over the existing
 trees produces **136 findings**, and they fall into three mechanical shapes plus

@@ -534,7 +534,7 @@ def required_campaign(
 `typing.assert_never` is the whole point of the enum: add a third outcome and
 every reader that does not handle it fails `mypy --strict` at the missed
 branch. Six encodings of the same two-outcome answer were measured against the
-repo's silent-site metric in `examples/spike-ports/` — the enum is the only
+repo's silent-site metric in `docs/design-application-ports.md` — the enum is the only
 union-free one that scores **zero** silent sites; a `found: bool` flag and a
 0-or-1 tuple each leave the reader silently wrong.
 

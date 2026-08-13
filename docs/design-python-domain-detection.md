@@ -161,7 +161,7 @@ accessor at all, only `__str__`.
 > types still have no primitive exit. Doctrine in
 > `skills/tesser-build/serialization.md` (rules 6-9) and
 > `skills/tesser-build/python.md#ports`; evidence in
-> `examples/spike-ports/README.md`.
+> `docs/design-application-ports.md`.
 
 ---
 

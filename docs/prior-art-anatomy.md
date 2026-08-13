@@ -75,7 +75,7 @@ free** (presence required, organization not prescribed):
 > that package and nothing else of the context — so a gateway can no longer
 > import the service it exists to be decoupled from. The rest of the anatomy
 > stands. Doctrine: `skills/tesser-build/map.md`; evidence:
-> `examples/spike-ports/README.md`.
+> `docs/design-application-ports.md`.
 
 The context's **`client` module is its public interface**: the `Client` interface
 + primitive DTOs in `client.py`, the context's `__init__.py` empty. There is

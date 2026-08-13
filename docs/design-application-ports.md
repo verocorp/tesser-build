@@ -1,9 +1,19 @@
-# spike-ports — where a context's ports live, and what shape their answers take
+# Application ports — where a context's ports live, and what shape their answers take
 
-A spike, not a shipped tree. Seven sibling trees over one neutral domain
-(`catalog`), identical except at **one seam**: how a repository port expresses a
-two-outcome answer (item found / item missing). `final/` is the selected
-combination.
+This is the design record for the `application/ports/` convention and the rules
+that enforce it. The shipped tree is `examples/ports/`; the rules are the ports
+family in `tessercheck-py/RULES.md`.
+
+**The measurements below were made against seven sibling trees over one neutral
+domain (`catalog`), identical except at one seam.** Six of them were rejected,
+and four exist *because* they produce findings, so they are not carried on
+`main` — a zero-findings gate is the wrong shape for a tree whose job is to fail.
+They remain executable on the **`spike/application-ports`** branch under
+`examples/spike-ports/`, which is where every number on this page can be
+reproduced. `examples/ports/` is the surviving combination.
+
+The seam: how a repository port expresses a two-outcome answer (item found /
+item missing).
 
 The question this spike answers: **adapters were allowed to import the whole
 `application` role, which means a gateway imports the service implementation it
@@ -20,7 +30,7 @@ reach only that, and the port's answer has to survive without a union.
 | `outcome/` | `FindItemResponse(outcome: str, items: ...)`, `"found"` / `"missing"` |
 | `enum/` | `FindItemResponse(outcome: ItemLookup, items: ...)` + `match`/`assert_never` |
 | `split/` | two port methods — `exists()` then `get()` |
-| `final/` | the selected shape — enum outcomes, tuple collections, two ports |
+| **`examples/ports/`** | **the selected shape — enum outcomes, tuple collections, two ports** |
 
 Every tree is `mypy --strict` clean and green under `pytest`. The differences
 below are measured, not argued.
@@ -142,7 +152,7 @@ Two encodings remain writable, and honesty is better than an overclaim:
   which is the `flag/` encoding again with an enum where the bool was. This is
   not hypothetical: the spike-llmport migration produced exactly that shape,
   fully checker-clean, and it was caught by review rather than by a rule. Carry
-  the payload as a tuple, as `final/` does, so the absent arm carries `()`.
+  the payload as a tuple, as `examples/ports/` does, so the absent arm carries `()`.
 
 None of these is mechanically decidable without banning legitimate code. The
 third is the one most likely to bite, because a migration can introduce it while
@@ -150,7 +160,7 @@ staying green.
 
 ## The selected shape
 
-`final/` demonstrates it, with two ports so the no-sharing rule is visible:
+`examples/ports/` demonstrates it, with two ports so the no-sharing rule is visible:
 
 - **A collection answer carries a tuple** — `ListItemsResponse(items=...)`. No
   outcome enum; cardinality *is* the answer.
@@ -171,7 +181,7 @@ import tesser.adapters as ts
 import catalog.application.ports.item_repository as item_repository
 ```
 
-That is the whole import block. Across `final/`, every adapter import is a
+That is the whole import block. Across `examples/ports/`, every adapter import is a
 protocol — its context's ports, the app shell's `protocol`, or a client. **No
 adapter imports an implementation module out of `application`.**
 
@@ -279,9 +289,12 @@ Two costs that are real and are not the rule's fault to fix:
   package, so the smallest context pays the full package + DTO + mapping cost.
   There is no graduation path, by construction.
 
-## Not a CI gate
+## What is gated
 
-These trees are a design record, not a governed example tree: `union/`, `flag/`,
-`outcome/` and `split/` exist *because* they produce findings, so a zero-findings
-gate is the wrong shape for them. `final/` alone is wired into `scripts/verify`.
-The migration of the five real example trees is in `MIGRATION.md`.
+`examples/ports/` is wired into `scripts/verify` and CI as a zero-findings tree,
+alongside the five example trees this change migrated. The rejected encodings are
+not on `main` for the reason above; reproduce them from the
+`spike/application-ports` branch.
+
+The migration of the five real example trees, and what it cost, is in
+`design-application-ports-migration.md`.

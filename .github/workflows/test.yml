@@ -107,6 +107,25 @@ jobs:
         # debt to fixes plus site-level ignores (the only opt-out mechanism).
         run: scripts/verify python-app
 
+  ports-example:
+    # Gates the application-ports worked example (Python) at the same bar:
+    # tessercheck zero findings + mypy --strict + pytest. This is the canonical
+    # shape an adapter sees — one context, two ports, an enum outcome read with
+    # match + assert_never, and a collection answer carried as a tuple. The six
+    # encodings it was chosen over live on the spike/application-ports branch;
+    # docs/design-application-ports.md carries the measurements.
+    name: ports example (tessercheck + mypy --strict + pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dev tooling
+        run: pip install -r examples/ports/requirements-dev.txt
+      - name: examples/ports — tessercheck + mypy --strict + pytest
+        run: scripts/verify ports
+
   serdepy-example:
     # Gates the serialization-norm worked example (Python) at the same bar:
     # tessercheck zero findings + mypy --strict + pytest. Shows every
