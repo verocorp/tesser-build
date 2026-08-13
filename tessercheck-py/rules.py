@@ -27,6 +27,8 @@ HOLE_NAMES: dict[str, str] = {
     "foreign_roles": "⟨roles⟩",
     "KIND_NAME[block]": "⟨kind⟩",
     "KIND_ROLE[block]": "⟨role⟩",
+    "KIND_HOME[block]": "⟨role⟩",
+    "enum_base": "⟨enum⟩",
     "KIND_NAME[touched]": "⟨kind⟩",
     "name": "⟨module⟩",
     "others": "⟨paths⟩",

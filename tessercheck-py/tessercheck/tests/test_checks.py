@@ -3518,3 +3518,282 @@ def test_an_adapter_reaches_application_only_through_ports(tmp_path: Path) -> No
         for f in findings
     )
     assert not any("imports app.application.ports.sink;" in f for f in findings)
+
+
+def test_a_port_dto_field_is_never_a_union(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "import tesser.application as ts\n"
+        "class ItemView(ts.Response):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
+        "class FindResponse(ts.Response):\n"
+        "    def __init__(self, item: ItemView | None) -> None:\n"
+        "        self.item = item\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.FindResponse.__init__ field 'item' is a union; "
+        "a port DTO field is never a union, optional included — model the outcome as an enum" in f
+        for f in findings
+    )
+
+
+def test_a_client_dto_field_may_still_be_optional(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "app/client/optional.py",
+        "from __future__ import annotations\n"
+        "import tesser.context as ts\n"
+        "class Inner(ts.Response):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
+        "class Outer(ts.Response):\n"
+        "    def __init__(self, inner: Inner | None) -> None:\n"
+        "        self.inner = inner\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert not any("app.client.optional" in f and "is a union" in f for f in findings)
+
+
+def test_a_conforming_ports_module_is_silent(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "import enum\n"
+        "from typing import Protocol\n"
+        "import tesser.application as ts\n"
+        "class Outcome(enum.Enum):\n"
+        "    STORED = 'stored'\n"
+        "    REFUSED = 'refused'\n"
+        "class ItemView(ts.Response):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
+        "class SaveRequest(ts.Request):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
+        "class SaveResponse(ts.Response):\n"
+        "    def __init__(self, outcome: Outcome, items: tuple[ItemView, ...]) -> None:\n"
+        "        self.outcome = outcome\n"
+        "        self.items = items\n"
+        "class ListRequest(ts.Request):\n"
+        "    def __init__(self) -> None:\n"
+        "        return None\n"
+        "class Sink(ts.Port, Protocol):\n"
+        "    def save(self, request: SaveRequest) -> SaveResponse: ...\n"
+        "    def all(self, request: ListRequest) -> SaveResponse: ...\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert not any("app/application/ports/sink.py" in f for f in findings), (
+        f"a conforming ports module produced findings: "
+        f"{[f for f in findings if 'ports/sink.py' in f]}"
+    )
+
+
+def test_a_ports_sibling_test_reaches_only_ports(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "import tesser.application as ts\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/test_sink.py",
+        "import app.application.ports.sink as sink\n"
+        "import app.domain.thing as thing\n"
+        "import app.application.service as service\n"
+        "def test_x() -> None:\n"
+        "    assert True\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.test_sink imports app.domain.thing, but a test placed in "
+        "ports reaches only application.ports of its own context; "
+        "a test reaches only what its placement allows" in f
+        for f in findings
+    )
+    assert any(
+        "app.application.ports.test_sink imports app.application.service" in f
+        for f in findings
+    )
+    assert not any("test_sink.py:1:" in f for f in findings)
+
+
+def test_a_client_dto_with_a_sibling_enum_stays_strict(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "app/client/verdict.py",
+        "from __future__ import annotations\n"
+        "import tesser.context as ts\n"
+        "class Verdict:\n"
+        "    pass\n"
+        "class VerdictResponse(ts.Response):\n"
+        "    def __init__(self, verdict: Verdict) -> None:\n"
+        "        self.verdict = verdict\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.client.verdict.VerdictResponse.__init__ parameter 'verdict' is not allowed; "
+        "a DTO field is a primitive or another DTO" in f
+        for f in findings
+    )
+
+
+def test_a_port_dto_field_is_never_a_bare_bool(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "import enum\n"
+        "import tesser.application as ts\n"
+        "class Outcome(enum.Enum):\n"
+        "    YES = 'yes'\n"
+        "    NO = 'no'\n"
+        "class FlagResponse(ts.Response):\n"
+        "    def __init__(self, found: bool, outcome: Outcome) -> None:\n"
+        "        self.found = found\n"
+        "        self.outcome = outcome\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.FlagResponse.__init__ field 'found' is a bool; "
+        "a port DTO field is never a bare bool — model the outcome as an enum" in f
+        for f in findings
+    )
+    assert not any("'outcome'" in f for f in findings)
+
+
+def test_a_port_dto_is_never_subclassed(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "import tesser.application as ts\n"
+        "class FindResponse(ts.Response):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
+        "class FoundItem(FindResponse):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.FoundItem subclasses a port DTO; a port DTO is never "
+        "subclassed, because a response hierarchy is a union mypy cannot check for exhaustiveness" in f
+        for f in findings
+    )
+
+
+def test_a_port_method_shape_survives_async_and_dunder_call(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "import tesser.application as ts\n"
+        "class Sink(ts.Port):\n"
+        "    async def fetch(self, name: str, count: int) -> bool: ...\n"
+        "    def __call__(self, name: str) -> bool: ...\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.Sink.fetch takes 2 parameters; "
+        "a port method takes exactly one ts.Request" in f
+        for f in findings
+    ), f"async def bypassed the port shape rule: {findings}"
+    assert any(
+        "app.application.ports.sink.Sink.__call__ parameter 'name' is not a ts.Request" in f
+        for f in findings
+    ), f"__call__ bypassed the port shape rule: {findings}"
+
+
+def test_a_fake_implementing_a_port_may_expose_inspection_methods(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "from typing import Protocol\n"
+        "import tesser.application as ts\n"
+        "class SaveRequest(ts.Request):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
+        "class SaveResponse(ts.Response):\n"
+        "    def __init__(self) -> None:\n"
+        "        return None\n"
+        "class Sink(ts.Port, Protocol):\n"
+        "    def save(self, request: SaveRequest) -> SaveResponse: ...\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "app/application/test_sink.py",
+        "import tesser.testing as ts\n"
+        "import app.application.ports.sink as sink\n"
+        "@ts.fake\n"
+        "class FakeSink(sink.Sink):\n"
+        "    def __init__(self) -> None:\n"
+        "        self.saves = 0\n"
+        "    def save(self, request: sink.SaveRequest) -> sink.SaveResponse:\n"
+        "        self.saves = self.saves + 1\n"
+        "        return sink.SaveResponse()\n"
+        "    def save_count(self) -> int:\n"
+        "        return self.saves\n"
+        "def test_x() -> None:\n"
+        "    assert True\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert not any("save_count" in f for f in findings), (
+        f"a fake's inspection method was flagged as a port method: "
+        f"{[f for f in findings if 'save_count' in f]}"
+    )
+
+
+def test_a_ports_enum_is_a_plain_enum(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "app/application/ports/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/application/ports/sink.py",
+        "from __future__ import annotations\n"
+        "import enum\n"
+        "import tesser.application as ts\n"
+        "class Loose(enum.StrEnum):\n"
+        "    YES = 'yes'\n"
+        "class Tight(enum.Enum):\n"
+        "    YES = 'yes'\n"
+        "class Sink(ts.Port):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert any(
+        "app.application.ports.sink.Loose is an enum.StrEnum; a ports enum is an enum.Enum, "
+        "because a str- or int-backed member compares equal to a raw literal "
+        "and reopens the typo the enum closes" in f
+        for f in findings
+    )
+    assert not any("Tight" in f for f in findings)

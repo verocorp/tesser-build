@@ -53,9 +53,11 @@ ROLES: Final[tuple[str, ...]] = ("domain", "application", "client", "adapters", 
 
 PORTS_PACKAGE: Final[str] = "ports"
 
-PORTS_ROLE: Final[str] = "application"
+PORTS_PARENT_ROLE: Final[str] = "application"
 
 PORTS_HOME: Final[str] = "application/ports"
+
+PORTS_IMPORT_PATH: Final[str] = "application.ports"
 
 PORTS_KINDS: Final[frozenset[str]] = frozenset({"port", "port_request", "port_response"})
 
@@ -77,6 +79,11 @@ KIND_ROLE: Final[dict[str, str]] = {
     "gateway": "adapters",
     "handler": "adapters",
     "wiring": "wiring",
+}
+
+KIND_HOME: Final[dict[str, str]] = {
+    block: (f"the {role} package" if role == PORTS_HOME else f"{role}.py")
+    for block, role in KIND_ROLE.items()
 }
 
 KIND_NAME: Final[dict[str, str]] = {
@@ -163,7 +170,7 @@ SAME_CONTEXT_IMPORTS: Final[dict[str, tuple[str, ...]]] = {
     "domain": (),
     "client": (),
     "application": ("domain", "client"),
-    "adapters": (PORTS_HOME.replace("/", "."),),
+    "adapters": (PORTS_IMPORT_PATH,),
     "wiring": ("application", "adapters", "client"),
 }
 
@@ -193,7 +200,7 @@ TEST_TIER_REACH: Final[dict[str, tuple[str, ...]]] = {
     "handlers": ("client",),
     "gateways": SAME_CONTEXT_IMPORTS["adapters"],
     "repositories": SAME_CONTEXT_IMPORTS["adapters"],
-    PORTS_TIER: (PORTS_HOME.replace("/", "."),),
+    PORTS_TIER: (PORTS_IMPORT_PATH,),
     TESTS_ROLE: ROLES + (TESTS_ROLE,),
 }
 
@@ -234,6 +241,10 @@ TEST_TIER_SHELL: Final[dict[str, frozenset[str]]] = {
 }
 
 PRIMITIVES: Final[frozenset[str]] = frozenset({"str", "int", "float", "bool", "bytes"})
+
+PORT_DTO_PRIMITIVES: Final[frozenset[str]] = PRIMITIVES - frozenset({"bool"})
+
+ENUM_BASES: Final[frozenset[str]] = frozenset({"Enum"})
 
 CORE_STDLIB: Final[dict[str, frozenset[str]]] = {
     "domain": frozenset(
@@ -830,7 +841,8 @@ class Codebase(ts.AggregateRoot):
                     found.extend(self._record_signature_violations(module, cls, blocks, "an adapter"))
                 elif block == "port":
                     found.extend(self._record_signature_violations(module, cls, blocks, "a port"))
-                    found.extend(self._port_violations(module, cls, blocks))
+                    if self._locate(module.name(), module.is_package(), contexts) == "ports":
+                        found.extend(self._port_violations(module, cls, blocks))
                 elif block == "service":
                     found.extend(self._service_violations(module, cls, blocks))
         return tuple(found)
@@ -897,7 +909,7 @@ class Codebase(ts.AggregateRoot):
         if parts[1] == TESTS_ROLE:
             return "context-tests-init" if is_package else "context-tests-stray"
         if parts[1] in ROLES:
-            if parts[1] == PORTS_ROLE and len(parts) >= 3 and parts[2] == PORTS_PACKAGE:
+            if parts[1] == PORTS_PARENT_ROLE and len(parts) >= 3 and parts[2] == PORTS_PACKAGE:
                 if is_package:
                     return "ports-init"
                 return "ports-file" if len(parts) == 3 else "ports"
@@ -2213,23 +2225,41 @@ class Codebase(ts.AggregateRoot):
         return tuple(found)
 
     @staticmethod
-    def _is_enum_class(stmt: ast.ClassDef) -> bool:
-        return any(
-            isinstance(base, ast.Attribute)
-            and isinstance(base.value, ast.Name)
-            and base.value.id == "enum"
-            for base in stmt.bases
-        )
+    def _enum_base(stmt: ast.ClassDef) -> str | None:
+        for base in stmt.bases:
+            if isinstance(base, ast.Attribute) and isinstance(base.value, ast.Name):
+                if base.value.id == "enum":
+                    return base.attr
+            elif isinstance(base, ast.Name) and base.id in ENUM_BASES:
+                return base.id
+        return None
 
-    @classmethod
-    def _enum_names(cls, module: Module) -> frozenset[str]:
+    @staticmethod
+    def _is_enum_class(stmt: ast.ClassDef) -> bool:
+        return Codebase._enum_base(stmt) is not None
+
+    @staticmethod
+    def _enum_names(module: Module) -> frozenset[str]:
         return frozenset(
-            stmt.name for stmt in module.class_defs() if cls._is_enum_class(stmt)
+            stmt.name for stmt in module.class_defs() if Codebase._is_enum_class(stmt)
         )
 
     @staticmethod
-    def _names_enum(node: ast.expr | None, enums: frozenset[str]) -> bool:
-        return isinstance(node, ast.Name) and node.id in enums
+    def _names_bool(node: ast.expr | None) -> bool:
+        return isinstance(node, ast.Name) and node.id == "bool"
+
+    @classmethod
+    def _is_union(cls, node: ast.expr | None) -> bool:
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+            return True
+        if isinstance(node, ast.Subscript):
+            if isinstance(node.value, ast.Name) and node.value.id in ("Optional", "Union"):
+                return True
+            elements = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
+            return any(cls._is_union(element) for element in elements)
+        if isinstance(node, ast.Attribute):
+            return node.attr in ("Optional", "Union")
+        return False
 
     def _ports_init_violations(self, module: Module) -> tuple[Violation, ...]:
         return tuple(
@@ -2253,7 +2283,7 @@ class Codebase(ts.AggregateRoot):
             self._tesser_import_violations(
                 module,
                 "ports",
-                ROLE_TESSER_PACKAGE[PORTS_ROLE],
+                ROLE_TESSER_PACKAGE[PORTS_PARENT_ROLE],
                 "a ports module imports only tesser.application",
                 "a ports module imports tesser.application exactly once, as ts",
                 "a ports module imports tesser.application exactly once, as ts",
@@ -2291,7 +2321,19 @@ class Codebase(ts.AggregateRoot):
                 continue
             block = blocks.get((module.name(), stmt.name))
             where = f"{module.name()}.{stmt.name}"
-            if self._is_enum_class(stmt):
+            enum_base = self._enum_base(stmt)
+            if enum_base is not None:
+                if enum_base not in ENUM_BASES:
+                    found.append(
+                        Violation(
+                            module.path(),
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} is an enum.{enum_base}; a ports enum is an enum.Enum, "
+                            "because a str- or int-backed member compares equal to a raw literal "
+                            "and reopens the typo the enum closes",
+                        )
+                    )
                 continue
             if block is None:
                 found.append(
@@ -2314,6 +2356,20 @@ class Codebase(ts.AggregateRoot):
                 )
             elif block == "port":
                 ports.append(stmt)
+            if block in ("port_request", "port_response") and any(
+                blocks.get((module.name(), base.id)) in ("port_request", "port_response")
+                for base in stmt.bases
+                if isinstance(base, ast.Name)
+            ):
+                found.append(
+                    Violation(
+                        module.path(),
+                        stmt.lineno,
+                        "TB052",
+                        f"{where} subclasses a port DTO; a port DTO is never subclassed, "
+                        "because a response hierarchy is a union mypy cannot check for exhaustiveness",
+                    )
+                )
         if len(ports) > 1:
             found.append(
                 Violation(
@@ -2356,7 +2412,9 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for item in cls.body:
-            if not isinstance(item, ast.FunctionDef) or item.name.startswith("_"):
+            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if item.name.startswith("_") and item.name != "__call__":
                 continue
             where = f"{module.name()}.{cls.name}.{item.name}"
             found.extend(
@@ -2410,7 +2468,7 @@ class Codebase(ts.AggregateRoot):
                             module.path(),
                             stmt.lineno,
                             "TB052",
-                            f"{where} is {KIND_NAME[block]}, whose home is {KIND_ROLE[block]}.py; "
+                            f"{where} is {KIND_NAME[block]}, whose home is {KIND_HOME[block]}; "
                             "a kind lives only in its role module",
                         )
                     )
@@ -2637,7 +2695,7 @@ class Codebase(ts.AggregateRoot):
             if len(parts) >= 4 and parts[2] in ADAPTER_TEST_TIERS:
                 return (parts[0], parts[2])
             return (parts[0], STRAY_TIER)
-        if parts[1] == PORTS_ROLE and len(parts) >= 4 and parts[2] == PORTS_PACKAGE:
+        if parts[1] == PORTS_PARENT_ROLE and len(parts) >= 4 and parts[2] == PORTS_PACKAGE:
             return (parts[0], PORTS_TIER)
         return (parts[0], parts[1])
 
@@ -3148,12 +3206,13 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         own = blocks.get((module.name(), cls.name))
+        port_dto = own in ("port_request", "port_response")
         nested = (
             frozenset({"port_request", "port_response"})
-            if own in ("port_request", "port_response")
+            if port_dto
             else frozenset({"request", "response"})
         )
-        enums = self._enum_names(module) if own in ("port_request", "port_response") else frozenset()
+        enums = self._enum_names(module) if port_dto else frozenset()
         for item in cls.body:
             if not isinstance(item, ast.FunctionDef):
                 continue
@@ -3169,9 +3228,36 @@ class Codebase(ts.AggregateRoot):
                 )
                 continue
             for arg in self._params(item):
-                if self._names_enum(arg.annotation, enums):
+                if port_dto and self._names_bool(arg.annotation):
+                    found.append(
+                        Violation(
+                            module.path(),
+                            item.lineno,
+                            "TB080",
+                            f"{where} field {arg.arg!r} is a bool; a port DTO field is "
+                            "never a bare bool — model the outcome as an enum",
+                        )
+                    )
                     continue
-                if not self._allowed_annotation(module, arg.annotation, blocks, nested):
+                if port_dto and self._is_union(arg.annotation):
+                    found.append(
+                        Violation(
+                            module.path(),
+                            item.lineno,
+                            "TB080",
+                            f"{where} field {arg.arg!r} is a union; a port DTO field "
+                            "is never a union, optional included — model the outcome as an enum",
+                        )
+                    )
+                    continue
+                if not self._allowed_annotation(
+                    module,
+                    arg.annotation,
+                    blocks,
+                    nested,
+                    enums,
+                    PORT_DTO_PRIMITIVES if port_dto else PRIMITIVES,
+                ):
                     found.append(
                         Violation(
                             module.path(),
@@ -3237,7 +3323,7 @@ class Codebase(ts.AggregateRoot):
         module: Module,
         where: str,
         line: int,
-        fn: ast.FunctionDef,
+        fn: ast.FunctionDef | ast.AsyncFunctionDef,
         param_block: str,
         return_block: str | None,
         subject: str,
@@ -3526,12 +3612,16 @@ class Codebase(ts.AggregateRoot):
         node: ast.expr | None,
         blocks: dict[tuple[str, str], str],
         allowed_blocks: frozenset[str],
+        enums: frozenset[str] = frozenset(),
+        primitives: frozenset[str] = PRIMITIVES,
     ) -> bool:
         if node is None:
             return False
         if isinstance(node, ast.Constant):
             return node.value is Ellipsis or node.value is None
-        if isinstance(node, ast.Name) and node.id in PRIMITIVES:
+        if isinstance(node, ast.Name) and node.id in enums:
+            return True
+        if isinstance(node, ast.Name) and node.id in primitives:
             return True
         if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
             left_none = isinstance(node.left, ast.Constant) and node.left.value is None
@@ -3539,12 +3629,13 @@ class Codebase(ts.AggregateRoot):
             if left_none == right_none:
                 return False
             wrapped = node.right if left_none else node.left
-            return self._allowed_annotation(module, wrapped, blocks, allowed_blocks)
+            return self._allowed_annotation(module, wrapped, blocks, allowed_blocks, enums, primitives)
         if isinstance(node, ast.Subscript):
             if isinstance(node.value, ast.Name) and node.value.id == "tuple":
                 elements = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
                 return all(
-                    self._allowed_annotation(module, element, blocks, allowed_blocks) for element in elements
+                    self._allowed_annotation(module, element, blocks, allowed_blocks, enums, primitives)
+                    for element in elements
                 )
             return False
         key = module._resolve(node)
