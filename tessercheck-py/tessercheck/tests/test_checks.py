@@ -4272,6 +4272,9 @@ def test_a_ports_module_runs_nothing_at_import(tmp_path: Path) -> None:
         "class Defaulted(ts.Response):\n"
         "    def __init__(self, id: str = str(enum.Enum)) -> None:\n"
         "        self.id = id\n"
+        "class Generic[T](ts.Response):\n"
+        "    def __init__(self, id: str) -> None:\n"
+        "        self.id = id\n"
         "class Computed(ts.Response, str(enum.Enum)):\n"
         "    def __init__(self, id: str) -> None:\n"
         "        self.id: str = id\n"
@@ -4299,6 +4302,12 @@ def test_a_ports_module_runs_nothing_at_import(tmp_path: Path) -> None:
         "adapter imports" in f
         for f in findings
     ), f"a computed base ran at import: {findings}"
+    assert any(
+        "app.application.ports.sink.Generic is generic; a ports module names concrete "
+        "shapes, because a type parameter is a slot the shape rules cannot read and a "
+        "bound is an expression" in f
+        for f in findings
+    ), f"a generic port DTO went ungoverned: {findings}"
     assert not any("Plain" in f for f in findings)
     assert not any("Computed.__init__ carries logic" in f for f in findings), (
         f"an annotated self-assignment was rejected: {findings}"

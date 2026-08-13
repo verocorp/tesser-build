@@ -2464,6 +2464,17 @@ class Codebase(ts.AggregateRoot):
                         "is logic every adapter imports",
                     )
                 )
+            for _ in getattr(stmt, "type_params", ()):
+                found.append(
+                    Violation(
+                        module.path(),
+                        stmt.lineno,
+                        "TB051",
+                        f"{module.name()}.{stmt.name} is generic; a ports module names "
+                        "concrete shapes, because a type parameter is a slot the shape "
+                        "rules cannot read and a bound is an expression",
+                    )
+                )
             for base in stmt.bases:
                 if isinstance(base, (ast.Name, ast.Attribute, ast.Subscript)):
                     continue
