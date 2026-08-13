@@ -135,8 +135,18 @@ Two encodings remain writable, and honesty is better than an overclaim:
 - **0-or-1 cardinality used as an outcome.** A tuple response is the correct
   shape for a genuine collection, so it cannot be banned; using one as a
   found/missing signal is a convention call.
+- **A payload that is mandatory when the outcome says it is absent.** The enum
+  makes the *outcome* loud; nothing forces the payload to be empty on the arm
+  that has none. `FindBookingResponse(presence, booking: BookingView)` compiles,
+  and the ABSENT arm has to fabricate `BookingView(step="", name="", ...)` —
+  which is the `flag/` encoding again with an enum where the bool was. This is
+  not hypothetical: the spike-llmport migration produced exactly that shape,
+  fully checker-clean, and it was caught by review rather than by a rule. Carry
+  the payload as a tuple, as `final/` does, so the absent arm carries `()`.
 
-Neither is mechanically decidable without banning legitimate code.
+None of these is mechanically decidable without banning legitimate code. The
+third is the one most likely to bite, because a migration can introduce it while
+staying green.
 
 ## The selected shape
 
