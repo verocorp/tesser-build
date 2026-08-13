@@ -74,6 +74,8 @@ services, repositories are not domain objects, but their mechanics live here).
 ## Entities
 ## Aggregates
 ## Application services  ← seam sections follow the object sections
+## Application ports     ← the `application/ports/` package (python.md; the Go
+                           mirror is pending)
 ## Repositories
 ## The composition root  ← public interface + wiring/bootstrap mechanics
 ## Inbound handlers and hosts   ← the transport edge (python.md; go.md pending

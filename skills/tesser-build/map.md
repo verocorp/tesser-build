@@ -21,8 +21,8 @@ prescribed):
 
 | Role | What it holds | Component docs |
 |---|---|---|
-| **domain** | VOs / entities / aggregates + the outbound port interfaces the context owns, defined beside their consumer | `value-objects.md`, `entities.md`, `aggregates.md`, `domain-services.md` |
-| **application** | use-case services (Convert → Delegate → Persist → Respond); no business logic | `application-services.md` |
+| **domain** | VOs / entities / aggregates | `value-objects.md`, `entities.md`, `aggregates.md`, `domain-services.md` |
+| **application** | use-case services (Convert → Delegate → Persist → Respond); no business logic — plus the **outbound ports the context owns**, in an `application/ports/` package (one port per module, with the request/response DTOs it speaks), and the domain ↔ port-DTO mapping | `application-services.md`, `repositories.md` |
 | **adapters** | inbound `handlers` + outbound `gateways` (taxonomy below) | `handlers.md`, `repositories.md`, `gateway-cross-context.md` |
 | **wiring** | the context's own construction + its `Config` | `wiring.md` |
 
@@ -60,7 +60,9 @@ context's behalf. Two types, split by direction — **inbound needs a server
 - **Handlers (inbound)** — translate one delivery mechanism's wire format to and
   from the context's `Client`: HTTP, CLI, event-consumer. → `handlers.md`
 - **Gateways (outbound)** — satisfy a port the context owns, by reaching
-  something outside it:
+  something outside it. The port and its DTOs live in the context's
+  `application/ports/`; the gateway imports that ports module and **nothing
+  else** from the context:
   - **repository** — the gateway to persistence → `repositories.md`
   - **cross-context** — the gateway to a peer context's `Client` →
     `gateway-cross-context.md`
@@ -85,8 +87,15 @@ contexts, every edge points one way, and the graph stays acyclic:
 ```
 srv/* hosts ──▶ handlers ──▶ Client ──▶ application ──▶ domain
 bootstrap ──▶ each context's wiring          (constructs, never the reverse)
-gateways ──implement──▶ ports the domain/application own
+gateways ──implement──▶ ports in each context's application/ports
 ```
+
+**An adapter imports only protocols** — its own context's `application/ports`,
+the app shell's `protocol`, and peer `Client`s — never an implementation
+module. That is what moving the ports out of the service module bought: a
+gateway can no longer import the service it exists to be decoupled from,
+because the only part of `application` it may reach is the ports package
+(measured across six encodings in `examples/spike-ports/`).
 
 Declare this, don't review it. The direction is a `forbidden` contract per edge
 in import-linter — verified in-example at `examples/python-app/.importlinter`,
@@ -95,7 +104,8 @@ because the default is transitive and a composition root legitimately reaches
 every context. The same file holds the host to a context's `adapters.handlers`.
 
 **A cross-context CALL** (one context needs a peer's answer, synchronously):
-the caller owns a port in its own vocabulary; a gateway in the caller's
+the caller owns a port in its own vocabulary, in its own
+`application/ports/`; a gateway in the caller's
 `adapters/gateways` adapts the peer's `Client` to it; the composition root
 constructs and injects the adapter. Synchronous calls are **fail-closed** — a
 peer outage fails the use case honestly. → `gateway-cross-context.md`
@@ -209,6 +219,7 @@ two features talk"). Jobs are too many to catalog; decompose instead:
 | Application service | `application-services.md` | full |
 | Public interface (`Client` + DTOs) | `public-interface.md` | full |
 | Handler | `handlers.md` | full |
+| Outbound port (`application/ports/`) | `repositories.md#rules`, mechanics in `python.md#ports` | full (Python; Go mirror pending) |
 | Gateway: repository | `repositories.md` | full |
 | Gateway: cross-context | `gateway-cross-context.md` | core rules settled; rest stub |
 | Gateway: vendor/ACL | — no file | gap: no verified impl anywhere |

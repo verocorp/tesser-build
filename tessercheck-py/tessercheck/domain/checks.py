@@ -468,6 +468,19 @@ class IgnoreScope(ts.ValueObject):
         return canonical_str(self._value)
 
 
+class IgnoreForm(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        if value not in ("parsed", "malformed"):
+            raise ValueError("ignore form must be parsed or malformed")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return canonical_str(self._value)
+
+
 class Violation(ts.ValueObject):
 
     _path: Path
@@ -499,18 +512,18 @@ class Ignore(ts.ValueObject):
     _line: Line
     _codes: tuple[Code, ...]
     _scope: IgnoreScope
-    _malformed: bool
+    _form: IgnoreForm
 
     def __init__(
-        self, line: int, codes: tuple[str, ...], file_level: bool, malformed: bool = False
+        self, line: int, codes: tuple[str, ...], file_level: bool, form: str = "parsed"
     ) -> None:
         object.__setattr__(self, "_line", Line(line))
         object.__setattr__(self, "_codes", tuple(Code(code) for code in codes))
         object.__setattr__(self, "_scope", IgnoreScope("file" if file_level else "line"))
-        object.__setattr__(self, "_malformed", malformed)
+        object.__setattr__(self, "_form", IgnoreForm(form))
 
     def _suppresses(self, violation: Violation) -> bool:
-        if self._malformed:
+        if str(self._form) == "malformed":
             return False
         file_wide = str(self._scope) == "file"
         if file_wide and not self._codes:
@@ -688,7 +701,7 @@ class Module(ts.Entity):
                         line=int(comment._line),
                         codes=(),
                         file_level=file_level,
-                        malformed=True,
+                        form="malformed",
                     )
                 )
                 continue
@@ -3565,7 +3578,7 @@ class Codebase(ts.AggregateRoot):
         )
 
     @staticmethod
-    def _params(fn: ast.FunctionDef) -> list[ast.arg]:
+    def _params(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.arg]:
         return [
             arg
             for arg in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs

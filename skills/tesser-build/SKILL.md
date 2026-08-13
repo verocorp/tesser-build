@@ -1,7 +1,7 @@
 ---
 name: tesser-build
 description: Application-construction entry point (DDD). Load whenever creating or modifying domain types OR the code around them — adding a field to a struct/class, creating a new type, modeling a new concept, writing a constructor, adding validation, comparing domain objects in tests, deciding between a value object/entity/aggregate, AND whenever writing a handler/endpoint, a use-case or application/domain service, or persistence/repository code (where to put business logic, how to load or save an aggregate, keeping domain math out of controllers), AND whenever wiring an application together — writing an entry point / `main` / composition root / host, exposing a component behind a public interface (a `Client` + DTOs), connecting two bounded contexts (a cross-context call or read), or placing a web UI / frontend / SPA (where presentation code lives), AND whenever reasoning about strategic design — subdomains, bounded contexts, or ubiquitous language. Routes the task through the decomposition procedure to the right component doc.
-skill-version: 32
+skill-version: 33
 source: https://github.com/verocorp/tesser-build (skills/tesser-build/)
 ---
 
@@ -103,6 +103,7 @@ Route on the task:
 | Writing a use-case / orchestration / a service method | Read `application-services.md` — the four-step shape (convert → delegate → persist → respond), no business logic |
 | Writing a handler / endpoint / controller | Read `handlers.md` — the one handler rule: parse/auth → call the app service through the public `Client`, injected; no domain math, no repository |
 | Loading or saving an aggregate, or writing a repository | Read `repositories.md` — whole aggregate in, reconstructed out, no business logic; query object ≠ spec |
+| Declaring an outbound port, or asking where a port goes — a repository, a peer-context, or a vendor interface | Read `python.md#ports` — a port lives in the context's `application/ports/` package, one port per module with the DTOs it speaks; one `ts.Request` in, one `ts.Response` out; no unions, no bare bools; multi-outcome answers are an enum read with `match` + `assert_never` |
 | Making one context call or read another | Read `gateway-cross-context.md` (the caller owns the port; fail-closed) and `map.md#how-contexts-connect` (a read composing two peers becomes its own context) |
 | Exposing a component/service behind a public interface (a `Client` + DTOs) | Read `public-interface.md` — a decoupling boundary, satisfied by embedding the service; speaks DTOs, never domain objects |
 | Wiring a context's own construction / its config | Read `wiring.md` — coordinate-driven impl selection, config in the wiring, cross-context deps injected |
@@ -112,7 +113,7 @@ Route on the task:
 | Business logic that "wants" to live in a service or handler | Read `application-services.md#domain-logic-leakage-checks` — move it onto the owning domain type |
 | Domain logic that fits no single object | Read `domain-services.md` — the rare case; confirm no missing type owns it first |
 | Adding a method to a value object, entity, or aggregate — especially one answering a question (`is_*`, `has_*`, `active`, a comparison) | Read `domain-return.md` — a domain object's behavior hands back domain objects; the comparison dunders are the base's, not yours; an internal predicate is private; do not wrap a bool to satisfy the rule |
-| Serializing a domain object — a repo row, a wire payload, a workflow-engine payload, or "how do I get the value out of this VO?" | Read `serialization.md` — domain objects never serialize themselves; leaf VOs have one canonical conversion exit; compounds/entities/aggregates decompose through the context's parts module (application layer); edges own their shape |
+| Serializing a domain object — a repo row, a wire payload, a workflow-engine payload, or "how do I get the value out of this VO?" | Read `serialization.md` — domain objects never serialize themselves; leaf VOs have one canonical conversion exit; compounds/entities/aggregates decompose through the application's mapping module into port DTOs declared in `application/ports/`; edges own their shape |
 | Writing or changing a test — how to write it, what to assert, what a test double may be | Read `testing.md` — hand-written doubles only (never a mocking library), one completeness test per spec-constructed type, assert only what you set or what was computed, trust your layers |
 | Tempted to write a comment or docstring | Read `comments.md` — v0 is zero (machine directives exempt); the explanation moves to a name, type, test, commit, or doc, never inline |
 | Adding logging, or wanting a domain object to "print nicely" in a log | Read `logging.md` — a stub: don't invent a convention; `repr` is the interim debug surface (domain types define no display dunders) |
@@ -129,9 +130,10 @@ Route on the task:
    form.
 5. **Tests are part of the object**: constructor rejection, equality
    semantics, and every invariant get tests when the type is born, not later.
-6. **Dependencies point inward and one way** — adapters depend on the domain,
-   contexts talk only through `Client`s, and the graph stays acyclic
-   (`map.md#how-contexts-connect`).
+6. **Dependencies point inward and one way** — an adapter depends on the
+   ports its context's application owns (in Python, on `application/ports/`
+   and nothing else of the context), contexts talk only through `Client`s,
+   and the graph stays acyclic (`map.md#how-contexts-connect`).
 
 Humans learning the why: see `docs/start-here.md` and `docs/faq.md` in the
 source repo (or https://github.com/verocorp/tesser-build).

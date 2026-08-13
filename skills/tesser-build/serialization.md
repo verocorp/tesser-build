@@ -68,7 +68,7 @@ data crosses an edge (maintainer rulings 2026-07-20).
    every canonical exit self-announcing at its definition (grep
    `canonical_` to find them all — a hand-rolled `__str__` is visibly not a
    canonical exit), and is statically typed with no runtime dispatch.
-   Consumers of the exit — the parts walk, edges — call the conversion
+   Consumers of the exit — the mapping walk, edges — call the conversion
    protocol directly (`str(vo)`, `int(vo)`). (Maintainer ruling 2026-07-20,
    superseding two same-day edge-side shapes — a one-arg introspective
    `canonical(vo)` dispatcher, then a two-arg `canonical(vo, expected)`
@@ -95,41 +95,48 @@ data crosses an edge (maintainer rulings 2026-07-20).
    apps log is its own future norm — `logging.md`, placeholder). The
    contract is mechanically crisp: a leaf has exactly one matching
    conversion dunder; a structured type has none.
-6. **One decompose walk per context: the parts module.** A single module in
-   the **application layer** (role, not filename — layout stays free) owns
-   the outbound walk for the context's domain types, producing a **total,
-   typed, domain-named** parts record: every field required (optional-by-
-   default is banned — totality is what makes a forgotten field a
-   missing-argument type error at one site), each leaf carried as its typed
-   canonical primitive (`int` stays `int` — a binary/typed wire maps parts
-   to native field types with no parse-back). The walk reads only the
-   sanctioned public surface: VO accessors and canonical exits. It lives in
-   the application layer because both of its consumers can legally reach it
-   there: the service's Respond step (a sibling) and the adapters (which
-   import the application layer; the reverse import would violate dependency
-   direction). It does NOT live in the domain: a parts record is spec-shaped
-   (public primitive fields), and the spec must remain the only primitive
-   bag near the domain — inbound-only.
-7. **Edges own their shape; they consume parts and never re-walk the
+6. **One decompose walk per context, into port DTOs.** The outbound shape a
+   context's domain types decompose into is a **port DTO** — a `ts.Request`
+   or `ts.Response` declared in the `application/ports/` package beside the
+   port that speaks it (`python.md#ports`) — and a single **mapping module
+   in the application role** (`mapping.py` / `views.py`; role, not filename)
+   owns the walk that builds it. The DTO is **total, typed, and
+   domain-named**: every field required (optional-by-default is banned, and
+   TB080 bans a union field outright — totality is what makes a forgotten
+   field a missing-argument type error at one site), each leaf carried as
+   its typed canonical primitive (`int` stays `int` — a binary/typed wire
+   maps fields to native types with no parse-back), a multi-outcome answer
+   an enum plus payload, a collection a tuple. The walk reads only the
+   sanctioned public surface: VO accessors and canonical exits.
+   **Why the split.** The DTO lives in `application/ports/` because that is
+   the one part of `application` an adapter may import (TB060) — and because
+   a ports module is a leaf that imports nothing from its tree (TB067), the
+   DTO structurally *cannot* reference a domain type. The walk lives in the
+   application role beside the service, because it must touch both sides and
+   an adapter may never see a domain object at all. Neither half lives in the
+   domain: a port DTO is spec-shaped (public primitive fields), and the spec
+   must remain the only primitive bag near the domain — inbound-only.
+7. **Edges own their shape; they consume port DTOs and never re-walk the
    domain.** Wire keys, casing, column names, payload framing — each
-   adapter maps the parts record to its own format. The parts record speaks
-   domain names only; if it emitted wire keys, one edge's rename would fork
-   the shared layer.
-8. **Graduation, not dogma.** A context with a single outbound edge and
-   leaf-only unwraps may keep the walk inline or in a private per-adapter
-   record + mapping function — that is the parts pattern's degenerate case
-   (one consumer), not a second mechanism. Introduce the shared parts module
-   at the first compound crossing an edge or the first second edge. An
-   adapter whose needs genuinely diverge forks to its own private mirror —
-   never by growing optional fields on the shared parts record.
+   adapter maps the DTO to its own format. The DTO speaks domain names only;
+   if it emitted wire keys, one edge's rename would fork the shared layer.
+8. **A diverging edge forks to its own port, never to optional fields.**
+   Each port module declares exactly one port with the DTOs that port
+   speaks, and no two ports may share a DTO (TB052 — and the leaf rule makes
+   sharing unrepresentable: a ports module cannot import its own sibling). So
+   the second edge whose needs genuinely differ gets its own ports module
+   with its own request and response, and the mapping module grows a second
+   walk. Widening one shared DTO with optional fields — the shape this used
+   to tempt — is banned twice over: by TB080 (no union field) and by the
+   silent-omission bug totality exists to kill.
 9. **Serialization frameworks never touch domain types.** A workflow
    engine's payload converter (Temporal, Restate), an ORM, a JSON encoder —
-   they serialize parts-derived records only. Letting the framework reach
-   the domain is how value objects get hollowed into public-field primitive
-   bags (observed at field scale; the pressure is real and this rule is the
-   pressure valve).
+   they serialize port DTOs and edge-owned records only. Letting the
+   framework reach the domain is how value objects get hollowed into
+   public-field primitive bags (observed at field scale; the pressure is
+   real and this rule is the pressure valve).
 
-**Migration caveat:** the parts record is total, but already-persisted data
+**Migration caveat:** the port DTO is total, but already-persisted data
 is not. Adding a field to a compound forces an explicit decision at each
 edge — a default, a backfill, or a loud load failure — and the decision
 belongs to the edge, recorded where its golden test lives.
@@ -140,7 +147,7 @@ belongs to the edge, recorded where its golden test lives.
   into N adapters, adding a component to a compound is N edits and every
   missed one ships silently — the edge just omits the field. Measured
   empirically: the per-edge inline walk left compound growth SILENT across
-  every edge; the shared total parts record turned the same change into
+  every edge; the shared total DTO turned the same change into
   type errors at one site.
 - **Two mechanisms fork.** A codebase that decomposes some types with
   methods and others with inline walks makes "which site do I change?"
@@ -204,16 +211,27 @@ belongs to the edge, recorded where its golden test lives.
   contract**: they have a ruled exit (`__str__`) but no ruled canonical form
   yet — the time-type taxonomy is a named open decision (`TODOS.md`) — and out
   of contract beats guessed at, as with `UUID` and `Enum`.
-- The **parts import boundary** (adapters consume parts, not domain types,
-  outbound) is a named deferred check; until it ships, rule 7 is
-  review-enforced. Honest gap, stated.
+- The **port-DTO import boundary** (adapters consume DTOs, not domain types,
+  outbound) was a named deferred check and is now enforced from both ends:
+  **TB060** lets an adapter import `application/ports` and nothing else of
+  `application`, **TB067** makes a ports module a leaf that imports nothing
+  from its tree, and **TB081** flags a domain object in a port or adapter
+  signature. Rule 7's remaining half — that the *edge*, not the DTO, owns wire
+  keys and framing — stays review-enforced. Honest gap, narrowed.
+- **TB080** flags the DTO-field half of rules 6 and 8: a port DTO field is
+  never a union (optional included) and never a bare `bool` — model the
+  outcome as an enum. **TB052** flags the rest of the ports module's contents:
+  a subclassed DTO (a response hierarchy is a union mypy cannot check for
+  exhaustiveness), a `StrEnum`/`IntEnum` outcome (a member that compares equal
+  to a raw literal reopens the typo the enum closes), a second port in the
+  module, and any class that is neither the port nor a DTO it speaks.
 
 ## Tests you must write
 
 - **Round-trip law, per leaf VO:** reconstructing from the canonical form
   yields an equal value.
 - **Golden-dict tests, per edge:** the exact wire/row/payload shape locked
-  as data. Goldens live at edges ONLY — the parts record is locked by its
+  as data. Goldens live at edges ONLY — the port DTO is locked by its
   total constructor and the type checker, and goldening it would tax
   harmless internal renames.
 - **Reconstruction round-trip, per repository:** save → load produces a
@@ -222,12 +240,17 @@ belongs to the edge, recorded where its golden test lives.
 ## Common mistakes
 
 - **The public decompiler:** `to_spec()`/`to_dict()`/`emit(sink)` on a
-  domain type. The walk belongs to the parts module.
+  domain type. The walk belongs to the application's mapping module.
 - **The scattered walk:** each adapter reading component VOs itself. One
-  walk; adapters consume parts.
-- **Optional parts fields:** an `x: str | None = None` on the parts record
-  re-admits the silent-omission bug totality just killed. Fork the
-  divergent adapter instead.
+  walk; adapters consume port DTOs — and cannot do otherwise, since an
+  adapter may not import the domain.
+- **Optional DTO fields:** an `x: str | None = None` on a port DTO
+  re-admits the silent-omission bug totality just killed (and TB080 rejects
+  the union outright). Give the diverging edge its own port instead.
+- **Logic in the ports module:** a helper function, a shared outcome
+  constant, a mapping function parked beside the DTO it builds. A ports
+  module holds imports and classes, nothing else (TB051) — the walk goes in
+  the application's mapping module, where it can legally see both sides.
 - **Parsing `str(x)` to extract data:** the canonical form is an exit, not
   a transport container for components.
 - **Hand-rolling a canonical form inside a dunder:** a leaf's `__str__`
@@ -235,31 +258,35 @@ belongs to the edge, recorded where its golden test lives.
   `f"{self._value:.2f}"`) instead of delegating to the matching
   `canonical_*` policy helper — the tenth such VO silently drifts from the
   pinned format, and the exit stops being greppable as canonical.
-- **Merging parts and spec because they look alike:** a minimal context's
-  parts record is often a field-for-field twin of its spec — that is a
+- **Merging the port DTO and the spec because they look alike:** a minimal
+  context's record is often a field-for-field twin of its spec — that is a
   coincidence of the simple case, not an identity. The spec is inbound-only
   (accepts any valid representation, feeds the validating constructor); the
-  parts record is outbound-only (carries exactly the canonical forms, and
+  port DTO is outbound-only (carries exactly the canonical forms, and
   grows derived fields the constructor must never accept). Deduplicating
-  them welds the two directions together; the verified impl locks the
-  separation with a test that the parts module never imports a spec.
+  them welds the two directions together — and is now structurally
+  impossible: a ports module imports nothing from its tree (TB067), so it
+  cannot reach a spec even to alias it.
 - **A "just for logging" dunder on a compound:** the zero-dunder contract
   has no debug carve-out; `repr` is the debug surface, and logging norms
   are `logging.md`'s to settle.
 - **Framework-shaped domain:** public fields or primitive accessors added
-  "because the serializer needs them" — route the framework through parts.
+  "because the serializer needs them" — route the framework through the port
+  DTO.
 
 ## Now build it
 
 - Python mechanics: `python.md#value-objects` (canonical exits, child VOs),
-  `python.md#the-spec-pattern` (inbound door). Compound shape verified in
-  `examples/python-app/campaign/domain/money.py`; parts verified impl:
-  `examples/python-app/campaign/application/parts.py`.
+  `python.md#the-spec-pattern` (inbound door), `python.md#ports` (the ports
+  package and its DTO rules). Compound shape verified in
+  `examples/python-app/campaign/domain/money.py`; the walk-plus-DTO pair
+  verified in `examples/serdepy/parcel/application/mapping.py` and
+  `examples/serdepy/parcel/application/ports/parcel_wire.py`.
 - The all-cases worked example: `examples/serdepy/` — every backing type's
   exit (all four conversion dunders, the Decimal and datetime text
-  policies), the zero-dunder compound, a parts record whose derived field
-  (`heavy`) proves parts ≠ spec by construction, an edge golden with
-  edge-owned keys and framing (bytes → hex), and the full required test
+  policies), the zero-dunder compound, a port DTO whose derived field
+  (`weight_class`, an enum) proves DTO ≠ spec by construction, an edge golden
+  with edge-owned keys and framing (bytes → hex), and the full required test
   set in miniature.
 - Go: **not yet materialized — note the gap, don't invent a convention.**
   The Go rendering re-hinges canonical text from `fmt.Stringer` to

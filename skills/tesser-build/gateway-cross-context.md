@@ -34,7 +34,10 @@ behind an interface the calling context owns?* Yes → cross-context gateway.
 
 1. **The consumer owns the port.** The calling context declares the interface it
    needs (campaign's `TargetPolicy`), in its own vocabulary, on its own side of
-   the boundary. The peer never learns the caller exists.
+   the boundary — in its `application/ports/` package, one port per module with
+   the request/response DTOs it speaks (`python.md#ports`). The peer never
+   learns the caller exists, and the peer's DTOs never appear in the port: the
+   gateway translates them into the caller's own.
 2. **The adapter lives in the caller's `adapters/gateways`.** It wraps the
    peer's `Client` and translates the peer's DTOs into the caller's own types —
    the peer's vocabulary never crosses inward. The composition root constructs
@@ -54,5 +57,6 @@ behind an interface the calling context owns?* Yes → cross-context gateway.
 
 Not yet materialized beyond the rules above (see status note). The verified impl
 to imitate: `examples/python-app/campaign/adapters/gateways/target_policy.py`
-(port + `PolicyOutcome` declared beside campaign's `Client`; adapter over
-`linkpolicy.Client`; wired in `examples/python-app/bootstrap/bootstrap.py`).
+(the `TargetPolicy` port and its request/response DTOs in campaign's
+`application/ports/`, the outcome an enum; adapter over `linkpolicy.Client`;
+wired in `examples/python-app/bootstrap/bootstrap.py`).
