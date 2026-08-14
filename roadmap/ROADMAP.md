@@ -22,7 +22,7 @@ Legend: ✅ done · 🟡 partial · ❌ absent · — intentionally n/a.
 | Context wiring | ✅ | ❌ | ✅ | 🟡 in-example | ❌ |
 | bootstrap + app config + lifecycle | ✅ | ❌ | ✅ | 🟡 in-example | ❌ |
 | srv hosts | ✅ | ❌ | ✅ | 🟡 in-example | ❌ |
-| The map | — | — | ✅ | 🟡 Py only (TB040, TB041, TB042, TB043, TB051, TB052, TB069) | ❌ |
+| The map | — | — | ✅ | 🟡 Py only (TB040, TB041, TB042, TB043, TB044, TB051, TB052, TB069) | ❌ |
 | Strategic design | — | — | ✅ | — | ❌ |
 | Norm: errors | ✅ | ❌ | ❌ | 🟡 in-example | ❌ the errorspy example matrix is the proof; no changeability contender |
 | Norm: testing | ❌ | ❌ | 🟡 partial | 🟡 Py only (TB030, TB070, TB071, TB072, TB073) | ❌ |

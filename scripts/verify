@@ -28,7 +28,21 @@ set -uo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT" || exit 1
 
-TREES=(spike-shells spike-llmport python-app serdepy errorspy ports tesser-py vobase tessercheck-py)
+# The tree list is derived from manifest.json, never hand-maintained here: a
+# python-app or python-library row IS the claim that scripts/verify gates it,
+# and a manifest tree with no run_* arm below fails as "unknown tree" rather
+# than silently not running. check-topology holds the other direction — that
+# every directory on disk has a manifest row at all.
+scripts/check-topology || exit 1
+
+mapfile -t TREES < <(python3 - <<'PY'
+import json, pathlib
+manifest = json.loads(pathlib.Path("manifest.json").read_text())
+for key, kind in manifest.items():
+    if kind in ("python-app", "python-library"):
+        print(key.split("/")[-1])
+PY
+)
 
 failed=()
 

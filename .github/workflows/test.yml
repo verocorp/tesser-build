@@ -6,6 +6,19 @@ on:
     branches: [main]
 
 jobs:
+  topology:
+    # The repo-topology guard: manifest.json is the one declaration of what
+    # every top-level directory (and every examples/ subdirectory) is; this
+    # fails when disk and manifest disagree in either direction — including a
+    # brand-new directory nobody wired into the gates. scripts/verify runs the
+    # same guard locally as its step 0, from the same script.
+    name: repo topology (manifest ↔ disk ↔ gates)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: check-topology
+        run: scripts/check-topology
+
   test:
     runs-on: ubuntu-latest
     steps:

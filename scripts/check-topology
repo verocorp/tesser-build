@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+#
+# The repo-topology guard: manifest.json is the one declaration of what every
+# top-level directory (and every examples/ subdirectory) is, and this script
+# fails when disk and manifest disagree — in either direction.
+#
+# What it holds:
+#   1. Every top-level directory has a manifest row, and every row a directory.
+#      A new top-level directory without a row is a failure by default, which
+#      is the guard against a tree appearing outside the gates.
+#   2. Same for examples/*.
+#   3. Every python-app row carries a .tesser-root declaring 'app', and no
+#      .tesser-root exists anywhere the manifest does not claim — so the set
+#      of checkable trees and the set of declared trees are the same set.
+#   4. Every python-app and python-library row is wired into CI: the workflow
+#      invokes `scripts/verify <tree>` for it. scripts/verify itself derives
+#      its tree list from the manifest, so local coverage needs no check here.
+import json
+import pathlib
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+SKIP_WALK = {".git", ".claude", ".venv", "venv", "node_modules", "__pycache__", ".mypy_cache", ".pytest_cache"}
+
+HIDDEN_TRACKED = {".github"}
+
+
+def fail(problems: list[str]) -> None:
+    if problems:
+        for problem in problems:
+            print(f"topology: {problem}", file=sys.stderr)
+        sys.exit(1)
+
+
+def disk_dirs(base: pathlib.Path) -> set[str]:
+    return {
+        entry.name
+        for entry in base.iterdir()
+        if entry.is_dir()
+        and (not entry.name.startswith(".") or entry.name in HIDDEN_TRACKED)
+    }
+
+
+def declared_roots() -> set[pathlib.Path]:
+    found: set[pathlib.Path] = set()
+    for path in ROOT.rglob(".tesser-root"):
+        relative = path.relative_to(ROOT)
+        if SKIP_WALK & set(relative.parts[:-1]):
+            continue
+        found.add(path)
+    return found
+
+
+def main() -> None:
+    manifest = json.loads((ROOT / "manifest.json").read_text())
+    problems: list[str] = []
+
+    top_rows = {key for key in manifest if "/" not in key}
+    top_disk = disk_dirs(ROOT)
+    for name in sorted(top_disk - top_rows):
+        problems.append(f"top-level directory '{name}' has no manifest.json row; every top-level directory declares what it is")
+    for name in sorted(top_rows - top_disk):
+        problems.append(f"manifest.json row '{name}' names no directory on disk")
+
+    example_rows = {key.split("/", 1)[1] for key in manifest if key.startswith("examples/")}
+    example_disk = disk_dirs(ROOT / "examples")
+    for name in sorted(example_disk - example_rows):
+        problems.append(f"examples/{name} has no manifest.json row")
+    for name in sorted(example_rows - example_disk):
+        problems.append(f"manifest.json row 'examples/{name}' names no directory on disk")
+
+    apps = {key for key, kind in manifest.items() if kind == "python-app"}
+    expected = {ROOT / key / ".tesser-root" for key in apps}
+    actual = declared_roots()
+    for path in sorted(actual - expected):
+        problems.append(f"{path.relative_to(ROOT)} declares a tree the manifest does not claim as python-app")
+    for path in sorted(expected - actual):
+        problems.append(f"{path.relative_to(ROOT)} is missing; a python-app tree declares itself with .tesser-root")
+    for path in sorted(expected & actual):
+        if path.read_text().strip() != "app":
+            problems.append(f"{path.relative_to(ROOT)} does not declare 'app'")
+
+    workflow = (ROOT / ".github" / "workflows" / "test.yml").read_text()
+    gated = {key for key, kind in manifest.items() if kind in ("python-app", "python-library")}
+    for key in sorted(gated):
+        tree = key.split("/")[-1]
+        if f"scripts/verify {tree}" not in workflow:
+            problems.append(f"{key} has no CI job invoking 'scripts/verify {tree}'")
+
+    fail(problems)
+    print(f"topology: {len(top_rows)} top-level rows, {len(example_rows)} example rows, {len(apps)} declared app trees — disk and manifest agree")
+
+
+if __name__ == "__main__":
+    main()

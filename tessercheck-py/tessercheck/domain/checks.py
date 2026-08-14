@@ -118,6 +118,8 @@ PROTOCOL_KINDS: Final[frozenset[str]] = SRV_KINDS - frozenset({"host"})
 
 PROTOCOL_PACKAGE: Final[str] = "protocol"
 
+TREE_DECLARATION: Final[str] = ".tesser-root"
+
 TESSER: Final[str] = "tesser"
 
 STUB_SUFFIX: Final[str] = ".pyi"
@@ -784,8 +786,15 @@ class Module(ts.Entity):
 
 class CodebaseSpec(ts.Spec):
 
-    def __init__(self, sources: tuple[tuple[str, str, str | None, bool], ...]) -> None:
+    def __init__(
+        self,
+        sources: tuple[tuple[str, str, str | None, bool], ...],
+        declared: str,
+        nested: tuple[str, ...],
+    ) -> None:
         self.sources = sources
+        self.declared = declared
+        self.nested = nested
 
 
 class Codebase(ts.AggregateRoot):
@@ -845,8 +854,13 @@ class Codebase(ts.AggregateRoot):
                 )
         self._modules = tuple(modules)
         self._broken = tuple(broken)
+        self._declaration = spec.declared
+        self._nested = spec.nested
 
     def violations(self) -> tuple[Violation, ...]:
+        declaration = self._declaration_violations()
+        if declaration:
+            return declaration
         found = list(self._broken)
         found.extend(self._rule_violations())
         kept: list[Violation] = []
@@ -1214,6 +1228,40 @@ class Codebase(ts.AggregateRoot):
         if cls._reaches_importlib(module, callee):
             return f"{IMPORTLIB}.{ast.unparse(callee).rsplit('.', 1)[-1]}"
         return None
+
+    def _declaration_violations(self) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        if self._declaration == "missing":
+            found.append(
+                Violation(
+                    TREE_DECLARATION,
+                    1,
+                    "TB044",
+                    "this tree is not declared; a checkable tree carries a "
+                    ".tesser-root file containing 'app' at its root",
+                )
+            )
+        elif self._declaration != "app":
+            found.append(
+                Violation(
+                    TREE_DECLARATION,
+                    1,
+                    "TB044",
+                    "this tree declares an unrecognized kind; "
+                    "the one recognized kind is 'app'",
+                )
+            )
+        for relative in self._nested:
+            found.append(
+                Violation(
+                    relative,
+                    1,
+                    "TB044",
+                    "declares a nested tree root; a tessercheck run covers one "
+                    "declared tree, so run that tree directly",
+                )
+            )
+        return tuple(found)
 
     def _homeless_violations(self, module: Module) -> tuple[Violation, ...]:
         return (

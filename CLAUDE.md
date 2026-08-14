@@ -105,9 +105,20 @@ green, that half of CI is green.
 ```
 python3 -m venv .venv && source .venv/bin/activate
 scripts/install-dev                      # every tree's requirements-dev.txt
-scripts/verify                           # all eight Python trees
+scripts/verify                           # every Python tree, from manifest.json
 scripts/verify python-app spike-shells   # or just the ones you touched
 ```
+
+**The repo's shape is declared, not inferred** (`docs/design-repo-topology.md`).
+`manifest.json` names what every top-level directory and every `examples/*`
+directory is; each checkable tree carries a `.tesser-root` file declaring
+`app` (an undeclared or nested root is a `TB044` finding); and
+`scripts/check-topology` — run by `scripts/verify` as step 0 and by its own CI
+job — fails when disk and manifest disagree in either direction. **Do not
+create a new top-level directory (or `examples/` subdirectory) without adding
+its manifest row**; the guard exists precisely to make that impossible to do
+silently. `scripts/verify` derives its tree list from the manifest, so a new
+`python-app` row must come with a `run_*` arm in the script and a CI job.
 
 Two things to know:
 

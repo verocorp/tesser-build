@@ -15,6 +15,14 @@ the bottom. Evidence base: the settled model excavated from the vero prior art
 An application is a set of **bounded contexts** (`strategic-design.md`) plus a
 thin app-level layer that wires and hosts them.
 
+**The tree declares itself.** A checkable app tree carries a `.tesser-root`
+file at its root containing `app` — that one file is what makes the directory
+a tessercheck subject. An undeclared root, an unrecognized kind, or a
+`.tesser-root` nested inside another tree is a `TB044` finding, and a
+declaration finding short-circuits every other rule: the analyzer reports what
+the directory is (or isn't) before it reports anything about its contents.
+When you create a new app tree, the declaration file comes first.
+
 **A bounded context has four roles — all present in an app context; internal
 nesting and layout are free** (presence is required, organization is not
 prescribed):

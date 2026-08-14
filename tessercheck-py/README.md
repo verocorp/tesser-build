@@ -31,6 +31,12 @@ PYTHONPATH=/path/to/tesser-build/tessercheck-py:/path/to/tesser-build/tesser-py 
   python3 -m tessercheck /path/to/tree
 ```
 
+The target declares itself: a checkable tree carries a `.tesser-root` file at
+its root containing `app`. An undeclared root, an unrecognized kind, or a
+`.tesser-root` nested below the root is a `TB044` finding — and a declaration
+finding short-circuits the walk, so pointing the analyzer at a directory that
+never claimed to be a tree reports that fact instead of walking it.
+
 Exit 0 when clean; exit 1 with one finding per line, flake8-style:
 
 ```

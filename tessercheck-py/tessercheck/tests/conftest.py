@@ -10,6 +10,13 @@ from tessercheck.client.client import CheckRequest
 
 
 def check_tree(root: Path) -> tuple[str, ...]:
+    declaration = root / ".tesser-root"
+    if not declaration.exists():
+        declaration.write_text("app\n")
+    return check_raw(root)
+
+
+def check_raw(root: Path) -> tuple[str, ...]:
     service = TessercheckService(FilesystemSourceReader())
     return service.check(CheckRequest(root=str(root))).findings
 

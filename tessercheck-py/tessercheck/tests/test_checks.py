@@ -4549,3 +4549,43 @@ def test_a_ports_module_holds_only_shapes_the_rules_can_read(tmp_path: Path) -> 
     assert any(
         "app.application.ports.sink.Header holds a Subscript" in f for f in findings
     ), f"an expression in a class base ran at import: {findings}"
+
+
+def test_an_undeclared_tree_is_a_finding_and_nothing_else_is(tmp_path: Path) -> None:
+    conftest.write_module(tmp_path, "stray.py", "import os\n")
+    findings = conftest.check_raw(tmp_path)
+    assert len(findings) == 1, findings
+    assert any(
+        "this tree is not declared; a checkable tree carries a .tesser-root file "
+        "containing 'app' at its root" in f
+        for f in findings
+    ), f"an undeclared tree was walked as if declared: {findings}"
+
+
+def test_an_unrecognized_declaration_is_a_finding(tmp_path: Path) -> None:
+    (tmp_path / ".tesser-root").write_text("domain\n")
+    findings = conftest.check_raw(tmp_path)
+    assert len(findings) == 1, findings
+    assert any(
+        "this tree declares an unrecognized kind; the one recognized kind is 'app'" in f
+        for f in findings
+    ), f"an unrecognized declaration passed: {findings}"
+
+
+def test_a_nested_declaration_is_a_finding(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    (tmp_path / "app" / ".tesser-root").write_text("app\n")
+    findings = conftest.check_tree(tmp_path)
+    assert len(findings) == 1, findings
+    assert any(
+        "declares a nested tree root; a tessercheck run covers one declared tree, "
+        "so run that tree directly" in f
+        for f in findings
+    ), f"a nested declaration passed: {findings}"
+
+
+def test_a_skipped_dir_hides_no_nested_declaration(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    (tmp_path / ".venv").mkdir()
+    (tmp_path / ".venv" / ".tesser-root").write_text("app\n")
+    assert conftest.check_tree(tmp_path) == ()

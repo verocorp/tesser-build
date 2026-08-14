@@ -25,6 +25,8 @@ SKIP_DIRS: Final[frozenset[str]] = frozenset(
     }
 )
 
+DECLARATION: Final[str] = ".tesser-root"
+
 
 class FilesystemSourceReader(ts.Repository):
 
@@ -63,4 +65,28 @@ class FilesystemSourceReader(ts.Repository):
                     form=form,
                 )
             )
-        return source_reader.ReadSourcesResponse(sources=tuple(found))
+        return source_reader.ReadSourcesResponse(
+            root=self._root_form(base),
+            nested=self._nested(base),
+            sources=tuple(found),
+        )
+
+    def _root_form(self, base: Path) -> source_reader.RootForm:
+        try:
+            text = (base / DECLARATION).read_text(encoding="utf-8").strip()
+        except OSError:
+            return source_reader.RootForm.MISSING
+        if text == "app":
+            return source_reader.RootForm.APP
+        return source_reader.RootForm.UNRECOGNIZED
+
+    def _nested(self, base: Path) -> tuple[str, ...]:
+        found: list[str] = []
+        for path in sorted(base.rglob(DECLARATION)):
+            relative = path.relative_to(base)
+            if str(relative) == DECLARATION:
+                continue
+            if SKIP_DIRS & set(relative.parts[:-1]):
+                continue
+            found.append(str(relative))
+        return tuple(found)
