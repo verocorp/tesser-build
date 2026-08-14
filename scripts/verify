@@ -35,14 +35,22 @@ cd "$ROOT" || exit 1
 # every directory on disk has a manifest row at all.
 scripts/check-topology || exit 1
 
-mapfile -t TREES < <(python3 - <<'PY'
+# Capture the generator's output in a variable first: process substitution
+# would hide a python3 failure from set -e, and an empty TREES list would make
+# the loop below report "all green (0 trees)" — a gate that fails open.
+TREE_LIST=$(python3 - <<'PY'
 import json, pathlib
 manifest = json.loads(pathlib.Path("manifest.json").read_text())
 for key, kind in manifest.items():
-    if kind in ("python-app", "python-library"):
+    if kind == "app":
         print(key.split("/")[-1])
 PY
-)
+) || { echo "verify: could not derive trees from manifest.json" >&2; exit 1; }
+mapfile -t TREES <<<"$TREE_LIST"
+if [ ${#TREES[@]} -eq 0 ] || [ -z "${TREES[0]}" ]; then
+  echo "verify: no gated trees derived from manifest.json" >&2
+  exit 1
+fi
 
 failed=()
 

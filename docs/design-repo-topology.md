@@ -25,48 +25,86 @@ Three related holes, all of the same shape — coverage was implicit:
 ## The declarations
 
 **A tree declares itself: `.tesser-root`.** A checkable tree carries a
-`.tesser-root` file at its root containing `app`. The declaration state is a
-fact the reader reports and the domain rules judge (`TB044`):
+`.tesser-root` file at its root. The file has a total grammar — anything
+outside it is a finding by default, the same move as TB069:
+
+```
+app
+skip testdata
+```
+
+The first line is the kind (`app` is the only one — see "Everything is an
+app"). Every further line is a `skip <dir>` directive naming a directory the
+walk ignores for this tree. This is where repo-specific configuration lives:
+**the analyzer carries nothing specific to any repo** (maintainer ruling
+2026-08-14) — tessercheck-py's own fixture directory is skipped by *its*
+declaration, not by a hardcoded name in the reader. The universal skip set
+(`.git`, `__pycache__`, venvs, caches, `build`/`dist`) stays in the reader
+because it is universal, not repo-specific.
+
+The declaration state is a fact the reader reports and the domain rules judge:
 
 - no `.tesser-root` → `TB044` — the tree is not declared;
-- unrecognized content → `TB044` — the one recognized kind is `app`;
-- a `.tesser-root` found *below* the root → `TB044` — a run covers one
-  declared tree; run the nested tree directly.
+- unreadable (not UTF-8 text, or not a regular file) → `TB044`;
+- unrecognized first line or directive → `TB044`;
+- a `.tesser-root` *below* the root → `TB044` — a run covers one declared
+  tree; run the nested tree directly;
+- a **symlinked directory** inside the tree → `TB045` — `os.walk` does not
+  follow symlinks, so a symlink would smuggle unwalked code into a
+  zero-findings gate; the walk reports what it cannot cover.
 
-A declaration finding short-circuits every other rule: an undeclared tree gets
-exactly the declaration findings and nothing else, because walk findings about
-a tree that never claimed to be a tree are noise. Run at the repo root today,
-tessercheck reports one line per declared tree below — a map, not a smoosh.
+A declaration or walk-integrity finding short-circuits every other rule:
+findings about a tree that never claimed to be a tree — or that could not be
+walked in full — are noise. Run at the repo root, tessercheck reports one line
+per declared tree below — a map, not a smoosh. TB044/TB045 report on files
+that cannot carry a Python comment, so they are the one family an inline
+ignore can never suppress.
 
 **The repo declares its shape: `manifest.json`.** Every top-level directory
-and every `examples/` subdirectory has a row naming its kind — `python-app`,
-`python-library`, `go`, `docs`, `skills`, `scripts`, `hybrid`, `config`,
-`spike`, `meta`, `examples`. The interesting property is what a *kind* buys:
+and every `examples/` subdirectory has a row. There are exactly two kinds,
+because **everything is an app** (maintainer ruling 2026-08-14: there is no
+library concept — a "library" is an app that does no IO but still exposes a
+client and coordinates its domain through an application service; revisit only
+when someone has a real performance problem):
 
-- `python-app` — a declared tesser tree; gated by `scripts/verify` with
-  tessercheck at zero findings. The manifest row and the `.tesser-root` file
-  must agree, both ways.
-- `python-library` — gated by `scripts/verify` (mypy + pytest), deliberately
-  not a tessercheck subject (`tesser-py`, `examples/vobase`). The decision not
-  to check a tree is now written down, not implied by absence.
-- everything else — named so its coverage story is visible (`go` is covered by
-  the Go gates, `spike` is explicitly ungated, and so on).
+- `app` — a Python tree gated by `scripts/verify`. `tesser-py` and
+  `examples/vobase` are app rows whose arms run mypy + pytest today and gain
+  the tessercheck step when their trees are migrated to conform — a config
+  change, not an ontology change.
+- `ungated` — not a subject of the Python gate system (Go directories are
+  covered by the Go jobs; docs and skills by their own checks).
+
+Earlier drafts had eleven kinds; nine were labels nothing read — prose wearing
+a schema. The word is not the guard. The witnesses are.
 
 ## The guard
 
-`scripts/check-topology` (stdlib Python, no venv needed) holds four equalities:
+`scripts/check-topology` (stdlib Python, no venv needed) holds the witnesses:
 
 1. top-level directories on disk == manifest rows, both directions;
 2. `examples/*` directories == manifest rows, both directions;
-3. the set of `.tesser-root` files in the repo == the set of `python-app`
-   rows, and each declares `app`;
-4. every `python-app`/`python-library` row has a CI job invoking
-   `scripts/verify <tree>`.
+3. a tree carries `.tesser-root` **exactly when** its `scripts/verify` arm
+   runs tessercheck — demoting either side alone goes red (and deleting a
+   declaration can't demote a checked tree anyway: the analyzer itself goes
+   red via TB044);
+4. every `app` row has a `scripts/verify` case arm and a CI job step
+   `run: scripts/verify <tree>`, and app basenames are unique (verify
+   dispatches by basename);
+5. every directory holding a `requirements-dev.txt` — **anywhere in the
+   repo** — is an `app` row, so a Python tree cannot be filed under a kind
+   that drops its gates, at any depth;
+6. a symlinked top-level or `examples/*` directory is a failure; deeper
+   symlinks inside declared trees are the analyzer's TB045.
+
+The guard has its own pytest suite (`scripts/test_check_topology.py`) pinning
+every failure mode against a synthetic repo root — run by the topology CI job,
+so "the guard regressed to always-pass" is itself catchable.
 
 `scripts/verify` runs the guard as step 0 and **derives its tree list from the
-manifest** — the hand-maintained `TREES` array is gone. A manifest tree with
-no `run_*` arm fails as "unknown tree" rather than silently not running. A new
-top-level directory without a manifest row fails CI before any other job runs.
+manifest** — the hand-maintained `TREES` array is gone, and an empty or failed
+derivation fails closed rather than reporting green over nothing. A manifest
+tree with no `run_*` arm fails as "unknown tree". A new top-level directory
+without a manifest row fails CI before any other job runs.
 
 ## Why there is no "run this dir as domain" flag
 

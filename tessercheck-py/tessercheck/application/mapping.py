@@ -10,7 +10,10 @@ import tessercheck.domain.checks as domain
 def findings(read: source_reader.ReadSourcesResponse) -> tuple[str, ...]:
     codebase = domain.Codebase(
         domain.CodebaseSpec(
-            sources=_sources(read), declared=_declared(read), nested=read.nested
+            sources=_sources(read),
+            declared=_declared(read),
+            nested=read.nested,
+            symlinked=read.symlinked,
         )
     )
     return tuple(
@@ -24,11 +27,13 @@ def findings(read: source_reader.ReadSourcesResponse) -> tuple[str, ...]:
 def _declared(read: source_reader.ReadSourcesResponse) -> str:
     match read.root:
         case source_reader.RootForm.APP:
-            return "app"
+            return domain.DECLARED_APP
         case source_reader.RootForm.MISSING:
-            return "missing"
+            return domain.DECLARED_MISSING
+        case source_reader.RootForm.UNREADABLE:
+            return domain.DECLARED_UNREADABLE
         case source_reader.RootForm.UNRECOGNIZED:
-            return "unrecognized"
+            return domain.DECLARED_UNRECOGNIZED
         case _ as unreachable:
             typing.assert_never(unreachable)
 

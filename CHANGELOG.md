@@ -5,6 +5,55 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.32.0] - 2026-08-14
+
+Repo topology. Three holes of one shape — coverage was implicit: a tessercheck
+run inferred its subject, the gate list was hand-maintained, and nothing
+stopped a new top-level directory from appearing outside the gates. Now both
+levels are declared, and a guard fails when disk and declarations disagree.
+
+### Added
+- **A checkable tree declares itself: `.tesser-root`.** The declaration has a
+  total grammar — first line `app`, then only `skip <dir>` lines. A missing,
+  unreadable, or unrecognized declaration, or one nested below the root, is a
+  **`TB044`** finding; a **symlinked directory** inside a declared tree is
+  **`TB045`**, because `os.walk` does not follow symlinks and a symlink would
+  smuggle unwalked code into a zero-findings gate. These findings
+  short-circuit every other rule and land on files that cannot carry a Python
+  comment, so they are the one family an inline ignore can never suppress.
+  Pointing the analyzer at the repo root now reports the map of declared trees
+  below — one line each — instead of smooshing nine trees into one walk.
+  Breaking for consumer repos: on upgrade, each checked tree adds one
+  `.tesser-root` file.
+- **`skip <dir>` is where repo-specific configuration lives** — the analyzer
+  hardcodes nothing about any repo. tessercheck-py's own fixture directory
+  (`testdata`) moved out of the reader's skip set and into its declaration.
+- **`manifest.json` declares what every top-level directory and every
+  `examples/*` directory is** — two kinds only, `app` and `ungated`, because
+  everything is an app; there is no library kind (a "library" is an app that
+  does no IO). `tesser-py` and `examples/vobase` are app rows whose gates gain
+  the tessercheck step when their trees are migrated to conform.
+- **`scripts/check-topology`** holds the witnesses, not just the words: disk
+  == manifest both directions and both levels; `.tesser-root` present exactly
+  when the tree's `scripts/verify` arm runs tessercheck; a verify arm, CI job,
+  and unique basename per app row; a `requirements-dev.txt` at **any depth**
+  must belong to an app row; symlinked top-level or `examples/*` directories
+  fail. It runs as `scripts/verify` step 0 and as its own CI job, which also
+  runs the guard's own pytest suite (`scripts/test_check_topology.py`, every
+  failure mode pinned against a synthetic root).
+- **`docs/design-repo-topology.md`** — the problem, the declarations, the
+  guard, and why there is no `--run-as domain` flag: placement truth lives in
+  the tree, never the invocation.
+
+### Changed
+- **`scripts/verify` derives its tree list from `manifest.json`** — the
+  hand-maintained `TREES` array is gone, and the derivation fails closed: a
+  broken or empty derivation aborts instead of reporting green over nothing.
+- **The reader walks once, pruning as it goes** (`os.walk`, symlinks never
+  followed) instead of three unpruned `rglob` passes — declaration, nested
+  roots, symlinks, and sources in a single traversal.
+- `map.md` carries the tree-declaration convention; skill-version 33 → 34.
+
 ## [0.0.31.0] - 2026-08-13
 
 Application ports. Adapters could import the whole `application` role, so a

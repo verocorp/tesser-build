@@ -16,8 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: check-topology
         run: scripts/check-topology
+      - name: guard's own suite (every failure mode pinned)
+        run: pip install pytest >/dev/null && python3 -m pytest scripts/test_check_topology.py -q
 
   test:
     runs-on: ubuntu-latest

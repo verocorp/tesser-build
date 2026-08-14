@@ -120,6 +120,14 @@ PROTOCOL_PACKAGE: Final[str] = "protocol"
 
 TREE_DECLARATION: Final[str] = ".tesser-root"
 
+DECLARED_APP: Final[str] = "app"
+
+DECLARED_MISSING: Final[str] = "missing"
+
+DECLARED_UNREADABLE: Final[str] = "unreadable"
+
+DECLARED_UNRECOGNIZED: Final[str] = "unrecognized"
+
 TESSER: Final[str] = "tesser"
 
 STUB_SUFFIX: Final[str] = ".pyi"
@@ -791,10 +799,12 @@ class CodebaseSpec(ts.Spec):
         sources: tuple[tuple[str, str, str | None, bool], ...],
         declared: str,
         nested: tuple[str, ...],
+        symlinked: tuple[str, ...],
     ) -> None:
         self.sources = sources
         self.declared = declared
         self.nested = nested
+        self.symlinked = symlinked
 
 
 class Codebase(ts.AggregateRoot):
@@ -856,6 +866,7 @@ class Codebase(ts.AggregateRoot):
         self._broken = tuple(broken)
         self._declaration = spec.declared
         self._nested = spec.nested
+        self._symlinked = spec.symlinked
 
     def violations(self) -> tuple[Violation, ...]:
         declaration = self._declaration_violations()
@@ -1231,7 +1242,7 @@ class Codebase(ts.AggregateRoot):
 
     def _declaration_violations(self) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        if self._declaration == "missing":
+        if self._declaration == DECLARED_MISSING:
             found.append(
                 Violation(
                     TREE_DECLARATION,
@@ -1241,14 +1252,24 @@ class Codebase(ts.AggregateRoot):
                     ".tesser-root file containing 'app' at its root",
                 )
             )
-        elif self._declaration != "app":
+        elif self._declaration == DECLARED_UNREADABLE:
             found.append(
                 Violation(
                     TREE_DECLARATION,
                     1,
                     "TB044",
-                    "this tree declares an unrecognized kind; "
-                    "the one recognized kind is 'app'",
+                    "this tree's declaration is not readable; "
+                    "a .tesser-root is a plain UTF-8 text file",
+                )
+            )
+        elif self._declaration != DECLARED_APP:
+            found.append(
+                Violation(
+                    TREE_DECLARATION,
+                    1,
+                    "TB044",
+                    "this tree declares an unrecognized kind; a declaration is "
+                    "'app', then only 'skip <dir>' lines",
                 )
             )
         for relative in self._nested:
@@ -1259,6 +1280,16 @@ class Codebase(ts.AggregateRoot):
                     "TB044",
                     "declares a nested tree root; a tessercheck run covers one "
                     "declared tree, so run that tree directly",
+                )
+            )
+        for relative in self._symlinked:
+            found.append(
+                Violation(
+                    relative,
+                    1,
+                    "TB045",
+                    "is a symlinked directory; a declared tree is walked in "
+                    "full, and a symlink escapes the walk",
                 )
             )
         return tuple(found)

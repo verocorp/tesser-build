@@ -9,6 +9,7 @@ import tesser.application as ts
 class RootForm(enum.Enum):
     APP = "app"
     MISSING = "missing"
+    UNREADABLE = "unreadable"
     UNRECOGNIZED = "unrecognized"
 
 
@@ -46,10 +47,12 @@ class ReadSourcesResponse(ts.Response):
         self,
         root: RootForm,
         nested: tuple[str, ...],
+        symlinked: tuple[str, ...],
         sources: tuple[SourceFile, ...],
     ) -> None:
         self.root = root
         self.nested = nested
+        self.symlinked = symlinked
         self.sources = sources
 
 
