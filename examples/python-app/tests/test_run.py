@@ -5,7 +5,7 @@ import threading
 import pytest
 import tesser.testing as ts
 
-from lifecycle import Host
+from protocol.lifecycle import Host
 from srv.run import run_until_signal
 from tests.support import SpyApp
 

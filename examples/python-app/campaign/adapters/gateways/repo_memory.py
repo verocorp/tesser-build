@@ -2,45 +2,73 @@ from __future__ import annotations
 
 import tesser.adapters as ts
 
-import campaign.application.parts as parts
+import campaign.application.ports.campaign_repository as campaign_repository
 from errors import InfraError
 
 
 class InMemoryCampaignRepository(ts.Repository):
 
     def __init__(self, *, down: bool = False) -> None:
-        self._rows: dict[str, parts.CampaignParts] = {}
+        self._rows: dict[str, campaign_repository.CampaignRecord] = {}
         self._down = down
         self.close_count = 0
 
-    def save(self, parts: parts.CampaignParts) -> None:
+    def save(
+        self, request: campaign_repository.SaveCampaignRequest
+    ) -> campaign_repository.SaveCampaignResponse:
         if self._down:
             raise InfraError("campaign store unavailable")
-        self._rows[parts.id] = parts
+        self._rows[request.id] = campaign_repository.CampaignRecord(
+            id=request.id, budget=request.budget, links=request.links
+        )
+        return campaign_repository.SaveCampaignResponse()
 
-    def find(self, id: str) -> parts.FoundCampaign | parts.MissingCampaign:
+    def find(
+        self, request: campaign_repository.FindCampaignRequest
+    ) -> campaign_repository.FindCampaignResponse:
         if self._down:
             raise InfraError("campaign store unavailable")
-        row = self._rows.get(id)
-        return parts.MissingCampaign() if row is None else parts.FoundCampaign(parts=row)
+        row = self._rows.get(request.campaign_id)
+        if row is None:
+            return campaign_repository.FindCampaignResponse(
+                outcome=campaign_repository.CampaignLookup.MISSING, campaigns=()
+            )
+        return campaign_repository.FindCampaignResponse(
+            outcome=campaign_repository.CampaignLookup.FOUND, campaigns=(row,)
+        )
 
-    def find_by_slug(self, slug: str) -> parts.FoundCampaign | parts.MissingCampaign:
+    def find_by_slug(
+        self, request: campaign_repository.FindCampaignBySlugRequest
+    ) -> campaign_repository.FindCampaignResponse:
         if self._down:
             raise InfraError("campaign store unavailable")
         for row in self._rows.values():
-            if any(link.slug == slug for link in row.links):
-                return parts.FoundCampaign(parts=row)
-        return parts.MissingCampaign()
+            if any(link.slug == request.slug for link in row.links):
+                return campaign_repository.FindCampaignResponse(
+                    outcome=campaign_repository.CampaignLookup.FOUND, campaigns=(row,)
+                )
+        return campaign_repository.FindCampaignResponse(
+            outcome=campaign_repository.CampaignLookup.MISSING, campaigns=()
+        )
 
-    def slug_taken(self, slug: str) -> bool:
+    def slug_taken(
+        self, request: campaign_repository.SlugTakenRequest
+    ) -> campaign_repository.SlugTakenResponse:
         if self._down:
             raise InfraError("campaign store unavailable")
-        return any(link.slug == slug for row in self._rows.values() for link in row.links)
+        taken = any(link.slug == request.slug for row in self._rows.values() for link in row.links)
+        return campaign_repository.SlugTakenResponse(
+            availability=campaign_repository.SlugAvailability.TAKEN
+            if taken
+            else campaign_repository.SlugAvailability.FREE
+        )
 
-    def all(self) -> tuple[parts.CampaignParts, ...]:
+    def all(
+        self, request: campaign_repository.ListCampaignsRequest
+    ) -> campaign_repository.ListCampaignsResponse:
         if self._down:
             raise InfraError("campaign store unavailable")
-        return tuple(self._rows.values())
+        return campaign_repository.ListCampaignsResponse(campaigns=tuple(self._rows.values()))
 
     def close(self) -> None:
         self.close_count += 1

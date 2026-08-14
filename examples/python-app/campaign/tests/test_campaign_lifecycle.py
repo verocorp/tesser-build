@@ -8,8 +8,7 @@ import campaign.adapters.handlers.http as http
 import campaign.application.service as service
 import tesser.testing as ts
 
-import campaign.application.parts as parts
-import campaign.application.service as campaign_service
+import campaign.application.ports.target_policy as target_policy
 import campaign.client.client as client
 import campaign.domain.campaign as campaign
 import campaign.domain.money as money
@@ -22,9 +21,9 @@ from srv.http.host import respond  # tessercheck:ignore TB070
 
 
 @ts.fake
-class FakeTargetPolicyAllowAll(campaign_service.TargetPolicy):
-    def check(self, target_url: str) -> parts.PolicyOutcome:
-        return parts.PolicyOutcome(True, "ok")
+class FakeTargetPolicyAllowAll(target_policy.TargetPolicy):
+    def check(self, request: target_policy.CheckTargetRequest) -> target_policy.CheckTargetResponse:
+        return target_policy.CheckTargetResponse(verdict=target_policy.PolicyVerdict.ALLOWED, reason="ok")
 
 
 def test_deactivate_link_flips_the_link_inactive() -> None:

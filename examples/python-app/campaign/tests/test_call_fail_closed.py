@@ -3,51 +3,77 @@ from __future__ import annotations
 import pytest
 import tesser.testing as ts
 
-import campaign.application.parts as parts
+import campaign.application.ports.campaign_repository as campaign_repository
+import campaign.application.ports.target_policy as target_policy
 import campaign.application.service as service
 import campaign.client.client as client
 from errors import DomainError, InfraError, Kind
 
 
 @ts.fake
-class FakeCampaignRepositoryRecording(service.CampaignRepository):
+class FakeCampaignRepositoryRecording(campaign_repository.CampaignRepository):
     def __init__(self) -> None:
-        budget = parts.MoneyParts(amount="100.00", currency="USD")
-        self._parts = parts.CampaignParts(id="0123456789abcdef", budget=budget, links=())
-        self.saved: list[parts.CampaignParts] = []
+        budget = campaign_repository.MoneyRecord(amount="100.00", currency="USD")
+        self._record = campaign_repository.CampaignRecord(
+            id="0123456789abcdef", budget=budget, links=()
+        )
+        self.saved: list[campaign_repository.SaveCampaignRequest] = []
 
-    def save(self, parts: parts.CampaignParts) -> None:
-        self.saved.append(parts)
+    def save(
+        self, request: campaign_repository.SaveCampaignRequest
+    ) -> campaign_repository.SaveCampaignResponse:
+        self.saved.append(request)
+        return campaign_repository.SaveCampaignResponse()
 
-    def find(self, id: str) -> parts.FoundCampaign | parts.MissingCampaign:
-        return parts.FoundCampaign(parts=self._parts) if id == self._parts.id else parts.MissingCampaign()
+    def find(
+        self, request: campaign_repository.FindCampaignRequest
+    ) -> campaign_repository.FindCampaignResponse:
+        if request.campaign_id == self._record.id:
+            return campaign_repository.FindCampaignResponse(
+                outcome=campaign_repository.CampaignLookup.FOUND, campaigns=(self._record,)
+            )
+        return campaign_repository.FindCampaignResponse(
+            outcome=campaign_repository.CampaignLookup.MISSING, campaigns=()
+        )
 
-    def find_by_slug(self, slug: str) -> parts.FoundCampaign | parts.MissingCampaign:
-        return parts.MissingCampaign()
+    def find_by_slug(
+        self, request: campaign_repository.FindCampaignBySlugRequest
+    ) -> campaign_repository.FindCampaignResponse:
+        return campaign_repository.FindCampaignResponse(
+            outcome=campaign_repository.CampaignLookup.MISSING, campaigns=()
+        )
 
-    def slug_taken(self, slug: str) -> bool:
-        return False
+    def slug_taken(
+        self, request: campaign_repository.SlugTakenRequest
+    ) -> campaign_repository.SlugTakenResponse:
+        return campaign_repository.SlugTakenResponse(
+            availability=campaign_repository.SlugAvailability.FREE
+        )
 
-    def all(self) -> tuple[parts.CampaignParts, ...]:
-        return (self._parts,)
+    def all(
+        self, request: campaign_repository.ListCampaignsRequest
+    ) -> campaign_repository.ListCampaignsResponse:
+        return campaign_repository.ListCampaignsResponse(campaigns=(self._record,))
 
 
 @ts.fake
-class FakeTargetPolicyBlocking(service.TargetPolicy):
-    def check(self, target_url: str) -> parts.PolicyOutcome:
-        return parts.PolicyOutcome(False, "not on the allow-list")
+class FakeTargetPolicyBlocking(target_policy.TargetPolicy):
+    def check(self, request: target_policy.CheckTargetRequest) -> target_policy.CheckTargetResponse:
+        return target_policy.CheckTargetResponse(
+            verdict=target_policy.PolicyVerdict.BLOCKED, reason="not on the allow-list"
+        )
 
 
 @ts.fake
-class FakeTargetPolicyOutage(service.TargetPolicy):
-    def check(self, target_url: str) -> parts.PolicyOutcome:
+class FakeTargetPolicyOutage(target_policy.TargetPolicy):
+    def check(self, request: target_policy.CheckTargetRequest) -> target_policy.CheckTargetResponse:
         raise InfraError("linkpolicy unavailable")
 
 
 @ts.fake
-class FakeTargetPolicyAllowAll(service.TargetPolicy):
-    def check(self, target_url: str) -> parts.PolicyOutcome:
-        return parts.PolicyOutcome(True, "ok")
+class FakeTargetPolicyAllowAll(target_policy.TargetPolicy):
+    def check(self, request: target_policy.CheckTargetRequest) -> target_policy.CheckTargetResponse:
+        return target_policy.CheckTargetResponse(verdict=target_policy.PolicyVerdict.ALLOWED, reason="ok")
 
 
 def test_rejection_is_a_conflict_and_creates_nothing() -> None:

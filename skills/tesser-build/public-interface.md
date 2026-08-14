@@ -51,8 +51,9 @@ those operations are implemented?* Yes → public interface.
 - A **DTO** on its own — data with no operations. The DTOs live *with* the
   `Client` (same package) but they are not it.
 - A **repository interface** (`repositories.md`) — that is an *outbound port* the
-  implementation needs (persistence), defined beside its consumer. The `Client`
-  is the contract the component offers callers, facing the other way.
+  implementation needs (persistence), declared in the context's
+  `application/ports/`. The `Client` is the contract the component offers
+  callers, facing the other way.
 
 ## Rules
 

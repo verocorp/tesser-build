@@ -1,27 +1,15 @@
-from typing import Protocol
-
 import tesser.application as ts
 
+import tessercheck.application.mapping as mapping
+import tessercheck.application.ports.source_reader as source_reader
 import tessercheck.client.client as client
-import tessercheck.domain.checks as domain
-
-
-class SourceReader(ts.Port, Protocol):
-
-    def sources(self, root: str) -> tuple[tuple[str, str, str | None, bool], ...]: ...
 
 
 class TessercheckService(ts.ApplicationService):
 
-    def __init__(self, reader: SourceReader) -> None:
+    def __init__(self, reader: source_reader.SourceReader) -> None:
         self._reader = reader
 
     def check(self, request: client.CheckRequest) -> client.CheckResponse:
-        codebase = domain.Codebase(domain.CodebaseSpec(sources=self._reader.sources(request.root)))
-        return client.CheckResponse(
-            findings=tuple(
-                f"{violation.path()}:{int(violation.line())}: "
-                f"{violation.code()} {violation.text()}"
-                for violation in codebase.violations()
-            )
-        )
+        read = self._reader.sources(source_reader.ReadSourcesRequest(root=request.root))
+        return client.CheckResponse(findings=mapping.findings(read))

@@ -59,7 +59,8 @@ behavior may return. (Maintainer ruling 2026-08-08.)
    and stop. If a caller outside asks, the answer is a concept, not a boolean —
    name it (rule 5).
 2. **Where does the primitive re-enter?** At the edge, and only there. The
-   application layer's parts module and the `Client` DTOs carry primitives;
+   application layer's port DTOs (`application/ports/`) and the `Client` DTOs
+   carry primitives;
    they unwrap through the canonical exit (`str(vo)`, `int(vo)`). The domain
    exports no shape (`serialization.md` rule 1).
 

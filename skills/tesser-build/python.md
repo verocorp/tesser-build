@@ -4,7 +4,7 @@ Construction mechanics only — the concepts and the rules' whys live in the
 concept files (`value-objects.md`, `entities.md`, `aggregates.md`,
 `application-services.md`, `repositories.md`, `domain-services.md`). This file
 covers the domain building blocks *and* the boundaries that serve them (application
-services, repositories) — not domain objects themselves, but their construction
+services, application ports, repositories) — not domain objects themselves, but their construction
 mechanics live here alongside the objects they orchestrate and persist. Section
 headings here are stable anchors; the resolver and the coverage matrix link to
 them.
@@ -393,95 +393,207 @@ method inlines its logic — no delegation chains, at most ten source lines,
 one level of branching, a condition satisfied by one domain call.
 
 ```python
-# campaign/application/service.py (verified impl)
-class CampaignRepository(ts.Port, Protocol):
-
-    def save(self, parts: cparts.CampaignParts) -> None: ...
-
-    def find(self, id: str) -> cparts.FoundCampaign | cparts.MissingCampaign: ...
-
-    def slug_taken(self, slug: str) -> bool: ...
-    ...                                                # find_by_slug, all — elided
-
-
-class TargetPolicy(ts.Port, Protocol):
-
-    def check(self, target_url: str) -> cparts.PolicyOutcome: ...
-
-
+# campaign/application/service.py (verified impl: examples/errorspy/)
 class CampaignService(ts.ApplicationService):
 
-    def __init__(self, repo: CampaignRepository, policy: TargetPolicy) -> None:
-        self._repo = repo                                  # injected ports, never built here
-        self._policy = policy
+    def __init__(self, repo: campaign_repository.CampaignRepository) -> None:
+        self._repo = repo
 
     def create_campaign(self, req: client.CreateCampaignRequest) -> client.CampaignView:
-        budget = money.MoneySpec(amount=req.budget_amount, currency=req.budget_currency)
-        c = campaign.Campaign(campaign.CampaignSpec(id=secrets.token_hex(8), budget=budget, links=()))
-        self._repo.save(cparts.campaign_parts(c))
-        return campaign_views.campaign_view(cparts.campaign_parts(c))
+        c = campaign.Campaign(views.create_spec(req))
+        self._repo.save(views.save_request(c))
+        return views.campaign_view(c)
+
+    def get_campaign(self, req: client.GetCampaignRequest) -> client.CampaignView:
+        found = self._repo.find(campaign_repository.FindCampaignRequest(campaign_id=req.campaign_id))
+        c = views.required_campaign(found, req.campaign_id)
+        return views.campaign_view(c)
 ```
 
 - **No `for` over domain objects, no arithmetic on domain quantities, no `if`
   on domain state** in the method — the leakage checks
   (`application-services.md#domain-logic-leakage-checks`).
 - **Return a DTO** (a `client.py` view), never the domain object.
-- **Ports speak `ts.Parts` records and primitives, never domain objects**
-  (TB081) — the service decomposes the aggregate to parts
-  (`cparts.campaign_parts(c)`) on the way to persistence, and views build
-  DTOs from parts on the way out.
+- **Every dependency is a port, injected, never built here** (TB081), and the
+  port is declared in the context's `application/ports/` package — never in
+  the service module (**Application ports**, below).
+- **Ports speak port DTOs and primitives, never domain objects** (TB081) — the
+  application's mapping module turns the aggregate into a `SaveCampaignRequest`
+  on the way to persistence and rebuilds it from the response's
+  `CampaignRecord` on the way back. The service never hands a domain object
+  across a port, and the port module never learns a domain type exists.
 - **Transaction / session boundary is consumer-specific.** Where the unit of
   work opens and commits — a SQLAlchemy `Session`, an async transaction, a
   FastAPI dependency — is a decision for the consuming codebase, not this
   skill. Wrap the use case in one unit of work; do **not** invent an ORM
   lifecycle here.
 
+## Application ports {#ports}
+
+Every outbound dependency a context owns — a repository, a peer-context
+gateway, a vendor client — is a `ts.Port` `Protocol` in the context's
+**`application/ports/` package**. Never a `ports.py` module (TB041); the
+package's `__init__.py` is empty (TB042). **One module, one port**, plus the
+`ts.Request`/`ts.Response` DTOs that port speaks and nothing else (TB052).
+
+```python
+# campaign/application/ports/campaign_repository.py (verified impl: examples/errorspy/)
+from __future__ import annotations
+
+import enum
+from typing import Protocol
+
+import tesser.application as ts
+
+
+class CampaignLookup(enum.Enum):
+    FOUND = "found"
+    MISSING = "missing"
+
+
+class LinkRecord(ts.Response):
+
+    def __init__(self, slug: str, target_url: str) -> None:
+        self.slug = slug
+        self.target_url = target_url
+
+
+class CampaignRecord(ts.Response):
+
+    def __init__(self, id: str, window: WindowRecord, links: tuple[LinkRecord, ...]) -> None:
+        self.id = id
+        self.window = window
+        self.links = links
+
+
+...                                   # WindowRecord, SaveCampaign{Request,Response} — elided
+
+
+class FindCampaignRequest(ts.Request):
+
+    def __init__(self, campaign_id: str) -> None:
+        self.campaign_id = campaign_id
+
+
+class FindCampaignResponse(ts.Response):
+
+    def __init__(self, outcome: CampaignLookup, campaigns: tuple[CampaignRecord, ...]) -> None:
+        self.outcome = outcome
+        self.campaigns = campaigns
+
+
+class CampaignRepository(ts.Port, Protocol):
+
+    def save(self, request: SaveCampaignRequest) -> SaveCampaignResponse: ...
+
+    def find(self, request: FindCampaignRequest) -> FindCampaignResponse: ...
+```
+
+- **The module is a leaf** (TB067): it imports `tesser.application` exactly
+  once as `ts` (TB050) plus the pure stdlib the shape needs (`typing`, `enum`,
+  `__future__`) — **nothing from its own tree, its ports siblings included**.
+  That leaf rule is what makes DTO sharing unrepresentable rather than merely
+  forbidden: `ports/b.py` cannot see a request declared in `ports/a.py`, and a
+  module declares exactly one port, so two ports can never share a DTO.
+- **Imports and classes only** (TB051). No module-level functions, no
+  constants — a ports module holds no logic to import, which is also why the
+  outcome cannot degrade into a bare string constant.
+- **One `ts.Request` in, one `ts.Response` out, and the body is `...`**
+  (TB081, TB051). No extra parameters, no `*args`/`**kwargs`, no second return
+  channel — an exception carrying the "missing" case is exactly what one
+  request in / one response out exists to prevent.
+- **A port DTO field is never a union (optional included) and never a bare
+  `bool`** (TB080), and **a port DTO is never subclassed** (TB052) — a
+  response hierarchy is a union mypy cannot check for exhaustiveness.
+- **A multi-outcome answer is an enum outcome plus payload; a collection is a
+  tuple.** Where cardinality *is* the answer (list-all), the tuple alone says
+  it — no outcome enum. The enum is a plain `enum.Enum`, never `StrEnum` or
+  `IntEnum` (TB052): a str- or int-backed member compares equal to a raw
+  literal and reopens the typo the enum closes.
+- **Mapping stays in the application role, never in ports.** A sibling
+  `mapping.py` / `views.py` owns domain ↔ port-DTO translation — it may import
+  the domain and the ports package; ports import neither.
+
+The reader matches, exhaustively:
+
+```python
+# campaign/application/views.py (verified impl: examples/errorspy/)
+@ts.function
+def required_campaign(
+    found: campaign_repository.FindCampaignResponse, campaign_id: str
+) -> campaign.Campaign:
+    match found.outcome:
+        case campaign_repository.CampaignLookup.FOUND:
+            return rebuilt_campaign(found.campaigns[0])
+        case campaign_repository.CampaignLookup.MISSING:
+            raise not_found("campaign_missing", f"no campaign {campaign_id!r}")
+        case _ as unreachable:
+            typing.assert_never(unreachable)
+```
+
+`typing.assert_never` is the whole point of the enum: add a third outcome and
+every reader that does not handle it fails `mypy --strict` at the missed
+branch. Six encodings of the same two-outcome answer were measured against the
+repo's silent-site metric in `docs/design-application-ports.md` — the enum is the only
+union-free one that scores **zero** silent sites; a `found: bool` flag and a
+0-or-1 tuple each leave the reader silently wrong.
+
 ## Repositories
 
-The port is defined **with the service** (above), as a `ts.Port` `Protocol`
-speaking parts records; the adapter subclasses `ts.Repository` and satisfies
-it structurally (like Go's implicit satisfaction). Whole aggregate in — as
-parts — reconstructed aggregate out, no business logic (`repositories.md`).
-How the aggregate decomposes — the per-context parts module, and when a
-repo-private record suffices — is the serialization norm
+The port is declared in `application/ports/` (**Application ports**, above), as a `ts.Port`
+`Protocol` speaking port DTOs; the adapter subclasses `ts.Repository` and
+satisfies it structurally (like Go's implicit satisfaction). Whole aggregate
+in — as a request DTO — reconstructed aggregate out, no business logic
+(`repositories.md`). How the aggregate decomposes is the serialization norm
 (`serialization.md` rules 6-8).
 
 ```python
-# campaign/adapters/gateways/repo_memory.py (verified impl; the down-guard
-# lines that simulate an unavailable store are elided)
-class InMemoryCampaignRepository(ts.Repository):
+# campaign/adapters/gateways/repo_storage.py (verified impl: examples/errorspy/)
+import tesser.adapters as ts
 
-    def __init__(self, *, down: bool = False) -> None:
-        self._rows: dict[str, parts.CampaignParts] = {}
-        ...
+import campaign.application.ports.campaign_repository as campaign_repository
 
-    def save(self, parts: parts.CampaignParts) -> None:    # parts in — never the root itself
-        ...
-        self._rows[parts.id] = parts
 
-    def find(self, id: str) -> parts.FoundCampaign | parts.MissingCampaign:
-        ...
-        row = self._rows.get(id)
-        return parts.MissingCampaign() if row is None else parts.FoundCampaign(parts=row)
+class StorageCampaignRepository(ts.Repository):
 
-    def find_by_slug(self, slug: str) -> parts.FoundCampaign | parts.MissingCampaign: ...
-    def slug_taken(self, slug: str) -> bool: ...
-    def all(self) -> tuple[parts.CampaignParts, ...]: ...
+    def __init__(self, storage: FakeStorage) -> None:
+        self._storage = storage
 
-    def close(self) -> None:                               # the repo doubles as its Closeable
-        ...
+    def save(
+        self, request: campaign_repository.SaveCampaignRequest
+    ) -> campaign_repository.SaveCampaignResponse:
+        self._storage.put(request.id, _to_record(request))
+        return campaign_repository.SaveCampaignResponse()
+
+    def find(
+        self, request: campaign_repository.FindCampaignRequest
+    ) -> campaign_repository.FindCampaignResponse:
+        try:
+            row = self._storage.load(request.campaign_id)
+        except StorageMiss:
+            return campaign_repository.FindCampaignResponse(
+                outcome=campaign_repository.CampaignLookup.MISSING, campaigns=()
+            )
+        return campaign_repository.FindCampaignResponse(
+            outcome=campaign_repository.CampaignLookup.FOUND,
+            campaigns=(_from_record(request.campaign_id, row),),
+        )
 ```
 
-- **The adapter speaks records** (TB081): parts and primitives cross the
+- **The import block is the rule made visible** (TB060): the only module this
+  adapter imports from its own context is its ports module. It cannot reach
+  the service, the mapping module, or the domain — so the gateway is decoupled
+  from the implementation it serves by the import matrix, not by discipline.
+- **The adapter speaks records** (TB081): port DTOs and primitives cross the
   port; the *application layer* reconstructs the aggregate through its spec
-  (`Campaign(campaign_spec(parts))`), so invariants re-run — never build a
+  (`Campaign(_campaign_spec(record))`), so invariants re-run — never build a
   domain object by assigning attributes.
 - **No domain math.** A finder may filter/order (persistence selection);
   summing or rule-checking is a leak.
 - Persistence backends — SQLAlchemy, async drivers — are consumer-specific;
   the `Protocol` is the stable contract, the backing store is not this
-  skill's decision. The worked example uses an in-memory repository; a
-  database-backed one satisfies the same port.
+  skill's decision. The worked examples use an in-memory map and a fake
+  key-value store; a database-backed one satisfies the same port.
 
 ## The composition root
 
@@ -532,7 +644,7 @@ module is imported **as an aliased module, never its members** (TB053).
 ```python
 # campaign/wiring/wire.py (verified impl) — coordinate-driven, fail-fast, uniform
 @ts.function
-def repo_for(cfg: config.Config) -> tuple[service.CampaignRepository, Closeable]:
+def repo_for(cfg: config.Config) -> tuple[campaign_repository.CampaignRepository, Closeable]:
     if cfg.storage == "memory":
         repo = repo_memory.InMemoryCampaignRepository()
         return repo, repo
@@ -542,7 +654,7 @@ def repo_for(cfg: config.Config) -> tuple[service.CampaignRepository, Closeable]
 
 
 @ts.function
-def build(cfg: config.Config, policy: service.TargetPolicy) -> tuple[client.Client, Closeable]:
+def build(cfg: config.Config, policy: target_policy.TargetPolicy) -> tuple[client.Client, Closeable]:
     repo, closeable = repo_for(cfg)
     return service.CampaignService(repo, policy), closeable
 
@@ -570,6 +682,11 @@ def new(cfg: Config) -> App:
 - **`build` returns `(Client, Closeable)`** — the Protocol and a resource
   handle, never the concrete service or a domain type. A context with no
   resources returns a named no-op closeable; the build contract stays uniform.
+- **The port types wiring annotates come from `application/ports/`**
+  (**Application ports**) — `campaign_repository` and `target_policy` above are ports
+  modules, not the service module. Wiring is the one role that may hold both
+  the port and the concrete: it reaches application, adapters, and client
+  (TB060), which is exactly what choosing an implementation requires.
 - **Each context gets only its slice** (`cfg.campaign`), and cross-context
   adapters are constructed in `new` and injected — only the root knows two
   contexts at once. The import matrix is machine-enforced: bootstrap builds

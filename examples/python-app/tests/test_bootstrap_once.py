@@ -4,7 +4,7 @@ import pytest
 
 import campaign.wiring.wire as campaign_wire
 from bootstrap.bootstrap import new
-import campaign.application.service as service  # tessercheck:ignore TB070
+import campaign.application.ports.target_policy as target_policy  # tessercheck:ignore TB070
 import campaign.client.client as client
 import campaign.wiring.config as config
 from lifecycle import Closeable
@@ -27,7 +27,7 @@ def test_constructor_runs_once_across_many_calls(monkeypatch: pytest.MonkeyPatch
 
     original = campaign_wire.build
 
-    def counting(cfg: config.Config, policy: service.TargetPolicy) -> tuple[client.Client, Closeable]:
+    def counting(cfg: config.Config, policy: target_policy.TargetPolicy) -> tuple[client.Client, Closeable]:
         calls["n"] += 1
         return original(cfg, policy)
 

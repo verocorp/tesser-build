@@ -65,7 +65,9 @@ myself?* Yes → application service.
 
 ```
 CreditService                       (holds an injected repository)
-  - repo  JournalRepository          (dependency — an interface)
+  - repo  JournalRepository          (dependency — a port, injected;
+                                      in Python it is declared in
+                                      application/ports/, not here)
 
   RecordPayment(ctx, RecordPaymentRequest) → (RecordPaymentResponse, error)
     1. spec    := toPaymentSpec(req)              // Convert

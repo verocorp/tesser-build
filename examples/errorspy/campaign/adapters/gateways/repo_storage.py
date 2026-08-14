@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tesser.adapters as ts
 
-import campaign.application.parts as parts
+import campaign.application.ports.campaign_repository as campaign_repository
 from errors import InfraError
 from storage import FakeStorage, Record, StorageMiss, StorageUnavailable
 
@@ -12,39 +12,51 @@ class StorageCampaignRepository(ts.Repository):
     def __init__(self, storage: FakeStorage) -> None:
         self._storage = storage
 
-    def save(self, record: parts.CampaignParts) -> None:
-        self._storage.put(record.id, _to_record(record))
+    def save(
+        self, request: campaign_repository.SaveCampaignRequest
+    ) -> campaign_repository.SaveCampaignResponse:
+        self._storage.put(request.id, _to_record(request))
+        return campaign_repository.SaveCampaignResponse()
 
-    def find(self, campaign_id: str) -> parts.FoundCampaign | parts.MissingCampaign:
+    def find(
+        self, request: campaign_repository.FindCampaignRequest
+    ) -> campaign_repository.FindCampaignResponse:
         try:
-            row = self._storage.load(campaign_id)
+            row = self._storage.load(request.campaign_id)
         except StorageMiss:
-            return parts.MissingCampaign()
+            return campaign_repository.FindCampaignResponse(
+                outcome=campaign_repository.CampaignLookup.MISSING, campaigns=()
+            )
         except StorageUnavailable as e:
             raise InfraError(
-                f"storage unavailable loading campaign {campaign_id!r}"
+                f"storage unavailable loading campaign {request.campaign_id!r}"
             ) from e
-        return parts.FoundCampaign(parts=_from_record(campaign_id, row))
+        return campaign_repository.FindCampaignResponse(
+            outcome=campaign_repository.CampaignLookup.FOUND,
+            campaigns=(_from_record(request.campaign_id, row),),
+        )
 
 
 @ts.function
-def _to_record(record: parts.CampaignParts) -> Record:
+def _to_record(request: campaign_repository.SaveCampaignRequest) -> Record:
     return {
-        "window": {"start": record.window.start, "end": record.window.end},
+        "window": {"start": request.window.start, "end": request.window.end},
         "links": [
             {"slug": link.slug, "target_url": link.target_url}
-            for link in record.links
+            for link in request.links
         ],
     }
 
 
 @ts.function
-def _from_record(campaign_id: str, row: Record) -> parts.CampaignParts:
-    return parts.CampaignParts(
+def _from_record(campaign_id: str, row: Record) -> campaign_repository.CampaignRecord:
+    return campaign_repository.CampaignRecord(
         id=campaign_id,
-        window=parts.WindowParts(start=row["window"]["start"], end=row["window"]["end"]),
+        window=campaign_repository.WindowRecord(
+            start=row["window"]["start"], end=row["window"]["end"]
+        ),
         links=tuple(
-            parts.LinkParts(slug=link["slug"], target_url=link["target_url"])
+            campaign_repository.LinkRecord(slug=link["slug"], target_url=link["target_url"])
             for link in row["links"]
         ),
     )

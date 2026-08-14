@@ -150,6 +150,19 @@ accessor at all, only `__str__`.
 > logging is its own future norm) — they decompose via the per-context
 > parts module (application layer); the spec stays inbound-only.
 
+> **Amended 2026-08-13 (application-ports ruling).** `ts.Parts` is retired.
+> The outbound shape a compound/entity/aggregate decomposes into is a **port
+> DTO** — a `ts.Request`/`ts.Response` declared in the context's
+> `application/ports/` package beside the `ts.Port` that speaks it — and the
+> walk that builds it lives in an application-role mapping module
+> (`mapping.py` / `views.py`), not in ports: a ports module is a leaf that
+> imports nothing from its tree, so it cannot see a domain type or a spec.
+> Everything else above stands: the spec is still inbound-only, structured
+> types still have no primitive exit. Doctrine in
+> `skills/tesser-build/serialization.md` (rules 6-9) and
+> `skills/tesser-build/python.md#ports`; evidence in
+> `docs/design-application-ports.md`.
+
 ---
 
 ## 4. Decided rules (this session)

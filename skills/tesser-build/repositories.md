@@ -8,8 +8,10 @@ aggregate to and from storage and hides how that storage works (Evans,
 **gateway type** — an outbound adapter behind a port the context owns
 (`map.md#adapters`); its sibling is the cross-context gateway
 (`gateway-cross-context.md`), which reaches a peer context instead of storage.
-The interface (the port) is defined beside its consumer; the concrete
-implementations live in the context's `adapters/gateways`. It has exactly two jobs
+The interface (the port) is declared in the context's `application/ports/`
+package — one port per module, with the request/response DTOs it speaks; the
+concrete implementations live in the context's `adapters/gateways` and import
+that ports module and nothing else of the context. It has exactly two jobs
 — **save** an aggregate (decompose it into rows/documents) and **retrieve** one
 (reconstruct it through its constructor). It holds **no business logic**: the
 domain already enforced every invariant before the aggregate reached the repo.
@@ -51,10 +53,22 @@ deciding any domain rule?* Yes → repository.
    aggregates and value objects; queries are typed structs of value objects, not
    loose strings. Raw storage types (rows, `sql.NullString`, ORM models) never
    cross the interface.
-5. **The interface lives with its caller.** Define the repository interface in
-   the package that uses it (the application service's package); concrete
-   implementations satisfy it. The domain depends on the abstraction, never on a
-   database.
+5. **The interface lives in the application role, in its own ports package.**
+   Define the repository port in the calling context's `application/ports/`
+   — a leaf package holding exactly one port plus the DTOs it speaks, and the
+   only part of `application` an adapter may import; concrete implementations
+   satisfy it structurally. Not in the domain, and not in the service module:
+   a port declared beside the service forces the gateway to import the
+   implementation it exists to be decoupled from. Mechanics and the enforced
+   DTO rules: `python.md#ports`.
+
+   **Language delta.** Rule 4's domain-typed boundary is the Go rendering. In
+   Python the port speaks **port DTOs** — primitives and records declared in
+   the ports module, never domain objects (TB081) — because the ports module
+   is a leaf that cannot import the domain at all; the aggregate is
+   reconstructed on the application side of the port. Same rule underneath
+   (no raw storage types, no leaked persistence vocabulary); different
+   carrier.
 
 ## The read side — draw the line explicitly
 
@@ -79,7 +93,7 @@ don't put domain objects in a spec.
 ## Shape
 
 ```
-OrderRepository                     (interface, defined in the service package)
+OrderRepository                     (the port, in application/ports/order_repository)
   Save(ctx, Order) → error                          // whole aggregate in
   Load(ctx, OrderID) → (Order, error)               // reconstructed via constructor
   Find(ctx, OrderQuery) → ([]OrderSummary, error)   // read concern: projection out

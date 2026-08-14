@@ -3,7 +3,7 @@ from __future__ import annotations
 import tesser.adapters as ts
 
 import linkpolicy.client.client as linkpolicy_client
-import reports.application.service as service
+import reports.application.ports.verdict_source as verdict_source
 
 
 class PolicyVerdictGateway(ts.Gateway):
@@ -11,6 +11,18 @@ class PolicyVerdictGateway(ts.Gateway):
     def __init__(self, verdicts: linkpolicy_client.Client) -> None:
         self._verdicts = verdicts
 
-    def verdicts(self) -> tuple[service.VerdictFact, ...]:
+    def verdicts(self, request: verdict_source.ListVerdictsRequest) -> verdict_source.ListVerdictsResponse:
         resp = self._verdicts.list_verdicts(linkpolicy_client.ListVerdictsRequest())
-        return tuple(service.VerdictFact(v.target_url, v.allowed, v.reason) for v in resp.verdicts)
+        records = tuple(
+            verdict_source.VerdictRecord(
+                target_url=v.target_url,
+                decision=(
+                    verdict_source.VerdictDecision.ALLOWED
+                    if v.allowed
+                    else verdict_source.VerdictDecision.DENIED
+                ),
+                reason=v.reason,
+            )
+            for v in resp.verdicts
+        )
+        return verdict_source.ListVerdictsResponse(verdicts=records)

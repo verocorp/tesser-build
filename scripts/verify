@@ -28,7 +28,7 @@ set -uo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT" || exit 1
 
-TREES=(spike-shells spike-llmport python-app serdepy errorspy tesser-py vobase tessercheck-py)
+TREES=(spike-shells spike-llmport python-app serdepy errorspy ports tesser-py vobase tessercheck-py)
 
 failed=()
 
@@ -68,6 +68,22 @@ run_python_app() {
   pytest -q || return 1
   step "tessercheck (zero findings over the whole tree)"
   PYTHONPATH=../../tessercheck-py:../../tesser-py python3 -m tessercheck . || return 1
+}
+
+# The canonical application-ports tree: one context, two ports, an enum outcome
+# and a collection answer. The six rejected encodings it was chosen over are not
+# here on purpose — four of them exist *because* they produce findings, so a
+# zero-findings gate is the wrong shape for them. They stay executable on the
+# spike/application-ports branch, and docs/design-application-ports.md carries
+# the measurements.
+run_ports() {
+  cd "$ROOT/examples/ports" || return 1
+  step "tessercheck (zero findings over the whole tree)"
+  PYTHONPATH=../../tessercheck-py:../../tesser-py python3 -m tessercheck . || return 1
+  step "mypy --strict"
+  MYPYPATH=.:../../tesser-py mypy --strict catalog || return 1
+  step "pytest"
+  pytest -q || return 1
 }
 
 run_serdepy() {
@@ -146,6 +162,7 @@ run_tree() {
     spike-llmport)  run_spike_llmport ;;
     python-app)     run_python_app ;;
     serdepy)        run_serdepy ;;
+    ports)          run_ports ;;
     errorspy)       run_errorspy ;;
     tesser-py)      run_tesser_py ;;
     vobase)         run_vobase ;;

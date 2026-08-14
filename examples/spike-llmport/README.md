@@ -20,10 +20,14 @@ scheduling/
     scheduling.py Step/CustomerName/Slot VOs, Booking aggregate, step constants
     test_domain.py       sibling test — reaches the role it sits in
   application/
-    parts.py      BookingParts + the Reserved | SlotTaken reservation outcomes
-    views.py      loaded / parts_of / state / reoffered — the vocabulary the
-                  service bodies are written in
-    service.py    SlotDirectory + BookingRepository ports, BookingService
+    ports/
+      slot_directory.py     SlotDirectory port + its Request/Response DTOs,
+                             ReservationOutcome (RESERVED / SLOT_TAKEN)
+      booking_repository.py BookingRepository port + its Request/Response
+                             DTOs, BookingPresence (PRESENT / ABSENT)
+    views.py      loaded / save_request / state / reoffered — the vocabulary
+                  the service bodies are written in, mapping domain <-> ports
+    service.py    BookingService, depending on the two ports above
     test_application.py  sibling test; declares its own @ts.fake port doubles
   adapters/
     handlers.py   LlmToolHandler — one endpoint method per tool, plus the schema
@@ -48,10 +52,15 @@ The division of labor the checkers enforce:
 - **The service speaks only Requests and Responses** — one `ts.Request` in,
   one `ts.Response` out, per use case (`begin`, `provide_name`, `choose_slot`,
   `confirm`, `status`), each body inline and under ten lines. The
-  booking is loaded from parts, driven through one guarded transition, and
-  decomposed back to parts; a rejected transition persists nothing.
+  booking is loaded from the repository port's `BookingView`, driven through
+  one guarded transition, and decomposed back to a `SaveBookingRequest`; a
+  rejected transition persists nothing.
 - **Ports speak records, never domain objects** — `SlotDirectory` and
-  `BookingRepository` carry strings and `BookingParts` only.
+  `BookingRepository` live in `application/ports/`, one port per module, and
+  their DTOs carry strings and `BookingView` only. `BookingRepository` used
+  to expose a check-then-get pair (`has` / `get`); it is now a single `find`
+  returning a `BookingPresence` outcome plus payload, closing the
+  time-of-check-to-time-of-use gap between the two calls.
 - **The handler translates; the host routes.** `handlers.py` owns the tool
   names, the JSON schemas (the choose-slot schema embeds the *current* offered
   slots as an enum, rebuilt from every response), and the raw-argument
@@ -60,8 +69,10 @@ The division of labor the checkers enforce:
   because routing is the host's job in every other srv. The context below the
   handler never hears the word "tool".
 - **A taken slot is an outcome, not an error.** `SlotDirectory.reserve`
-  returns `Reserved | SlotTaken` rather than raising, and `confirm` matches on
-  it: reserved books, taken re-offers the slots that are free now and persists
+  returns a `ReservationOutcome` enum (`RESERVED` / `SLOT_TAKEN`) plus payload
+  rather than raising or returning a union, and `confirm` matches on it with
+  `typing.assert_never` for exhaustiveness: reserved books, taken re-offers
+  the slots that are free now and persists
   that. One call, one turn — the caller is told what happened and what to do
   next in the same response, and the state it is told about is the state that
   was saved. This was edge choreography until 2026-08-08 (the adapter caught

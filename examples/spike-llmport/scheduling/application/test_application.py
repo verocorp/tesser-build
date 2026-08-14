@@ -1,52 +1,64 @@
 import pytest
 import tesser.testing as ts
 
-import scheduling.application.parts as parts
+import scheduling.application.ports.booking_repository as booking_repository
+import scheduling.application.ports.slot_directory as slot_directory
 import scheduling.application.service as application
 import scheduling.client.client as client
 
 
 @ts.fake
-class FakeSlotDirectory(application.SlotDirectory):
+class FakeSlotDirectory(slot_directory.SlotDirectory):
 
     def __init__(self, slots: tuple[str, ...]) -> None:
         self.slots = list(slots)
         self.reserved: list[tuple[str, str]] = []
 
-    def available(self) -> tuple[str, ...]:
-        return tuple(self.slots)
+    def available(self, request: slot_directory.AvailableSlotsRequest) -> slot_directory.AvailableSlotsResponse:
+        return slot_directory.AvailableSlotsResponse(slots=tuple(self.slots))
 
-    def reserve(self, slot: str, name: str) -> parts.Reserved | parts.SlotTaken:
-        if slot not in self.slots:
-            return parts.SlotTaken(available=tuple(self.slots))
-        self.slots.remove(slot)
-        self.reserved.append((slot, name))
-        return parts.Reserved()
+    def reserve(self, request: slot_directory.ReserveSlotRequest) -> slot_directory.ReserveSlotResponse:
+        if request.slot not in self.slots:
+            return slot_directory.ReserveSlotResponse(
+                outcome=slot_directory.ReservationOutcome.SLOT_TAKEN, available=tuple(self.slots)
+            )
+        self.slots.remove(request.slot)
+        self.reserved.append((request.slot, request.name))
+        return slot_directory.ReserveSlotResponse(
+            outcome=slot_directory.ReservationOutcome.RESERVED, available=()
+        )
 
 
 @ts.fake
-class FakeBookingRepository(application.BookingRepository):
+class FakeBookingRepository(booking_repository.BookingRepository):
 
     def __init__(self) -> None:
-        self.stored: dict[str, parts.BookingParts] = {}
+        self.stored: dict[str, booking_repository.BookingView] = {}
 
-    def has(self, booking_id: str) -> bool:
-        return booking_id in self.stored
+    def find(self, request: booking_repository.FindBookingRequest) -> booking_repository.FindBookingResponse:
+        row = self.stored.get(request.booking_id)
+        if row is None:
+            return booking_repository.FindBookingResponse(
+                presence=booking_repository.BookingPresence.ABSENT, bookings=()
+            )
+        return booking_repository.FindBookingResponse(
+            presence=booking_repository.BookingPresence.PRESENT, bookings=(row,)
+        )
 
-    def get(self, booking_id: str) -> parts.BookingParts:
-        return self.stored[booking_id]
-
-    def save(self, booking_id: str, parts: parts.BookingParts) -> None:
-        self.stored[booking_id] = parts
+    def save(self, request: booking_repository.SaveBookingRequest) -> booking_repository.SaveBookingResponse:
+        self.stored[request.booking_id] = booking_repository.BookingView(
+            step=request.step, name=request.name, chosen=request.chosen, offered=request.offered
+        )
+        return booking_repository.SaveBookingResponse()
 
 
 @ts.fake
-class FakeSlotDirectoryDown(application.SlotDirectory):
+class FakeSlotDirectoryDown(slot_directory.SlotDirectory):
 
-    def available(self) -> tuple[str, ...]:
+    def available(self, request: slot_directory.AvailableSlotsRequest) -> slot_directory.AvailableSlotsResponse:
         raise RuntimeError("slot directory unreachable")
 
-    def reserve(self, slot: str, name: str) -> parts.Reserved | parts.SlotTaken:
+    def reserve(self, request: slot_directory.ReserveSlotRequest) -> slot_directory.ReserveSlotResponse:
         raise RuntimeError("slot directory unreachable")
 
 

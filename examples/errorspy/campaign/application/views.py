@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import typing
+
 import tesser.application as ts
 
-import campaign.application.parts as cparts
+import campaign.application.ports.campaign_repository as campaign_repository
 import campaign.client.client as client
 import campaign.domain.campaign as campaign
 import campaign.domain.short_link as short_link
@@ -11,10 +13,10 @@ from errors import DomainError, InfraError, not_found  # tessercheck:ignore TB06
 
 
 @ts.function
-def campaign_view(parts: cparts.CampaignParts) -> client.CampaignView:
+def campaign_view(c: campaign.Campaign) -> client.CampaignView:
     return client.CampaignView(
-        campaign_id=parts.id,
-        links=tuple(link.slug for link in parts.links),
+        campaign_id=c.id,
+        links=tuple(str(link.slug) for link in c.links),
     )
 
 
@@ -31,31 +33,52 @@ def create_spec(req: client.CreateCampaignRequest) -> campaign.CampaignSpec:
 
 
 @ts.function
-def campaign_spec(parts: cparts.CampaignParts) -> campaign.CampaignSpec:
-    return campaign.CampaignSpec(
-        id=parts.id,
-        window=values.DateWindowSpec(start=parts.window.start, end=parts.window.end),
-        links=tuple(
-            short_link.ShortLinkSpec(slug=link.slug, target_url=link.target_url)
-            for link in parts.links
-        ),
+def save_request(c: campaign.Campaign) -> campaign_repository.SaveCampaignRequest:
+    return campaign_repository.SaveCampaignRequest(
+        id=c.id,
+        window=_window_record(c),
+        links=tuple(_link_record(link) for link in c.links),
     )
 
 
 @ts.function
 def required_campaign(
-    lookup: cparts.FoundCampaign | cparts.MissingCampaign, campaign_id: str
+    found: campaign_repository.FindCampaignResponse, campaign_id: str
 ) -> campaign.Campaign:
-    match lookup:
-        case cparts.FoundCampaign(parts=parts):
-            return rebuilt_campaign(parts)
-        case cparts.MissingCampaign():
+    match found.outcome:
+        case campaign_repository.CampaignLookup.FOUND:
+            return rebuilt_campaign(found.campaigns[0])
+        case campaign_repository.CampaignLookup.MISSING:
             raise not_found("campaign_missing", f"no campaign {campaign_id!r}")
+        case _ as unreachable:
+            typing.assert_never(unreachable)
 
 
 @ts.function
-def rebuilt_campaign(parts: cparts.CampaignParts) -> campaign.Campaign:
+def rebuilt_campaign(record: campaign_repository.CampaignRecord) -> campaign.Campaign:
     try:
-        return campaign.Campaign(campaign_spec(parts))
+        return campaign.Campaign(_campaign_spec(record))
     except DomainError as e:
-        raise InfraError(f"corrupted campaign record {parts.id!r}: {e}") from e
+        raise InfraError(f"corrupted campaign record {record.id!r}: {e}") from e
+
+
+@ts.function
+def _campaign_spec(record: campaign_repository.CampaignRecord) -> campaign.CampaignSpec:
+    return campaign.CampaignSpec(
+        id=record.id,
+        window=values.DateWindowSpec(start=record.window.start, end=record.window.end),
+        links=tuple(
+            short_link.ShortLinkSpec(slug=link.slug, target_url=link.target_url)
+            for link in record.links
+        ),
+    )
+
+
+@ts.function
+def _window_record(c: campaign.Campaign) -> campaign_repository.WindowRecord:
+    return campaign_repository.WindowRecord(start=str(c.window.start), end=str(c.window.end))
+
+
+@ts.function
+def _link_record(link: short_link.ShortLink) -> campaign_repository.LinkRecord:
+    return campaign_repository.LinkRecord(slug=str(link.slug), target_url=str(link.target))

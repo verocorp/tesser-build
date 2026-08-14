@@ -47,7 +47,8 @@ ceremony — and it **converged** (materialized by `src/ctx-creator.sh` into the
 Which one a context uses is decided by **application vs library**: a library ships
 the four roles but no wiring and no hosts (the consumer supplies them); an app has
 both. The invariants that held across *both* branches — VO-first + `NewX`/`MustNewX`
-+ constructor-only construction, ports-beside-consumer, primitive-leaved DTOs — are
++ constructor-only construction, consumer-owned ports (where they *live* was
+re-ruled 2026-08-13 — see §3), primitive-leaved DTOs — are
 exactly what the tesser-build skill already teaches.
 
 ---
@@ -66,6 +67,15 @@ free** (presence required, organization not prescribed):
   `gateways` (outbound: repositories, ACLs, event-publishers, external clients).
   Handlers receive; gateways reach out.
 - **wiring** — the context's own construction (its providers / `NewClient`).
+
+> **Superseded 2026-08-13 (application-ports ruling).** The outbound ports are
+> **application**, not domain, and they no longer sit beside their consumer:
+> each context owns an `application/ports/` package holding one port per module
+> plus the request/response DTOs that port speaks, and an adapter may import
+> that package and nothing else of the context — so a gateway can no longer
+> import the service it exists to be decoupled from. The rest of the anatomy
+> stands. Doctrine: `skills/tesser-build/map.md`; evidence:
+> `docs/design-application-ports.md`.
 
 The context's **`client` module is its public interface**: the `Client` interface
 + primitive DTOs in `client.py`, the context's `__init__.py` empty. There is

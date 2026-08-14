@@ -3,8 +3,8 @@ from __future__ import annotations
 import tesser.context as ts
 
 import campaign.client.client as campaign_client
-import linkpolicy.client.client as linkpolicy_client
 from lifecycle import Closeable
+import linkpolicy.client.client as linkpolicy_client
 import reports.adapters.gateways.campaign_links as campaign_links
 import reports.adapters.gateways.policy_verdicts as policy_verdicts
 import reports.application.service as reports_service
