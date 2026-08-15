@@ -7,7 +7,7 @@ from typing import Final
 import tesser.domain as ts
 
 from errors import DomainError, invalid, wrap  # tessercheck:ignore TB062
-from serialization import canonical_str  # tessercheck:ignore TB062
+from tesser.serialization import canonical_str
 
 _SLUG_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[a-z0-9-]{4,20}$")
 _LINK_STATES: Final[frozenset[str]] = frozenset({"active", "inactive"})

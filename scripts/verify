@@ -77,7 +77,7 @@ run_python_app() {
   step "import-linter (import direction)"
   PYTHONPATH=. lint-imports || return 1
   step "mypy --strict"
-  MYPYPATH=.:../../tesser-py mypy --strict errors.py lifecycle.py serialization.py protocol campaign linkpolicy reports bootstrap srv tests conftest.py || return 1
+  MYPYPATH=.:../../tesser-py mypy --strict errors.py lifecycle.py protocol campaign linkpolicy reports bootstrap srv tests conftest.py || return 1
   step "pytest"
   pytest -q || return 1
   step "tessercheck (zero findings over the whole tree)"
@@ -105,7 +105,7 @@ run_serdepy() {
   step "tessercheck (zero findings over the whole tree)"
   tessercheck_tree "$PWD" || return 1
   step "mypy --strict"
-  MYPYPATH=.:../../tesser-py mypy --strict serialization.py conftest.py parcel || return 1
+  MYPYPATH=.:../../tesser-py mypy --strict conftest.py parcel || return 1
   step "pytest"
   pytest -q || return 1
 }
@@ -115,7 +115,7 @@ run_errorspy() {
   step "tessercheck (zero findings over the whole tree)"
   tessercheck_tree "$PWD" || return 1
   step "mypy --strict"
-  MYPYPATH=.:../../tesser-py mypy --strict errors.py serialization.py storage.py conftest.py protocol campaign tests || return 1
+  MYPYPATH=.:../../tesser-py mypy --strict errors.py storage.py conftest.py protocol campaign tests || return 1
   step "pytest"
   pytest -q || return 1
 }

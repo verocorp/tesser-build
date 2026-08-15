@@ -51,8 +51,8 @@ data crosses an edge (maintainer rulings 2026-07-20).
    test asserts it per leaf. Changing a canonical form is a representation
    change — a breaking change — never a formatting tweak.
    **The exit routes through a per-type policy helper — the dunder body is
-   one line.** The app-level serialization module owns one function per
-   backing type — `canonical_str` / `canonical_int` / `canonical_float` /
+   one line.** The runtime's `tesser.serialization` module owns one function
+   per backing type — `canonical_str` / `canonical_int` / `canonical_float` /
    `canonical_bytes` (identity for the native primitives) and
    `canonical_decimal` / `canonical_datetime` (the text policies above,
    executable) — and every leaf's conversion dunder delegates to the
@@ -77,7 +77,7 @@ data crosses an edge (maintainer rulings 2026-07-20).
    What the runtime verifier guarded — `str()` on a structured type
    silently yielding `repr` garbage, since `str()` never fails — is covered
    by the mandatory per-edge goldens below and the zero-dunder checker.)
-   Verified impls: `examples/python-app/serialization.py` (the module),
+   Verified impls: `tesser.serialization` in tesser-py (the module),
    `examples/serdepy/` (every backing type exercised).
 4. **Display is a presentation concern, never the value object's.** Locale,
    grouping, currency symbols, human phrasing — a formatter at the

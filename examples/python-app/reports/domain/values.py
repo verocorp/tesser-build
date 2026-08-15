@@ -6,7 +6,7 @@ from typing import Final
 import tesser.domain as ts
 
 from errors import invalid  # tessercheck:ignore TB062
-from serialization import canonical_str  # tessercheck:ignore TB062
+from tesser.serialization import canonical_str
 
 _SLUG_RE: Final[re.Pattern[str]] = re.compile(r"[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?")
 _URL_RE: Final[re.Pattern[str]] = re.compile(r"https?://\S+")
