@@ -55,6 +55,27 @@
       ]
     },
     {
+      "key": "kernels",
+      "title": "Kernels (direct-import tier)",
+      "skill": "kernels.md",
+      "py_example": [
+        "examples/python-app/kernel/slug.py"
+      ],
+      "go_example": [],
+      "go_analyzers": [],
+      "py_checks": [
+        "TB041",
+        "TB042",
+        "TB044",
+        "TB050",
+        "TB051",
+        "TB052",
+        "TB062",
+        "TB070"
+      ],
+      "rationale": []
+    },
+    {
       "key": "entities",
       "title": "Entities",
       "skill": "entities.md",

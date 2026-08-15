@@ -91,6 +91,7 @@ def test_import_contracts_break_on_a_host_reaching_past_handlers(tmp_path: pathl
         "linkpolicy/__init__.py",
         "linkpolicy/application/__init__.py",
         "srv/__init__.py",
+        "kernel/__init__.py",
         "srv/http/__init__.py",
     ):
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -122,7 +123,7 @@ def test_import_contracts_break_on_a_host_reaching_past_handlers(tmp_path: pathl
         check=False,
     )
     assert result.returncode == 1, result.stdout
-    assert "Contracts: 0 kept, 3 broken." in result.stdout, result.stdout
+    assert "Contracts: 1 kept, 3 broken." in result.stdout, result.stdout
     assert "srv.http.host -> campaign.application.service" in result.stdout
     assert "linkpolicy.application.service -> campaign.client" in result.stdout
     assert "campaign.client -> reports.client" in result.stdout
@@ -149,6 +150,7 @@ def test_import_contracts_allow_a_host_reaching_a_context_through_bootstrap(
         "linkpolicy/application/__init__.py",
         "linkpolicy/application/service.py",
         "srv/__init__.py",
+        "kernel/__init__.py",
         "srv/http/__init__.py",
     ):
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -173,4 +175,4 @@ def test_import_contracts_allow_a_host_reaching_a_context_through_bootstrap(
         check=False,
     )
     assert result.returncode == 0, result.stdout
-    assert "Contracts: 3 kept, 0 broken." in result.stdout, result.stdout
+    assert "Contracts: 4 kept, 0 broken." in result.stdout, result.stdout

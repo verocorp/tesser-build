@@ -17,6 +17,7 @@ root_packages =
     reports
     srv
     bootstrap
+    kernel
 include_external_packages = False
 unmatched_ignore_imports_alerting = error
 
@@ -60,3 +61,18 @@ source_modules =
     campaign
 forbidden_modules =
     reports
+
+# The kernel sits below every context: contexts agree on its types by importing
+# them, and it never knows a context exists — nothing points leftward.
+[importlinter:contract:kernel-imports-no-context]
+name = a kernel never imports a context or the app shell
+type = forbidden
+allow_indirect_imports = true
+source_modules =
+    kernel
+forbidden_modules =
+    campaign
+    linkpolicy
+    reports
+    srv
+    bootstrap

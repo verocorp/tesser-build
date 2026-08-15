@@ -25,17 +25,23 @@ Three related holes, all of the same shape — coverage was implicit:
 ## The declarations
 
 **A tree declares itself: `.tesser-root`.** A checkable tree carries a
-`.tesser-root` file at its root. The file allows exactly two things, and
+`.tesser-root` file at its root. The file allows exactly four things, and
 anything else is a finding by default — the same move as TB069:
 
 ```
 app
 skip testdata
+export tesser
+import money_kernel
 ```
 
 The first line is the kind (`app` is the only one — see "Everything is an
-app"). Every further line is a `skip <dir>` directive naming a directory the
-walk ignores for this tree. This is where repo-specific configuration lives:
+app"). Every further line is one of: a `skip <dir>` directive naming a
+directory the walk ignores for this tree; an `export <dir>` directive naming
+the tree's **exported kernel** (at most one line — a tree has one exported
+kernel, because the export is the package's import name and a package has
+one name; see `docs/design-kernels.md`); or an `import <package>` directive
+naming an external kernel this tree's pure roles and kernels may import. This is where repo-specific configuration lives:
 **the analyzer carries nothing specific to any repo** (maintainer ruling
 2026-08-14) — tessercheck-py's own fixture directory is skipped by *its*
 declaration, not by a hardcoded name in the reader. The universal skip set
@@ -47,6 +53,8 @@ The declaration state is a fact the reader reports and the domain rules judge:
 - no `.tesser-root` → `TB044` — the tree is not declared;
 - unreadable (not UTF-8 text, or not a regular file) → `TB044`;
 - unrecognized first line or directive → `TB044`;
+- a second `export` line, an export naming no package at the tree root, or
+  an export taking the name of `kernel` or an app-shell package → `TB044`;
 - a `.tesser-root` *below* the root → `TB044` — a run covers one declared
   tree; run the nested tree directly;
 - a **symlinked directory** inside the tree → `TB045` — `os.walk` does not
