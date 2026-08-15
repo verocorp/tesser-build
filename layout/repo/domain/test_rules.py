@@ -23,7 +23,7 @@ def _spec(
     verify: tuple[str, str] = (
         "read",
         "run_appone() {\n"
-        "  PYTHONPATH=x python3 -m tessercheck . || return 1\n"
+        "  tessercheck_tree . || return 1\n"
         "}\n"
         "run_libby() {\n"
         "  mypy || return 1\n"

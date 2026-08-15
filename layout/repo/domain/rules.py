@@ -204,7 +204,7 @@ class Repo(ts.AggregateRoot):
             names[tree] = key
             if tree not in arms:
                 found.append(Problem(f"{key} has no scripts/verify case arm for '{tree}'"))
-            elif "-m tessercheck" in self._arm_body(verify_text, arms[tree]):
+            elif "tessercheck_tree" in self._arm_body(verify_text, arms[tree]):
                 checked.add(f"{key}/{DECLARATION}")
             if not re.search(
                 rf"^\s*run: scripts/verify {re.escape(tree)}\s*$",

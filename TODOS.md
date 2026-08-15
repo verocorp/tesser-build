@@ -72,7 +72,9 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `__main__` exemptions are gone — a conftest carries its location's row (a
   leaf at the tree root, a test tier's reach inside a tests location), and a
   context `__main__` composes from its own application, adapters, client,
-  and wiring (TB063). (2) RESOLVED 2026-08-11 (harness wave):
+  and wiring (TB063) — that classification was deleted in v0.0.33.0 (issue
+  #75): a context `__main__` is a stray module (TB041), and an app is entered
+  through a host in `srv/`. (2) RESOLVED 2026-08-11 (harness wave):
   `FilesystemSourceReader` prunes the standard skip set (`.venv`, `build`,
   `node_modules`, …), and an unparseable module, a non-UTF-8 file, or a
   module defined twice is a per-file TB043 finding instead of a crashed
@@ -414,7 +416,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
     subclasses as value objects — today TB003/TB010–TB014 are blind to the
     shape (red-team verified: a raw-primitive accessor that TB010 catches on a
     frozen dataclass passes silently on a ValueObject subclass);
-    (2) add the `python -m tessercheck examples/vobase` CI gate — the
+    (2) add the `examples/vobase` tessercheck CI gate — the
     `vobase-example` job in `.github/workflows/test.yml` deliberately omits
     tessercheck until then; TB032 also
     misfires on `tests/test_money.py`'s `_spec` helper under the new shape;

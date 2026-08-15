@@ -126,7 +126,7 @@ declares itself with the `ts.*` shells, so `tesser-py` is on both paths and
 **tessercheck** (`tessercheck-py/`) audits it:
 
 ```
-PYTHONPATH=../../tessercheck-py:../../tesser-py python3 -m tessercheck .
+(cd ../../tessercheck-py && PYTHONPATH=.:../tesser-py python3 -m srv.cli.main ../examples/python-app)
 ```
 
 That exits 0 — the conformance wave burned the import-totality bill down to

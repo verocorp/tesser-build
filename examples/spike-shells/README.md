@@ -8,7 +8,7 @@ contexts live here (`spike/`, a note service, and `digest/`, which reaches
 spike only through its client — the one legal cross-context edge).
 
 The analyzer itself grew up in this tree as **sigcheck** and graduated to
-[`tessercheck-py/`](../../tessercheck-py/) as `python -m tessercheck`, taking
+[`tessercheck-py/`](../../tessercheck-py/) as **tessercheck**, taking
 its rule set ([`RULES.md`](../../tessercheck-py/RULES.md)), its generator, and
 its tests with it. This tree stays what it was built to be — the worked
 example — and is gated at zero findings by the analyzer it hatched.
@@ -16,7 +16,7 @@ example — and is gated at zero findings by the analyzer it hatched.
 ## Verify this tree
 
 ```sh
-PYTHONPATH=../../tessercheck-py:../../tesser-py python3 -m tessercheck .
+(cd ../../tessercheck-py && PYTHONPATH=.:../tesser-py python3 -m srv.cli.main ../examples/spike-shells)
 MYPYPATH=.:../../tesser-py mypy --strict spike digest
 pytest -q
 PYTHONPATH=.:../../tesser-py lint-imports --no-cache # the import contracts

@@ -15,7 +15,7 @@ def _repo(root: Path) -> Path:  # tessercheck:ignore TB073
     (root / "scripts").mkdir()
     (root / "scripts" / "verify").write_text(
         "run_appone() {\n"
-        "  PYTHONPATH=x python3 -m tessercheck . || return 1\n"
+        "  tessercheck_tree . || return 1\n"
         "}\n"
         "run_tree() {\n"
         '  case "$1" in\n'
