@@ -5,6 +5,27 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.36.0] - 2026-08-15
+
+The checker can no longer write itself exceptions. Issue #75's root cause was
+that the file-sorting logic could grow a category serving only the checker's
+own files — `context-main` lived that way for six releases because no example
+tree ever exercised it and nothing noticed.
+
+### Added
+- **A test that makes every classification earn its place**
+  (`test_locate.py`): it runs the sorter over every checked tree in the repo
+  and fails if any category it can produce appears in none of them — unless
+  the category is one of the five finding shapes a rule-following tree cannot
+  legally contain, each pinned in the test by name. A new category now ships
+  only together with a real example that earns it.
+- **A worked example of the eval shape** — the one legal category no example
+  earned. `examples/python-app` gains
+  `campaign/adapters/gateways/eval_target_policy.py`: an eval lives in a
+  gateway, reaches its own kind, its ports, and the foreign client it samples
+  through a hand-written fake. Removing the file makes the new test fail by
+  name.
+
 ## [0.0.35.0] - 2026-08-15
 
 Protocol narrows to its speakers, and the layout app finishes its tests.
