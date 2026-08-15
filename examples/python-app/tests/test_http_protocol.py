@@ -4,7 +4,7 @@ import inspect
 
 import pytest
 
-from errors import InfraError, invalid
+from tesser.errors import InfraError, invalid
 from protocol.http import (
     BadRequest,
     HttpRequest,

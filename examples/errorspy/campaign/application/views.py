@@ -9,7 +9,7 @@ import campaign.client.client as client
 import campaign.domain.campaign as campaign
 import campaign.domain.short_link as short_link
 import campaign.domain.values as values
-from errors import DomainError, InfraError, not_found  # tessercheck:ignore TB062
+from tesser.errors import DomainError, InfraError, not_found
 
 
 @ts.function

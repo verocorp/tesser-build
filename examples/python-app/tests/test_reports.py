@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from bootstrap.bootstrap import new
 import campaign.client.client as client
-from errors import DomainError
+from tesser.errors import DomainError
 import reports.client.client as reports_client
 from tests.support import app_config
 

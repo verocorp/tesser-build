@@ -100,3 +100,22 @@ def test_exit_code_for_is_total_over_the_kind_set() -> None:
 def test_infra_error_is_a_separate_channel() -> None:
     assert not issubclass(InfraError, DomainError)
     assert not issubclass(DomainError, InfraError)
+
+
+def test_two_codes_share_one_kind() -> None:
+    dup = conflict("duplicate_slug", "slug taken")
+    deactivated = conflict("already_deactivated", "link already off")
+    assert dup.kind is deactivated.kind is Kind.CONFLICT
+    assert dup.code != deactivated.code
+
+
+def test_chaining_preserves_cause_and_field() -> None:
+    try:
+        try:
+            raise ValueError("low level")
+        except ValueError as low:
+            raise invalid("bad_amount", "amount invalid", field="amount") from low
+    except DomainError as e:
+        assert isinstance(e.__cause__, ValueError)
+        assert e.field == "amount"
+        assert e.code == "bad_amount"

@@ -5,7 +5,7 @@ import tesser.domain as ts
 import campaign.domain.money as money
 import campaign.domain.short_link as short_link
 import campaign.domain.values as values
-from errors import DomainError, conflict, invalid, not_found  # tessercheck:ignore TB062
+from tesser.errors import DomainError, conflict, invalid, not_found
 
 
 class CampaignSpec(ts.Spec):

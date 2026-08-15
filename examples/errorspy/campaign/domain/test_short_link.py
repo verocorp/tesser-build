@@ -5,7 +5,7 @@ import tesser.testing as ts
 
 import campaign.domain.short_link as short_link
 import campaign.domain.values as values
-from errors import DomainError, DomainKind
+from tesser.errors import DomainError, Kind
 
 
 @ts.helper
@@ -23,7 +23,7 @@ def test_child_error_propagates_unchanged() -> None:
     with pytest.raises(DomainError) as ei:
         short_link.ShortLink(_spec(slug="BAD"))
     e = ei.value
-    assert e.kind is DomainKind.VALIDATION
+    assert e.kind is Kind.VALIDATION
     assert e.code == "bad_slug"
     assert e.field == "slug"
 
@@ -34,7 +34,7 @@ def test_deactivate_then_deactivate_is_conflict() -> None:
     assert link.status == values.LinkStatus("inactive")
     with pytest.raises(DomainError) as ei:
         link.deactivate()
-    assert ei.value.kind is DomainKind.CONFLICT
+    assert ei.value.kind is Kind.CONFLICT
     assert ei.value.code == "already_deactivated"
 
 

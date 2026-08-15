@@ -6,7 +6,7 @@ from typing import Final
 
 import tesser.domain as ts
 
-from errors import DomainError, invalid, wrap  # tessercheck:ignore TB062
+from tesser.errors import DomainError, invalid, wrap
 from tesser.serialization import canonical_str
 
 _SLUG_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[a-z0-9-]{4,20}$")

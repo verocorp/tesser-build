@@ -10,7 +10,7 @@ import tesser.context  # tessercheck:ignore TB050
 import tesser.testing as ts
 import campaign.adapters.handlers.http as http  # tessercheck:ignore TB070
 import campaign.client.client as client
-from errors import InfraError
+from tesser.errors import InfraError
 from protocol.http import HttpRequest
 import reports.adapters.handlers.http as reports_http  # tessercheck:ignore TB070
 import reports.client.client as reports_client2

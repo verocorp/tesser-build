@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 import campaign.domain.labels as labels
-from errors import DomainError
+from tesser.errors import DomainError
 
 
 def test_labels_equality_is_order_independent() -> None:

@@ -8,7 +8,7 @@ import campaign.application.ports.target_policy as target_policy
 import campaign.application.service as service
 import campaign.client.client as client
 import campaign.wiring.config as config
-from errors import invalid
+from tesser.errors import invalid
 from tesser.lifecycle import Closeable
 
 

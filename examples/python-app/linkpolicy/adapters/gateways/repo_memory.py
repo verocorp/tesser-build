@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tesser.adapters as ts
 
-from errors import InfraError
+from tesser.errors import InfraError
 import linkpolicy.application.ports.verdict_repository as verdict_repository
 
 

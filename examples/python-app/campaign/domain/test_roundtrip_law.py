@@ -4,7 +4,7 @@ import pytest
 
 import campaign.domain.money as money
 import campaign.domain.values as values
-from errors import DomainError
+from tesser.errors import DomainError
 
 
 def test_slug_roundtrip() -> None:

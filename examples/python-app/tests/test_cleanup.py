@@ -10,7 +10,7 @@ import reports.wiring.wire as reports_wire
 from bootstrap.bootstrap import CleanupStack, new
 from bootstrap.config import Config
 import campaign.wiring.config as config
-from errors import DomainError
+from tesser.errors import DomainError
 from tesser.lifecycle import Closeable
 import linkpolicy.client.client as client
 import linkpolicy.wiring.config as linkpolicy_config
