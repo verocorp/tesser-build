@@ -96,7 +96,9 @@ tree-wide **norm checks** with no test exemption: zero comments (`TB020`),
 fakes-only test doubles (`TB030`), and ignore hygiene (`TB090` — a
 suppression that suppresses nothing is itself a finding). The full per-code
 table is [`tessercheck-py/RULES.md`](tessercheck-py/RULES.md), generated from the
-implementation. Run `python -m tessercheck path/to/tree`; flake8-style
+implementation. Run `python -m tessercheck path/to/tree` — the target must
+carry a `.tesser-root` file declaring `app` at its root, or the run reports
+`TB044` instead of walking (`docs/design-repo-layout.md`); flake8-style
 output; suppress a single finding with a trailing
 `# tessercheck:ignore TB0xx`.
 

@@ -5,6 +5,61 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.32.0] - 2026-08-14
+
+Repo layout. Three holes of one shape — nothing said what was covered: a
+tessercheck run walked whatever it was pointed at, the tree list in
+`scripts/verify` was maintained by hand, and nothing stopped a new top-level
+directory from appearing outside the gates. Now every directory says what it
+is, and a check fails when the directories on disk and those files disagree.
+
+### Added
+- **A checkable tree marks itself with a `.tesser-root` file.** The file
+  allows exactly two things — a first line `app`, then `skip <dir>` lines —
+  and anything else is a finding. A missing, unreadable, or wrong
+  `.tesser-root`, or one nested below the root, is a **`TB044`** finding; a
+  **symlinked directory** inside a declared tree is **`TB045`**, because the
+  walk never follows symlinks, so a symlink would let unchecked code sit
+  inside a tree that reports zero findings. When one of these fires it is the
+  only finding reported, and it lands on a file that cannot carry a Python
+  comment, so no inline ignore can silence it. Pointing the analyzer at the
+  repo root now prints one line per marked tree below it instead of treating
+  nine separate trees as one. Breaking for consumer repos: on upgrade, each
+  checked tree adds one `.tesser-root` file.
+- **`skip <dir>` is where anything specific to one repo goes** — the analyzer
+  hardcodes nothing about any repo. tessercheck-py's own fixture directory
+  (`testdata`) moved out of the reader's built-in skip list and into its own
+  `.tesser-root`.
+- **`manifest.json` says what every top-level directory and every
+  `examples/*` directory is** — two kinds only, `app` and `ungated`, because
+  everything is an app; there is no library kind (a "library" is an app that
+  does no IO). `tesser-py` and `examples/vobase` are app rows whose verify
+  steps gain the tessercheck step once their trees are reworked to conform.
+- **`scripts/check-layout`** cross-checks the words against real things, so a
+  typo'd kind cannot quietly drop a tree's gates: directories on disk match
+  manifest rows both ways at both levels; a tree has `.tesser-root` exactly
+  when its `scripts/verify` steps run tessercheck; every app row has a verify
+  arm, a CI job, and a directory name no other app row uses; a
+  `requirements-dev.txt` at **any depth** must belong to an app row; a
+  symlinked top-level or `examples/*` directory fails. It runs as
+  `scripts/verify` step 0 and as its own CI job, which also runs the check's
+  test suite (`scripts/test_check_layout.py` — a test per failure case,
+  against a small fake repo).
+- **`docs/design-repo-layout.md`** — the problem, the two files, the check,
+  and why there is no `--run-as domain` flag: what a directory is gets
+  written in the directory, never passed on the command line.
+
+### Changed
+- **`scripts/verify` reads its tree list from `manifest.json`** — the
+  hand-maintained `TREES` array is gone, and if the list comes back empty or
+  the read fails, verify stops with an error instead of reporting green over
+  nothing.
+- **The reader walks the tree once, skipping ignored directories as it goes**
+  (symlinks never followed) instead of three separate full scans — the
+  `.tesser-root`, nested roots, symlinks, and source files all come from one
+  pass.
+- `map.md` carries the `.tesser-root` convention; skill-version 33 → 34.
+
 ## [0.0.31.0] - 2026-08-13
 
 Application ports. Adapters could import the whole `application` role, so a

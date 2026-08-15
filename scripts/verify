@@ -28,7 +28,30 @@ set -uo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT" || exit 1
 
-TREES=(spike-shells spike-llmport python-app serdepy errorspy ports tesser-py vobase tessercheck-py)
+# The tree list comes from manifest.json, never hand-maintained here: an
+# `app` row IS the claim that scripts/verify runs that tree, and a manifest
+# tree with no run_* arm below fails as "unknown tree" rather than silently
+# not running. check-layout holds the other direction — that every directory
+# on disk has a manifest row at all.
+scripts/check-layout || exit 1
+
+# Capture the generator's output in a variable first: process substitution
+# would hide a python3 failure from set -e, and an empty TREES list would make
+# the loop below report "all green (0 trees)" — a check that passes without
+# checking anything.
+TREE_LIST=$(python3 - <<'PY'
+import json, pathlib
+manifest = json.loads(pathlib.Path("manifest.json").read_text())
+for key, kind in manifest.items():
+    if kind == "app":
+        print(key.split("/")[-1])
+PY
+) || { echo "verify: could not derive trees from manifest.json" >&2; exit 1; }
+mapfile -t TREES <<<"$TREE_LIST"
+if [ ${#TREES[@]} -eq 0 ] || [ -z "${TREES[0]}" ]; then
+  echo "verify: no gated trees derived from manifest.json" >&2
+  exit 1
+fi
 
 failed=()
 

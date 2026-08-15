@@ -6,6 +6,24 @@ on:
     branches: [main]
 
 jobs:
+  layout:
+    # manifest.json says what every top-level directory (and every examples/
+    # subdirectory) is; this job fails when the directories on disk and the
+    # manifest disagree in either direction — including a brand-new directory
+    # nobody wired into the gates. scripts/verify runs the same check locally
+    # as its step 0, from the same script.
+    name: repo layout (every directory declared, every declared tree gated)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: check-layout
+        run: scripts/check-layout
+      - name: the check's own test suite (every failure case covered)
+        run: pip install pytest >/dev/null && python3 -m pytest scripts/test_check_layout.py -q
+
   test:
     runs-on: ubuntu-latest
     steps:

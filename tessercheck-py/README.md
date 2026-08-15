@@ -31,6 +31,19 @@ PYTHONPATH=/path/to/tesser-build/tessercheck-py:/path/to/tesser-build/tesser-py 
   python3 -m tessercheck /path/to/tree
 ```
 
+The target declares itself: a checkable tree carries a `.tesser-root` file at
+its root. The declaration has a total grammar — first line `app`, then only
+`skip <dir>` lines naming directories the walk ignores for this tree (this is
+where repo-specific configuration lives; the analyzer hardcodes nothing about
+any repo). An undeclared, unreadable, or unrecognized root, or a
+`.tesser-root` nested below the root, is a `TB044` finding; a symlinked
+directory inside the tree is `TB045`, because the walk never follows symlinks
+and must say what it could not see. When a TB044 or TB045 fires it is the only
+finding reported, so pointing the analyzer at a directory that never claimed
+to be a tree reports that fact instead of walking it — and these findings land
+on files that cannot carry a Python comment, so an inline ignore can never
+silence them.
+
 Exit 0 when clean; exit 1 with one finding per line, flake8-style:
 
 ```

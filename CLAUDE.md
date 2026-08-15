@@ -105,9 +105,28 @@ green, that half of CI is green.
 ```
 python3 -m venv .venv && source .venv/bin/activate
 scripts/install-dev                      # every tree's requirements-dev.txt
-scripts/verify                           # all eight Python trees
+scripts/verify                           # every Python tree, from manifest.json
 scripts/verify python-app spike-shells   # or just the ones you touched
 ```
+
+**Every directory says what it is** (`docs/design-repo-layout.md`).
+`manifest.json` has a row for every top-level directory and every `examples/*`
+directory — two kinds only, `app` and `ungated`, because everything is an app.
+Each tree that tessercheck runs on carries a `.tesser-root` file (first line
+`app`, then only `skip <dir>` lines — anything specific to one repo goes in
+this file, never in the analyzer's code). A missing, unreadable, wrong, or
+nested `.tesser-root` is a `TB044` finding; a symlinked directory inside a
+declared tree is `TB045`; when either fires, it is the only finding reported —
+the analyzer says what the directory is before saying anything about its
+contents. `scripts/check-layout` — run by `scripts/verify` as step 0 and by
+its own CI job (which also runs the check's test suite) — fails when the
+directories on disk, the manifest, the `.tesser-root` files, and the CI jobs
+disagree in any direction, including a `requirements-dev.txt` at any depth
+outside an `app` row. **Do not create a new top-level directory (or
+`examples/` subdirectory) without adding its manifest row**; the check exists
+precisely to make that impossible to do silently. `scripts/verify` reads its
+tree list from the manifest, so a new `app` row must come with a `run_*` arm
+in the script and a CI job.
 
 Two things to know:
 
@@ -130,7 +149,10 @@ Every tessercheck gate is a plain zero-findings check — there is no ratchet
 and no code-family off switch. A finding is either fixed or carries a
 site-level `# tessercheck:ignore TB0xx` at the line it excuses. Bare codes, no
 brackets: an ignore whose payload does not parse as codes suppresses nothing,
-and an ignore that suppresses nothing is itself a finding.
+and an ignore that suppresses nothing is itself a finding. The one exception:
+`TB044` (the tree's `.tesser-root` file) and `TB045` (a symlinked directory)
+report on files that cannot carry a Python comment and run before the ignore
+filter — they are fixed, never suppressed.
 
 ## Git & shipping
 

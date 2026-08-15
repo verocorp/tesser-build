@@ -6,6 +6,13 @@ from typing import Protocol
 import tesser.application as ts
 
 
+class RootForm(enum.Enum):
+    APP = "app"
+    MISSING = "missing"
+    UNREADABLE = "unreadable"
+    UNRECOGNIZED = "unrecognized"
+
+
 class SourceState(enum.Enum):
     READ = "read"
     UNREADABLE = "unreadable"
@@ -36,7 +43,16 @@ class ReadSourcesRequest(ts.Request):
 
 class ReadSourcesResponse(ts.Response):
 
-    def __init__(self, sources: tuple[SourceFile, ...]) -> None:
+    def __init__(
+        self,
+        root: RootForm,
+        nested: tuple[str, ...],
+        symlinked: tuple[str, ...],
+        sources: tuple[SourceFile, ...],
+    ) -> None:
+        self.root = root
+        self.nested = nested
+        self.symlinked = symlinked
         self.sources = sources
 
 
