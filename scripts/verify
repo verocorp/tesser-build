@@ -115,7 +115,7 @@ run_errorspy() {
   step "tessercheck (zero findings over the whole tree)"
   tessercheck_tree "$PWD" || return 1
   step "mypy --strict"
-  MYPYPATH=.:../../tesser-py mypy --strict storage.py conftest.py protocol campaign || return 1
+  MYPYPATH=.:../../tesser-py mypy --strict storage conftest.py protocol campaign || return 1
   step "pytest"
   pytest -q || return 1
 }
