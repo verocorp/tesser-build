@@ -5,7 +5,7 @@ import tesser.testing as ts
 
 import campaign.adapters.handlers.cli as cli
 import campaign.client.client as campaign_client
-from errors import DomainError, invalid
+from tesser.errors import DomainError, invalid
 from protocol.cli import CliRequest, UsageError
 
 

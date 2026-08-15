@@ -9,7 +9,7 @@ import tesser.srv as ts
 
 from bootstrap.bootstrap import App
 import campaign.adapters.handlers.http as http
-from errors import DomainError, InfraError, status_for
+from tesser.errors import DomainError, InfraError, status_for
 from protocol.http import BadRequest, HttpRequest, HttpResponse, PayloadTooLarge, StreamingUnsupported
 import reports.adapters.handlers.http as reports_http
 from srv.http.router import Route, match

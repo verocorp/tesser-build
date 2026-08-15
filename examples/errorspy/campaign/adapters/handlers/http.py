@@ -6,7 +6,7 @@ import tesser.adapters as ts
 
 import campaign.client.client as client
 import protocol.http as http
-from errors import DomainError, InfraError, status_for
+from tesser.errors import DomainError, InfraError, status_for
 
 
 class Handler(ts.Handler):

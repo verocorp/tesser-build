@@ -952,7 +952,8 @@ def test_test_module_tesser_import_rules() -> None:
                )
     assert any(
         "app.test_imports imports tesser.domain; a test module's tesser imports "
-        "are tesser.testing, tesser.lifecycle, and tesser.serialization" in f
+        "are tesser.testing, tesser.errors, tesser.lifecycle, "
+        "and tesser.serialization" in f
         for f in findings
     )
     assert any(

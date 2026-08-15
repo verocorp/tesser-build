@@ -3,7 +3,7 @@ from __future__ import annotations
 from bootstrap.bootstrap import App, new
 from bootstrap.config import from_env
 from protocol.cli import CliRequest, CliResponse, UsageError
-from errors import InfraError, conflict, invalid, not_found
+from tesser.errors import InfraError, conflict, invalid, not_found
 from srv.cli.main import commands_for, dispatch, respond
 
 

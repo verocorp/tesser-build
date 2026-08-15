@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tesser.domain as ts
 
-from errors import invalid  # tessercheck:ignore TB062
+from tesser.errors import invalid
 from tesser.serialization import canonical_str
 
 

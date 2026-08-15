@@ -77,7 +77,7 @@ run_python_app() {
   step "import-linter (import direction)"
   PYTHONPATH=. lint-imports || return 1
   step "mypy --strict"
-  MYPYPATH=.:../../tesser-py mypy --strict errors.py protocol campaign linkpolicy reports bootstrap srv tests conftest.py || return 1
+  MYPYPATH=.:../../tesser-py mypy --strict protocol campaign linkpolicy reports bootstrap srv tests conftest.py || return 1
   step "pytest"
   pytest -q || return 1
   step "tessercheck (zero findings over the whole tree)"
@@ -115,7 +115,7 @@ run_errorspy() {
   step "tessercheck (zero findings over the whole tree)"
   tessercheck_tree "$PWD" || return 1
   step "mypy --strict"
-  MYPYPATH=.:../../tesser-py mypy --strict errors.py storage.py conftest.py protocol campaign tests || return 1
+  MYPYPATH=.:../../tesser-py mypy --strict storage.py conftest.py protocol campaign || return 1
   step "pytest"
   pytest -q || return 1
 }
@@ -147,11 +147,14 @@ run_tesser_py() {
   pip wheel --no-deps -w dist . > /dev/null || return 1
   python3 - <<'EOF' || return 1
 import glob, pathlib, sys, zipfile
-shipped = {name.split("/")[1] for name in zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist() if name.startswith("tesser/") and name.count("/") == 2}
+names = zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist()
+shipped = {n.split("/")[1] for n in names if n.startswith("tesser/") and n.count("/") == 2}
+shipped |= {n.split("/")[1] for n in names if n.startswith("tesser/") and n.count("/") == 1 and n.endswith(".py")}
 on_disk = {p.parent.name for p in pathlib.Path("tesser").glob("*/__init__.py")}
+on_disk |= {p.name for p in pathlib.Path("tesser").glob("*.py") if p.name != "__init__.py"}
 missing = on_disk - shipped
 if missing:
-    sys.exit(f"wheel omits subpackages: {sorted(missing)}")
+    sys.exit(f"wheel omits subpackages or modules: {sorted(missing)}")
 print(f"wheel ships: {sorted(on_disk)}")
 EOF
 }

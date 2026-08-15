@@ -6,7 +6,7 @@ import tesser.domain as ts
 
 import campaign.domain.short_link as short_link
 import campaign.domain.values as values
-from errors import DomainError, conflict, not_found, wrap  # tessercheck:ignore TB062
+from tesser.errors import DomainError, conflict, not_found, wrap
 
 _MAX_LINKS: Final[int] = 5
 

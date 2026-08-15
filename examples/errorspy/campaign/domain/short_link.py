@@ -3,7 +3,7 @@ from __future__ import annotations
 import tesser.domain as ts
 
 import campaign.domain.values as values
-from errors import conflict  # tessercheck:ignore TB062
+from tesser.errors import conflict
 
 
 class ShortLinkSpec(ts.Spec):

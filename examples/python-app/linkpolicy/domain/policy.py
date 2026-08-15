@@ -5,7 +5,7 @@ from urllib.parse import urlparse  # tessercheck:ignore TB062
 
 import tesser.domain as ts
 
-from errors import invalid  # tessercheck:ignore TB062
+from tesser.errors import invalid
 from tesser.serialization import canonical_str
 
 _DEFAULT_SCHEMES: Final[tuple[str, ...]] = ("https",)

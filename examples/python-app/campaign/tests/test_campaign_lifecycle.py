@@ -14,7 +14,7 @@ import campaign.domain.campaign as campaign
 import campaign.domain.money as money
 import campaign.domain.short_link as short_link
 import campaign.domain.values as values
-from errors import DomainError, Kind
+from tesser.errors import DomainError, Kind
 from protocol.http import HttpRequest
 from srv.http.host import respond  # tessercheck:ignore TB070
 

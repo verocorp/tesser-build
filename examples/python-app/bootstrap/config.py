@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 import campaign.wiring.config as config
-from errors import invalid
+from tesser.errors import invalid
 import linkpolicy.wiring.config as linkpolicy_config
 import reports.wiring.config as reports_config
 

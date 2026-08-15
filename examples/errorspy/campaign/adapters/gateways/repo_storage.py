@@ -3,7 +3,7 @@ from __future__ import annotations
 import tesser.adapters as ts
 
 import campaign.application.ports.campaign_repository as campaign_repository
-from errors import InfraError
+from tesser.errors import InfraError
 from storage import FakeStorage, Record, StorageMiss, StorageUnavailable
 
 

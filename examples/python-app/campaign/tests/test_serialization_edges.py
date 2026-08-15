@@ -12,7 +12,7 @@ import campaign.application.views as views
 import campaign.domain.campaign as campaign
 import campaign.domain.money as money
 import campaign.domain.short_link as short_link
-from errors import DomainError
+from tesser.errors import DomainError
 from protocol.http import HttpRequest
 
 

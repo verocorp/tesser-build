@@ -10,7 +10,7 @@ import campaign.client.client as client
 import campaign.domain.campaign as campaign
 import campaign.domain.money as money
 import campaign.domain.short_link as short_link
-from errors import conflict, not_found  # tessercheck:ignore TB062
+from tesser.errors import conflict, not_found
 
 
 @ts.function
