@@ -4620,3 +4620,31 @@ def test_a_declaration_finding_is_never_inline_suppressible(tmp_path: Path) -> N
     findings = conftest.check_raw(tmp_path)
     assert len(findings) == 1, findings
     assert "TB044" in findings[0], findings
+
+
+def test_a_bare_skip_directive_is_an_unrecognized_kind(tmp_path: Path) -> None:
+    (tmp_path / ".tesser-root").write_text("app\nskip\n")
+    findings = conftest.check_raw(tmp_path)
+    assert len(findings) == 1, findings
+    assert "unrecognized kind" in findings[0], findings
+
+
+def test_a_skip_directive_with_a_path_is_an_unrecognized_kind(tmp_path: Path) -> None:
+    (tmp_path / ".tesser-root").write_text("app\nskip a/b\n")
+    findings = conftest.check_raw(tmp_path)
+    assert len(findings) == 1, findings
+    assert "unrecognized kind" in findings[0], findings
+
+
+def test_an_undeclared_testdata_dir_is_walked(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "testdata/stray.py", "import os\n")
+    findings = conftest.check_tree(tmp_path)
+    assert any("TB040" in f and "testdata.stray" in f for f in findings), findings
+
+
+def test_a_declared_skip_applies_at_any_depth(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    (tmp_path / ".tesser-root").write_text("app\nskip fixtures\n")
+    conftest.write_module(tmp_path, "app/domain/fixtures/bad.py", "def f(:\n")
+    assert conftest.check_raw(tmp_path) == ()

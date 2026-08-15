@@ -5,6 +5,34 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.34.0] - 2026-08-15
+
+The layout check becomes an app. `scripts/` held a real Python program
+wearing a script's clothes: the repo-layout check had rules, a filesystem
+reader, and a test suite, while its directory's manifest row said "ungated"
+and its CI job installed pytest by hand. The tool that polices app structure
+was itself exempt from all of it. Everything is an app — including this.
+
+### Added
+- **`layout/` — the repo-layout check as a full tesser app.** The manifest
+  rules live in a `Repo` aggregate (`layout/repo/domain/rules.py`); a reader
+  port and filesystem adapter feed it; a two-method client (`check`, `trees`)
+  fronts it; `srv/cli/check.py` and `srv/cli/trees.py` are the entry points,
+  reached through a handler per the host rules. Gated like every other tree:
+  its own manifest row, its own `.tesser-root`, tessercheck zero findings,
+  mypy --strict, and 32 tests (a test per rule beside the rules, built from
+  specs; whole-app tests against fake repos on disk through wiring and the
+  client).
+
+### Changed
+- **`scripts/` holds only bash** — `verify` and `install-dev`, dispatch with
+  no logic of their own. `scripts/check-layout` and its test file are
+  deleted; `scripts/verify` runs the layout app as step 0 and asks it for
+  the tree list, so the Python program embedded in the bash heredoc is gone.
+- **JSON parsing moved out of the domain.** tessercheck flagged `json` in
+  the new domain module: parsing a wire format is the boundary's job, so the
+  adapter parses `manifest.json` and the domain judges the rows — the
+  serialization norm doing its work on the checker's own checker.
 ## [0.0.33.0] - 2026-08-15
 
 The analyzer's own entry point. `tessercheck/__main__.py` did two jobs the

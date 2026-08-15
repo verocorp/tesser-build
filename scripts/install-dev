@@ -20,7 +20,7 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 
-mapfile -t files < <(find examples tessercheck-py tesser-py -name requirements-dev.txt | sort)
+mapfile -t files < <(find examples layout tessercheck-py tesser-py -name requirements-dev.txt | sort)
 
 echo "installing dev tooling from ${#files[@]} requirements files:"
 printf '  %s\n' "${files[@]}"
