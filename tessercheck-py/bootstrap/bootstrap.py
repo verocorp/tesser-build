@@ -6,7 +6,7 @@ import tessercheck.client.client as tessercheck_client
 import tessercheck.wiring.wire as tessercheck_wire
 
 from bootstrap.config import Config
-from lifecycle import Closeable
+from tesser.lifecycle import Closeable
 
 
 class App:  # tessercheck:ignore TB051

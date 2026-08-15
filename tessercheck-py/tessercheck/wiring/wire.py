@@ -6,7 +6,7 @@ import tessercheck.adapters.repositories as repositories
 import tessercheck.application.service as service
 import tessercheck.client.client as client
 import tessercheck.wiring.config as config
-from lifecycle import Closeable
+from tesser.lifecycle import Closeable
 
 
 class NoResources(ts.Wiring):

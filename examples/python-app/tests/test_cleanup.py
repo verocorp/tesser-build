@@ -11,7 +11,7 @@ from bootstrap.bootstrap import CleanupStack, new
 from bootstrap.config import Config
 import campaign.wiring.config as config
 from errors import DomainError
-from lifecycle import Closeable
+from tesser.lifecycle import Closeable
 import linkpolicy.client.client as client
 import linkpolicy.wiring.config as linkpolicy_config
 import reports.client.client as reports_client2

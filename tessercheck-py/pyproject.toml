@@ -26,4 +26,4 @@ testpaths = ["tessercheck", "srv"]
 
 [tool.mypy]
 strict = true
-files = ["tessercheck", "srv", "bootstrap", "protocol", "lifecycle.py", "rules.py"]
+files = ["tessercheck", "srv", "bootstrap", "protocol", "rules.py"]
