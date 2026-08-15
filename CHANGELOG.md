@@ -5,6 +5,40 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.43.0] - 2026-08-15
+
+The third and widest norm module goes live, and the root-module era of the
+trees ends: no tree carries an `errors.py`, `lifecycle.py`, or
+`serialization.py` copy anymore, and every site-level `TB062` ignore those
+copies forced is gone.
+
+### Added
+- **`tesser.errors` grant**: domain, application, adapters, wiring,
+  bootstrap, srv, and test modules may from-import it. A client module keeps
+  importing only its own tesser package — DTOs carry no policy. The role
+  call site becomes plain branches, one literal inventory clause per role,
+  so the rules registry stays decidable.
+
+### Removed
+- **Both root `errors.py` copies** (python-app, errorspy): 38 modules move
+  their imports to `tesser.errors`; the remaining site-level `TB062` ignores
+  drop; errorspy's `DomainKind` renames to `Kind` — the name the skill docs
+  teach. errorspy's `tests/test_errors.py` retires with its subject; the two
+  behaviors tesser-py's suite lacked (two codes share one kind, chaining
+  preserves cause and field) move there.
+
+### Changed
+- The tesser-py wheel gate now verifies flat modules ship too, not only
+  subpackages (`errors.py`, `serialization.py`, `declared.py` were invisible
+  to it).
+- `python.md` excerpts import from `tesser.errors`; the transcription note
+  about `TB062` markers shrinks to history; `handlers.md` names
+  `tesser.errors.status_for` / `exit_code_for`. skill-version 40.
+- `TODOS.md` gains the norm-module followup Chris flagged: the `Closeable`
+  kind-table entry (#86) and the process gap it exposed — a rule-shaping
+  analyzer change riding inside a migration PR — are to be revisited after
+  the one-test-file workstream.
+
 ## [0.0.42.0] - 2026-08-15
 
 The second norm module goes live the same way the first did: the grant and
