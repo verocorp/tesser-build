@@ -8,7 +8,7 @@ import campaign.application.ports.campaign_repository as campaign_repository
 import campaign.application.ports.target_policy as target_policy
 import campaign.client.client as client
 import campaign.domain.campaign as campaign
-import kernel.money as money
+import campaign.domain.money as money
 import campaign.domain.short_link as short_link
 from errors import conflict, not_found  # tessercheck:ignore TB062
 

@@ -128,6 +128,26 @@ dependency (there is no directory to discover), so the consuming tree names
 the packages its pure roles may import. `tesser` stays hardcoded-legal
 everywhere and needs no line.
 
+An `import` declaration is a purity waiver, so it is validated like one
+(all three are TB044 findings, reported before any module finding):
+
+- it never names this tree — not `kernel`, not the app shell, not any
+  walked top-level package. A declaration legalizes an *installed external
+  kernel*; anything the walk governs is governed by the walk.
+- it never names the stdlib — the pure stdlib is already legal, and the
+  rest of it is never a kernel (`import subprocess` cannot be declared
+  away).
+- it must be *used* — a declaration that legalizes no edge is itself a
+  finding, mirroring TB090's rule that an ignore suppressing nothing rots
+  the ledger.
+
+Kernel-target imports are trusted per **walked module**, not per top-level
+name: an import of `kernel.vendored.x` where `vendored/` is skipped from
+the walk is a finding, because trust in code the analyzer never saw is not
+trust. And `kernel` is a **reserved top-level name**: a consumer repo with
+a pre-existing bounded context named `kernel` will see its modules
+reinterpreted under the kernel rules — loudly, by design — and must rename.
+
 ## Import matrix changes
 
 - **TB062 (pure roles)** — domain, client, and application may additionally
@@ -145,8 +165,12 @@ everywhere and needs no line.
 
 ## The one special case, and where it lives
 
+**Status: rollout step 2 — designed here, not yet implemented.** Nothing
+routes `export tesser` today; until the shells rows land, declaring it
+fails loudly under the generic kernel rules rather than silently passing.
+
 Kernel *content* rules are keyed on the `ts.*` shells — and the shells
-cannot subclass themselves. So the analyzer routes exactly one exported
+cannot subclass themselves. So the analyzer will route exactly one exported
 kernel differently: when the declared export is the package `tesser`, its
 modules are governed by **shells rows** instead of domain-content rows:
 
@@ -175,7 +199,7 @@ never in the manifest, the layout, or the docs' ontology.
 | kernel content is conventional domain content | existing TB01x/TB03x, applied to kernel modules |
 | pure roles import only entitled kernels | TB062 extension |
 | nothing imports leftward into a kernel's consumers | existing rows (unchanged) |
-| shells meet the shells bar | shells rows (tesser routing) |
+| shells meet the shells bar | shells rows (tesser routing — rollout step 2, pending) |
 | declarations match disk, arms, and CI | layout app cross-checks |
 
 ## Rollout
@@ -187,8 +211,14 @@ never in the manifest, the layout, or the docs' ontology.
    (`app` + `export tesser` + skips for the mutmut fixtures) and
    `tessercheck_tree` in its verify arm. The gate this design exists to
    make real.
-3. **The worked example** — python-app's `Money` lifts into `kernel/`,
-   consumed by a second context; the Decimal/precision behavioral tests
-   that retired with vobase return as gated kernel companion tests.
+3. **The worked example** — landed with step 1, because the
+   category-earning meta-test demands a real tree exercise every legal
+   classification. The honest lift turned out to be `Slug`, not `Money`:
+   `Slug` was duplicated byte-for-byte in `campaign` and `reports` (two
+   real consumers — the second consumer earns the move), while `Money` has
+   one consumer and stays in `campaign/domain`, and the three `TargetURL`s
+   validate differently — different rules are different types, so none of
+   them lift. The Decimal/precision behavioral ground stays tracked
+   against the ValueObject-shape TODO.
 
 Each step lands green on its own; no step depends on a later one.

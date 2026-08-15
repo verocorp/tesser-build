@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 from typing import Final
 
@@ -40,7 +41,7 @@ class FilesystemSourceReader(ts.Repository):
         self, request: source_reader.ReadSourcesRequest
     ) -> source_reader.ReadSourcesResponse:
         base = Path(request.root)
-        form, skips, export, imports = self._declaration(base)
+        form, skips, exports, imports = self._declaration(base)
         found: list[source_reader.SourceFile] = []
         nested: list[str] = []
         symlinked: list[str] = []
@@ -67,8 +68,9 @@ class FilesystemSourceReader(ts.Repository):
             nested=tuple(nested),
             symlinked=tuple(symlinked),
             sources=tuple(sorted(found, key=lambda source: source.path)),
-            export=export,
+            exports=exports,
             imports=imports,
+            stdlib=tuple(sorted(sys.stdlib_module_names)),
         )
 
     def _source(self, path: Path, relative: Path) -> source_reader.SourceFile:
@@ -97,34 +99,32 @@ class FilesystemSourceReader(ts.Repository):
 
     def _declaration(
         self, base: Path
-    ) -> tuple[source_reader.RootForm, frozenset[str], str, tuple[str, ...]]:
+    ) -> tuple[source_reader.RootForm, frozenset[str], tuple[str, ...], tuple[str, ...]]:
         try:
             text = (base / DECLARATION).read_text(encoding="utf-8-sig")
         except FileNotFoundError:
-            return source_reader.RootForm.MISSING, frozenset(), "", ()
+            return source_reader.RootForm.MISSING, frozenset(), (), ()
         except (UnicodeDecodeError, OSError):
-            return source_reader.RootForm.UNREADABLE, frozenset(), "", ()
+            return source_reader.RootForm.UNREADABLE, frozenset(), (), ()
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         if not lines or lines[0] != "app":
-            return source_reader.RootForm.UNRECOGNIZED, frozenset(), "", ()
+            return source_reader.RootForm.UNRECOGNIZED, frozenset(), (), ()
         skips: set[str] = set()
-        export = ""
+        exports: list[str] = []
         imports: list[str] = []
         for line in lines[1:]:
             directive, _, value = line.partition(" ")
             value = value.strip()
             if not value:
-                return source_reader.RootForm.UNRECOGNIZED, frozenset(), "", ()
+                return source_reader.RootForm.UNRECOGNIZED, frozenset(), (), ()
             if directive == SKIP_DIRECTIVE and "/" not in value:
                 skips.add(value)
             elif directive == EXPORT_DIRECTIVE and value.isidentifier():
-                if export:
-                    return source_reader.RootForm.DOUBLE_EXPORT, frozenset(), "", ()
-                export = value
+                exports.append(value)
             elif directive == IMPORT_DIRECTIVE and all(
                 part.isidentifier() for part in value.split(".")
             ):
                 imports.append(value)
             else:
-                return source_reader.RootForm.UNRECOGNIZED, frozenset(), "", ()
-        return source_reader.RootForm.APP, frozenset(skips), export, tuple(imports)
+                return source_reader.RootForm.UNRECOGNIZED, frozenset(), (), ()
+        return source_reader.RootForm.APP, frozenset(skips), tuple(exports), tuple(imports)

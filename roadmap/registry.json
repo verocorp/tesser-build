@@ -27,7 +27,7 @@
       "skill": "value-objects.md",
       "py_example": [
         "examples/python-app/campaign/domain/values.py",
-        "examples/python-app/kernel/money.py",
+        "examples/python-app/campaign/domain/money.py",
         "examples/python-app/campaign/domain/labels.py"
       ],
       "go_example": [
@@ -59,11 +59,20 @@
       "title": "Kernels (direct-import tier)",
       "skill": "kernels.md",
       "py_example": [
-        "examples/python-app/kernel/money.py"
+        "examples/python-app/kernel/slug.py"
       ],
       "go_example": [],
       "go_analyzers": [],
-      "py_checks": [],
+      "py_checks": [
+        "TB041",
+        "TB042",
+        "TB044",
+        "TB050",
+        "TB051",
+        "TB052",
+        "TB062",
+        "TB070"
+      ],
       "rationale": []
     },
     {

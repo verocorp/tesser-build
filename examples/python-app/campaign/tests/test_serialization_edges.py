@@ -10,7 +10,7 @@ import campaign.application.ports.target_policy as target_policy
 import campaign.application.service as service
 import campaign.application.views as views
 import campaign.domain.campaign as campaign
-import kernel.money as money
+import campaign.domain.money as money
 import campaign.domain.short_link as short_link
 from errors import DomainError
 from protocol.http import HttpRequest

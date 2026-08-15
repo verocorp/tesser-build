@@ -9,8 +9,9 @@ import tessercheck.domain.checks as checks
 def _spec(
     sources: tuple[tuple[str, str, str | None, bool], ...] = (),
     declared: str = "app",
-    export: str | None = None,
+    exports: tuple[str, ...] = (),
     imports: tuple[str, ...] = (),
+    stdlib: tuple[str, ...] = (),
     base: tuple[tuple[str, str, str | None, bool], ...] = (
         (
             "app/domain/thing.py",
@@ -48,15 +49,16 @@ def _spec(
         declared=declared,
         nested=(),
         symlinked=(),
-        export=export,
+        exports=exports,
         imports=imports,
+        stdlib=stdlib,
     )
 
 
 def test_a_second_export_declaration_is_a_finding() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(declared="double-export")).violations()
+        for v in checks.Codebase(_spec(exports=("one", "two"))).violations()
     )
     assert len(findings) == 1, findings
     assert any(
@@ -69,7 +71,7 @@ def test_a_second_export_declaration_is_a_finding() -> None:
 def test_an_export_that_is_no_package_is_a_finding() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(export="ghost")).violations()
+        for v in checks.Codebase(_spec(exports=("ghost",))).violations()
     )
     assert any(
         "this tree exports 'ghost' but no such package exists; "
@@ -82,7 +84,7 @@ def test_an_export_never_takes_a_shell_or_kernel_name() -> None:
     for taken in ("srv", "kernel", "tests", "protocol", "bootstrap"):
         findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(export=taken)).violations()
+        for v in checks.Codebase(_spec(exports=(taken,))).violations()
     )
         assert any(
             "an exported kernel never takes the name of the kernel package "
@@ -377,7 +379,7 @@ def test_a_kernel_test_reaches_only_its_kernel() -> None:
     )
     assert any(
         "kernel.test_money imports app.domain.thing, but a test placed in "
-        "a kernel reaches only its kernel; "
+        "a kernel reaches no context; "
         "a test reaches only what its placement allows" in f
         for f in findings
     ), findings
@@ -410,10 +412,338 @@ def test_an_exported_kernel_is_governed_like_a_kernel() -> None:
                     False,
                 ),
             ),
-            export="shells",
+            exports=("shells",),
         )).violations()
     )
     assert any(
         "a kernel holds only domain kinds" in f for f in findings
     ), findings
     assert not any("app/domain/price.py" in f for f in findings), findings
+
+
+def test_a_context_shaped_export_is_a_finding() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(
+            sources=(
+                ("beta/__init__.py", "beta", "", True),
+                (
+                    "beta/domain/policy.py",
+                    "beta.domain.policy",
+                    "import tesser.domain as ts\n"
+                    "class PolicySpec(ts.Spec):\n"
+                    "    def __init__(self, text: str) -> None:\n"
+                    "        self.text = text\n",
+                    False,
+                ),
+            ),
+            exports=("beta",),
+        )).violations()
+    )
+    assert len(findings) == 1, findings
+    assert any(
+        "a bounded context's domain is never exported — a kernel is not a context" in f
+        for f in findings
+    ), findings
+
+
+def test_an_import_declaration_never_names_this_tree() -> None:
+    for declared in ("srv", "kernel", "tests", "app"):
+        findings = tuple(
+            f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+            for v in checks.Codebase(_spec(imports=(declared,))).violations()
+        )
+        assert any(
+            "an import declaration names an installed external kernel, "
+            "never something the walk governs" in f
+            for f in findings
+        ), (declared, findings)
+
+
+def test_an_import_declaration_never_names_the_stdlib() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(
+            imports=("subprocess", "os.path"),
+            stdlib=("os", "subprocess"),
+        )).violations()
+    )
+    assert (
+        sum(
+            "the pure stdlib is already legal and the rest of it is never a kernel" in f
+            for f in findings
+        )
+        == 2
+    ), findings
+
+
+def test_an_unused_import_declaration_is_a_finding() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(imports=("money_kernel",))).violations()
+    )
+    assert any(
+        "an import declaration that legalizes nothing is itself a finding" in f
+        for f in findings
+    ), findings
+
+
+def test_kernel_siblings_import_each_other_in_both_kernel_shapes() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(
+            sources=(
+                ("shells/__init__.py", "shells", "", True),
+                (
+                    "shells/base.py",
+                    "shells.base",
+                    "import tesser.domain as ts\n"
+                    "class BaseSpec(ts.Spec):\n"
+                    "    def __init__(self, text: str) -> None:\n"
+                    "        self.text = text\n",
+                    False,
+                ),
+                (
+                    "shells/rich.py",
+                    "shells.rich",
+                    "import tesser.domain as ts\n"
+                    "from shells.base import BaseSpec\n"
+                    "class RichSpec(ts.Spec):\n"
+                    "    def __init__(self, base: BaseSpec) -> None:\n"
+                    "        self.base = base\n",
+                    False,
+                ),
+                (
+                    "kernel/rates.py",
+                    "kernel.rates",
+                    "import tesser.domain as ts\n"
+                    "from kernel.money import Money\n"
+                    "class RateSpec(ts.Spec):\n"
+                    "    def __init__(self, money: Money) -> None:\n"
+                    "        self.money = money\n",
+                    False,
+                ),
+            ),
+            exports=("shells",),
+        )).violations()
+    )
+    assert not any("shells/rich.py" in f for f in findings), findings
+    assert not any("kernel/rates.py" in f for f in findings), findings
+
+
+def test_the_exported_kernel_never_imports_the_private_kernel() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(
+            sources=(
+                ("shells/__init__.py", "shells", "", True),
+                (
+                    "shells/base.py",
+                    "shells.base",
+                    "import tesser.domain as ts\n"
+                    "from kernel.money import Money\n"
+                    "class BaseSpec(ts.Spec):\n"
+                    "    def __init__(self, money: Money) -> None:\n"
+                    "        self.money = money\n",
+                    False,
+                ),
+            ),
+            exports=("shells",),
+        )).violations()
+    )
+    assert any(
+        "shells.base imports kernel.money; a kernel imports only its "
+        "kernel, tesser.domain, declared kernels, and the pure stdlib" in f
+        for f in findings
+    ), findings
+
+
+def test_a_declared_import_matches_on_the_package_boundary() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(
+            sources=(
+                (
+                    "kernel/prices.py",
+                    "kernel.prices",
+                    "import tesser.domain as ts\n"
+                    "import money_kernel.sub\n"
+                    "import money_kernel_evil\n"
+                    "class PriceSpec(ts.Spec):\n"
+                    "    def __init__(self, text: str) -> None:\n"
+                    "        self.text = text\n",
+                    False,
+                ),
+            ),
+            imports=("money_kernel",),
+        )).violations()
+    )
+    assert any("imports money_kernel_evil" in f for f in findings), findings
+    assert not any("imports money_kernel.sub" in f for f in findings), findings
+
+
+def test_a_kernel_import_is_only_trusted_when_its_module_was_walked() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(
+            sources=(
+                (
+                    "app/domain/price.py",
+                    "app.domain.price",
+                    "import tesser.domain as ts\n"
+                    "from kernel.money import Money\n"
+                    "from kernel.vendored.impure import Client\n"
+                    "class PriceSpec(ts.Spec):\n"
+                    "    def __init__(self, money: Money) -> None:\n"
+                    "        self.money = money\n",
+                    False,
+                ),
+            ),
+        )).violations()
+    )
+    assert any("imports kernel.vendored.impure" in f for f in findings), findings
+    assert not any("imports kernel.money" in f for f in findings), findings
+
+
+def test_a_pure_role_kernel_import_needs_the_kernel_to_exist() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(
+            sources=(
+                (
+                    "app/domain/price.py",
+                    "app.domain.price",
+                    "import tesser.domain as ts\n"
+                    "from kernel.money import Money\n"
+                    "class PriceSpec(ts.Spec):\n"
+                    "    def __init__(self, money: Money) -> None:\n"
+                    "        self.money = money\n",
+                    False,
+                ),
+            ),
+            kernel_init=(),
+            money=(),
+        )).violations()
+    )
+    assert any(
+        "app.domain.price imports kernel.money; domain, client, and application "
+        "import only their context, their kernels, their tesser package, "
+        "and the pure stdlib" in f
+        for f in findings
+    ), findings
+
+
+def test_a_role_named_subpackage_of_the_fixed_kernel_stays_kernel_governed() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(
+            sources=(
+                ("kernel/domain/__init__.py", "kernel.domain", "", True),
+                (
+                    "kernel/domain/svc.py",
+                    "kernel.domain.svc",
+                    "import tesser.domain as ts\n"
+                    "import tesser.application as tsa\n"
+                    "class Svc(tsa.ApplicationService):\n"
+                    "    pass\n",
+                    False,
+                ),
+            ),
+        )).violations()
+    )
+    assert any(
+        "a kernel holds only domain kinds" in f for f in findings
+    ), findings
+    assert not any("is not a context module" in f for f in findings), findings
+
+
+def test_a_kernel_init_rejects_a_near_miss_package() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(
+            sources=(
+                (
+                    "kernel/__init__.py",
+                    "kernel",
+                    "import kernelish.money as money\n",
+                    True,
+                ),
+                ("kernelish/__init__.py", "kernelish", "", True),
+                (
+                    "kernelish/money.py",
+                    "kernelish.money",
+                    "import app.domain.thing\n",
+                    False,
+                ),
+            ),
+            kernel_init=(),
+        )).violations()
+    )
+    assert any(
+        "kernel imports kernelish.money; "
+        "a kernel __init__ only re-exports from its own kernel" in f
+        for f in findings
+    ), findings
+
+
+def test_a_member_form_reexport_in_a_kernel_init_is_legal() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(
+            sources=(
+                (
+                    "kernel/__init__.py",
+                    "kernel",
+                    "from kernel.money import Money as Money\n",
+                    True,
+                ),
+            ),
+            kernel_init=(),
+        )).violations()
+    )
+    assert not any("kernel/__init__.py" in f for f in findings), findings
+
+
+def test_an_export_naming_a_bare_module_is_a_finding() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(
+            sources=(("shells.py", "shells", "X = 1\n", False),),
+            exports=("shells",),
+        )).violations()
+    )
+    assert len(findings) == 1, findings
+    assert any(
+        "an export names a package at the tree root" in f for f in findings
+    ), findings
+
+
+def test_a_kernel_test_may_reach_the_trees_other_kernel() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(
+            sources=(
+                ("shells/__init__.py", "shells", "", True),
+                (
+                    "shells/base.py",
+                    "shells.base",
+                    "import tesser.domain as ts\n"
+                    "class BaseSpec(ts.Spec):\n"
+                    "    def __init__(self, text: str) -> None:\n"
+                    "        self.text = text\n",
+                    False,
+                ),
+                (
+                    "kernel/test_money.py",
+                    "kernel.test_money",
+                    "from kernel.money import Money\n"
+                    "from shells.base import BaseSpec\n"
+                    "def test_money() -> None:\n"
+                    "    assert Money(1) == Money(1)\n",
+                    False,
+                ),
+            ),
+            exports=("shells",),
+        )).violations()
+    )
+    assert not any("kernel/test_money.py" in f for f in findings), findings

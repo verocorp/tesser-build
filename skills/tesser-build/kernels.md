@@ -68,10 +68,15 @@ that isn't a copy.
 
 ## How the machine sees it
 
-`kernel/` is discovered by its fixed name; an exported kernel is routed by
-its `.tesser-root` declaration (a second `export` line, an export naming no
-package, or a shell/kernel name collision is a `TB044` finding). Kernel
-modules carry the domain content rules (`TB052` block declarations, the
-`TB01x` taxonomy), the kernel import row (`TB050`/`TB062`), statement
-totality (`TB051`), and the kernel test tier (`TB070`). The worked example
-is `examples/python-app/kernel/`.
+`kernel/` is discovered by its fixed name (a reserved top-level name — a
+context may not be called `kernel`); an exported kernel is routed by its
+`.tesser-root` declaration (a second `export` line, an export naming no
+package or a context-shaped one, or a shell/kernel name collision is a
+`TB044` finding). An `import <package>` declaration is a validated purity
+waiver: it never names this tree or the stdlib, and one that legalizes
+nothing is itself a finding. Kernel modules carry the domain content rules
+(`TB052` block declarations, the `TB01x` taxonomy), the kernel import row
+(`TB050`/`TB062` — trusted per walked module, and the exported kernel never
+imports the app-scoped one), statement totality (`TB051`), and the kernel
+test tier (`TB070`). The worked example is `examples/python-app/kernel/`
+(`Slug`, shared by the campaign and reports contexts).

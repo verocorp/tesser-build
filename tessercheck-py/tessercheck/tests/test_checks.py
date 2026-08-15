@@ -50,6 +50,38 @@ def test_an_unknown_directive_is_an_unrecognized_kind(tmp_path: Path) -> None:
     assert "unrecognized kind" in findings[0], findings
 
 
+def test_a_malformed_export_value_is_an_unrecognized_kind(tmp_path: Path) -> None:
+    for declaration in ("app\nexport a/b\n", "app\nexport 2bad\n"):
+        (tmp_path / ".tesser-root").write_text(declaration)
+        findings = conftest.check_raw(tmp_path)
+        assert len(findings) == 1, (declaration, findings)
+        assert "unrecognized kind" in findings[0], (declaration, findings)
+
+
+def test_a_malformed_import_value_is_an_unrecognized_kind(tmp_path: Path) -> None:
+    for declaration in ("app\nimport a-b\n", "app\nimport a..b\n"):
+        (tmp_path / ".tesser-root").write_text(declaration)
+        findings = conftest.check_raw(tmp_path)
+        assert len(findings) == 1, (declaration, findings)
+        assert "unrecognized kind" in findings[0], (declaration, findings)
+
+
+def test_a_dotted_import_declaration_parses_and_reaches_a_domain(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    (tmp_path / ".tesser-root").write_text("app\nimport money.kernel\n")
+    conftest.write_module(
+        tmp_path,
+        "app/domain/price.py",
+        "import tesser.domain as ts\n"
+        "import money.kernel\n"
+        "class PriceSpec(ts.Spec):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    findings = conftest.check_raw(tmp_path)
+    assert findings == (), findings
+
+
 def test_a_declared_export_is_read_and_governed_end_to_end(tmp_path: Path) -> None:
     conftest.conforming_tree(tmp_path)
     (tmp_path / ".tesser-root").write_text("app\nexport shells\n")

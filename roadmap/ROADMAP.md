@@ -10,7 +10,7 @@ Legend: ✅ done · 🟡 partial · ❌ absent · — intentionally n/a.
 | Row | Py example | Go example | Skill doc | Checker | Rationale |
 |---|---|---|---|---|---|
 | Value objects | ✅ | ✅ | ✅ | ✅ 7 Go + 4 Py | ✅ |
-| Kernels (direct-import tier) | ✅ | ❌ | ✅ | ❌ | ❌ |
+| Kernels (direct-import tier) | ✅ | ❌ | ✅ | 🟡 Py only (TB041, TB042, TB044, TB050, TB051, TB052, TB062, TB070) | ❌ |
 | Entities | ✅ | ✅ | ✅ | ❌ | ❌ |
 | Aggregates | ✅ | ✅ | ✅ | 🟡 Py only (TB011, TB012) | ❌ |
 | Domain services | ❌ | ❌ | 🟡 stub | ❌ | ❌ |
