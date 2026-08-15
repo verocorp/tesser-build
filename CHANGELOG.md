@@ -30,6 +30,11 @@ in, findings out).
   reader's walking behavior and the whole `.tesser-root` declaration family.
 - `RULES.md`'s covering-test columns now point into the sibling files;
   `rules.py` scans both homes.
+- **No helpers in test files, by rule**: each sibling file carries exactly
+  one helper — a spec builder that satisfies the helper contract as written
+  (defaulted parameters, one construction, returns the spec, no escape
+  comments) — and every test constructs the checker and renders its findings
+  inline. Duplication in tests is fine; indirection is not.
 
 ## [0.0.36.0] - 2026-08-15
 
