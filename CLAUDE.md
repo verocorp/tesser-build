@@ -7,7 +7,8 @@ the build-side member of the tesser family): the `go/analysis` analyzers in
 plugin (`gclplugin/`), the Python analyzer (`tessercheck-py/` — the `TB0*`
 checks), a Python runtime library (`tesser-py/` — `tesser.domain.ValueObject`,
 the repo's first shipped runtime dependency rather than a build-time checker;
-candidate mutation-testable VO base, see `examples/vobase/`), an executable
+candidate mutation-testable VO base — the mutmut-visibility claim is asserted
+by the ecosystem test in `tesser-py/tests/ecosystem/mutmut/`), an executable
 rationale layer (`rationale/`), an agent
 skill (`skills/tesser-build/` — Go + Python construction guidance, copy-in distributed
 to consumers), and human docs (`docs/start-here.md`, `docs/faq.md`). If you are

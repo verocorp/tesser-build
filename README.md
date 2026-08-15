@@ -112,10 +112,13 @@ guard. As with frozen dataclasses, the frozen guard blocks rebinding only —
 fields must themselves be immutable values (value objects, not lists or
 dicts), or equality silently changes after construction. It exists because
 mutmut skips any decorated class wholesale, so the
-frozen-dataclass idiom is invisible to mutation testing. Candidate successor
-shape under evaluation — the taught convention is still the frozen dataclass;
-the worked example is [`examples/vobase/`](examples/vobase/), which is
-deliberately not tessercheck-gated until the analyzer classifies this shape.
+frozen-dataclass idiom is invisible to mutation testing. That claim is
+executable: the ecosystem test in
+[`tesser-py/tests/ecosystem/mutmut/`](tesser-py/tests/ecosystem/mutmut/)
+runs the mutmut CLI on the same value object built both ways and asserts
+mutants are generated and killed for the `ts.ValueObject` build while the
+dataclass build produces none. Candidate successor shape under evaluation —
+the taught convention is still the frozen dataclass.
 
 ### Using it in CI: the `go tool` directive
 

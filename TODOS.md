@@ -409,18 +409,16 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 ## Toolkit
 
 - [ ] **ValueObject-shape adoption decision + classifier support** (shipped as
-  experiment 2026-08-01, `tesser-py/` + `examples/vobase/`)
+  experiment 2026-08-01, `tesser-py/`; `examples/vobase/` retired 2026-08-15 —
+  its mutmut-visibility purpose is now the ecosystem test in
+  `tesser-py/tests/ecosystem/mutmut/`)
   - **What:** decide whether `tesser.domain.ValueObject` (the mutmut-visible
     VO base) supersedes the frozen-dataclass idiom. If adopted:
     (1) teach `tessercheck-py`'s classifier to recognize `ts.ValueObject`
     subclasses as value objects — today TB003/TB010–TB014 are blind to the
     shape (red-team verified: a raw-primitive accessor that TB010 catches on a
     frozen dataclass passes silently on a ValueObject subclass);
-    (2) add the `examples/vobase` tessercheck CI gate — the
-    `vobase-example` job in `.github/workflows/test.yml` deliberately omits
-    tessercheck until then; TB032 also
-    misfires on `tests/test_money.py`'s `_spec` helper under the new shape;
-    (3) walk the affected rows in `rationale/coverage.md` and re-render
+    (2) walk the affected rows in `rationale/coverage.md` and re-render
     `skills/tesser-build/python.md`, bumping skill-version.
   - **Also found in that review, independent of the decision:**
     `examples/python/catalog/money.py` shares the bugs the vobase port fixed —

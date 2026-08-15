@@ -197,19 +197,6 @@ jobs:
         # only building the distribution can catch that omission class.
         run: scripts/verify tesser-py
 
-  vobase-example:
-    name: vobase example (mypy --strict + pytest)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install dev tooling
-        run: pip install -r examples/vobase/requirements-dev.txt
-      - name: examples/vobase — mypy --strict + pytest
-        run: scripts/verify vobase
-
   roadmap:
     # The roadmap matrix is generated, never hand-maintained (Wave 2 item 10):
     # this job fails when the committed rendering drifts from the derivation,

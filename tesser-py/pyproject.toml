@@ -22,3 +22,6 @@ testpaths = ["tests"]
 [tool.mypy]
 strict = true
 files = ["tesser", "tests"]
+# The mutmut fixture projects are standalone mutation targets, each shipping
+# its own `vo` package — checking them here would collide on the module name.
+exclude = ['tests/ecosystem/mutmut/fixtures/']

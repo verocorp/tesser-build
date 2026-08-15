@@ -157,14 +157,6 @@ print(f"wheel ships: {sorted(on_disk)}")
 EOF
 }
 
-run_vobase() {
-  cd "$ROOT/examples/vobase" || return 1
-  step "mypy --strict"
-  MYPYPATH=.:../../tesser-py mypy --strict vobase tests || return 1
-  step "pytest"
-  pytest -q || return 1
-}
-
 run_layout() {
   cd "$ROOT/layout" || return 1
   step "tessercheck (zero findings over the whole tree)"
@@ -201,7 +193,6 @@ run_tree() {
     ports)          run_ports ;;
     errorspy)       run_errorspy ;;
     tesser-py)      run_tesser_py ;;
-    vobase)         run_vobase ;;
     layout)         run_layout ;;
     tessercheck-py) run_tessercheck_py ;;
     *) echo "unknown tree: $tree (known: ${TREES[*]})"; return 1 ;;
