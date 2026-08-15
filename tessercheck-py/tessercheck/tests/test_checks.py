@@ -50,6 +50,50 @@ def test_an_unknown_directive_is_an_unrecognized_kind(tmp_path: Path) -> None:
     assert "unrecognized kind" in findings[0], findings
 
 
+def test_a_declared_export_is_read_and_governed_end_to_end(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    (tmp_path / ".tesser-root").write_text("app\nexport shells\n")
+    conftest.write_module(tmp_path, "shells/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "shells/svc.py",
+        "import tesser.domain as ts\n"
+        "import tesser.application as tsa\n"
+        "class Svc(tsa.ApplicationService):\n"
+        "    pass\n",
+    )
+    findings = conftest.check_raw(tmp_path)
+    assert any("a kernel holds only domain kinds" in f for f in findings), findings
+
+
+def test_a_second_export_line_is_a_finding_end_to_end(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    (tmp_path / ".tesser-root").write_text("app\nexport one\nexport two\n")
+    findings = conftest.check_raw(tmp_path)
+    assert len(findings) == 1, findings
+    assert any(
+        "a tree has one exported kernel, so a declaration carries at most one "
+        "'export <dir>' line" in f
+        for f in findings
+    ), findings
+
+
+def test_an_import_declaration_reaches_the_pure_roles_end_to_end(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    (tmp_path / ".tesser-root").write_text("app\nimport money_kernel\n")
+    conftest.write_module(
+        tmp_path,
+        "app/domain/price.py",
+        "import tesser.domain as ts\n"
+        "import money_kernel\n"
+        "class PriceSpec(ts.Spec):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    findings = conftest.check_raw(tmp_path)
+    assert not any("imports money_kernel" in f for f in findings), findings
+
+
 def test_an_unreadable_declaration_is_a_finding(tmp_path: Path) -> None:
     (tmp_path / ".tesser-root").write_bytes(b"\xff\xfe\x00app")
     findings = conftest.check_raw(tmp_path)
