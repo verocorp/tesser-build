@@ -4,7 +4,10 @@ import textwrap
 from collections.abc import Callable
 from pathlib import Path
 
-from tessercheck.adapters.repositories import FilesystemSourceReader
+from tessercheck.adapters.repositories import (
+    FilesystemRulebookSources,
+    FilesystemSourceReader,
+)
 from tessercheck.application.service import TessercheckService
 from tessercheck.client.client import CheckRequest
 
@@ -17,7 +20,7 @@ def check_tree(root: Path) -> tuple[str, ...]:
 
 
 def check_raw(root: Path) -> tuple[str, ...]:
-    service = TessercheckService(FilesystemSourceReader())
+    service = TessercheckService(FilesystemSourceReader(), FilesystemRulebookSources())
     return service.check(CheckRequest(root=str(root))).findings
 
 

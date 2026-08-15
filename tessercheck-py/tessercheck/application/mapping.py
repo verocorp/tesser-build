@@ -2,8 +2,10 @@ import typing
 
 import tesser.application as ts
 
+import tessercheck.application.ports.rulebook_sources as rulebook_sources
 import tessercheck.application.ports.source_reader as source_reader
 import tessercheck.domain.checks as domain
+import tessercheck.domain.rulebook as rulebook
 
 
 @ts.function
@@ -68,3 +70,12 @@ def _text(source: source_reader.SourceFile) -> str | None:
             return None
         case _ as unreachable:
             typing.assert_never(unreachable)
+
+
+@ts.function
+def rendered_rulebook(read: rulebook_sources.ReadRulebookResponse) -> str:
+    return rulebook.render(
+        read.checks_text,
+        tuple((module.name, module.text) for module in read.test_modules),
+        read.contracts_text,
+    )

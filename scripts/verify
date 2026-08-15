@@ -174,7 +174,7 @@ run_tessercheck_py() {
   step "tessercheck (self-check over its own tree)"
   tessercheck_tree "$PWD" || return 1
   step "RULES.md drift gate"
-  python3 rules.py --check || return 1
+  PYTHONPATH=.:../tesser-py python3 -m srv.cli.rules --check || return 1
   step "mypy --strict"
   MYPYPATH=.:../tesser-py mypy || return 1
   step "pytest"

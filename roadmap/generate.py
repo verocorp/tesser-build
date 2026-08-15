@@ -246,19 +246,21 @@ def go_analyzer_names(root: Path, cmd: list[str]) -> set[str]:
 
 def py_check_codes(root: Path) -> set[str]:
     """The shipped Python check codes, from the same extraction RULES.md is
-    generated with: rules.py's rule_rows over the Violation call sites in
-    tessercheck/domain/checks.py. Loaded by file path (not sys.path) so the
-    top-level module name ``rules`` cannot collide with anything else."""
-    rules_path = root / "tessercheck-py" / "rules.py"
-    spec = importlib.util.spec_from_file_location("tessercheck_rules", rules_path)
-    if spec is None or spec.loader is None:
-        raise RoadmapError(f"cannot load the tessercheck-py rule extractor at {rules_path}")
-    module = importlib.util.module_from_spec(spec)
+    generated with: the rulebook domain module's rule_rows over the Violation
+    call sites in tessercheck/domain/checks.py. The rulebook lives inside the
+    tessercheck package (it imports tesser and its own context), so it is
+    imported as a package module with tessercheck-py and tesser-py on
+    sys.path rather than loaded by file path."""
+    rules_path = root / "tessercheck-py" / "tessercheck" / "domain" / "rulebook.py"
+    checks_path = root / "tessercheck-py" / "tessercheck" / "domain" / "checks.py"
+    for entry in (root / "tessercheck-py", root / "tesser-py"):
+        if str(entry) not in sys.path:
+            sys.path.insert(0, str(entry))
     try:
-        spec.loader.exec_module(module)
-        tree = ast.parse(Path(module.DOMAIN).read_text(encoding="utf-8"))
-        codes = {row.code for row in module.rule_rows(tree)}
-    except (OSError, SyntaxError, AttributeError) as e:
+        rulebook = importlib.import_module("tessercheck.domain.rulebook")
+        tree = ast.parse(checks_path.read_text(encoding="utf-8"))
+        codes = {str(row.code()) for row in rulebook.rule_rows(tree)}
+    except (OSError, SyntaxError, AttributeError, ImportError) as e:
         raise RoadmapError(f"cannot extract tessercheck-py check codes via {rules_path}: {e}") from e
     if not codes:
         raise RoadmapError(f"{rules_path} extracted zero check codes — refusing an empty column")
@@ -678,7 +680,7 @@ def generate(root: Path, registry_path: Path, analyzers_cmd: list[str]) -> str:
     # lists a check yet" must not be the reason the guard sees nothing.
     need_go = any(_str_list(r, "go_analyzers") for r in rows) or (root / "cmd" / "analyzers-json").is_dir()
     need_py = any(_str_list(r, "py_checks") for r in rows) or (
-        root / "tessercheck-py" / "rules.py"
+        root / "tessercheck-py" / "tessercheck" / "domain" / "rulebook.py"
     ).is_file()
     go_names = go_analyzer_names(root, analyzers_cmd) if need_go else None
     py_codes = py_check_codes(root) if need_py else None

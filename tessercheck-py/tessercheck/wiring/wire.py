@@ -17,4 +17,10 @@ class NoResources(ts.Wiring):
 
 @ts.function
 def build(cfg: config.Config) -> tuple[client.Client, Closeable]:
-    return service.TessercheckService(repositories.FilesystemSourceReader()), NoResources()
+    return (
+        service.TessercheckService(
+            repositories.FilesystemSourceReader(),
+            repositories.FilesystemRulebookSources(),
+        ),
+        NoResources(),
+    )

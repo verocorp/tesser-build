@@ -9,6 +9,8 @@ from protocol.cli import CliRequest, CliResponse
 
 _CHECK_USAGE: Final[str] = "usage: check [tree]"
 
+_RULES_USAGE: Final[str] = "usage: rules [tree]"
+
 _HERE: Final[str] = "."
 
 
@@ -26,3 +28,9 @@ class Handler(ts.Handler):
             stdout="\n".join(view.findings),
             stderr="",
         )
+
+    def rulebook(self, req: CliRequest) -> CliResponse:
+        root = req.arg(0, _HERE)
+        req.no_extra_args(1, _RULES_USAGE)
+        view = self._client.rulebook(client.RulebookRequest(root=root))
+        return CliResponse(0, stdout=view.rendered, stderr="")
