@@ -38,7 +38,7 @@ def test_an_unrecognized_declaration_is_a_finding(tmp_path: Path) -> None:
     assert len(findings) == 1, findings
     assert any(
         "this tree declares an unrecognized kind; a declaration is "
-        "'app', then only 'skip <dir>' lines" in f
+        "'app', then only 'skip <dir>', 'export <dir>', and 'import <package>' lines" in f
         for f in findings
     ), f"an unrecognized declaration passed: {findings}"
 

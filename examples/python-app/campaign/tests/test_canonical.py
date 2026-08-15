@@ -7,7 +7,7 @@ from decimal import Decimal
 import pytest
 
 import campaign.domain.campaign as campaign
-import campaign.domain.money as money
+import kernel.money as money
 import campaign.domain.short_link as short_link
 from serialization import canonical_datetime, canonical_decimal, canonical_str
 import pathlib

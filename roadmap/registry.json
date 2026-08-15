@@ -27,7 +27,7 @@
       "skill": "value-objects.md",
       "py_example": [
         "examples/python-app/campaign/domain/values.py",
-        "examples/python-app/campaign/domain/money.py",
+        "examples/python-app/kernel/money.py",
         "examples/python-app/campaign/domain/labels.py"
       ],
       "go_example": [
@@ -53,6 +53,18 @@
       "rationale": [
         "rationale/*_test.go"
       ]
+    },
+    {
+      "key": "kernels",
+      "title": "Kernels (direct-import tier)",
+      "skill": "kernels.md",
+      "py_example": [
+        "examples/python-app/kernel/money.py"
+      ],
+      "go_example": [],
+      "go_analyzers": [],
+      "py_checks": [],
+      "rationale": []
     },
     {
       "key": "entities",

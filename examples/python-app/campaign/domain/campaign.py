@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tesser.domain as ts
 
-import campaign.domain.money as money
+import kernel.money as money
 import campaign.domain.short_link as short_link
 import campaign.domain.values as values
 from errors import DomainError, conflict, invalid, not_found  # tessercheck:ignore TB062

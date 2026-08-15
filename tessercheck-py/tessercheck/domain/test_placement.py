@@ -144,7 +144,7 @@ def test_homeless_modules_are_flagged() -> None:
                )
     assert any(
         "loose belongs to no governed package; every module belongs to a context, "
-        "srv, bootstrap, tests, or the protocol package" in f
+        "a kernel, srv, bootstrap, tests, or the protocol package" in f
         for f in findings
     )
     assert any(

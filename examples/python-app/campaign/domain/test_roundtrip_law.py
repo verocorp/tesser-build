@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-import campaign.domain.money as money
+import kernel.money as money
 import campaign.domain.values as values
 from errors import DomainError
 

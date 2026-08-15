@@ -11,6 +11,7 @@ class RootForm(enum.Enum):
     MISSING = "missing"
     UNREADABLE = "unreadable"
     UNRECOGNIZED = "unrecognized"
+    DOUBLE_EXPORT = "double-export"
 
 
 class SourceState(enum.Enum):
@@ -49,11 +50,15 @@ class ReadSourcesResponse(ts.Response):
         nested: tuple[str, ...],
         symlinked: tuple[str, ...],
         sources: tuple[SourceFile, ...],
+        export: str,
+        imports: tuple[str, ...],
     ) -> None:
         self.root = root
         self.nested = nested
         self.symlinked = symlinked
         self.sources = sources
+        self.export = export
+        self.imports = imports
 
 
 class SourceReader(ts.Port, Protocol):

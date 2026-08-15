@@ -10,6 +10,7 @@ Legend: ✅ done · 🟡 partial · ❌ absent · — intentionally n/a.
 | Row | Py example | Go example | Skill doc | Checker | Rationale |
 |---|---|---|---|---|---|
 | Value objects | ✅ | ✅ | ✅ | ✅ 7 Go + 4 Py | ✅ |
+| Kernels (direct-import tier) | ✅ | ❌ | ✅ | ❌ | ❌ |
 | Entities | ✅ | ✅ | ✅ | ❌ | ❌ |
 | Aggregates | ✅ | ✅ | ✅ | 🟡 Py only (TB011, TB012) | ❌ |
 | Domain services | ❌ | ❌ | 🟡 stub | ❌ | ❌ |

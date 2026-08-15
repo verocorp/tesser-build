@@ -557,13 +557,13 @@ def test_pure_core_stdlib_allowlist() -> None:
                )
     assert any(
         "io1.domain.thing imports os; domain, client, and application "
-        "import only their context, their tesser package, and the pure stdlib" in f
+        "import only their context, their kernels, their tesser package, and the pure stdlib" in f
         for f in findings
     )
     assert not any("io1.domain.thing imports datetime" in f for f in findings)
     assert any(
         "io1.client.client imports datetime; domain, client, and application "
-        "import only their context, their tesser package, and the pure stdlib" in f
+        "import only their context, their kernels, their tesser package, and the pure stdlib" in f
         for f in findings
     )
     assert not any("imports __future__" in f for f in findings)
@@ -736,7 +736,7 @@ def test_nested_imports_neither_classify_nor_satisfy_presence() -> None:
     )
     assert any(
         "lazy2.domain.thing imports os; domain, client, and application "
-        "import only their context, their tesser package, and the pure stdlib" in f
+        "import only their context, their kernels, their tesser package, and the pure stdlib" in f
         for f in findings
     )
     assert any(
@@ -890,7 +890,7 @@ def test_pure_core_allowlist_covers_application_and_domain_future() -> None:
     assert not any("io2.domain.thing" in f and "the pure stdlib" in f for f in findings)
     assert any(
         "io2.application.service imports socket; domain, client, and application "
-        "import only their context, their tesser package, and the pure stdlib" in f
+        "import only their context, their kernels, their tesser package, and the pure stdlib" in f
         for f in findings
     )
     assert not any("io2.application.service:1" in f for f in findings)

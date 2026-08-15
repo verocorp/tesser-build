@@ -174,7 +174,7 @@ norm (`logging.md`).
 **Each rule lives on the type that owns it** — the child's `__init__` guards
 the child; the compound's methods guard only cross-field relations — so no
 construction path can skip a rule, and no rule has two homes. Verified impl:
-`examples/python-app/campaign/domain/money.py`.
+`examples/python-app/kernel/money.py`.
 
 **The construction doors, revised for the shells (supersedes the 2026-07-20
 (b)-uniform spec-door-for-compound-VOs ruling):** a **value object's** one

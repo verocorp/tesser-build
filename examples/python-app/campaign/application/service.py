@@ -9,7 +9,7 @@ import campaign.application.ports.target_policy as target_policy
 import campaign.application.views as campaign_views
 import campaign.client.client as client
 import campaign.domain.campaign as campaign
-import campaign.domain.money as money
+import kernel.money as money
 import campaign.domain.short_link as short_link
 import campaign.domain.values as values
 

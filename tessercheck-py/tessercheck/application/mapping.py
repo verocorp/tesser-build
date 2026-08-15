@@ -14,6 +14,8 @@ def findings(read: source_reader.ReadSourcesResponse) -> tuple[str, ...]:
             declared=_declared(read),
             nested=read.nested,
             symlinked=read.symlinked,
+            export=read.export or None,
+            imports=read.imports,
         )
     )
     return tuple(
@@ -34,6 +36,8 @@ def _declared(read: source_reader.ReadSourcesResponse) -> str:
             return domain.DECLARED_UNREADABLE
         case source_reader.RootForm.UNRECOGNIZED:
             return domain.DECLARED_UNRECOGNIZED
+        case source_reader.RootForm.DOUBLE_EXPORT:
+            return domain.DECLARED_DOUBLE_EXPORT
         case _ as unreachable:
             typing.assert_never(unreachable)
 

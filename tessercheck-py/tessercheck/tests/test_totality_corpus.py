@@ -49,6 +49,10 @@ def test_no_module_shape_is_silent(tmp_path: Path) -> None:
         ("bootstrap.py", bait),
         ("app/tests.py", "import app.application.service\n"),
         ("app/application/ports.py", "import app.domain.thing\n"),
+        ("kernel.py", bait),
+        ("kernel/money_bait.py", bait),
+        ("kernel/test_money.py", test_bait),
+        ("kernel/conftest.py", bait),
         ("__main__.py", bait),
         ("weird/__init__.py", bait),
         ("srv/deep/__init__.py", bait),
@@ -84,6 +88,7 @@ def test_no_module_shape_is_silent(tmp_path: Path) -> None:
             "context-tests-init",
             "role-file",
             "ports-init",
+            "kernel-init",
         }
     )
     uncovered = returned - package_only - covered
