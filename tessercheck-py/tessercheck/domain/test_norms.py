@@ -4,9 +4,11 @@ import tesser.testing as ts
 
 import tessercheck.domain.checks as checks
 
+
 @ts.helper
-def _conforming() -> tuple[tuple[str, str, str, bool], ...]:  # tessercheck:ignore TB073
-    return (
+def _spec(
+    sources: tuple[tuple[str, str, str | None, bool], ...] = (),
+    base: tuple[tuple[str, str, str | None, bool], ...] = (
         (
             "app/domain/thing.py",
             "app.domain.thing",
@@ -43,30 +45,17 @@ def _conforming() -> tuple[tuple[str, str, str, bool], ...]:  # tessercheck:igno
             "        return anything\n",
             False,
         ),
-    )
-
-
-@ts.helper
-def _findings(  # tessercheck:ignore TB073
-    sources: tuple[tuple[str, str, str, bool], ...] = (),
-    conforming: bool = True,
-) -> tuple[str, ...]:
-    spec = checks.CodebaseSpec(
-        sources=(_conforming() + sources) if conforming else sources,
-        declared="app",
-        nested=(),
-        symlinked=(),
-    )
-    return tuple(
-        f"{violation.path()}:{int(violation.line())}: "
-        f"{violation.code()} {violation.text()}"
-        for violation in checks.Codebase(spec).violations()
+    ),
+) -> checks.CodebaseSpec:
+    return checks.CodebaseSpec(
+        sources=base + sources, declared="app", nested=(), symlinked=()
     )
 
 
 def test_comments_docstrings_and_bare_strings_are_flagged() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "tests/test_prose.py",
                 "tests.test_prose",
@@ -79,8 +68,8 @@ def test_comments_docstrings_and_bare_strings_are_flagged() -> None:
                 "    assert y\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "test_prose.py:1: TB020" in f and "carries a docstring; "
         "code speaks for itself — comments, docstrings, and loose strings "
@@ -96,8 +85,9 @@ def test_comments_docstrings_and_bare_strings_are_flagged() -> None:
 
 
 def test_the_retired_category_marker_is_an_ordinary_comment() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "tests/test_marked.py",
                 "tests.test_marked",
@@ -106,16 +96,17 @@ def test_the_retired_category_marker_is_an_ordinary_comment() -> None:
                 "    assert True\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "test_marked.py:1: TB020" in f and "carries a code comment" in f for f in findings
     )
 
 
 def test_mocking_library_and_patcher_fixtures_are_flagged() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "tests/test_mocky.py",
                 "tests.test_mocky",
@@ -125,8 +116,8 @@ def test_mocking_library_and_patcher_fixtures_are_flagged() -> None:
                 "    assert patch\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "test_mocky.py:1: TB030" in f and "imports a mocking library; a test double is "
         "a hand-written fake, never a mocking library or a runtime patcher" in f
@@ -143,8 +134,9 @@ def test_mocking_library_and_patcher_fixtures_are_flagged() -> None:
 
 
 def test_a_marked_patcher_seam_is_suppressed() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "tests/test_seam.py",
                 "tests.test_seam",
@@ -152,14 +144,15 @@ def test_a_marked_patcher_seam_is_suppressed() -> None:
                 "    assert monkeypatch\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any("test_seam" in f for f in findings)
 
 
 def test_a_called_shadowed_builtin_is_flagged() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "tests/test_shadow.py",
                 "tests.test_shadow",
@@ -170,8 +163,8 @@ def test_a_called_shadowed_builtin_is_flagged() -> None:
                 "    assert len == 0\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "test_shadow.py:3: TB033" in f and "binds id and calls it in the same scope; "
         "a shadowed builtin is never called — rename the binding" in f
@@ -181,8 +174,9 @@ def test_a_called_shadowed_builtin_is_flagged() -> None:
 
 
 def test_string_form_equality_is_flagged() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "tests/test_streq.py",
                 "tests.test_streq",
@@ -192,8 +186,8 @@ def test_string_form_equality_is_flagged() -> None:
                 "    assert str(a) == 'one'\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "test_streq.py:3: TB004" in f and "compare value objects by value, "
         "never by their string form" in f
@@ -203,8 +197,9 @@ def test_string_form_equality_is_flagged() -> None:
 
 
 def test_a_value_object_mutable_collection_field_is_flagged() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/domain/bag.py",
                 "app.domain.bag",
@@ -217,8 +212,8 @@ def test_a_value_object_mutable_collection_field_is_flagged() -> None:
                 "        object.__setattr__(self, '_names', (item,))\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "bag.py:3: TB002" in f and "field _items is a mutable collection; "
         "a value object's field is hashable — a tuple or frozenset, never "
@@ -229,8 +224,9 @@ def test_a_value_object_mutable_collection_field_is_flagged() -> None:
 
 
 def test_mutable_set_and_quoted_annotations_are_still_mutable_collections() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/domain/holder.py",
                 "app.domain.holder",
@@ -244,15 +240,16 @@ def test_mutable_set_and_quoted_annotations_are_still_mutable_collections() -> N
                 "        object.__setattr__(self, '_quoted', [item])\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any("field _mset is a mutable collection" in f for f in findings)
     assert any("field _quoted is a mutable collection" in f for f in findings)
 
 
 def test_a_value_object_hides_its_representation() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/domain/leaky.py",
                 "app.domain.leaky",
@@ -267,8 +264,8 @@ def test_a_value_object_hides_its_representation() -> None:
                 "        return self._kept\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "leaky.py:3: TB010" in f and "exposes field amount; a value object hides its "
         "representation — a public field belongs on a spec" in f
@@ -283,8 +280,9 @@ def test_a_value_object_hides_its_representation() -> None:
 
 
 def test_an_accessor_never_hands_back_the_backing_collection() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/domain/box.py",
                 "app.domain.box",
@@ -300,8 +298,8 @@ def test_an_accessor_never_hands_back_the_backing_collection() -> None:
                 "        return self._items\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "TB011" in f and "Box.items hands back its backing collection; an accessor "
         "returns a defensive copy, never the backing store" in f
@@ -310,8 +308,9 @@ def test_an_accessor_never_hands_back_the_backing_collection() -> None:
 
 
 def test_an_aggregate_is_referenced_by_id_never_held() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/domain/pair.py",
                 "app.domain.pair",
@@ -326,8 +325,8 @@ def test_an_aggregate_is_referenced_by_id_never_held() -> None:
                 "        self._other = thing.Thing(thing.ThingSpec(text=spec.text))\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "TB012" in f and "Pair field _other holds another aggregate root; an aggregate "
         "is referenced by its ID value object, never held" in f
@@ -336,8 +335,9 @@ def test_an_aggregate_is_referenced_by_id_never_held() -> None:
 
 
 def test_exit_norms_leaf_and_structured() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/domain/exits.py",
                 "app.domain.exits",
@@ -373,8 +373,8 @@ def test_exit_norms_leaf_and_structured() -> None:
                 "        return 'x'\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any("GoodLeaf" in f and "TB015" in f for f in findings)
     assert not any("GoodLeaf" in f and "TB018" in f for f in findings)
     assert any(
@@ -395,8 +395,9 @@ def test_exit_norms_leaf_and_structured() -> None:
 
 
 def test_composition_norms() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/domain/shapes.py",
                 "app.domain.shapes",
@@ -413,8 +414,8 @@ def test_composition_norms() -> None:
                 "        object.__setattr__(self, '_on', on)\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "TB016" in f and "Flag field _value is a bool; bool and complex are not "
         "value-object material — model the raw value or reach for an enum" in f
@@ -429,8 +430,9 @@ def test_composition_norms() -> None:
 
 
 def test_a_value_object_has_one_construction_door() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/domain/doors.py",
                 "app.domain.doors",
@@ -449,8 +451,8 @@ def test_a_value_object_has_one_construction_door() -> None:
                 "        return cls(raw.strip())\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "TB017" in f and "Slug.parse is a second construction door; a value object has "
         "one door — its own __init__" in f
@@ -459,8 +461,9 @@ def test_a_value_object_has_one_construction_door() -> None:
 
 
 def test_domain_returns_and_spec_returns() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/domain/returns.py",
                 "app.domain.returns",
@@ -479,8 +482,8 @@ def test_domain_returns_and_spec_returns() -> None:
                 "        return None\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "TB019" in f and "Widget.label returns str; a domain object's public behavior "
         "hands back domain objects — the licensed exits are the protocol dunders, "
@@ -496,8 +499,9 @@ def test_domain_returns_and_spec_returns() -> None:
 
 
 def test_review_pins_for_the_shape_norms() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/domain/pins.py",
                 "app.domain.pins",
@@ -538,8 +542,8 @@ def test_review_pins_for_the_shape_norms() -> None:
                 "        return canonical_str(self._value)\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any("SelfDoor.parse is a second construction door" in f for f in findings)
     assert any("SelfDoor.bare_door is a second construction door" in f for f in findings)
     assert not any("SelfDoor.kind" in f for f in findings)
@@ -550,8 +554,9 @@ def test_review_pins_for_the_shape_norms() -> None:
 
 
 def test_module_qualified_canonical_delegation_passes() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/domain/policy.py",
                 "app.domain.policy",
@@ -574,14 +579,15 @@ def test_module_qualified_canonical_delegation_passes() -> None:
                 "        return policy.canonical_str(self._value)\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any("Word" in f for f in findings)
 
 
 def test_undeclared_backing_collection_is_still_caught() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/domain/sack.py",
                 "app.domain.sack",
@@ -596,8 +602,8 @@ def test_undeclared_backing_collection_is_still_caught() -> None:
                 "        return self._items\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "TB011" in f and "Sack.items hands back its backing collection" in f
         for f in findings

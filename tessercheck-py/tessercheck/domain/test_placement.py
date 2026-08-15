@@ -4,9 +4,11 @@ import tesser.testing as ts
 
 import tessercheck.domain.checks as checks
 
+
 @ts.helper
-def _conforming() -> tuple[tuple[str, str, str, bool], ...]:  # tessercheck:ignore TB073
-    return (
+def _spec(
+    sources: tuple[tuple[str, str, str | None, bool], ...] = (),
+    base: tuple[tuple[str, str, str | None, bool], ...] = (
         (
             "app/domain/thing.py",
             "app.domain.thing",
@@ -43,34 +45,24 @@ def _conforming() -> tuple[tuple[str, str, str, bool], ...]:  # tessercheck:igno
             "        return anything\n",
             False,
         ),
-    )
-
-
-@ts.helper
-def _findings(  # tessercheck:ignore TB073
-    sources: tuple[tuple[str, str, str, bool], ...] = (),
-    conforming: bool = True,
-) -> tuple[str, ...]:
-    spec = checks.CodebaseSpec(
-        sources=(_conforming() + sources) if conforming else sources,
-        declared="app",
-        nested=(),
-        symlinked=(),
-    )
-    return tuple(
-        f"{violation.path()}:{int(violation.line())}: "
-        f"{violation.code()} {violation.text()}"
-        for violation in checks.Codebase(spec).violations()
+    ),
+) -> checks.CodebaseSpec:
+    return checks.CodebaseSpec(
+        sources=base + sources, declared="app", nested=(), symlinked=()
     )
 
 
 def test_a_conforming_spec_is_clean() -> None:
-    assert _findings() == ()
+    assert tuple(
+               f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+               for v in checks.Codebase(_spec()).violations()
+           ) == ()
 
 
 def test_placement_totality_is_flagged() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "plain/domain/thing.py",
                 "plain.domain.thing",
@@ -87,8 +79,8 @@ def test_placement_totality_is_flagged() -> None:
                 "print('hi')\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "plain.domain.thing.Loose" in f
         and "every context class declares its block" in f
@@ -117,8 +109,9 @@ def test_placement_totality_is_flagged() -> None:
 
 
 def test_declared_function_and_final_constant_pass() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             ("app/domain2.py", "app.domain2", "", False),
             (
                 "plain/domain/thing.py",
@@ -131,14 +124,15 @@ def test_declared_function_and_final_constant_pass() -> None:
                 "    return None\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any("plain.domain.thing" in f for f in findings)
 
 
 def test_homeless_modules_are_flagged() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             ("loose.py", "loose", "def anything() -> None:\n    return None\n", False),
             (
                 "stray/util.py",
@@ -146,8 +140,8 @@ def test_homeless_modules_are_flagged() -> None:
                 "def anything() -> None:\n    return None\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "loose belongs to no governed package; every module belongs to a context, "
         "srv, bootstrap, tests, or the protocol package" in f
@@ -159,8 +153,9 @@ def test_homeless_modules_are_flagged() -> None:
 
 
 def test_non_context_module_and_nonempty_init_are_flagged() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/util.py",
                 "app.util",
@@ -168,8 +163,8 @@ def test_non_context_module_and_nonempty_init_are_flagged() -> None:
                 False,
             ),
             ("app/__init__.py", "app", "X = 1\n", True),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.util" in f
         and "a context holds only domain, application, client, adapters, wiring, and tests modules" in f
@@ -179,8 +174,9 @@ def test_non_context_module_and_nonempty_init_are_flagged() -> None:
 
 
 def test_a_role_must_be_a_package() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "flat/domain.py",
                 "flat.domain",
@@ -199,8 +195,8 @@ def test_a_role_must_be_a_package() -> None:
                 False,
             ),
             ("flat/client/__init__.py", "flat.client", "", True),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "flat.domain is a role module; a role is a package, never a module" in f
         for f in findings
@@ -209,8 +205,9 @@ def test_a_role_must_be_a_package() -> None:
 
 
 def test_a_role_may_be_a_package() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "deep/domain/__init__.py",
                 "deep.domain",
@@ -245,8 +242,8 @@ def test_a_role_may_be_a_package() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any(
         "deep.domain.money" in f and "not a context module" in f for f in findings
     )
@@ -267,8 +264,9 @@ def test_a_role_may_be_a_package() -> None:
 
 
 def test_wiring_is_a_role() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "two/client/client.py",
                 "two.client.client",
@@ -290,8 +288,8 @@ def test_wiring_is_a_role() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any(
         "app.wiring.wire" in f and "not a context module" in f for f in findings
     )
@@ -316,8 +314,9 @@ def test_wiring_is_a_role() -> None:
 
 
 def test_tests_package_totality_is_flagged() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             ("tests/__init__.py", "tests", "X = 1\n", True),
             (
                 "tests/util.py",
@@ -331,8 +330,8 @@ def test_tests_package_totality_is_flagged() -> None:
                 "def test_ok() -> None:\n    assert True\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "tests __init__ declares code; "
         "a tests package holds only test modules and conftest" in f
@@ -349,16 +348,17 @@ def test_tests_package_totality_is_flagged() -> None:
 
 
 def test_a_context_main_is_a_stray_module() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/__main__.py",
                 "app.__main__",
                 "import app.application.service as service\nimport app.wiring.wire as wire\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.__main__ is not a context module; a context holds only domain, "
         "application, client, adapters, wiring, and tests modules" in f
@@ -368,8 +368,9 @@ def test_a_context_main_is_a_stray_module() -> None:
 
 
 def test_protocol_module_totality_is_flagged() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "protocol/box.py",
                 "protocol.box",
@@ -411,8 +412,8 @@ def test_protocol_module_totality_is_flagged() -> None:
                 False,
             ),
             ("srv/host.py", "srv.host", "import tesser.srv as ts\n", False),
-        )
-    )
+        ))).violations()
+               )
     assert not any("protocol.box.BoxRequest" in f for f in findings)
     assert not any("protocol.box.BoxResponse" in f for f in findings)
     assert not any("protocol.box.BoxLabel" in f for f in findings)
@@ -468,8 +469,9 @@ def test_protocol_module_totality_is_flagged() -> None:
 
 
 def test_protocol_module_tesser_import_is_exactly_once_as_ts() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "protocol/loud.py",
                 "protocol.loud",
@@ -495,8 +497,8 @@ def test_protocol_module_tesser_import_is_exactly_once_as_ts() -> None:
                 "import tesser.srv as tz\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "protocol.loud imports tesser.context; a protocol module imports only tesser.srv" in f
         for f in findings
@@ -522,14 +524,15 @@ def test_protocol_module_tesser_import_is_exactly_once_as_ts() -> None:
 
 
 def test_only_the_top_level_protocol_package_holds_protocol_modules() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             ("protocol/__init__.py", "protocol", "", True),
             ("protocol/box.py", "protocol.box", "import tesser.srv as ts\n", False),
             ("boxwire.py", "boxwire", "import tesser.srv as ts\n", False),
             ("wire.py", "wire", "import tesser.srv as ts\n", False),
-        )
-    )
+        ))).violations()
+               )
     assert not any("protocol/box.py" in f for f in findings)
     assert not any("protocol/__init__.py" in f for f in findings)
     assert any("boxwire belongs to no governed package" in f for f in findings)
@@ -537,12 +540,13 @@ def test_only_the_top_level_protocol_package_holds_protocol_modules() -> None:
 
 
 def test_a_protocol_init_is_empty() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             ("protocol/__init__.py", "protocol", "LIMIT = 3\n", True),
             ("protocol/box.py", "protocol.box", "import tesser.srv as ts\n", False),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "protocol __init__ declares code; a protocol __init__ is empty" in f
         for f in findings

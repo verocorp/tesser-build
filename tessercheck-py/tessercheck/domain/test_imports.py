@@ -4,9 +4,11 @@ import tesser.testing as ts
 
 import tessercheck.domain.checks as checks
 
+
 @ts.helper
-def _conforming() -> tuple[tuple[str, str, str, bool], ...]:  # tessercheck:ignore TB073
-    return (
+def _spec(
+    sources: tuple[tuple[str, str, str | None, bool], ...] = (),
+    base: tuple[tuple[str, str, str | None, bool], ...] = (
         (
             "app/domain/thing.py",
             "app.domain.thing",
@@ -43,30 +45,17 @@ def _conforming() -> tuple[tuple[str, str, str, bool], ...]:  # tessercheck:igno
             "        return anything\n",
             False,
         ),
-    )
-
-
-@ts.helper
-def _findings(  # tessercheck:ignore TB073
-    sources: tuple[tuple[str, str, str, bool], ...] = (),
-    conforming: bool = True,
-) -> tuple[str, ...]:
-    spec = checks.CodebaseSpec(
-        sources=(_conforming() + sources) if conforming else sources,
-        declared="app",
-        nested=(),
-        symlinked=(),
-    )
-    return tuple(
-        f"{violation.path()}:{int(violation.line())}: "
-        f"{violation.code()} {violation.text()}"
-        for violation in checks.Codebase(spec).violations()
+    ),
+) -> checks.CodebaseSpec:
+    return checks.CodebaseSpec(
+        sources=base + sources, declared="app", nested=(), symlinked=()
     )
 
 
 def test_import_matrix_is_flagged() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "two/client/client.py",
                 "two.client.client",
@@ -102,8 +91,8 @@ def test_import_matrix_is_flagged() -> None:
                 "import app.domain.thing\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "two.domain.thing" in f
         and "the same-context matrix is a role to itself, application to domain and client, adapters to application/ports, wiring to application, adapters, and client" in f
@@ -118,8 +107,9 @@ def test_import_matrix_is_flagged() -> None:
 
 
 def test_srv_and_bootstrap_import_rows() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/adapters/gateways.py",
                 "app.adapters.gateways",
@@ -163,8 +153,8 @@ def test_srv_and_bootstrap_import_rows() -> None:
                 "import srv.http\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "srv.http" in f and "imports app.application.service" in f
         and "a host reaches a context only through its handlers" in f
@@ -192,8 +182,9 @@ def test_srv_and_bootstrap_import_rows() -> None:
 
 
 def test_only_a_handler_imports_its_own_client() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/adapters/gateways.py",
                 "app.adapters.gateways",
@@ -222,8 +213,8 @@ def test_only_a_handler_imports_its_own_client() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any("app.adapters.gateways" in f and "imports app.client.client" in f for f in findings)
     assert any(
         "two.adapters.gateways" in f and "imports two.client.client" in f
@@ -233,8 +224,9 @@ def test_only_a_handler_imports_its_own_client() -> None:
 
 
 def test_only_a_gateway_reaches_a_foreign_client() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "two/client/client.py",
                 "two.client.client",
@@ -253,8 +245,8 @@ def test_only_a_gateway_reaches_a_foreign_client() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.adapters.gateways" in f and "imports two.client.client" in f
         and "a context reaches another context only through its client, and only from gateways and wiring" in f
@@ -263,8 +255,9 @@ def test_only_a_gateway_reaches_a_foreign_client() -> None:
 
 
 def test_role_module_tesser_import_is_exactly_once_as_ts() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "lone/domain/thing.py",
                 "lone.domain.thing",
@@ -300,8 +293,8 @@ def test_role_module_tesser_import_is_exactly_once_as_ts() -> None:
                 "        self.text = text\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "lone.domain.thing never imports tesser.domain; "
         "a role module imports its tesser package exactly once, as ts" in f
@@ -325,8 +318,9 @@ def test_role_module_tesser_import_is_exactly_once_as_ts() -> None:
 
 
 def test_reexport_only_role_init_needs_no_tesser_import() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "deep/domain/__init__.py",
                 "deep.domain",
@@ -342,14 +336,15 @@ def test_reexport_only_role_init_needs_no_tesser_import() -> None:
                 "        object.__setattr__(self, '_amount', amount)\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any("deep.domain" in f and "exactly once, as ts" in f for f in findings)
 
 
 def test_role_init_only_reexports_its_own_role() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "pkg/domain/__init__.py",
                 "pkg.domain",
@@ -367,8 +362,8 @@ def test_role_init_only_reexports_its_own_role() -> None:
                 "        object.__setattr__(self, '_text', text)\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "pkg.domain imports tesser.domain; a role __init__ only re-exports from its own role" in f
         for f in findings
@@ -419,19 +414,26 @@ def test_a_role_init_may_import_a_module_but_never_a_class() -> None:
         True,
     )
     assert not any(
-        "mod.domain:" in f for f in _findings((vo, module_form, client, client_init))
+        "mod.domain:" in f for f in tuple(
+                                        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                                        for v in checks.Codebase(_spec(sources=(vo, module_form, client, client_init))).violations()
+                                    )
     )
 
     assert any(
         "mod.domain imports names from mod.domain.vo; "
         "a context module is imported as an aliased module, never its members" in f
-        for f in _findings((vo, class_form, client, client_init))
+        for f in tuple(
+                     f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                     for v in checks.Codebase(_spec(sources=(vo, class_form, client, client_init))).violations()
+                 )
     )
 
 
 def test_srv_and_bootstrap_statement_totality() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "srv/box.py",
                 "srv.box",
@@ -461,8 +463,8 @@ def test_srv_and_bootstrap_statement_totality() -> None:
                 "print('hi')\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "srv.box imports tesser.domain; a srv module imports only tesser.srv" in f
         for f in findings
@@ -517,8 +519,9 @@ def test_srv_and_bootstrap_statement_totality() -> None:
 
 
 def test_pure_core_stdlib_allowlist() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "io1/domain/thing.py",
                 "io1.domain.thing",
@@ -550,8 +553,8 @@ def test_pure_core_stdlib_allowlist() -> None:
                 "    def load(self, key: str) -> str: ...\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "io1.domain.thing imports os; domain, client, and application "
         "import only their context, their tesser package, and the pure stdlib" in f
@@ -568,8 +571,9 @@ def test_pure_core_stdlib_allowlist() -> None:
 
 
 def test_context_module_import_form() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "form/client/client.py",
                 "form.client.client",
@@ -595,8 +599,8 @@ def test_context_module_import_form() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "form.application.service imports names from form.client.client; "
         "a context module is imported as an aliased module, never its members" in f
@@ -610,8 +614,9 @@ def test_context_module_import_form() -> None:
 
 
 def test_relative_imports_resolve_against_the_package() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "rel/domain/__init__.py",
                 "rel.domain",
@@ -663,8 +668,8 @@ def test_relative_imports_resolve_against_the_package() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any("rel.domain" in f and "a role __init__ only re-exports from its own role" in f for f in findings)
     assert any(
         "rel.adapters.beyond imports ...domain.money beyond the package root; "
@@ -687,8 +692,9 @@ def test_relative_imports_resolve_against_the_package() -> None:
 
 
 def test_nested_imports_neither_classify_nor_satisfy_presence() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "lazy/domain/thing.py",
                 "lazy.domain.thing",
@@ -718,8 +724,8 @@ def test_nested_imports_neither_classify_nor_satisfy_presence() -> None:
                 "        self.text = text\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "lazy.domain.thing never imports tesser.domain; "
         "a role module imports its tesser package exactly once, as ts" in f
@@ -741,8 +747,9 @@ def test_nested_imports_neither_classify_nor_satisfy_presence() -> None:
 
 
 def test_srv_and_bootstrap_tesser_form_modes() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "srv/dup.py",
                 "srv.dup",
@@ -808,9 +815,8 @@ def test_srv_and_bootstrap_tesser_form_modes() -> None:
                 "LIMIT: Final[int] = 3\n",
                 False,
             ),
-        ),
-        conforming=False,
-    )
+        ), base=())).violations()
+               )
     assert any(
         "srv.dup imports tesser.srv again; "
         "a srv module imports tesser.srv exactly once, as ts" in f
@@ -855,8 +861,9 @@ def test_srv_and_bootstrap_tesser_form_modes() -> None:
 
 
 def test_pure_core_allowlist_covers_application_and_domain_future() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "io2/domain/thing.py",
                 "io2.domain.thing",
@@ -878,9 +885,8 @@ def test_pure_core_allowlist_covers_application_and_domain_future() -> None:
                 "    pass\n",
                 False,
             ),
-        ),
-        conforming=False,
-    )
+        ), base=())).violations()
+               )
     assert not any("io2.domain.thing" in f and "the pure stdlib" in f for f in findings)
     assert any(
         "io2.application.service imports socket; domain, client, and application "
@@ -892,8 +898,9 @@ def test_pure_core_allowlist_covers_application_and_domain_future() -> None:
 
 
 def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/adapters/gateways.py",
                 "app.adapters.gateways",
@@ -925,8 +932,8 @@ def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.adapters.gateways.Sneaky" in f
         and "is a host; a host lives in srv and a protocol kind in a protocol module, never a context" in f
@@ -973,8 +980,9 @@ def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv() -> None:
 
 
 def test_form_rule_fires_in_tests_and_srv_and_skips_illegal_edges() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/test_forms.py",
                 "app.test_forms",
@@ -1007,8 +1015,8 @@ def test_form_rule_fires_in_tests_and_srv_and_skips_illegal_edges() -> None:
                 "        self.text = text\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.test_forms imports names from app.domain.thing; "
         "a context module is imported as an aliased module, never its members" in f
@@ -1031,8 +1039,9 @@ def test_form_rule_fires_in_tests_and_srv_and_skips_illegal_edges() -> None:
 
 
 def test_a_denied_app_edge_is_not_form_checked() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "srv/host.py",
                 "srv.host",
@@ -1040,8 +1049,8 @@ def test_a_denied_app_edge_is_not_form_checked() -> None:
                 "from app.domain import thing\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "srv.host imports app.domain" in f
         and "a host reaches a context only through its handlers" in f
@@ -1051,8 +1060,9 @@ def test_a_denied_app_edge_is_not_form_checked() -> None:
 
 
 def test_production_never_imports_the_tests_package() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "tests/test_ok.py",
                 "tests.test_ok",
@@ -1077,8 +1087,8 @@ def test_production_never_imports_the_tests_package() -> None:
                 "import tesser.srv as ts\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "srv.http imports tests.test_ok; "
         "production code never imports the tests package" in f
@@ -1097,8 +1107,9 @@ def test_production_never_imports_the_tests_package() -> None:
 
 
 def test_a_context_role_reaches_the_app_shell_only_as_handlers_to_protocol() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "protocol/http.py",
                 "protocol.http",
@@ -1149,8 +1160,8 @@ def test_a_context_role_reaches_the_app_shell_only_as_handlers_to_protocol() -> 
                 False,
             ),
             ("srv/http.py", "srv.http", "", False),
-        )
-    )
+        ))).violations()
+               )
     clause = "of the app shell a context imports only protocol, and only from its handlers"
     assert any(
         "app.adapters.handlers imports srv.http; "
@@ -1173,8 +1184,9 @@ def test_a_context_role_reaches_the_app_shell_only_as_handlers_to_protocol() -> 
 
 
 def test_a_classless_module_inside_handlers_may_speak_protocol() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             ("protocol/http.py", "protocol.http", "import tesser.srv as ts\n", False),
             ("app/adapters/handlers/__init__.py", "app.adapters.handlers", "", True),
             (
@@ -1184,16 +1196,17 @@ def test_a_classless_module_inside_handlers_may_speak_protocol() -> None:
                 "import protocol.http as http\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any(
         "app.adapters.handlers.usage imports protocol.http" in f for f in findings
     ), f"a helper module inside handlers/ was denied protocol: {findings}"
 
 
 def test_a_shell_name_missing_from_the_tree_is_not_the_shell() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/domain/test_thing.py",
                 "app.domain.test_thing",
@@ -1207,19 +1220,20 @@ def test_a_shell_name_missing_from_the_tree_is_not_the_shell() -> None:
                 "import tesser.context as ts\nimport bootstrap\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any("app.domain.test_thing imports protocol.thirdparty" in f for f in findings)
     assert not any("app.wiring.wire imports bootstrap" in f for f in findings)
 
 
 def test_a_vendored_tesser_package_is_not_the_tree() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             ("tesser/testing.py", "tesser.testing", "X = 1\n", False),
             ("conftest.py", "conftest", "import tesser.testing\n", False),
-        )
-    )
+        ))).violations()
+               )
     assert not any(
         "conftest imports tesser.testing; "
         "a conftest is a leaf that imports nothing from its tree" in f
@@ -1228,16 +1242,17 @@ def test_a_vendored_tesser_package_is_not_the_tree() -> None:
 
 
 def test_a_root_module_is_a_leaf() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "helpers.py",
                 "helpers",
                 "import app.domain.thing\nimport enum\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any("helpers belongs to no governed package" in f for f in findings)
     assert any(
         "helpers imports app.domain.thing; "
@@ -1248,16 +1263,17 @@ def test_a_root_module_is_a_leaf() -> None:
 
 
 def test_a_root_conftest_is_a_leaf() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "conftest.py",
                 "conftest",
                 "import os\nimport sys\nimport app.domain.thing\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "conftest imports app.domain.thing; "
         "a conftest is a leaf that imports nothing from its tree" in f
@@ -1267,8 +1283,9 @@ def test_a_root_conftest_is_a_leaf() -> None:
 
 
 def test_a_protocol_module_imports_nothing_else_from_its_tree() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             ("serialization.py", "serialization", "X = 1\n", False),
             (
                 "protocol/http.py",
@@ -1276,8 +1293,8 @@ def test_a_protocol_module_imports_nothing_else_from_its_tree() -> None:
                 "import tesser.srv as ts\nimport serialization\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "protocol.http imports serialization; "
         "a protocol module imports nothing else from its tree" in f

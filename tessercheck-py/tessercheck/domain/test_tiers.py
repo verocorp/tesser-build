@@ -6,8 +6,9 @@ import tessercheck.domain.checks as checks
 
 
 @ts.helper
-def _conforming() -> tuple[tuple[str, str, str, bool], ...]:  # tessercheck:ignore TB073
-    return (
+def _spec(
+    sources: tuple[tuple[str, str, str | None, bool], ...] = (),
+    base: tuple[tuple[str, str, str | None, bool], ...] = (
         (
             "app/domain/thing.py",
             "app.domain.thing",
@@ -44,24 +45,10 @@ def _conforming() -> tuple[tuple[str, str, str, bool], ...]:  # tessercheck:igno
             "        return anything\n",
             False,
         ),
-    )
-
-
-@ts.helper
-def _findings(  # tessercheck:ignore TB073
-    sources: tuple[tuple[str, str, str, bool], ...] = (),
-    conforming: bool = True,
-) -> tuple[str, ...]:
-    spec = checks.CodebaseSpec(
-        sources=(_conforming() + sources) if conforming else sources,
-        declared="app",
-        nested=(),
-        symlinked=(),
-    )
-    return tuple(
-        f"{violation.path()}:{int(violation.line())}: "
-        f"{violation.code()} {violation.text()}"
-        for violation in checks.Codebase(spec).violations()
+    ),
+) -> checks.CodebaseSpec:
+    return checks.CodebaseSpec(
+        sources=base + sources, declared="app", nested=(), symlinked=()
     )
 
 
@@ -77,7 +64,10 @@ def test_an_eval_lives_only_in_a_gateway() -> None:
         ("app/tests/eval_tier.py", "app.tests.eval_tier", body, False),
         ("app/domain/eval_role.py", "app.domain.eval_role", body, False),
     )
-    findings = _findings(loose)
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=loose)).violations()
+               )
     for outside in ("app.adapters.eval_flat", "app.tests.eval_tier", "app.domain.eval_role"):
         assert any(
             f"{outside} is an eval outside a gateway; an eval lives only in a gateway, "
@@ -85,8 +75,9 @@ def test_an_eval_lives_only_in_a_gateway() -> None:
             for f in findings
         ), outside
 
-    housed = _findings(
-        loose
+    housed = tuple(
+                 f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                 for v in checks.Codebase(_spec(sources=loose
         + (
             (
                 "app/adapters/gateways/__init__.py",
@@ -118,15 +109,16 @@ def test_an_eval_lives_only_in_a_gateway() -> None:
                 body,
                 False,
             ),
-        )
-    )
+        ))).violations()
+             )
     assert not any("eval_llm is an eval outside a gateway" in f for f in housed)
     assert not any("eval_tools is an eval outside a gateway" in f for f in housed)
 
 
 def test_a_handler_sibling_fakes_only_the_client() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/adapters/handlers/http.py",
                 "app.adapters.handlers.http",
@@ -152,8 +144,8 @@ def test_a_handler_sibling_fakes_only_the_client() -> None:
                 False,
             ),
             ("app/adapters/gateways/__init__.py", "app.adapters.gateways", "", True),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.adapters.handlers.test_http imports app.application.service, but a test "
         "placed in handlers reaches only adapters.handlers, client of its own context; "
@@ -171,8 +163,9 @@ def test_a_handler_sibling_fakes_only_the_client() -> None:
 
 
 def test_a_srv_test_reaches_a_context_only_through_its_handlers() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/adapters/handlers/http.py",
                 "app.adapters.handlers.http",
@@ -195,8 +188,8 @@ def test_a_srv_test_reaches_a_context_only_through_its_handlers() -> None:
                 "    assert True\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "srv.test_router imports app.application.service, but a test placed in "
         "srv reaches a context only through its handlers; "
@@ -207,8 +200,9 @@ def test_a_srv_test_reaches_a_context_only_through_its_handlers() -> None:
 
 
 def test_a_test_reaches_only_what_its_placement_allows() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "far/domain/test_thing.py",
                 "far.domain.test_thing",
@@ -238,8 +232,8 @@ def test_a_test_reaches_only_what_its_placement_allows() -> None:
             ),
             ("far/domain/__init__.py", "far.domain", "", True),
             ("far/client/__init__.py", "far.client", "", True),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "far.domain.test_thing imports far.client.client, but a test placed in domain "
         "reaches only domain of its own context; "
@@ -255,8 +249,9 @@ def test_a_test_reaches_only_what_its_placement_allows() -> None:
 
 
 def test_a_repository_sibling_test_reaches_its_kind_and_application_only() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/adapters/repositories/words.py",
                 "app.adapters.repositories.words",
@@ -304,8 +299,8 @@ def test_a_repository_sibling_test_reaches_its_kind_and_application_only() -> No
                 False,
             ),
             ("far/domain/__init__.py", "far.domain", "", True),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.adapters.repositories.test_words imports app.domain.thing, but a test placed "
         "in repositories reaches only adapters.repositories, application.ports of its own context; "
@@ -323,8 +318,9 @@ def test_a_repository_sibling_test_reaches_its_kind_and_application_only() -> No
 
 
 def test_a_wiring_sibling_test_mirrors_production_wiring_reach() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             ("app/wiring/__init__.py", "app.wiring", "", True),
             (
                 "app/wiring/test_wire.py",
@@ -356,8 +352,8 @@ def test_a_wiring_sibling_test_mirrors_production_wiring_reach() -> None:
                 False,
             ),
             ("far/domain/__init__.py", "far.domain", "", True),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.wiring.test_wire imports app.domain.thing, but a test placed in wiring "
         "reaches only wiring, application, adapters, client of its own context; "
@@ -369,8 +365,9 @@ def test_a_wiring_sibling_test_mirrors_production_wiring_reach() -> None:
 
 
 def test_a_client_sibling_test_reaches_only_its_own_client() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/client/test_client.py",
                 "app.client.test_client",
@@ -380,8 +377,8 @@ def test_a_client_sibling_test_reaches_only_its_own_client() -> None:
                 "    assert True\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.client.test_client imports app.domain.thing, but a test placed in client "
         "reaches only client of its own context; "
@@ -392,8 +389,9 @@ def test_a_client_sibling_test_reaches_only_its_own_client() -> None:
 
 
 def test_a_bootstrap_test_reaches_a_context_like_production_bootstrap() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "bootstrap/test_boot.py",
                 "bootstrap.test_boot",
@@ -404,8 +402,8 @@ def test_a_bootstrap_test_reaches_a_context_like_production_bootstrap() -> None:
                 False,
             ),
             ("bootstrap/__init__.py", "bootstrap", "", True),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "bootstrap.test_boot imports app.domain.thing, but a test placed in "
         "bootstrap reaches a context only through its wiring, client, and adapters; "
@@ -416,8 +414,9 @@ def test_a_bootstrap_test_reaches_a_context_like_production_bootstrap() -> None:
 
 
 def test_a_protocol_test_reaches_no_context() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "protocol/test_proto.py",
                 "protocol.test_proto",
@@ -427,8 +426,8 @@ def test_a_protocol_test_reaches_no_context() -> None:
                 False,
             ),
             ("protocol/__init__.py", "protocol", "", True),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "protocol.test_proto imports app.client.client, but a test placed in "
         "protocol reaches no context; "
@@ -438,8 +437,9 @@ def test_a_protocol_test_reaches_no_context() -> None:
 
 
 def test_a_test_that_resolves_to_no_tier_is_itself_a_finding() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/adapters/test_flat.py",
                 "app.adapters.test_flat",
@@ -454,8 +454,8 @@ def test_a_test_that_resolves_to_no_tier_is_itself_a_finding() -> None:
             ),
             ("app/adapters/blobs/__init__.py", "app.adapters.blobs", "", True),
             ("app/adapters/__init__.py", "app.adapters", "", True),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.adapters.test_flat resolves to no test tier; "
         "a sibling test lives in a role package or an adapter kind package "
@@ -504,26 +504,36 @@ def test_a_context_tier_test_reaches_its_whole_context_and_a_neighbours_applicat
     )
     empty = (("near/tests/__init__.py", "near.tests", "", True),)
     assert not any(
-        "near.tests.test_wiring" in f for f in _findings(empty + context)
+        "near.tests.test_wiring" in f for f in tuple(
+                                                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                                                   for v in checks.Codebase(_spec(sources=empty + context)).violations()
+                                               )
     )
 
     declared = (("near/tests/__init__.py", "near.tests", "X = 1\n", True),)
     assert any(
         "near.tests __init__ declares code; a context tests __init__ is empty" in f
-        for f in _findings(declared + context)
+        for f in tuple(
+                     f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                     for v in checks.Codebase(_spec(sources=declared + context)).violations()
+                 )
     )
 
     helpers = (("near/tests/helpers.py", "near.tests.helpers", "VALUE = 1\n", False),)
     assert any(
         "near.tests.helpers is neither a test module nor conftest; "
         "a context tests package holds only test modules and conftest" in f
-        for f in _findings(empty + context + helpers)
+        for f in tuple(
+                     f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                     for v in checks.Codebase(_spec(sources=empty + context + helpers)).violations()
+                 )
     )
 
 
 def test_a_root_test_reaches_a_context_only_through_wiring_and_client() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/wiring/wire.py",
                 "app.wiring.wire",
@@ -549,8 +559,8 @@ def test_a_root_test_reaches_a_context_only_through_wiring_and_client() -> None:
                 False,
             ),
             ("bootstrap/wire.py", "bootstrap.wire", "", False),
-        )
-    )
+        ))).violations()
+               )
     reach = (
         "reaches a context only through its wiring and client; "
         "a test reaches only what its placement allows"
@@ -578,8 +588,9 @@ def test_a_root_test_reaches_a_context_only_through_wiring_and_client() -> None:
 
 
 def test_a_placed_test_reaches_the_app_shell_only_where_its_placement_does() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/domain/test_thing.py",
                 "app.domain.test_thing",
@@ -610,8 +621,8 @@ def test_a_placed_test_reaches_the_app_shell_only_where_its_placement_does() -> 
             ),
             ("srv/http.py", "srv.http", "", False),
             ("bootstrap/wire.py", "bootstrap.wire", "", False),
-        )
-    )
+        ))).violations()
+               )
     clause = "does not reach that package; a test reaches only what its placement allows"
     assert any(
         "app.domain.test_thing imports srv.http, but a test placed in domain "
@@ -632,8 +643,9 @@ def test_a_placed_test_reaches_the_app_shell_only_where_its_placement_does() -> 
 
 
 def test_a_context_tests_module_reaches_its_own_tests_package() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             ("app/tests/__init__.py", "app.tests", "", True),
             (
                 "app/tests/test_thing.py",
@@ -657,8 +669,8 @@ def test_a_context_tests_module_reaches_its_own_tests_package() -> None:
                 "def test_ok() -> None:\n    assert True\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any("app.tests.test_thing imports app.tests.conftest" in f for f in findings)
     assert any(
         "app.tests.test_thing imports two.tests.test_two, but a test placed in tests "
@@ -669,8 +681,9 @@ def test_a_context_tests_module_reaches_its_own_tests_package() -> None:
 
 
 def test_an_unplaced_test_module_is_still_governed() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "weird/test_nested.py",
                 "weird.test_nested",
@@ -684,8 +697,8 @@ def test_an_unplaced_test_module_is_still_governed() -> None:
                 "def test_ok() -> None:\n    assert True\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "weird.test_nested resolves to no test tier; "
         "a sibling test lives in a role package or an adapter kind package "
@@ -696,8 +709,9 @@ def test_an_unplaced_test_module_is_still_governed() -> None:
 
 
 def test_a_conftest_off_the_tier_map_is_a_leaf() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/adapters/conftest.py",
                 "app.adapters.conftest",
@@ -710,8 +724,8 @@ def test_a_conftest_off_the_tier_map_is_a_leaf() -> None:
                 "import app.domain.thing\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.adapters.conftest imports app.domain.thing; "
         "a conftest is a leaf that imports nothing from its tree" in f
@@ -727,8 +741,9 @@ def test_a_conftest_off_the_tier_map_is_a_leaf() -> None:
 
 
 def test_a_placed_conftest_carries_its_tier() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "tests/conftest.py",
                 "tests.conftest",
@@ -744,8 +759,8 @@ def test_a_placed_conftest_carries_its_tier() -> None:
             ),
             ("bootstrap/wire.py", "bootstrap.wire", "", False),
             ("srv/http.py", "srv.http", "", False),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "tests.conftest imports app.domain.thing, but a test placed in "
         "the root tests package reaches a context only through its wiring and client; "
@@ -778,8 +793,9 @@ def test_adapter_kind_and_protocol_tests_shell_reach() -> None:
             ),
         )
     )
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             ("protocol/http.py", "protocol.http", "import tesser.srv as ts\n", False),
             ("srv/http.py", "srv.http", "", False),
         )
@@ -793,8 +809,8 @@ def test_adapter_kind_and_protocol_tests_shell_reach() -> None:
                 "def test_ok() -> None:\n    assert True\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any(
         "app.adapters.handlers.test_handlers imports protocol.http" in f
         for f in findings
@@ -821,8 +837,9 @@ def test_adapter_kind_and_protocol_tests_shell_reach() -> None:
 
 
 def test_an_eval_in_a_gateway_reaches_no_shell_package() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             ("protocol/http.py", "protocol.http", "import tesser.srv as ts\n", False),
             ("srv/http.py", "srv.http", "", False),
             ("app/adapters/gateways/__init__.py", "app.adapters.gateways", "", True),
@@ -834,8 +851,8 @@ def test_an_eval_in_a_gateway_reaches_no_shell_package() -> None:
                 "def test_ok() -> None:\n    assert True\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.adapters.gateways.eval_model imports protocol.http" in f
         and "does not reach that package" in f
@@ -849,8 +866,9 @@ def test_an_eval_in_a_gateway_reaches_no_shell_package() -> None:
 
 
 def test_a_context_tests_helper_answers_for_its_imports() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             ("app/tests/__init__.py", "app.tests", "", True),
             (
                 "app/tests/support.py",
@@ -859,8 +877,8 @@ def test_a_context_tests_helper_answers_for_its_imports() -> None:
                 False,
             ),
             ("srv/http.py", "srv.http", "", False),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.tests.support is neither a test module nor conftest" in f for f in findings
     )
@@ -873,8 +891,9 @@ def test_a_context_tests_helper_answers_for_its_imports() -> None:
 
 
 def test_a_main_below_the_context_root_is_a_governed_module() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/domain/__main__.py",
                 "app.domain.__main__",
@@ -888,8 +907,8 @@ def test_a_main_below_the_context_root_is_a_governed_module() -> None:
                 "import app.application.service as service\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.domain.__main__ imports app.application.service; the same-context matrix is" in f
         for f in findings
@@ -908,8 +927,9 @@ def test_every_test_tier_has_a_shell_row() -> None:
 
 
 def test_test_module_tesser_import_rules() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/test_imports.py",
                 "app.test_imports",
@@ -928,8 +948,8 @@ def test_test_module_tesser_import_rules() -> None:
                 "    assert fake is not None\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.test_imports imports tesser.domain; a test module imports only tesser.testing" in f
         for f in findings
@@ -952,22 +972,24 @@ def test_test_module_tesser_import_rules() -> None:
 
 
 def test_a_test_module_may_omit_tesser_testing() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "tests/test_bare.py",
                 "tests.test_bare",
                 "def test_bare() -> None:\n    assert True\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any("test_bare" in f for f in findings)
 
 
 def test_test_module_totality_is_flagged() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/test_junk.py",
                 "app.test_junk",
@@ -982,8 +1004,8 @@ def test_test_module_totality_is_flagged() -> None:
                 "COUNT = 2\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "test_junk.build" in f and "a test module holds tests, @ts.helper builders, and @ts.fake doubles" in f
         for f in findings
@@ -997,8 +1019,9 @@ def test_test_module_totality_is_flagged() -> None:
 
 
 def test_helper_rules_are_flagged() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/test_helpers.py",
                 "app.test_helpers",
@@ -1011,8 +1034,8 @@ def test_helper_rules_are_flagged() -> None:
                 "    return thing\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "bad_builder" in f and "parameter 'thing' is not a primitive; a helper takes only defaulted primitives" in f
         for f in findings
@@ -1026,8 +1049,9 @@ def test_helper_rules_are_flagged() -> None:
 
 
 def test_a_fake_may_implement_a_protocol_port() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "protocol/box.py",
                 "protocol.box",
@@ -1050,6 +1074,6 @@ def test_a_fake_may_implement_a_protocol_port() -> None:
                 "    assert FakeDoor\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any("app.test_doors.FakeDoor" in f for f in findings)

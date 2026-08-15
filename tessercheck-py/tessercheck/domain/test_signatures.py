@@ -10,8 +10,9 @@ import tessercheck.domain.checks as checks
 
 
 @ts.helper
-def _conforming() -> tuple[tuple[str, str, str, bool], ...]:  # tessercheck:ignore TB073
-    return (
+def _spec(
+    sources: tuple[tuple[str, str, str | None, bool], ...] = (),
+    base: tuple[tuple[str, str, str | None, bool], ...] = (
         (
             "app/domain/thing.py",
             "app.domain.thing",
@@ -48,24 +49,10 @@ def _conforming() -> tuple[tuple[str, str, str, bool], ...]:  # tessercheck:igno
             "        return anything\n",
             False,
         ),
-    )
-
-
-@ts.helper
-def _findings(  # tessercheck:ignore TB073
-    sources: tuple[tuple[str, str, str, bool], ...] = (),
-    conforming: bool = True,
-) -> tuple[str, ...]:
-    spec = checks.CodebaseSpec(
-        sources=(_conforming() + sources) if conforming else sources,
-        declared="app",
-        nested=(),
-        symlinked=(),
-    )
-    return tuple(
-        f"{violation.path()}:{int(violation.line())}: "
-        f"{violation.code()} {violation.text()}"
-        for violation in checks.Codebase(spec).violations()
+    ),
+) -> checks.CodebaseSpec:
+    return checks.CodebaseSpec(
+        sources=base + sources, declared="app", nested=(), symlinked=()
     )
 
 
@@ -84,8 +71,9 @@ def test_every_kind_row_names_a_real_tesser_export() -> None:
 
 
 def test_primitive_parameter_and_return_are_flagged() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/bad.py",
                 "app.bad",
@@ -95,8 +83,8 @@ def test_primitive_parameter_and_return_are_flagged() -> None:
                 "        return text\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "parameter 'text' is not a ts.Request; a service method takes exactly one ts.Request"
         in f
@@ -109,8 +97,9 @@ def test_primitive_parameter_and_return_are_flagged() -> None:
 
 
 def test_arity_and_missing_annotations_are_flagged() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/bad.py",
                 "app.bad",
@@ -125,8 +114,8 @@ def test_arity_and_missing_annotations_are_flagged() -> None:
                 "        return AskResponse(text='')\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "takes 2 parameters; a service method takes exactly one ts.Request" in f
         for f in findings
@@ -143,8 +132,9 @@ def test_arity_and_missing_annotations_are_flagged() -> None:
 
 
 def test_aggregate_constructor_violations_are_flagged() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/badroots.py",
                 "app.badroots",
@@ -160,8 +150,8 @@ def test_aggregate_constructor_violations_are_flagged() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "Primitive.__init__" in f
         and "parameter 'text' is not a ts.Spec; a domain constructor takes exactly one ts.Spec"
@@ -181,8 +171,9 @@ def test_aggregate_constructor_violations_are_flagged() -> None:
 
 
 def test_service_body_rules_are_flagged() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/busy.py",
                 "app.busy",
@@ -207,8 +198,8 @@ def test_service_body_rules_are_flagged() -> None:
                 "        return AskResponse(text='')\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "BusyService.long" in f
         and "body spans 12 source lines; a service method body is at most 10 source lines"
@@ -236,8 +227,9 @@ def test_service_body_rules_are_flagged() -> None:
 
 
 def test_service_delegation_is_flagged() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/helped.py",
                 "app.helped",
@@ -252,8 +244,8 @@ def test_service_delegation_is_flagged() -> None:
                 "        return AskResponse(text=shape(request.text))\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "HelpedService.ask" in f
         and "delegates to self._prep" in f
@@ -269,8 +261,9 @@ def test_service_delegation_is_flagged() -> None:
 
 
 def test_elif_chain_is_one_level() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/chained.py",
                 "app.chained",
@@ -285,8 +278,8 @@ def test_elif_chain_is_one_level() -> None:
                 "        return AskResponse(text='c')\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any(
         "ChainService" in f and "a service method branches one level deep" in f
         for f in findings
@@ -294,8 +287,9 @@ def test_elif_chain_is_one_level() -> None:
 
 
 def test_indirect_subclass_still_classifies() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/derived.py",
                 "app.derived",
@@ -306,8 +300,8 @@ def test_indirect_subclass_still_classifies() -> None:
                 "        return request\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "DerivedService.again" in f
         and "does not return a ts.Response; a service method returns a ts.Response" in f
@@ -316,8 +310,9 @@ def test_indirect_subclass_still_classifies() -> None:
 
 
 def test_service_dependencies_must_be_ports() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/extra.py",
                 "app.extra",
@@ -330,8 +325,8 @@ def test_service_dependencies_must_be_ports() -> None:
                 "        return AskResponse(text=request.text)\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "NeedyService.__init__" in f
         and "parameter 'db' is not a ts.Port; a service depends only on ports" in f
@@ -340,8 +335,9 @@ def test_service_dependencies_must_be_ports() -> None:
 
 
 def test_client_method_rules_are_flagged() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/extra2.py",
                 "app.extra2",
@@ -351,8 +347,8 @@ def test_client_method_rules_are_flagged() -> None:
                 "    def ask(self, text: str) -> str: ...\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "BadClient.ask" in f
         and "parameter 'text' is not a ts.Request; a client method takes exactly one ts.Request"
@@ -367,8 +363,9 @@ def test_client_method_rules_are_flagged() -> None:
 
 
 def test_records_never_carry_domain_objects() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/extra3.py",
                 "app.extra3",
@@ -382,8 +379,8 @@ def test_records_never_carry_domain_objects() -> None:
                 "    def fetch(self) -> Thing: ...\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "LoadingRepo.load" in f and "an adapter speaks records, never domain objects" in f
         for f in findings
@@ -395,8 +392,9 @@ def test_records_never_carry_domain_objects() -> None:
 
 
 def test_domain_field_rules_are_flagged() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/extra4.py",
                 "app.extra4",
@@ -419,8 +417,8 @@ def test_domain_field_rules_are_flagged() -> None:
                 "        return None\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "Money.__init__" in f
         and "a value object constructs from primitives and value objects" in f
@@ -457,8 +455,9 @@ def test_edge_records_reject_an_empty_target() -> None:
 
 
 def test_optional_construction_data_is_the_only_union() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/domain/opt.py",
                 "app.domain.opt",
@@ -470,8 +469,8 @@ def test_optional_construction_data_is_the_only_union() -> None:
                 "        self.mix = mix\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any("parameter 'text'" in f for f in findings)
     assert any(
         "parameter 'items' is not allowed; "
@@ -482,8 +481,9 @@ def test_optional_construction_data_is_the_only_union() -> None:
 
 
 def test_bytes_is_construction_primitive() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/domain/digest.py",
                 "app.domain.digest",
@@ -496,14 +496,15 @@ def test_bytes_is_construction_primitive() -> None:
                 "        return self._value\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any("parameter 'value' is not allowed" in f for f in findings)
 
 
 def test_async_def_is_not_a_way_around_a_method_rule() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/client/async_client.py",
                 "app.client.async_client",
@@ -527,8 +528,8 @@ def test_async_def_is_not_a_way_around_a_method_rule() -> None:
                 "    async def save(self, entity: thing.Thing) -> None: ...\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.client.async_client.Loose.ask" in f
         and "a client method takes exactly one" in f
@@ -542,8 +543,9 @@ def test_async_def_is_not_a_way_around_a_method_rule() -> None:
 
 
 def test_an_adapters_module_holds_one_kind() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/adapters/gateways.py",
                 "app.adapters.gateways",
@@ -554,8 +556,8 @@ def test_an_adapters_module_holds_one_kind() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.adapters.gateways mixes adapter kinds" in f
         and "an adapters module holds one adapter kind" in f
@@ -564,8 +566,9 @@ def test_an_adapters_module_holds_one_kind() -> None:
 
 
 def test_a_dotted_module_base_resolves() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/test_doubles.py",
                 "app.test_doubles",
@@ -576,8 +579,8 @@ def test_a_dotted_module_base_resolves() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any(
         "FakePort" in f and "implements no ts.Port" in f and "undeclared" in f
         for f in findings

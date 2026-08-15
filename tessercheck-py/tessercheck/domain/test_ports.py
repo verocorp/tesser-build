@@ -4,9 +4,11 @@ import tesser.testing as ts
 
 import tessercheck.domain.checks as checks
 
+
 @ts.helper
-def _conforming() -> tuple[tuple[str, str, str, bool], ...]:  # tessercheck:ignore TB073
-    return (
+def _spec(
+    sources: tuple[tuple[str, str, str | None, bool], ...] = (),
+    base: tuple[tuple[str, str, str | None, bool], ...] = (
         (
             "app/domain/thing.py",
             "app.domain.thing",
@@ -43,30 +45,17 @@ def _conforming() -> tuple[tuple[str, str, str, bool], ...]:  # tessercheck:igno
             "        return anything\n",
             False,
         ),
-    )
-
-
-@ts.helper
-def _findings(  # tessercheck:ignore TB073
-    sources: tuple[tuple[str, str, str, bool], ...] = (),
-    conforming: bool = True,
-) -> tuple[str, ...]:
-    spec = checks.CodebaseSpec(
-        sources=(_conforming() + sources) if conforming else sources,
-        declared="app",
-        nested=(),
-        symlinked=(),
-    )
-    return tuple(
-        f"{violation.path()}:{int(violation.line())}: "
-        f"{violation.code()} {violation.text()}"
-        for violation in checks.Codebase(spec).violations()
+    ),
+) -> checks.CodebaseSpec:
+    return checks.CodebaseSpec(
+        sources=base + sources, declared="app", nested=(), symlinked=()
     )
 
 
 def test_ports_is_a_package_never_a_module() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports.py",
                 "app.application.ports",
@@ -75,8 +64,8 @@ def test_ports_is_a_package_never_a_module() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports is a ports module; ports is a package, never a module" in f
         for f in findings
@@ -84,16 +73,17 @@ def test_ports_is_a_package_never_a_module() -> None:
 
 
 def test_a_ports_init_is_empty() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
                 "X = 1\n",
                 True,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports __init__ declares code; a ports __init__ is empty" in f
         for f in findings
@@ -101,8 +91,9 @@ def test_a_ports_init_is_empty() -> None:
 
 
 def test_a_ports_module_is_a_leaf() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -127,8 +118,8 @@ def test_a_ports_module_is_a_leaf() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink imports app.domain.thing; a ports module is a leaf "
         "and imports nothing from its tree, its own siblings included" in f
@@ -142,8 +133,9 @@ def test_a_ports_module_is_a_leaf() -> None:
 
 
 def test_a_ports_module_stdlib_allowlist() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -160,8 +152,8 @@ def test_a_ports_module_stdlib_allowlist() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink imports socket; a ports module imports "
         "only tesser.application and the pure stdlib" in f
@@ -171,8 +163,9 @@ def test_a_ports_module_stdlib_allowlist() -> None:
 
 
 def test_a_ports_module_tesser_import_rules() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -195,8 +188,8 @@ def test_a_ports_module_tesser_import_rules() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink imports tesser.domain; "
         "a ports module imports only tesser.application" in f
@@ -208,8 +201,9 @@ def test_a_ports_module_tesser_import_rules() -> None:
 
 
 def test_a_ports_module_holds_only_imports_and_classes() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -225,8 +219,8 @@ def test_a_ports_module_holds_only_imports_and_classes() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink has a loose module-level statement; "
         "a ports module holds only imports and classes" in f
@@ -235,8 +229,9 @@ def test_a_ports_module_holds_only_imports_and_classes() -> None:
 
 
 def test_a_ports_module_declares_exactly_one_port() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -262,8 +257,8 @@ def test_a_ports_module_declares_exactly_one_port() -> None:
                 "        self.text = text\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.two declares 2 ports; a ports module "
         "declares exactly one port, so no two ports can share a request or a response" in f
@@ -277,8 +272,9 @@ def test_a_ports_module_declares_exactly_one_port() -> None:
 
 
 def test_a_ports_module_holds_only_port_kinds() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -297,8 +293,8 @@ def test_a_ports_module_holds_only_port_kinds() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.Bare declares no ts.* base; a ports class declares its block" in f
         for f in findings
@@ -311,8 +307,9 @@ def test_a_ports_module_holds_only_port_kinds() -> None:
 
 
 def test_a_port_method_speaks_one_request_and_one_response() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -335,8 +332,8 @@ def test_a_port_method_speaks_one_request_and_one_response() -> None:
                 "    def both(self, request: SaveRequest, extra: str) -> SaveResponse: ...\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.Sink.save parameter 'text' is not a ts.Request; "
         "a port method takes exactly one ts.Request" in f
@@ -355,8 +352,9 @@ def test_a_port_method_speaks_one_request_and_one_response() -> None:
 
 
 def test_an_adapter_reaches_application_only_through_ports() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -381,8 +379,8 @@ def test_an_adapter_reaches_application_only_through_ports() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.adapters.gateways.memory imports app.application.service; "
         "the same-context matrix is a role to itself, application to domain and client, "
@@ -393,8 +391,9 @@ def test_an_adapter_reaches_application_only_through_ports() -> None:
 
 
 def test_a_port_dto_field_is_never_a_union() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -416,8 +415,8 @@ def test_a_port_dto_field_is_never_a_union() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.FindResponse.__init__ field 'item' is a union; "
         "a port DTO field is never a union, optional included — model the outcome as an enum" in f
@@ -426,8 +425,9 @@ def test_a_port_dto_field_is_never_a_union() -> None:
 
 
 def test_a_client_dto_field_may_still_be_optional() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/client/optional.py",
                 "app.client.optional",
@@ -441,14 +441,15 @@ def test_a_client_dto_field_may_still_be_optional() -> None:
                 "        self.inner = inner\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any("app.client.optional" in f and "is a union" in f for f in findings)
 
 
 def test_a_conforming_ports_module_is_silent() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -483,8 +484,8 @@ def test_a_conforming_ports_module_is_silent() -> None:
                 "    def all(self, request: ListRequest) -> SaveResponse: ...\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any("app/application/ports/sink.py" in f for f in findings), (
         f"a conforming ports module produced findings: "
         f"{[f for f in findings if 'ports/sink.py' in f]}"
@@ -492,8 +493,9 @@ def test_a_conforming_ports_module_is_silent() -> None:
 
 
 def test_a_ports_package_holds_only_ports_modules() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -526,8 +528,8 @@ def test_a_ports_package_holds_only_ports_modules() -> None:
                 "",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.test_support is not a ports module; a ports package holds "
         "only ports modules, and test_/eval_/conftest are reserved names, because a fake "
@@ -538,8 +540,9 @@ def test_a_ports_package_holds_only_ports_modules() -> None:
 
 
 def test_a_client_dto_with_a_sibling_enum_stays_strict() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/client/verdict.py",
                 "app.client.verdict",
@@ -552,8 +555,8 @@ def test_a_client_dto_with_a_sibling_enum_stays_strict() -> None:
                 "        self.verdict = verdict\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.client.verdict.VerdictResponse.__init__ parameter 'verdict' is not allowed; "
         "a DTO field is a primitive or another DTO" in f
@@ -562,8 +565,9 @@ def test_a_client_dto_with_a_sibling_enum_stays_strict() -> None:
 
 
 def test_a_port_dto_field_is_never_a_bare_bool() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -587,8 +591,8 @@ def test_a_port_dto_field_is_never_a_bare_bool() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.FlagResponse.__init__ field 'found' is a bool; "
         "a port DTO field is never a bare bool — model the outcome as an enum" in f
@@ -598,8 +602,9 @@ def test_a_port_dto_field_is_never_a_bare_bool() -> None:
 
 
 def test_a_port_dto_is_never_subclassed() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -621,8 +626,8 @@ def test_a_port_dto_is_never_subclassed() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.FoundItem subclasses a port DTO; a port DTO is never "
         "subclassed, because a response hierarchy is a union mypy cannot check for exhaustiveness" in f
@@ -631,8 +636,9 @@ def test_a_port_dto_is_never_subclassed() -> None:
 
 
 def test_a_port_method_shape_survives_async_and_dunder_call() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -649,8 +655,8 @@ def test_a_port_method_shape_survives_async_and_dunder_call() -> None:
                 "    def __call__(self, name: str) -> bool: ...\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.Sink.fetch takes 2 parameters; "
         "a port method takes exactly one ts.Request" in f
@@ -663,8 +669,9 @@ def test_a_port_method_shape_survives_async_and_dunder_call() -> None:
 
 
 def test_a_fake_implementing_a_port_may_expose_inspection_methods() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -705,8 +712,8 @@ def test_a_fake_implementing_a_port_may_expose_inspection_methods() -> None:
                 "    assert True\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any("save_count" in f for f in findings), (
         f"a fake's inspection method was flagged as a port method: "
         f"{[f for f in findings if 'save_count' in f]}"
@@ -714,8 +721,9 @@ def test_a_fake_implementing_a_port_may_expose_inspection_methods() -> None:
 
 
 def test_a_ports_enum_is_a_plain_enum() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -736,8 +744,8 @@ def test_a_ports_enum_is_a_plain_enum() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.Loose is an enum.StrEnum; a ports enum is an enum.Enum, "
         "because a str- or int-backed member compares equal to a raw literal "
@@ -748,8 +756,9 @@ def test_a_ports_enum_is_a_plain_enum() -> None:
 
 
 def test_a_port_method_declares_a_shape_and_never_a_body() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -774,8 +783,8 @@ def test_a_port_method_declares_a_shape_and_never_a_body() -> None:
                 "    def drop(self, request: SaveRequest) -> SaveResponse: ...\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.Sink.save carries a body; a port method declares a shape "
         "and never a body, because a ports module holds no logic to import" in f
@@ -785,8 +794,9 @@ def test_a_port_method_declares_a_shape_and_never_a_body() -> None:
 
 
 def test_an_ignored_ports_file_is_still_governed() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports.py",
                 "app.application.ports",
@@ -801,8 +811,8 @@ def test_an_ignored_ports_file_is_still_governed() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports imports app.domain.thing; a ports module is a leaf" in f
         for f in findings
@@ -812,8 +822,9 @@ def test_an_ignored_ports_file_is_still_governed() -> None:
 
 
 def test_an_enum_base_cannot_hide_a_second_port() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -832,16 +843,17 @@ def test_an_enum_base_cannot_hide_a_second_port() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any("declares 2 ports" in f for f in findings), (
         f"an enum base hid a second port, so two ports could share every DTO: {findings}"
     )
 
 
 def test_an_enum_is_resolved_by_its_binding_not_its_spelling() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -872,8 +884,8 @@ def test_an_enum_is_resolved_by_its_binding_not_its_spelling() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.masked.Rules declares no ts.* base" in f for f in findings
     ), f"a name bound to something else was accepted as an enum: {findings}"
@@ -883,8 +895,9 @@ def test_an_enum_is_resolved_by_its_binding_not_its_spelling() -> None:
 
 
 def test_a_dynamic_import_is_not_a_way_around_the_matrix() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -910,8 +923,8 @@ def test_a_dynamic_import_is_not_a_way_around_the_matrix() -> None:
                 "        self._service = importlib.import_module('app.application.service')\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.adapters.gateways.memory imports dynamically through importlib.import_module; "
         "an import is a statement the walk can read, never a call" in f
@@ -920,8 +933,9 @@ def test_a_dynamic_import_is_not_a_way_around_the_matrix() -> None:
 
 
 def test_a_dto_declares_its_fields_where_the_rules_can_read_them() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -944,8 +958,8 @@ def test_a_dto_declares_its_fields_where_the_rules_can_read_them() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.ClassLevel carries a class-level statement; a port DTO "
         "declares its fields as __init__ parameters, where the field rules can read them" in f
@@ -959,8 +973,9 @@ def test_a_dto_declares_its_fields_where_the_rules_can_read_them() -> None:
 
 
 def test_an_async_method_on_a_dto_is_still_a_method() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -981,8 +996,8 @@ def test_an_async_method_on_a_dto_is_still_a_method() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.Loaded.resolve defines a method on a DTO; "
         "a DTO carries data and nothing else" in f
@@ -991,8 +1006,9 @@ def test_an_async_method_on_a_dto_is_still_a_method() -> None:
 
 
 def test_a_nested_class_cannot_hide_a_second_port() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -1013,8 +1029,8 @@ def test_a_nested_class_cannot_hide_a_second_port() -> None:
                 "        self.id = id\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.Holder.Second is a nested class; a ports module declares "
         "its port and its DTOs at module level, where the one-port count can see them" in f
@@ -1023,8 +1039,9 @@ def test_a_nested_class_cannot_hide_a_second_port() -> None:
 
 
 def test_a_dynamic_import_is_resolved_by_binding_not_spelling() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -1058,8 +1075,8 @@ def test_a_dynamic_import_is_resolved_by_binding_not_spelling() -> None:
                 "        self._loader = importlib\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.adapters.gateways.memory imports dynamically through importlib.import_module" in f
         for f in findings
@@ -1070,8 +1087,9 @@ def test_a_dynamic_import_is_resolved_by_binding_not_spelling() -> None:
 
 
 def test_a_port_speaks_shapes_it_declares_itself() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -1095,8 +1113,8 @@ def test_a_port_speaks_shapes_it_declares_itself() -> None:
                 "    def own(self, request: SaveRequest) -> SaveResponse: ...\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.Sink.bare names a shape it does not declare; a port "
         "method speaks requests and responses declared in its own ports module, never a "
@@ -1107,8 +1125,9 @@ def test_a_port_speaks_shapes_it_declares_itself() -> None:
 
 
 def test_a_ports_class_carries_no_class_level_statement() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -1135,8 +1154,8 @@ def test_a_ports_class_carries_no_class_level_statement() -> None:
                 "    def save(self, request: SaveRequest) -> SaveResponse: ...\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.Sink carries a class-level statement; only an enum "
         "member is class-level data in a ports module, because anything else runs at "
@@ -1147,8 +1166,9 @@ def test_a_ports_class_carries_no_class_level_statement() -> None:
 
 
 def test_a_private_port_method_carries_no_body() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -1173,8 +1193,8 @@ def test_a_private_port_method_carries_no_body() -> None:
                 "    def save(self, request: SaveRequest) -> SaveResponse: ...\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.Sink._score carries a body; a port method declares a "
         "shape and never a body" in f
@@ -1183,8 +1203,9 @@ def test_a_private_port_method_carries_no_body() -> None:
 
 
 def test_a_stub_cannot_shadow_the_shape_the_rules_read() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -1205,8 +1226,8 @@ def test_a_stub_cannot_shadow_the_shape_the_rules_read() -> None:
                 "    allowed: bool\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink is a stub; a module carries its own shape, because a "
         "stub is what the type checker reads and the walk cannot" in f
@@ -1215,8 +1236,9 @@ def test_a_stub_cannot_shadow_the_shape_the_rules_read() -> None:
 
 
 def test_a_ports_enum_carries_nothing_but_its_members() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -1238,8 +1260,8 @@ def test_a_ports_enum_carries_nothing_but_its_members() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.Outcome carries more than its members; a ports enum "
         "is a closed set of names and nothing else, because a method or a decorator here "
@@ -1250,8 +1272,9 @@ def test_a_ports_enum_carries_nothing_but_its_members() -> None:
 
 
 def test_a_port_dto_constructor_only_assigns_its_parameters() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -1279,8 +1302,8 @@ def test_a_port_dto_constructor_only_assigns_its_parameters() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.Validating.__init__ carries logic; a port DTO "
         "constructor only assigns its parameters, because a ports module holds no "
@@ -1291,8 +1314,9 @@ def test_a_port_dto_constructor_only_assigns_its_parameters() -> None:
 
 
 def test_a_port_declares_only_the_calls_an_implementer_provides() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -1317,8 +1341,8 @@ def test_a_port_declares_only_the_calls_an_implementer_provides() -> None:
                 "    def save(self, request: SaveRequest) -> SaveResponse: ...\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.Sink._raw is not a call an implementer provides; "
         "a port declares only its public calls and __call__, because a private name is "
@@ -1330,8 +1354,9 @@ def test_a_port_declares_only_the_calls_an_implementer_provides() -> None:
 
 
 def test_a_ports_module_runs_nothing_at_import() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -1364,8 +1389,8 @@ def test_a_ports_module_runs_nothing_at_import() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.Decorated is decorated; a ports module holds no "
         "decorator, because a decorator is a call that runs at import in the one "
@@ -1396,8 +1421,9 @@ def test_a_ports_module_runs_nothing_at_import() -> None:
 
 
 def test_an_async_port_method_runs_nothing_at_import() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -1421,8 +1447,8 @@ def test_an_async_port_method_runs_nothing_at_import() -> None:
                 "-> SaveResponse: ...\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.Sink.audit carries a computed default; a ports module "
         "holds no expression that runs at import, because every adapter imports it" in f
@@ -1431,8 +1457,9 @@ def test_an_async_port_method_runs_nothing_at_import() -> None:
 
 
 def test_a_port_dto_binds_only_its_own_parameters() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -1456,8 +1483,8 @@ def test_a_port_dto_binds_only_its_own_parameters() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.Capability.__init__ carries logic; a port DTO "
         "constructor only assigns its parameters" in f
@@ -1467,8 +1494,9 @@ def test_a_port_dto_binds_only_its_own_parameters() -> None:
 
 
 def test_a_ports_class_carries_no_keyword() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -1487,8 +1515,8 @@ def test_a_ports_class_carries_no_keyword() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.Meta carries a class keyword; a ports module holds no "
         "expression that runs at import, and a metaclass is logic every adapter imports" in f
@@ -1497,8 +1525,9 @@ def test_a_ports_class_carries_no_keyword() -> None:
 
 
 def test_an_enum_member_may_be_negative_or_annotated() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -1520,8 +1549,8 @@ def test_an_enum_member_may_be_negative_or_annotated() -> None:
                 "    pass\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert not any("UNKNOWN" in f or "ALLOWED" in f or "NEXT" in f for f in findings), (
         f"a legitimate enum member was rejected: {findings}"
     )
@@ -1532,8 +1561,9 @@ def test_an_enum_member_may_be_negative_or_annotated() -> None:
 
 
 def test_a_ports_module_computes_no_annotation() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -1555,8 +1585,8 @@ def test_a_ports_module_computes_no_annotation() -> None:
                 "    def save[T](self, request: SaveRequest) -> SaveResponse: ...\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.SaveRequest.__init__ computes an annotation; a ports "
         "module holds no expression that runs at import, and an annotation is evaluated "
@@ -1569,8 +1599,9 @@ def test_a_ports_module_computes_no_annotation() -> None:
 
 
 def test_every_spelling_of_a_dynamic_import_is_a_finding() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -1629,8 +1660,8 @@ def test_every_spelling_of_a_dynamic_import_is_a_finding() -> None:
                 "        self.svc = sys.modules['app.application.service']\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     for name in ("rebound", "indirect", "builtin", "registry"):
         assert any(f"app.adapters.gateways.{name} imports dynamically" in f for f in findings), (
             f"the {name} spelling reached application with no import edge: {findings}"
@@ -1638,8 +1669,9 @@ def test_every_spelling_of_a_dynamic_import_is_a_finding() -> None:
 
 
 def test_a_ports_module_holds_only_shapes_the_rules_can_read() -> None:
-    findings = _findings(
-        (
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
             (
                 "app/application/ports/__init__.py",
                 "app.application.ports",
@@ -1665,8 +1697,8 @@ def test_a_ports_module_holds_only_shapes_the_rules_can_read() -> None:
                 "    def save(self, request: SaveRequest) -> SaveResponse: ...\n",
                 False,
             ),
-        )
-    )
+        ))).violations()
+               )
     assert any(
         "app.application.ports.sink.SaveRequest.__init__ holds a Delete; a ports module "
         "holds only the shapes its rules can read, so anything else is a finding by "

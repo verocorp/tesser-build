@@ -3,29 +3,8 @@ from __future__ import annotations
 import ast
 import inspect
 import textwrap
-from collections.abc import Callable
-
-import tesser.testing as ts
 
 import tessercheck.domain.checks as checks
-
-
-@ts.helper
-def _function_tree(func: Callable[..., object] = checks.Codebase._locate) -> ast.FunctionDef:  # tessercheck:ignore TB073
-    tree = ast.parse(textwrap.dedent(inspect.getsource(func)))
-    return next(node for node in tree.body if isinstance(node, ast.FunctionDef))
-
-
-@ts.helper
-def _returned_tokens(func: ast.FunctionDef | None = None) -> frozenset[str]:  # tessercheck:ignore TB073
-    node = func if func is not None else _function_tree()
-    return frozenset(
-        value.value
-        for stmt in ast.walk(node)
-        if isinstance(stmt, ast.Return) and stmt.value is not None
-        for value in ast.walk(stmt.value)
-        if isinstance(value, ast.Constant) and isinstance(value.value, str)
-    )
 
 
 def test_locate_is_the_single_routing_decision() -> None:
@@ -105,7 +84,19 @@ def test_locate_is_the_single_routing_decision() -> None:
         assert got == expected, (
             f"_locate({name!r}, is_package={is_package}) = {got!r}, expected {expected!r}"
         )
-    returned = _returned_tokens()
+    locate_tree = ast.parse(
+        textwrap.dedent(inspect.getsource(checks.Codebase._locate))
+    )
+    locate = next(
+        node for node in locate_tree.body if isinstance(node, ast.FunctionDef)
+    )
+    returned = frozenset(
+        value.value
+        for stmt in ast.walk(locate)
+        if isinstance(stmt, ast.Return) and stmt.value is not None
+        for value in ast.walk(stmt.value)
+        if isinstance(value, ast.Constant) and isinstance(value.value, str)
+    )
     exercised = frozenset(expected for _, _, expected in table)
     assert returned == exercised, (
         f"the classification table and _locate's return set drifted apart: "
@@ -115,8 +106,25 @@ def test_locate_is_the_single_routing_decision() -> None:
 
 
 def test_every_location_token_has_a_dispatch_arm() -> None:
-    tokens = _returned_tokens()
-    dispatch = _function_tree(checks.Codebase._module_violations)
+    locate_tree = ast.parse(
+        textwrap.dedent(inspect.getsource(checks.Codebase._locate))
+    )
+    locate = next(
+        node for node in locate_tree.body if isinstance(node, ast.FunctionDef)
+    )
+    tokens = frozenset(
+        value.value
+        for stmt in ast.walk(locate)
+        if isinstance(stmt, ast.Return) and stmt.value is not None
+        for value in ast.walk(stmt.value)
+        if isinstance(value, ast.Constant) and isinstance(value.value, str)
+    )
+    dispatch_tree = ast.parse(
+        textwrap.dedent(inspect.getsource(checks.Codebase._module_violations))
+    )
+    dispatch = next(
+        node for node in dispatch_tree.body if isinstance(node, ast.FunctionDef)
+    )
     handled = frozenset(
         node.comparators[0].value
         for node in ast.walk(dispatch)
