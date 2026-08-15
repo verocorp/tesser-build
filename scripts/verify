@@ -28,16 +28,17 @@ set -uo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT" || exit 1
 
-# The tree list is derived from manifest.json, never hand-maintained here: a
-# python-app or python-library row IS the claim that scripts/verify gates it,
-# and a manifest tree with no run_* arm below fails as "unknown tree" rather
-# than silently not running. check-topology holds the other direction — that
-# every directory on disk has a manifest row at all.
-scripts/check-topology || exit 1
+# The tree list comes from manifest.json, never hand-maintained here: an
+# `app` row IS the claim that scripts/verify runs that tree, and a manifest
+# tree with no run_* arm below fails as "unknown tree" rather than silently
+# not running. check-layout holds the other direction — that every directory
+# on disk has a manifest row at all.
+scripts/check-layout || exit 1
 
 # Capture the generator's output in a variable first: process substitution
 # would hide a python3 failure from set -e, and an empty TREES list would make
-# the loop below report "all green (0 trees)" — a gate that fails open.
+# the loop below report "all green (0 trees)" — a check that passes without
+# checking anything.
 TREE_LIST=$(python3 - <<'PY'
 import json, pathlib
 manifest = json.loads(pathlib.Path("manifest.json").read_text())

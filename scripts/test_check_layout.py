@@ -3,7 +3,7 @@ import pathlib
 import subprocess
 import sys
 
-SCRIPT = pathlib.Path(__file__).resolve().parent / "check-topology"
+SCRIPT = pathlib.Path(__file__).resolve().parent / "check-layout"
 
 VERIFY = """#!/usr/bin/env bash
 run_appone() {
@@ -182,7 +182,7 @@ def test_a_declaration_that_is_a_directory_fails_with_a_message(tmp_path: pathli
     (tmp_path / "appone" / ".tesser-root").mkdir()
     code, out = run(tmp_path)
     assert code == 1
-    assert "topology:" in out
+    assert "layout:" in out
     assert "Traceback" not in out
 
 
@@ -194,7 +194,7 @@ def test_a_requirements_dev_outside_an_app_row_fails(tmp_path: pathlib.Path) -> 
     assert "docs holds a requirements-dev.txt but is not an app row" in out
 
 
-def test_a_nested_python_tree_is_caught_by_the_requirements_witness(tmp_path: pathlib.Path) -> None:
+def test_a_nested_python_tree_is_caught_by_the_requirements_check(tmp_path: pathlib.Path) -> None:
     build(tmp_path)
     deep = tmp_path / "docs" / "buried" / "tree"
     deep.mkdir(parents=True)
@@ -204,7 +204,7 @@ def test_a_nested_python_tree_is_caught_by_the_requirements_witness(tmp_path: pa
     assert "docs/buried/tree holds a requirements-dev.txt" in out
 
 
-def test_a_demoted_app_row_is_caught_by_the_requirements_witness(tmp_path: pathlib.Path) -> None:
+def test_a_demoted_app_row_is_caught_by_the_requirements_check(tmp_path: pathlib.Path) -> None:
     build(tmp_path)
     rewrite(tmp_path, {"libby": "ungated"})
     code, out = run(tmp_path)

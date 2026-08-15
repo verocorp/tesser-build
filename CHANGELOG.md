@@ -7,52 +7,58 @@ carries the analyzer package's own version — separate streams.)
 
 ## [0.0.32.0] - 2026-08-14
 
-Repo topology. Three holes of one shape — coverage was implicit: a tessercheck
-run inferred its subject, the gate list was hand-maintained, and nothing
-stopped a new top-level directory from appearing outside the gates. Now both
-levels are declared, and a guard fails when disk and declarations disagree.
+Repo layout. Three holes of one shape — nothing said what was covered: a
+tessercheck run walked whatever it was pointed at, the tree list in
+`scripts/verify` was maintained by hand, and nothing stopped a new top-level
+directory from appearing outside the gates. Now every directory says what it
+is, and a check fails when the directories on disk and those files disagree.
 
 ### Added
-- **A checkable tree declares itself: `.tesser-root`.** The declaration has a
-  total grammar — first line `app`, then only `skip <dir>` lines. A missing,
-  unreadable, or unrecognized declaration, or one nested below the root, is a
-  **`TB044`** finding; a **symlinked directory** inside a declared tree is
-  **`TB045`**, because `os.walk` does not follow symlinks and a symlink would
-  smuggle unwalked code into a zero-findings gate. These findings
-  short-circuit every other rule and land on files that cannot carry a Python
-  comment, so they are the one family an inline ignore can never suppress.
-  Pointing the analyzer at the repo root now reports the map of declared trees
-  below — one line each — instead of smooshing nine trees into one walk.
-  Breaking for consumer repos: on upgrade, each checked tree adds one
-  `.tesser-root` file.
-- **`skip <dir>` is where repo-specific configuration lives** — the analyzer
+- **A checkable tree marks itself with a `.tesser-root` file.** The file
+  allows exactly two things — a first line `app`, then `skip <dir>` lines —
+  and anything else is a finding. A missing, unreadable, or wrong
+  `.tesser-root`, or one nested below the root, is a **`TB044`** finding; a
+  **symlinked directory** inside a declared tree is **`TB045`**, because the
+  walk never follows symlinks, so a symlink would let unchecked code sit
+  inside a tree that reports zero findings. When one of these fires it is the
+  only finding reported, and it lands on a file that cannot carry a Python
+  comment, so no inline ignore can silence it. Pointing the analyzer at the
+  repo root now prints one line per marked tree below it instead of treating
+  nine separate trees as one. Breaking for consumer repos: on upgrade, each
+  checked tree adds one `.tesser-root` file.
+- **`skip <dir>` is where anything specific to one repo goes** — the analyzer
   hardcodes nothing about any repo. tessercheck-py's own fixture directory
-  (`testdata`) moved out of the reader's skip set and into its declaration.
-- **`manifest.json` declares what every top-level directory and every
+  (`testdata`) moved out of the reader's built-in skip list and into its own
+  `.tesser-root`.
+- **`manifest.json` says what every top-level directory and every
   `examples/*` directory is** — two kinds only, `app` and `ungated`, because
   everything is an app; there is no library kind (a "library" is an app that
-  does no IO). `tesser-py` and `examples/vobase` are app rows whose gates gain
-  the tessercheck step when their trees are migrated to conform.
-- **`scripts/check-topology`** holds the witnesses, not just the words: disk
-  == manifest both directions and both levels; `.tesser-root` present exactly
-  when the tree's `scripts/verify` arm runs tessercheck; a verify arm, CI job,
-  and unique basename per app row; a `requirements-dev.txt` at **any depth**
-  must belong to an app row; symlinked top-level or `examples/*` directories
-  fail. It runs as `scripts/verify` step 0 and as its own CI job, which also
-  runs the guard's own pytest suite (`scripts/test_check_topology.py`, every
-  failure mode pinned against a synthetic root).
-- **`docs/design-repo-topology.md`** — the problem, the declarations, the
-  guard, and why there is no `--run-as domain` flag: placement truth lives in
-  the tree, never the invocation.
+  does no IO). `tesser-py` and `examples/vobase` are app rows whose verify
+  steps gain the tessercheck step once their trees are reworked to conform.
+- **`scripts/check-layout`** cross-checks the words against real things, so a
+  typo'd kind cannot quietly drop a tree's gates: directories on disk match
+  manifest rows both ways at both levels; a tree has `.tesser-root` exactly
+  when its `scripts/verify` steps run tessercheck; every app row has a verify
+  arm, a CI job, and a directory name no other app row uses; a
+  `requirements-dev.txt` at **any depth** must belong to an app row; a
+  symlinked top-level or `examples/*` directory fails. It runs as
+  `scripts/verify` step 0 and as its own CI job, which also runs the check's
+  test suite (`scripts/test_check_layout.py` — a test per failure case,
+  against a small fake repo).
+- **`docs/design-repo-layout.md`** — the problem, the two files, the check,
+  and why there is no `--run-as domain` flag: what a directory is gets
+  written in the directory, never passed on the command line.
 
 ### Changed
-- **`scripts/verify` derives its tree list from `manifest.json`** — the
-  hand-maintained `TREES` array is gone, and the derivation fails closed: a
-  broken or empty derivation aborts instead of reporting green over nothing.
-- **The reader walks once, pruning as it goes** (`os.walk`, symlinks never
-  followed) instead of three unpruned `rglob` passes — declaration, nested
-  roots, symlinks, and sources in a single traversal.
-- `map.md` carries the tree-declaration convention; skill-version 33 → 34.
+- **`scripts/verify` reads its tree list from `manifest.json`** — the
+  hand-maintained `TREES` array is gone, and if the list comes back empty or
+  the read fails, verify stops with an error instead of reporting green over
+  nothing.
+- **The reader walks the tree once, skipping ignored directories as it goes**
+  (symlinks never followed) instead of three separate full scans — the
+  `.tesser-root`, nested roots, symlinks, and source files all come from one
+  pass.
+- `map.md` carries the `.tesser-root` convention; skill-version 33 → 34.
 
 ## [0.0.31.0] - 2026-08-13
 

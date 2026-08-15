@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
 #
-# The repo-topology guard: manifest.json is the one declaration of what every
-# top-level directory (and every examples/ subdirectory) is, and this script
-# fails when disk and declarations disagree — in either direction.
+# The repo-layout check: manifest.json says what every top-level directory
+# (and every examples/ subdirectory) is, and this script fails when the
+# directories on disk and the manifest disagree — in either direction.
 #
-# Two kinds only, because everything is an app: `app` (a Python tree gated by
-# scripts/verify) and `ungated` (not a subject of the Python gate system; Go
-# directories are covered by the Go jobs, not by this guard). The word is not
-# the guard — the witnesses are:
+# Two kinds only, because everything is an app: `app` (a Python tree that
+# scripts/verify runs) and `ungated` (not part of the Python gates; Go
+# directories are covered by the Go jobs, not by this script). A word in a
+# file can be typo'd, so the checks below don't rely on the word alone:
 #   1. Every top-level directory has a manifest row, and every row a directory.
 #   2. Same for examples/*.
 #   3. A tree carries .tesser-root exactly when its scripts/verify arm runs
-#      tessercheck — so demoting either side alone goes red.
+#      tessercheck — changing either side alone fails.
 #   4. Every app row has a scripts/verify case arm and a CI job invoking it.
 #   5. Every directory holding a requirements-dev.txt is an app row — a Python
 #      tree cannot be filed under a kind that drops its gates.
 #   6. A symlinked top-level or examples/* directory is a failure; inside a
 #      declared tree, symlinks are the analyzer's TB045.
-# The guard sees two directory depths by design; deeper Python trees are
-# caught by witness 5, which walks the whole repo.
+# This script looks at two directory levels by design; check 5 walks the
+# whole repo, so a Python tree buried deeper is still caught.
 import json
 import pathlib
 import re
@@ -50,7 +50,7 @@ KINDS = frozenset({"app", "ungated"})
 def fail(problems: list[str]) -> None:
     if problems:
         for problem in problems:
-            print(f"topology: {problem}", file=sys.stderr)
+            print(f"layout: {problem}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -188,7 +188,7 @@ def main() -> None:
     fail(problems)
     manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
     apps = sum(1 for kind in manifest.values() if kind == "app")
-    print(f"topology: {len(manifest)} rows, {apps} app trees — disk, declarations, and gates agree")
+    print(f"layout: {len(manifest)} rows, {apps} app trees — disk, declarations, and gates agree")
 
 
 if __name__ == "__main__":

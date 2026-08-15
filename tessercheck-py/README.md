@@ -37,11 +37,12 @@ its root. The declaration has a total grammar — first line `app`, then only
 where repo-specific configuration lives; the analyzer hardcodes nothing about
 any repo). An undeclared, unreadable, or unrecognized root, or a
 `.tesser-root` nested below the root, is a `TB044` finding; a symlinked
-directory inside the tree is `TB045`, because a symlink escapes the walk. A
-declaration or walk-integrity finding short-circuits everything else, so
-pointing the analyzer at a directory that never claimed to be a tree reports
-that fact instead of walking it — and these findings land on files that cannot
-carry a Python comment, so they are never inline-suppressible.
+directory inside the tree is `TB045`, because the walk never follows symlinks
+and must say what it could not see. When a TB044 or TB045 fires it is the only
+finding reported, so pointing the analyzer at a directory that never claimed
+to be a tree reports that fact instead of walking it — and these findings land
+on files that cannot carry a Python comment, so an inline ignore can never
+silence them.
 
 Exit 0 when clean; exit 1 with one finding per line, flake8-style:
 

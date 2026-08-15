@@ -17,14 +17,15 @@ thin app-level layer that wires and hosts them.
 
 **The tree declares itself.** A checkable app tree carries a `.tesser-root`
 file at its root — that one file is what makes the directory a tessercheck
-subject. Its grammar is total: first line `app`, then only `skip <dir>` lines
-naming directories the walk ignores for this tree (tree-specific skips are
-configuration in the tree, never code in the analyzer). An undeclared,
-unreadable, or unrecognized root, or a `.tesser-root` nested inside another
-tree, is a `TB044` finding; a symlinked directory inside the tree is `TB045`
-(a symlink escapes the walk). These findings short-circuit every other rule
-and can never be inline-suppressed: the analyzer reports what the directory is
-(or isn't) before it reports anything about its contents. When you create a
+subject. The file allows exactly two things — a first line `app`, then only
+`skip <dir>` lines naming directories the walk ignores for this tree
+(tree-specific skips go in this file, never in the analyzer's code); anything
+else is a finding. A missing, unreadable, or wrong `.tesser-root`, or one
+nested inside another tree, is a `TB044` finding; a symlinked directory
+inside the tree is `TB045` (the walk never follows symlinks and must say what
+it could not see). When one of these fires it is the only finding reported,
+and no inline ignore can silence it: the analyzer says what the directory is
+(or isn't) before saying anything about its contents. When you create a
 new app tree, the declaration file comes first. And everything is an app —
 there is no library kind; a "library" is an app that does no IO but still
 exposes a client and coordinates its domain through an application service.
