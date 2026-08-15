@@ -27,18 +27,19 @@ def repo(read: repo_reader.ReadRepoResponse) -> domain.Repo:
 
 
 @ts.function
-def problems(read: repo_reader.ReadRepoResponse) -> tuple[str, ...]:
-    return tuple(str(problem.text()) for problem in repo(read).problems())
+def report(
+    read: repo_reader.ReadRepoResponse,
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    built = repo(read)
+    return (
+        tuple(str(problem.text()) for problem in built.problems()),
+        tuple(str(count) for count in built.counts()),
+    )
 
 
 @ts.function
 def trees(read: repo_reader.ReadRepoResponse) -> tuple[str, ...]:
     return tuple(str(tree) for tree in repo(read).trees())
-
-
-@ts.function
-def counts(read: repo_reader.ReadRepoResponse) -> tuple[str, ...]:
-    return tuple(str(count) for count in repo(read).counts())
 
 
 @ts.function

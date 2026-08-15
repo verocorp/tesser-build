@@ -111,13 +111,15 @@ class Repo(ts.AggregateRoot):
         if rows is None:
             return ()
         return tuple(
-            Text(key.split("/")[-1]) for key, kind in rows.items() if kind == KIND_APP
+            Text(key.split("/")[-1])
+            for key, kind in rows.items()
+            if kind == KIND_APP and key.split("/")[-1]
         )
 
     def counts(self) -> tuple[Text, ...]:
         rows = self._rows()
         if rows is None:
-            return ()
+            return (Text("0"), Text("0"))
         apps = sum(1 for kind in rows.values() if kind == KIND_APP)
         return (Text(str(len(rows))), Text(str(apps)))
 
@@ -166,7 +168,9 @@ class Repo(ts.AggregateRoot):
             found.append(
                 Problem(f"manifest.json row 'examples/{name}' names no directory on disk")
             )
-        for name, form in sorted(self._top) + sorted(self._examples):
+        entries = [(name, form) for name, form in sorted(self._top)]
+        entries.extend((f"examples/{name}", form) for name, form in sorted(self._examples))
+        for name, form in entries:
             if form == SYMLINK:
                 found.append(
                     Problem(

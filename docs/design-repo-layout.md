@@ -148,5 +148,5 @@ This is a breaking change for consumer repos (certus, metron, quanta, the
 pilot): after upgrading the analyzer, a tessercheck run on an undeclared tree
 produces a `TB044` finding. The migration is one file: add `.tesser-root`
 containing `app` at each checked tree root. The manifest and check-layout
-are this repo's own check, not part of the analyzer; consumers may copy the
-pattern but nothing requires it.
+are this repo's own machinery, not part of the analyzer; consumers may copy
+the pattern but nothing requires it.

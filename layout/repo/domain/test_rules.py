@@ -248,3 +248,58 @@ def test_trees_lists_app_rows_in_manifest_order() -> None:
 def test_counts_reports_rows_and_app_trees() -> None:
     repo = rules.Repo(_spec())
     assert tuple(str(count) for count in repo.counts()) == ("7", "2")
+
+
+def test_a_missing_verify_file_is_a_problem_and_cascades() -> None:
+    found = _texts(rules.Repo(_spec(verify=("missing", ""))))
+    assert any("scripts/verify is missing" in text for text in found), found
+    assert any("appone has no scripts/verify case arm" in text for text in found), found
+
+
+def test_an_unreadable_workflow_file_is_a_problem() -> None:
+    found = _texts(rules.Repo(_spec(workflow=("unreadable", ""))))
+    assert any(
+        ".github/workflows/test.yml is unreadable" in text for text in found
+    ), found
+
+
+def test_an_unreadable_manifest_is_the_only_problem() -> None:
+    found = _texts(rules.Repo(_spec(manifest=("unreadable", (), ""))))
+    assert found == ("manifest.json is unreadable",)
+
+
+def test_trees_and_counts_degrade_when_the_manifest_cannot_be_read() -> None:
+    repo = rules.Repo(_spec(manifest=("malformed", (), "boom")))
+    assert repo.trees() == ()
+    assert tuple(str(count) for count in repo.counts()) == ("0", "0")
+
+
+def test_a_symlinked_examples_dir_reports_with_its_prefix() -> None:
+    found = _texts(rules.Repo(_spec(examples=(("demo", "symlink"),))))
+    assert any(
+        "examples/demo is a symlinked directory" in text for text in found
+    ), found
+
+
+def test_text_rejects_the_empty_string() -> None:
+    import pytest
+
+    with pytest.raises(ValueError):
+        rules.Text("")
+
+
+def test_text_equality() -> None:
+    assert rules.Text("a") == rules.Text("a")
+    assert rules.Text("a") != rules.Text("b")
+
+
+def test_problem_equality() -> None:
+    assert rules.Problem("a b") == rules.Problem("a b")
+    assert rules.Problem("a b") != rules.Problem("c d")
+
+
+def test_a_trailing_slash_app_row_is_a_problem_and_trees_survives_it() -> None:
+    rows = _spec().manifest[1] + (("ghost/", "app"),)
+    repo = rules.Repo(_spec(manifest=("read", rows, "")))
+    assert any("has no scripts/verify case arm" in str(p.text()) for p in repo.problems())
+    assert tuple(str(tree) for tree in repo.trees()) == ("appone", "libby")

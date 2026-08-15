@@ -100,3 +100,42 @@ def test_a_malformed_manifest_is_a_message_not_a_crash(tmp_path: Path) -> None:
 def test_trees_lists_app_rows(tmp_path: Path) -> None:
     response = wire.build().trees(client.TreesRequest(root=str(_repo(tmp_path))))
     assert response.trees == ("appone",)
+
+
+def test_a_dangling_symlink_is_still_reported(tmp_path: Path) -> None:
+    _repo(tmp_path)
+    (tmp_path / "vendored").symlink_to(tmp_path / "no-such-target")
+    response = wire.build().check(client.CheckRequest(root=str(tmp_path)))
+    assert any("vendored is a symlinked directory" in p for p in response.problems)
+
+
+def test_a_declaration_that_is_a_directory_is_a_problem_not_a_crash(
+    tmp_path: Path,
+) -> None:
+    _repo(tmp_path)
+    (tmp_path / "appone" / ".tesser-root").unlink()
+    (tmp_path / "appone" / ".tesser-root").mkdir()
+    response = wire.build().check(client.CheckRequest(root=str(tmp_path)))
+    assert any("appone/.tesser-root is missing" in p for p in response.problems)
+
+
+def test_a_nonexistent_root_is_a_problem_not_a_crash(tmp_path: Path) -> None:
+    response = wire.build().check(
+        client.CheckRequest(root=str(tmp_path / "no-such-dir"))
+    )
+    assert len(response.problems) == 1
+    assert "is not a directory" in response.problems[0]
+
+
+def test_an_unlistable_directory_does_not_crash(tmp_path: Path) -> None:
+    import os
+
+    _repo(tmp_path)
+    locked = tmp_path / "appone" / "locked"
+    locked.mkdir()
+    os.chmod(locked, 0)
+    try:
+        response = wire.build().check(client.CheckRequest(root=str(tmp_path)))
+    finally:
+        os.chmod(locked, 0o755)
+    assert response.problems == ()

@@ -39,6 +39,24 @@ class FilesystemRepoReader(ts.Repository):
 
     def read(self, request: repo_reader.ReadRepoRequest) -> repo_reader.ReadRepoResponse:
         base = Path(request.root)
+        if not base.is_dir():
+            return repo_reader.ReadRepoResponse(
+                manifest=repo_reader.ManifestRecord(
+                    state=repo_reader.ManifestState.MALFORMED,
+                    rows=(),
+                    note=f"{request.root} is not a directory",
+                ),
+                verify=repo_reader.FileRecord(
+                    state=repo_reader.FileState.MISSING, text=""
+                ),
+                workflow=repo_reader.FileRecord(
+                    state=repo_reader.FileState.MISSING, text=""
+                ),
+                top=(),
+                examples=(),
+                declarations=(),
+                requirements=(),
+            )
         declarations, requirements = self._walk(base)
         return repo_reader.ReadRepoResponse(
             manifest=self._manifest(base / "manifest.json"),
@@ -102,17 +120,24 @@ class FilesystemRepoReader(ts.Repository):
         if not base.is_dir():
             return ()
         found: list[repo_reader.EntryRecord] = []
-        for entry in sorted(base.iterdir()):
-            if not entry.is_dir() or entry.name in SKIP_DIRS:
+        for entry in self._listing(base):
+            if entry.name in SKIP_DIRS:
                 continue
             if entry.name.startswith(".") and entry.name not in HIDDEN_TRACKED:
                 continue
-            form = (
-                repo_reader.EntryForm.SYMLINK
-                if entry.is_symlink()
-                else repo_reader.EntryForm.DIRECTORY
-            )
-            found.append(repo_reader.EntryRecord(name=entry.name, form=form))
+            if entry.is_symlink():
+                if entry.is_dir() or not entry.exists():
+                    found.append(
+                        repo_reader.EntryRecord(
+                            name=entry.name, form=repo_reader.EntryForm.SYMLINK
+                        )
+                    )
+            elif entry.is_dir():
+                found.append(
+                    repo_reader.EntryRecord(
+                        name=entry.name, form=repo_reader.EntryForm.DIRECTORY
+                    )
+                )
         return tuple(found)
 
     def _walk(
@@ -123,7 +148,7 @@ class FilesystemRepoReader(ts.Repository):
         pending = [root]
         while pending:
             base = pending.pop()
-            for entry in sorted(base.iterdir()):
+            for entry in self._listing(base):
                 if entry.name in SKIP_DIRS:
                     continue
                 if entry.is_dir() and not entry.is_symlink():
@@ -140,3 +165,9 @@ class FilesystemRepoReader(ts.Repository):
                 elif entry.name == REQUIREMENTS and not entry.is_dir():
                     requirements.append(str(entry.parent.relative_to(root)))
         return tuple(declarations), tuple(requirements)
+
+    def _listing(self, base: Path) -> tuple[Path, ...]:
+        try:
+            return tuple(sorted(base.iterdir()))
+        except OSError:
+            return ()

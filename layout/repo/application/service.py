@@ -14,9 +14,8 @@ class LayoutService(ts.ApplicationService):
 
     def check(self, request: client.CheckRequest) -> client.CheckResponse:
         read = self._reader.read(repo_reader.ReadRepoRequest(root=request.root))
-        return client.CheckResponse(
-            problems=mapping.problems(read), counts=mapping.counts(read)
-        )
+        problems, counts = mapping.report(read)
+        return client.CheckResponse(problems=problems, counts=counts)
 
     def trees(self, request: client.TreesRequest) -> client.TreesResponse:
         read = self._reader.read(repo_reader.ReadRepoRequest(root=request.root))
