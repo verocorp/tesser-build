@@ -24,8 +24,9 @@ them.
 > composition-root mechanics — and the app-level anatomy of `bootstrap` +
 > per-context `client.py`/`wiring` + `srv` hosts + inbound handlers — are
 > `examples/python-app/` end to end (multi-context, self-enforcing tests).
-> `examples/spike-shells/` is the second exemplar (two contexts, the
-> declare-then-verify arc). All trees pass `mypy --strict`, `pytest`, and the
+> `examples/ports/` is the second exemplar (one context, two application
+> ports, the enum outcome read with `match` + `assert_never`, the collection
+> answer carried as a tuple). All trees pass `mypy --strict`, `pytest`, and the
 > analyzer in CI, the same bar the Go mechanics meet. The examples here are
 > all *lifecycle* and *1:1*, so they do not exercise a **fact**
 > aggregate/entity that returns a new instance on change or an explicit

@@ -9,7 +9,7 @@ one genuine modelling gap.
 | Tree | TB081 (port arity) | TB052 (kind placement) | TB060 (adapters→application) | Total |
 |---|---|---|---|---|
 | `python-app` | 50 | 14 | 5 | 69 |
-| `spike-llmport` | 34 | 5 | 2 | 41 |
+| `llmport` | 34 | 5 | 2 | 41 |
 | `spike-shells` | 8 | 3 | — | 11 |
 | `errorspy` | 4 | 6 | 1 | 11 |
 | `serdepy` | — | 1 | 1 | 2 |
@@ -31,9 +31,9 @@ rewrite:
 | `python-app` `CampaignRepository.find` | `FoundCampaign \| MissingCampaign` | `CampaignLookup` enum + payload |
 | `python-app` `CampaignRepository.find_by_slug` | same | same |
 | `errorspy` `CampaignRepository.find` | same | same |
-| `spike-llmport` `SlotDirectory.reserve` | `Reserved \| SlotTaken` | `ReservationOutcome` enum |
+| `llmport` `SlotDirectory.reserve` | `Reserved \| SlotTaken` | `ReservationOutcome` enum |
 | `python-app` `CampaignRepository.slug_taken` | `-> bool` | `SlugAvailability` enum |
-| `spike-llmport` `BookingRepository.has` | `-> bool` | `BookingPresence` enum |
+| `llmport` `BookingRepository.has` | `-> bool` | `BookingPresence` enum |
 
 The two bool returns are where the "ban bare bool in a port DTO" question bites.
 The repo already argues the position elsewhere — TB016 bans a bool inside a

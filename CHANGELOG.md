@@ -5,6 +5,30 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.39.0] - 2026-08-15
+
+Two trees stop being called what they are not. `examples/spike-shells` is
+retired: its teaching role is fully covered by `examples/python-app` (the
+bounded-context anatomy exemplar) and `examples/ports` (the application-ports
+exemplar), and keeping a third exemplar meant keeping a third copy of every
+convention current. `examples/spike-llmport` is no spike — it is a gated,
+conformant tree — so it is now `examples/llmport`.
+
+### Removed
+- **`examples/spike-shells/` and its whole gate chain**: the tree, its
+  `manifest.json` row, its `scripts/verify` arm, and its CI job. Live prose
+  that pointed at it now points at the current exemplars
+  (`skills/tesser-build/python.md` teaches the second exemplar from
+  `examples/ports`). Historical records — CHANGELOG entries, the totalreturn
+  findings, the application-ports migration measurements, and
+  tessercheck-py's "grew up as sigcheck in spike-shells" origin note — keep
+  the old name, because they describe the past.
+
+### Changed
+- **`examples/spike-llmport` → `examples/llmport`**: directory, manifest key,
+  verify arm (`scripts/verify llmport`), CI job, and every live reference.
+  `scripts/verify` runs all 8 trees green after the move.
+
 ## [0.0.38.0] - 2026-08-15
 
 The checker's own tests move beside the rules they test, without changing a

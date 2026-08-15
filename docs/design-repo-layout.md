@@ -11,7 +11,7 @@ Three related holes, all of the same shape — coverage was implicit:
 
 1. **A tessercheck run inferred its subject.** `python -m tessercheck <dir>`
    walked whatever it was pointed at. Run at the repo root, it would treat
-   nine unrelated trees as one and report nonsense; run on a random
+   every unrelated tree as one and report nonsense; run on a random
    directory, it would report "clean" about a thing that was never a tesser
    tree at all. Nothing distinguished "this directory is a checked app" from
    "nobody ever looked here."
@@ -56,7 +56,7 @@ The declaration state is a fact the reader reports and the domain rules judge:
 When a TB044 or TB045 finding fires, it is the only finding reported —
 findings about a tree that never claimed to be a tree, or that the analyzer
 could not fully see, are noise. Run at the repo root, tessercheck reports one
-line per declared tree below it instead of treating nine separate trees as
+line per declared tree below it instead of treating the separate trees as
 one. TB044/TB045 report on files that cannot carry a Python comment, so they
 are the one family an inline ignore can never suppress.
 
@@ -144,7 +144,7 @@ The alternative considered was an invocation mode: `tessercheck --as domain
   tier, context). A partial-tree mode would need a synthetic context around
   the fragment — a second interpretation of every placement rule, maintained
   forever, for the benefit of trees that could instead just be complete.
-- All six checked example trees were already complete apps, and there is no
+- Every checked example tree was already a complete app, and there is no
   library case to serve: everything is an app (see above), so a partial-tree
   mode would exist for trees that should instead be finished.
 
