@@ -5,6 +5,36 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.38.0] - 2026-08-15
+
+The checker's own tests move beside the rules they test, without changing a
+line of the rules. Issue #75: before the big rules file can be split up, its
+behavior had to be pinned at a finer grain than "run the whole checker over a
+folder and read the output" — and it turned out the rules never needed the
+folder: they are decidable from a built description of a tree (plain tuples
+in, findings out).
+
+### Changed
+- **160 tests convert to that form and move next to `checks.py`**, one file
+  per rule family: sorting (`test_locate.py`), file placement
+  (`test_placement.py`), method and constructor shapes
+  (`test_signatures.py`), the import rules (`test_imports.py`), test
+  placement tiers (`test_tiers.py`), the comment/mock/value-object norms
+  (`test_norms.py`), the ignore machinery (`test_ignores.py`), and ports
+  (`test_ports.py`). Every assertion string moved verbatim. Because these
+  tests sit beside a domain file, the import rules let them reach only the
+  domain — which is the proof that each rule is decidable without the reader
+  or the service.
+- **`tests/test_checks.py` shrinks from 4,709 lines to 153.** The seventeen
+  tests that remain are the ones that genuinely need a filesystem: the
+  reader's walking behavior and the whole `.tesser-root` declaration family.
+- `RULES.md`'s covering-test columns now point into the sibling files;
+  `rules.py` scans both homes.
+- **No helpers in test files, by rule**: each sibling file carries exactly
+  one helper — a spec builder that satisfies the helper contract as written
+  (defaulted parameters, one construction, returns the spec, no escape
+  comments) — and every test constructs the checker and renders its findings
+  inline. Duplication in tests is fine; indirection is not.
 ## [0.0.37.0] - 2026-08-15
 
 The claim `tesser.domain.ValueObject` exists for — mutation testing sees
