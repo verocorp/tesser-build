@@ -103,7 +103,8 @@ def test_placement_totality_is_flagged() -> None:
     )
     assert any(
         "imports tesser.context" in f
-        and "a domain module's tesser imports are tesser.domain and tesser.serialization" in f
+        and "a domain module's tesser imports are tesser.domain, "
+        "tesser.errors, and tesser.serialization" in f
         for f in findings
     )
 
@@ -258,7 +259,8 @@ def test_a_role_may_be_a_package() -> None:
     assert any(
         "deep.domain.svc" in f
         and "imports tesser.application" in f
-        and "a domain module's tesser imports are tesser.domain and tesser.serialization" in f
+        and "a domain module's tesser imports are tesser.domain, "
+        "tesser.errors, and tesser.serialization" in f
         for f in findings
     )
 

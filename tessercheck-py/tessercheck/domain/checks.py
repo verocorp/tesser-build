@@ -188,11 +188,13 @@ ROLE_TESSER_PACKAGE: Final[dict[str, str]] = {
 }
 
 NORM_IMPORTS: Final[dict[str, frozenset[str]]] = {
-    "domain": frozenset({"tesser.serialization"}),
-    "wiring": frozenset({"tesser.lifecycle"}),
-    "bootstrap": frozenset({"tesser.lifecycle"}),
-    "srv": frozenset({"tesser.lifecycle"}),
-    "test": frozenset({"tesser.serialization", "tesser.lifecycle"}),
+    "domain": frozenset({"tesser.errors", "tesser.serialization"}),
+    "application": frozenset({"tesser.errors"}),
+    "adapters": frozenset({"tesser.errors"}),
+    "wiring": frozenset({"tesser.errors", "tesser.lifecycle"}),
+    "bootstrap": frozenset({"tesser.errors", "tesser.lifecycle"}),
+    "srv": frozenset({"tesser.errors", "tesser.lifecycle"}),
+    "test": frozenset({"tesser.errors", "tesser.lifecycle", "tesser.serialization"}),
 }
 
 SAME_CONTEXT_IMPORTS: Final[dict[str, tuple[str, ...]]] = {
@@ -2314,7 +2316,8 @@ class Codebase(ts.AggregateRoot):
                 module,
                 "bootstrap",
                 "tesser.context",
-                "a bootstrap module's tesser imports are tesser.context and tesser.lifecycle",
+                "a bootstrap module's tesser imports are tesser.context, "
+                "tesser.errors, and tesser.lifecycle",
                 "a bootstrap module imports tesser.context exactly once, as ts",
                 "a bootstrap module imports tesser.context exactly once, as ts",
                 NORM_IMPORTS["bootstrap"],
@@ -2352,7 +2355,8 @@ class Codebase(ts.AggregateRoot):
                 module,
                 "srv",
                 "tesser.srv",
-                "a srv module's tesser imports are tesser.srv and tesser.lifecycle",
+                "a srv module's tesser imports are tesser.srv, "
+                "tesser.errors, and tesser.lifecycle",
                 "a srv module imports tesser.srv exactly once, as ts",
                 "a srv module imports tesser.srv exactly once, as ts",
                 NORM_IMPORTS["srv"],
@@ -3132,36 +3136,69 @@ class Codebase(ts.AggregateRoot):
         found.extend(self._stray_import_violations(module))
         holds_handler = self._holds_kind(module, blocks, "handler")
         holds_gateway = self._holds_kind(module, blocks, "gateway")
-        found.extend(
-            self._tesser_import_violations(
-                module,
-                "role",
-                ROLE_TESSER_PACKAGE[role],
-                "a domain module's tesser imports are tesser.domain and tesser.serialization",
-                "a role module imports its tesser package exactly once, as ts",
-                "a role module imports its tesser package exactly once, as ts",
-                NORM_IMPORTS[role],
+        if role == "domain":
+            found.extend(
+                self._tesser_import_violations(
+                    module,
+                    "role",
+                    ROLE_TESSER_PACKAGE[role],
+                    "a domain module's tesser imports are tesser.domain, "
+                    "tesser.errors, and tesser.serialization",
+                    "a role module imports its tesser package exactly once, as ts",
+                    "a role module imports its tesser package exactly once, as ts",
+                    NORM_IMPORTS[role],
+                )
             )
-            if role == "domain"
-            else self._tesser_import_violations(
-                module,
-                "role",
-                ROLE_TESSER_PACKAGE[role],
-                "a wiring module's tesser imports are tesser.context and tesser.lifecycle",
-                "a role module imports its tesser package exactly once, as ts",
-                "a role module imports its tesser package exactly once, as ts",
-                NORM_IMPORTS[role],
+        elif role == "application":
+            found.extend(
+                self._tesser_import_violations(
+                    module,
+                    "role",
+                    ROLE_TESSER_PACKAGE[role],
+                    "an application module's tesser imports are "
+                    "tesser.application and tesser.errors",
+                    "a role module imports its tesser package exactly once, as ts",
+                    "a role module imports its tesser package exactly once, as ts",
+                    NORM_IMPORTS[role],
+                )
             )
-            if role == "wiring"
-            else self._tesser_import_violations(
-                module,
-                "role",
-                ROLE_TESSER_PACKAGE[role],
-                "a role module imports only its own tesser package",
-                "a role module imports its tesser package exactly once, as ts",
-                "a role module imports its tesser package exactly once, as ts",
+        elif role == "adapters":
+            found.extend(
+                self._tesser_import_violations(
+                    module,
+                    "role",
+                    ROLE_TESSER_PACKAGE[role],
+                    "an adapters module's tesser imports are "
+                    "tesser.adapters and tesser.errors",
+                    "a role module imports its tesser package exactly once, as ts",
+                    "a role module imports its tesser package exactly once, as ts",
+                    NORM_IMPORTS[role],
+                )
             )
-        )
+        elif role == "wiring":
+            found.extend(
+                self._tesser_import_violations(
+                    module,
+                    "role",
+                    ROLE_TESSER_PACKAGE[role],
+                    "a wiring module's tesser imports are tesser.context, "
+                    "tesser.errors, and tesser.lifecycle",
+                    "a role module imports its tesser package exactly once, as ts",
+                    "a role module imports its tesser package exactly once, as ts",
+                    NORM_IMPORTS[role],
+                )
+            )
+        else:
+            found.extend(
+                self._tesser_import_violations(
+                    module,
+                    "role",
+                    ROLE_TESSER_PACKAGE[role],
+                    "a role module imports only its own tesser package",
+                    "a role module imports its tesser package exactly once, as ts",
+                    "a role module imports its tesser package exactly once, as ts",
+                )
+            )
         for edge in module.import_edges():
             target = str(edge._target)
             lineno = int(edge._lineno)
@@ -3563,7 +3600,7 @@ class Codebase(ts.AggregateRoot):
                 "test",
                 "tesser.testing",
                 "a test module's tesser imports are tesser.testing, "
-                "tesser.lifecycle, and tesser.serialization",
+                "tesser.errors, tesser.lifecycle, and tesser.serialization",
                 "a test module imports tesser.testing at most once, as ts",
                 None,
                 NORM_IMPORTS["test"],
