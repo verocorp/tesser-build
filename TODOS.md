@@ -421,7 +421,8 @@ Deferred work with context. Each entry carries enough for a cold pickup.
     (2) walk the affected rows in `rationale/coverage.md` and re-render
     `skills/tesser-build/python.md`, bumping skill-version.
   - **Also found in that review, independent of the decision:**
-    `examples/python/catalog/money.py` shares the bugs the vobase port fixed —
+    `examples/python/catalog/money.py` carries the bugs the (now-retired)
+    vobase Money port had fixed —
     `MoneyAmount("NaN")` raises `decimal.InvalidOperation` (not ValueError,
     from `parsed < 0` outside the try), `"Infinity"` is accepted, and `add`
     silently rounds past 28 significant digits. Fix the catalog original (and
