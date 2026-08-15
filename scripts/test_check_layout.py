@@ -7,7 +7,7 @@ SCRIPT = pathlib.Path(__file__).resolve().parent / "check-layout"
 
 VERIFY = """#!/usr/bin/env bash
 run_appone() {
-  PYTHONPATH=x python3 -m tessercheck . || return 1
+  tessercheck_tree "$PWD" || return 1
 }
 run_libby() {
   mypy || return 1

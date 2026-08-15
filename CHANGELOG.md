@@ -5,6 +5,55 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.33.0] - 2026-08-15
+
+The analyzer's own entry point. `tessercheck/__main__.py` did two jobs the
+conventions place in two different homes — it composed the app and it hosted
+it — and the classifier carried a `context-main` place that existed to make
+that one file legal. Exactly one file in the repo was ever classified that
+way: the checker's own. The extraction and the deletion ship together, because
+the self-check gates every change and one without the other turns the
+checker's tree red. Issue #75, arc step 2.
+
+### Added
+- **`tessercheck-py` has the app shape its own skill prescribes**:
+  composition in `tessercheck/wiring/` (the uniform
+  `build(cfg) → (Client, Closeable)` contract), the CLI host in
+  `srv/cli/main.py`, the composition root in `bootstrap/`, the CLI request and
+  response records in `protocol/cli.py`, and a CLI handler in
+  `tessercheck/adapters/handlers/cli.py` — a host reaches a context only
+  through its handlers, which is what TB063 already said. The context gains a
+  public `Client` interface next to its DTOs, and `lifecycle.py` carries the
+  `Closeable` shape.
+- **Tests beside their subjects** for every new module —
+  `tessercheck/wiring/test_wire.py`,
+  `tessercheck/adapters/handlers/test_cli.py`, and `srv/cli/test_main.py`,
+  each reaching only what its placement allows.
+
+### Changed
+- **The analyzer is invoked as `python -m srv.cli.main <tree>`, run from
+  `tessercheck-py/`.** `python -m tessercheck` is gone with the `__main__` it
+  named. The run happens from the analyzer's own directory rather than the
+  checked tree's, because `-m` resolves against the working directory first
+  and a checked tree may have an `srv` package of its own — so the tree to
+  check is an argument, never the working directory. Breaking for consumer
+  repos: update the command.
+- **`scripts/verify` calls the analyzer through one `tessercheck_tree`
+  helper**, and `scripts/check-layout` recognizes a tessercheck-gated arm by
+  that helper's name instead of by the old command string.
+- `wiring.md` carries the new spelling; skill-version 34 → 35.
+
+### Removed
+- **The `context-main` classification** — the `_locate` branch, the place
+  name, its import row, and `_main_violations`. A `<context>/__main__.py` now
+  falls through to the stray-module fallthrough (`TB041`), like any other
+  module in a context that is not one of its roles. `TB063` itself stays: it
+  still carries the host's and the composition root's import rows.
+- **`tessercheck-py`'s console-script entry point.** It named
+  `tessercheck.__main__:main`, and the host that replaced it lives in the app
+  shell (`srv/`), which cannot be shipped as a top-level distribution package
+  without colliding with every app that has one of its own.
+
 ## [0.0.32.0] - 2026-08-14
 
 Repo layout. Three holes of one shape — nothing said what was covered: a
