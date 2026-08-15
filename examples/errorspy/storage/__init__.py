@@ -1,4 +1,4 @@
-from __future__ import annotations  # tessercheck:ignore-file TB040
+from __future__ import annotations
 
 from typing import Any
 
