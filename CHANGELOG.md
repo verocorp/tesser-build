@@ -5,6 +5,41 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.37.0] - 2026-08-15
+
+The claim `tesser.domain.ValueObject` exists for — mutation testing sees
+through it, while mutmut skips a decorated class wholesale — was declared in
+three places and executed in none. Now it is a test that CI runs.
+
+### Added
+- **The mutmut ecosystem gate** (`tesser-py/tests/ecosystem/mutmut/`): the
+  same `Amount` value object built twice — on `ts.ValueObject` and as a
+  frozen dataclass — with an e2e test driving the real mutmut CLI (pinned
+  `==3.7.0`) over each. The `ts.ValueObject` build must yield mutants for
+  every hand-written method and kill them all; the dataclass build must
+  yield none and abort, pinning the negative control so a future mutmut
+  that stops skipping dataclasses turns the gate red instead of letting the
+  docs overclaim. The gate is hardened against lying: fixture copies exclude
+  run leftovers (a stale gitignored `mutants/` would otherwise freeze the
+  test green against a snapshot), each fixture suite first proves itself
+  under plain pytest so the "no test case for any mutant" abort cannot hold
+  vacuously, and a lockstep test keeps everything but `vo/amount.py`
+  byte-identical between the fixtures.
+- **A strict mypy pass per fixture** in the tesser-py verify arm — the
+  cross-package `ts.ValueObject` consumer check the retired vobase job used
+  to provide.
+
+### Removed
+- **`examples/vobase`** (tree, manifest row, verify arm, CI job): its real
+  purpose was this gate, and its mutmut dependency was declared but never
+  run. The richer Money port's behavioral ground is covered by
+  `examples/ddd` and `examples/python-app`; the base-class mechanics stay
+  covered by `tesser-py/tests/test_valueobject.py`.
+- **`tesser-py/setup.cfg`**: its only content was a `[mutmut]` section
+  pointing at the shells that no gate ever ran. Running mutmut over
+  `tesser/` itself is no longer configured anywhere — deliberate, until a
+  gate exists that would actually read the result.
+
 ## [0.0.36.0] - 2026-08-15
 
 The checker can no longer write itself exceptions. Issue #75's root cause was
