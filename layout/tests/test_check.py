@@ -47,76 +47,24 @@ def test_a_consistent_repo_checks_clean(tmp_path: Path) -> None:
     assert response.counts == ("6", "1")
 
 
-def test_an_unregistered_directory_is_reported(tmp_path: Path) -> None:
+def test_an_unregistered_directory_is_reported_through_the_stack(tmp_path: Path) -> None:
     _repo(tmp_path)
     (tmp_path / "utils").mkdir()
     response = wire.build().check(client.CheckRequest(root=str(tmp_path)))
     assert any("'utils' has no manifest.json row" in p for p in response.problems)
 
 
-def test_a_symlinked_directory_is_reported(tmp_path: Path) -> None:
-    _repo(tmp_path)
-    outside = tmp_path.parent / f"{tmp_path.name}-outside"
-    outside.mkdir(exist_ok=True)
-    (tmp_path / "vendored").symlink_to(outside)
-    response = wire.build().check(client.CheckRequest(root=str(tmp_path)))
-    assert any("vendored is a symlinked directory" in p for p in response.problems)
+def test_trees_lists_app_rows_through_the_client(tmp_path: Path) -> None:
+    response = wire.build().trees(client.TreesRequest(root=str(_repo(tmp_path))))
+    assert response.trees == ("appone",)
 
 
-def test_a_deep_requirements_file_is_reported(tmp_path: Path) -> None:
-    _repo(tmp_path)
-    deep = tmp_path / "docs" / "buried"
-    deep.mkdir()
-    (deep / "requirements-dev.txt").write_text("pytest\n")
-    response = wire.build().check(client.CheckRequest(root=str(tmp_path)))
-    assert any("docs/buried holds a requirements-dev.txt" in p for p in response.problems)
-
-
-def test_a_bom_prefixed_declaration_still_reads(tmp_path: Path) -> None:
-    _repo(tmp_path)
-    (tmp_path / "appone" / ".tesser-root").write_bytes(b"\xef\xbb\xbfapp\n")
-    response = wire.build().check(client.CheckRequest(root=str(tmp_path)))
-    assert response.problems == ()
-
-
-def test_a_declaration_under_a_skip_dir_is_not_walked(tmp_path: Path) -> None:
-    _repo(tmp_path)
-    hidden = tmp_path / "appone" / ".venv"
-    hidden.mkdir()
-    (hidden / ".tesser-root").write_text("app\n")
-    (hidden / "requirements-dev.txt").write_text("x\n")
-    response = wire.build().check(client.CheckRequest(root=str(tmp_path)))
-    assert response.problems == ()
-
-
-def test_a_malformed_manifest_is_a_message_not_a_crash(tmp_path: Path) -> None:
+def test_a_malformed_manifest_is_one_message_not_a_crash(tmp_path: Path) -> None:
     _repo(tmp_path)
     (tmp_path / "manifest.json").write_text("{ truncated")
     response = wire.build().check(client.CheckRequest(root=str(tmp_path)))
     assert len(response.problems) == 1
     assert "manifest.json is unreadable" in response.problems[0]
-
-
-def test_trees_lists_app_rows(tmp_path: Path) -> None:
-    response = wire.build().trees(client.TreesRequest(root=str(_repo(tmp_path))))
-    assert response.trees == ("appone",)
-
-
-def test_a_dangling_symlink_is_still_reported(tmp_path: Path) -> None:
-    _repo(tmp_path)
-    (tmp_path / "vendored").symlink_to(tmp_path / "no-such-target")
-    response = wire.build().check(client.CheckRequest(root=str(tmp_path)))
-    assert any("vendored is a symlinked directory" in p for p in response.problems)
-
-
-def test_a_declaration_that_is_a_directory_is_a_problem_not_a_crash(
-    tmp_path: Path,
-) -> None:
-    _repo(tmp_path)
-    (tmp_path / "appone" / ".tesser-root").unlink()
-    (tmp_path / "appone" / ".tesser-root").mkdir()
-    response = wire.build().check(client.CheckRequest(root=str(tmp_path)))
-    assert any("appone/.tesser-root is missing" in p for p in response.problems)
 
 
 def test_a_nonexistent_root_is_a_problem_not_a_crash(tmp_path: Path) -> None:
@@ -125,17 +73,3 @@ def test_a_nonexistent_root_is_a_problem_not_a_crash(tmp_path: Path) -> None:
     )
     assert len(response.problems) == 1
     assert "is not a directory" in response.problems[0]
-
-
-def test_an_unlistable_directory_does_not_crash(tmp_path: Path) -> None:
-    import os
-
-    _repo(tmp_path)
-    locked = tmp_path / "appone" / "locked"
-    locked.mkdir()
-    os.chmod(locked, 0)
-    try:
-        response = wire.build().check(client.CheckRequest(root=str(tmp_path)))
-    finally:
-        os.chmod(locked, 0o755)
-    assert response.problems == ()
