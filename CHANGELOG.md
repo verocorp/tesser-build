@@ -5,6 +5,33 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.44.0] - 2026-08-15
+
+The last root module joins the app, and the allowance that excused it
+retires — fired by the every-classification-earned test the moment nothing
+earned it, which is that test doing exactly what it was built for.
+
+### Changed
+- **`rules.py` (the RULES.md generator) becomes part of the tessercheck
+  app**, at every tier the anatomy prescribes: the pure derivation
+  (Violation call sites → `RuleRow` value objects → rendered markdown) is
+  `tessercheck/domain/rulebook.py`; reading `checks.py`, the test modules,
+  and `.importlinter` is an application port with a filesystem repository;
+  the use case is a service method behind the client; the CLI is a handler;
+  `srv/cli/rules.py` is the host that owns `--check` and the file write.
+  The drift gate calls `python3 -m srv.cli.rules --check`.
+- `roadmap/generate.py` imports the rulebook as a package module for its
+  check-code column (the old file-path load can't resolve a module that
+  imports its own context).
+
+### Removed
+- **The root-module allowance.** With zero root modules in any tree, a
+  top-level module is now purely a `TB040` finding ("every module belongs
+  to a context, srv, bootstrap, tests, or the protocol package"), the
+  `root` place moves to the finding list in the earned-classification test,
+  and `TB065`'s root-module leaf rule — a rule only excused modules could
+  ever reach — is deleted. This is a rule change: review it as one.
+
 ## [0.0.43.1] - 2026-08-15
 
 ### Changed
