@@ -2849,7 +2849,7 @@ def test_a_protocol_module_imports_nothing_else_from_its_tree(tmp_path: Path) ->
     )
 
 
-def test_a_context_role_reaches_the_app_shell_only_as_adapters_to_protocol(tmp_path: Path) -> None:
+def test_a_context_role_reaches_the_app_shell_only_as_handlers_to_protocol(tmp_path: Path) -> None:
     conftest.conforming_tree(tmp_path)
     conftest.write_module(
         tmp_path,
@@ -2871,16 +2871,27 @@ def test_a_context_role_reaches_the_app_shell_only_as_adapters_to_protocol(tmp_p
         "import tesser.context as ts\n"
         "import protocol.http as http\n",
     )
+    conftest.write_module(
+        tmp_path,
+        "app/adapters/gateways.py",
+        "import tesser.adapters as ts\n"
+        "import protocol.http as http\n"
+        "class PeerGateway(ts.Gateway):\n"
+        "    pass\n",
+    )
     conftest.write_module(tmp_path, "srv/http.py", "")
     findings = conftest.check_tree(tmp_path)
-    clause = "of the app shell a context imports only protocol, and only from its adapters"
+    clause = "of the app shell a context imports only protocol, and only from its handlers"
     assert any(
         "app.adapters.handlers imports srv.http; "
-        "of the app shell a context imports only protocol, and only from its adapters" in f
+        "of the app shell a context imports only protocol, and only from its handlers" in f
         for f in findings
     )
     assert not any("app.adapters.handlers imports protocol.http" in f for f in findings)
     assert any(f"app.wiring.wire imports protocol.http; {clause}" in f for f in findings)
+    assert any(
+        f"app.adapters.gateways imports protocol.http; {clause}" in f for f in findings
+    ), f"a gateway imported protocol without a finding: {findings}"
 
 
 def test_production_never_imports_the_tests_package(tmp_path: Path) -> None:
@@ -3117,10 +3128,17 @@ def test_adapter_kind_and_protocol_tests_shell_reach(tmp_path: Path) -> None:
         "def test_ok() -> None:\n    assert True\n",
     )
     findings = conftest.check_tree(tmp_path)
+    assert not any(
+        "app.adapters.handlers.test_handlers imports protocol.http" in f
+        for f in findings
+    )
+    for kind in ("gateways", "repositories"):
+        assert any(
+            f"app.adapters.{kind}.test_{kind} imports protocol.http" in f
+            and "does not reach that package" in f
+            for f in findings
+        ), f"a {kind} test reached protocol; only srv and handlers speak protocol: {findings}"
     for kind in ("handlers", "gateways", "repositories"):
-        assert not any(
-            f"app.adapters.{kind}.test_{kind} imports protocol.http" in f for f in findings
-        )
         assert any(
             f"app.adapters.{kind}.test_{kind} imports srv.http" in f
             and "does not reach that package; "
@@ -3148,9 +3166,11 @@ def test_an_eval_in_a_gateway_carries_the_gateway_shell_reach(tmp_path: Path) ->
         "def test_ok() -> None:\n    assert True\n",
     )
     findings = conftest.check_tree(tmp_path)
-    assert not any(
-        "app.adapters.gateways.eval_model imports protocol.http" in f for f in findings
-    )
+    assert any(
+        "app.adapters.gateways.eval_model imports protocol.http" in f
+        and "does not reach that package" in f
+        for f in findings
+    ), f"a gateway eval reached protocol; only srv and handlers speak protocol: {findings}"
     assert any(
         "app.adapters.gateways.eval_model imports srv.http, but a test placed in gateways "
         "does not reach that package" in f
