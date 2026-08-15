@@ -7,7 +7,8 @@ the build-side member of the tesser family): the `go/analysis` analyzers in
 plugin (`gclplugin/`), the Python analyzer (`tessercheck-py/` — the `TB0*`
 checks), a Python runtime library (`tesser-py/` — `tesser.domain.ValueObject`,
 the repo's first shipped runtime dependency rather than a build-time checker;
-candidate mutation-testable VO base, see `examples/vobase/`), an executable
+candidate mutation-testable VO base — the mutmut-visibility claim is asserted
+by the ecosystem test in `tesser-py/tests/ecosystem/mutmut/`), an executable
 rationale layer (`rationale/`), an agent
 skill (`skills/tesser-build/` — Go + Python construction guidance, copy-in distributed
 to consumers), and human docs (`docs/start-here.md`, `docs/faq.md`). If you are
@@ -129,7 +130,7 @@ precisely to make that impossible to do silently. `scripts/verify` reads its
 tree list from the manifest, so a new `app` row must come with a `run_*` arm
 in the script and a CI job.
 
-Two things to know:
+Three things to know:
 
 - **`scripts/verify` covers more than the tree you are editing.** The
   shipped analyzer runs a zero-findings gate over every example tree
@@ -137,6 +138,12 @@ Two things to know:
   layout change in an example can break the analyzer without touching a file
   under `tessercheck-py/`. That is not hypothetical — it is how PR #56
   failed.
+- **`scripts/verify tesser-py` shells out to the real mutmut CLI.** The
+  ecosystem gate (`tesser-py/tests/ecosystem/mutmut/`) runs `mutmut` — pinned
+  exact at `==3.7.0` in `tesser-py/requirements-dev.txt` — over two fixture
+  projects, so that arm is slower than the others and it can go red because
+  the ecosystem moved, not because this repo changed. That is the gate doing
+  its job: read the failure before re-pinning around it.
 - **`roadmap` is not in it.** `generate.py --check` and 2 of its 32 tests shell
   out to `go run ./cmd/analyzers-json`, so it is a Go/Python hybrid, not a
   Python tree. It stays a workflow job:

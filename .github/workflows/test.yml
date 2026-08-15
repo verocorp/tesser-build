@@ -190,25 +190,12 @@ jobs:
           python-version: '3.12'
       - name: Install dev tooling
         run: pip install -r tesser-py/requirements-dev.txt
-      - name: tesser-py — mypy --strict + pytest + the built wheel ships every subpackage
+      - name: tesser-py — mypy --strict (tree + mutmut fixtures) + pytest (incl. the mutmut ecosystem gate) + the built wheel ships every subpackage
         # The wheel check is not redundant with the type/test gates: the
         # enumerated packages list once silently dropped tesser.testing and
         # tesser.srv, and every other job reaches the source via PYTHONPATH, so
         # only building the distribution can catch that omission class.
         run: scripts/verify tesser-py
-
-  vobase-example:
-    name: vobase example (mypy --strict + pytest)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install dev tooling
-        run: pip install -r examples/vobase/requirements-dev.txt
-      - name: examples/vobase — mypy --strict + pytest
-        run: scripts/verify vobase
 
   roadmap:
     # The roadmap matrix is generated, never hand-maintained (Wave 2 item 10):

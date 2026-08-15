@@ -136,6 +136,17 @@ run_tesser_py() {
   cd "$ROOT/tesser-py" || return 1
   step "mypy --strict"
   mypy || return 1
+  # The mutmut fixture projects are excluded from the tree's own mypy run
+  # (each ships a package named vo, which would collide), so each gets its
+  # own strict invocation here — the cross-package consumer check the
+  # retired vobase job used to provide.
+  step "mypy --strict (mutmut fixtures)"
+  # --cache-dir=/dev/null: a .mypy_cache left inside a fixture would be
+  # copytree'd into the mutation runs (the test ignores known junk dirs, but
+  # not creating the junk is the honest half of that contract).
+  for fixture in tests/ecosystem/mutmut/fixtures/*/; do
+    (cd "$fixture" && MYPYPATH=../../../../..:. mypy --strict --cache-dir=/dev/null vo tests) || return 1
+  done
   step "pytest"
   pytest -q || return 1
   step "built wheel ships every subpackage"
@@ -155,14 +166,6 @@ if missing:
     sys.exit(f"wheel omits subpackages: {sorted(missing)}")
 print(f"wheel ships: {sorted(on_disk)}")
 EOF
-}
-
-run_vobase() {
-  cd "$ROOT/examples/vobase" || return 1
-  step "mypy --strict"
-  MYPYPATH=.:../../tesser-py mypy --strict vobase tests || return 1
-  step "pytest"
-  pytest -q || return 1
 }
 
 run_layout() {
@@ -201,7 +204,6 @@ run_tree() {
     ports)          run_ports ;;
     errorspy)       run_errorspy ;;
     tesser-py)      run_tesser_py ;;
-    vobase)         run_vobase ;;
     layout)         run_layout ;;
     tessercheck-py) run_tessercheck_py ;;
     *) echo "unknown tree: $tree (known: ${TREES[*]})"; return 1 ;;

@@ -16,7 +16,6 @@
   "examples/spike-llmport": "app",
   "examples/spike-shells": "app",
   "examples/spike-totalreturn": "ungated",
-  "examples/vobase": "app",
   "gclplugin": "ungated",
   "internal": "ungated",
   "layout": "app",
