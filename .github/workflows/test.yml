@@ -68,28 +68,15 @@ jobs:
       - name: Plugin bundling smoke test
         run: go test ./gclplugin/ -run CustomGCL -v
 
-  spike-shells:
-    name: spike-shells (tessercheck zero findings + mypy --strict + pytest + import-linter)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install dev tooling
-        run: pip install -r examples/spike-shells/requirements-dev.txt
-      - name: examples/spike-shells — tessercheck + mypy --strict + pytest + import contracts
-        run: scripts/verify spike-shells
-
-  spike-llmport:
-    # Gates the LLM tool-call port spike at the spike-shells bar: tessercheck
+  llmport:
+    # Gates the LLM tool-call port example at the shared example bar: tessercheck
     # zero findings over the whole tree (the srv-vocabulary + wire-module
     # rules resolved the two findings the ratchet used to carry), then
     # mypy --strict + pytest on the pure modules, including the srv router
     # (it imports no livekit). srv/voice/agent.py is in tessercheck's walk
     # (pure AST) but outside the mypy crawl — livekit-agents is not
-    # installed in CI; the spike README records that boundary.
-    name: spike-llmport (tessercheck + mypy --strict + pytest)
+    # installed in CI; the tree's README records that boundary.
+    name: llmport (tessercheck + mypy --strict + pytest)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -97,9 +84,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install dev tooling
-        run: pip install -r examples/spike-llmport/requirements-dev.txt
-      - name: examples/spike-llmport — tessercheck + mypy --strict + pytest
-        run: scripts/verify spike-llmport
+        run: pip install -r examples/llmport/requirements-dev.txt
+      - name: examples/llmport — tessercheck + mypy --strict + pytest
+        run: scripts/verify llmport
 
   python-app-example:
     # Gates the composition-root / wiring worked example (Python) at the same bar:
@@ -229,7 +216,7 @@ jobs:
   tessercheck-py:
     # The merged analyzer (the sigcheck engine, graduated): self-check over its
     # own tree, the RULES.md drift gate, mypy --strict, pytest, and the import
-    # contracts — the same bar spike-shells held it to before the move.
+    # contracts — the same bar every example tree is held to.
     name: tessercheck-py (self-check + RULES.md drift + mypy --strict + pytest + import-linter)
     runs-on: ubuntu-latest
     steps:

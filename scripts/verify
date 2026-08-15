@@ -4,7 +4,7 @@
 #
 #   scripts/verify              all trees
 #   scripts/verify python-app   one tree
-#   scripts/verify spike-shells python-app
+#   scripts/verify serdepy python-app
 #
 # Each CI job calls this with its own tree, so the commands live here — in the
 # repo, reviewable — rather than inline in workflow YAML. That is the point:
@@ -60,20 +60,8 @@ tessercheck_tree() {
   (cd "$ROOT/tessercheck-py" && PYTHONPATH=.:../tesser-py python3 -m srv.cli.main "$1")
 }
 
-run_spike_shells() {
-  cd "$ROOT/examples/spike-shells" || return 1
-  step "tessercheck (zero findings over the whole tree)"
-  tessercheck_tree "$PWD" || return 1
-  step "mypy --strict"
-  MYPYPATH=.:../../tesser-py mypy --strict spike digest || return 1
-  step "pytest"
-  pytest -q || return 1
-  step "import contracts"
-  PYTHONPATH=.:../../tesser-py lint-imports --no-cache || return 1
-}
-
-run_spike_llmport() {
-  cd "$ROOT/examples/spike-llmport" || return 1
+run_llmport() {
+  cd "$ROOT/examples/llmport" || return 1
   step "tessercheck (zero findings over the whole tree)"
   tessercheck_tree "$PWD" || return 1
   step "mypy --strict"
@@ -197,8 +185,7 @@ run_tree() {
   echo
   echo "=== $tree ==="
   case "$tree" in
-    spike-shells)   run_spike_shells ;;
-    spike-llmport)  run_spike_llmport ;;
+    llmport)        run_llmport ;;
     python-app)     run_python_app ;;
     serdepy)        run_serdepy ;;
     ports)          run_ports ;;

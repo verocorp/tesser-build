@@ -172,7 +172,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   (a) **the tool declaration as a context-side CLASS** (his original
   "declared tool object" shape) needs a new ADAPTERS kind — outside the
   srv-only scope; the sigcheck probe walls are recorded verbatim in
-  examples/spike-llmport/README.md. Rule whether the data-table shape
+  examples/llmport/README.md. Rule whether the data-table shape
   stands or an adapters Tool kind is worth the vocabulary. Partly answered
   2026-08-08 by the routing move: with `dispatch` gone from the handler,
   what remains per tool is an endpoint method plus a schema declaration,
@@ -258,7 +258,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   tesser — errors.py left them with `respond` — so the allowlist would
   just record what the trees already do.
 - [ ] **A role `__init__` re-export defeats the classifier** (found while
-  splitting spike-llmport's application.py into a package, 2026-08-08).
+  splitting llmport's application.py into a package, 2026-08-08).
   RULES.md sanctions "a role __init__ only re-exports from its own role", but
   `resolve()` does not follow a base class through the re-export: with
   `scheduling/application/__init__.py` re-exporting `SlotDirectory` from
@@ -333,7 +333,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   records (ImportEdge/TesserImport/Ignore/Comment) wrapped their slots and
   dropped their public accessors (same-module attribute reads — the rules
   judge public surface, and nothing outside the domain touches them), and
-  spike-llmport's Booking exposes Step/CustomerName/Slot leaves with the
+  llmport's Booking exposes Step/CustomerName/Slot leaves with the
   ""-for-None mapping at the views boundary. Entity BARE field accessors
   (Module.name() -> str) remain unjudged — the reference analyzer had the
   same carve-out (bare returns route to TB010/TB011, which are VO/mutable
@@ -396,8 +396,8 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   docs↔example sync (and the roadmap living-surface link gate).
   Contents, in order: (1) migrate `examples/python`, `serdepy`,
   `errorspy` (and rule whether `examples/python`'s catalog/campaign
-  frozen-dataclass example survives at all now that spike-shells and
-  python-app are the canonical shell examples); (2) delete
+  frozen-dataclass example survives at all now that python-app is the
+  canonical shell example — spike-shells is retired); (2) delete
   `tessercheck-py-legacy/` + its verify tree + CI job; (3) rework
   `roadmap/generate.py`'s py_checks registry import (it reads the legacy
   `CHECKS`; the new analyzer's registry is RULES.md); (4) the skill-docs

@@ -150,7 +150,7 @@ Two encodings remain writable, and honesty is better than an overclaim:
   that has none. `FindBookingResponse(presence, booking: BookingView)` compiles,
   and the ABSENT arm has to fabricate `BookingView(step="", name="", ...)` —
   which is the `flag/` encoding again with an enum where the bool was. This is
-  not hypothetical: the spike-llmport migration produced exactly that shape,
+  not hypothetical: the llmport migration (then named spike-llmport) produced exactly that shape,
   fully checker-clean, and it was caught by review rather than by a rule. Carry
   the payload as a tuple, as `examples/ports/` does, so the absent arm carries `()`.
 
