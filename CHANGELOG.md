@@ -5,6 +5,35 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.40.0] - 2026-08-15
+
+The generic halves of the trees' root modules move into the runtime. Four
+trees carry near-identical copies of `errors.py`, `serialization.py`, and
+`lifecycle.py` at their roots, each excused by a `tessercheck:ignore-file
+TB040` and imported through 23 site-level TB062 ignores — the copies exist
+only because there was no shared home. Now there is one. This is the first
+slice: pure addition, no tree migrates yet. The analyzer allowance for the
+new imports and the tree migrations ship separately.
+
+### Added
+- **`tesser.errors`** — the closed `Kind` set, `DomainError` (kind-as-field,
+  optional `field`, collected `problems`), `InfraError`, the
+  `invalid`/`not_found`/`conflict` constructors, `wrap`, `collect`, and the
+  two total edge mappers `status_for` / `exit_code_for`. The superset of the
+  copies: errorspy's fuller module under the names the skill docs already
+  teach (`Kind`, not `DomainKind`).
+- **`tesser.serialization`** — the `canonical_*` exit helpers, byte-identical
+  across the three trees that carried them.
+- **`tesser.lifecycle`** — the `Closeable` port.
+- Tests for all three beside the existing tesser-py suite (16 tests: the
+  taxonomy, the mappers' totality over `Kind`, `collect`'s
+  gather-and-reraise contract, the canonical forms, the naive-datetime
+  refusal, structural `Closeable`).
+
+### Changed
+- `requires-python` moves to `>=3.11`: `typing.assert_never` (used by the
+  exhaustive kind mappers) landed in 3.11.
+
 ## [0.0.39.0] - 2026-08-15
 
 Two trees stop being called what they are not. `examples/spike-shells` is
