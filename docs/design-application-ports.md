@@ -182,8 +182,9 @@ import catalog.application.ports.item_repository as item_repository
 ```
 
 That is the whole import block. Across `examples/ports/`, every adapter import is a
-protocol — its context's ports, the app shell's `protocol`, or a client. **No
-adapter imports an implementation module out of `application`.**
+protocol — its context's ports, a client, or (for handlers only, since
+v0.0.35.0) the app shell's `protocol`. **No adapter imports an implementation
+module out of `application`.**
 
 The precise claim matters: adapter-to-adapter imports stay legal, because every
 role may import itself, so "an adapter imports only protocols" would be an

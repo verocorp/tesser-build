@@ -10,8 +10,10 @@ aggregate to and from storage and hides how that storage works (Evans,
 (`gateway-cross-context.md`), which reaches a peer context instead of storage.
 The interface (the port) is declared in the context's `application/ports/`
 package — one port per module, with the request/response DTOs it speaks; the
-concrete implementations live in the context's `adapters/gateways` and import
-that ports module and nothing else of the context. It has exactly two jobs
+concrete implementations live in the context's `adapters/repositories/` (or
+`adapters/gateways/` where a tree keeps the older home), each module named
+for its backing (`file_repository.py`, `repo_memory.py`), and import that
+ports module and nothing else of the context. It has exactly two jobs
 — **save** an aggregate (decompose it into rows/documents) and **retrieve** one
 (reconstruct it through its constructor). It holds **no business logic**: the
 domain already enforced every invariant before the aggregate reached the repo.

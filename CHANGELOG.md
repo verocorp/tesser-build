@@ -5,6 +5,35 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.35.0] - 2026-08-15
+
+Protocol narrows to its speakers, and the layout app finishes its tests.
+
+### Changed
+- **`protocol/` is spoken only by srv and handlers** (`TB066` tightens): a
+  context module may import `protocol` only when it holds a handler — keyed
+  on the declared block, the same mechanism that already gates
+  foreign-client imports. A repository reads `application/ports` and nothing
+  else. The test tiers follow: a gateway- or repository-sibling test (and a
+  gateway eval) no longer reaches `protocol`; handler-sibling tests keep it,
+  and the context `tests/` package keeps it for transport tests. Zero
+  migrations — nothing in the corpus ever used the wider grant.
+- **The layout app's reader lives in its kind package**:
+  `layout/repo/adapters/repositories/file_repository.py`, named for its
+  implementation — a flat `repositories.py` had no legal home for a sibling
+  test, since the test tiers only recognize kind packages.
+
+### Added
+- **The layout app is tested at every tier**: the service in isolation
+  through a hand-written fake of its reader port
+  (`application/test_service.py`), the DTO-to-domain translation alone
+  (`application/test_mapping.py`), and the real reader against real
+  filesystems, asserting on port DTOs
+  (`adapters/repositories/test_file_repository.py` — manifest states, entry
+  forms, the walk's skip list, BOM and undecodable declarations, symlinks
+  never followed). The wired end-to-end suite slims from twelve cases to
+  five — the tiers own their own edges.
+
 ## [0.0.34.0] - 2026-08-15
 
 The layout check becomes an app. `scripts/` held a real Python program

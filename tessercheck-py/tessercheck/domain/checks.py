@@ -251,8 +251,8 @@ TEST_TIER_SHELL: Final[dict[str, frozenset[str]]] = {
     "client": frozenset(),
     "wiring": frozenset(),
     "handlers": frozenset({"protocol"}),
-    "gateways": frozenset({"protocol"}),
-    "repositories": frozenset({"protocol"}),
+    "gateways": frozenset(),
+    "repositories": frozenset(),
     TESTS_ROLE: frozenset({"protocol"}),
 }
 
@@ -3090,6 +3090,11 @@ class Codebase(ts.AggregateRoot):
             for allowed in SAME_CONTEXT_IMPORTS[role]
         )
 
+    @staticmethod
+    def _in_handlers(module: Module) -> bool:
+        parts = module.name().split(".")
+        return len(parts) >= 3 and parts[2] == "handlers"
+
     def _import_violations(
         self,
         module: Module,
@@ -3174,7 +3179,11 @@ class Codebase(ts.AggregateRoot):
             elif (
                 pieces[0] in SHELL_PACKAGES
                 and pieces[0] in self._tree_tops()
-                and not (role == "adapters" and pieces[0] == PROTOCOL_PACKAGE)
+                and not (
+                    role == "adapters"
+                    and pieces[0] == PROTOCOL_PACKAGE
+                    and self._in_handlers(module)
+                )
             ):
                 found.append(
                     Violation(
@@ -3182,7 +3191,7 @@ class Codebase(ts.AggregateRoot):
                         lineno,
                         "TB066",
                         f"{module.name()} imports {target}; of the app shell a context "
-                        "imports only protocol, and only from its adapters",
+                        "imports only protocol, and only from its handlers",
                     )
                 )
         return tuple(found)
