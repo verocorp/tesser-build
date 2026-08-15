@@ -118,11 +118,12 @@ this file, never in the analyzer's code). A missing, unreadable, wrong, or
 nested `.tesser-root` is a `TB044` finding; a symlinked directory inside a
 declared tree is `TB045`; when either fires, it is the only finding reported —
 the analyzer says what the directory is before saying anything about its
-contents. `scripts/check-layout` — run by `scripts/verify` as step 0 and by
-its own CI job (which also runs the check's test suite) — fails when the
-directories on disk, the manifest, the `.tesser-root` files, and the CI jobs
-disagree in any direction, including a `requirements-dev.txt` at any depth
-outside an `app` row. **Do not create a new top-level directory (or
+contents. The layout check is itself an app (`layout/` — domain rules, a
+filesystem reader, a client, and `srv/cli` entry points, gated at the same
+bar as every other tree). Run by `scripts/verify` as step 0 and by its own CI
+job, it fails when the directories on disk, the manifest, the `.tesser-root`
+files, and the CI jobs disagree in any direction, including a
+`requirements-dev.txt` at any depth outside an `app` row. **Do not create a new top-level directory (or
 `examples/` subdirectory) without adding its manifest row**; the check exists
 precisely to make that impossible to do silently. `scripts/verify` reads its
 tree list from the manifest, so a new `app` row must come with a `run_*` arm

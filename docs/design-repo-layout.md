@@ -2,7 +2,7 @@
 
 Two files and one check. A checkable tree marks itself with a `.tesser-root`
 file at its root; `manifest.json` says what every top-level directory is; and
-`scripts/check-layout` fails when the directories on disk and those files
+the layout app (`layout/`) fails when the directories on disk and those files
 disagree in either direction.
 
 ## The problem this solves
@@ -81,7 +81,14 @@ cross-check on something real.
 
 ## The check
 
-`scripts/check-layout` (stdlib Python, no venv needed) holds these:
+The layout app (`layout/`) holds these. It is itself a full tesser app —
+because everything is an app, including the tool that checks that everything
+is an app: the rules live in `layout/repo/domain/rules.py` as a `Repo`
+aggregate, a filesystem reader adapter feeds it, a client exposes `check` and
+`trees`, and `srv/cli/check.py` / `srv/cli/trees.py` are the entry points
+(`cd layout && PYTHONPATH=.:../tesser-py python3 -m srv.cli.check <root>`).
+It needs only the in-repo `tesser-py` on the path, so a bare CI checkout can
+run it with system Python. What it holds:
 
 1. top-level directories on disk == manifest rows, both directions;
 2. `examples/*` directories == manifest rows, both directions;
@@ -98,14 +105,18 @@ cross-check on something real.
 6. a symlinked top-level or `examples/*` directory is a failure; deeper
    symlinks inside declared trees are the analyzer's TB045.
 
-The check has its own pytest suite (`scripts/test_check_layout.py`) with a
-test per failure case, run against a small fake repo — by the layout CI job —
-so a bug that made the check always pass would itself be caught.
+The rules have a test per failure case beside them
+(`layout/repo/domain/test_rules.py`, built specs, no filesystem), and
+`layout/tests/` runs the whole app against small fake repos on disk — so a
+bug that made the check always pass would itself be caught. The app is gated
+like every tree: tessercheck zero findings, mypy --strict, pytest.
+`scripts/` holds only bash after this — `verify` and `install-dev`, dispatch
+with no logic of their own.
 
-`scripts/verify` runs the check as step 0 and **reads its tree list from the
-manifest** — the hand-maintained `TREES` array is gone, and if the list comes
-back empty or the read fails, verify stops with an error instead of reporting
-green over nothing. A manifest tree with no `run_*` arm fails as "unknown
+`scripts/verify` runs the check as step 0 and **asks the layout app for its
+tree list** (`srv/cli/trees.py`) — the hand-maintained `TREES` array is gone,
+and if the list comes back empty or the read fails, verify stops with an
+error instead of reporting green over nothing. A manifest tree with no `run_*` arm fails as "unknown
 tree". A new top-level directory without a manifest row fails CI before any
 other job runs.
 

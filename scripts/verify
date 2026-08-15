@@ -28,25 +28,19 @@ set -uo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT" || exit 1
 
-# The tree list comes from manifest.json, never hand-maintained here: an
-# `app` row IS the claim that scripts/verify runs that tree, and a manifest
-# tree with no run_* arm below fails as "unknown tree" rather than silently
-# not running. check-layout holds the other direction — that every directory
-# on disk has a manifest row at all.
-scripts/check-layout || exit 1
+# Step 0 is the layout app (layout/ — a full tesser app with its own gates):
+# it fails when the directories on disk, manifest.json, the .tesser-root
+# files, and the CI jobs disagree in any direction. The tree list also comes
+# from the layout app, never hand-maintained here: an `app` manifest row IS
+# the claim that scripts/verify runs that tree, and a manifest tree with no
+# run_* arm below fails as "unknown tree" rather than silently not running.
+(cd "$ROOT/layout" && PYTHONPATH=.:../tesser-py python3 -m srv.cli.check "$ROOT") || exit 1
 
-# Capture the generator's output in a variable first: process substitution
-# would hide a python3 failure from set -e, and an empty TREES list would make
-# the loop below report "all green (0 trees)" — a check that passes without
+# Capture the output in a variable first: a python3 failure inside process
+# substitution would be invisible, and an empty TREES list would make the
+# loop below report "all green (0 trees)" — a check that passes without
 # checking anything.
-TREE_LIST=$(python3 - <<'PY'
-import json, pathlib
-manifest = json.loads(pathlib.Path("manifest.json").read_text())
-for key, kind in manifest.items():
-    if kind == "app":
-        print(key.split("/")[-1])
-PY
-) || { echo "verify: could not derive trees from manifest.json" >&2; exit 1; }
+TREE_LIST=$( (cd "$ROOT/layout" && PYTHONPATH=.:../tesser-py python3 -m srv.cli.trees "$ROOT") ) || { echo "verify: could not derive trees from manifest.json" >&2; exit 1; }
 mapfile -t TREES <<<"$TREE_LIST"
 if [ ${#TREES[@]} -eq 0 ] || [ -z "${TREES[0]}" ]; then
   echo "verify: no gated trees derived from manifest.json" >&2
@@ -162,6 +156,16 @@ run_vobase() {
   pytest -q || return 1
 }
 
+run_layout() {
+  cd "$ROOT/layout" || return 1
+  step "tessercheck (zero findings over the whole tree)"
+  PYTHONPATH=../tessercheck-py:../tesser-py python3 -m tessercheck . || return 1
+  step "mypy --strict"
+  MYPYPATH=.:../tesser-py mypy --strict repo protocol bootstrap srv conftest.py || return 1
+  step "pytest"
+  pytest -q || return 1
+}
+
 run_tessercheck_py() {
   cd "$ROOT/tessercheck-py" || return 1
   step "tessercheck (self-check over its own tree)"
@@ -189,6 +193,7 @@ run_tree() {
     errorspy)       run_errorspy ;;
     tesser-py)      run_tesser_py ;;
     vobase)         run_vobase ;;
+    layout)         run_layout ;;
     tessercheck-py) run_tessercheck_py ;;
     *) echo "unknown tree: $tree (known: ${TREES[*]})"; return 1 ;;
   esac

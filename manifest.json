@@ -19,6 +19,7 @@
   "examples/vobase": "app",
   "gclplugin": "ungated",
   "internal": "ungated",
+  "layout": "app",
   "passes": "ungated",
   "rationale": "ungated",
   "roadmap": "ungated",
