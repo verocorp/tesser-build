@@ -5,6 +5,20 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.43.1] - 2026-08-15
+
+### Changed
+- **errorspy's fake storage becomes a skipped vendored package.**
+  `storage.py` stood in for an external SDK — the gateway imports it exactly
+  as it would import a real driver — but sat as a root module with an
+  ignore-file excuse. It is now the `storage/` package with a `skip storage`
+  line in the tree's `.tesser-root`: present so the example runs with no
+  infra, declared outside the checked tree the way site-packages would be.
+  mypy still checks it; tessercheck now correctly does not. Uses only
+  existing per-tree vocabulary — no analyzer change. One root module remains
+  in the repo (`tessercheck-py/rules.py`, next PR) before the allowance
+  itself can retire.
+
 ## [0.0.43.0] - 2026-08-15
 
 The third and widest norm module goes live, and the root-module era of the
