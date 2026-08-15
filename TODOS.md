@@ -136,7 +136,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   deleted function AND collides with the real `Response.json_body` reader
   (see item (c) of the wire-vocabulary entry below, which already rules the
   distinction) — rewrite the illustration, don't just rename the call.
-  Root `README.md:98-110` and `CLAUDE.md:8` both under-describe tesser-py
+  Root `README.md:106-121` and `CLAUDE.md:8` both under-describe tesser-py
   (each names only `tesser.domain.ValueObject`, while the package ships
   `adapters`, `application`, `context`, `domain`, `srv`, and `testing` —
   pre-existing narrowness, widened by every srv wave; fold in here).
