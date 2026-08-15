@@ -72,7 +72,7 @@ Yes → handler.
 7. **Errors map to the wire at the edge, exhaustively — and the host uses the
    same table.** One `respond` path catches: shape failures (malformed JSON,
    wrong-typed field) → 400; domain errors → status via the one pure kind→status
-   mapper (the closed `Kind` set, `errors.status_for`); infra errors → 503;
+   mapper (the closed `Kind` set, `tesser.errors.status_for`); infra errors → 503;
    anything unexpected → 500 with no internals leaked. The host's *transport*
    rejections go through the **same** `respond`/`problem` vocabulary — an
    oversized body → 413, a streaming body it can't buffer → 411, an unmatched
@@ -137,7 +137,7 @@ read endpoint over a cross-context read model).
    `CliResponse` (`exit_code`, `stdout`, `stderr`) are the CLI's request/response
    DTOs; `protocol/cli.py` is their shared vocabulary, the analog of `protocol/http.py`.
    The one CLI-specific piece is the error mapper: the same closed domain `Kind`
-   set maps to an **exit code** (`errors.exit_code_for`) exactly as HTTP maps it
+   set maps to an **exit code** (`tesser.errors.exit_code_for`) exactly as HTTP maps it
    to a status (`status_for`) — one taxonomy, two total edge mappers. It obeys
    the same rules: no domain math, no repository, no transport in the signature.
 3. **What is the problem-shape on the wire?** The verified impl renders

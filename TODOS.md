@@ -16,6 +16,22 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   - **Risk of waiting:** path-keyed state keeps accumulating; the move gets
     costlier.
 
+## Norm-module wave followups (2026-08-15, PRs #84-#86, Chris flag)
+
+- [ ] **Revisit the `("tesser.lifecycle", "Closeable") → "port"` kind-table
+  entry** (checks.py `TESSER_BASE_BLOCKS`, added in PR #86). Chris flagged it
+  as a smell on two axes, to be revisited once the one-test-file workstream
+  completes: (1) the design — hand-adding a runtime class to the analyzer's
+  kind table is a second source of truth for what tesser-py exports mean, and
+  it silently widens what counts as "a port" everywhere (any class extending
+  `Closeable` classifies as a port); (2) the process — a rule-shaping change
+  like this could be made and merged without an explicit ruling, which is the
+  same class of gap the "every classification earned" test exists to close.
+  Candidate directions when revisited: derive the kind table from tesser-py
+  itself instead of a hand-list; or narrow the entry to the TB072 fake check
+  rather than global classification; or require kind-table rows to carry a
+  ruling reference the same way `.tesser-root` carries tree facts.
+
 ## Import-totality wave followups (2026-08-06, branch `worktree-io-import-restrictions`)
 
 - [x] **python-app conformance + remove the sigcheck CI ratchet** — RESOLVED
