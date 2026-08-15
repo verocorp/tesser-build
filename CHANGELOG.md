@@ -15,9 +15,11 @@ three places and executed in none. Now it is a test that CI runs.
 - **The mutmut ecosystem gate** (`tesser-py/tests/ecosystem/mutmut/`): the
   same `Amount` value object built twice — on `ts.ValueObject` and as a
   frozen dataclass — with an e2e test driving the real mutmut CLI (pinned
-  `==3.7.0`) over each. The `ts.ValueObject` build must yield mutants for
-  every hand-written method and kill them all; the dataclass build must
-  yield none and abort, pinning the negative control so a future mutmut
+  `==3.7.0`) over each. The `ts.ValueObject` build must yield mutants inside
+  its hand-written constructor and arithmetic (`value()` is a bare return —
+  mutmut generates nothing for it) and every mutant must die; the dataclass
+  build must yield none and abort, pinning the negative control so a future
+  mutmut
   that stops skipping dataclasses turns the gate red instead of letting the
   docs overclaim. The gate is hardened against lying: fixture copies exclude
   run leftovers (a stale gitignored `mutants/` would otherwise freeze the
@@ -32,9 +34,11 @@ three places and executed in none. Now it is a test that CI runs.
 ### Removed
 - **`examples/vobase`** (tree, manifest row, verify arm, CI job): its real
   purpose was this gate, and its mutmut dependency was declared but never
-  run. The richer Money port's behavioral ground is covered by
-  `examples/ddd` and `examples/python-app`; the base-class mechanics stay
-  covered by `tesser-py/tests/test_valueobject.py`.
+  run. The base-class mechanics (equality, hash, immutability, VO-typed
+  fields) stay covered by `tesser-py/tests/test_valueobject.py`; the Money
+  port's richer behavioral tests (Decimal canonicalization, precision
+  traps) retire with it — that ground now has no gated example, recorded
+  against the open ValueObject-shape TODO.
 - **`tesser-py/setup.cfg`**: its only content was a `[mutmut]` section
   pointing at the shells that no gate ever ran. Running mutmut over
   `tesser/` itself is no longer configured anywhere — deliberate, until a
