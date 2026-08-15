@@ -2817,54 +2817,20 @@ def test_a_root_module_is_a_leaf(tmp_path: Path) -> None:
     assert not any("helpers imports enum" in f for f in findings)
 
 
-def test_a_context_main_composes_only_its_own_context(tmp_path: Path) -> None:
+def test_a_context_main_is_a_stray_module(tmp_path: Path) -> None:
     conftest.conforming_tree(tmp_path)
     conftest.write_module(
         tmp_path,
-        "two/client/client.py",
-        "import tesser.context as ts\n"
-        "class PingRequest(ts.Request):\n"
-        "    def __init__(self, text: str) -> None:\n"
-        "        self.text = text\n",
-    )
-    conftest.write_module(
-        tmp_path,
         "app/__main__.py",
-        "import app.application.service as service\n"
-        "import app.adapters.handlers as handlers\n"
-        "import app.wiring.wire as wire\n"
-        "import app.client.client as client\n"
-        "import app.domain.thing as thing\n"
-        "import two.client.client as two_client\n"
-        "import srv.http\n"
-        "import protocol.http\n"
-        "import tests.test_ok\n"
-        "import helpers\n",
+        "import app.application.service as service\nimport app.wiring.wire as wire\n",
     )
-    conftest.write_module(tmp_path, "srv/http.py", "")
-    conftest.write_module(tmp_path, "protocol/http.py", "import tesser.srv as ts\n")
-    conftest.write_module(
-        tmp_path, "tests/test_ok.py", "def test_ok() -> None:\n    assert True\n"
-    )
-    conftest.write_module(tmp_path, "helpers.py", "X = 1\n")
     findings = conftest.check_tree(tmp_path)
-    clause = "a context __main__ composes from its own application, adapters, client, and wiring"
     assert any(
-        "app.__main__ imports app.domain.thing; "
-        "a context __main__ composes from its own application, adapters, client, and wiring" in f
+        "app.__main__ is not a context module; a context holds only domain, "
+        "application, client, adapters, wiring, and tests modules" in f
         for f in findings
     )
-    assert any(
-        f"app.__main__ imports two.client.client; {clause}" in f for f in findings
-    )
-    assert any(f"app.__main__ imports srv.http; {clause}" in f for f in findings)
-    assert any(f"app.__main__ imports protocol.http; {clause}" in f for f in findings)
-    assert any(f"app.__main__ imports tests.test_ok; {clause}" in f for f in findings)
-    assert not any("app.__main__ imports app.application.service" in f for f in findings)
-    assert not any("app.__main__ imports app.adapters.handlers" in f for f in findings)
-    assert not any("app.__main__ imports app.wiring.wire" in f for f in findings)
-    assert not any("app.__main__ imports app.client.client" in f for f in findings)
-    assert not any("app.__main__ imports helpers" in f for f in findings)
+    assert not any("__main__ composes from" in f for f in findings)
 
 
 def test_a_protocol_module_imports_nothing_else_from_its_tree(tmp_path: Path) -> None:

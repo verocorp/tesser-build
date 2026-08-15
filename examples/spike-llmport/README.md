@@ -182,7 +182,7 @@ typed assertion in the handler tests is a plain assignment.
 ## Run it
 
 ```sh
-PYTHONPATH=tessercheck-py:tesser-py python3 -m tessercheck examples/spike-llmport
+(cd tessercheck-py && PYTHONPATH=.:../tesser-py python3 -m srv.cli.main ../examples/spike-llmport)
 cd examples/spike-llmport
 MYPYPATH=.:../../tesser-py mypy --strict scheduling protocol srv/voice/router.py conftest.py
 pytest -q

@@ -43,7 +43,7 @@ def test_locate_is_the_single_routing_decision() -> None:
         ("protocol.conftest", False, "conftest"),
         ("app", True, "context-init"),
         ("app", False, "context-init"),
-        ("app.__main__", False, "context-main"),
+        ("app.__main__", False, "context-stray"),
         ("app.domain", True, "role-init"),
         ("app.domain", False, "role-file"),
         ("app.domain.thing", False, "role"),

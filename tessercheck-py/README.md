@@ -23,13 +23,19 @@ contract.
 ## Running tessercheck on any tree
 
 The analyzer is stdlib-only at check time (the target is parsed, never
-imported). The only things it needs on `PYTHONPATH` are this directory and
-`tesser-py` (the shells the analyzer itself is built from):
+imported). It is an app, so it runs through its own host — `srv/cli/main.py`,
+from this directory — and takes the tree to check as its argument. The only
+things it needs on `PYTHONPATH` are this directory and `tesser-py` (the shells
+the analyzer itself is built from):
 
 ```sh
-PYTHONPATH=/path/to/tesser-build/tessercheck-py:/path/to/tesser-build/tesser-py \
-  python3 -m tessercheck /path/to/tree
+cd /path/to/tesser-build/tessercheck-py
+PYTHONPATH=.:../tesser-py python3 -m srv.cli.main /path/to/tree
 ```
+
+Run it from here rather than from the tree being checked: `-m` resolves
+against the working directory first, and a checked tree may well have an `srv`
+package of its own.
 
 The target declares itself: a checkable tree carries a `.tesser-root` file at
 its root. The declaration has a total grammar — first line `app`, then only
@@ -93,7 +99,7 @@ cannot read cannot carry a working marker, so those are fixed, not excused.
 ## Verify this tree
 
 ```sh
-PYTHONPATH=.:../tesser-py python3 -m tessercheck .   # self-check: must be clean
+PYTHONPATH=.:../tesser-py python3 -m srv.cli.main .  # self-check: must be clean
 python3 rules.py --check                             # RULES.md drift gate
 MYPYPATH=.:../tesser-py mypy                         # --strict via pyproject
 pytest -q

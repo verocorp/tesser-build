@@ -57,10 +57,19 @@ failed=()
 
 step() { echo "  → $*"; }
 
+# The analyzer is an app, and an app is run through its host: tessercheck-py's
+# srv/cli/main.py. It runs from tessercheck-py's own directory — `-m
+# srv.cli.main` resolves against the current directory first, and a checked
+# tree may have an srv package of its own — so the tree to check is an
+# argument, not the working directory.
+tessercheck_tree() {
+  (cd "$ROOT/tessercheck-py" && PYTHONPATH=.:../tesser-py python3 -m srv.cli.main "$1")
+}
+
 run_spike_shells() {
   cd "$ROOT/examples/spike-shells" || return 1
   step "tessercheck (zero findings over the whole tree)"
-  PYTHONPATH=../../tessercheck-py:../../tesser-py python3 -m tessercheck . || return 1
+  tessercheck_tree "$PWD" || return 1
   step "mypy --strict"
   MYPYPATH=.:../../tesser-py mypy --strict spike digest || return 1
   step "pytest"
@@ -72,7 +81,7 @@ run_spike_shells() {
 run_spike_llmport() {
   cd "$ROOT/examples/spike-llmport" || return 1
   step "tessercheck (zero findings over the whole tree)"
-  PYTHONPATH=../../tessercheck-py:../../tesser-py python3 -m tessercheck . || return 1
+  tessercheck_tree "$PWD" || return 1
   step "mypy --strict"
   MYPYPATH=.:../../tesser-py mypy --strict scheduling protocol srv/voice/router.py conftest.py || return 1
   step "pytest"
@@ -90,7 +99,7 @@ run_python_app() {
   step "pytest"
   pytest -q || return 1
   step "tessercheck (zero findings over the whole tree)"
-  PYTHONPATH=../../tessercheck-py:../../tesser-py python3 -m tessercheck . || return 1
+  tessercheck_tree "$PWD" || return 1
 }
 
 # The canonical application-ports tree: one context, two ports, an enum outcome
@@ -102,7 +111,7 @@ run_python_app() {
 run_ports() {
   cd "$ROOT/examples/ports" || return 1
   step "tessercheck (zero findings over the whole tree)"
-  PYTHONPATH=../../tessercheck-py:../../tesser-py python3 -m tessercheck . || return 1
+  tessercheck_tree "$PWD" || return 1
   step "mypy --strict"
   MYPYPATH=.:../../tesser-py mypy --strict catalog || return 1
   step "pytest"
@@ -112,7 +121,7 @@ run_ports() {
 run_serdepy() {
   cd "$ROOT/examples/serdepy" || return 1
   step "tessercheck (zero findings over the whole tree)"
-  PYTHONPATH=../../tessercheck-py:../../tesser-py python3 -m tessercheck . || return 1
+  tessercheck_tree "$PWD" || return 1
   step "mypy --strict"
   MYPYPATH=.:../../tesser-py mypy --strict serialization.py conftest.py parcel || return 1
   step "pytest"
@@ -122,7 +131,7 @@ run_serdepy() {
 run_errorspy() {
   cd "$ROOT/examples/errorspy" || return 1
   step "tessercheck (zero findings over the whole tree)"
-  PYTHONPATH=../../tessercheck-py:../../tesser-py python3 -m tessercheck . || return 1
+  tessercheck_tree "$PWD" || return 1
   step "mypy --strict"
   MYPYPATH=.:../../tesser-py mypy --strict errors.py serialization.py storage.py conftest.py protocol campaign tests || return 1
   step "pytest"
@@ -165,7 +174,7 @@ run_vobase() {
 run_tessercheck_py() {
   cd "$ROOT/tessercheck-py" || return 1
   step "tessercheck (self-check over its own tree)"
-  PYTHONPATH=.:../tesser-py python3 -m tessercheck . || return 1
+  tessercheck_tree "$PWD" || return 1
   step "RULES.md drift gate"
   python3 rules.py --check || return 1
   step "mypy --strict"

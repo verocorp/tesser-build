@@ -9,22 +9,21 @@ description = "The tesser-build construction analyzer for Python: declare-then-v
 requires-python = ">=3.10"
 dependencies = ["tesser"]
 
-[project.scripts]
-tessercheck = "tessercheck.__main__:main"
-
 [tool.setuptools]
 packages = [
     "tessercheck",
     "tessercheck.domain",
     "tessercheck.application",
     "tessercheck.adapters",
+    "tessercheck.adapters.handlers",
     "tessercheck.client",
+    "tessercheck.wiring",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-testpaths = ["tessercheck/tests"]
+testpaths = ["tessercheck", "srv"]
 
 [tool.mypy]
 strict = true
-files = ["tessercheck", "rules.py"]
+files = ["tessercheck", "srv", "bootstrap", "protocol", "lifecycle.py", "rules.py"]

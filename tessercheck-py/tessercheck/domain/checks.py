@@ -965,7 +965,6 @@ class Codebase(ts.AggregateRoot):
         "protocol",
         "root",
         "context-init",
-        "context-main",
         "context-tests-init",
         "context-tests-stray",
         "role-init",
@@ -1011,8 +1010,6 @@ class Codebase(ts.AggregateRoot):
             return "root"
         if len(parts) == 1:
             return "context-init"
-        if basename == "__main__" and len(parts) == 2:
-            return "context-main"
         if parts[1] == TESTS_ROLE:
             return "context-tests-init" if is_package else "context-tests-stray"
         if parts[1] in ROLES:
@@ -1064,8 +1061,6 @@ class Codebase(ts.AggregateRoot):
             return self._homeless_violations(module) + self._root_leaf_violations(module)
         if place == "context-init":
             return self._context_init_violations(module)
-        if place == "context-main":
-            return self._main_violations(module, parts[0], contexts)
         if place == "context-tests-init":
             return self._context_tests_init_violations(module)
         if place == "context-tests-stray":
@@ -1339,39 +1334,6 @@ class Codebase(ts.AggregateRoot):
             )
             for target, lineno in self._tree_edges(module)
         )
-
-    def _main_violations(
-        self,
-        module: Module,
-        context: str,
-        contexts: frozenset[str],
-    ) -> tuple[Violation, ...]:
-        tops = self._tree_tops()
-        found: list[Violation] = []
-        for edge in module.import_edges():
-            target = str(edge._target)
-            lineno = int(edge._lineno)
-            pieces = target.split(".")
-            if pieces[0] == TESSER or pieces[0] not in tops:
-                continue
-            tail = pieces[1] if len(pieces) > 1 else ""
-            if pieces[0] == context and tail in ("application", "adapters", "client", "wiring"):
-                continue
-            if pieces[0] not in contexts and pieces[0] not in APP_PACKAGES and pieces[0] not in (
-                PROTOCOL_PACKAGE,
-                TESTS_ROLE,
-            ):
-                continue
-            found.append(
-                Violation(
-                    module.path(),
-                    lineno,
-                    "TB063",
-                    f"{module.name()} imports {target}; a context __main__ composes from "
-                    "its own application, adapters, client, and wiring",
-                )
-            )
-        return tuple(found)
 
     def _tests_package_violations(
         self,

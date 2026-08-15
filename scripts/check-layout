@@ -157,7 +157,7 @@ def check(root: pathlib.Path) -> list[str]:
         names[tree] = key
         if tree not in arms:
             problems.append(f"{key} has no scripts/verify case arm for '{tree}'")
-        elif "-m tessercheck" in arm_body(verify_text, arms[tree]):
+        elif "tessercheck_tree" in arm_body(verify_text, arms[tree]):
             tessercheck_gated.add(root / key / ".tesser-root")
         if not re.search(rf"^\s*run: scripts/verify {re.escape(tree)}\s*$", workflow, re.MULTILINE):
             problems.append(f"{key} has no CI job step 'run: scripts/verify {tree}'")

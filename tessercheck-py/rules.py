@@ -94,7 +94,6 @@ APPLIES_TO: dict[str, str] = {
     "Codebase._homeless_violations": "top-level module",
     "Codebase._conftest_leaf_violations": "conftest module",
     "Codebase._root_leaf_violations": "root module",
-    "Codebase._main_violations": "context `__main__`",
     "Codebase._shell_reach_violations": "test module, by where it is placed",
     "Codebase._tests_package_violations": "tests package module",
     "Codebase._role_init_violations": "role package `__init__`",
