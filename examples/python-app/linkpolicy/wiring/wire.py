@@ -8,7 +8,7 @@ import linkpolicy.application.ports.verdict_repository as verdict_repository
 import linkpolicy.application.service as service
 import linkpolicy.client.client as client
 import linkpolicy.wiring.config as config
-from lifecycle import Closeable
+from tesser.lifecycle import Closeable
 
 
 @ts.function

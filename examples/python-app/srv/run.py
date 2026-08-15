@@ -7,7 +7,7 @@ from typing import Optional
 
 import tesser.srv as ts
 
-from lifecycle import Closeable
+from tesser.lifecycle import Closeable
 from protocol.lifecycle import Host
 
 

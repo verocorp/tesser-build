@@ -115,7 +115,7 @@ The conventions the nesting carries:
 
 Deliberately minimal, split across the two layers that own it: **bootstrap
 mandates** a `Closeable` shape (one `close()` method —
-`examples/python-app/lifecycle.py`) and an `App.close()` that tears the graph
+`tesser.lifecycle.Closeable`) and an `App.close()` that tears the graph
 down; the **host mandates** a `Host` (`run(stop)`) run under a runner that
 installs SIGTERM and calls `App.close()` (`srv.md`). Health, readiness,
 graceful-shutdown *ordering*, drain, and observability are the host's fill-in

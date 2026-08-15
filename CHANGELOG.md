@@ -5,6 +5,31 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.42.0] - 2026-08-15
+
+The second norm module goes live the same way the first did: the grant and
+the trees that earn it, one change.
+
+### Added
+- **`tesser.lifecycle` grant**: wiring, bootstrap, srv, and test modules may
+  from-import it — the placements that build and tear down the object graph.
+  `Closeable` joins the analyzer's kind table as a port, so a `@ts.fake`
+  doubling it still satisfies the fake-implements-its-port rule after the
+  move out of the trees.
+
+### Removed
+- **The two identical root `lifecycle.py` copies** (python-app,
+  tessercheck-py): nine import sites move to `tesser.lifecycle`; the mypy
+  target lists shrink to match.
+
+### Changed
+- `tesser.lifecycle` becomes a package (`lifecycle/closeable.py` behind a
+  re-exporting `__init__`) like every other tesser area, which puts it under
+  the wheel-completeness gate — a flat module was invisible to the
+  subpackage check.
+- `bootstrap.md` points its `Closeable` reference at the runtime.
+  skill-version 39.
+
 ## [0.0.41.0] - 2026-08-15
 
 The first norm module goes live end to end: the analyzer learns the grant
