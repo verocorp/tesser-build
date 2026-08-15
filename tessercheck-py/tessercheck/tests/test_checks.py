@@ -2879,6 +2879,21 @@ def test_a_context_role_reaches_the_app_shell_only_as_handlers_to_protocol(tmp_p
         "class PeerGateway(ts.Gateway):\n"
         "    pass\n",
     )
+    conftest.write_module(
+        tmp_path,
+        "app/adapters/handlers_support.py",
+        "import tesser.adapters as ts\n"
+        "import protocol.http as http\n",
+    )
+    conftest.write_module(tmp_path, "app/adapters/repositories/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/adapters/repositories/smuggle.py",
+        "import tesser.adapters as ts\n"
+        "import protocol.http as http\n"
+        "class SmuggleHandler(ts.Handler):\n"
+        "    pass\n",
+    )
     conftest.write_module(tmp_path, "srv/http.py", "")
     findings = conftest.check_tree(tmp_path)
     clause = "of the app shell a context imports only protocol, and only from its handlers"
@@ -2892,6 +2907,30 @@ def test_a_context_role_reaches_the_app_shell_only_as_handlers_to_protocol(tmp_p
     assert any(
         f"app.adapters.gateways imports protocol.http; {clause}" in f for f in findings
     ), f"a gateway imported protocol without a finding: {findings}"
+    assert any(
+        f"app.adapters.handlers_support imports protocol.http; {clause}" in f
+        for f in findings
+    ), f"a handlers-adjacent name bought the grant without the placement: {findings}"
+    assert any(
+        f"app.adapters.repositories.smuggle imports protocol.http; {clause}" in f
+        for f in findings
+    ), f"a Handler class declared outside handlers/ bought the grant: {findings}"
+
+
+def test_a_classless_module_inside_handlers_may_speak_protocol(tmp_path: Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(tmp_path, "protocol/http.py", "import tesser.srv as ts\n")
+    conftest.write_module(tmp_path, "app/adapters/handlers/__init__.py", "")
+    conftest.write_module(
+        tmp_path,
+        "app/adapters/handlers/usage.py",
+        "import tesser.adapters as ts\n"
+        "import protocol.http as http\n",
+    )
+    findings = conftest.check_tree(tmp_path)
+    assert not any(
+        "app.adapters.handlers.usage imports protocol.http" in f for f in findings
+    ), f"a helper module inside handlers/ was denied protocol: {findings}"
 
 
 def test_production_never_imports_the_tests_package(tmp_path: Path) -> None:
@@ -3131,7 +3170,7 @@ def test_adapter_kind_and_protocol_tests_shell_reach(tmp_path: Path) -> None:
     assert not any(
         "app.adapters.handlers.test_handlers imports protocol.http" in f
         for f in findings
-    )
+    ), f"a handlers-tier test was denied protocol: {findings}"
     for kind in ("gateways", "repositories"):
         assert any(
             f"app.adapters.{kind}.test_{kind} imports protocol.http" in f
@@ -3153,7 +3192,7 @@ def test_adapter_kind_and_protocol_tests_shell_reach(tmp_path: Path) -> None:
     )
 
 
-def test_an_eval_in_a_gateway_carries_the_gateway_shell_reach(tmp_path: Path) -> None:
+def test_an_eval_in_a_gateway_reaches_no_shell_package(tmp_path: Path) -> None:
     conftest.conforming_tree(tmp_path)
     conftest.write_module(tmp_path, "protocol/http.py", "import tesser.srv as ts\n")
     conftest.write_module(tmp_path, "srv/http.py", "")

@@ -3090,6 +3090,11 @@ class Codebase(ts.AggregateRoot):
             for allowed in SAME_CONTEXT_IMPORTS[role]
         )
 
+    @staticmethod
+    def _in_handlers(module: Module) -> bool:
+        parts = module.name().split(".")
+        return len(parts) >= 3 and parts[2] == "handlers"
+
     def _import_violations(
         self,
         module: Module,
@@ -3177,7 +3182,7 @@ class Codebase(ts.AggregateRoot):
                 and not (
                     role == "adapters"
                     and pieces[0] == PROTOCOL_PACKAGE
-                    and holds_handler
+                    and self._in_handlers(module)
                 )
             ):
                 found.append(

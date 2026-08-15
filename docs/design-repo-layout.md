@@ -105,11 +105,17 @@ run it with system Python. What it holds:
 6. a symlinked top-level or `examples/*` directory is a failure; deeper
    symlinks inside declared trees are the analyzer's TB045.
 
-The rules have a test per failure case beside them
-(`layout/repo/domain/test_rules.py`, built specs, no filesystem), and
-`layout/tests/` runs the whole app against small fake repos on disk — so a
-bug that made the check always pass would itself be caught. The app is gated
-like every tree: tessercheck zero findings, mypy --strict, pytest.
+The app is tested at four tiers, each reaching only what its placement
+allows: the rules have a test per failure case beside them
+(`layout/repo/domain/test_rules.py`, built specs, no filesystem); the service
+is tested in isolation through a fake of its reader port and the
+DTO-to-domain translation alone (`repo/application/test_service.py`,
+`test_mapping.py`); the real reader runs against real filesystems asserting
+on port DTOs (`repo/adapters/repositories/test_file_repository.py` — states,
+symlinks, skip dirs); and `layout/tests/` keeps a small wired suite proving
+everything is hooked up end to end. A bug that made the check always pass
+would be caught at the tier that owns it. The app is gated like every tree:
+tessercheck zero findings, mypy --strict, pytest.
 `scripts/` holds only bash after this — `verify` and `install-dev`, dispatch
 with no logic of their own.
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import tesser.testing as ts
@@ -70,7 +71,7 @@ def test_a_missing_verify_file_reports_missing(tmp_path: Path) -> None:
 def test_entries_mark_directories_and_symlinks(tmp_path: Path) -> None:
     _repo(tmp_path)
     outside = tmp_path.parent / f"{tmp_path.name}-outside"
-    outside.mkdir(exist_ok=True)
+    outside.mkdir()
     (tmp_path / "vendored").symlink_to(outside)
     read = _read(tmp_path)
     forms = {entry.name: entry.form for entry in read.top}
@@ -142,7 +143,7 @@ def test_the_walk_skips_ignored_directories(tmp_path: Path) -> None:
 def test_the_walk_never_follows_symlinked_directories(tmp_path: Path) -> None:
     _repo(tmp_path)
     outside = tmp_path.parent / f"{tmp_path.name}-smuggle"
-    outside.mkdir(exist_ok=True)
+    outside.mkdir()
     (outside / ".tesser-root").write_text("app\n")
     (outside / "requirements-dev.txt").write_text("x\n")
     (tmp_path / "appone" / "vendored").symlink_to(outside)
@@ -159,8 +160,8 @@ def test_a_dangling_symlink_does_not_crash_the_walk(tmp_path: Path) -> None:
 
 
 def test_an_unlistable_directory_does_not_crash_the_walk(tmp_path: Path) -> None:
-    import os
-
+    if os.geteuid() == 0:
+        return
     _repo(tmp_path)
     locked = tmp_path / "appone" / "locked"
     locked.mkdir()
@@ -170,3 +171,19 @@ def test_an_unlistable_directory_does_not_crash_the_walk(tmp_path: Path) -> None
     finally:
         os.chmod(locked, 0o755)
     assert read.manifest.state is repo_reader.ManifestState.READ
+
+
+def test_a_top_level_dangling_symlink_is_an_entry_with_symlink_form(tmp_path: Path) -> None:
+    _repo(tmp_path)
+    (tmp_path / "vendored").symlink_to(tmp_path / "no-such-target")
+    read = _read(tmp_path)
+    forms = {entry.name: entry.form for entry in read.top}
+    assert forms["vendored"] is repo_reader.EntryForm.SYMLINK
+
+
+def test_an_undecodable_manifest_reports_unreadable(tmp_path: Path) -> None:
+    _repo(tmp_path)
+    (tmp_path / "manifest.json").write_bytes(b"\xff\xfe\x00{}")
+    read = _read(tmp_path)
+    assert read.manifest.state is repo_reader.ManifestState.UNREADABLE
+    assert read.manifest.rows == ()

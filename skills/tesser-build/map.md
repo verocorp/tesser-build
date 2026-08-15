@@ -86,8 +86,11 @@ context's behalf. Two types, split by direction — **inbound needs a server
     don't invent a convention. Anti-corruption is a *purpose* a gateway can
     have, not a separate role: it is built as port + adapter like any other.
 
-Recommended (not enforced) layout: `adapters/handlers` and `adapters/gateways`
-as the sole adapter dirs. **Events are not a new role**: publish = an outbound
+Recommended (not enforced) layout: `adapters/handlers`, `adapters/gateways`,
+and `adapters/repositories` as the adapter kind dirs, each implementation
+module named for its backing (`file_repository.py`, `repo_memory.py`) — a
+sibling test is only placeable inside a kind dir, so a flat module in
+`adapters/` has no legal home for its test. **Events are not a new role**: publish = an outbound
 gateway over an `EventPublisher` port; consume = an inbound handler plus a
 worker host (`srv/wrk`). (The event shape is reasoned by symmetry with the
 well-evidenced HTTP path — the prior art is thin here; treat it as the default
@@ -105,8 +108,10 @@ bootstrap ──▶ each context's wiring          (constructs, never the revers
 gateways ──implement──▶ ports in each context's application/ports
 ```
 
-**Of `application`, an adapter reaches only the ports package** — alongside the
-app shell's `protocol` and peer `Client`s, all of them protocols. That is what
+**Of `application`, an adapter reaches only the ports package** — alongside
+peer `Client`s, and (for handlers only) the app shell's `protocol`: the
+transport vocabulary is spoken by srv and handlers, never by a gateway or a
+repository, which read `application/ports` and nothing else of the shell. That is what
 moving the ports out of the service module bought: a gateway can no longer
 import the service it exists to be decoupled from. Sibling adapters remain
 importable, since every role may import itself, so the claim is about the

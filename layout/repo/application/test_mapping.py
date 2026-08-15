@@ -76,5 +76,22 @@ def test_report_renders_problems_and_counts_as_text() -> None:
     assert counts == ("0", "0")
 
 
-def test_trees_render_as_text_and_degrade_with_the_manifest() -> None:
+def test_trees_render_app_rows_and_degrade_with_the_manifest() -> None:
+    read = repo_reader.ReadRepoResponse(
+        manifest=repo_reader.ManifestRecord(
+            state=repo_reader.ManifestState.READ,
+            rows=(
+                repo_reader.RowRecord(key="appone", kind="app"),
+                repo_reader.RowRecord(key="docs", kind="ungated"),
+            ),
+            note="",
+        ),
+        verify=repo_reader.FileRecord(state=repo_reader.FileState.MISSING, text=""),
+        workflow=repo_reader.FileRecord(state=repo_reader.FileState.MISSING, text=""),
+        top=(),
+        examples=(),
+        declarations=(),
+        requirements=(),
+    )
+    assert mapping.trees(read) == ("appone",)
     assert mapping.trees(_empty_response()) == ()
