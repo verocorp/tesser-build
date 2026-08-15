@@ -1,7 +1,7 @@
-# spike-llmport — the LLM tool-call edge as a conformant bounded context
+# llmport — the LLM tool-call edge as a conformant bounded context
 
 A workflow whose next step is decided by an LLM tool call, built as a real
-`scheduling` context in the `ts.*` shell idiom and held to the spike-shells
+`scheduling` context in the `ts.*` shell idiom and held to the shared example
 bar. The whole tree is sigcheck-clean — zero findings, gated plainly in CI.
 The two findings the tree's ratchet used to carry were resolved by the srv
 vocabulary (`tesser.srv`: `Host`, `Port`, `Record`, `Rejection`, `Request`,
@@ -101,8 +101,9 @@ the original design genuinely collided:
 - **The error-kind taxonomy is not expressible.** The settled error norm
   (closed kind set, `DomainError` with kind-as-field, exhaustive
   `status_for`-style mappers) has no shell: an exception class or an enum in a
-  role module is "declares no ts.* base". This tree does what spike-shells
-  does — the domain raises `ValueError` — and the edge rule collapses to
+  role module is "declares no ts.* base". This tree does what the retired
+  spike-shells tree did — the domain raises `ValueError` — and the edge rule
+  collapses to
   "`ValueError` is model-correctable, anything else halts". The
   validation/not-found/conflict distinction is gone from the types; an errors
   block for the rulebook is the open gap.
@@ -125,7 +126,7 @@ the original design genuinely collided:
   "declares no ts.* base; every context class declares its block", and
   declaring it with the wire vocabulary draws "is a wire record; a host
   lives in srv and a wire kind in a wire module, never a context" — a tool
-  class would need a new adapters kind, which is a ruling this spike may
+  class would need a new adapters kind, which is a ruling this tree may
   not improvise. What IS buildable: `voicewire.Tool` (`ts.Record`, the new
   generic wire-record kind) carries the declaration as data (name +
   description + parameters, `schema()` renders the raw dict the host
@@ -182,8 +183,8 @@ typed assertion in the handler tests is a plain assignment.
 ## Run it
 
 ```sh
-(cd tessercheck-py && PYTHONPATH=.:../tesser-py python3 -m srv.cli.main ../examples/spike-llmport)
-cd examples/spike-llmport
+(cd tessercheck-py && PYTHONPATH=.:../tesser-py python3 -m srv.cli.main ../examples/llmport)
+cd examples/llmport
 MYPYPATH=.:../../tesser-py mypy --strict scheduling protocol srv/voice/router.py conftest.py
 pytest -q
 ```
@@ -241,8 +242,7 @@ out of `schema()` because the host hands that dict to a provider SDK.
 
 ## Non-goals
 
-No wiring module (no concrete gateways exist to select — the precedent is
-spike-shells' contexts), no bootstrap or composition root (`srv/voice/agent.py`
+No wiring module (no concrete gateways exist to select), no bootstrap or composition root (`srv/voice/agent.py`
 is the one host and nothing in-tree constructs it), no evals. The eval tiers
 this design supports are the subject of the test-structure ruling, not this
 code.

@@ -107,7 +107,7 @@ green, that half of CI is green.
 python3 -m venv .venv && source .venv/bin/activate
 scripts/install-dev                      # every tree's requirements-dev.txt
 scripts/verify                           # every Python tree, from manifest.json
-scripts/verify python-app spike-shells   # or just the ones you touched
+scripts/verify python-app serdepy        # or just the ones you touched
 ```
 
 **Every directory says what it is** (`docs/design-repo-layout.md`).
@@ -134,7 +134,7 @@ Three things to know:
 
 - **`scripts/verify` covers more than the tree you are editing.** The
   shipped analyzer runs a zero-findings gate over every example tree
-  (`spike-shells`, `spike-llmport`, `python-app`, `serdepy`, `errorspy`), so a
+  (`llmport`, `python-app`, `ports`, `serdepy`, `errorspy`), so a
   layout change in an example can break the analyzer without touching a file
   under `tessercheck-py/`. That is not hypothetical — it is how PR #56
   failed.
