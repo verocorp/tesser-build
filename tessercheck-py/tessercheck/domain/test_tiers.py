@@ -951,7 +951,8 @@ def test_test_module_tesser_import_rules() -> None:
         ))).violations()
                )
     assert any(
-        "app.test_imports imports tesser.domain; a test module imports only tesser.testing" in f
+        "app.test_imports imports tesser.domain; a test module's tesser imports "
+        "are tesser.testing, tesser.lifecycle, and tesser.serialization" in f
         for f in findings
     )
     assert any(
@@ -1077,3 +1078,20 @@ def test_a_fake_may_implement_a_protocol_port() -> None:
         ))).violations()
                )
     assert not any("app.test_doors.FakeDoor" in f for f in findings)
+
+
+def test_a_test_module_may_from_import_tesser_serialization() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "app/domain/test_thing.py",
+                "app.domain.test_thing",
+                "from tesser.serialization import canonical_str\n"
+                "def test_canonical() -> None:\n"
+                '    assert canonical_str("x") == "x"\n',
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any("app.domain.test_thing" in f for f in findings)

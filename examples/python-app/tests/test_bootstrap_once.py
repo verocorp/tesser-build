@@ -7,7 +7,7 @@ from bootstrap.bootstrap import new
 import campaign.application.ports.target_policy as target_policy  # tessercheck:ignore TB070
 import campaign.client.client as client
 import campaign.wiring.config as config
-from lifecycle import Closeable
+from tesser.lifecycle import Closeable
 from tests.support import app_config
 
 

@@ -8,7 +8,7 @@ import tesser.domain as ts
 
 from errors import invalid  # tessercheck:ignore TB062
 from kernel.slug import Slug as Slug
-from serialization import canonical_str  # tessercheck:ignore TB062
+from tesser.serialization import canonical_str
 
 _CAMPAIGN_ID_RE: Final[re.Pattern[str]] = re.compile(r"[a-f0-9]{16}")
 _LINK_STATES: Final[frozenset[str]] = frozenset({"active", "inactive"})

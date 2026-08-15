@@ -37,9 +37,11 @@ them.
 
 (One transcription note: the excerpts below drop the inline
 `# tessercheck:ignore TB062` markers the verified files carry on their
-`errors`/`serialization` imports — app-level policy modules sit outside the
-pure-core allowlist pending its ruling, and each such import is opted out at
-its site. Copy the marker with the import.)
+`errors` imports — that app-level policy module sits outside the pure-core
+allowlist pending its move into the tesser runtime, and each such import is
+opted out at its site. Copy the marker with the import.
+`tesser.serialization` needs no marker: it is a tesser norm module a domain
+module may from-import.)
 
 **What the shell buys, once.** `ts.ValueObject` owns immutability and value
 equality at runtime: assignment and deletion raise, `__eq__`/`__hash__`
@@ -63,7 +65,7 @@ validate at the one door:**
 import tesser.domain as ts
 
 from errors import invalid
-from serialization import canonical_str
+from tesser.serialization import canonical_str
 
 
 class CampaignID(ts.ValueObject):

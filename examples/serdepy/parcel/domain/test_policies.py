@@ -6,7 +6,7 @@ from decimal import Decimal
 import pytest
 
 import parcel.domain.parcel as parcel
-from serialization import canonical_datetime, canonical_decimal
+from tesser.serialization import canonical_datetime, canonical_decimal
 
 
 def test_decimal_policy_is_the_string_form() -> None:

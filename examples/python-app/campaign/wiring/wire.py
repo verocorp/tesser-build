@@ -9,7 +9,7 @@ import campaign.application.service as service
 import campaign.client.client as client
 import campaign.wiring.config as config
 from errors import invalid
-from lifecycle import Closeable
+from tesser.lifecycle import Closeable
 
 
 @ts.function

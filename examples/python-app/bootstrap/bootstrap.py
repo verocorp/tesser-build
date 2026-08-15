@@ -10,7 +10,7 @@ import tesser.context as ts
 
 from bootstrap.config import Config
 import campaign.adapters.gateways.target_policy as target_policy
-from lifecycle import Closeable
+from tesser.lifecycle import Closeable
 
 
 class CleanupStack:  # tessercheck:ignore TB051
