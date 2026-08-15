@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tesser.context as ts
 
-from errors import invalid
+from tesser.errors import invalid
 import linkpolicy.adapters.gateways.repo_memory as repo_memory
 import linkpolicy.application.ports.verdict_repository as verdict_repository
 import linkpolicy.application.service as service

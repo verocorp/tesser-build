@@ -7,7 +7,7 @@ import campaign.application.ports.campaign_repository as campaign_repository
 import campaign.application.ports.target_policy as target_policy
 import campaign.application.service as service
 import campaign.client.client as client
-from errors import DomainError, InfraError, Kind
+from tesser.errors import DomainError, InfraError, Kind
 
 
 @ts.fake

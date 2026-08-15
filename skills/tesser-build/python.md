@@ -35,13 +35,11 @@ them.
 > structural typing vs Go's struct embedding, the absence of
 > `context.Context` — it is called out inline.
 
-(One transcription note: the excerpts below drop the inline
-`# tessercheck:ignore TB062` markers the verified files carry on their
-`errors` imports — that app-level policy module sits outside the pure-core
-allowlist pending its move into the tesser runtime, and each such import is
-opted out at its site. Copy the marker with the import.
-`tesser.serialization` needs no marker: it is a tesser norm module a domain
-module may from-import.)
+(`tesser.errors` and `tesser.serialization` need no ignore markers: they are
+tesser norm modules the placement may from-import. The
+`# tessercheck:ignore TB062` markers earlier revisions of these excerpts
+carried are gone — the app-level `errors`/`serialization` root modules they
+excused moved into the tesser runtime.)
 
 **What the shell buys, once.** `ts.ValueObject` owns immutability and value
 equality at runtime: assignment and deletion raise, `__eq__`/`__hash__`
@@ -64,7 +62,7 @@ validate at the one door:**
 # campaign/domain/values.py (verified impl)
 import tesser.domain as ts
 
-from errors import invalid
+from tesser.errors import invalid
 from tesser.serialization import canonical_str
 
 
@@ -97,8 +95,8 @@ conversion dunder matching its backing primitive — str-backed → `__str__`
 under the explicit per-type policy in `serialization.md` rule 3. One dunder
 per leaf, matching its representation — a second or mismatched one is a
 disguise (TB015), and the dunder body is a **one-line delegation** to the
-app-level `canonical_*` policy helper (TB018), so each canonical form has
-exactly one implementation site. The canonical form is what the
+runtime's `tesser.serialization.canonical_*` policy helper (TB018), so each
+canonical form has exactly one implementation site. The canonical form is what the
 serialization layer carries (`serialization.md`); display formatting is a
 presentation concern and never the value object's job. The round-trip law
 locks the exit: `CampaignID(str(id)) == id`, asserted in a test per leaf.
@@ -890,7 +888,7 @@ def main() -> None:
   `stdout`/`stderr`, exits the `exit_code`; the handler
   (`campaign/adapters/handlers/cli.py`) never touches `argv`, `print`, or
   the process, and the host's error table maps the closed domain `Kind` to
-  an exit code via `errors.exit_code_for` — the CLI's `status_for`. Piped
+  an exit code via `tesser.errors.exit_code_for` — the CLI's `status_for`. Piped
   **stdin** would be the CLI's "body" and reopens the same
   buffered-vs-stream question as HTTP; none of these commands read it, so it
   stays a named boundary.

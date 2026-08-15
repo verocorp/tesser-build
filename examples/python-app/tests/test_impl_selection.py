@@ -6,7 +6,7 @@ from bootstrap.bootstrap import new
 from bootstrap.config import Config
 import campaign.wiring.config as config
 import campaign.wiring.wire as wire
-from errors import DomainError
+from tesser.errors import DomainError
 import linkpolicy.wiring.config as linkpolicy_config
 import linkpolicy.wiring.wire as linkpolicy_wire
 import reports.wiring.config as reports_config

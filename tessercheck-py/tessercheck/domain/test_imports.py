@@ -467,7 +467,7 @@ def test_srv_and_bootstrap_statement_totality() -> None:
                )
     assert any(
         "srv.box imports tesser.domain; a srv module's tesser imports "
-        "are tesser.srv and tesser.lifecycle" in f
+        "are tesser.srv, tesser.errors, and tesser.lifecycle" in f
         for f in findings
     )
     assert any(
@@ -835,7 +835,8 @@ def test_srv_and_bootstrap_tesser_form_modes() -> None:
     )
     assert any(
         "bootstrap.wrongpkg imports tesser.domain; "
-        "a bootstrap module's tesser imports are tesser.context and tesser.lifecycle" in f
+        "a bootstrap module's tesser imports are tesser.context, "
+        "tesser.errors, and tesser.lifecycle" in f
         for f in findings
     )
     assert any(
@@ -1357,7 +1358,8 @@ def test_a_norm_module_is_from_imported_where_its_placement_allows() -> None:
     )
     assert any(
         "appside.application.service imports tesser.serialization; "
-        "a role module imports only its own tesser package" in f
+        "an application module's tesser imports are "
+        "tesser.application and tesser.errors" in f
         for f in findings
     )
     assert any(
@@ -1411,6 +1413,82 @@ def test_wiring_bootstrap_and_srv_may_from_import_tesser_lifecycle() -> None:
     assert not any("srv.run" in f and "tesser.lifecycle" in f for f in findings)
     assert any(
         "astray.wiring.wire imports tesser.domain; "
-        "a wiring module's tesser imports are tesser.context and tesser.lifecycle" in f
+        "a wiring module's tesser imports are tesser.context, "
+        "tesser.errors, and tesser.lifecycle" in f
+        for f in findings
+    )
+
+
+def test_any_role_but_client_may_from_import_tesser_errors() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "app/domain/money.py",
+                "app.domain.money",
+                "import tesser.domain as ts\n"
+                "from tesser.errors import invalid\n"
+                "class MoneySpec(ts.Spec):\n"
+                "    def __init__(self, code: str) -> None:\n"
+                "        if not code:\n"
+                "            raise invalid(\"bad_code\", \"code is empty\")\n"
+                "        self.code = code\n",
+                False,
+            ),
+            (
+                "app/application/views.py",
+                "app.application.views",
+                "import tesser.application as ts\n"
+                "import app.client.client as client\n"
+                "from tesser.errors import not_found\n"
+                "class ViewService(ts.ApplicationService):\n"
+                "    def ask(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        raise not_found(\"no_row\", request.text)\n",
+                False,
+            ),
+            (
+                "app/adapters/gateways.py",
+                "app.adapters.gateways",
+                "import tesser.adapters as ts\n"
+                "from tesser.errors import InfraError\n"
+                "class MemoryGateway(ts.Gateway):\n"
+                "    def load(self, key: str) -> str:\n"
+                "        raise InfraError(key)\n",
+                False,
+            ),
+            (
+                "stray/client/client.py",
+                "stray.client.client",
+                "import tesser.context as ts\n"
+                "from tesser.errors import invalid\n"
+                "class AskRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n",
+                False,
+            ),
+            (
+                "astray/adapters/gateways.py",
+                "astray.adapters.gateways",
+                "import tesser.adapters as ts\n"
+                "from tesser.serialization import canonical_str\n"
+                "class StrayGateway(ts.Gateway):\n"
+                "    def load(self, key: str) -> str:\n"
+                "        return canonical_str(key)\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any("app.domain.money" in f for f in findings)
+    assert not any("app.application.views" in f for f in findings)
+    assert not any("app.adapters.gateways" in f for f in findings)
+    assert any(
+        "stray.client.client imports tesser.errors; "
+        "a role module imports only its own tesser package" in f
+        for f in findings
+    )
+    assert any(
+        "astray.adapters.gateways imports tesser.serialization; "
+        "an adapters module's tesser imports are "
+        "tesser.adapters and tesser.errors" in f
         for f in findings
     )

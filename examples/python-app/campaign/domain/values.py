@@ -6,8 +6,8 @@ from urllib.parse import urlparse  # tessercheck:ignore TB062
 
 import tesser.domain as ts
 
-from errors import invalid  # tessercheck:ignore TB062
 from kernel.slug import Slug as Slug
+from tesser.errors import invalid
 from tesser.serialization import canonical_str
 
 _CAMPAIGN_ID_RE: Final[re.Pattern[str]] = re.compile(r"[a-f0-9]{16}")

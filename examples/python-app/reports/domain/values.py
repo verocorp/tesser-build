@@ -5,8 +5,8 @@ from typing import Final
 
 import tesser.domain as ts
 
-from errors import invalid  # tessercheck:ignore TB062
 from kernel.slug import Slug as Slug
+from tesser.errors import invalid
 from tesser.serialization import canonical_str
 
 _URL_RE: Final[re.Pattern[str]] = re.compile(r"https?://\S+")

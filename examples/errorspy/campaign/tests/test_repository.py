@@ -9,7 +9,7 @@ import campaign.application.views as views
 import campaign.domain.campaign as campaign
 import campaign.domain.short_link as short_link
 import campaign.domain.values as values
-from errors import DomainError, DomainKind, InfraError
+from tesser.errors import DomainError, Kind, InfraError
 from storage import FakeStorage, StorageError
 
 
@@ -37,7 +37,7 @@ def test_missing_is_domain_not_found() -> None:
     found = repo.find(campaign_repository.FindCampaignRequest(campaign_id="nope"))
     with pytest.raises(DomainError) as ei:
         views.required_campaign(found, "nope")
-    assert ei.value.kind is DomainKind.NOT_FOUND
+    assert ei.value.kind is Kind.NOT_FOUND
     assert ei.value.code == "campaign_missing"
 
 
@@ -64,4 +64,4 @@ def test_corrupted_record_is_infra_not_validation() -> None:
         views.required_campaign(found, "c1")
     assert not isinstance(ei.value, DomainError)
     assert isinstance(ei.value.__cause__, DomainError)
-    assert ei.value.__cause__.kind is DomainKind.VALIDATION
+    assert ei.value.__cause__.kind is Kind.VALIDATION

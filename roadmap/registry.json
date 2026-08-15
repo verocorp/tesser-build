@@ -308,7 +308,8 @@
       "go_analyzers": [],
       "py_checks": [],
       "enforcement_tests": [
-        "examples/errorspy/tests"
+        "tesser-py/tests/test_errors.py",
+        "examples/errorspy/campaign/tests"
       ],
       "rationale": []
     },

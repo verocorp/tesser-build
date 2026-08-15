@@ -1,7 +1,7 @@
 import pytest
 
-from errors import DomainError
 from kernel.slug import Slug
+from tesser.errors import DomainError
 
 
 def test_a_slug_validates_on_construction() -> None:

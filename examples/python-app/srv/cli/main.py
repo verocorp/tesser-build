@@ -11,7 +11,7 @@ from bootstrap.bootstrap import App, new
 from bootstrap.config import from_env
 import campaign.adapters.handlers.cli as cli
 from protocol.cli import CliRequest, CliResponse, Command, UsageError
-from errors import DomainError, InfraError, exit_code_for
+from tesser.errors import DomainError, InfraError, exit_code_for
 
 _USAGE: Final[str] = (
     "usage: python -m srv.cli.main <command> [args]\n"
