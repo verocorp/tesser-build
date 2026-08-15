@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 DOMAIN = ROOT / "tessercheck" / "domain" / "checks.py"
 TESTS = ROOT / "tessercheck" / "tests" / "test_checks.py"
+SIBLING_TESTS = sorted((ROOT / "tessercheck" / "domain").glob("test_*.py"))
 CONTRACTS = ROOT / ".importlinter"
 OUTPUT = ROOT / "RULES.md"
 
@@ -329,18 +330,19 @@ def rule_rows(tree: ast.Module) -> list[RuleRow]:
 
 
 def test_assertions() -> dict[str, list[str]]:
-    tree = ast.parse(TESTS.read_text())
     out: dict[str, list[str]] = {}
-    for fn in tree.body:
-        if not isinstance(fn, ast.FunctionDef) or not fn.name.startswith("test_"):
-            continue
-        literals: list[str] = []
-        for node in ast.walk(fn):
-            if isinstance(node, ast.Assert):
-                for sub in ast.walk(node):
-                    if isinstance(sub, ast.Constant) and isinstance(sub.value, str) and len(sub.value) >= 8:
-                        literals.append(sub.value)
-        out[fn.name] = literals
+    for path in [TESTS, *SIBLING_TESTS]:
+        tree = ast.parse(path.read_text())
+        for fn in tree.body:
+            if not isinstance(fn, ast.FunctionDef) or not fn.name.startswith("test_"):
+                continue
+            literals: list[str] = []
+            for node in ast.walk(fn):
+                if isinstance(node, ast.Assert):
+                    for sub in ast.walk(node):
+                        if isinstance(sub, ast.Constant) and isinstance(sub.value, str) and len(sub.value) >= 8:
+                            literals.append(sub.value)
+            out[fn.name] = literals
     return out
 
 

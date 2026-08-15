@@ -201,57 +201,6 @@ def test_indirect_subclass_still_classifies(tmp_path: Path) -> None:
         for f in findings
     )
 
-def test_placement_totality_is_flagged(tmp_path: Path) -> None:
-    conftest.write_module(
-        tmp_path,
-        "plain/domain/thing.py",
-        "import tesser.domain as ts\n"
-        "import tesser.context as tc\n"
-        "class Loose:\n"
-        "    pass\n"
-        "class Ask(tc.Request):\n"
-        "    def __init__(self, text: str) -> None:\n"
-        "        self.text = text\n"
-        "def stray() -> None:\n"
-        "    return None\n"
-        "LIMIT = 3\n"
-        "print('hi')\n",
-    )
-    findings = conftest.check_tree(tmp_path)
-    assert any("plain.domain.thing.Loose" in f and "every context class declares its block" in f for f in findings)
-    assert any("plain.domain.thing.Ask" in f and "a kind lives only in its role module" in f for f in findings)
-    assert any("plain.domain.thing.stray" in f and "a module function declares itself with @ts.function" in f for f in findings)
-    assert any("a module constant is Final" in f for f in findings)
-    assert any(
-        "a context module holds only imports, classes, declared functions, and Final constants" in f
-        for f in findings
-    )
-    assert any(
-        "imports tesser.context" in f and "a role module imports only its own tesser package" in f
-        for f in findings
-    )
-
-def test_declared_function_and_final_constant_pass(tmp_path: Path) -> None:
-    conftest.conforming_tree(tmp_path)
-    conftest.write_module(
-        tmp_path,
-        "app/domain2.py",
-        "",
-    )
-    conftest.write_module(
-        tmp_path,
-        "plain/domain/thing.py",
-        "from typing import Final\n"
-        "import tesser.domain as ts\n"
-        "LIMIT: Final[int] = 3\n"
-        "@ts.function\n"
-        "def declared() -> None:\n"
-        "    return None\n",
-    )
-    findings = conftest.check_tree(tmp_path)
-    assert not any("plain.domain.thing" in f and "@ts.function" in f for f in findings)
-    assert not any("plain.domain.thing" in f and "a module constant is Final" in f for f in findings)
-
 def test_non_context_module_and_nonempty_init_are_flagged(tmp_path: Path) -> None:
     conftest.conforming_tree(tmp_path)
     conftest.write_module(tmp_path, "app/util.py", "def anything() -> None:\n    return None\n")
@@ -1176,24 +1125,6 @@ def test_test_module_tesser_import_rules(tmp_path: Path) -> None:
         "a test module imports tesser.testing at most once, as ts" in f
         for f in findings
     )
-
-def test_homeless_modules_are_flagged(tmp_path: Path) -> None:
-    conftest.conforming_tree(tmp_path)
-    conftest.write_module(tmp_path, "loose.py", "def anything() -> None:\n    return None\n")
-    conftest.write_module(tmp_path, "stray/util.py", "def anything() -> None:\n    return None\n")
-    conftest.write_module(tmp_path, "rules.py", "def anything() -> None:\n    return None\n")
-    findings = conftest.check_tree(tmp_path)
-    assert any(
-        "loose belongs to no governed package; "
-        "every module belongs to a context, srv, bootstrap, tests, or the protocol package" in f
-        for f in findings
-    )
-    assert any(
-        "stray.util belongs to no governed package; "
-        "every module belongs to a context, srv, bootstrap, tests, or the protocol package" in f
-        for f in findings
-    )
-    assert any("rules belongs to no governed package" in f for f in findings)
 
 def test_tests_package_totality_is_flagged(tmp_path: Path) -> None:
     conftest.conforming_tree(tmp_path)
