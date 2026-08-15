@@ -9,8 +9,11 @@
 #
 # It installs each tree's own requirements-dev.txt rather than a curated union,
 # so this cannot drift when a tree adds a tool. The union today is mypy,
-# pytest, import-linter, ruff, and mutmut — all floor-pinned, no conflicts,
-# which is why a single environment works at all.
+# pytest, import-linter, and ruff floor-pinned, plus mutmut pinned exact
+# (==3.7.0 — the ecosystem test asserts that version's observed behavior).
+# No conflicts today, which is why a single environment works at all; the
+# exact pin is the one constraint that could collide if another tree ever
+# pins mutmut differently.
 #
 # CI does NOT use this: each job installs only its own tree's requirements, and
 # that isolation is load-bearing — it proves each requirements-dev.txt is

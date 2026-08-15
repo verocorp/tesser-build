@@ -136,7 +136,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   deleted function AND collides with the real `Response.json_body` reader
   (see item (c) of the wire-vocabulary entry below, which already rules the
   distinction) — rewrite the illustration, don't just rename the call.
-  Root `README.md:98-110` and `CLAUDE.md:8` both under-describe tesser-py
+  Root `README.md:106-121` and `CLAUDE.md:8` both under-describe tesser-py
   (each names only `tesser.domain.ValueObject`, while the package ships
   `adapters`, `application`, `context`, `domain`, `srv`, and `testing` —
   pre-existing narrowness, widened by every srv wave; fold in here).
@@ -409,21 +409,20 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 ## Toolkit
 
 - [ ] **ValueObject-shape adoption decision + classifier support** (shipped as
-  experiment 2026-08-01, `tesser-py/` + `examples/vobase/`)
+  experiment 2026-08-01, `tesser-py/`; `examples/vobase/` retired 2026-08-15 —
+  its mutmut-visibility purpose is now the ecosystem test in
+  `tesser-py/tests/ecosystem/mutmut/`)
   - **What:** decide whether `tesser.domain.ValueObject` (the mutmut-visible
     VO base) supersedes the frozen-dataclass idiom. If adopted:
     (1) teach `tessercheck-py`'s classifier to recognize `ts.ValueObject`
     subclasses as value objects — today TB003/TB010–TB014 are blind to the
     shape (red-team verified: a raw-primitive accessor that TB010 catches on a
     frozen dataclass passes silently on a ValueObject subclass);
-    (2) add the `examples/vobase` tessercheck CI gate — the
-    `vobase-example` job in `.github/workflows/test.yml` deliberately omits
-    tessercheck until then; TB032 also
-    misfires on `tests/test_money.py`'s `_spec` helper under the new shape;
-    (3) walk the affected rows in `rationale/coverage.md` and re-render
+    (2) walk the affected rows in `rationale/coverage.md` and re-render
     `skills/tesser-build/python.md`, bumping skill-version.
   - **Also found in that review, independent of the decision:**
-    `examples/python/catalog/money.py` shares the bugs the vobase port fixed —
+    `examples/python/catalog/money.py` carries the bugs the (now-retired)
+    vobase Money port had fixed —
     `MoneyAmount("NaN")` raises `decimal.InvalidOperation` (not ValueError,
     from `parsed < 0` outside the try), `"Infinity"` is accepted, and `add`
     silently rounds past 28 significant digits. Fix the catalog original (and

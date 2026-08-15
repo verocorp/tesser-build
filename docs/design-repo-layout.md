@@ -67,10 +67,13 @@ library concept — a "library" is an app that does no IO but still exposes a
 client and coordinates its domain through an application service; revisit only
 when someone has a real performance problem):
 
-- `app` — a Python tree that `scripts/verify` runs. `tesser-py` and
-  `examples/vobase` are app rows whose steps run mypy + pytest today and gain
-  the tessercheck step when their trees are reworked to conform — a one-line
-  change here, plus the conformance work there.
+- `app` — a Python tree that `scripts/verify` runs. `tesser-py` is an app row
+  whose steps run mypy + pytest today and gain the tessercheck step when the
+  tree is reworked to conform — a one-line change here, plus the conformance
+  work there. (`examples/vobase` was such a row until 2026-08-15; its real
+  purpose — showing that mutmut sees through `ts.ValueObject` but skips a
+  dataclass — is now an ecosystem test in
+  `tesser-py/tests/ecosystem/mutmut/`, so the tree retired.)
 - `ungated` — not part of the Python gates (Go directories are covered by the
   Go jobs; docs and skills by their own checks).
 
