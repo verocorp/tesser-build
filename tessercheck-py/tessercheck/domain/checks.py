@@ -186,6 +186,11 @@ ROLE_TESSER_PACKAGE: Final[dict[str, str]] = {
     "wiring": "tesser.context",
 }
 
+NORM_IMPORTS: Final[dict[str, frozenset[str]]] = {
+    "domain": frozenset({"tesser.serialization"}),
+    "test": frozenset({"tesser.serialization"}),
+}
+
 SAME_CONTEXT_IMPORTS: Final[dict[str, tuple[str, ...]]] = {
     "domain": (),
     "client": (),
@@ -1420,6 +1425,7 @@ class Codebase(ts.AggregateRoot):
         only_clause: str,
         once_clause: str,
         absent_clause: str | None,
+        norms: frozenset[str] = frozenset(),
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         seen_own = False
@@ -1427,6 +1433,19 @@ class Codebase(ts.AggregateRoot):
         for imp in module.tesser_imports():
             target = str(imp._target)
             lineno = int(imp._lineno)
+            if target in norms:
+                if str(imp._form) != "from":
+                    found.append(
+                        Violation(
+                            module.path(),
+                            lineno,
+                            "TB050",
+                            f"{module.name()} imports {target} whole; a norm module "
+                            "is from-imported by name, never whole — the ts alias "
+                            "belongs to the placement's own package",
+                        )
+                    )
+                continue
             seen_any = True
             if target != package:
                 found.append(
@@ -3112,6 +3131,16 @@ class Codebase(ts.AggregateRoot):
                 module,
                 "role",
                 ROLE_TESSER_PACKAGE[role],
+                "a domain module's tesser imports are tesser.domain and tesser.serialization",
+                "a role module imports its tesser package exactly once, as ts",
+                "a role module imports its tesser package exactly once, as ts",
+                NORM_IMPORTS[role],
+            )
+            if role == "domain"
+            else self._tesser_import_violations(
+                module,
+                "role",
+                ROLE_TESSER_PACKAGE[role],
                 "a role module imports only its own tesser package",
                 "a role module imports its tesser package exactly once, as ts",
                 "a role module imports its tesser package exactly once, as ts",
@@ -3517,9 +3546,10 @@ class Codebase(ts.AggregateRoot):
                 module,
                 "test",
                 "tesser.testing",
-                "a test module imports only tesser.testing",
+                "a test module's tesser imports are tesser.testing and tesser.serialization",
                 "a test module imports tesser.testing at most once, as ts",
                 None,
+                NORM_IMPORTS["test"],
             )
         )
         for stmt in module.body():
