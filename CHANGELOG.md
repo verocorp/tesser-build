@@ -5,6 +5,32 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.41.0] - 2026-08-15
+
+The first norm module goes live end to end: the analyzer learns the grant
+and the trees exercise it in the same change, so the allowance is earned the
+moment it exists — no checker-only allowance, no migration waiting on a rule.
+
+### Added
+- **`NORM_IMPORTS`**: the tesser norm modules a placement may from-import
+  beside its one ts-aliased package. First grant: `tesser.serialization` for
+  domain and test modules — the two placements the trees' canonical exits
+  exercise. A norm module is from-imported by name, never whole (the ts
+  alias belongs to the placement's own package), and a norm import does not
+  satisfy the package-presence rule. All other placements still reject it;
+  protocol and ports are untouched.
+
+### Removed
+- **The three root `serialization.py` copies** (python-app, serdepy,
+  errorspy — byte-identical): nine import sites move to
+  `tesser.serialization` and seven site-level `TB062` ignores go with them.
+  The mypy target lists in `scripts/verify` shrink to match.
+
+### Changed
+- `serialization.md` rule 3 names `tesser.serialization` as the one
+  implementation site; `python.md`'s transcription note shrinks to the
+  `errors` imports that still await their own move. skill-version 38.
+
 ## [0.0.40.0] - 2026-08-15
 
 The generic halves of the trees' root modules move into the runtime. Four
