@@ -1300,3 +1300,67 @@ def test_a_protocol_module_imports_nothing_else_from_its_tree() -> None:
         "a protocol module imports nothing else from its tree" in f
         for f in findings
     )
+
+
+def test_a_norm_module_is_from_imported_where_its_placement_allows() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "fine/domain/money.py",
+                "fine.domain.money",
+                "import tesser.domain as ts\n"
+                "from tesser.serialization import canonical_str\n"
+                "class MoneySpec(ts.Spec):\n"
+                "    def __init__(self, code: str) -> None:\n"
+                "        self.code = canonical_str(code)\n",
+                False,
+            ),
+            (
+                "whole/domain/money.py",
+                "whole.domain.money",
+                "import tesser.domain as ts\n"
+                "import tesser.serialization\n"
+                "class WholeSpec(ts.Spec):\n"
+                "    def __init__(self, code: str) -> None:\n"
+                "        self.code = code\n",
+                False,
+            ),
+            (
+                "appside/application/service.py",
+                "appside.application.service",
+                "import tesser.application as ts\n"
+                "from tesser.serialization import canonical_str\n"
+                "class SideService(ts.ApplicationService):\n"
+                "    def ask(self, code: str) -> str:\n"
+                "        return canonical_str(code)\n",
+                False,
+            ),
+            (
+                "only/domain/money.py",
+                "only.domain.money",
+                "from tesser.serialization import canonical_str\n"
+                "class OnlyMoney:\n"
+                "    def __init__(self, code: str) -> None:\n"
+                "        self.code = canonical_str(code)\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any("fine.domain.money" in f for f in findings)
+    assert any(
+        "whole.domain.money imports tesser.serialization whole; a norm module "
+        "is from-imported by name, never whole — the ts alias belongs to the "
+        "placement's own package" in f
+        for f in findings
+    )
+    assert any(
+        "appside.application.service imports tesser.serialization; "
+        "a role module imports only its own tesser package" in f
+        for f in findings
+    )
+    assert any(
+        "only.domain.money never imports tesser.domain; "
+        "a role module imports its tesser package exactly once, as ts" in f
+        for f in findings
+    )

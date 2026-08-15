@@ -3,7 +3,7 @@ from __future__ import annotations
 import tesser.domain as ts
 
 from errors import invalid  # tessercheck:ignore TB062
-from serialization import canonical_str  # tessercheck:ignore TB062
+from tesser.serialization import canonical_str
 
 
 class LabelValue(ts.ValueObject):

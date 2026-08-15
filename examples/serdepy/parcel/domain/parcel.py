@@ -8,7 +8,7 @@ from typing import Final
 
 import tesser.domain as ts
 
-from serialization import (  # tessercheck:ignore TB062
+from tesser.serialization import (
     canonical_bytes,
     canonical_datetime,
     canonical_decimal,

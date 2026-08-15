@@ -7,7 +7,7 @@ from urllib.parse import urlparse  # tessercheck:ignore TB062
 import tesser.domain as ts
 
 from errors import invalid  # tessercheck:ignore TB062
-from serialization import canonical_str  # tessercheck:ignore TB062
+from tesser.serialization import canonical_str
 
 _SLUG_RE: Final[re.Pattern[str]] = re.compile(r"[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?")
 _CAMPAIGN_ID_RE: Final[re.Pattern[str]] = re.compile(r"[a-f0-9]{16}")

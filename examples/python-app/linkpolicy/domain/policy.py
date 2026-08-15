@@ -6,7 +6,7 @@ from urllib.parse import urlparse  # tessercheck:ignore TB062
 import tesser.domain as ts
 
 from errors import invalid  # tessercheck:ignore TB062
-from serialization import canonical_str  # tessercheck:ignore TB062
+from tesser.serialization import canonical_str
 
 _DEFAULT_SCHEMES: Final[tuple[str, ...]] = ("https",)
 _DEFAULT_BLOCKED: Final[tuple[str, ...]] = ("evil.example", "malware.test")

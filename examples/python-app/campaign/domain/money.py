@@ -7,7 +7,7 @@ from typing import Final
 import tesser.domain as ts
 
 from errors import invalid  # tessercheck:ignore TB062
-from serialization import canonical_decimal, canonical_str  # tessercheck:ignore TB062
+from tesser.serialization import canonical_decimal, canonical_str
 
 _CURRENCY_RE: Final[re.Pattern[str]] = re.compile(r"[A-Z]{3}")
 
