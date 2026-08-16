@@ -431,28 +431,51 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 
 ## Toolkit
 
-- [ ] **ValueObject-shape adoption decision + classifier support** (shipped as
-  experiment 2026-08-01, `tesser-py/`; `examples/vobase/` retired 2026-08-15 —
-  its mutmut-visibility purpose is now the ecosystem test in
-  `tesser-py/tests/ecosystem/mutmut/`)
-  - **What:** decide whether `tesser.domain.ValueObject` (the mutmut-visible
-    VO base) supersedes the frozen-dataclass idiom. If adopted:
-    (1) teach `tessercheck-py`'s classifier to recognize `ts.ValueObject`
-    subclasses as value objects — today TB003/TB010–TB014 are blind to the
-    shape (red-team verified: a raw-primitive accessor that TB010 catches on a
-    frozen dataclass passes silently on a ValueObject subclass);
-    (2) walk the affected rows in `rationale/coverage.md` and re-render
-    `skills/tesser-build/python.md`, bumping skill-version.
-  - **Also found in that review, independent of the decision:**
-    `examples/python/catalog/money.py` carries the bugs the (now-retired)
-    vobase Money port had fixed —
-    `MoneyAmount("NaN")` raises `decimal.InvalidOperation` (not ValueError,
-    from `parsed < 0` outside the try), `"Infinity"` is accepted, and `add`
-    silently rounds past 28 significant digits. Fix the catalog original (and
-    check `examples/python-app`'s VOs for the same class of gap).
-  - **Context:** decision frame = (a)+cosmic-ray vs (e)+mutmut, measured
-    2026-07-29; five-way prototype data in the session memory
-    `go-ddd-mutmut-vo-stance` and `~/.tesser/digests/github.com/boxed/mutmut@*`.
+- [x] **ValueObject-shape adoption decision + classifier support** —
+  **DECIDED 2026-08-16 (Chris): `ts.ValueObject` supersedes the
+  frozen-dataclass idiom, and the toolkit ships no dataclass at all.** The
+  reason is measured, not stylistic: mutmut skips a decorated class
+  wholesale, so the dataclass idiom and everything written inside it is
+  invisible to mutation testing (`tesser-py/tests/ecosystem/mutmut/` asserts
+  both halves). Both follow-ups were already satisfied when the decision
+  landed — the classifier maps `("tesser.domain", "ValueObject")` to
+  `valueobject` (`checks.py:21`), so `TB010`–`TB014` and the serialization
+  norm see the shape; `skills/tesser-build/python.md` teaches `ts.ValueObject`
+  with no dataclass mention; `rationale/coverage.md` already records the
+  dissolved dataclass-era rows. Closed out by correcting the record:
+  `README.md` (which still called the dataclass the taught convention),
+  `docs/design-python-analyzer.md` (marked superseded on the substrate
+  question), and `tesser.errors` (the last shipped dataclass, removed).
+
+- [ ] **Move the rest of the repo off dataclasses** (the target Chris set
+  2026-08-16 alongside the adoption decision). The distribution is clean;
+  these remain, and each is a real question rather than a mechanical swap:
+  - `examples/python-app/bootstrap/config.py` (2) and
+    `tessercheck-py/bootstrap/config.py` (1) — app-level config aggregation.
+    Each already carries `# tessercheck:ignore TB051`, because a bootstrap
+    module holds imports, declared functions, and Final constants — **no
+    class at all**. So the fix is not a different base: either the app-level
+    config moves out of bootstrap to a home where a class is legal, or
+    TB051 grows a declared config kind. Going off dataclasses here *deletes*
+    suppressions, which is the sign the direction is right.
+  - `examples/python-app/srv/http/router.py` (1, `# tessercheck:ignore
+    TB052`) — a `Route` record in a srv module; same shape of question.
+  - `roadmap/generate.py`, `examples/spike-totalreturn/probe.py` — a
+    Go/Python hybrid tool and an ungated spike; lowest stakes.
+  - **Deliberately keep:** `tesser-py/tests/ecosystem/mutmut/fixtures/dcvo/`
+    (the negative control — it exists *because* it is a dataclass) and
+    `tessercheck-py/testdata/tb031/` (analyzer fixtures under test).
+
+- [ ] **`examples/python-app`'s Money accepts non-finite amounts** (found in
+  the 2026-08-01 review, verified still live 2026-08-16). The path in the
+  old note (`examples/python/catalog/money.py`) no longer exists; the code
+  is `examples/python-app/campaign/domain/money.py`. Measured:
+  `MoneyAmount("Infinity")` is **accepted** (`Decimal("Infinity") < 0` is
+  False), and `MoneyAmount("NaN")` escapes as `decimal.InvalidOperation`
+  rather than a `DomainError` — the `parsed < 0` comparison sits outside the
+  try. Also check `add` for silent rounding past 28 significant digits, and
+  sweep the other VOs for the same class of gap. This is the behavioral
+  ground the retired vobase Money port had covered.
 
 - [ ] **TB031 construction-completeness checker** (contract landed 2026-07-20,
   v0.0.5.0)

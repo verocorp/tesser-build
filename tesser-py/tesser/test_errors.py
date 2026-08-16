@@ -2,7 +2,7 @@ import pytest
 
 from tesser.errors import (
     DomainError,
-    FieldProblem,
+    NeedsDesignFieldProblem,
     InfraError,
     Kind,
     collect,
@@ -66,8 +66,8 @@ def test_collect_gathers_validation_problems_into_one_error() -> None:
     assert err.kind is Kind.VALIDATION
     assert err.code == "validation_failed"
     assert err.problems == (
-        FieldProblem("bad_name", "name", "empty"),
-        FieldProblem("bad_slug", "s", "empty"),
+        NeedsDesignFieldProblem("bad_name", "name", "empty"),
+        NeedsDesignFieldProblem("bad_slug", "s", "empty"),
     )
 
 

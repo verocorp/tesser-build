@@ -5,6 +5,42 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.53.0] - 2026-08-16
+
+The toolkit stops shipping the one construction its own gate proves is
+invisible. `ts.ValueObject` supersedes the frozen-dataclass idiom (Chris,
+2026-08-16), and the distribution carries no dataclass.
+
+### Changed
+- **`tesser.errors` drops its last `@dataclass(frozen=True)`.** `FieldProblem`
+  becomes a hand-rolled frozen carrier — local and deletable, rather than
+  entangled with `tesser.srv.Record` or minting a new module for a type that is
+  about to be redesigned. The mutmut ecosystem gate exists to prove the frozen
+  dataclass is invisible to mutation testing; the shipped library was the last
+  place still using it.
+- **It is now `NeedsDesignFieldProblem`.** The name carries the smell rather
+  than hiding it: the `domain → collect → application → edge` pass, the
+  `collect()` aggregation itself, and a domain-facing type named for its RFC
+  9457 destination are all unresolved design.
+- **The record catches up.** README claimed the taught convention was still the
+  frozen dataclass, contradicting the skill it points at.
+  `docs/design-python-analyzer.md` reasons throughout about a dataclass
+  substrate — VO identification by decorator, `dataclasses.replace()` as a
+  construction door, accessors dropped because "dataclass fields are public by
+  idiom" — and is marked superseded on that question, kept as the record of how
+  the Python gate was planned. Both of the adoption TODO's open follow-ups were
+  already satisfied in code: the classifier maps
+  `("tesser.domain", "ValueObject")` to `valueobject`, so `TB010`–`TB014` and
+  the serialization norm already see the shape.
+
+### Removed
+- The ValueObject-adoption TODO closes. What it carried splits into two real
+  items: the repo's remaining dataclasses (each a design question, not a swap —
+  the bootstrap configs need a legal home for a class, not a different base),
+  and python-app's `Money`, whose bugs the old note filed under a path that no
+  longer exists. Verified still live: `Infinity` is accepted, and `NaN` escapes
+  as `decimal.InvalidOperation` instead of a `DomainError`.
+
 ## [0.0.52.0] - 2026-08-16
 
 The tree that defines the conventions is now checked by them. `tesser-py`

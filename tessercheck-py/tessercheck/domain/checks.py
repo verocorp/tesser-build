@@ -157,7 +157,6 @@ TESSER_STDLIB: Final[frozenset[str]] = frozenset(
         "enum",
         "datetime",
         "decimal",
-        "dataclasses",
     }
 )
 

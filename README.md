@@ -103,22 +103,27 @@ carry a `.tesser-root` file declaring `app` at its root, or the run reports
 output; suppress a single finding with a trailing
 `# tessercheck:ignore TB0xx`.
 
-### `tesser-py`: the Python runtime library (experimental)
+### `tesser-py`: the Python runtime library
 
-The repo's first runtime artifact ([`tesser-py/`](tesser-py/)):
+The repo's runtime artifact ([`tesser-py/`](tesser-py/)):
 `tesser.domain.ValueObject`, an undecorated base class giving value objects
 type-exact `__dict__` equality, a derived hash, a generic repr, and a frozen
-guard. As with frozen dataclasses, the frozen guard blocks rebinding only —
-fields must themselves be immutable values (value objects, not lists or
-dicts), or equality silently changes after construction. It exists because
-mutmut skips any decorated class wholesale, so the
-frozen-dataclass idiom is invisible to mutation testing. That claim is
-executable: the ecosystem test in
+guard. The frozen guard blocks rebinding only — fields must themselves be
+immutable values (value objects, not lists or dicts), or equality silently
+changes after construction.
+
+**This is the taught convention** (maintainer ruling 2026-08-16, superseding
+the frozen-dataclass idiom): a Python value object subclasses
+`ts.ValueObject`, and the toolkit itself ships no dataclass. The reason is
+executable, not stylistic — mutmut skips a decorated class wholesale, so a
+frozen dataclass and everything written inside it is invisible to mutation
+testing. The ecosystem test in
 [`tesser-py/tests/ecosystem/mutmut/`](tesser-py/tests/ecosystem/mutmut/)
-runs the mutmut CLI on the same value object built both ways and asserts
+runs the mutmut CLI over the same value object built both ways and asserts
 mutants are generated and killed for the `ts.ValueObject` build while the
-dataclass build produces none. Candidate successor shape under evaluation —
-the taught convention is still the frozen dataclass.
+dataclass build produces none. `skills/tesser-build/python.md` teaches the
+shape; the analyzer classifies it (a `ts.ValueObject` subclass is a value
+object to `TB010`–`TB014` and the serialization norm).
 
 ### Using it in CI: the `go tool` directive
 
