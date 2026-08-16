@@ -7,7 +7,6 @@ import linkpolicy.client.client as linkpolicy_client
 import linkpolicy.wiring.wire as linkpolicy_wire
 import reports.client.client as reports_client
 import reports.wiring.wire as reports_wire
-from tesser.lifecycle import Closeable
 
 import bootstrap.config as config
 
@@ -15,7 +14,7 @@ import bootstrap.config as config
 class App:  # tessercheck:ignore TB051
 
     def __init__(self, cfg: config.Config) -> None:
-        made: list[Closeable] = []
+        made: list[linkpolicy_wire.LinkPolicy | campaign_wire.Campaign | reports_wire.Reports] = []
         try:
             policies = linkpolicy_wire.LinkPolicy(cfg.linkpolicy)
             made.append(policies)
@@ -29,7 +28,9 @@ class App:  # tessercheck:ignore TB051
             for built in made:
                 built.close()
             raise
-        self._components: tuple[Closeable, ...] = (policies, campaigns, reports)
+        self._components: tuple[
+            linkpolicy_wire.LinkPolicy | campaign_wire.Campaign | reports_wire.Reports, ...
+        ] = (policies, campaigns, reports)
         self.http: config.HttpConfig = cfg.http
         self.campaign: campaign_client.Client = campaigns.client
         self.linkpolicy: linkpolicy_client.Client = policies.client

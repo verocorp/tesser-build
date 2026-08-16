@@ -8,15 +8,13 @@ import campaign.application.service as service
 import campaign.client.client as client
 import campaign.wiring.config as config
 from tesser.errors import invalid
-from tesser.lifecycle import Closeable
 
 
 class Campaign(ts.Wiring):
 
     def __init__(self, cfg: config.Config, policy: target_policy.TargetPolicy) -> None:
-        repo = self._repo_for(cfg)
-        self._closeable: Closeable = repo
-        self.client: client.Client = service.CampaignService(repo, policy)
+        self._repo = self._repo_for(cfg)
+        self.client: client.Client = service.CampaignService(self._repo, policy)
 
     def _repo_for(self, cfg: config.Config) -> repo_memory.InMemoryCampaignRepository:
         if cfg.storage == "memory":
@@ -26,4 +24,4 @@ class Campaign(ts.Wiring):
         raise invalid("unknown_backend", f"campaign storage {cfg.storage!r} not supported")
 
     def close(self) -> None:
-        self._closeable.close()
+        self._repo.close()

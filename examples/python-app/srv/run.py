@@ -7,12 +7,12 @@ from typing import Optional
 
 import tesser.srv as ts
 
-from tesser.lifecycle import Closeable
+from bootstrap.app import App
 from protocol.lifecycle import Host
 
 
 @ts.function
-def run_until_signal(host: Host, app: Closeable) -> None:
+def run_until_signal(host: Host, app: App) -> None:
     stop = threading.Event()
 
     def _handle(signum: int, frame: Optional[FrameType]) -> None:
