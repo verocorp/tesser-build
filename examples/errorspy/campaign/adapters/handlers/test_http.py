@@ -6,7 +6,7 @@ import tesser.testing as ts
 
 import campaign.adapters.handlers.http as handlers
 import campaign.client.client as client
-from tesser.errors import DomainError, FieldProblem, InfraError, Kind, conflict, invalid, not_found
+from tesser.errors import DomainError, NeedsDesignFieldProblem, InfraError, Kind, conflict, invalid, not_found
 
 
 @ts.fake
@@ -150,8 +150,8 @@ def test_an_aggregated_validation_failure_lists_every_invalid_param() -> None:
             "validation_failed",
             "one or more fields are invalid",
             problems=(
-                FieldProblem("bad_slug", "slug", "invalid slug 'BAD'"),
-                FieldProblem("bad_target_url", "target_url", "invalid target url 'ftp://x'"),
+                NeedsDesignFieldProblem("bad_slug", "slug", "invalid slug 'BAD'"),
+                NeedsDesignFieldProblem("bad_target_url", "target_url", "invalid target url 'ftp://x'"),
             ),
         )
     )

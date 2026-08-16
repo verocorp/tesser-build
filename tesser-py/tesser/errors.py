@@ -1,6 +1,5 @@
 import enum
 from collections.abc import Callable
-from dataclasses import dataclass
 from typing import assert_never
 
 
@@ -11,12 +10,36 @@ class Kind(enum.Enum):
     CONFLICT = "conflict"
 
 
-@dataclass(frozen=True)
-class FieldProblem:
+class NeedsDesignFieldProblem:
 
     code: str
     field: str | None
     message: str
+
+    def __init__(self, code: str, field: str | None, message: str) -> None:
+        object.__setattr__(self, "code", code)
+        object.__setattr__(self, "field", field)
+        object.__setattr__(self, "message", message)
+
+    def __eq__(self, other: object) -> bool:
+        if type(self) is not type(other):
+            return NotImplemented
+        return self.__dict__ == other.__dict__
+
+    def __hash__(self) -> int:
+        return hash((type(self), self.code, self.field, self.message))
+
+    def __repr__(self) -> str:
+        return (
+            f"NeedsDesignFieldProblem(code={self.code!r}, "
+            f"field={self.field!r}, message={self.message!r})"
+        )
+
+    def __setattr__(self, name: str, value: object) -> None:
+        raise AttributeError(f"{type(self).__name__} is frozen: cannot set {name!r}")
+
+    def __delattr__(self, name: str) -> None:
+        raise AttributeError(f"{type(self).__name__} is frozen: cannot delete {name!r}")
 
 
 class DomainError(Exception):
@@ -28,7 +51,7 @@ class DomainError(Exception):
         message: str,
         *,
         field: str | None = None,
-        problems: tuple[FieldProblem, ...] = (),
+        problems: tuple[NeedsDesignFieldProblem, ...] = (),
     ) -> None:
         super().__init__(message)
         self.kind = kind
@@ -65,14 +88,14 @@ def wrap(err: DomainError, message: str, *, field: str | None = None) -> DomainE
 
 
 def collect(**fields: Callable[[], object]) -> None:
-    problems: list[FieldProblem] = []
+    problems: list[NeedsDesignFieldProblem] = []
     for name, thunk in fields.items():
         try:
             thunk()
         except DomainError as e:
             if e.kind is not Kind.VALIDATION:
                 raise
-            problems.append(FieldProblem(e.code, e.field or name, e.message))
+            problems.append(NeedsDesignFieldProblem(e.code, e.field or name, e.message))
     if problems:
         raise DomainError(
             Kind.VALIDATION,
