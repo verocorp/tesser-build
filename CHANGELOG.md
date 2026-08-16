@@ -5,6 +5,30 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.50.0] - 2026-08-16
+
+The rule the whole arc served: **TB074 — every implementation module
+carries exactly one sibling test file**, in both directions.
+
+### Added
+- **`TB074`**: an implementation module (role, kernel, srv, bootstrap,
+  protocol places) with no sibling `test_<module>.py` is a finding, and a
+  sibling test file naming no module beside it is a finding. Exempt by
+  construction: `application/ports` modules, declaration-only modules
+  (every class a declared DTO/Protocol block, methods stopping at
+  `__init__` — `client.py` is the canonical case), `__init__.py`,
+  `conftest`, and `tests/` packages (the wired tier pairs with the app, not
+  a module). **No temporary exemptions**: the one module that genuinely
+  cannot be tested — llmport's `srv/voice/agent.py`, bound to an
+  uninstallable vendor SDK — carries a site-level ignore where the finding
+  lands, as visible debt. Run over the repo, the rule fired on exactly that
+  one module: the three pairing waves left nothing owed.
+
+### Changed
+- The checker's own spec fixtures gain their sibling pairs (the rule
+  applies to the trees the tests build, too). TB074 joins the norm-testing
+  roadmap row; `testing.md` and `CLAUDE.md` teach it. skill-version 41.
+
 ## [0.0.49.0] - 2026-08-16
 
 Third and largest pairing wave: python-app reaches
