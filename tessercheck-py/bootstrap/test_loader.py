@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import tesser.testing as ts
-from tesser.app import ConfigRepository
 
 import bootstrap.config as config
 import bootstrap.loader as loader
+import bootstrap.repository as repository
 import tessercheck.wiring.config as component_config
 
 
 @ts.fake
-class FakeConfigRepository(ConfigRepository[config.Config]):
+class FakeConfigRepository(repository.ConfigRepository):
 
     def __init__(self) -> None:
         self.reads = 0

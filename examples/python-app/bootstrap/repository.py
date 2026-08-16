@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 
+from typing import Protocol
+
 import tesser.app as ts
 
 import campaign.wiring.config as campaign_config
@@ -12,7 +14,12 @@ from tesser.errors import invalid
 import bootstrap.config as config
 
 
-class EnvConfigRepository(ts.ConfigRepository[config.Config]):
+class ConfigRepository(ts.ConfigRepository, Protocol):
+
+    def get(self) -> config.Config: ...
+
+
+class EnvConfigRepository(ConfigRepository):
 
     def get(self) -> config.Config:
         return config.Config(
