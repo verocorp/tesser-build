@@ -4,10 +4,8 @@ import textwrap
 from collections.abc import Callable
 from pathlib import Path
 
-from tessercheck.adapters.repositories import (
-    FilesystemRulebookSources,
-    FilesystemSourceReader,
-)
+from tessercheck.adapters.repositories.rulebook_sources import FilesystemRulebookSources
+from tessercheck.adapters.repositories.source_reader import FilesystemSourceReader
 from tessercheck.application.service import TessercheckService
 from tessercheck.client.client import CheckRequest
 

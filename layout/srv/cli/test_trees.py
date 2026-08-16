@@ -7,7 +7,7 @@ import tesser.testing as ts
 
 from bootstrap.bootstrap import new
 import repo.adapters.handlers.cli as cli
-from srv.cli.check import respond, run
+from srv.cli.trees import respond, run
 
 
 @ts.helper
@@ -40,38 +40,50 @@ def _repo(root: Path) -> Path:  # tessercheck:ignore TB073
     return root
 
 
-def test_a_missing_root_argument_exits_two() -> None:
-    response = respond(cli.Handler(new().repo), [])
-    assert response.exit_code == 2
-    assert "usage: python -m srv.cli.check" in response.stderr
-
-
-def test_an_extra_argument_exits_two() -> None:
-    response = respond(cli.Handler(new().repo), ["/r", "extra"])
-    assert response.exit_code == 2
-
-
-def test_a_clean_repo_exits_zero_with_the_summary(tmp_path: Path) -> None:
+def test_a_clean_repo_exits_zero_with_the_app_rows(tmp_path: Path) -> None:
     response = respond(cli.Handler(new().repo), [str(_repo(tmp_path))])
     assert response.exit_code == 0
-    assert "3 rows, 1 app trees" in response.stdout
+    assert response.stdout == "appone"
+    assert response.stderr == ""
 
 
-def test_problems_exit_one_on_stderr(tmp_path: Path) -> None:
+def test_a_missing_root_argument_exits_two_with_the_usage() -> None:
+    response = respond(cli.Handler(new().repo), [])
+    assert response.exit_code == 2
+    assert response.stdout == ""
+    assert "usage: python -m srv.cli.trees" in response.stderr
+
+
+def test_an_extra_argument_exits_two_with_the_usage(tmp_path: Path) -> None:
+    response = respond(cli.Handler(new().repo), [str(_repo(tmp_path)), "extra"])
+    assert response.exit_code == 2
+    assert "usage: python -m srv.cli.trees" in response.stderr
+
+
+def test_a_broken_manifest_exits_one_on_stderr(tmp_path: Path) -> None:
     _repo(tmp_path)
-    (tmp_path / "stray").mkdir()
+    (tmp_path / "manifest.json").write_text("{ truncated")
     response = respond(cli.Handler(new().repo), [str(tmp_path)])
     assert response.exit_code == 1
-    assert "layout: " in response.stderr
+    assert response.stdout == ""
+    assert "manifest.json is unreadable" in response.stderr
 
 
-def test_run_prints_the_summary_to_stdout_and_returns_zero(
+def test_an_unregistered_directory_exits_one_before_listing(tmp_path: Path) -> None:
+    _repo(tmp_path)
+    (tmp_path / "utils").mkdir()
+    response = respond(cli.Handler(new().repo), [str(tmp_path)])
+    assert response.exit_code == 1
+    assert "no manifest.json row" in response.stderr
+
+
+def test_run_prints_the_trees_to_stdout_and_returns_zero(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     code = run([str(_repo(tmp_path))])
     captured = capsys.readouterr()
     assert code == 0
-    assert "3 rows, 1 app trees" in captured.out
+    assert captured.out == "appone\n"
     assert captured.err == ""
 
 
@@ -82,15 +94,10 @@ def test_run_prints_a_usage_error_to_stderr_and_returns_two(
     captured = capsys.readouterr()
     assert code == 2
     assert captured.out == ""
-    assert "usage: python -m srv.cli.check" in captured.err
+    assert "usage: python -m srv.cli.trees" in captured.err
 
 
-def test_run_prints_problems_to_stderr_and_returns_one(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_run_prints_problems_to_stderr_and_returns_one(tmp_path: Path) -> None:
     _repo(tmp_path)
-    (tmp_path / "stray").mkdir()
-    code = run([str(tmp_path)])
-    captured = capsys.readouterr()
-    assert code == 1
-    assert "layout: " in captured.err
+    (tmp_path / "manifest.json").write_text("{ truncated")
+    assert run([str(tmp_path)]) == 1

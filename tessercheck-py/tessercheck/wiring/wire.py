@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import tesser.context as ts
 
-import tessercheck.adapters.repositories as repositories
+import tessercheck.adapters.repositories.rulebook_sources as rulebook_repository
+import tessercheck.adapters.repositories.source_reader as source_repository
 import tessercheck.application.service as service
 import tessercheck.client.client as client
 import tessercheck.wiring.config as config
@@ -19,8 +20,8 @@ class NoResources(ts.Wiring):
 def build(cfg: config.Config) -> tuple[client.Client, Closeable]:
     return (
         service.TessercheckService(
-            repositories.FilesystemSourceReader(),
-            repositories.FilesystemRulebookSources(),
+            source_repository.FilesystemSourceReader(),
+            rulebook_repository.FilesystemRulebookSources(),
         ),
         NoResources(),
     )
