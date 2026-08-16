@@ -64,14 +64,25 @@ them together — not a service and not a handler?* Yes → composition root.
 
 ```
 bootstrap/                       ← service-owned, app-level
-  config.py / config.go          ← app Config: nested from per-context Configs
-  bootstrap.py / bootstrap.go    ← new(cfg Config) → App   (validate, build once)
+  config.py                      ← ts.Spec + ts.Config: nested from per-component Configs
+  repository.py                  ← ts.ConfigRepository: reads the environment, decodes a Config
+  app.py                         ← ts.App: App(cfg) builds the components; close() closes them
+  loader.py                      ← ts.Loader + the one @ts.load function
 
-def new(cfg: Config) -> App:
-    policy_client, closer  = linkpolicy_wire.build(cfg.linkpolicy)   # per-context wiring
-    campaign_client, closer = campaign_wire.build(cfg.campaign, checker)
-    ...
-    return App(campaign_client, policy_client, ..., stack)           # App owns close()
+class App(ts.App):
+    def __init__(self, cfg: config.Config) -> None:
+        linkpolicy = linkpolicy_wire.LinkPolicy(cfg.linkpolicy)      # per-component construction
+        try:
+            campaign = campaign_wire.Campaign(cfg.campaign, policy)  # cross-component edge
+        except Exception:
+            linkpolicy.close()                                       # a half-built app never exists
+            raise
+        ...
+
+    def close(self) -> None:
+        self.reports.close()                                         # each closes what it made
+        self.campaign.close()
+        self.linkpolicy.close()
 ```
 
 The impl-selection site (an in-memory vs a database-backed repository) is inside

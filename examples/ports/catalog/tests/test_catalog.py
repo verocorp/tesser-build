@@ -43,14 +43,14 @@ class FakeNamePolicy(name_policy.NamePolicy):
 
 
 def test_add_then_get_returns_the_item() -> None:
-    svc = wire.CatalogWiring().client()
+    svc = wire.Catalog().client
     svc.add(client.AddItemRequest(id="a1", name="Anvil"))
     got = svc.get(client.GetItemRequest(id="a1"))
     assert tuple((v.id, v.name) for v in got.items) == (("a1", "Anvil"),)
 
 
 def test_get_of_an_unknown_item_answers_empty() -> None:
-    svc = wire.CatalogWiring().client()
+    svc = wire.Catalog().client
     got = svc.get(client.GetItemRequest(id="nope"))
     assert got.items == ()
 
@@ -66,13 +66,13 @@ def test_an_archived_item_is_not_served_as_live() -> None:
 
 
 def test_a_reserved_name_is_refused_with_a_reason() -> None:
-    svc = wire.CatalogWiring().client()
+    svc = wire.Catalog().client
     added = svc.add(client.AddItemRequest(id="c3", name="admin"))
     assert (added.id, added.reason) == ("", "name is reserved")
 
 
 def test_list_returns_every_stored_item() -> None:
-    svc = wire.CatalogWiring().client()
+    svc = wire.Catalog().client
     svc.add(client.AddItemRequest(id="d4", name="Drill"))
     listed = svc.list(client.ListItemsRequest())
     assert tuple(v.name for v in listed.items) == ("Drill",)

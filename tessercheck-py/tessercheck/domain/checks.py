@@ -161,6 +161,8 @@ TESSER: Final[str] = "tesser"
 
 TESSER_NAMESPACES: Final[frozenset[str]] = frozenset(
     {
+        "app",
+        "component",
         "domain",
         "application",
         "adapters",

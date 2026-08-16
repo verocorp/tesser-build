@@ -1,4 +1,6 @@
-from __future__ import annotations  # tessercheck:ignore TB050
+from __future__ import annotations
+
+import tesser.app as ts
 
 import campaign.adapters.gateways.target_policy as target_policy
 import campaign.wiring.wire as campaign_wire
@@ -8,7 +10,7 @@ import reports.wiring.wire as reports_wire
 import bootstrap.config as config
 
 
-class App:  # tessercheck:ignore TB051
+class App(ts.App):
 
     def __init__(self, cfg: config.Config) -> None:
         linkpolicy = linkpolicy_wire.LinkPolicy(cfg.linkpolicy)

@@ -2,6 +2,7 @@ from typing import Protocol
 
 import tesser.adapters
 import tesser.application
+import tesser.component
 import tesser.context
 import tesser.domain
 import tesser.srv
@@ -108,7 +109,7 @@ def test_shells_classify_subclasses() -> None:
     class Reply(tesser.context.Response):
         pass
 
-    class Wire(tesser.context.Wiring):
+    class Wire(tesser.component.Component):
         pass
 
     class Inbound(tesser.adapters.Handler):

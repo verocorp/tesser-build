@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import tesser.context as ts
+import tesser.component as ts
 
 import campaign.adapters.gateways.repo_memory as repo_memory
 import campaign.application.ports.target_policy as target_policy
@@ -10,7 +10,7 @@ import campaign.wiring.config as config
 from tesser.errors import invalid
 
 
-class Campaign(ts.Wiring):
+class Campaign(ts.Component):
 
     def __init__(self, cfg: config.Config, policy: target_policy.TargetPolicy) -> None:
         self._repo = self._repo_for(cfg)

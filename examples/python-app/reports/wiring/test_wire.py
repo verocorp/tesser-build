@@ -70,7 +70,7 @@ def test_the_wired_client_joins_a_link_to_the_verdict_recorded_for_it() -> None:
         linkpolicy_client.VerdictView("https://a.example/s", False, "host blocked")
     )
 
-    component = wire.Reports(config.Config(), links, verdicts)
+    component = wire.Reports(config.Config(config.Spec()), links, verdicts)
     try:
         resp = component.client.links_by_verdict(client.LinksByVerdictRequest())
         assert [(view.slug, view.allowed, view.reason) for view in resp.links] == [
@@ -86,7 +86,7 @@ def test_the_wired_client_reports_a_link_no_policy_has_ruled_on() -> None:
     )
     verdicts = FakeLinkPolicyClient()
 
-    component = wire.Reports(config.Config(), links, verdicts)
+    component = wire.Reports(config.Config(config.Spec()), links, verdicts)
     try:
         resp = component.client.links_by_verdict(client.LinksByVerdictRequest())
         assert [(view.slug, view.allowed, view.reason) for view in resp.links] == [
@@ -98,7 +98,7 @@ def test_the_wired_client_reports_a_link_no_policy_has_ruled_on() -> None:
 
 def test_the_wired_client_reports_nothing_when_neither_context_has_anything() -> None:
     component = wire.Reports(
-        config.Config(), FakeCampaignClient(), FakeLinkPolicyClient()
+        config.Config(config.Spec()), FakeCampaignClient(), FakeLinkPolicyClient()
     )
     try:
         assert component.client.links_by_verdict(client.LinksByVerdictRequest()).links == ()
@@ -108,7 +108,7 @@ def test_the_wired_client_reports_nothing_when_neither_context_has_anything() ->
 
 def test_closing_the_wired_graph_is_safe_to_repeat() -> None:
     component = wire.Reports(
-        config.Config(), FakeCampaignClient(), FakeLinkPolicyClient()
+        config.Config(config.Spec()), FakeCampaignClient(), FakeLinkPolicyClient()
     )
 
     component.close()
@@ -119,10 +119,10 @@ def test_closing_the_wired_graph_is_safe_to_repeat() -> None:
 
 def test_two_builds_hand_back_two_independent_clients() -> None:
     first = wire.Reports(
-        config.Config(), FakeCampaignClient(), FakeLinkPolicyClient()
+        config.Config(config.Spec()), FakeCampaignClient(), FakeLinkPolicyClient()
     )
     second = wire.Reports(
-        config.Config(), FakeCampaignClient(), FakeLinkPolicyClient()
+        config.Config(config.Spec()), FakeCampaignClient(), FakeLinkPolicyClient()
     )
     try:
         assert first.client is not second.client
@@ -134,7 +134,7 @@ def test_two_builds_hand_back_two_independent_clients() -> None:
 def test_a_failure_in_a_wired_neighbour_reaches_the_caller() -> None:
     links = FakeCampaignClient(error=InfraError("campaign store unreachable"))
 
-    component = wire.Reports(config.Config(), links, FakeLinkPolicyClient())
+    component = wire.Reports(config.Config(config.Spec()), links, FakeLinkPolicyClient())
     try:
         with pytest.raises(InfraError):
             component.client.links_by_verdict(client.LinksByVerdictRequest())
