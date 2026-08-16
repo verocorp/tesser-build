@@ -5,6 +5,24 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.48.0] - 2026-08-16
+
+Second pairing wave: errorspy, layout, and tessercheck-py reach
+one-implementation-file-one-test-file.
+
+### Changed
+- **errorspy** gains five sibling files (76 tests, 31→107): the RFC 9457
+  status ladder end to end, the storage outage translated to `InfraError`
+  with its cause kept, aggregated validation proven to touch no port.
+- **layout** gains four sibling files and splits `srv/cli/test_check.py`,
+  which had been doubling as `trees.py`'s test file (95 tests tree-wide).
+- **tessercheck-py** gains ten sibling files (319 tests tree-wide) plus two
+  structural moves: the flat `adapters/repositories.py` splits into the
+  kind package (`repositories/source_reader.py` + `rulebook_sources.py`,
+  classes byte-identical), and the three pure rulebook-derivation tests
+  move from `tests/test_rules.py` to `domain/test_rulebook.py` beside their
+  subject. RULES.md regenerates with zero diff.
+
 ## [0.0.47.0] - 2026-08-16
 
 First pairing wave: serdepy, ports, and llmport reach
