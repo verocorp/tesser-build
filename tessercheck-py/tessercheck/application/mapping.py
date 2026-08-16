@@ -16,6 +16,9 @@ def findings(read: source_reader.ReadSourcesResponse) -> tuple[str, ...]:
             declared=_declared(read),
             nested=read.nested,
             symlinked=read.symlinked,
+            exports=read.exports,
+            imports=read.imports,
+            stdlib=read.stdlib,
         )
     )
     return tuple(

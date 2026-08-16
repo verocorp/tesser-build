@@ -78,12 +78,36 @@ def test_locate_is_the_single_routing_decision() -> None:
         ("app.stray", False, "context-stray"),
         ("app.stray_pkg.mod", False, "context-stray"),
         ("app.conftest", False, "conftest"),
+        ("kernel", True, "kernel-init"),
+        ("kernel", False, "kernel-file"),
+        ("kernel.money", False, "kernel"),
+        ("kernel.sub", True, "kernel-init"),
+        ("kernel.sub.deep", False, "kernel"),
+        ("kernel.__main__", False, "kernel"),
+        ("kernel.test_money", False, "test"),
+        ("kernel.conftest", False, "conftest"),
     )
     for name, is_package, expected in table:
         got = checks.Codebase._locate(name, is_package, contexts)
         assert got == expected, (
             f"_locate({name!r}, is_package={is_package}) = {got!r}, expected {expected!r}"
         )
+    exported = (
+        ("shells", True, "kernel-init"),
+        ("shells", False, "kernel-file"),
+        ("shells.valueobject", False, "kernel"),
+        ("shells.domain.base", False, "kernel"),
+        ("shells.test_base", False, "test"),
+    )
+    for name, is_package, expected in exported:
+        got = checks.Codebase._locate(name, is_package, contexts, "shells")
+        assert got == expected, (
+            f"_locate({name!r}, is_package={is_package}, export='shells') = {got!r}, "
+            f"expected {expected!r}"
+        )
+    assert checks.Codebase._locate("shells.thing", False, contexts) == "root", (
+        "an undeclared export directory must classify as it always did"
+    )
     locate_tree = ast.parse(
         textwrap.dedent(inspect.getsource(checks.Codebase._locate))
     )

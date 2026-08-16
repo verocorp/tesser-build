@@ -129,6 +129,8 @@ DECLARED_UNREADABLE: Final[str] = "unreadable"
 
 DECLARED_UNRECOGNIZED: Final[str] = "unrecognized"
 
+KERNEL_PACKAGE: Final[str] = "kernel"
+
 TESSER: Final[str] = "tesser"
 
 STUB_SUFFIX: Final[str] = ".pyi"
@@ -252,11 +254,14 @@ APP_TIER: Final[str] = "the root tests package"
 
 SHELL_PACKAGES: Final[frozenset[str]] = frozenset(APP_PACKAGES) | {PROTOCOL_PACKAGE, TESTS_ROLE}
 
+KERNEL_TIER: Final[str] = "kernel"
+
 TEST_TIER_SHELL: Final[dict[str, frozenset[str]]] = {
     APP_TIER: SHELL_PACKAGES,
     SRV_TIER: frozenset({"srv", "bootstrap", "protocol"}),
     BOOTSTRAP_TIER: frozenset({"bootstrap"}),
     PROTOCOL_TIER: frozenset({"protocol"}),
+    KERNEL_TIER: frozenset(),
     "domain": frozenset(),
     "application": frozenset(),
     "client": frozenset(),
@@ -811,11 +816,17 @@ class CodebaseSpec(ts.Spec):
         declared: str,
         nested: tuple[str, ...],
         symlinked: tuple[str, ...],
+        exports: tuple[str, ...] = (),
+        imports: tuple[str, ...] = (),
+        stdlib: tuple[str, ...] = (),
     ) -> None:
         self.sources = sources
         self.declared = declared
         self.nested = nested
         self.symlinked = symlinked
+        self.exports = exports
+        self.imports = imports
+        self.stdlib = stdlib
 
 
 class Codebase(ts.AggregateRoot):
@@ -878,13 +889,20 @@ class Codebase(ts.AggregateRoot):
         self._declaration = spec.declared
         self._nested = spec.nested
         self._symlinked = spec.symlinked
+        self._exports = spec.exports
+        self._export = spec.exports[0] if len(spec.exports) == 1 else None
+        self._imports = spec.imports
+        self._stdlib = frozenset(spec.stdlib)
+        self._used_imports: set[str] = set()
 
     def violations(self) -> tuple[Violation, ...]:
         declaration = self._declaration_violations()
         if declaration:
             return declaration
+        self._used_imports = set()
         found = list(self._broken)
         found.extend(self._rule_violations())
+        found.extend(self._unused_import_violations())
         kept: list[Violation] = []
         used: set[tuple[str, Line]] = set()
         by_path = {module.path(): module for module in self._modules}
@@ -943,7 +961,9 @@ class Codebase(ts.AggregateRoot):
                     found.extend(self._record_signature_violations(module, cls, blocks, "an adapter"))
                 elif block == "port":
                     found.extend(self._record_signature_violations(module, cls, blocks, "a port"))
-                    if self._locate(module.name(), module.is_package(), contexts) in (
+                    if self._locate(
+                        module.name(), module.is_package(), contexts, self._export
+                    ) in (
                         "ports",
                         "ports-file",
                     ):
@@ -952,17 +972,34 @@ class Codebase(ts.AggregateRoot):
                     found.extend(self._service_violations(module, cls, blocks))
         return tuple(found)
 
+    def _kernel_tops(self) -> frozenset[str]:
+        names = {KERNEL_PACKAGE}
+        if self._export is not None:
+            names.add(self._export)
+        return frozenset(names) & self._tree_tops()
+
+    def _walked(self, target: str) -> bool:
+        return any(
+            module.name() == target or module.name().startswith(target + ".")
+            for module in self._modules
+        )
+
     def _contexts(self) -> frozenset[str]:
         found: set[str] = set()
         for module in self._modules:
             parts = module.name().split(".")
+            if parts[0] in self._kernel_tops():
+                continue
             if len(parts) >= 2 and parts[1] in ROLES:
                 found.add(parts[0])
         return frozenset(found)
 
     @staticmethod
     def _locate(
-        name: str, is_package: bool, contexts: frozenset[str]
+        name: str,
+        is_package: bool,
+        contexts: frozenset[str],
+        export: str | None = None,
     ) -> Literal[
         "conftest-root",
         "conftest",
@@ -974,6 +1011,9 @@ class Codebase(ts.AggregateRoot):
         "root-tests",
         "protocol-init",
         "protocol",
+        "kernel-init",
+        "kernel-file",
+        "kernel",
         "root",
         "context-init",
         "context-tests-init",
@@ -1017,6 +1057,12 @@ class Codebase(ts.AggregateRoot):
             return "root-tests"
         if parts[0] == PROTOCOL_PACKAGE:
             return "protocol-init" if is_package else "protocol"
+        if parts[0] == KERNEL_PACKAGE or (export is not None and parts[0] == export):
+            if is_package:
+                return "kernel-init"
+            if len(parts) == 1:
+                return "kernel-file"
+            return "kernel"
         if parts[0] not in contexts:
             return "root"
         if len(parts) == 1:
@@ -1040,7 +1086,7 @@ class Codebase(ts.AggregateRoot):
         contexts: frozenset[str],
     ) -> tuple[Violation, ...]:
         parts = module.name().split(".")
-        place = self._locate(module.name(), module.is_package(), contexts)
+        place = self._locate(module.name(), module.is_package(), contexts, self._export)
         if place == "conftest-root":
             return self._conftest_leaf_violations(module)
         if place == "conftest":
@@ -1070,6 +1116,22 @@ class Codebase(ts.AggregateRoot):
             return self._protocol_module_violations(module, blocks, contexts)
         if place == "root":
             return self._homeless_violations(module)
+        if place == "kernel-init":
+            return self._kernel_init_violations(module)
+        if place == "kernel-file":
+            return (
+                Violation(
+                    module.path(),
+                    1,
+                    "TB041",
+                    f"{module.name()} is a kernel module at the tree root; "
+                    "kernel is a package, never a module",
+                ),
+            )
+        if place == "kernel":
+            return self._kernel_module_violations(module, blocks) + self._kernel_import_violations(
+                module
+            )
         if place == "context-init":
             return self._context_init_violations(module)
         if place == "context-tests-init":
@@ -1268,6 +1330,17 @@ class Codebase(ts.AggregateRoot):
                     "a .tesser-root is a plain UTF-8 text file",
                 )
             )
+        elif len(self._exports) > 1:
+            found.append(
+                Violation(
+                    TREE_DECLARATION,
+                    1,
+                    "TB044",
+                    "this tree declares a second exported kernel; a tree has one "
+                    "exported kernel, so a declaration carries at most one "
+                    "'export <dir>' line",
+                )
+            )
         elif self._declaration != DECLARED_APP:
             found.append(
                 Violation(
@@ -1275,9 +1348,13 @@ class Codebase(ts.AggregateRoot):
                     1,
                     "TB044",
                     "this tree declares an unrecognized kind; a declaration is "
-                    "'app', then only 'skip <dir>' lines",
+                    "'app', then only 'skip <dir>', 'export <dir>', and "
+                    "'import <package>' lines",
                 )
             )
+        if len(self._exports) <= 1:
+            found.extend(self._export_declaration_violations())
+            found.extend(self._import_declaration_violations())
         for relative in self._nested:
             found.append(
                 Violation(
@@ -1300,6 +1377,89 @@ class Codebase(ts.AggregateRoot):
             )
         return tuple(found)
 
+    def _export_declaration_violations(self) -> tuple[Violation, ...]:
+        if self._export is None:
+            return ()
+        if self._export == KERNEL_PACKAGE or self._export in SHELL_PACKAGES:
+            return (
+                Violation(
+                    TREE_DECLARATION,
+                    1,
+                    "TB044",
+                    f"this tree exports '{self._export}'; an exported kernel "
+                    "never takes the name of the kernel package or the app shell",
+                ),
+            )
+        if not any(
+            module.name() == self._export and module.is_package()
+            for module in self._modules
+        ):
+            return (
+                Violation(
+                    TREE_DECLARATION,
+                    1,
+                    "TB044",
+                    f"this tree exports '{self._export}' but no such package "
+                    "exists; an export names a package at the tree root",
+                ),
+            )
+        if any(
+            len(parts) >= 2 and parts[0] == self._export and parts[1] in ROLES
+            for parts in (module.name().split(".") for module in self._modules)
+        ):
+            return (
+                Violation(
+                    TREE_DECLARATION,
+                    1,
+                    "TB044",
+                    f"this tree exports '{self._export}', a context-shaped package; "
+                    "a bounded context's domain is never exported — a kernel is not a context",
+                ),
+            )
+        return ()
+
+    def _import_declaration_violations(self) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        tops = self._tree_tops()
+        for declared in self._imports:
+            head = declared.split(".")[0]
+            if head == KERNEL_PACKAGE or head in SHELL_PACKAGES or head in tops:
+                found.append(
+                    Violation(
+                        TREE_DECLARATION,
+                        1,
+                        "TB044",
+                        f"this tree declares 'import {declared}' but that names "
+                        "this tree; an import declaration names an installed "
+                        "external kernel, never something the walk governs",
+                    )
+                )
+            elif head in self._stdlib:
+                found.append(
+                    Violation(
+                        TREE_DECLARATION,
+                        1,
+                        "TB044",
+                        f"this tree declares 'import {declared}' but that names "
+                        "the stdlib; the pure stdlib is already legal and the "
+                        "rest of it is never a kernel",
+                    )
+                )
+        return tuple(found)
+
+    def _unused_import_violations(self) -> tuple[Violation, ...]:
+        return tuple(
+            Violation(
+                TREE_DECLARATION,
+                1,
+                "TB044",
+                f"this tree declares 'import {declared}' and nothing uses it; "
+                "an import declaration that legalizes nothing is itself a finding",
+            )
+            for declared in self._imports
+            if declared not in self._used_imports
+        )
+
     def _homeless_violations(self, module: Module) -> tuple[Violation, ...]:
         return (
             Violation(
@@ -1307,7 +1467,8 @@ class Codebase(ts.AggregateRoot):
                 1,
                 "TB040",
                 f"{module.name()} belongs to no governed package; "
-                "every module belongs to a context, srv, bootstrap, tests, or the protocol package",
+                "every module belongs to a context, a kernel, srv, bootstrap, tests, "
+                "or the protocol package",
             ),
         )
 
@@ -1399,6 +1560,121 @@ class Codebase(ts.AggregateRoot):
                 )
             found.extend(self._form_violations(module, edge))
         return tuple(found)
+
+    def _kernel_init_violations(self, module: Module) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for stmt in module.body():
+            if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
+                found.append(
+                    Violation(
+                        module.path(),
+                        stmt.lineno,
+                        "TB042",
+                        f"{module.name()} __init__ declares code; "
+                        "a kernel __init__ only re-exports from its own kernel",
+                    )
+                )
+        for edge in module.import_edges():
+            target = str(edge._target)
+            lineno = int(edge._lineno)
+            if not target.startswith(module.name() + "."):
+                found.append(
+                    Violation(
+                        module.path(),
+                        lineno,
+                        "TB042",
+                        f"{module.name()} imports {target}; "
+                        "a kernel __init__ only re-exports from its own kernel",
+                    )
+                )
+        return tuple(found)
+
+    def _kernel_module_violations(
+        self,
+        module: Module,
+        blocks: dict[tuple[str, str], str],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for stmt in module.body():
+            if isinstance(stmt, ast.ClassDef):
+                block = blocks.get((module.name(), stmt.name))
+                where = f"{module.name()}.{stmt.name}"
+                if block is None:
+                    found.append(
+                        Violation(
+                            module.path(),
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} declares no ts.* base; every kernel class declares its block",
+                        )
+                    )
+                elif KIND_ROLE.get(block) != "domain":
+                    found.append(
+                        Violation(
+                            module.path(),
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} is {KIND_NAME[block]}; a kernel holds only domain kinds — "
+                            "value objects, entities, aggregates, and specs",
+                        )
+                    )
+        found.extend(
+            self._statement_violations(
+                module,
+                "kernel",
+                "a kernel module holds only imports, classes, declared functions, and Final constants",
+            )
+        )
+        return tuple(found)
+
+    def _kernel_import_violations(self, module: Module) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        found.extend(self._stray_import_violations(module))
+        found.extend(
+            self._tesser_import_violations(
+                module,
+                "kernel",
+                ROLE_TESSER_PACKAGE["domain"],
+                "a kernel module imports only tesser.domain",
+                "a kernel module imports tesser.domain exactly once, as ts",
+                "a kernel module imports tesser.domain exactly once, as ts",
+                norms=NORM_IMPORTS["domain"],
+            )
+        )
+        own = (
+            frozenset({self._export})
+            if module.name().split(".")[0] == self._export
+            else self._kernel_tops()
+        )
+        for edge in module.import_edges():
+            target = str(edge._target)
+            lineno = int(edge._lineno)
+            pieces = target.split(".")
+            if pieces[0] == TESSER:
+                continue
+            if pieces[0] in own and self._walked(target):
+                continue
+            if self._declared_kernel_import(target):
+                continue
+            if target in CORE_STDLIB["domain"] or pieces[0] in CORE_STDLIB["domain"]:
+                continue
+            found.append(
+                Violation(
+                    module.path(),
+                    lineno,
+                    "TB062",
+                    f"{module.name()} imports {target}; a kernel imports only its "
+                    "kernel, tesser.domain, declared kernels, and the pure stdlib",
+                )
+            )
+        return tuple(found)
+
+    def _declared_kernel_import(self, target: str) -> bool:
+        for declared in self._imports:
+            if target == declared or target.startswith(declared + "."):
+                self._used_imports.add(declared)
+                return True
+        return False
 
     def _app_init_violations(self, module: Module) -> tuple[Violation, ...]:
         return tuple(
@@ -3232,6 +3508,10 @@ class Codebase(ts.AggregateRoot):
                 found.extend(denied)
                 if not denied:
                     found.extend(self._form_violations(module, edge))
+            elif pieces[0] in self._kernel_tops() and self._walked(target):
+                continue
+            elif self._declared_kernel_import(target):
+                continue
             elif (
                 role in CORE_STDLIB
                 and target not in CORE_STDLIB[role]
@@ -3243,7 +3523,8 @@ class Codebase(ts.AggregateRoot):
                         lineno,
                         "TB062",
                         f"{module.name()} imports {target}; domain, client, and application "
-                        "import only their context, their tesser package, and the pure stdlib",
+                        "import only their context, their kernels, their tesser package, "
+                        "and the pure stdlib",
                     )
                 )
             elif (
@@ -3337,9 +3618,10 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    @staticmethod
-    def _test_tier(module: Module, contexts: frozenset[str]) -> tuple[str, str] | None:
+    def _test_tier(self, module: Module, contexts: frozenset[str]) -> tuple[str, str] | None:
         parts = module.name().split(".")
+        if parts[0] in self._kernel_tops() and len(parts) >= 2:
+            return ("", KERNEL_TIER)
         if parts[0] == "srv" and len(parts) >= 2:
             return ("", SRV_TIER)
         if parts[0] == "bootstrap" and len(parts) >= 2:
@@ -3419,6 +3701,24 @@ class Codebase(ts.AggregateRoot):
                         f"{module.name()} imports {target}, but a test placed in "
                         "the root tests package reaches a context only through its "
                         "wiring and client; "
+                        "a test reaches only what its placement allows",
+                    )
+                )
+            return tuple(found)
+        if tier == KERNEL_TIER:
+            for edge in module.import_edges():
+                target = str(edge._target)
+                lineno = int(edge._lineno)
+                pieces = target.split(".")
+                if pieces[0] not in contexts:
+                    continue
+                found.append(
+                    Violation(
+                        module.path(),
+                        lineno,
+                        "TB070",
+                        f"{module.name()} imports {target}, but a test placed in "
+                        "a kernel reaches no context; "
                         "a test reaches only what its placement allows",
                     )
                 )

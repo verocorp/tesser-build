@@ -15,6 +15,7 @@ def test_every_place_is_earned_by_a_checked_tree_or_is_a_finding() -> None:
         ("app.application.ports.test_x", False, "ports-stray"),
         ("app.application.ports", False, "ports-file"),
         ("app.domain", False, "role-file"),
+        ("kernel", False, "kernel-file"),
     )
     contexts = frozenset({"app"})
     for name, is_package, expected in finding_rows:

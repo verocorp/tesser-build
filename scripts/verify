@@ -77,7 +77,7 @@ run_python_app() {
   step "import-linter (import direction)"
   PYTHONPATH=. lint-imports || return 1
   step "mypy --strict"
-  MYPYPATH=.:../../tesser-py mypy --strict protocol campaign linkpolicy reports bootstrap srv tests conftest.py || return 1
+  MYPYPATH=.:../../tesser-py mypy --strict protocol kernel campaign linkpolicy reports bootstrap srv tests conftest.py || return 1
   step "pytest"
   pytest -q || return 1
   step "tessercheck (zero findings over the whole tree)"

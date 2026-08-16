@@ -5,7 +5,7 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
-## [0.0.44.0] - 2026-08-15
+## [0.0.45.0] - 2026-08-15
 
 The last root module joins the app, and the allowance that excused it
 retires — fired by the every-classification-earned test the moment nothing
@@ -31,6 +31,46 @@ earned it, which is that test doing exactly what it was built for.
   `root` place moves to the finding list in the earned-classification test,
   and `TB065`'s root-module leaf rule — a rule only excused modules could
   ever reach — is deleted. This is a rule change: review it as one.
+
+## [0.0.44.0] - 2026-08-15
+
+Only bounded contexts have domains, and a context's domain is never
+exported. What a domain couples to by direct import — no interface to
+inject — now has a name and rules: **kernels**
+(`docs/design-kernels.md`).
+
+### Added
+- **The kernel tier.** Two scopes, two promises: `kernel/` at the tree
+  root (fixed name, discovered, shared across one app's bounded contexts,
+  invisible outside) and the **exported kernel** (the package's public
+  import name, declared `export <dir>` in `.tesser-root` — at most one per
+  tree, because the export is the package's import name and a package has
+  one name). Kernel content is domain content: every class declares its
+  `ts.*` block, only domain kinds are legal, and the full identity
+  taxonomy and serialization norm apply unchanged. A kernel module imports
+  only its kernel, `tesser.domain` (as `ts`, plus the domain's norm
+  grants), declared external kernels, and the domain pure stdlib — and
+  nothing ever imports leftward into a kernel's consumers.
+- **`import <package>` — the consumer-side declaration, validated as the
+  purity waiver it is.** It never names this tree (not `kernel`, the app
+  shell, or any walked package), never names the stdlib (`import
+  subprocess` cannot be declared away), and must legalize at least one
+  edge — an unused declaration is itself a finding, the same rule TB090
+  applies to ignores. Kernel-target imports are trusted per *walked
+  module*, so a `skip` line cannot smuggle unwalked code into the
+  allowlist, and an export can never dissolve a bounded context — a
+  context-shaped export is a finding reported before anything else.
+- **The worked example**: `Slug` was duplicated byte-for-byte in
+  python-app's campaign and reports contexts — the exact drift kernels
+  exist to end. It now lives once in `kernel/slug.py`, consumed by both,
+  with a companion test and an import-linter contract asserting the
+  kernel imports no context. Money stays in `campaign/domain` (one
+  consumer — the second consumer earns the move), and the three
+  `TargetURL`s stay put (they validate differently; different rules are
+  different types).
+- **`kernels.md` joins the skill** (routing, placement, rules,
+  skill-version 40), with the shells routing for `export tesser`
+  designed and explicitly deferred to the next step.
 
 ## [0.0.43.1] - 2026-08-15
 

@@ -79,6 +79,7 @@ placement failure, not a mis-picked noun:
 - an operation owned by no single object → **domain service** (rare)
 - load or save an aggregate → **repository**
 - reach a peer context → **cross-context gateway** (`gateway-cross-context.md`)
+- a domain type two or more contexts must agree on → **kernel** (`kernels.md`)
 - choose a concrete impl / build the object graph → **wiring / bootstrap**
 - read the environment, exit the process → **host** (`srv.md`) — nowhere else
 - computing a domain result (sum/decision) in a handler or service → it's
@@ -105,6 +106,7 @@ Route on the task:
 | Loading or saving an aggregate, or writing a repository | Read `repositories.md` — whole aggregate in, reconstructed out, no business logic; query object ≠ spec |
 | Declaring an outbound port, or asking where a port goes — a repository, a peer-context, or a vendor interface | Read `python.md#ports` — a port lives in the context's `application/ports/` package, one port per module with the DTOs it speaks; one `ts.Request` in, one `ts.Response` out; no unions, no bare bools; multi-outcome answers are an enum read with `match` + `assert_never` |
 | Making one context call or read another | Read `gateway-cross-context.md` (the caller owns the port; fail-closed) and `map.md#how-contexts-connect` (a read composing two peers becomes its own context) |
+| Two contexts needing the same domain type (a shared Money/Quantity), or shipping domain-level code other apps import directly | Read `kernels.md` — the direct-import tier: app-scoped `kernel/` vs the one exported kernel; content follows the domain conventions; purity is the domain's bar, transitively |
 | Exposing a component/service behind a public interface (a `Client` + DTOs) | Read `public-interface.md` — a decoupling boundary, satisfied by embedding the service; speaks DTOs, never domain objects |
 | Wiring a context's own construction / its config | Read `wiring.md` — coordinate-driven impl selection, config in the wiring, cross-context deps injected |
 | Writing the app's composition root / `main` / app config / lifecycle | Read `bootstrap.md` — service-owned `new(cfg) → App`, builds the graph once, never reads the environment |

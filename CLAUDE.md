@@ -114,8 +114,9 @@ scripts/verify python-app serdepy        # or just the ones you touched
 `manifest.json` has a row for every top-level directory and every `examples/*`
 directory — two kinds only, `app` and `ungated`, because everything is an app.
 Each tree that tessercheck runs on carries a `.tesser-root` file (first line
-`app`, then only `skip <dir>` lines — anything specific to one repo goes in
-this file, never in the analyzer's code). A missing, unreadable, wrong, or
+`app`, then only `skip <dir>`, `export <dir>`, and `import <package>` lines —
+anything specific to one repo goes in this file, never in the analyzer's
+code; at most one `export` line, because a tree has one exported kernel). A missing, unreadable, wrong, or
 nested `.tesser-root` is a `TB044` finding; a symlinked directory inside a
 declared tree is `TB045`; when either fires, it is the only finding reported —
 the analyzer says what the directory is before saying anything about its
