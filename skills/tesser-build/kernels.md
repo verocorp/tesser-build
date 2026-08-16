@@ -19,7 +19,9 @@ that isn't a copy.
   `export <dir>` in `.tesser-root`. A tree has at most one — the exported
   kernel is the package's import name, and a package has one name.
   (`tesser` itself is an exported kernel; tesser-py is an app whose export
-  it is.)
+  it is, governed by the shells rows — namespace totality, the shell
+  stdlib, and inverted tests — because the shells cannot subclass
+  themselves.)
 - **Only one context uses it** → it is that context's domain content. Do not
   lift a type into the kernel speculatively; the second consumer earns the
   move.

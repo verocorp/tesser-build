@@ -37,13 +37,19 @@ def test_every_place_is_earned_by_a_checked_tree_or_is_a_finding() -> None:
         names = [
             (s.name, s.form is source_reader.ModuleForm.PACKAGE) for s in read.sources
         ]
+        export = read.exports[0] if len(read.exports) == 1 else None
         tree_contexts = frozenset(
             name.split(".")[0]
             for name, _ in names
-            if len(name.split(".")) >= 2 and name.split(".")[1] in checks.ROLES
+            if len(name.split(".")) >= 2
+            and name.split(".")[1] in checks.ROLES
+            and name.split(".")[0] != checks.KERNEL_PACKAGE
+            and name.split(".")[0] != export
         )
         for name, is_package in names:
-            exercised.add(checks.Codebase._locate(name, is_package, tree_contexts))
+            exercised.add(
+                checks.Codebase._locate(name, is_package, tree_contexts, export)
+            )
     assert checked_trees >= 2, (
         f"only {checked_trees} checked trees found from {repo / 'manifest.json'}; "
         "this test must run from the tesser-build repo checkout"

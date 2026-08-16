@@ -165,12 +165,8 @@ reinterpreted under the kernel rules — loudly, by design — and must rename.
 
 ## The one special case, and where it lives
 
-**Status: rollout step 2 — designed here, not yet implemented.** Nothing
-routes `export tesser` today; until the shells rows land, declaring it
-fails loudly under the generic kernel rules rather than silently passing.
-
 Kernel *content* rules are keyed on the `ts.*` shells — and the shells
-cannot subclass themselves. So the analyzer will route exactly one exported
+cannot subclass themselves. So the analyzer routes exactly one exported
 kernel differently: when the declared export is the package `tesser`, its
 modules are governed by **shells rows** instead of domain-content rows:
 
@@ -199,7 +195,7 @@ never in the manifest, the layout, or the docs' ontology.
 | kernel content is conventional domain content | existing TB01x/TB03x, applied to kernel modules |
 | pure roles import only entitled kernels | TB062 extension |
 | nothing imports leftward into a kernel's consumers | existing rows (unchanged) |
-| shells meet the shells bar | shells rows (tesser routing — rollout step 2, pending) |
+| shells meet the shells bar | shells rows (the `export tesser` routing) |
 | declarations match disk, arms, and CI | layout app cross-checks |
 
 ## Rollout

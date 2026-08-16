@@ -1,21 +1,3 @@
-"""Ecosystem compatibility: mutation testing sees through ts.ValueObject.
-
-Not a mutation-score gate. The claim under test is that building a value
-object on ts.ValueObject leaves it fully visible to mutmut, while the
-obvious alternative construction (a frozen dataclass) is skipped by mutmut
-wholesale — hand-written methods included — so its behavior silently
-escapes mutation testing. Both fixtures are the same Amount value object;
-only the construction differs (test_fixtures_stay_in_lockstep enforces
-that everything except vo/amount.py is byte-identical). mutmut is invoked
-through its public CLI, pinned exact in requirements-dev.txt, because
-these assertions describe observed behavior of that version: if an
-upgrade changes either outcome, this test is the place that finds out.
-The pin is best-effort — mutmut's own dependencies (libcst generates the
-mutants, pytest runs them) float, so an upstream release can also move
-these assertions; a red run here with no repo change means the ecosystem
-moved, which is exactly what this test is for.
-"""
-
 import os
 import re
 import shutil
@@ -31,18 +13,12 @@ assert (_TESSER_PY / "tesser" / "domain").is_dir(), (
     "updating its parents[] anchor"
 )
 _TRAMPOLINE_MARK = "@_mutmut_mutated"
-# State a run leaves behind. Never copied into a fixture's tmp project:
-# copytree preserves mtimes, and mutmut reuses a mutants/ tree that is newer
-# than its source — a stale, gitignored mutants/ in the fixture dir would
-# freeze this test green against a snapshot forever.
 _JUNK_DIRS = ("mutants", "__pycache__", ".mypy_cache", ".pytest_cache")
 
 
 def _run(
     args: "list[str]", cwd: Path, env: "dict[str, str]", timeout: int
 ) -> "subprocess.CompletedProcess[str]":
-    # mutmut forks workers; on timeout, kill the whole session so a hung
-    # worker does not outlive the test.
     proc = subprocess.Popen(
         args,
         cwd=cwd,
@@ -62,11 +38,6 @@ def _run(
 
 
 def _clean_env() -> "dict[str, str]":
-    # The inner pytest (both the control run and mutmut's forked runner) must
-    # not inherit the outer session's pytest/coverage configuration — an
-    # allowlist keeps the subprocess contract ours. "." resolves against the
-    # fixture project cwd (and, inside mutmut's runner, against mutants/ —
-    # where mutmut chdirs; an internal but pinned behavior).
     env = {
         key: value
         for key, value in os.environ.items()
@@ -114,9 +85,6 @@ def _mutmut_on(fixture: str, tmp_path: Path) -> _Outcome:
     )
     env = _clean_env()
 
-    # Control: the fixture suite must pass and actually collect tests under
-    # plain pytest, or the dataclass assertions below would hold vacuously
-    # (mutmut reports "no test case for any mutant" for an empty suite too).
     control = _run(
         [sys.executable, "-m", "pytest", "-q", "tests"],
         cwd=project,
@@ -127,9 +95,6 @@ def _mutmut_on(fixture: str, tmp_path: Path) -> _Outcome:
     collected = re.search(r"(\d+) passed", control.stdout)
     assert collected is not None and int(collected.group(1)) > 0, control.stdout
 
-    # A zero exit from `mutmut run` means it did not crash — it says nothing
-    # about survivors (verified: a suite that kills nothing still exits 0).
-    # Survivor accounting is results_output()'s job.
     run = _run(
         [sys.executable, "-m", "mutmut", "run"],
         cwd=project,

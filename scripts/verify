@@ -122,6 +122,8 @@ run_errorspy() {
 
 run_tesser_py() {
   cd "$ROOT/tesser-py" || return 1
+  step "tessercheck (zero findings over the whole tree)"
+  tessercheck_tree "$PWD" || return 1
   step "mypy --strict"
   mypy || return 1
   # The mutmut fixture projects are excluded from the tree's own mypy run
