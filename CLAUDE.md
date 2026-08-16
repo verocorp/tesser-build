@@ -57,7 +57,9 @@ the tree carries an import row keyed on where it sits; there are no exempt
 modules, so a root module and a `conftest` are leaves that import nothing from
 the tree), and the testing norm (`TB030` — a test double is a hand-written
 fake, never a mocking library; `TB070` — placement carries the tier, so where a
-test lives fixes what it may import; `TB071`/`TB073` — the totality check over
+test lives fixes what it may import; `TB074` — every implementation module
+carries exactly one sibling test file named for it, and every sibling test
+file names the module beside it; `TB071`/`TB073` — the totality check over
 test modules: every module-level function is a test, a declared `@ts.helper`,
 or a declared `@ts.fake`, and what does not classify is a finding;
 `skills/tesser-build/testing.md`).

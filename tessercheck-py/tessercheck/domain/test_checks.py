@@ -32,6 +32,20 @@ def _spec(
             False,
         ),
         (
+            "app/domain/test_thing.py",
+            "app.domain.test_thing",
+            "def test_thing_exists() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+        (
+            "app/application/test_service.py",
+            "app.application.test_service",
+            "def test_service_exists() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+        (
             "app/client/client.py",
             "app.client.client",
             "import tesser.context as ts\n"
@@ -300,6 +314,13 @@ def test_declared_function_and_final_constant_pass() -> None:
                 "@ts.function\n"
                 "def declared() -> None:\n"
                 "    return None\n",
+                False,
+            ),
+            (
+                "plain/domain/test_thing.py",
+                "plain.domain.test_thing",
+                "def test_thing_exists() -> None:\n"
+                "    assert True\n",
                 False,
             ),
         ))).violations()
@@ -708,6 +729,13 @@ def test_only_the_top_level_protocol_package_holds_protocol_modules() -> None:
                    for v in checks.Codebase(_spec(sources=(
             ("protocol/__init__.py", "protocol", "", True),
             ("protocol/box.py", "protocol.box", "import tesser.srv as ts\n", False),
+            (
+                "protocol/test_box.py",
+                "protocol.test_box",
+                "def test_box_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
             ("boxwire.py", "boxwire", "import tesser.srv as ts\n", False),
             ("wire.py", "wire", "import tesser.srv as ts\n", False),
         ))).violations()
@@ -735,7 +763,8 @@ def test_a_protocol_init_is_empty() -> None:
 def test_every_declared_block_has_a_name_and_a_home() -> None:
     blocks = set(checks.TESSER_BASE_BLOCKS.values())
     assert set(checks.KIND_NAME) == blocks
-    assert set(checks.KIND_ROLE) == blocks - checks.SRV_KINDS
+    assert set(checks.KIND_ROLE) == blocks - checks.SRV_KINDS - {"closeable"}
+    assert "closeable" not in checks.KIND_ROLE
 
 
 def test_every_kind_row_names_a_real_tesser_export() -> None:
@@ -1262,7 +1291,7 @@ def test_a_dotted_module_base_resolves() -> None:
         for f in findings
     )
     assert any(
-        "FakePort" in f and "a fake implements the port or client it doubles" in f
+        "FakePort" in f and "a fake implements the contract it doubles" in f
         for f in findings
     )
 
@@ -1977,12 +2006,26 @@ def test_srv_and_bootstrap_tesser_form_modes() -> None:
                 False,
             ),
             (
+                "srv/test_dup.py",
+                "srv.test_dup",
+                "def test_dup_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
                 "srv/alias.py",
                 "srv.alias",
                 "import tesser.srv as tc\n"
                 "@tc.function\n"
                 "def go() -> None:\n"
                 "    return None\n",
+                False,
+            ),
+            (
+                "srv/test_alias.py",
+                "srv.test_alias",
+                "def test_alias_exists() -> None:\n"
+                "    assert True\n",
                 False,
             ),
             (
@@ -1995,10 +2038,24 @@ def test_srv_and_bootstrap_tesser_form_modes() -> None:
                 False,
             ),
             (
+                "bootstrap/test_fromform.py",
+                "bootstrap.test_fromform",
+                "def test_fromform_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
                 "bootstrap/wrongpkg.py",
                 "bootstrap.wrongpkg",
                 "import tesser.context as ts\n"
                 "import tesser.domain as td\n",
+                False,
+            ),
+            (
+                "bootstrap/test_wrongpkg.py",
+                "bootstrap.test_wrongpkg",
+                "def test_wrongpkg_exists() -> None:\n"
+                "    assert True\n",
                 False,
             ),
             (
@@ -2009,9 +2066,23 @@ def test_srv_and_bootstrap_tesser_form_modes() -> None:
                 False,
             ),
             (
+                "srv/test_consts.py",
+                "srv.test_consts",
+                "def test_consts_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
                 "srv/annconst.py",
                 "srv.annconst",
                 "LIMIT: int = 3\n",
+                False,
+            ),
+            (
+                "srv/test_annconst.py",
+                "srv.test_annconst",
+                "def test_annconst_exists() -> None:\n"
+                "    assert True\n",
                 False,
             ),
             (
@@ -2022,6 +2093,13 @@ def test_srv_and_bootstrap_tesser_form_modes() -> None:
                 "LIMIT: typing.Final[int] = 3\n",
                 False,
             ),
+            (
+                "srv/test_tfinal.py",
+                "srv.test_tfinal",
+                "def test_tfinal_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
             ("srv/__init__.py", "srv", "X = 1\n", True),
             ("bootstrap/__init__.py", "bootstrap", "", True),
             (
@@ -2029,6 +2107,13 @@ def test_srv_and_bootstrap_tesser_form_modes() -> None:
                 "konst.domain.thing",
                 "from typing import Final\n"
                 "LIMIT: Final[int] = 3\n",
+                False,
+            ),
+            (
+                "konst/domain/test_thing.py",
+                "konst.domain.test_thing",
+                "def test_thing_exists() -> None:\n"
+                "    assert True\n",
                 False,
             ),
         ), base=())).violations()
@@ -2532,6 +2617,13 @@ def test_a_norm_module_is_from_imported_where_its_placement_allows() -> None:
                 False,
             ),
             (
+                "fine/domain/test_money.py",
+                "fine.domain.test_money",
+                "def test_money_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
                 "whole/domain/money.py",
                 "whole.domain.money",
                 "import tesser.domain as ts\n"
@@ -2539,6 +2631,13 @@ def test_a_norm_module_is_from_imported_where_its_placement_allows() -> None:
                 "class WholeSpec(ts.Spec):\n"
                 "    def __init__(self, code: str) -> None:\n"
                 "        self.code = code\n",
+                False,
+            ),
+            (
+                "whole/domain/test_money.py",
+                "whole.domain.test_money",
+                "def test_money_exists() -> None:\n"
+                "    assert True\n",
                 False,
             ),
             (
@@ -2552,12 +2651,26 @@ def test_a_norm_module_is_from_imported_where_its_placement_allows() -> None:
                 False,
             ),
             (
+                "appside/application/test_service.py",
+                "appside.application.test_service",
+                "def test_service_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
                 "only/domain/money.py",
                 "only.domain.money",
                 "from tesser.serialization import canonical_str\n"
                 "class OnlyMoney:\n"
                 "    def __init__(self, code: str) -> None:\n"
                 "        self.code = canonical_str(code)\n",
+                False,
+            ),
+            (
+                "only/domain/test_money.py",
+                "only.domain.test_money",
+                "def test_money_exists() -> None:\n"
+                "    assert True\n",
                 False,
             ),
         ))).violations()
@@ -2597,10 +2710,24 @@ def test_wiring_bootstrap_and_srv_may_from_import_tesser_lifecycle() -> None:
                 False,
             ),
             (
+                "app/wiring/test_wire.py",
+                "app.wiring.test_wire",
+                "def test_wire_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
                 "bootstrap/wire.py",
                 "bootstrap.wire",
                 "import tesser.context as ts\n"
                 "from tesser.lifecycle import Closeable\n",
+                False,
+            ),
+            (
+                "bootstrap/test_wire.py",
+                "bootstrap.test_wire",
+                "def test_wire_exists() -> None:\n"
+                "    assert True\n",
                 False,
             ),
             (
@@ -2611,12 +2738,26 @@ def test_wiring_bootstrap_and_srv_may_from_import_tesser_lifecycle() -> None:
                 False,
             ),
             (
+                "srv/test_run.py",
+                "srv.test_run",
+                "def test_run_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
                 "astray/wiring/wire.py",
                 "astray.wiring.wire",
                 "import tesser.context as ts\n"
                 "import tesser.domain\n"
                 "class Wiring(ts.Wiring):\n"
                 "    pass\n",
+                False,
+            ),
+            (
+                "astray/wiring/test_wire.py",
+                "astray.wiring.test_wire",
+                "def test_wire_exists() -> None:\n"
+                "    assert True\n",
                 False,
             ),
         ))).violations()
@@ -2649,6 +2790,13 @@ def test_any_role_but_client_may_from_import_tesser_errors() -> None:
                 False,
             ),
             (
+                "app/domain/test_money.py",
+                "app.domain.test_money",
+                "def test_money_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
                 "app/application/views.py",
                 "app.application.views",
                 "import tesser.application as ts\n"
@@ -2657,6 +2805,13 @@ def test_any_role_but_client_may_from_import_tesser_errors() -> None:
                 "class ViewService(ts.ApplicationService):\n"
                 "    def ask(self, request: client.AskRequest) -> client.AskResponse:\n"
                 "        raise not_found(\"no_row\", request.text)\n",
+                False,
+            ),
+            (
+                "app/application/test_views.py",
+                "app.application.test_views",
+                "def test_views_exists() -> None:\n"
+                "    assert True\n",
                 False,
             ),
             (
@@ -2670,6 +2825,13 @@ def test_any_role_but_client_may_from_import_tesser_errors() -> None:
                 False,
             ),
             (
+                "app/adapters/test_gateways.py",
+                "app.adapters.test_gateways",
+                "def test_gateways_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
                 "stray/client/client.py",
                 "stray.client.client",
                 "import tesser.context as ts\n"
@@ -2680,6 +2842,13 @@ def test_any_role_but_client_may_from_import_tesser_errors() -> None:
                 False,
             ),
             (
+                "stray/client/test_client.py",
+                "stray.client.test_client",
+                "def test_client_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
                 "astray/adapters/gateways.py",
                 "astray.adapters.gateways",
                 "import tesser.adapters as ts\n"
@@ -2687,6 +2856,13 @@ def test_any_role_but_client_may_from_import_tesser_errors() -> None:
                 "class StrayGateway(ts.Gateway):\n"
                 "    def load(self, key: str) -> str:\n"
                 "        return canonical_str(key)\n",
+                False,
+            ),
+            (
+                "astray/adapters/test_gateways.py",
+                "astray.adapters.test_gateways",
+                "def test_gateways_exists() -> None:\n"
+                "    assert True\n",
                 False,
             ),
         ))).violations()
@@ -2978,6 +3154,15 @@ def test_a_wiring_sibling_test_mirrors_production_wiring_reach() -> None:
                    for v in checks.Codebase(_spec(sources=(
             ("app/wiring/__init__.py", "app.wiring", "", True),
             (
+                "app/wiring/wire.py",
+                "app.wiring.wire",
+                "import tesser.context as ts\n"
+                "class Wiring(ts.Wiring):\n"
+                "    def close(self) -> None:\n"
+                "        return None\n",
+                False,
+            ),
+            (
                 "app/wiring/test_wire.py",
                 "app.wiring.test_wire",
                 "import app.application.service as service\n"
@@ -2996,6 +3181,13 @@ def test_a_wiring_sibling_test_mirrors_production_wiring_reach() -> None:
                 "        self.text = text\n",
                 False,
             ),
+            (
+                "far/client/test_client.py",
+                "far.client.test_client",
+                "def test_client_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
             ("far/client/__init__.py", "far.client", "", True),
             (
                 "far/domain/thing.py",
@@ -3004,6 +3196,13 @@ def test_a_wiring_sibling_test_mirrors_production_wiring_reach() -> None:
                 "class Tag(ts.ValueObject):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        object.__setattr__(self, '_text', text)\n",
+                False,
+            ),
+            (
+                "far/domain/test_thing.py",
+                "far.domain.test_thing",
+                "def test_thing_exists() -> None:\n"
+                "    assert True\n",
                 False,
             ),
             ("far/domain/__init__.py", "far.domain", "", True),
@@ -3047,6 +3246,15 @@ def test_a_bootstrap_test_reaches_a_context_like_production_bootstrap() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
+            (
+                "bootstrap/boot.py",
+                "bootstrap.boot",
+                "import tesser.context as ts\n"
+                "@ts.function\n"
+                "def boot() -> int:\n"
+                "    return 1\n",
+                False,
+            ),
             (
                 "bootstrap/test_boot.py",
                 "bootstrap.test_boot",
@@ -3668,7 +3876,7 @@ def test_test_module_totality_is_flagged() -> None:
         for f in findings
     )
     assert any("test_junk.Junk" in f and "a test double declares itself with @ts.fake" in f for f in findings)
-    assert any("test_junk.FakeNothing" in f and "a fake implements the port or client it doubles" in f for f in findings)
+    assert any("test_junk.FakeNothing" in f and "a fake implements the contract it doubles" in f for f in findings)
     assert any(
         "test_junk" in f and "a test module holds only imports, tests, helpers, and fakes" in f
         for f in findings
@@ -4342,6 +4550,13 @@ def test_a_stale_ignore_is_itself_a_finding() -> None:
                 "app/domain/extra.py",
                 "app.domain.extra",
                 "import tesser.domain as ts  # tessercheck:ignore\n",
+                False,
+            ),
+            (
+                "app/domain/test_extra.py",
+                "app.domain.test_extra",
+                "def test_extra_exists() -> None:\n"
+                "    assert True\n",
                 False,
             ),
         ))).violations()
@@ -6336,7 +6551,21 @@ def test_a_declared_kernel_import_is_legal_in_a_kernel() -> None:
 def test_pure_roles_may_import_kernels() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('app/domain/price.py', 'app.domain.price', 'import tesser.domain as ts\nfrom kernel.money import Money\nimport money_kernel\nclass PriceSpec(ts.Spec):\n    def __init__(self, money: Money) -> None:\n        self.money = money\n', False)), imports=('money_kernel',))).violations()
+        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False),
+            (
+                "kernel/test_money.py",
+                "kernel.test_money",
+                "def test_money_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ), ('app/domain/price.py', 'app.domain.price', 'import tesser.domain as ts\nfrom kernel.money import Money\nimport money_kernel\nclass PriceSpec(ts.Spec):\n    def __init__(self, money: Money) -> None:\n        self.money = money\n', False),
+            (
+                "app/domain/test_price.py",
+                "app.domain.test_price",
+                "def test_price_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            )), imports=('money_kernel',))).violations()
     )
     assert not any("app/domain/price.py" in f for f in findings), findings
 
@@ -6371,7 +6600,28 @@ def test_a_kernel_test_reaches_only_its_kernel() -> None:
 def test_an_exported_kernel_is_governed_like_a_kernel() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('shells/__init__.py', 'shells', '', True), ('shells/svc.py', 'shells.svc', 'import tesser.domain as ts\nimport tesser.application as tsa\nclass Svc(tsa.ApplicationService):\n    pass\n', False), ('app/domain/price.py', 'app.domain.price', 'import tesser.domain as ts\nfrom shells.svc import Svc\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False)), exports=('shells',))).violations()
+        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False),
+            (
+                "kernel/test_money.py",
+                "kernel.test_money",
+                "def test_money_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ), ('shells/__init__.py', 'shells', '', True), ('shells/svc.py', 'shells.svc', 'import tesser.domain as ts\nimport tesser.application as tsa\nclass Svc(tsa.ApplicationService):\n    pass\n', False),
+            (
+                "shells/test_svc.py",
+                "shells.test_svc",
+                "def test_svc_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ), ('app/domain/price.py', 'app.domain.price', 'import tesser.domain as ts\nfrom shells.svc import Svc\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False),
+            (
+                "app/domain/test_price.py",
+                "app.domain.test_price",
+                "def test_price_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            )), exports=('shells',))).violations()
     )
     assert any(
         "a kernel holds only domain kinds" in f for f in findings
@@ -6432,7 +6682,35 @@ def test_an_unused_import_declaration_is_a_finding() -> None:
 def test_kernel_siblings_import_each_other_in_both_kernel_shapes() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('shells/__init__.py', 'shells', '', True), ('shells/base.py', 'shells.base', 'import tesser.domain as ts\nclass BaseSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False), ('shells/rich.py', 'shells.rich', 'import tesser.domain as ts\nfrom shells.base import BaseSpec\nclass RichSpec(ts.Spec):\n    def __init__(self, base: BaseSpec) -> None:\n        self.base = base\n', False), ('kernel/rates.py', 'kernel.rates', 'import tesser.domain as ts\nfrom kernel.money import Money\nclass RateSpec(ts.Spec):\n    def __init__(self, money: Money) -> None:\n        self.money = money\n', False)), exports=('shells',))).violations()
+        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False),
+            (
+                "kernel/test_money.py",
+                "kernel.test_money",
+                "def test_money_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ), ('shells/__init__.py', 'shells', '', True), ('shells/base.py', 'shells.base', 'import tesser.domain as ts\nclass BaseSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False),
+            (
+                "shells/test_base.py",
+                "shells.test_base",
+                "def test_base_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ), ('shells/rich.py', 'shells.rich', 'import tesser.domain as ts\nfrom shells.base import BaseSpec\nclass RichSpec(ts.Spec):\n    def __init__(self, base: BaseSpec) -> None:\n        self.base = base\n', False),
+            (
+                "shells/test_rich.py",
+                "shells.test_rich",
+                "def test_rich_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ), ('kernel/rates.py', 'kernel.rates', 'import tesser.domain as ts\nfrom kernel.money import Money\nclass RateSpec(ts.Spec):\n    def __init__(self, money: Money) -> None:\n        self.money = money\n', False),
+            (
+                "kernel/test_rates.py",
+                "kernel.test_rates",
+                "def test_rates_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            )), exports=('shells',))).violations()
     )
     assert not any("shells/rich.py" in f for f in findings), findings
     assert not any("kernel/rates.py" in f for f in findings), findings
@@ -6529,3 +6807,440 @@ def test_a_kernel_test_may_reach_the_trees_other_kernel() -> None:
         for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('shells/__init__.py', 'shells', '', True), ('shells/base.py', 'shells.base', 'import tesser.domain as ts\nclass BaseSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False), ('kernel/test_money.py', 'kernel.test_money', 'from kernel.money import Money\nfrom shells.base import BaseSpec\ndef test_money() -> None:\n    assert Money(1) == Money(1)\n', False)), exports=('shells',))).violations()
     )
     assert not any("kernel/test_money.py" in f for f in findings), findings
+
+
+def test_an_implementation_module_carries_exactly_one_sibling_test() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "app/domain/money.py",
+                "app.domain.money",
+                "import tesser.domain as ts\n"
+                "class MoneySpec(ts.Spec):\n"
+                "    def __init__(self, code: str) -> None:\n"
+                "        self.code = code\n",
+                False,
+            ),
+            (
+                "app/domain/test_thing.py",
+                "app.domain.test_thing",
+                "def test_thing_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "app.domain.money has no sibling test file; an implementation "
+        "module carries exactly one test_<module>.py beside it" in f
+        for f in findings
+    )
+    assert not any("app.domain.thing has no sibling test" in f for f in findings)
+
+
+def test_a_sibling_test_names_the_module_beside_it() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "app/domain/test_thing.py",
+                "app.domain.test_thing",
+                "def test_thing_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "app/domain/test_ghost.py",
+                "app.domain.test_ghost",
+                "def test_ghost() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "app/tests/__init__.py",
+                "app.tests",
+                "",
+                True,
+            ),
+            (
+                "app/tests/test_wired_flow.py",
+                "app.tests.test_wired_flow",
+                "def test_flow() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "app.domain.test_ghost pairs with no implementation module; a sibling "
+        "test file is named test_<module>.py for the module beside it" in f
+        for f in findings
+    )
+    assert not any("app.domain.test_thing pairs with no" in f for f in findings)
+    assert not any("app.tests.test_wired_flow pairs with no" in f for f in findings)
+
+
+def test_a_declaration_only_module_needs_no_sibling_test() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "app/domain/test_thing.py",
+                "app.domain.test_thing",
+                "def test_thing_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ), base=(
+            (
+                "app/domain/thing.py",
+                "app.domain.thing",
+                "import tesser.domain as ts\n"
+                "class ThingSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Thing(ts.AggregateRoot):\n"
+                "    def __init__(self, spec: ThingSpec) -> None:\n"
+                "        self.text = spec.text\n",
+                False,
+            ),
+            (
+                "app/client/client.py",
+                "app.client.client",
+                "import tesser.context as ts\n"
+                "class AskRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class AskResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any(
+        "app.client.client has no sibling test file" in f for f in findings
+    )
+
+
+def test_a_ports_module_and_an_init_need_no_sibling_test() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "app/domain/test_thing.py",
+                "app.domain.test_thing",
+                "def test_thing_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "app/application/test_service.py",
+                "app.application.test_service",
+                "def test_service_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "app/application/ports/__init__.py",
+                "app.application.ports",
+                "",
+                True,
+            ),
+            (
+                "app/application/ports/asker.py",
+                "app.application.ports.asker",
+                "from typing import Protocol\n"
+                "import tesser.application as ts\n"
+                "class AskPortRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class AskPortResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Asker(ts.Port, Protocol):\n"
+                "    def ask(self, request: AskPortRequest) -> AskPortResponse: ...\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any(
+        "asker has no sibling test file" in f for f in findings
+    )
+    assert not any(
+        "app.domain has no sibling test file" in f for f in findings
+    )
+
+
+def test_the_lifecycle_contract_is_fakeable_but_never_a_production_base() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "app/wiring/wire.py",
+                "app.wiring.wire",
+                "import tesser.context as ts\n"
+                "from tesser.lifecycle import Closeable\n"
+                "class Sneaky(Closeable):\n"
+                "    def close(self) -> None:\n"
+                "        return None\n",
+                False,
+            ),
+            (
+                "app/wiring/test_wire.py",
+                "app.wiring.test_wire",
+                "import tesser.testing as ts\n"
+                "from tesser.lifecycle import Closeable\n"
+                "@ts.fake\n"
+                "class FakeCloseable(Closeable):\n"
+                "    def close(self) -> None:\n"
+                "        return None\n"
+                "def test_wire_closes() -> None:\n"
+                "    FakeCloseable().close()\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "app.wiring.wire.Sneaky declares the lifecycle contract as a base; production "
+        "satisfies Closeable structurally — only a test fake declares it" in f
+        for f in findings
+    )
+    assert not any("FakeCloseable" in f for f in findings)
+
+
+@ts.helper
+def _tesser_export_spec(
+    sources: tuple[tuple[str, str, str | None, bool], ...] = (),
+    exports: tuple[str, ...] = ("tesser",),
+    base: tuple[tuple[str, str, str | None, bool], ...] = (
+        ("tesser/__init__.py", "tesser", "", True),
+        ("tesser/domain/__init__.py", "tesser.domain", "", True),
+        (
+            "tesser/domain/valueobject.py",
+            "tesser.domain.valueobject",
+            "class ValueObject:\n"
+            "    def __eq__(self, other: object) -> bool:\n"
+            "        return self.__dict__ == other.__dict__\n",
+            False,
+        ),
+        (
+            "tesser/domain/test_valueobject.py",
+            "tesser.domain.test_valueobject",
+            "from tesser.domain.valueobject import ValueObject\n"
+            "def test_equality() -> None:\n"
+            "    assert ValueObject() == ValueObject()\n",
+            False,
+        ),
+    ),
+) -> checks.CodebaseSpec:
+    return checks.CodebaseSpec(
+        sources=base + sources,
+        declared="app",
+        nested=(),
+        symlinked=(),
+        exports=exports,
+    )
+
+
+def test_the_shells_tree_is_clean_and_not_context_shaped() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_tesser_export_spec()).violations()
+    )
+    assert findings == (), findings
+
+
+def test_a_tesser_init_only_reexports_from_the_distribution() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_tesser_export_spec(
+            sources=(
+                (
+                    "tesser/testing/__init__.py",
+                    "tesser.testing",
+                    "from tesser.declared import fake as fake\n"
+                    "from . import declared as declared\n"
+                    "import subprocess\n"
+                    "X = 1\n",
+                    True,
+                ),
+                ("tesser/declared.py", "tesser.declared", "", False),
+            ),
+        )).violations()
+    )
+    assert any(
+        "tesser.testing imports subprocess; "
+        "a tesser __init__ only re-exports from the distribution" in f
+        for f in findings
+    ), findings
+    assert any(
+        "tesser.testing __init__ declares code; "
+        "a tesser __init__ only re-exports from the distribution" in f
+        for f in findings
+    ), findings
+    assert not any("imports tesser.declared" in f for f in findings), findings
+    assert not any("tesser.testing.declared" in f for f in findings), findings
+
+
+def test_the_distribution_holds_only_consumer_namespaces() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_tesser_export_spec(
+            sources=(("tesser/extras.py", "tesser.extras", "X = 1\n", False),),
+        )).violations()
+    )
+    assert any(
+        "tesser.extras is not a consumer namespace; the tesser "
+        "distribution holds only the namespaces its consumers import" in f
+        for f in findings
+    ), findings
+
+
+def test_a_shell_module_stays_on_the_shell_stdlib() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_tesser_export_spec(
+            sources=(
+                (
+                    "tesser/srv/host.py",
+                    "tesser.srv.host",
+                    "import subprocess\n"
+                    "from typing import Protocol\n"
+                    "from tesser.domain.valueobject import ValueObject\n"
+                    "class Host(Protocol):\n"
+                    "    ...\n",
+                    False,
+                ),
+                ("tesser/srv/__init__.py", "tesser.srv", "", True),
+            ),
+        )).violations()
+    )
+    assert any(
+        "tesser.srv.host imports subprocess; a shell module imports "
+        "only the tesser distribution and the shell stdlib" in f
+        for f in findings
+    ), findings
+    assert not any("imports typing" in f for f in findings), findings
+    assert not any("imports tesser.domain" in f for f in findings), findings
+
+
+def test_the_shells_tests_probe_freely_with_any_tesser_import() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_tesser_export_spec(
+            sources=(
+                (
+                    "tests/test_shells.py",
+                    "tests.test_shells",
+                    "import tesser.adapters\n"
+                    "import tesser.domain\n"
+                    "class Probe(tesser.domain.ValueObject):\n"
+                    "    pass\n"
+                    "def test_probe() -> None:\n"
+                    "    assert Probe() == Probe()\n",
+                    False,
+                ),
+            ),
+        )).violations()
+    )
+    assert findings == (), findings
+
+
+def test_the_shells_tests_keep_function_totality() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_tesser_export_spec(
+            sources=(
+                (
+                    "tests/test_shells.py",
+                    "tests.test_shells",
+                    "import tesser.domain\n"
+                    "def helper() -> int:\n"
+                    "    return 1\n"
+                    "print('loose')\n"
+                    "def test_ok() -> None:\n"
+                    "    assert True\n",
+                    False,
+                ),
+            ),
+        )).violations()
+    )
+    assert any(
+        "is neither a test nor a declared helper; a test module holds "
+        "tests, @ts.helper builders, and @ts.fake doubles" in f
+        for f in findings
+    ), findings
+    assert any(
+        "a test module holds only imports, tests, helpers, and fakes" in f
+        for f in findings
+    ), findings
+
+
+def test_a_tree_exporting_tesser_holds_nothing_else() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_tesser_export_spec(
+            sources=(
+                (
+                    "billing/domain/money.py",
+                    "billing.domain.money",
+                    "import tesser.domain as ts\n"
+                    "class MoneySpec(ts.Spec):\n"
+                    "    def __init__(self, text: str) -> None:\n"
+                    "        self.text = text\n",
+                    False,
+                ),
+            ),
+        )).violations()
+    )
+    assert len(findings) == 1, findings
+    assert any(
+        "a tree exporting tesser is the distribution itself — "
+        "its top level is tesser and tests, nothing else" in f
+        for f in findings
+    ), findings
+
+
+def test_a_stray_subpackage_in_the_distribution_is_a_finding() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_tesser_export_spec(
+            sources=(
+                (
+                    "tesser/evil/__init__.py",
+                    "tesser.evil",
+                    "from tesser.domain.valueobject import ValueObject as ValueObject\n",
+                    True,
+                ),
+            ),
+        )).violations()
+    )
+    assert any(
+        "tesser.evil is not a consumer namespace; the tesser "
+        "distribution holds only the namespaces its consumers import" in f
+        for f in findings
+    ), findings
+
+
+def test_a_conftest_leaf_counts_tesser_edges_in_the_exporting_tree() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_tesser_export_spec(
+            sources=(
+                (
+                    "conftest.py",
+                    "conftest",
+                    "import tesser.domain.valueobject\n",
+                    False,
+                ),
+            ),
+        )).violations()
+    )
+    assert any(
+        "conftest imports tesser.domain.valueobject; "
+        "a conftest is a leaf that imports nothing from its tree" in f
+        for f in findings
+    ), findings

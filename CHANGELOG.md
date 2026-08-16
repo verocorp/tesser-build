@@ -5,6 +5,52 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.51.0] - 2026-08-16
+
+The flagged kind-table entry resolves by ruling: **a port is for the
+application; Closeable is not a port — it is the lifecycle contract, its
+own kind.**
+
+### Changed
+- **`tesser.lifecycle.Closeable` drops its `ts.Port` base** — it is a plain
+  structural Protocol now. The analyzer's kind table carries `"closeable"`
+  as a distinct block instead of aliasing it to `"port"`, retiring the #86
+  entry and the global widening it carried (any Closeable-extending class
+  used to classify as a port).
+- **TB072's clause becomes "a fake implements the contract it doubles"** —
+  a fake may double a port, a client, a protocol port, or the lifecycle
+  contract.
+- **A production class declaring `Closeable` as a base is a finding**
+  (TB052): production satisfies the contract structurally; only a test fake
+  declares it.
+- Two pins hold the ruling against drift: the runtime suite asserts `Port`
+  is not in `Closeable.__mro__`, and the kind-table meta test asserts
+  `closeable` has no `KIND_ROLE` home.
+
+## [0.0.50.0] - 2026-08-16
+
+The rule the whole arc served: **TB074 — every implementation module
+carries exactly one sibling test file**, in both directions.
+
+### Added
+- **`TB074`**: an implementation module (role, kernel, srv, bootstrap,
+  protocol places) with no sibling `test_<module>.py` is a finding, and a
+  sibling test file naming no module beside it is a finding. Exempt by
+  construction: `application/ports` modules, declaration-only modules
+  (every class a declared DTO/Protocol block, methods stopping at
+  `__init__` — `client.py` is the canonical case), `__init__.py`,
+  `conftest`, and `tests/` packages (the wired tier pairs with the app, not
+  a module). **No temporary exemptions**: the one module that genuinely
+  cannot be tested — llmport's `srv/voice/agent.py`, bound to an
+  uninstallable vendor SDK — carries a site-level ignore where the finding
+  lands, as visible debt. Run over the repo, the rule fired on exactly that
+  one module: the three pairing waves left nothing owed.
+
+### Changed
+- The checker's own spec fixtures gain their sibling pairs (the rule
+  applies to the trees the tests build, too). TB074 joins the norm-testing
+  roadmap row; `testing.md` and `CLAUDE.md` teach it. skill-version 41.
+
 ## [0.0.49.0] - 2026-08-16
 
 Third and largest pairing wave: python-app reaches

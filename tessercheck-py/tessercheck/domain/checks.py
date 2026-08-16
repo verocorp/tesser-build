@@ -10,7 +10,7 @@ import tesser.domain as ts
 TESSER_BASE_BLOCKS: Final[dict[tuple[str, str], str]] = {
     ("tesser.application", "ApplicationService"): "service",
     ("tesser.application", "Port"): "port",
-    ("tesser.lifecycle", "Closeable"): "port",
+    ("tesser.lifecycle", "Closeable"): "closeable",
     ("tesser.application", "Request"): "port_request",
     ("tesser.application", "Response"): "port_response",
     ("tesser.context", "Request"): "request",
@@ -109,6 +109,7 @@ KIND_NAME: Final[dict[str, str]] = {
     "protocol_rejection": "a protocol rejection",
     "protocol_request": "a protocol request record",
     "protocol_response": "a protocol response record",
+    "closeable": "the lifecycle contract",
 }
 
 SRV_KINDS: Final[frozenset[str]] = frozenset(
@@ -215,6 +216,26 @@ ROLE_TESSER_PACKAGE: Final[dict[str, str]] = {
     "adapters": "tesser.adapters",
     "wiring": "tesser.context",
 }
+
+DTO_BLOCKS: Final[frozenset[str]] = frozenset(
+    {
+        "request",
+        "response",
+        "client",
+        "port",
+        "port_request",
+        "port_response",
+        "protocol_port",
+        "protocol_record",
+        "protocol_rejection",
+        "protocol_request",
+        "protocol_response",
+    }
+)
+
+PAIRED_PLACES: Final[frozenset[str]] = frozenset(
+    {"role", "kernel", "shell-srv", "shell-bootstrap", "protocol"}
+)
 
 NORM_IMPORTS: Final[dict[str, frozenset[str]]] = {
     "domain": frozenset({"tesser.errors", "tesser.serialization"}),
@@ -1001,6 +1022,67 @@ class Codebase(ts.AggregateRoot):
                         found.extend(self._port_violations(module, cls, blocks))
                 elif block == "service":
                     found.extend(self._service_violations(module, cls, blocks))
+        found.extend(self._pairing_violations(contexts, blocks))
+        return tuple(found)
+
+    def _declaration_only(self, module: Module, blocks: dict[tuple[str, str], str]) -> bool:
+        saw_class = False
+        for stmt in module.body():
+            if isinstance(stmt, (ast.Import, ast.ImportFrom)):
+                continue
+            if not isinstance(stmt, ast.ClassDef):
+                return False
+            if blocks.get((module.name(), stmt.name)) not in DTO_BLOCKS:
+                return False
+            for item in stmt.body:
+                if not isinstance(item, ast.FunctionDef):
+                    continue
+                if item.name == "__init__":
+                    continue
+                if len(item.body) == 1 and isinstance(item.body[0], ast.Expr) and isinstance(
+                    item.body[0].value, ast.Constant
+                ):
+                    continue
+                return False
+            saw_class = True
+        return saw_class
+
+    def _pairing_violations(
+        self, contexts: frozenset[str], blocks: dict[tuple[str, str], str]
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        names = {module.name() for module in self._modules if not module.is_package()}
+        for module in self._modules:
+            parts = module.name().split(".")
+            base = parts[-1]
+            place = self._locate(module.name(), module.is_package(), contexts, self._export)
+            parent = ".".join(parts[:-1])
+            if place in PAIRED_PLACES and not module.is_package() and base != "__main__":
+                if self._declaration_only(module, blocks):
+                    continue
+                sibling = (parent + "." if parent else "") + "test_" + base
+                if sibling not in names:
+                    found.append(
+                        Violation(
+                            module.path(),
+                            1,
+                            "TB074",
+                            f"{module.name()} has no sibling test file; an implementation "
+                            "module carries exactly one test_<module>.py beside it",
+                        )
+                    )
+            elif place == "test" and base.startswith("test_") and "tests" not in parts:
+                subject = (parent + "." if parent else "") + base[len("test_") :]
+                if subject not in names:
+                    found.append(
+                        Violation(
+                            module.path(),
+                            1,
+                            "TB074",
+                            f"{module.name()} pairs with no implementation module; a sibling "
+                            "test file is named test_<module>.py for the module beside it",
+                        )
+                    )
         return tuple(found)
 
     def _kernel_tops(self) -> frozenset[str]:
@@ -3464,6 +3546,16 @@ class Codebase(ts.AggregateRoot):
                             "a host lives in srv and a protocol kind in a protocol module, never a context",
                         )
                     )
+                elif block == "closeable":
+                    found.append(
+                        Violation(
+                            module.path(),
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} declares the lifecycle contract as a base; production "
+                            "satisfies Closeable structurally — only a test fake declares it",
+                        )
+                    )
                 elif KIND_ROLE[block] != role:
                     found.append(
                         Violation(
@@ -4053,7 +4145,7 @@ class Codebase(ts.AggregateRoot):
                         )
                     )
                 elif not any(
-                    blocks.get(key) in ("port", "client", "protocol_port")
+                    blocks.get(key) in ("port", "client", "protocol_port", "closeable")
                     for key in self._base_keys(module, stmt)
                 ):
                     found.append(
@@ -4061,8 +4153,8 @@ class Codebase(ts.AggregateRoot):
                             module.path(),
                             stmt.lineno,
                             "TB072",
-                            f"{where} implements no application port, protocol port, or client; "
-                            "a fake implements the port or client it doubles",
+                            f"{where} implements no application port, protocol port, client, "
+                            "or lifecycle contract; a fake implements the contract it doubles",
                         )
                     )
             else:

@@ -18,7 +18,7 @@ tesser = ["py.typed"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-testpaths = ["tests"]
+testpaths = ["tesser", "tests"]
 
 [tool.mypy]
 strict = true
