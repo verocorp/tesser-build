@@ -165,25 +165,38 @@ reinterpreted under the kernel rules — loudly, by design — and must rename.
 
 ## The one special case, and where it lives
 
-**Status: rollout step 2 — designed here, not yet implemented.** Nothing
-routes `export tesser` today; until the shells rows land, declaring it
-fails loudly under the generic kernel rules rather than silently passing.
-
 Kernel *content* rules are keyed on the `ts.*` shells — and the shells
-cannot subclass themselves. So the analyzer will route exactly one exported
+cannot subclass themselves. So the analyzer routes exactly one exported
 kernel differently: when the declared export is the package `tesser`, its
 modules are governed by **shells rows** instead of domain-content rows:
 
-- **Totality**: the kernel's top level is exactly the consumer namespaces
-  (`domain`, `application`, `adapters`, `context`, `srv`, `testing`) plus
-  `declared.py` and `py.typed`; anything else is a finding.
+- **The tree is the distribution, and nothing else**: a tree declaring
+  `export tesser` holds exactly `tesser/` and `tests/` at its top level.
+  Without this, any app could park a `tesser/` package beside its
+  contexts, declare the export, and gain a content-rule-free region its
+  governed domain code calls as `ts.*` — the shape gate makes the
+  declaration an identity claim only the distribution can make.
+- **Totality**: the distribution's members — modules and subpackages alike
+  — are exactly the consumer namespaces (`domain`, `application`,
+  `adapters`, `context`, `srv`, `testing`, `lifecycle`, `errors`,
+  `serialization`) plus `declared.py`; anything else is a finding.
 - **Purity**: a shell module imports only its own distribution and the
-  narrow typing stdlib (`__future__`, `typing`, `collections.abc`) — the
-  bar the shells impose is the bar they meet, with room to spare (verified:
-  that list is their entire external surface today).
-- **Tests invert the consumer rule**: this tree's tests may import any
-  `tesser.*`, because the shells are their subject — the mirror image of
-  consumer tests, which may touch only `tesser.testing`.
+  shell stdlib (`__future__`, `typing`, `collections`, `enum`, `datetime`,
+  `decimal`, `dataclasses`) — the measured external surface of the
+  shipped distribution, and a meta-test
+  (`tessercheck/tests/test_tesser_allowlists.py`) fails when either
+  allowlist grants a name the distribution does not earn.
+- **Tests invert exactly two consumer rules, and keep the rest**: this
+  tree's tests may import any `tesser.*` (the shells are their subject —
+  the mirror image of consumer tests, which may touch only
+  `tesser.testing`), and their module-level classes are free (probe
+  subclasses of the shells are the tests' method, not test doubles).
+  Function totality still applies — every module-level function is a test
+  or a declared helper — as do the comments norm, the mock-library ban,
+  and placement. The mutmut ecosystem harness is subprocess
+  infrastructure that cannot meet the helper shape, so it is skipped by
+  declaration (`skip ecosystem`), visibly, with its rationale in that
+  directory's README.
 
 This is the entire remaining specialness of tesser-py, and it lives in the
 analyzer — the same file that already names `tesser` in every import row —
@@ -199,7 +212,7 @@ never in the manifest, the layout, or the docs' ontology.
 | kernel content is conventional domain content | existing TB01x/TB03x, applied to kernel modules |
 | pure roles import only entitled kernels | TB062 extension |
 | nothing imports leftward into a kernel's consumers | existing rows (unchanged) |
-| shells meet the shells bar | shells rows (tesser routing — rollout step 2, pending) |
+| shells meet the shells bar | shells rows (the `export tesser` routing) |
 | declarations match disk, arms, and CI | layout app cross-checks |
 
 ## Rollout

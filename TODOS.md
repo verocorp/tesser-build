@@ -191,7 +191,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   string-keyed chains are gone); (3) immutability + value equality returned
   per-kind on `ts.Record` (VO-style frozen beat write-once — the
   losing arm and its smuggling hole are pinned in
-  tesser-py/tests/test_record.py). STILL OPEN, needing Chris:
+  tesser-py/tesser/srv/test_record.py). STILL OPEN, needing Chris:
   (a) **the tool declaration as a context-side CLASS** (his original
   "declared tool object" shape) needs a new ADAPTERS kind — outside the
   srv-only scope; the sigcheck probe walls are recorded verbatim in

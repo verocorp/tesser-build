@@ -122,6 +122,8 @@ run_errorspy() {
 
 run_tesser_py() {
   cd "$ROOT/tesser-py" || return 1
+  step "tessercheck (zero findings over the whole tree)"
+  tessercheck_tree "$PWD" || return 1
   step "mypy --strict"
   mypy || return 1
   # The mutmut fixture projects are excluded from the tree's own mypy run
@@ -151,7 +153,11 @@ names = zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist()
 shipped = {n.split("/")[1] for n in names if n.startswith("tesser/") and n.count("/") == 2}
 shipped |= {n.split("/")[1] for n in names if n.startswith("tesser/") and n.count("/") == 1 and n.endswith(".py")}
 on_disk = {p.parent.name for p in pathlib.Path("tesser").glob("*/__init__.py")}
-on_disk |= {p.name for p in pathlib.Path("tesser").glob("*.py") if p.name != "__init__.py"}
+on_disk |= {
+    p.name
+    for p in pathlib.Path("tesser").glob("*.py")
+    if p.name != "__init__.py" and not p.name.startswith("test_")
+}
 missing = on_disk - shipped
 if missing:
     sys.exit(f"wheel omits subpackages or modules: {sorted(missing)}")

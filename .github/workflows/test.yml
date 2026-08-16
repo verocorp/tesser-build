@@ -177,7 +177,7 @@ jobs:
           python-version: '3.12'
       - name: Install dev tooling
         run: pip install -r tesser-py/requirements-dev.txt
-      - name: tesser-py — mypy --strict (tree + mutmut fixtures) + pytest (incl. the mutmut ecosystem gate) + the built wheel ships every subpackage
+      - name: tesser-py — tessercheck (shells rows) + mypy --strict (tree + mutmut fixtures) + pytest (incl. the mutmut ecosystem gate) + the built wheel ships every subpackage
         # The wheel check is not redundant with the type/test gates: the
         # enumerated packages list once silently dropped tesser.testing and
         # tesser.srv, and every other job reaches the source via PYTHONPATH, so

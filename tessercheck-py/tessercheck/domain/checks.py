@@ -134,6 +134,33 @@ KERNEL_PACKAGE: Final[str] = "kernel"
 
 TESSER: Final[str] = "tesser"
 
+TESSER_NAMESPACES: Final[frozenset[str]] = frozenset(
+    {
+        "domain",
+        "application",
+        "adapters",
+        "context",
+        "srv",
+        "testing",
+        "lifecycle",
+        "declared",
+        "errors",
+        "serialization",
+    }
+)
+
+TESSER_STDLIB: Final[frozenset[str]] = frozenset(
+    {
+        "__future__",
+        "typing",
+        "collections",
+        "enum",
+        "datetime",
+        "decimal",
+        "dataclasses",
+    }
+)
+
 STUB_SUFFIX: Final[str] = ".pyi"
 
 IMPORTLIB: Final[str] = "importlib"
@@ -961,6 +988,10 @@ class Codebase(ts.AggregateRoot):
             found.extend(self._universal_violations(module))
             found.extend(self._dynamic_import_violations(module))
             found.extend(self._module_violations(module, blocks, contexts))
+            if self._export == TESSER and self._locate(
+                module.name(), module.is_package(), contexts, self._export
+            ) == "test":
+                continue
             for cls in module.class_defs():
                 block = blocks.get((module.name(), cls.name))
                 if block == "aggregate":
@@ -1199,6 +1230,8 @@ class Codebase(ts.AggregateRoot):
         if place == "root":
             return self._homeless_violations(module)
         if place == "kernel-init":
+            if self._export == TESSER and parts[0] == TESSER:
+                return self._tesser_init_violations(module)
             return self._kernel_init_violations(module)
         if place == "kernel-file":
             return (
@@ -1211,6 +1244,8 @@ class Codebase(ts.AggregateRoot):
                 ),
             )
         if place == "kernel":
+            if self._export == TESSER and parts[0] == TESSER:
+                return self._tesser_shell_violations(module)
             return self._kernel_module_violations(module, blocks) + self._kernel_import_violations(
                 module
             )
@@ -1485,7 +1520,25 @@ class Codebase(ts.AggregateRoot):
                     "exists; an export names a package at the tree root",
                 ),
             )
-        if any(
+        if self._export == TESSER:
+            outsiders = sorted(
+                frozenset(
+                    module.name().split(".")[0] for module in self._modules
+                )
+                - frozenset({TESSER, TESTS_ROLE, "conftest"})
+            )
+            if outsiders:
+                return (
+                    Violation(
+                        TREE_DECLARATION,
+                        1,
+                        "TB044",
+                        f"this tree exports 'tesser' but also holds {', '.join(outsiders)}; "
+                        "a tree exporting tesser is the distribution itself — "
+                        "its top level is tesser and tests, nothing else",
+                    ),
+                )
+        if self._export != TESSER and any(
             len(parts) >= 2 and parts[0] == self._export and parts[1] in ROLES
             for parts in (module.name().split(".") for module in self._modules)
         ):
@@ -1558,7 +1611,9 @@ class Codebase(ts.AggregateRoot):
         return frozenset(module.name().split(".")[0] for module in self._modules)
 
     def _tree_edges(self, module: Module) -> tuple[tuple[str, int], ...]:
-        tops = self._tree_tops() - {TESSER}
+        tops = self._tree_tops()
+        if self._export != TESSER:
+            tops = tops - {TESSER}
         return tuple(
             (str(edge._target), int(edge._lineno))
             for edge in module.import_edges()
@@ -1641,6 +1696,76 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
             found.extend(self._form_violations(module, edge))
+        return tuple(found)
+
+    def _tesser_init_violations(self, module: Module) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        parts = module.name().split(".")
+        if len(parts) >= 2 and parts[1] not in TESSER_NAMESPACES:
+            found.append(
+                Violation(
+                    module.path(),
+                    1,
+                    "TB041",
+                    f"{module.name()} is not a consumer namespace; the tesser "
+                    "distribution holds only the namespaces its consumers import",
+                )
+            )
+        for stmt in module.body():
+            if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
+                found.append(
+                    Violation(
+                        module.path(),
+                        stmt.lineno,
+                        "TB042",
+                        f"{module.name()} __init__ declares code; "
+                        "a tesser __init__ only re-exports from the distribution",
+                    )
+                )
+        for edge in module.import_edges():
+            target = str(edge._target)
+            lineno = int(edge._lineno)
+            if not target.startswith(TESSER + "."):
+                found.append(
+                    Violation(
+                        module.path(),
+                        lineno,
+                        "TB042",
+                        f"{module.name()} imports {target}; "
+                        "a tesser __init__ only re-exports from the distribution",
+                    )
+                )
+        return tuple(found)
+
+    def _tesser_shell_violations(self, module: Module) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        found.extend(self._stray_import_violations(module))
+        parts = module.name().split(".")
+        if parts[1] not in TESSER_NAMESPACES:
+            found.append(
+                Violation(
+                    module.path(),
+                    1,
+                    "TB041",
+                    f"{module.name()} is not a consumer namespace; the tesser "
+                    "distribution holds only the namespaces its consumers import",
+                )
+            )
+        for edge in module.import_edges():
+            target = str(edge._target)
+            lineno = int(edge._lineno)
+            head = target.split(".")[0]
+            if head == TESSER or head in TESSER_STDLIB:
+                continue
+            found.append(
+                Violation(
+                    module.path(),
+                    lineno,
+                    "TB062",
+                    f"{module.name()} imports {target}; a shell module imports "
+                    "only the tesser distribution and the shell stdlib",
+                )
+            )
         return tuple(found)
 
     def _kernel_init_violations(self, module: Module) -> tuple[Violation, ...]:
@@ -3974,18 +4099,19 @@ class Codebase(ts.AggregateRoot):
         for edge in module.import_edges():
             if str(edge._target).split(".")[0] in contexts:
                 found.extend(self._form_violations(module, edge))
-        found.extend(
-            self._tesser_import_violations(
-                module,
-                "test",
-                "tesser.testing",
-                "a test module's tesser imports are tesser.testing, "
-                "tesser.errors, tesser.lifecycle, and tesser.serialization",
-                "a test module imports tesser.testing at most once, as ts",
-                None,
-                NORM_IMPORTS["test"],
+        if self._export != TESSER:
+            found.extend(
+                self._tesser_import_violations(
+                    module,
+                    "test",
+                    "tesser.testing",
+                    "a test module's tesser imports are tesser.testing, "
+                    "tesser.errors, tesser.lifecycle, and tesser.serialization",
+                    "a test module imports tesser.testing at most once, as ts",
+                    None,
+                    NORM_IMPORTS["test"],
+                )
             )
-        )
         for stmt in module.body():
             if isinstance(stmt, (ast.Import, ast.ImportFrom)):
                 continue
@@ -4006,6 +4132,8 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
             elif isinstance(stmt, ast.ClassDef):
+                if self._export == TESSER:
+                    continue
                 where = f"{module.name()}.{stmt.name}"
                 if not self._declared(module, stmt, "fake"):
                     found.append(
