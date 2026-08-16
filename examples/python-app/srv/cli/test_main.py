@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-from bootstrap.bootstrap import App, new
-from bootstrap.config import from_env
+from bootstrap.app import App
+import bootstrap.loader as loader
+import bootstrap.repository as repository
 from protocol.cli import CliRequest, CliResponse, UsageError
 from tesser.errors import InfraError, conflict, invalid, not_found
 from srv.cli.main import commands_for, dispatch, respond
 
 
 def _app() -> App:  # tessercheck:ignore TB071
-    env = {"CAMPAIGN_STORAGE": "memory", "LINKPOLICY_STORAGE": "memory"}
-    return new(from_env(env.get))
+    env = {"CAMPAIGN_STORAGE": "memory", "LINKPOLICY_STORAGE": "memory", "HTTP_HOST": "", "HTTP_PORT": "8080"}
+    return loader.AppLoader(repository.EnvConfigRepository(env)).load()
 
 
 def test_a_domain_rejection_becomes_an_exit_code_not_a_traceback() -> None:

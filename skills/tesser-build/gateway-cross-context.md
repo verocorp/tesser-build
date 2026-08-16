@@ -59,4 +59,4 @@ Not yet materialized beyond the rules above (see status note). The verified impl
 to imitate: `examples/python-app/campaign/adapters/gateways/target_policy.py`
 (the `TargetPolicy` port and its request/response DTOs in campaign's
 `application/ports/`, the outcome an enum; adapter over `linkpolicy.Client`;
-wired in `examples/python-app/bootstrap/bootstrap.py`).
+wired in `examples/python-app/bootstrap/app.py`).

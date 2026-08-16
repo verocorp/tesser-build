@@ -24,12 +24,12 @@ class FakeHostRaising(Host):
 
 def test_close_runs_when_host_returns(restore_signals: None) -> None:
     app = SpyApp()
-    run_until_signal(FakeHostReturning(), app)
+    run_until_signal(FakeHostReturning(), app.close)
     assert app.closed == 1
 
 
 def test_close_runs_when_host_raises(restore_signals: None) -> None:
     app = SpyApp()
     with pytest.raises(RuntimeError):
-        run_until_signal(FakeHostRaising(), app)
+        run_until_signal(FakeHostRaising(), app.close)
     assert app.closed == 1

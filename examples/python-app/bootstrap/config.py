@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__ import annotations  # tessercheck:ignore TB050
 
 import campaign.wiring.config as campaign_config
 import linkpolicy.wiring.config as linkpolicy_config

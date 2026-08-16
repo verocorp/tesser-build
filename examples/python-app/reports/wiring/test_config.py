@@ -69,33 +69,33 @@ def test_a_config_wires_a_client_that_serves_a_report() -> None:
         linkpolicy_client.VerdictView("https://a.example/s", True, "on the allowlist")
     )
 
-    reports, closeable = wire.build(config.Config(), links, verdicts)
+    component = wire.Reports(config.Config(), links, verdicts)
     try:
-        resp = reports.links_by_verdict(client.LinksByVerdictRequest())
+        resp = component.client.links_by_verdict(client.LinksByVerdictRequest())
         assert [view.slug for view in resp.links] == ["spring-sale"]
     finally:
-        closeable.close()
+        component.close()
 
 
 def test_two_configs_wire_two_independent_clients() -> None:
-    first, first_closeable = wire.build(
+    first = wire.Reports(
         config.Config(), FakeCampaignClient(), FakeLinkPolicyClient()
     )
-    second, second_closeable = wire.build(
+    second = wire.Reports(
         config.Config(), FakeCampaignClient(), FakeLinkPolicyClient()
     )
     try:
-        assert first is not second
+        assert first.client is not second.client
     finally:
-        first_closeable.close()
-        second_closeable.close()
+        first.close()
+        second.close()
 
 
 def test_a_config_carries_nothing_a_caller_must_set() -> None:
-    reports, closeable = wire.build(
+    component = wire.Reports(
         config.Config(), FakeCampaignClient(), FakeLinkPolicyClient()
     )
     try:
-        assert reports.links_by_verdict(client.LinksByVerdictRequest()).links == ()
+        assert component.client.links_by_verdict(client.LinksByVerdictRequest()).links == ()
     finally:
-        closeable.close()
+        component.close()

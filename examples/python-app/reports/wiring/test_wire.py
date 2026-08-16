@@ -70,14 +70,14 @@ def test_the_wired_client_joins_a_link_to_the_verdict_recorded_for_it() -> None:
         linkpolicy_client.VerdictView("https://a.example/s", False, "host blocked")
     )
 
-    reports, closeable = wire.build(config.Config(), links, verdicts)
+    component = wire.Reports(config.Config(), links, verdicts)
     try:
-        resp = reports.links_by_verdict(client.LinksByVerdictRequest())
+        resp = component.client.links_by_verdict(client.LinksByVerdictRequest())
         assert [(view.slug, view.allowed, view.reason) for view in resp.links] == [
             ("spring-sale", False, "host blocked")
         ]
     finally:
-        closeable.close()
+        component.close()
 
 
 def test_the_wired_client_reports_a_link_no_policy_has_ruled_on() -> None:
@@ -86,57 +86,57 @@ def test_the_wired_client_reports_a_link_no_policy_has_ruled_on() -> None:
     )
     verdicts = FakeLinkPolicyClient()
 
-    reports, closeable = wire.build(config.Config(), links, verdicts)
+    component = wire.Reports(config.Config(), links, verdicts)
     try:
-        resp = reports.links_by_verdict(client.LinksByVerdictRequest())
+        resp = component.client.links_by_verdict(client.LinksByVerdictRequest())
         assert [(view.slug, view.allowed, view.reason) for view in resp.links] == [
             ("spring-sale", True, "no verdict recorded")
         ]
     finally:
-        closeable.close()
+        component.close()
 
 
 def test_the_wired_client_reports_nothing_when_neither_context_has_anything() -> None:
-    reports, closeable = wire.build(
+    component = wire.Reports(
         config.Config(), FakeCampaignClient(), FakeLinkPolicyClient()
     )
     try:
-        assert reports.links_by_verdict(client.LinksByVerdictRequest()).links == ()
+        assert component.client.links_by_verdict(client.LinksByVerdictRequest()).links == ()
     finally:
-        closeable.close()
+        component.close()
 
 
 def test_closing_the_wired_graph_is_safe_to_repeat() -> None:
-    reports, closeable = wire.build(
+    component = wire.Reports(
         config.Config(), FakeCampaignClient(), FakeLinkPolicyClient()
     )
 
-    closeable.close()
-    closeable.close()
+    component.close()
+    component.close()
 
-    assert reports.links_by_verdict(client.LinksByVerdictRequest()).links == ()
+    assert component.client.links_by_verdict(client.LinksByVerdictRequest()).links == ()
 
 
 def test_two_builds_hand_back_two_independent_clients() -> None:
-    first, first_closeable = wire.build(
+    first = wire.Reports(
         config.Config(), FakeCampaignClient(), FakeLinkPolicyClient()
     )
-    second, second_closeable = wire.build(
+    second = wire.Reports(
         config.Config(), FakeCampaignClient(), FakeLinkPolicyClient()
     )
     try:
-        assert first is not second
+        assert first.client is not second.client
     finally:
-        first_closeable.close()
-        second_closeable.close()
+        first.close()
+        second.close()
 
 
 def test_a_failure_in_a_wired_neighbour_reaches_the_caller() -> None:
     links = FakeCampaignClient(error=InfraError("campaign store unreachable"))
 
-    reports, closeable = wire.build(config.Config(), links, FakeLinkPolicyClient())
+    component = wire.Reports(config.Config(), links, FakeLinkPolicyClient())
     try:
         with pytest.raises(InfraError):
-            reports.links_by_verdict(client.LinksByVerdictRequest())
+            component.client.links_by_verdict(client.LinksByVerdictRequest())
     finally:
-        closeable.close()
+        component.close()

@@ -12,7 +12,7 @@ def main() -> None:
     app = load_app()
     host = HttpHost((app.http.host, app.http.port), app)
     print(f"campaign+linkpolicy app listening on {app.http.host or '0.0.0.0'}:{app.http.port}")  # noqa: T201
-    run_until_signal(host, app)
+    run_until_signal(host, app.close)
 
 
 if __name__ == "__main__":  # tessercheck:ignore TB051

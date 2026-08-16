@@ -72,9 +72,8 @@ def test_ruff_config_lifts_the_env_ban_only_at_the_loader(tmp_path: pathlib.Path
         check=False,
     )
     assert result.returncode == 1, result.stdout
-    assert "bootstrap/loader.py" not in result.stdout
-    assert result.stdout.count("bootstrap/repository.py") == 1, result.stdout
-    assert result.stdout.count("bootstrap/app.py") == 1, result.stdout
+    flagged = [line.split(":")[0] for line in result.stdout.splitlines() if line.startswith("bootstrap/")]
+    assert sorted(flagged) == ["bootstrap/app.py", "bootstrap/repository.py"], result.stdout
 
 
 def test_ruff_config_never_lifts_the_bare_exit_ban(tmp_path: pathlib.Path) -> None:

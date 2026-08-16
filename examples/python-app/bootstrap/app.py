@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__ import annotations  # tessercheck:ignore TB050
 
 import campaign.adapters.gateways.target_policy as target_policy
 import campaign.wiring.wire as campaign_wire

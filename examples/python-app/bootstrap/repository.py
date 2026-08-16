@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__ import annotations  # tessercheck:ignore TB050
 
 from collections.abc import Mapping
 from typing import Protocol
