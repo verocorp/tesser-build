@@ -16,6 +16,12 @@ def test_a_utf8_bom_file_is_checked_normally(tmp_path: Path) -> None:
     (tmp_path / "app" / "domain" / "bom.py").write_bytes(
         b"\xef\xbb\xbfimport tesser.domain as ts\n"
     )
+    conftest.write_module(
+        tmp_path,
+        "app/domain/test_bom.py",
+        "def test_bom_exists() -> None:\n"
+        "    assert True\n",
+    )
     findings = conftest.check_tree(tmp_path)
     assert not any("bom" in f for f in findings)
 
@@ -77,6 +83,12 @@ def test_a_dotted_import_declaration_parses_and_reaches_a_domain(tmp_path: Path)
         "class PriceSpec(ts.Spec):\n"
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "app/domain/test_price.py",
+        "def test_price_exists() -> None:\n"
+        "    assert True\n",
     )
     findings = conftest.check_raw(tmp_path)
     assert findings == (), findings

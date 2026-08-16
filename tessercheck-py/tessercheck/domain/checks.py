@@ -189,6 +189,26 @@ ROLE_TESSER_PACKAGE: Final[dict[str, str]] = {
     "wiring": "tesser.context",
 }
 
+DTO_BLOCKS: Final[frozenset[str]] = frozenset(
+    {
+        "request",
+        "response",
+        "client",
+        "port",
+        "port_request",
+        "port_response",
+        "protocol_port",
+        "protocol_record",
+        "protocol_rejection",
+        "protocol_request",
+        "protocol_response",
+    }
+)
+
+PAIRED_PLACES: Final[frozenset[str]] = frozenset(
+    {"role", "kernel", "shell-srv", "shell-bootstrap", "protocol"}
+)
+
 NORM_IMPORTS: Final[dict[str, frozenset[str]]] = {
     "domain": frozenset({"tesser.errors", "tesser.serialization"}),
     "application": frozenset({"tesser.errors"}),
@@ -970,6 +990,67 @@ class Codebase(ts.AggregateRoot):
                         found.extend(self._port_violations(module, cls, blocks))
                 elif block == "service":
                     found.extend(self._service_violations(module, cls, blocks))
+        found.extend(self._pairing_violations(contexts, blocks))
+        return tuple(found)
+
+    def _declaration_only(self, module: Module, blocks: dict[tuple[str, str], str]) -> bool:
+        saw_class = False
+        for stmt in module.body():
+            if isinstance(stmt, (ast.Import, ast.ImportFrom)):
+                continue
+            if not isinstance(stmt, ast.ClassDef):
+                return False
+            if blocks.get((module.name(), stmt.name)) not in DTO_BLOCKS:
+                return False
+            for item in stmt.body:
+                if not isinstance(item, ast.FunctionDef):
+                    continue
+                if item.name == "__init__":
+                    continue
+                if len(item.body) == 1 and isinstance(item.body[0], ast.Expr) and isinstance(
+                    item.body[0].value, ast.Constant
+                ):
+                    continue
+                return False
+            saw_class = True
+        return saw_class
+
+    def _pairing_violations(
+        self, contexts: frozenset[str], blocks: dict[tuple[str, str], str]
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        names = {module.name() for module in self._modules if not module.is_package()}
+        for module in self._modules:
+            parts = module.name().split(".")
+            base = parts[-1]
+            place = self._locate(module.name(), module.is_package(), contexts, self._export)
+            parent = ".".join(parts[:-1])
+            if place in PAIRED_PLACES and not module.is_package() and base != "__main__":
+                if self._declaration_only(module, blocks):
+                    continue
+                sibling = (parent + "." if parent else "") + "test_" + base
+                if sibling not in names:
+                    found.append(
+                        Violation(
+                            module.path(),
+                            1,
+                            "TB074",
+                            f"{module.name()} has no sibling test file; an implementation "
+                            "module carries exactly one test_<module>.py beside it",
+                        )
+                    )
+            elif place == "test" and base.startswith("test_") and "tests" not in parts:
+                subject = (parent + "." if parent else "") + base[len("test_") :]
+                if subject not in names:
+                    found.append(
+                        Violation(
+                            module.path(),
+                            1,
+                            "TB074",
+                            f"{module.name()} pairs with no implementation module; a sibling "
+                            "test file is named test_<module>.py for the module beside it",
+                        )
+                    )
         return tuple(found)
 
     def _kernel_tops(self) -> frozenset[str]:

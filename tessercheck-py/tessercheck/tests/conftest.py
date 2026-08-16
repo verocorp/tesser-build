@@ -42,6 +42,18 @@ def conforming_tree(root: Path) -> None:
     )
     write_module(
         root,
+        "app/domain/test_thing.py",
+        "def test_thing_exists() -> None:\n"
+        "    assert True\n",
+    )
+    write_module(
+        root,
+        "app/application/test_service.py",
+        "def test_service_exists() -> None:\n"
+        "    assert True\n",
+    )
+    write_module(
+        root,
         "app/client/client.py",
         "import tesser.context as ts\n"
         "class AskRequest(ts.Request):\n"

@@ -188,6 +188,16 @@ file says *how*, and it is the cross-cutting layer they assume.
   spec-constructed type's field set against the fields asserted in its
   completeness test and flag the difference. Until then rule 2 is enforced by
   review.
+- **`TB074` (one implementation file, one test file)** — every implementation
+  module carries exactly one sibling `test_<module>.py` beside it, and every
+  sibling test file names the module beside it. Exempt by construction:
+  `application/ports` modules, declaration-only modules (every class is a
+  declared DTO/Protocol block and methods stop at `__init__` — `client.py` is
+  the canonical case), `__init__.py`, `conftest`, and everything in a `tests/`
+  package (the wired tier pairs with the app, not a module). There are no
+  temporary exemptions: a module that genuinely cannot be tested (one exists —
+  an srv module bound to an uninstallable vendor SDK) carries a site-level
+  `# tessercheck:ignore TB074` where the finding lands, as visible debt.
 - **`TB071` + `TB073` (test-module totality)** — rule 9, and the analyzer's
   first **totality** check (they superseded the frozen-dataclass era's
   `TB032`). Every other check hunts a known-bad shape and stays quiet
