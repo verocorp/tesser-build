@@ -58,7 +58,7 @@ class FakeLinkPolicyClient(linkpolicy_client.Client):
 
 def test_the_context_takes_no_settings_yet() -> None:
     with pytest.raises(TypeError):
-        config.Config("memory")  # type: ignore[call-arg]
+        config.Config(config.Spec("memory"))  # type: ignore[call-arg]
 
 
 def test_a_config_wires_a_client_that_serves_a_report() -> None:
@@ -69,7 +69,7 @@ def test_a_config_wires_a_client_that_serves_a_report() -> None:
         linkpolicy_client.VerdictView("https://a.example/s", True, "on the allowlist")
     )
 
-    component = wire.Reports(config.Config(), links, verdicts)
+    component = wire.Reports(config.Config(config.Spec()), links, verdicts)
     try:
         resp = component.client.links_by_verdict(client.LinksByVerdictRequest())
         assert [view.slug for view in resp.links] == ["spring-sale"]
@@ -79,10 +79,10 @@ def test_a_config_wires_a_client_that_serves_a_report() -> None:
 
 def test_two_configs_wire_two_independent_clients() -> None:
     first = wire.Reports(
-        config.Config(), FakeCampaignClient(), FakeLinkPolicyClient()
+        config.Config(config.Spec()), FakeCampaignClient(), FakeLinkPolicyClient()
     )
     second = wire.Reports(
-        config.Config(), FakeCampaignClient(), FakeLinkPolicyClient()
+        config.Config(config.Spec()), FakeCampaignClient(), FakeLinkPolicyClient()
     )
     try:
         assert first.client is not second.client
@@ -93,7 +93,7 @@ def test_two_configs_wire_two_independent_clients() -> None:
 
 def test_a_config_carries_nothing_a_caller_must_set() -> None:
     component = wire.Reports(
-        config.Config(), FakeCampaignClient(), FakeLinkPolicyClient()
+        config.Config(config.Spec()), FakeCampaignClient(), FakeLinkPolicyClient()
     )
     try:
         assert component.client.links_by_verdict(client.LinksByVerdictRequest()).links == ()

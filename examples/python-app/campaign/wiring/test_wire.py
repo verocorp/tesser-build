@@ -34,7 +34,7 @@ class FakeTargetPolicyBlocking(target_policy.TargetPolicy):
 
 def test_an_absent_storage_coordinate_is_refused_by_name() -> None:
     with pytest.raises(DomainError) as caught:
-        wire.Campaign(config.Config(storage=""), FakeTargetPolicyAllowing())
+        wire.Campaign(config.Config(config.Spec(storage="")), FakeTargetPolicyAllowing())
 
     assert caught.value.kind is Kind.VALIDATION
     assert caught.value.code == "missing_coordinate"
@@ -42,7 +42,7 @@ def test_an_absent_storage_coordinate_is_refused_by_name() -> None:
 
 def test_an_unsupported_storage_backend_is_refused_by_name() -> None:
     with pytest.raises(DomainError) as caught:
-        wire.Campaign(config.Config(storage="postgres"), FakeTargetPolicyAllowing())
+        wire.Campaign(config.Config(config.Spec(storage="postgres")), FakeTargetPolicyAllowing())
 
     assert caught.value.kind is Kind.VALIDATION
     assert caught.value.code == "unknown_backend"
@@ -50,7 +50,7 @@ def test_an_unsupported_storage_backend_is_refused_by_name() -> None:
 
 
 def test_a_component_serves_a_whole_campaign_round_trip() -> None:
-    built = wire.Campaign(config.Config(storage="memory"), FakeTargetPolicyAllowing())
+    built = wire.Campaign(config.Config(config.Spec(storage="memory")), FakeTargetPolicyAllowing())
 
     created = built.client.create_campaign(
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
@@ -68,7 +68,7 @@ def test_a_component_serves_a_whole_campaign_round_trip() -> None:
 
 
 def test_a_component_hands_the_policy_it_was_given_to_the_service() -> None:
-    built = wire.Campaign(config.Config(storage="memory"), FakeTargetPolicyBlocking())
+    built = wire.Campaign(config.Config(config.Spec(storage="memory")), FakeTargetPolicyBlocking())
     created = built.client.create_campaign(
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
@@ -84,8 +84,8 @@ def test_a_component_hands_the_policy_it_was_given_to_the_service() -> None:
 
 
 def test_two_components_do_not_share_a_store() -> None:
-    first = wire.Campaign(config.Config(storage="memory"), FakeTargetPolicyAllowing())
-    second = wire.Campaign(config.Config(storage="memory"), FakeTargetPolicyAllowing())
+    first = wire.Campaign(config.Config(config.Spec(storage="memory")), FakeTargetPolicyAllowing())
+    second = wire.Campaign(config.Config(config.Spec(storage="memory")), FakeTargetPolicyAllowing())
     created = first.client.create_campaign(
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
@@ -97,7 +97,7 @@ def test_two_components_do_not_share_a_store() -> None:
 
 
 def test_a_component_closes_what_it_built() -> None:
-    built = wire.Campaign(config.Config(storage="memory"), FakeTargetPolicyAllowing())
+    built = wire.Campaign(config.Config(config.Spec(storage="memory")), FakeTargetPolicyAllowing())
 
     built.close()
 

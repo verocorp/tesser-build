@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import tesser.context as ts
+import tesser.component as ts
 
 import campaign.client.client as campaign_client
 import linkpolicy.client.client as linkpolicy_client
@@ -11,7 +11,7 @@ import reports.client.client as client
 import reports.wiring.config as config
 
 
-class Reports(ts.Wiring):
+class Reports(ts.Component):
 
     def __init__(
         self, cfg: config.Config, campaigns: campaign_client.Client, policies: linkpolicy_client.Client

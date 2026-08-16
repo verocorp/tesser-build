@@ -3,8 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import tessercheck.adapters.handlers.cli as cli
-from bootstrap.bootstrap import new
-from bootstrap.config import Config
+from bootstrap.loader import load
 from protocol.cli import CliResponse, UsageError
 from srv.cli.rules import dispatch, respond, settle
 
@@ -30,9 +29,9 @@ def test_the_host_never_leaks_internals_on_the_unexpected_path() -> None:
 
 
 def test_an_extra_argument_dispatches_to_exit_code_two() -> None:
-    app = new(Config())
+    app = load()
     try:
-        resp = dispatch(cli.Handler(app.tessercheck), [".", "surplus"])
+        resp = dispatch(cli.Handler(app.tessercheck.client), [".", "surplus"])
         assert resp.exit_code == 2
         assert resp.stdout == ""
     finally:
@@ -41,9 +40,9 @@ def test_an_extra_argument_dispatches_to_exit_code_two() -> None:
 
 def test_a_tree_dispatches_to_a_rendered_rulebook_on_stdout() -> None:
     root = Path(__file__).resolve().parents[2]
-    app = new(Config())
+    app = load()
     try:
-        resp = dispatch(cli.Handler(app.tessercheck), [str(root)])
+        resp = dispatch(cli.Handler(app.tessercheck.client), [str(root)])
         assert resp.exit_code == 0
         assert resp.stdout.startswith("# Rules implemented in the spike")
         assert resp.stderr == ""

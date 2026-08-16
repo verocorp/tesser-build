@@ -79,7 +79,10 @@ run_python_app() {
   step "mypy --strict"
   MYPYPATH=.:../../tesser-py mypy --strict protocol kernel campaign linkpolicy reports bootstrap srv tests conftest.py || return 1
   step "pytest"
-  pytest -q || return 1
+  # The app reads its own environment through the config repository, so the
+  # runner supplies one — the same job a deploy does. Tests never inject it.
+  CAMPAIGN_STORAGE=memory LINKPOLICY_STORAGE=memory HTTP_HOST= HTTP_PORT=8080 \
+    pytest -q || return 1
   step "tessercheck (zero findings over the whole tree)"
   tessercheck_tree "$PWD" || return 1
 }

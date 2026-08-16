@@ -3,11 +3,14 @@ from __future__ import annotations  # tessercheck:ignore-file TB041
 import ast
 import pathlib
 
-from bootstrap.config import Config, HttpConfig
+from bootstrap.config import Config, HttpConfig, HttpSpec, Spec
 from campaign.wiring.config import Config as CampaignConfig
+from campaign.wiring.config import Spec as CampaignSpec
 from protocol.http import HttpRequest, HttpResponse
 from linkpolicy.wiring.config import Config as LinkPolicyConfig
+from linkpolicy.wiring.config import Spec as LinkPolicySpec
 from reports.wiring.config import Config as ReportsConfig
+from reports.wiring.config import Spec as ReportsSpec
 from srv.http.router import Route
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -17,10 +20,12 @@ CONFIG_OWNERS = frozenset({"cfg", "config"})
 
 def app_config() -> Config:
     return Config(
-        campaign=CampaignConfig("memory"),
-        linkpolicy=LinkPolicyConfig("memory"),
-        reports=ReportsConfig(),
-        http=HttpConfig("", 8080),
+        Spec(
+            campaign=CampaignConfig(CampaignSpec("memory")),
+            linkpolicy=LinkPolicyConfig(LinkPolicySpec("memory")),
+            reports=ReportsConfig(ReportsSpec()),
+            http=HttpConfig(HttpSpec("", 8080)),
+        )
     )
 
 

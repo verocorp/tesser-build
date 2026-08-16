@@ -57,7 +57,7 @@ def test_ruff_config_lifts_the_bans_only_at_the_host_edge(tmp_path: pathlib.Path
     assert result.stdout.count("srv/http/host.py") == 2, result.stdout
 
 
-def test_ruff_config_lifts_the_env_ban_only_at_the_loader(tmp_path: pathlib.Path) -> None:
+def test_ruff_config_lifts_the_env_ban_only_at_the_config_repository(tmp_path: pathlib.Path) -> None:
     shutil.copy(ROOT / "ruff.toml", tmp_path / "ruff.toml")
     read = "import os\n\n\ndef get() -> None:\n    os.environ['X']\n"
     (tmp_path / "bootstrap").mkdir(parents=True)
@@ -73,7 +73,7 @@ def test_ruff_config_lifts_the_env_ban_only_at_the_loader(tmp_path: pathlib.Path
     )
     assert result.returncode == 1, result.stdout
     flagged = [line.split(":")[0] for line in result.stdout.splitlines() if line.startswith("bootstrap/")]
-    assert sorted(flagged) == ["bootstrap/app.py", "bootstrap/repository.py"], result.stdout
+    assert sorted(flagged) == ["bootstrap/app.py", "bootstrap/loader.py"], result.stdout
 
 
 def test_ruff_config_never_lifts_the_bare_exit_ban(tmp_path: pathlib.Path) -> None:

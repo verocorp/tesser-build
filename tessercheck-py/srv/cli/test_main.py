@@ -3,17 +3,16 @@ from __future__ import annotations
 from pathlib import Path
 
 import tessercheck.adapters.handlers.cli as cli
-from bootstrap.bootstrap import new
-from bootstrap.config import Config
+from bootstrap.loader import load
 from protocol.cli import CliResponse, UsageError
 from srv.cli.main import dispatch, respond, run
 
 
 def test_a_clean_tree_dispatches_to_exit_code_zero(tmp_path: Path) -> None:
     (tmp_path / ".tesser-root").write_text("app\n", encoding="utf-8")
-    app = new(Config())
+    app = load()
     try:
-        resp = dispatch(cli.Handler(app.tessercheck), [str(tmp_path)])
+        resp = dispatch(cli.Handler(app.tessercheck.client), [str(tmp_path)])
         assert resp.exit_code == 0
         assert resp.stdout == ""
         assert resp.stderr == ""
@@ -22,9 +21,9 @@ def test_a_clean_tree_dispatches_to_exit_code_zero(tmp_path: Path) -> None:
 
 
 def test_a_finding_dispatches_to_exit_code_one(tmp_path: Path) -> None:
-    app = new(Config())
+    app = load()
     try:
-        resp = dispatch(cli.Handler(app.tessercheck), [str(tmp_path)])
+        resp = dispatch(cli.Handler(app.tessercheck.client), [str(tmp_path)])
         assert resp.exit_code == 1
         assert "TB044" in resp.stdout
     finally:
@@ -32,7 +31,7 @@ def test_a_finding_dispatches_to_exit_code_one(tmp_path: Path) -> None:
 
 
 def test_the_app_closes_idempotently(tmp_path: Path) -> None:
-    app = new(Config())
+    app = load()
     app.close()
     app.close()
 

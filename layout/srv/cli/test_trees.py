@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import tesser.testing as ts
 
-from bootstrap.bootstrap import new
+from bootstrap.loader import load
 import repo.adapters.handlers.cli as cli
 from srv.cli.trees import respond, run
 
@@ -41,21 +41,21 @@ def _repo(root: Path) -> Path:  # tessercheck:ignore TB073
 
 
 def test_a_clean_repo_exits_zero_with_the_app_rows(tmp_path: Path) -> None:
-    response = respond(cli.Handler(new().repo), [str(_repo(tmp_path))])
+    response = respond(cli.Handler(load().repo.client), [str(_repo(tmp_path))])
     assert response.exit_code == 0
     assert response.stdout == "appone"
     assert response.stderr == ""
 
 
 def test_a_missing_root_argument_exits_two_with_the_usage() -> None:
-    response = respond(cli.Handler(new().repo), [])
+    response = respond(cli.Handler(load().repo.client), [])
     assert response.exit_code == 2
     assert response.stdout == ""
     assert "usage: python -m srv.cli.trees" in response.stderr
 
 
 def test_an_extra_argument_exits_two_with_the_usage(tmp_path: Path) -> None:
-    response = respond(cli.Handler(new().repo), [str(_repo(tmp_path)), "extra"])
+    response = respond(cli.Handler(load().repo.client), [str(_repo(tmp_path)), "extra"])
     assert response.exit_code == 2
     assert "usage: python -m srv.cli.trees" in response.stderr
 
@@ -63,7 +63,7 @@ def test_an_extra_argument_exits_two_with_the_usage(tmp_path: Path) -> None:
 def test_a_broken_manifest_exits_one_on_stderr(tmp_path: Path) -> None:
     _repo(tmp_path)
     (tmp_path / "manifest.json").write_text("{ truncated")
-    response = respond(cli.Handler(new().repo), [str(tmp_path)])
+    response = respond(cli.Handler(load().repo.client), [str(tmp_path)])
     assert response.exit_code == 1
     assert response.stdout == ""
     assert "manifest.json is unreadable" in response.stderr
@@ -72,7 +72,7 @@ def test_a_broken_manifest_exits_one_on_stderr(tmp_path: Path) -> None:
 def test_an_unregistered_directory_exits_one_before_listing(tmp_path: Path) -> None:
     _repo(tmp_path)
     (tmp_path / "utils").mkdir()
-    response = respond(cli.Handler(new().repo), [str(tmp_path)])
+    response = respond(cli.Handler(load().repo.client), [str(tmp_path)])
     assert response.exit_code == 1
     assert "no manifest.json row" in response.stderr
 

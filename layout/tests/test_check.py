@@ -5,6 +5,7 @@ from pathlib import Path
 import tesser.testing as ts
 
 import repo.client.client as client
+import repo.wiring.config as config
 import repo.wiring.wire as wire
 
 
@@ -42,7 +43,7 @@ def _repo(root: Path) -> Path:  # tessercheck:ignore TB073
 
 
 def test_a_consistent_repo_checks_clean(tmp_path: Path) -> None:
-    response = wire.build().check(client.CheckRequest(root=str(_repo(tmp_path))))
+    response = wire.Repo(config.Config(config.Spec())).client.check(client.CheckRequest(root=str(_repo(tmp_path))))
     assert response.problems == ()
     assert response.counts == ("6", "1")
 
@@ -50,25 +51,25 @@ def test_a_consistent_repo_checks_clean(tmp_path: Path) -> None:
 def test_an_unregistered_directory_is_reported_through_the_stack(tmp_path: Path) -> None:
     _repo(tmp_path)
     (tmp_path / "utils").mkdir()
-    response = wire.build().check(client.CheckRequest(root=str(tmp_path)))
+    response = wire.Repo(config.Config(config.Spec())).client.check(client.CheckRequest(root=str(tmp_path)))
     assert any("'utils' has no manifest.json row" in p for p in response.problems)
 
 
 def test_trees_lists_app_rows_through_the_client(tmp_path: Path) -> None:
-    response = wire.build().trees(client.TreesRequest(root=str(_repo(tmp_path))))
+    response = wire.Repo(config.Config(config.Spec())).client.trees(client.TreesRequest(root=str(_repo(tmp_path))))
     assert response.trees == ("appone",)
 
 
 def test_a_malformed_manifest_is_one_message_not_a_crash(tmp_path: Path) -> None:
     _repo(tmp_path)
     (tmp_path / "manifest.json").write_text("{ truncated")
-    response = wire.build().check(client.CheckRequest(root=str(tmp_path)))
+    response = wire.Repo(config.Config(config.Spec())).client.check(client.CheckRequest(root=str(tmp_path)))
     assert len(response.problems) == 1
     assert "manifest.json is unreadable" in response.problems[0]
 
 
 def test_a_nonexistent_root_is_a_problem_not_a_crash(tmp_path: Path) -> None:
-    response = wire.build().check(
+    response = wire.Repo(config.Config(config.Spec())).client.check(
         client.CheckRequest(root=str(tmp_path / "no-such-dir"))
     )
     assert len(response.problems) == 1

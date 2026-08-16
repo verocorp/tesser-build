@@ -7,7 +7,7 @@ from typing import Final
 import tesser.srv as ts
 
 from bootstrap.app import App
-from bootstrap.loader import load_app
+from bootstrap.loader import load
 import campaign.adapters.handlers.cli as cli
 from protocol.cli import CliRequest, CliResponse, Command, UsageError
 from tesser.errors import DomainError, InfraError, exit_code_for
@@ -54,7 +54,7 @@ def dispatch(commands: dict[str, Command], argv: list[str]) -> CliResponse:
 
 @ts.function
 def run(argv: list[str]) -> int:
-    app = load_app()
+    app = load()
     try:
         resp = dispatch(commands_for(app), argv)
         if resp.stdout:

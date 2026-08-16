@@ -5,6 +5,45 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.55.0] - 2026-08-16
+
+The design gets its own shells. `tesser.app` and `tesser.component` name the two
+levels the app/component shape needs, and `ts.Wiring` retires.
+
+### Added
+- **`tesser.app`** — `App`, `Loader`, `Config`, `Spec`, `ConfigRepository`, and
+  the `@ts.load` decorator for the single no-arg module function a design may
+  hold. `ConfigRepository` is generic in the config it yields, or a loader would
+  hand every tree the shell's own `Config` back.
+- **`tesser.component`** — `Component`, `Config`, `Spec`.
+- Both packages export `Spec` and `Config`. The placement's own `ts` alias picks
+  which, and the kind table keys on `(package, name)`, so the two levels carry
+  different rules without inventing `AppConfig` and `ComponentConfig`.
+
+### Removed
+- **`ts.Wiring`.** It was the kind for anything in the wiring role — `Config`
+  subclassed it too — which is why it could never require `close()`. Splitting
+  it frees `Component` to mean "constructs infrastructure and releases it".
+
+### Changed
+- **A bootstrap module binds `tesser.app`, not `tesser.context`.** That import
+  existed only to decorate module functions; the design has one, declared
+  `@ts.load`. **A bootstrap module holds classes**, and TB052 rules which: only
+  app kinds. The three ignores `examples/python-app` carried were asking for
+  exactly this, and are gone.
+- **A fake may double a config repository**, and a test module may name
+  `tesser.app` so it can implement the contract.
+- **Every config is spec-shaped** — one `ts.Spec` parameter, the same door
+  TB080 already requires of a domain constructor.
+- **The env edge is `bootstrap/repository.py`.** The reader encapsulates the
+  environment rather than taking it, so `scripts/verify` supplies one for
+  `python-app`'s pytest — the job a deploy does. Repositories are integration
+  tested; nothing injects a mapping.
+- Analyzer internals: the base resolver unwraps a subscripted base so
+  `ts.ConfigRepository[Config]` classifies, and the `@ts.function` check moves
+  out of the shared statement walk — left there, every placement derived a
+  clause it could never fire.
+
 ## [0.0.54.0] - 2026-08-16
 
 Apps and components. The composition root stops threading closeables through

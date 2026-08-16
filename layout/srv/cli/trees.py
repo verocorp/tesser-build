@@ -4,7 +4,7 @@ import sys
 
 import tesser.srv as ts
 
-from bootstrap.bootstrap import new
+from bootstrap.loader import load
 import repo.adapters.handlers.cli as cli
 from protocol.cli import CliRequest, CliResponse, UsageError
 
@@ -19,7 +19,7 @@ def respond(handler: cli.Handler, argv: list[str]) -> CliResponse:
 
 @ts.function
 def run(argv: list[str]) -> int:
-    response = respond(cli.Handler(new().repo), argv)
+    response = respond(cli.Handler(load().repo.client), argv)
     if response.stdout:
         print(response.stdout)
     if response.stderr:

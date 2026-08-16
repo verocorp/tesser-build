@@ -655,34 +655,32 @@ def repo_for(cfg: config.Config) -> tuple[campaign_repository.CampaignRepository
 
 
 @ts.function
-def build(cfg: config.Config, policy: target_policy.TargetPolicy) -> tuple[client.Client, Closeable]:
-    repo, closeable = repo_for(cfg)
-    return service.CampaignService(repo, policy), closeable
+class Campaign(ts.Component):
+    def __init__(self, cfg: config.Config, policy: target_policy.TargetPolicy) -> None:
+        self._repo = self._repo_for(cfg)            # the concrete it chose, held by its own type
+        self.client: client.Client = service.CampaignService(self._repo, policy)
+
+    def close(self) -> None:
+        self._repo.close()                          # releases only what it constructed
 
 
-# bootstrap/bootstrap.py (verified impl) — new(cfg): build ONCE, in dependency order
-@ts.function
-def new(cfg: Config) -> App:
-    stack = CleanupStack()
-    try:
-        policy_client, policy_closeable = linkpolicy_wire.build(cfg.linkpolicy)
-        stack.push(policy_closeable)
-
-        policy = target_policy.LinkPolicyTargetPolicy(policy_client)   # cross-context adapter:
-        campaign_client, campaign_closeable = campaign_wire.build(cfg.campaign, policy)
-        stack.push(campaign_closeable)                                 # built HERE, injected
-
-        reports_client, reports_closeable = reports_wire.build(cfg.reports, campaign_client, policy_client)
-        stack.push(reports_closeable)
-        return App(campaign_client, policy_client, reports_client, stack)   # App owns close()
-    except Exception:
-        stack.close_all()      # partial construction unwinds — no leaked pools
-        raise
+# bootstrap/app.py (verified impl) — build ONCE, in dependency order
+class App(ts.App):
+    def __init__(self, cfg: config.Config) -> None:
+        linkpolicy = linkpolicy_wire.LinkPolicy(cfg.linkpolicy)
+        try:
+            policy = target_policy.LinkPolicyTargetPolicy(linkpolicy.client)  # cross-context
+            campaign = campaign_wire.Campaign(cfg.campaign, policy)           # adapter built HERE
+        except Exception:
+            linkpolicy.close()                      # partial construction unwinds
+            raise
+        ...
 ```
 
-- **`build` returns `(Client, Closeable)`** — the Protocol and a resource
-  handle, never the concrete service or a domain type. A context with no
-  resources returns a named no-op closeable; the build contract stays uniform.
+- **A component exposes a `Client` and a `close()`** — the Protocol and its own
+  teardown, never the concrete service or a domain type. A component with no
+  infrastructure has an empty `close()`, which is honest rather than ceremonial.
+ — the Protocol and a resource
 - **The port types wiring annotates come from `application/ports/`**
   (**Application ports**) — `campaign_repository` and `target_policy` above are ports
   modules, not the service module. Wiring is the one role that may hold both
@@ -694,8 +692,9 @@ def new(cfg: Config) -> App:
   from wiring, clients, and adapters, never domain or application (TB063);
   a context reaches another context only through its client, and only from
   gateways and wiring (TB061).
-- **`App.close()` is idempotent** and pops the stack in reverse; a close that
-  raises must not orphan the rest (`CleanupStack.close_all` collects errors).
+- **`App.close()` closes each component it built**, one named call apiece. No
+  ordering doctrine: with strict ownership no component's close depends on
+  another still being open.
 - **No `context.Context`.** A plain synchronous Python service has no such
   idiom; thread a unit-of-work/session where your codebase already does.
 - **The degenerate case:** a single-context app can collapse this to one

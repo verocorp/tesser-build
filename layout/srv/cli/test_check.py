@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import tesser.testing as ts
 
-from bootstrap.bootstrap import new
+from bootstrap.loader import load
 import repo.adapters.handlers.cli as cli
 from srv.cli.check import respond, run
 
@@ -41,18 +41,18 @@ def _repo(root: Path) -> Path:  # tessercheck:ignore TB073
 
 
 def test_a_missing_root_argument_exits_two() -> None:
-    response = respond(cli.Handler(new().repo), [])
+    response = respond(cli.Handler(load().repo.client), [])
     assert response.exit_code == 2
     assert "usage: python -m srv.cli.check" in response.stderr
 
 
 def test_an_extra_argument_exits_two() -> None:
-    response = respond(cli.Handler(new().repo), ["/r", "extra"])
+    response = respond(cli.Handler(load().repo.client), ["/r", "extra"])
     assert response.exit_code == 2
 
 
 def test_a_clean_repo_exits_zero_with_the_summary(tmp_path: Path) -> None:
-    response = respond(cli.Handler(new().repo), [str(_repo(tmp_path))])
+    response = respond(cli.Handler(load().repo.client), [str(_repo(tmp_path))])
     assert response.exit_code == 0
     assert "3 rows, 1 app trees" in response.stdout
 
@@ -60,7 +60,7 @@ def test_a_clean_repo_exits_zero_with_the_summary(tmp_path: Path) -> None:
 def test_problems_exit_one_on_stderr(tmp_path: Path) -> None:
     _repo(tmp_path)
     (tmp_path / "stray").mkdir()
-    response = respond(cli.Handler(new().repo), [str(tmp_path)])
+    response = respond(cli.Handler(load().repo.client), [str(tmp_path)])
     assert response.exit_code == 1
     assert "layout: " in response.stderr
 

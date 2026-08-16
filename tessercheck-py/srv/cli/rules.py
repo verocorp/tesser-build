@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -9,8 +8,7 @@ from typing import Final
 import tesser.srv as ts
 
 import tessercheck.adapters.handlers.cli as cli
-from bootstrap.bootstrap import new
-from bootstrap.config import from_env
+from bootstrap.loader import load
 from protocol.cli import CliRequest, CliResponse, UsageError
 
 _USAGE: Final[str] = "usage: python -m srv.cli.rules [tree] [--check]"
@@ -55,9 +53,9 @@ def settle(rendered: str, output: Path, check: bool) -> int:
 def run(argv: list[str]) -> int:
     check = "--check" in argv
     args = [arg for arg in argv if arg != "--check"]
-    app = new(from_env(os.getenv))
+    app = load()
     try:
-        resp = dispatch(cli.Handler(app.tessercheck), args)
+        resp = dispatch(cli.Handler(app.tessercheck.client), args)
         if resp.exit_code != 0:
             if resp.stderr:
                 print(resp.stderr, file=sys.stderr)
