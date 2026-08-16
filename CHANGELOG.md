@@ -5,6 +5,20 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.46.0] - 2026-08-16
+
+### Changed
+- **The nine sibling test files merge into one `domain/test_checks.py`
+  beside `checks.py`** (197 tests). checks.py stays one file, so its tests
+  become one file — the shape the coming
+  one-implementation-file-one-test-file rule demands, and the merge chosen
+  over splitting checks.py when the split turned out to mean seven duplicate
+  `_spec` helpers. The merged file carries exactly one helper: the shared
+  `_spec`, widened with the kernel file's knobs (`declared`, `exports`,
+  `imports`, `stdlib`); the 31 kernel tests inline their kernel/money
+  fixtures at each call site — duplication in tests is fine, a second helper
+  is not.
+
 ## [0.0.45.0] - 2026-08-15
 
 The last root module joins the app, and the allowance that excused it
