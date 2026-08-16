@@ -2,6 +2,29 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## App/component follow-ups (2026-08-16, PRs #98-#101)
+
+- [ ] **`srv` still holds module functions, and Chris ruled the design has
+  none.** `main`, `run_until_signal`, `respond`, `dispatch`, `routes_for`,
+  `make_server` — 24 across python-app, layout, and tessercheck-py. bootstrap
+  and wiring were converted; srv was not in scope. **Needs a ruling:** is srv
+  part of "this design"? If yes it is a host-class refactor.
+- [ ] **`App.http` exists under protest.** HTTP config sits on the app only
+  because TB052 says a srv module holds only a host class. Either srv gains a
+  config kind or the app keeps knowing its transport — which contradicts the
+  argument that an app should not presume its own server.
+- [ ] **The partial-construction unwind has no test.** It is the one guarantee
+  the design kept, and `App(cfg)` building its own components means a test
+  cannot observe the components it closed on the way out. Verified by hand
+  (patching `LinkPolicy.close`), which TB030 bans in a test.
+- [ ] **Idempotent close is undecided.** Hosts call close in a `finally`; a CLI
+  that also closes explicitly would double-close. Nothing currently guards it.
+- [ ] **Bare `pytest` fails for python-app outside `scripts/verify`.** The
+  config repository encapsulates the environment, so the runner supplies one.
+  A developer running `pytest` directly gets a confusing failure in `srv` and
+  `bootstrap/test_repository.py`. Options: accept, document, or add a
+  pytest-level default (which is a default).
+
 ## T8 rename follow-ups (machine-local — meaningless outside Chris's machine)
 
 - [ ] **Local directory rename** — `~/workspace/vero/go-ddd` → `~/workspace/vero/tesser-build`.

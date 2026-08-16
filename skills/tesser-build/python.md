@@ -637,21 +637,19 @@ service and delegates.
 **The composition root — the settled app anatomy** (`bootstrap.md`,
 `wiring.md`; verified impl `examples/python-app/`). Each context owns a
 `wiring/` package (its spec-shaped `Config` + a `build` contract); the
-app-level `bootstrap` nests the configs and calls each context's `build` in
-dependency order, onto a cleanup stack. Module-level functions declare
-themselves with `@ts.function`; module constants are `Final`; a context
-module is imported **as an aliased module, never its members** (TB053).
+app-level `bootstrap` nests the configs and constructs each component in
+dependency order. A component's impl selection is a private method; module
+constants are `Final`; a context module is imported **as an aliased module,
+never its members** (TB053).
 
 ```python
 # campaign/wiring/wire.py (verified impl) — coordinate-driven, fail-fast, uniform
-@ts.function
-def repo_for(cfg: config.Config) -> tuple[campaign_repository.CampaignRepository, Closeable]:
-    if cfg.storage == "memory":
-        repo = repo_memory.InMemoryCampaignRepository()
-        return repo, repo
-    if not cfg.storage:
-        raise invalid("missing_coordinate", "campaign storage coordinate is required")
-    raise invalid("unknown_backend", f"campaign storage {cfg.storage!r} not supported")
+    def _repo_for(self, cfg: config.Config) -> repo_memory.InMemoryCampaignRepository:
+        if cfg.storage == "memory":
+            return repo_memory.InMemoryCampaignRepository()
+        if not cfg.storage:
+            raise invalid("missing_coordinate", "campaign storage coordinate is required")
+        raise invalid("unknown_backend", f"campaign storage {cfg.storage!r} not supported")
 
 
 @ts.function

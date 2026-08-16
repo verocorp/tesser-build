@@ -763,8 +763,7 @@ def test_a_protocol_init_is_empty() -> None:
 def test_every_declared_block_has_a_name_and_a_home() -> None:
     blocks = set(checks.TESSER_BASE_BLOCKS.values())
     assert set(checks.KIND_NAME) == blocks
-    assert set(checks.KIND_ROLE) == blocks - checks.SRV_KINDS - checks.APP_KINDS - {"closeable"}
-    assert "closeable" not in checks.KIND_ROLE
+    assert set(checks.KIND_ROLE) == blocks - checks.SRV_KINDS - checks.APP_KINDS
     assert not (checks.APP_KINDS & set(checks.KIND_ROLE))
 
 
@@ -1712,7 +1711,7 @@ def test_srv_and_bootstrap_statement_totality() -> None:
                )
     assert any(
         "srv.box imports tesser.domain; a srv module's tesser imports "
-        "are tesser.srv, tesser.errors, and tesser.lifecycle" in f
+        "are tesser.srv, and tesser.errors" in f
         for f in findings
     )
     assert any(
@@ -2136,7 +2135,7 @@ def test_srv_and_bootstrap_tesser_form_modes() -> None:
     assert any(
         "bootstrap.wrongpkg imports tesser.domain; "
         "a bootstrap module's tesser imports are tesser.app, "
-        "tesser.errors, and tesser.lifecycle" in f
+        "and tesser.errors" in f
         for f in findings
     )
     assert any(
@@ -2695,7 +2694,7 @@ def test_a_norm_module_is_from_imported_where_its_placement_allows() -> None:
     )
 
 
-def test_wiring_bootstrap_and_srv_may_from_import_tesser_lifecycle() -> None:
+def test_wiring_bootstrap_and_srv_may_from_import_tesser_errors() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
@@ -2703,10 +2702,10 @@ def test_wiring_bootstrap_and_srv_may_from_import_tesser_lifecycle() -> None:
                 "app/wiring/wire.py",
                 "app.wiring.wire",
                 "import tesser.component as ts\n"
-                "from tesser.lifecycle import Closeable\n"
+                "from tesser.errors import invalid\n"
                 "class Wiring(ts.Component):\n"
-                "    def closeables(self) -> tuple[Closeable, ...]:\n"
-                "        return ()\n",
+                "    def close(self) -> None:\n"
+                "        return None\n",
                 False,
             ),
             (
@@ -2720,7 +2719,7 @@ def test_wiring_bootstrap_and_srv_may_from_import_tesser_lifecycle() -> None:
                 "bootstrap/wire.py",
                 "bootstrap.wire",
                 "import tesser.app as ts\n"
-                "from tesser.lifecycle import Closeable\n",
+                "from tesser.errors import invalid\n",
                 False,
             ),
             (
@@ -2734,7 +2733,7 @@ def test_wiring_bootstrap_and_srv_may_from_import_tesser_lifecycle() -> None:
                 "srv/run.py",
                 "srv.run",
                 "import tesser.srv as ts\n"
-                "from tesser.lifecycle import Closeable\n",
+                "from tesser.errors import invalid\n",
                 False,
             ),
             (
@@ -2763,12 +2762,12 @@ def test_wiring_bootstrap_and_srv_may_from_import_tesser_lifecycle() -> None:
         ))).violations()
                )
     assert not any("app.wiring.wire" in f for f in findings)
-    assert not any("bootstrap.wire" in f and "tesser.lifecycle" in f for f in findings)
-    assert not any("srv.run" in f and "tesser.lifecycle" in f for f in findings)
+    assert not any("bootstrap.wire" in f and "tesser.errors" in f for f in findings)
+    assert not any("srv.run" in f and "tesser.errors" in f for f in findings)
     assert any(
         "astray.wiring.wire imports tesser.domain; "
         "a wiring module's tesser imports are tesser.component, "
-        "tesser.errors, and tesser.lifecycle" in f
+        "and tesser.errors" in f
         for f in findings
     )
 
@@ -3815,7 +3814,7 @@ def test_test_module_tesser_import_rules() -> None:
                )
     assert any(
         "app.test_imports imports tesser.domain; a test module's tesser imports "
-        "are tesser.testing, tesser.errors, tesser.lifecycle, "
+        "are tesser.testing, tesser.errors, "
         "and tesser.serialization" in f
         for f in findings
     )
@@ -6973,44 +6972,6 @@ def test_a_ports_module_and_an_init_need_no_sibling_test() -> None:
     )
 
 
-def test_the_lifecycle_contract_is_fakeable_but_never_a_production_base() -> None:
-    findings = tuple(
-                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
-            (
-                "app/wiring/wire.py",
-                "app.wiring.wire",
-                "import tesser.component as ts\n"
-                "from tesser.lifecycle import Closeable\n"
-                "class Sneaky(Closeable):\n"
-                "    def close(self) -> None:\n"
-                "        return None\n",
-                False,
-            ),
-            (
-                "app/wiring/test_wire.py",
-                "app.wiring.test_wire",
-                "import tesser.testing as ts\n"
-                "from tesser.lifecycle import Closeable\n"
-                "@ts.fake\n"
-                "class FakeCloseable(Closeable):\n"
-                "    def close(self) -> None:\n"
-                "        return None\n"
-                "def test_wire_closes() -> None:\n"
-                "    FakeCloseable().close()\n"
-                "    assert True\n",
-                False,
-            ),
-        ))).violations()
-               )
-    assert any(
-        "app.wiring.wire.Sneaky declares the lifecycle contract as a base; production "
-        "satisfies Closeable structurally — only a test fake declares it" in f
-        for f in findings
-    )
-    assert not any("FakeCloseable" in f for f in findings)
-
-
 @ts.helper
 def _tesser_export_spec(
     sources: tuple[tuple[str, str, str | None, bool], ...] = (),
@@ -7276,3 +7237,81 @@ def test_a_bootstrap_module_holds_only_app_kinds() -> None:
         for f in findings
     )
     assert not any("bootstrap.wrong.Root" in f and "TB052" in f for f in findings)
+
+
+def test_a_component_releases_what_it_constructed() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "leaky/wiring/wire.py",
+                "leaky.wiring.wire",
+                "import tesser.component as ts\n"
+                "class Leaky(ts.Component):\n"
+                "    def __init__(self) -> None:\n"
+                "        return None\n"
+                "class Tidy(ts.Component):\n"
+                "    def __init__(self) -> None:\n"
+                "        return None\n"
+                "    def close(self) -> None:\n"
+                "        return None\n",
+                False,
+            ),
+            (
+                "leaky/wiring/test_wire.py",
+                "leaky.wiring.test_wire",
+                "def test_wire_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "leaky.wiring.wire.Leaky defines no close; "
+        "a component releases what it constructed" in f
+        for f in findings
+    )
+    assert not any("leaky.wiring.wire.Tidy" in f for f in findings)
+
+
+def test_a_config_constructs_from_exactly_one_spec() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "loose/wiring/config.py",
+                "loose.wiring.config",
+                "import tesser.component as ts\n"
+                "class Spec(ts.Spec):\n"
+                "    def __init__(self, storage: str) -> None:\n"
+                "        self.storage = storage\n"
+                "class Doorless(ts.Config):\n"
+                "    pass\n"
+                "class Wide(ts.Config):\n"
+                "    def __init__(self, storage: str, extra: str) -> None:\n"
+                "        self.storage = storage\n"
+                "class Right(ts.Config):\n"
+                "    def __init__(self, spec: Spec) -> None:\n"
+                "        self.storage = spec.storage\n",
+                False,
+            ),
+            (
+                "loose/wiring/test_config.py",
+                "loose.wiring.test_config",
+                "def test_config_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "loose.wiring.config.Doorless defines no __init__; "
+        "a config constructs from exactly one ts.Spec" in f
+        for f in findings
+    )
+    assert any(
+        "loose.wiring.config.Wide.__init__ takes 2 parameters; "
+        "a config constructor takes exactly one ts.Spec" in f
+        for f in findings
+    )
+    assert not any("loose.wiring.config.Right" in f for f in findings)

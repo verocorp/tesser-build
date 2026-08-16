@@ -75,8 +75,10 @@ APPLIES_TO: Final[dict[str, str]] = {
     "a service method": "public service method",
     "a client method": "client protocol method",
     "a domain constructor": "aggregate or entity `__init__`",
+    "a config constructor": "config `__init__`",
     "an aggregate": "aggregate class",
     "an entity": "entity class",
+    "a config": "config class",
     "an adapter": "repository or gateway method",
     "a port": "port protocol method",
     "a port method": "port protocol method",
@@ -124,6 +126,7 @@ APPLIES_TO: Final[dict[str, str]] = {
     "Codebase._pairing_violations": "implementation module and its sibling test file",
     "Codebase._dependency_violations": "service `__init__`",
     "Codebase._valueobject_violations": "value object `__init__`",
+    "Codebase._component_violations": "component class",
     "Codebase._spec_violations": "spec class",
     "Codebase._dto_violations": "request/response DTO",
 }
