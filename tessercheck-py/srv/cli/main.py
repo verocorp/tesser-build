@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import sys
 from collections.abc import Callable
 from typing import Final
@@ -8,8 +7,7 @@ from typing import Final
 import tesser.srv as ts
 
 import tessercheck.adapters.handlers.cli as cli
-from bootstrap.bootstrap import new
-from bootstrap.config import from_env
+from bootstrap.loader import load
 from protocol.cli import CliRequest, CliResponse, UsageError
 
 _USAGE: Final[str] = "usage: python -m srv.cli.main [tree]"
@@ -32,9 +30,9 @@ def dispatch(handler: cli.Handler, argv: list[str]) -> CliResponse:
 
 @ts.function
 def run(argv: list[str]) -> int:
-    app = new(from_env(os.getenv))
+    app = load()
     try:
-        resp = dispatch(cli.Handler(app.tessercheck), argv)
+        resp = dispatch(cli.Handler(app.tessercheck.client), argv)
         if resp.stdout:
             print(resp.stdout)
         if resp.stderr:

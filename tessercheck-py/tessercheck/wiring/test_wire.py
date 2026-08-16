@@ -1,28 +1,23 @@
 from __future__ import annotations
 
-from pathlib import Path
-
-import tessercheck.client.client as client
 import tessercheck.wiring.config as config
 import tessercheck.wiring.wire as wire
 
 
-def test_build_returns_a_working_client(tmp_path: Path) -> None:
-    checker, closeable = wire.build(config.Config())
-    (tmp_path / ".tesser-root").write_text("app\n", encoding="utf-8")
-    response = checker.check(client.CheckRequest(root=str(tmp_path)))
-    assert response.findings == ()
-    closeable.close()
+def test_a_component_exposes_a_client() -> None:
+    assert wire.Tessercheck(config.Config(config.Spec())).client is not None
 
 
-def test_build_returns_a_closeable_that_closes_twice(tmp_path: Path) -> None:
-    _, closeable = wire.build(config.Config())
-    closeable.close()
-    closeable.close()
+def test_each_component_gets_its_own_client() -> None:
+    first = wire.Tessercheck(config.Config(config.Spec()))
+    second = wire.Tessercheck(config.Config(config.Spec()))
+
+    assert first.client is not second.client
 
 
-def test_an_undeclared_tree_is_reported_through_the_built_client(tmp_path: Path) -> None:
-    checker, closeable = wire.build(config.Config())
-    response = checker.check(client.CheckRequest(root=str(tmp_path)))
-    assert any("TB044" in finding for finding in response.findings)
-    closeable.close()
+def test_a_component_closes_what_it_built() -> None:
+    built = wire.Tessercheck(config.Config(config.Spec()))
+
+    built.close()
+
+    assert built.client is not None

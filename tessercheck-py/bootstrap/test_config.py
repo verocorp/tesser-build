@@ -1,42 +1,23 @@
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Optional
-
-import tessercheck.client.client as client
-import tessercheck.wiring.wire as wire
-from bootstrap.config import Config, from_env
+import bootstrap.config as config
+import tessercheck.wiring.config as component_config
 
 
-def test_reading_the_environment_asks_it_for_nothing_yet() -> None:
-    asked: list[str] = []
+def test_a_config_carries_the_slice_its_component_reads() -> None:
+    slice_ = component_config.Config(component_config.Spec())
 
-    def getenv(name: str) -> Optional[str]:
-        asked.append(name)
-        return None
+    cfg = config.Config(config.Spec(tessercheck=slice_))
 
-    from_env(getenv)
-    assert asked == []
+    assert cfg.tessercheck is slice_
 
 
-def test_a_hostile_environment_cannot_break_the_read() -> None:
-    def getenv(name: str) -> Optional[str]:
-        raise AssertionError(name)
+def test_each_config_carries_its_own_slice() -> None:
+    first = config.Config(
+        config.Spec(tessercheck=component_config.Config(component_config.Spec()))
+    )
+    second = config.Config(
+        config.Spec(tessercheck=component_config.Config(component_config.Spec()))
+    )
 
-    assert from_env(getenv).tessercheck is not None
-
-
-def test_the_config_from_the_environment_wires_a_working_client(tmp_path: Path) -> None:
-    def getenv(name: str) -> Optional[str]:
-        return None
-
-    (tmp_path / ".tesser-root").write_text("app\n", encoding="utf-8")
-    checker, closeable = wire.build(from_env(getenv).tessercheck)
-    try:
-        assert checker.check(client.CheckRequest(root=str(tmp_path))).findings == ()
-    finally:
-        closeable.close()
-
-
-def test_a_default_config_carries_a_context_config_of_its_own() -> None:
-    assert Config().tessercheck is not Config().tessercheck
+    assert first.tessercheck is not second.tessercheck

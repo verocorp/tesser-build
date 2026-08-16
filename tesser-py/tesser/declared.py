@@ -9,6 +9,10 @@ def function(fn: F) -> F:
     return fn
 
 
+def load(fn: F) -> F:
+    return fn
+
+
 def helper(fn: F) -> F:
     return fn
 

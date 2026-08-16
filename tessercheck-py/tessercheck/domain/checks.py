@@ -23,7 +23,14 @@ TESSER_BASE_BLOCKS: Final[dict[tuple[str, str], str]] = {
     ("tesser.adapters", "Repository"): "repository",
     ("tesser.adapters", "Gateway"): "gateway",
     ("tesser.adapters", "Handler"): "handler",
-    ("tesser.context", "Wiring"): "wiring",
+    ("tesser.component", "Component"): "component",
+    ("tesser.component", "Config"): "component_config",
+    ("tesser.component", "Spec"): "component_spec",
+    ("tesser.app", "App"): "app",
+    ("tesser.app", "Loader"): "loader",
+    ("tesser.app", "Config"): "app_config",
+    ("tesser.app", "Spec"): "app_spec",
+    ("tesser.app", "ConfigRepository"): "config_repository",
     ("tesser.srv", "Host"): "host",
     ("tesser.srv", "Port"): "protocol_port",
     ("tesser.srv", "Record"): "protocol_record",
@@ -38,6 +45,7 @@ TESSER_DECORATORS: Final[dict[tuple[str, str], str]] = {
     ("tesser.adapters", "function"): "function",
     ("tesser.context", "function"): "function",
     ("tesser.srv", "function"): "function",
+    ("tesser.app", "load"): "load",
     ("tesser.testing", "helper"): "helper",
     ("tesser.testing", "fake"): "fake",
 }
@@ -64,6 +72,14 @@ PORTS_KINDS: Final[frozenset[str]] = frozenset({"port", "port_request", "port_re
 
 APP_PACKAGES: Final[tuple[str, ...]] = ("srv", "bootstrap")
 
+APP_KINDS: Final[frozenset[str]] = frozenset(
+    {"app", "loader", "app_config", "app_spec", "config_repository"}
+)
+
+COMPONENT_KINDS: Final[frozenset[str]] = frozenset(
+    {"component", "component_config", "component_spec"}
+)
+
 KIND_ROLE: Final[dict[str, str]] = {
     "aggregate": "domain",
     "entity": "domain",
@@ -79,7 +95,9 @@ KIND_ROLE: Final[dict[str, str]] = {
     "repository": "adapters",
     "gateway": "adapters",
     "handler": "adapters",
-    "wiring": "wiring",
+    "component": "wiring",
+    "component_config": "wiring",
+    "component_spec": "wiring",
 }
 
 KIND_HOME: Final[dict[str, str]] = {
@@ -102,7 +120,14 @@ KIND_NAME: Final[dict[str, str]] = {
     "repository": "a repository adapter",
     "gateway": "a gateway adapter",
     "handler": "an inbound handler",
-    "wiring": "a wiring assembly",
+    "component": "a component",
+    "component_config": "a component config",
+    "component_spec": "a component config spec",
+    "app": "an app",
+    "loader": "an app loader",
+    "app_config": "an app config",
+    "app_spec": "an app config spec",
+    "config_repository": "a config repository",
     "host": "a host",
     "protocol_port": "a protocol port",
     "protocol_record": "a protocol record",
@@ -213,7 +238,7 @@ ROLE_TESSER_PACKAGE: Final[dict[str, str]] = {
     "application": "tesser.application",
     "client": "tesser.context",
     "adapters": "tesser.adapters",
-    "wiring": "tesser.context",
+    "wiring": "tesser.component",
 }
 
 DTO_BLOCKS: Final[frozenset[str]] = frozenset(
@@ -243,7 +268,9 @@ NORM_IMPORTS: Final[dict[str, frozenset[str]]] = {
     "wiring": frozenset({"tesser.errors", "tesser.lifecycle"}),
     "bootstrap": frozenset({"tesser.errors", "tesser.lifecycle"}),
     "srv": frozenset({"tesser.errors", "tesser.lifecycle"}),
-    "test": frozenset({"tesser.errors", "tesser.lifecycle", "tesser.serialization"}),
+    "test": frozenset(
+        {"tesser.app", "tesser.errors", "tesser.lifecycle", "tesser.serialization"}
+    ),
 }
 
 SAME_CONTEXT_IMPORTS: Final[dict[str, tuple[str, ...]]] = {
@@ -843,6 +870,8 @@ class Module(ts.Entity):
         return self._bound_names
 
     def _resolve(self, node: ast.expr) -> tuple[str, str] | None:
+        if isinstance(node, ast.Subscript):
+            return self._resolve(node.value)
         if isinstance(node, ast.Attribute) and isinstance(node.value, (ast.Name, ast.Attribute)):
             package = self._package_aliases.get(ast.unparse(node.value))
             if package is not None:
@@ -1217,7 +1246,7 @@ class Codebase(ts.AggregateRoot):
                 module, parts[0], contexts, blocks
             )
         if place == "shell-bootstrap":
-            return self._bootstrap_module_violations(module) + self._app_import_violations(
+            return self._bootstrap_module_violations(module, blocks) + self._app_import_violations(
                 module, parts[0], contexts, blocks
             )
         if place == "root-tests":
@@ -1825,6 +1854,9 @@ class Codebase(ts.AggregateRoot):
                         )
                     )
         found.extend(
+            self._module_function_violations(module, "kernel")
+        )
+        found.extend(
             self._statement_violations(
                 module,
                 "kernel",
@@ -1972,6 +2004,21 @@ class Codebase(ts.AggregateRoot):
             )
         return tuple(found)
 
+    def _module_function_violations(self, module: Module, subject: str) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for stmt in module.body():
+            if isinstance(stmt, ast.FunctionDef) and not self._declared(module, stmt, "function"):
+                found.append(
+                    Violation(
+                        module.path(),
+                        stmt.lineno,
+                        "TB051",
+                        f"{module.name()}.{stmt.name} is an undeclared module function; "
+                        f"a {subject} function declares itself with @ts.function",
+                    )
+                )
+        return tuple(found)
+
     def _statement_violations(
         self,
         module: Module,
@@ -1983,17 +2030,8 @@ class Codebase(ts.AggregateRoot):
             if isinstance(stmt, (ast.Import, ast.ImportFrom, ast.ClassDef)):
                 continue
             if isinstance(stmt, ast.FunctionDef):
-                if not self._declared(module, stmt, "function"):
-                    found.append(
-                        Violation(
-                            module.path(),
-                            stmt.lineno,
-                            "TB051",
-                            f"{module.name()}.{stmt.name} is an undeclared module function; "
-                            f"a {subject} function declares itself with @ts.function",
-                        )
-                    )
-            elif isinstance(stmt, ast.AnnAssign):
+                continue
+            if isinstance(stmt, ast.AnnAssign):
                 if not self._is_final(stmt.annotation):
                     found.append(
                         Violation(
@@ -2778,37 +2816,65 @@ class Codebase(ts.AggregateRoot):
             return Codebase._annotation_head(parsed.body)
         return None
 
-    def _bootstrap_module_violations(self, module: Module) -> tuple[Violation, ...]:
+    def _bootstrap_module_violations(
+        self,
+        module: Module,
+        blocks: dict[tuple[str, str], str],
+    ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         found.extend(self._stray_import_violations(module))
         found.extend(
             self._tesser_import_violations(
                 module,
                 "bootstrap",
-                "tesser.context",
-                "a bootstrap module's tesser imports are tesser.context, "
+                "tesser.app",
+                "a bootstrap module's tesser imports are tesser.app, "
                 "tesser.errors, and tesser.lifecycle",
-                "a bootstrap module imports tesser.context exactly once, as ts",
-                "a bootstrap module imports tesser.context exactly once, as ts",
+                "a bootstrap module imports tesser.app exactly once, as ts",
+                "a bootstrap module imports tesser.app exactly once, as ts",
                 NORM_IMPORTS["bootstrap"],
             )
         )
         for stmt in module.body():
-            if isinstance(stmt, ast.ClassDef):
+            if isinstance(stmt, ast.FunctionDef) and not self._declared(module, stmt, "load"):
                 found.append(
                     Violation(
                         module.path(),
                         stmt.lineno,
                         "TB051",
-                        f"{module.name()}.{stmt.name} is a class; "
-                        "a bootstrap module holds only imports, declared functions, and Final constants",
+                        f"{module.name()}.{stmt.name} is an undeclared module function; "
+                        "a bootstrap function declares itself with @ts.load",
                     )
                 )
+            if isinstance(stmt, ast.ClassDef):
+                block = blocks.get((module.name(), stmt.name))
+                where = f"{module.name()}.{stmt.name}"
+                if block is None:
+                    found.append(
+                        Violation(
+                            module.path(),
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} declares no ts.* base; "
+                            "every bootstrap class declares its block",
+                        )
+                    )
+                elif block not in APP_KINDS:
+                    found.append(
+                        Violation(
+                            module.path(),
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} is {KIND_NAME[block]}; only an app, an app loader, an app "
+                            "config, an app config spec, and a config repository live in a "
+                            "bootstrap module",
+                        )
+                    )
         found.extend(
             self._statement_violations(
                 module,
                 "bootstrap",
-                "a bootstrap module holds only imports, declared functions, and Final constants",
+                "a bootstrap module holds only imports, classes, declared functions, and Final constants",
             )
         )
         return tuple(found)
@@ -2854,6 +2920,9 @@ class Codebase(ts.AggregateRoot):
                             f"{where} is {KIND_NAME[block]}; only a host class lives in a srv module",
                         )
                     )
+        found.extend(
+            self._module_function_violations(module, "srv")
+        )
         found.extend(
             self._statement_violations(
                 module,
@@ -2938,6 +3007,9 @@ class Codebase(ts.AggregateRoot):
                             "protocol rejections, protocol requests, and protocol responses live in a protocol module",
                         )
                     )
+        found.extend(
+            self._module_function_violations(module, "protocol")
+        )
         found.extend(
             self._statement_violations(
                 module,
@@ -3566,6 +3638,9 @@ class Codebase(ts.AggregateRoot):
                         )
                     )
         found.extend(
+            self._module_function_violations(module, "module")
+        )
+        found.extend(
             self._statement_violations(
                 module,
                 "module",
@@ -3661,7 +3736,7 @@ class Codebase(ts.AggregateRoot):
                     module,
                     "role",
                     ROLE_TESSER_PACKAGE[role],
-                    "a wiring module's tesser imports are tesser.context, "
+                    "a wiring module's tesser imports are tesser.component, "
                     "tesser.errors, and tesser.lifecycle",
                     "a role module imports its tesser package exactly once, as ts",
                     "a role module imports its tesser package exactly once, as ts",
@@ -4144,7 +4219,7 @@ class Codebase(ts.AggregateRoot):
                         )
                     )
                 elif not any(
-                    blocks.get(key) in ("port", "client", "protocol_port", "closeable")
+                    blocks.get(key) in ("port", "client", "protocol_port", "closeable", "config_repository")
                     for key in self._base_keys(module, stmt)
                 ):
                     found.append(
@@ -4152,7 +4227,7 @@ class Codebase(ts.AggregateRoot):
                             module.path(),
                             stmt.lineno,
                             "TB072",
-                            f"{where} implements no application port, protocol port, client, "
+                            f"{where} implements no application port, protocol port, client, config repository, "
                             "or lifecycle contract; a fake implements the contract it doubles",
                         )
                     )

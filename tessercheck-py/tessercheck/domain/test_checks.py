@@ -479,12 +479,12 @@ def test_wiring_is_a_role() -> None:
             (
                 "app/wiring/wire.py",
                 "app.wiring.wire",
-                "import tesser.context as ts\n"
+                "import tesser.component as ts\n"
                 "import app.application.service as application\n"
                 "import app.client.client as client\n"
                 "import two.client.client as two_client\n"
                 "import two.domain.thing\n"
-                "class AskWiring(ts.Wiring):\n"
+                "class AskWiring(ts.Component):\n"
                 "    pass\n",
                 False,
             ),
@@ -763,8 +763,9 @@ def test_a_protocol_init_is_empty() -> None:
 def test_every_declared_block_has_a_name_and_a_home() -> None:
     blocks = set(checks.TESSER_BASE_BLOCKS.values())
     assert set(checks.KIND_NAME) == blocks
-    assert set(checks.KIND_ROLE) == blocks - checks.SRV_KINDS - {"closeable"}
+    assert set(checks.KIND_ROLE) == blocks - checks.SRV_KINDS - checks.APP_KINDS - {"closeable"}
     assert "closeable" not in checks.KIND_ROLE
+    assert not (checks.APP_KINDS & set(checks.KIND_ROLE))
 
 
 def test_every_kind_row_names_a_real_tesser_export() -> None:
@@ -1735,19 +1736,18 @@ def test_srv_and_bootstrap_statement_totality() -> None:
         for f in findings
     )
     assert any(
-        "bootstrap.wire never imports tesser.context; "
-        "a bootstrap module imports tesser.context exactly once, as ts" in f
+        "bootstrap.wire never imports tesser.app; "
+        "a bootstrap module imports tesser.app exactly once, as ts" in f
         for f in findings
     )
     assert any(
         "bootstrap.wire.build" in f
-        and "a bootstrap function declares itself with @ts.function" in f
+        and "a bootstrap function declares itself with @ts.load" in f
         for f in findings
     )
     assert any(
         "bootstrap.wire.App" in f
-        and "is a class; a bootstrap module holds only imports, declared functions, "
-        "and Final constants" in f
+            and "declares no ts.* base; every bootstrap class declares its block" in f
         for f in findings
     )
     assert any(
@@ -1758,7 +1758,7 @@ def test_srv_and_bootstrap_statement_totality() -> None:
     assert any(
         "bootstrap.wire" in f
         and "has a loose module-level statement; a bootstrap module holds only imports, "
-        "declared functions, and Final constants" in f
+        "classes, declared functions, and Final constants" in f
         for f in findings
     )
 
@@ -1838,9 +1838,9 @@ def test_context_module_import_form() -> None:
             (
                 "form/wiring/wire.py",
                 "form.wiring.wire",
-                "import tesser.context as ts\n"
+                "import tesser.component as ts\n"
                 "import form.application.service\n"
-                "class PingWiring(ts.Wiring):\n"
+                "class PingWiring(ts.Component):\n"
                 "    pass\n",
                 False,
             ),
@@ -1889,9 +1889,9 @@ def test_relative_imports_resolve_against_the_package() -> None:
             (
                 "rel/wiring/wire.py",
                 "rel.wiring.wire",
-                "import tesser.context as ts\n"
+                "import tesser.component as ts\n"
                 "from ..client.client import RelRequest\n"
-                "class RelWiring(ts.Wiring):\n"
+                "class RelWiring(ts.Component):\n"
                 "    pass\n",
                 False,
             ),
@@ -2031,8 +2031,8 @@ def test_srv_and_bootstrap_tesser_form_modes() -> None:
             (
                 "bootstrap/fromform.py",
                 "bootstrap.fromform",
-                "from tesser.context import function\n"
-                "@function\n"
+                "from tesser.app import load\n"
+                "@load\n"
                 "def go() -> None:\n"
                 "    return None\n",
                 False,
@@ -2129,13 +2129,13 @@ def test_srv_and_bootstrap_tesser_form_modes() -> None:
         for f in findings
     )
     assert any(
-        "bootstrap.fromform imports names from tesser.context; "
-        "a bootstrap module imports tesser.context exactly once, as ts" in f
+        "bootstrap.fromform imports names from tesser.app; "
+        "a bootstrap module imports tesser.app exactly once, as ts" in f
         for f in findings
     )
     assert any(
         "bootstrap.wrongpkg imports tesser.domain; "
-        "a bootstrap module's tesser imports are tesser.context, "
+        "a bootstrap module's tesser imports are tesser.app, "
         "tesser.errors, and tesser.lifecycle" in f
         for f in findings
     )
@@ -2431,7 +2431,7 @@ def test_a_context_role_reaches_the_app_shell_only_as_handlers_to_protocol() -> 
             (
                 "app/wiring/wire.py",
                 "app.wiring.wire",
-                "import tesser.context as ts\n"
+                "import tesser.component as ts\n"
                 "import protocol.http as http\n",
                 False,
             ),
@@ -2702,9 +2702,9 @@ def test_wiring_bootstrap_and_srv_may_from_import_tesser_lifecycle() -> None:
             (
                 "app/wiring/wire.py",
                 "app.wiring.wire",
-                "import tesser.context as ts\n"
+                "import tesser.component as ts\n"
                 "from tesser.lifecycle import Closeable\n"
-                "class Wiring(ts.Wiring):\n"
+                "class Wiring(ts.Component):\n"
                 "    def closeables(self) -> tuple[Closeable, ...]:\n"
                 "        return ()\n",
                 False,
@@ -2719,7 +2719,7 @@ def test_wiring_bootstrap_and_srv_may_from_import_tesser_lifecycle() -> None:
             (
                 "bootstrap/wire.py",
                 "bootstrap.wire",
-                "import tesser.context as ts\n"
+                "import tesser.app as ts\n"
                 "from tesser.lifecycle import Closeable\n",
                 False,
             ),
@@ -2747,9 +2747,9 @@ def test_wiring_bootstrap_and_srv_may_from_import_tesser_lifecycle() -> None:
             (
                 "astray/wiring/wire.py",
                 "astray.wiring.wire",
-                "import tesser.context as ts\n"
+                "import tesser.component as ts\n"
                 "import tesser.domain\n"
-                "class Wiring(ts.Wiring):\n"
+                "class Wiring(ts.Component):\n"
                 "    pass\n",
                 False,
             ),
@@ -2767,7 +2767,7 @@ def test_wiring_bootstrap_and_srv_may_from_import_tesser_lifecycle() -> None:
     assert not any("srv.run" in f and "tesser.lifecycle" in f for f in findings)
     assert any(
         "astray.wiring.wire imports tesser.domain; "
-        "a wiring module's tesser imports are tesser.context, "
+        "a wiring module's tesser imports are tesser.component, "
         "tesser.errors, and tesser.lifecycle" in f
         for f in findings
     )
@@ -3156,8 +3156,8 @@ def test_a_wiring_sibling_test_mirrors_production_wiring_reach() -> None:
             (
                 "app/wiring/wire.py",
                 "app.wiring.wire",
-                "import tesser.context as ts\n"
-                "class Wiring(ts.Wiring):\n"
+                "import tesser.component as ts\n"
+                "class Wiring(ts.Component):\n"
                 "    def close(self) -> None:\n"
                 "        return None\n",
                 False,
@@ -3400,7 +3400,7 @@ def test_a_root_test_reaches_a_context_only_through_wiring_and_client() -> None:
             (
                 "app/wiring/wire.py",
                 "app.wiring.wire",
-                "import tesser.context as ts\n",
+                "import tesser.component as ts\n",
                 False,
             ),
             (
@@ -6980,7 +6980,7 @@ def test_the_lifecycle_contract_is_fakeable_but_never_a_production_base() -> Non
             (
                 "app/wiring/wire.py",
                 "app.wiring.wire",
-                "import tesser.context as ts\n"
+                "import tesser.component as ts\n"
                 "from tesser.lifecycle import Closeable\n"
                 "class Sneaky(Closeable):\n"
                 "    def close(self) -> None:\n"
@@ -7244,3 +7244,35 @@ def test_a_conftest_leaf_counts_tesser_edges_in_the_exporting_tree() -> None:
         "a conftest is a leaf that imports nothing from its tree" in f
         for f in findings
     ), findings
+
+
+def test_a_bootstrap_module_holds_only_app_kinds() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "bootstrap/wrong.py",
+                "bootstrap.wrong",
+                "import tesser.app as ts\n"
+                "import tesser.component as tc\n"
+                "class Slice(tc.Component):\n"
+                "    pass\n"
+                "class Root(ts.App):\n"
+                "    pass\n",
+                False,
+            ),
+            (
+                "bootstrap/test_wrong.py",
+                "bootstrap.test_wrong",
+                "def test_wrong_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "bootstrap.wrong.Slice is a component; only an app, an app loader, an app config, "
+        "an app config spec, and a config repository live in a bootstrap module" in f
+        for f in findings
+    )
+    assert not any("bootstrap.wrong.Root" in f and "TB052" in f for f in findings)
