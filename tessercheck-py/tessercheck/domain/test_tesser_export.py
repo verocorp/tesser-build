@@ -163,3 +163,70 @@ def test_the_shells_tests_keep_function_totality() -> None:
         "a test module holds only imports, tests, helpers, and fakes" in f
         for f in findings
     ), findings
+
+
+def test_a_tree_exporting_tesser_holds_nothing_else() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(
+            sources=(
+                (
+                    "billing/domain/money.py",
+                    "billing.domain.money",
+                    "import tesser.domain as ts\n"
+                    "class MoneySpec(ts.Spec):\n"
+                    "    def __init__(self, text: str) -> None:\n"
+                    "        self.text = text\n",
+                    False,
+                ),
+            ),
+        )).violations()
+    )
+    assert len(findings) == 1, findings
+    assert any(
+        "a tree exporting tesser is the distribution itself — "
+        "its top level is tesser and tests, nothing else" in f
+        for f in findings
+    ), findings
+
+
+def test_a_stray_subpackage_in_the_distribution_is_a_finding() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(
+            sources=(
+                (
+                    "tesser/evil/__init__.py",
+                    "tesser.evil",
+                    "from tesser.domain.valueobject import ValueObject as ValueObject\n",
+                    True,
+                ),
+            ),
+        )).violations()
+    )
+    assert any(
+        "tesser.evil is not a consumer namespace; the tesser "
+        "distribution holds only the namespaces its consumers import" in f
+        for f in findings
+    ), findings
+
+
+def test_a_conftest_leaf_counts_tesser_edges_in_the_exporting_tree() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(
+            sources=(
+                (
+                    "conftest.py",
+                    "conftest",
+                    "import tesser.domain.valueobject\n",
+                    False,
+                ),
+            ),
+        )).violations()
+    )
+    assert any(
+        "conftest imports tesser.domain.valueobject; "
+        "a conftest is a leaf that imports nothing from its tree" in f
+        for f in findings
+    ), findings

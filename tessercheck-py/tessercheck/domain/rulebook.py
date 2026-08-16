@@ -24,6 +24,7 @@ HOLE_NAMES: Final[dict[str, str]] = {
     "target": "⟨import⟩",
     "package": "⟨package⟩",
     "self._export": "⟨export⟩",
+    "', '.join(outsiders)": "⟨packages⟩",
     "declared": "⟨import⟩",
     "tier": "⟨tier⟩",
     "own_roles": "⟨roles⟩",

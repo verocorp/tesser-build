@@ -1,5 +1,12 @@
 # The mutmut ecosystem gate
 
+This directory is excluded from the tessercheck walk (`skip ecosystem` in
+`tesser-py/.tesser-root`): the harness is subprocess infrastructure whose
+functions cannot meet the `@ts.helper` shape (they branch, take paths, and
+return process outcomes, not specs), and the fixture projects are deliberate
+mutation targets — one of them deliberately non-conforming. Its gates are
+this suite's own pytest run and the fixture mypy steps in `scripts/verify`.
+
 Not a mutation-score gate. The claim under test is that building a value
 object on `ts.ValueObject` leaves it fully visible to mutmut, while the
 obvious alternative construction (a frozen dataclass) is skipped by mutmut

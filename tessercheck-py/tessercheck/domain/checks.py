@@ -1438,6 +1438,24 @@ class Codebase(ts.AggregateRoot):
                     "exists; an export names a package at the tree root",
                 ),
             )
+        if self._export == TESSER:
+            outsiders = sorted(
+                frozenset(
+                    module.name().split(".")[0] for module in self._modules
+                )
+                - frozenset({TESSER, TESTS_ROLE, "conftest"})
+            )
+            if outsiders:
+                return (
+                    Violation(
+                        TREE_DECLARATION,
+                        1,
+                        "TB044",
+                        f"this tree exports 'tesser' but also holds {', '.join(outsiders)}; "
+                        "a tree exporting tesser is the distribution itself — "
+                        "its top level is tesser and tests, nothing else",
+                    ),
+                )
         if self._export != TESSER and any(
             len(parts) >= 2 and parts[0] == self._export and parts[1] in ROLES
             for parts in (module.name().split(".") for module in self._modules)
@@ -1511,7 +1529,9 @@ class Codebase(ts.AggregateRoot):
         return frozenset(module.name().split(".")[0] for module in self._modules)
 
     def _tree_edges(self, module: Module) -> tuple[tuple[str, int], ...]:
-        tops = self._tree_tops() - {TESSER}
+        tops = self._tree_tops()
+        if self._export != TESSER:
+            tops = tops - {TESSER}
         return tuple(
             (str(edge._target), int(edge._lineno))
             for edge in module.import_edges()
@@ -1598,6 +1618,17 @@ class Codebase(ts.AggregateRoot):
 
     def _tesser_init_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
+        parts = module.name().split(".")
+        if len(parts) >= 2 and parts[1] not in TESSER_NAMESPACES:
+            found.append(
+                Violation(
+                    module.path(),
+                    1,
+                    "TB041",
+                    f"{module.name()} is not a consumer namespace; the tesser "
+                    "distribution holds only the namespaces its consumers import",
+                )
+            )
         for stmt in module.body():
             if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
                 found.append(
