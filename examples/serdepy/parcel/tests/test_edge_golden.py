@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import parcel.adapters.wire as wire
+import parcel.adapters.gateways.wire as wire
 import parcel.application.mapping as mapping
 import parcel.application.ports.parcel_wire as parcel_wire
 import parcel.domain.parcel as parcel
