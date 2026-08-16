@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import os
 import sys
 from collections.abc import Callable
 from typing import Final
 
 import tesser.srv as ts
 
-from bootstrap.bootstrap import App, new
-from bootstrap.config import from_env
+from bootstrap.app import App
+from bootstrap.loader import load_app
 import campaign.adapters.handlers.cli as cli
 from protocol.cli import CliRequest, CliResponse, Command, UsageError
 from tesser.errors import DomainError, InfraError, exit_code_for
@@ -55,7 +54,7 @@ def dispatch(commands: dict[str, Command], argv: list[str]) -> CliResponse:
 
 @ts.function
 def run(argv: list[str]) -> int:
-    app = new(from_env(os.getenv))
+    app = load_app()
     try:
         resp = dispatch(commands_for(app), argv)
         if resp.stdout:
