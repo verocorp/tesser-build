@@ -113,35 +113,35 @@ The conventions the nesting carries:
 
 ## Lifecycle
 
-Deliberately minimal, split across the two layers that own it: **bootstrap
-mandates** a `Closeable` shape (one `close()` method —
-`tesser.lifecycle.Closeable`) and an `App.close()` that tears the graph
-down; the **host mandates** a `Host` (`run(stop)`) run under a runner that
-installs SIGTERM and calls `App.close()` (`srv.md`). Health, readiness,
-graceful-shutdown *ordering*, drain, and observability are the host's fill-in
+Deliberately minimal, and owned by whoever holds the resource. A **component**
+constructs its own infrastructure from its config slice and its `close()`
+releases exactly that; the **app** builds the components and its `close()`
+closes each one; the **host** mandates a `Host` (`run(stop)`) run under a
+runner that installs SIGTERM and calls the app's `close` in a `finally`
+(`srv.md`). Health, readiness, drain, and observability are the host's fill-in
 above that minimum — the shape leaves room to do them *properly* without the
 template mandating them (see the ops-deferral notice in `SKILL.md`).
 
 What the mandated minimum requires:
 
-- **A cleanup stack, pushed in construction order, closed in reverse.** As
-  `new(cfg)` builds each context it pushes that context's closeable; teardown
-  pops. Reverse order is the dependency order run backwards — a consumer
-  closes before what it consumes.
-- **A close that raises must not orphan the rest.** The stack attempts every
-  close and collects errors; one leaky pool cannot leak the others. `App.close`
-  **retains** those errors on `App.close_errors` rather than dropping them, so a
-  host or test can see a partial teardown (verified impl:
-  `CleanupStack.close_all` + `App.close_errors`, locked by
-  `examples/python-app/tests/test_cleanup.py`).
-- **Partial construction unwinds.** If a later context's build fails,
-  `new(cfg)` closes what it already built before the error propagates — a
-  failed boot must not leak connections (same test).
-- **`close()` is idempotent.** Hosts call it in `finally`; a double close is
-  a no-op, not a crash.
-- **Every wiring returns a closeable, even a no-op** (`wiring.md` rule 2) —
-  the stack's uniformity is what makes the four guarantees above hold by
-  construction rather than per-context vigilance.
+- **Ownership is strict.** A component releases only what it constructed, and
+  nothing else reaches into it. That is what makes teardown order free: no
+  component's `close()` depends on another still being open, so there is no
+  reverse-order doctrine to get right. A component that holds no
+  infrastructure has an empty `close()`, and that is honest rather than
+  ceremonial.
+- **Partial construction unwinds.** If a later component's construction fails,
+  the app closes the ones it already built before the error propagates — not
+  because of a leak argument, but because a half-built app is an invalid
+  object and a single validating constructor never leaves one behind (verified
+  impl: `examples/python-app/bootstrap/app.py`, locked by
+  `examples/python-app/bootstrap/test_app.py`).
+- **Nothing travels.** A closeable is never a return value, a tuple element, or
+  a stack entry — each object holds what it made, in its own type. A release
+  contract that has to be *passed* is the sign that ownership is unclear.
+- **The app is built, never run.** `App` has no `run`; hosts run. The runner
+  takes a host and a callable to invoke when it stops, so it needs to know
+  nothing about apps at all.
 
 ## Decisions you must make
 

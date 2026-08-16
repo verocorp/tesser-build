@@ -98,9 +98,10 @@ The `wiring/` role directory is part of the prescribed anatomy asserted by the
 verified impl's shape checks (`examples/python-app/tests/test_shape.py`), and
 the analyzer walks every context and judges each module's declared role
 (`python -m srv.cli.main <tree>`, run from `tessercheck-py/`, TB040/TB043).
-Coordinate-driven selection and the fail-fast are locked by
-`examples/python-app/tests/test_impl_selection.py` (the `"memory"` coordinate
-builds; an absent coordinate errors at construction). The review-side tells:
+Coordinate-driven selection and the fail-fast are locked beside each component
+(`examples/python-app/campaign/wiring/test_wire.py`,
+`examples/python-app/linkpolicy/wiring/test_wire.py`): the `"memory"` coordinate
+builds, an absent one errors at construction. The review-side tells:
 - a **default coordinate** (`cfg.storage or "memory"`) — the silent fall
   rule 4 bans;
 - a **peer import inside `wiring/`** — cross-context construction leaked out
@@ -110,15 +111,15 @@ builds; an absent coordinate errors at construction). The review-side tells:
 
 ## Tests you must write
 
-- **The coordinate builds the implementation it names:** `build` with the
-  in-memory coordinate returns a working `Client` (verified impl:
-  `test_impl_selection.py`).
+- **The coordinate builds the implementation it names:** constructing the
+  component with the in-memory coordinate exposes a working `Client` (verified
+  impl: `examples/python-app/campaign/wiring/test_wire.py`).
 - **An absent coordinate fails at construction** — assert the error, not a
   fallback.
-- **The closeable reaches teardown:** whatever `build` returns is closed on
-  app close (`examples/python-app/tests/test_cleanup.py` locks the root's
-  reverse-order, keep-going contract; the context's part is returning the
-  right closeable).
+- **The component closes what it built:** teardown is the component's own
+  `close()`, reaching only the infrastructure it constructed (verified impl:
+  `examples/python-app/bootstrap/test_app.py` locks that the app closes each
+  component it built).
 
 ## Common mistakes
 

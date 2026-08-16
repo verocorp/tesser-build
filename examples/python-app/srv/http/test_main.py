@@ -37,7 +37,7 @@ def test_the_edge_announces_its_address_and_exits_zero_when_signalled() -> None:
     assert stderr == ""
 
 
-def test_the_edge_refuses_to_start_without_its_storage_coordinate() -> None:
+def test_the_edge_refuses_to_start_when_a_variable_is_absent() -> None:
     root = pathlib.Path(__file__).resolve().parents[2]
     env = {
         "PYTHONPATH": os.pathsep.join(entry for entry in sys.path if entry),
@@ -56,7 +56,7 @@ def test_the_edge_refuses_to_start_without_its_storage_coordinate() -> None:
         stdout, stderr = proc.communicate(timeout=30)
     assert proc.returncode != 0
     assert stdout == ""
-    assert "missing_coordinate" in stderr
+    assert "missing_env" in stderr
 
 
 def test_the_edge_refuses_to_start_on_an_unreadable_port() -> None:
@@ -66,6 +66,7 @@ def test_the_edge_refuses_to_start_on_an_unreadable_port() -> None:
         "PYTHONUNBUFFERED": "1",
         "CAMPAIGN_STORAGE": "memory",
         "LINKPOLICY_STORAGE": "memory",
+        "HTTP_HOST": "127.0.0.1",
         "HTTP_PORT": "eighty",
     }
     with subprocess.Popen(
@@ -80,3 +81,27 @@ def test_the_edge_refuses_to_start_on_an_unreadable_port() -> None:
     assert proc.returncode != 0
     assert stdout == ""
     assert "bad_http_port" in stderr
+
+
+def test_the_edge_refuses_to_start_on_an_empty_storage_coordinate() -> None:
+    root = pathlib.Path(__file__).resolve().parents[2]
+    env = {
+        "PYTHONPATH": os.pathsep.join(entry for entry in sys.path if entry),
+        "PYTHONUNBUFFERED": "1",
+        "CAMPAIGN_STORAGE": "",
+        "LINKPOLICY_STORAGE": "memory",
+        "HTTP_HOST": "127.0.0.1",
+        "HTTP_PORT": "0",
+    }
+    with subprocess.Popen(
+        [sys.executable, "-m", "srv.http.main"],
+        cwd=root,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    ) as proc:
+        stdout, stderr = proc.communicate(timeout=30)
+    assert proc.returncode != 0
+    assert stdout == ""
+    assert "missing_coordinate" in stderr

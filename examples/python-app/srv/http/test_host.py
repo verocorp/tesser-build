@@ -6,8 +6,8 @@ import threading
 
 import pytest
 
-from bootstrap.bootstrap import new
-from bootstrap.config import from_env
+import bootstrap.loader as loader
+import bootstrap.repository as repository
 from protocol.http import BadRequest, HttpResponse, PayloadTooLarge, StreamingUnsupported
 from tesser.errors import InfraError, conflict, invalid, not_found
 from srv.http.host import MAX_BUFFERED_BODY, HttpHost, buffered_length, make_server, respond, routes_for
@@ -100,8 +100,8 @@ def test_an_unexpected_failure_leaks_nothing() -> None:
 
 
 def test_the_route_table_is_the_declared_one() -> None:
-    env = {"CAMPAIGN_STORAGE": "memory", "LINKPOLICY_STORAGE": "memory"}
-    app = new(from_env(env.get))
+    env = {"CAMPAIGN_STORAGE": "memory", "LINKPOLICY_STORAGE": "memory", "HTTP_HOST": "", "HTTP_PORT": "8080"}
+    app = loader.AppLoader(repository.EnvConfigRepository(env)).load()
     try:
         assert [(route.method, route.pattern) for route in routes_for(app)] == [
             ("POST", "/campaigns"),
@@ -116,8 +116,8 @@ def test_the_route_table_is_the_declared_one() -> None:
 
 
 def test_the_server_answers_a_routed_request() -> None:
-    env = {"CAMPAIGN_STORAGE": "memory", "LINKPOLICY_STORAGE": "memory"}
-    app = new(from_env(env.get))
+    env = {"CAMPAIGN_STORAGE": "memory", "LINKPOLICY_STORAGE": "memory", "HTTP_HOST": "", "HTTP_PORT": "8080"}
+    app = loader.AppLoader(repository.EnvConfigRepository(env)).load()
     server = make_server(("127.0.0.1", 0), app)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -143,8 +143,8 @@ def test_the_server_answers_a_routed_request() -> None:
 
 
 def test_the_server_answers_an_unknown_route_with_a_problem_document() -> None:
-    env = {"CAMPAIGN_STORAGE": "memory", "LINKPOLICY_STORAGE": "memory"}
-    app = new(from_env(env.get))
+    env = {"CAMPAIGN_STORAGE": "memory", "LINKPOLICY_STORAGE": "memory", "HTTP_HOST": "", "HTTP_PORT": "8080"}
+    app = loader.AppLoader(repository.EnvConfigRepository(env)).load()
     server = make_server(("127.0.0.1", 0), app)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -164,8 +164,8 @@ def test_the_server_answers_an_unknown_route_with_a_problem_document() -> None:
 
 
 def test_the_server_refuses_a_body_it_cannot_buffer() -> None:
-    env = {"CAMPAIGN_STORAGE": "memory", "LINKPOLICY_STORAGE": "memory"}
-    app = new(from_env(env.get))
+    env = {"CAMPAIGN_STORAGE": "memory", "LINKPOLICY_STORAGE": "memory", "HTTP_HOST": "", "HTTP_PORT": "8080"}
+    app = loader.AppLoader(repository.EnvConfigRepository(env)).load()
     server = make_server(("127.0.0.1", 0), app)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -187,8 +187,8 @@ def test_the_server_refuses_a_body_it_cannot_buffer() -> None:
 
 
 def test_the_host_runs_until_its_stop_is_set() -> None:
-    env = {"CAMPAIGN_STORAGE": "memory", "LINKPOLICY_STORAGE": "memory"}
-    app = new(from_env(env.get))
+    env = {"CAMPAIGN_STORAGE": "memory", "LINKPOLICY_STORAGE": "memory", "HTTP_HOST": "", "HTTP_PORT": "8080"}
+    app = loader.AppLoader(repository.EnvConfigRepository(env)).load()
     try:
         host = HttpHost(("127.0.0.1", 0), app)
         stop = threading.Event()

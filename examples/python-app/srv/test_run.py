@@ -57,7 +57,7 @@ def test_the_host_runs_once_with_an_unset_stop() -> None:
     original_term = signal.getsignal(signal.SIGTERM)
     try:
         host = FakeHostReturning()
-        run_until_signal(host, FakeAppSpy())
+        run_until_signal(host, FakeAppSpy().close)
         assert host.runs == 1
         assert host.stop_was_set is False
     finally:
@@ -70,7 +70,7 @@ def test_the_app_closes_when_the_host_returns() -> None:
     original_term = signal.getsignal(signal.SIGTERM)
     try:
         app = FakeAppSpy()
-        run_until_signal(FakeHostReturning(), app)
+        run_until_signal(FakeHostReturning(), app.close)
         assert app.closes == 1
     finally:
         signal.signal(signal.SIGINT, original_int)
@@ -83,7 +83,7 @@ def test_the_app_closes_when_the_host_crashes_and_the_crash_still_surfaces() -> 
     try:
         app = FakeAppSpy()
         with pytest.raises(RuntimeError) as caught:
-            run_until_signal(FakeHostRaising(), app)
+            run_until_signal(FakeHostRaising(), app.close)
         assert "serve loop crashed" in str(caught.value)
         assert app.closes == 1
     finally:
@@ -96,7 +96,7 @@ def test_an_interrupt_signal_sets_the_stop_the_host_waits_on() -> None:
     original_term = signal.getsignal(signal.SIGTERM)
     try:
         host = FakeHostCallingTheInstalledHandler(signal.SIGINT)
-        run_until_signal(host, FakeAppSpy())
+        run_until_signal(host, FakeAppSpy().close)
         assert host.handler_was_callable is True
         assert host.stop_was_set is True
     finally:
@@ -109,7 +109,7 @@ def test_a_termination_signal_sets_the_stop_the_host_waits_on() -> None:
     original_term = signal.getsignal(signal.SIGTERM)
     try:
         host = FakeHostCallingTheInstalledHandler(signal.SIGTERM)
-        run_until_signal(host, FakeAppSpy())
+        run_until_signal(host, FakeAppSpy().close)
         assert host.handler_was_callable is True
         assert host.stop_was_set is True
     finally:

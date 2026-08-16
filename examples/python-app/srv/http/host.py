@@ -7,7 +7,7 @@ from typing import Any, Final
 
 import tesser.srv as ts
 
-from bootstrap.bootstrap import App
+from bootstrap.app import App
 import campaign.adapters.handlers.http as http
 from tesser.errors import DomainError, InfraError, status_for
 from protocol.http import BadRequest, HttpRequest, HttpResponse, PayloadTooLarge, StreamingUnsupported
@@ -64,8 +64,8 @@ def respond(run: Callable[[], HttpResponse]) -> HttpResponse:
 
 @ts.function
 def routes_for(app: App) -> tuple[Route, ...]:
-    campaign = http.Handler(app.campaign)
-    reports = reports_http.Handler(app.reports)
+    campaign = http.Handler(app.campaign.client)
+    reports = reports_http.Handler(app.reports.client)
     return (
         Route("POST", "/campaigns", campaign.create_campaign),
         Route("POST", "/links", campaign.add_link),

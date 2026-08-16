@@ -230,7 +230,8 @@
       "go_analyzers": [],
       "py_checks": [],
       "enforcement_tests": [
-        "examples/python-app/tests/test_impl_selection.py"
+        "examples/python-app/campaign/wiring/test_wire.py",
+        "examples/python-app/linkpolicy/wiring/test_wire.py"
       ],
       "rationale": []
     },
@@ -250,7 +251,9 @@
         "examples/python-app/tests/test_enforcement.py",
         "examples/python-app/tests/test_architecture_teeth.py",
         "examples/python-app/tests/test_bootstrap_once.py",
-        "examples/python-app/tests/test_cleanup.py"
+        "examples/python-app/bootstrap/test_app.py",
+        "examples/python-app/bootstrap/test_loader.py",
+        "examples/python-app/bootstrap/test_repository.py"
       ],
       "rationale": []
     },

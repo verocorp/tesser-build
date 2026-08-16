@@ -2,17 +2,17 @@ from __future__ import annotations
 
 import signal
 import threading
+from collections.abc import Callable
 from types import FrameType
 from typing import Optional
 
 import tesser.srv as ts
 
-from tesser.lifecycle import Closeable
 from protocol.lifecycle import Host
 
 
 @ts.function
-def run_until_signal(host: Host, app: Closeable) -> None:
+def run_until_signal(host: Host, close: Callable[[], None]) -> None:
     stop = threading.Event()
 
     def _handle(signum: int, frame: Optional[FrameType]) -> None:
@@ -23,4 +23,4 @@ def run_until_signal(host: Host, app: Closeable) -> None:
     try:
         host.run(stop)
     finally:
-        app.close()
+        close()

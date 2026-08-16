@@ -27,15 +27,17 @@ target-version = "py311"
 select = ["TID251", "PLR1722", "F401", "F823"]
 
 [lint.flake8-tidy-imports.banned-api]
-"os.getenv" = { msg = "read the environment only in srv/*/main.py — pass values inward as a Config (skills/tesser-build/bootstrap.md)" }
-"os.environ" = { msg = "read the environment only in srv/*/main.py — pass values inward as a Config (skills/tesser-build/bootstrap.md)" }
+"os.getenv" = { msg = "read the environment only in bootstrap/loader.py — the config repository decodes it (skills/tesser-build/bootstrap.md)" }
+"os.environ" = { msg = "read the environment only in bootstrap/loader.py — the config repository decodes it (skills/tesser-build/bootstrap.md)" }
 "sys.exit" = { msg = "exit only from srv/*/main.py — everything below returns or raises (skills/tesser-build/srv.md)" }
 "os._exit" = { msg = "exit only from srv/*/main.py — everything below returns or raises (skills/tesser-build/srv.md)" }
 
-# The host edge is the one place both rules are lifted: it decodes the
-# environment into a Config and it is the only frame that may exit. `srv/*/main.py`
-# does not cross a directory separator, so a deeper module never inherits the
-# exemption. Bare `exit`/`quit` stay banned everywhere via PLR1722 — they are
-# site builtins, never the edge's exit.
+# Two edges, each lifted in exactly one file. `bootstrap/loader.py` names the
+# environment once, handing it to the config repository that decodes it;
+# `srv/*/main.py` is the only frame that may exit. Neither pattern crosses a
+# directory separator, so a deeper module never inherits the exemption. Bare
+# `exit`/`quit` stay banned everywhere via PLR1722 — they are site builtins,
+# never the edge's exit.
 [lint.per-file-ignores]
+"bootstrap/loader.py" = ["TID251"]
 "srv/*/main.py" = ["TID251"]

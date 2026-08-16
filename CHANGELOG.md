@@ -5,6 +5,41 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.54.0] - 2026-08-16
+
+Apps and components. The composition root stops threading closeables through
+return types: a component constructs its own infrastructure from its config
+slice and closes exactly that, and the app builds the components and closes
+them. Nothing runs — hosts run.
+
+### Changed
+- **`wire.build(cfg, deps) -> (Client, Closeable)` becomes a component class**
+  with a validating `__init__` and a `close()`. `NoResources` and both tuple
+  returns retire; a component that holds no infrastructure has an empty
+  `close()`.
+- **`bootstrap.py` + `from_env` become `config`, `repository`, `loader`, and
+  `app`.** Reaching an app is `AppLoader(EnvConfigRepository(os.environ)).load()`,
+  behind one module function, `load_app()`. The app loader coordinates a config
+  repository and construction; the app it returns is what gets closed.
+- **Every default is gone.** An absent environment variable is refused by name
+  (`missing_env`) rather than silently backfilled — the `http` slice default,
+  the `or ""` coordinate fallbacks, and the `8080` port fallback all go.
+- **The env edge moves from the host to the loader.** `srv` reads no
+  environment; the ruff ban moves with the edge rather than widening, and a new
+  teeth test pins that only `bootstrap/loader.py` is exempt.
+- **The runner takes a callable, not an app.** `run_until_signal(host, close)`
+  needs to know nothing about apps.
+
+### Removed
+- **`CleanupStack`,** and with it reverse-order teardown and close-error
+  aggregation. Under strict ownership no component's `close()` depends on
+  another still being open, so ordering is free; `spanner.Client.Close()`
+  returns nothing to aggregate. Partial-construction unwind survives, re-derived
+  from "a single validating constructor never leaves an invalid object behind."
+- **`tesser.lifecycle.Closeable` from python-app.** Its only job was letting a
+  closeable travel — out of `build()`, into a stack, through a runner signature.
+  Nothing travels now. It remains in the shells and the other trees.
+
 ## [0.0.53.0] - 2026-08-16
 
 The toolkit stops shipping the one construction its own gate proves is

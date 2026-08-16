@@ -3,7 +3,7 @@ from __future__ import annotations  # tessercheck:ignore-file TB041
 import ast
 import pathlib
 
-from bootstrap.config import Config
+from bootstrap.config import Config, HttpConfig
 from campaign.wiring.config import Config as CampaignConfig
 from protocol.http import HttpRequest, HttpResponse
 from linkpolicy.wiring.config import Config as LinkPolicyConfig
@@ -20,6 +20,7 @@ def app_config() -> Config:
         campaign=CampaignConfig("memory"),
         linkpolicy=LinkPolicyConfig("memory"),
         reports=ReportsConfig(),
+        http=HttpConfig("", 8080),
     )
 
 

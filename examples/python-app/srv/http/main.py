@@ -1,22 +1,18 @@
 from __future__ import annotations
 
-import os
-
 import tesser.srv as ts
 
-from bootstrap.bootstrap import new
-from bootstrap.config import from_env
+from bootstrap.loader import load_app
 from srv.http.host import HttpHost
 from srv.run import run_until_signal
 
 
 @ts.function
 def main() -> None:
-    cfg = from_env(os.getenv)
-    app = new(cfg)
-    host = HttpHost((cfg.http.host, cfg.http.port), app)
-    print(f"campaign+linkpolicy app listening on {cfg.http.host or '0.0.0.0'}:{cfg.http.port}")  # noqa: T201
-    run_until_signal(host, app)
+    app = load_app()
+    host = HttpHost((app.http.host, app.http.port), app)
+    print(f"campaign+linkpolicy app listening on {app.http.host or '0.0.0.0'}:{app.http.port}")  # noqa: T201
+    run_until_signal(host, app.close)
 
 
 if __name__ == "__main__":  # tessercheck:ignore TB051
