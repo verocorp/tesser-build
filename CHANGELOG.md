@@ -5,6 +5,40 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.52.0] - 2026-08-16
+
+The tree that defines the conventions is now checked by them. `tesser-py`
+declares `export tesser`, its verify arm runs tessercheck, and the run is
+clean — the last unchecked tree in the repo closes.
+
+### Added
+- **The shells rows.** Kernel content rules are keyed on the `ts.*` bases,
+  and the bases cannot subclass themselves, so one exported kernel routes
+  differently: when a tree's export is `tesser`, its modules answer to
+  namespace totality (modules *and* subpackages are exactly the namespaces
+  consumers import), shell-stdlib purity (the distribution's measured
+  external surface — a meta-test fails when either allowlist grants a name
+  the distribution does not earn), and a `__init__` that only re-exports
+  from the distribution. Its tests invert exactly two rules — any
+  `tesser.*` import, and free module-level classes, because probe
+  subclasses of the shells are the tests' method — and keep function
+  totality, the comments norm, the mock ban, and placement.
+- **A shape gate on the claim.** A tree exporting `tesser` holds exactly
+  `tesser` and `tests` at its top level. Without it, any app could park a
+  `tesser/` package beside its contexts, declare the export, and buy a
+  content-rule-free region its governed domain code calls as `ts.*`.
+
+### Changed
+- **`tesser-py` conforms to TB074 rather than being excused from it**
+  (maintainer ruling 2026-08-16: those shell classes will likely carry
+  behavior later, and exemptions are reserved for true exemptions). All 25
+  implementation modules gained sibling tests — the six behavior-carrying
+  ones moved beside their code, the marker declarations gained tests that
+  assert their actual contract (structural satisfaction for the protocol
+  bases, inheritance for the derived records, no behavior of their own for
+  the markers). The wheel-completeness check compares real members, so a
+  test file can never stand in for a missing subpackage.
+
 ## [0.0.51.0] - 2026-08-16
 
 The flagged kind-table entry resolves by ruling: **a port is for the
