@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__ import annotations  # tessercheck:ignore TB074
 
 import asyncio
 from collections.abc import Awaitable, Callable

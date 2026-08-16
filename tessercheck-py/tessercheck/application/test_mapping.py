@@ -26,6 +26,13 @@ def test_a_declared_tree_of_conforming_modules_yields_no_findings() -> None:
                 state=source_reader.SourceState.READ,
                 form=source_reader.ModuleForm.MODULE,
             ),
+            source_reader.SourceFile(
+                path="app/domain/test_thing.py",
+                name="app.domain.test_thing",
+                text=("def test_thing_exists() -> None:\n    assert True\n"),
+                state=source_reader.SourceState.READ,
+                form=source_reader.ModuleForm.MODULE,
+            ),
         ),
         exports=(),
         imports=(),

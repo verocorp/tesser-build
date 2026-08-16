@@ -26,7 +26,7 @@ Legend: ✅ done · 🟡 partial · ❌ absent · — intentionally n/a.
 | The map | — | — | ✅ | 🟡 Py only (TB040, TB041, TB042, TB043, TB044, TB045, TB051, TB052, TB069) | ❌ |
 | Strategic design | — | — | ✅ | — | ❌ |
 | Norm: errors | ✅ | ❌ | ❌ | 🟡 in-example | ❌ the errorspy example matrix is the proof; no changeability contender |
-| Norm: testing | ❌ | ❌ | 🟡 partial | 🟡 Py only (TB030, TB070, TB071, TB072, TB073) | ❌ |
+| Norm: testing | ❌ | ❌ | 🟡 partial | 🟡 Py only (TB030, TB070, TB071, TB072, TB073, TB074) | ❌ |
 | Norm: comments | ✅ | ✅ | ✅ | ✅ 1 Go + 1 Py | ❌ |
 | Norm: serialization | ✅ | ❌ | ✅ | 🟡 Py only (TB015, TB016, TB017, TB018) | ❌ |
 | Norm: domain return | ✅ | ❌ | ✅ | 🟡 Py only (TB019) | ❌ |
