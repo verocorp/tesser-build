@@ -1,5 +1,18 @@
 # Design — the Python DDD analyzer (`ddd-vet-py`) and its sequencing (2026-07-15)
 
+> **Superseded on the substrate question (2026-08-16).** This record reasons
+> throughout about a **frozen-dataclass substrate** — VO identification by the
+> `@dataclass(frozen=True)` decorator, `dataclasses.replace()` as a sanctioned
+> door, accessors dropped because "dataclass fields are public by idiom." That
+> substrate is gone: a Python value object subclasses `ts.ValueObject`
+> (`README.md`, `skills/tesser-build/python.md`), the toolkit ships no
+> dataclass, and the reason is measured — mutmut skips a decorated class
+> wholesale, so the dataclass idiom is invisible to mutation testing
+> (`tesser-py/tests/ecosystem/mutmut/`). The sequencing reasoning, the
+> analyzer-by-analyzer fate table's *intent*, and the coverage argument still
+> read true; the substrate they assume does not. Kept as the record of how the
+> Python gate was planned, not as guidance.
+
 Planning record from a `/office-hours` sequencing session. Driver: a new Python
 app for **the pilot consumer** is being built now (VOs, entities, aggregates, repositories,
 application services, composition root), and the goal is an **automated
