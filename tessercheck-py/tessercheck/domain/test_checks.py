@@ -763,7 +763,8 @@ def test_a_protocol_init_is_empty() -> None:
 def test_every_declared_block_has_a_name_and_a_home() -> None:
     blocks = set(checks.TESSER_BASE_BLOCKS.values())
     assert set(checks.KIND_NAME) == blocks
-    assert set(checks.KIND_ROLE) == blocks - checks.SRV_KINDS
+    assert set(checks.KIND_ROLE) == blocks - checks.SRV_KINDS - {"closeable"}
+    assert "closeable" not in checks.KIND_ROLE
 
 
 def test_every_kind_row_names_a_real_tesser_export() -> None:
@@ -1290,7 +1291,7 @@ def test_a_dotted_module_base_resolves() -> None:
         for f in findings
     )
     assert any(
-        "FakePort" in f and "a fake implements the port or client it doubles" in f
+        "FakePort" in f and "a fake implements the contract it doubles" in f
         for f in findings
     )
 
@@ -3875,7 +3876,7 @@ def test_test_module_totality_is_flagged() -> None:
         for f in findings
     )
     assert any("test_junk.Junk" in f and "a test double declares itself with @ts.fake" in f for f in findings)
-    assert any("test_junk.FakeNothing" in f and "a fake implements the port or client it doubles" in f for f in findings)
+    assert any("test_junk.FakeNothing" in f and "a fake implements the contract it doubles" in f for f in findings)
     assert any(
         "test_junk" in f and "a test module holds only imports, tests, helpers, and fakes" in f
         for f in findings
@@ -6970,3 +6971,41 @@ def test_a_ports_module_and_an_init_need_no_sibling_test() -> None:
     assert not any(
         "app.domain has no sibling test file" in f for f in findings
     )
+
+
+def test_the_lifecycle_contract_is_fakeable_but_never_a_production_base() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "app/wiring/wire.py",
+                "app.wiring.wire",
+                "import tesser.context as ts\n"
+                "from tesser.lifecycle import Closeable\n"
+                "class Sneaky(Closeable):\n"
+                "    def close(self) -> None:\n"
+                "        return None\n",
+                False,
+            ),
+            (
+                "app/wiring/test_wire.py",
+                "app.wiring.test_wire",
+                "import tesser.testing as ts\n"
+                "from tesser.lifecycle import Closeable\n"
+                "@ts.fake\n"
+                "class FakeCloseable(Closeable):\n"
+                "    def close(self) -> None:\n"
+                "        return None\n"
+                "def test_wire_closes() -> None:\n"
+                "    FakeCloseable().close()\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "app.wiring.wire.Sneaky declares the lifecycle contract as a base; production "
+        "satisfies Closeable structurally — only a test fake declares it" in f
+        for f in findings
+    )
+    assert not any("FakeCloseable" in f for f in findings)

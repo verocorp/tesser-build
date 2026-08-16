@@ -18,8 +18,15 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 
 ## Norm-module wave followups (2026-08-15, PRs #84-#86, Chris flag)
 
-- [ ] **Revisit the `("tesser.lifecycle", "Closeable") → "port"` kind-table
-  entry** (checks.py `TESSER_BASE_BLOCKS`, added in PR #86). Chris flagged it
+- [x] **Revisit the `("tesser.lifecycle", "Closeable") → "port"` kind-table
+  entry** — RESOLVED 2026-08-16 by maintainer ruling: a port is for the
+  application; Closeable is not a port, it is the lifecycle contract, its
+  own kind. The runtime dropped the `ts.Port` base (Closeable is a plain
+  Protocol), the kind table carries `"closeable"` as a distinct block, a
+  fake may double it (TB072), and a production class declaring it as a base
+  is a finding — production satisfies Closeable structurally. The runtime
+  suite pins `Port not in Closeable.__mro__`; the kind-table meta test pins
+  that closeable has no KIND_ROLE home. Original flag, kept for the record: (checks.py `TESSER_BASE_BLOCKS`, added in PR #86). Chris flagged it
   as a smell on two axes, to be revisited once the one-test-file workstream
   completes: (1) the design — hand-adding a runtime class to the analyzer's
   kind table is a second source of truth for what tesser-py exports mean, and

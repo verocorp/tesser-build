@@ -10,7 +10,7 @@ import tesser.domain as ts
 TESSER_BASE_BLOCKS: Final[dict[tuple[str, str], str]] = {
     ("tesser.application", "ApplicationService"): "service",
     ("tesser.application", "Port"): "port",
-    ("tesser.lifecycle", "Closeable"): "port",
+    ("tesser.lifecycle", "Closeable"): "closeable",
     ("tesser.application", "Request"): "port_request",
     ("tesser.application", "Response"): "port_response",
     ("tesser.context", "Request"): "request",
@@ -109,6 +109,7 @@ KIND_NAME: Final[dict[str, str]] = {
     "protocol_rejection": "a protocol rejection",
     "protocol_request": "a protocol request record",
     "protocol_response": "a protocol response record",
+    "closeable": "the lifecycle contract",
 }
 
 SRV_KINDS: Final[frozenset[str]] = frozenset(
@@ -3420,6 +3421,16 @@ class Codebase(ts.AggregateRoot):
                             "a host lives in srv and a protocol kind in a protocol module, never a context",
                         )
                     )
+                elif block == "closeable":
+                    found.append(
+                        Violation(
+                            module.path(),
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} declares the lifecycle contract as a base; production "
+                            "satisfies Closeable structurally — only a test fake declares it",
+                        )
+                    )
                 elif KIND_ROLE[block] != role:
                     found.append(
                         Violation(
@@ -4006,7 +4017,7 @@ class Codebase(ts.AggregateRoot):
                         )
                     )
                 elif not any(
-                    blocks.get(key) in ("port", "client", "protocol_port")
+                    blocks.get(key) in ("port", "client", "protocol_port", "closeable")
                     for key in self._base_keys(module, stmt)
                 ):
                     found.append(
@@ -4014,8 +4025,8 @@ class Codebase(ts.AggregateRoot):
                             module.path(),
                             stmt.lineno,
                             "TB072",
-                            f"{where} implements no application port, protocol port, or client; "
-                            "a fake implements the port or client it doubles",
+                            f"{where} implements no application port, protocol port, client, "
+                            "or lifecycle contract; a fake implements the contract it doubles",
                         )
                     )
             else:
