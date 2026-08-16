@@ -64,8 +64,8 @@ def respond(run: Callable[[], HttpResponse]) -> HttpResponse:
 
 @ts.function
 def routes_for(app: App) -> tuple[Route, ...]:
-    campaign = http.Handler(app.campaign)
-    reports = reports_http.Handler(app.reports)
+    campaign = http.Handler(app.campaign.client)
+    reports = reports_http.Handler(app.reports.client)
     return (
         Route("POST", "/campaigns", campaign.create_campaign),
         Route("POST", "/links", campaign.add_link),

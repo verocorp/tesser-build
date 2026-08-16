@@ -23,7 +23,7 @@ _USAGE: Final[str] = (
 
 @ts.function
 def commands_for(app: App) -> dict[str, Command]:
-    campaign = cli.Handler(app.campaign)
+    campaign = cli.Handler(app.campaign.client)
     return {
         "create-campaign": campaign.create_campaign,
         "add-link": campaign.add_link,
