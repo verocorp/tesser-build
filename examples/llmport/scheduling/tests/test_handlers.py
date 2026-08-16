@@ -1,9 +1,9 @@
 import pytest
 import tesser.testing as ts
 
-import scheduling.adapters.directory_memory as directory_memory
-import scheduling.adapters.handlers as handlers
-import scheduling.adapters.repo_memory as repo_memory
+import scheduling.adapters.gateways.directory_memory as directory_memory
+import scheduling.adapters.handlers.handlers as handlers
+import scheduling.adapters.repositories.repo_memory as repo_memory
 import scheduling.application.service as application
 import scheduling.client.client as client
 import scheduling.domain.scheduling as domain

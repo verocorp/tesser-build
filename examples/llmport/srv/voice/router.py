@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tesser.srv as ts
 
-import scheduling.adapters.handlers as handlers
+import scheduling.adapters.handlers.handlers as handlers
 import protocol.voice as voice
 
 

@@ -5,6 +5,31 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.47.0] - 2026-08-16
+
+First pairing wave: serdepy, ports, and llmport reach
+one-implementation-file-one-test-file ahead of the rule that will demand it.
+
+### Changed
+- **Every implementation module in the three trees has exactly one sibling
+  test file named for it.** serdepy's four subjectless domain test files
+  merge into `test_parcel.py`; llmport's `test_domain`/`test_application`
+  rename to `test_scheduling`/`test_service`; ports gains six new sibling
+  files, llmport seven. 97 new or moved tests (serdepy 46→55, ports 5→49
+  collected, llmport 50→114), all behavioral, at the tier their placement
+  carries.
+- **The last two flat `adapters/` directories move to kind packages.**
+  TB070 gives a sibling test no tier in an unkinded `adapters/`, so
+  serdepy's `wire.py` and llmport's three adapters relocate into
+  `gateways/`/`repositories/`/`handlers/` — the same shape the layout
+  ruling already prescribed and every other tree already had.
+- llmport's pytest `testpaths` widens to `protocol`/`scheduling`/`srv`
+  (two new test files were outside the old collection path), and its verify
+  mypy line gains `srv/voice/test_router.py`.
+
+Named for the rule PR: llmport's `srv/voice/agent.py` (imports livekit,
+outside the mypy crawl — no test can import it) needs an exemption ruling.
+
 ## [0.0.46.0] - 2026-08-16
 
 ### Changed

@@ -65,7 +65,7 @@ run_llmport() {
   step "tessercheck (zero findings over the whole tree)"
   tessercheck_tree "$PWD" || return 1
   step "mypy --strict"
-  MYPYPATH=.:../../tesser-py mypy --strict scheduling protocol srv/voice/router.py conftest.py || return 1
+  MYPYPATH=.:../../tesser-py mypy --strict scheduling protocol srv/voice/router.py srv/voice/test_router.py conftest.py || return 1
   step "pytest"
   pytest -q || return 1
 }

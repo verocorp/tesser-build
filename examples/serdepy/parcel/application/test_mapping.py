@@ -11,13 +11,13 @@ import parcel.application.ports.parcel_wire as parcel_wire
 import parcel.domain.parcel as parcel
 
 @ts.helper
-def _spec() -> parcel.ParcelSpec:
+def _spec(items: int = 3, declared_value: str = "199.99") -> parcel.ParcelSpec:
     return parcel.ParcelSpec(
         code="PKG-2026-0042",
-        items=3,
+        items=items,
         weight_kg=21.5,
         label_digest=bytes(range(32)),
-        declared_value="199.99",
+        declared_value=declared_value,
         scanned_at="2026-07-20T10:16:15.123456-05:00",
     )
 
@@ -31,6 +31,23 @@ def test_mapping_carries_typed_canonical_leaves_and_derived_fields() -> None:
     assert record.declared_value == "199.99"
     assert record.scanned_at == "2026-07-20T15:16:15.123456+00:00"
     assert record.weight_class is parcel_wire.WeightClass.HEAVY
+
+
+def test_records_from_equal_parcels_render_identically() -> None:
+    a = mapping.parcel_record(parcel.Parcel(_spec()))
+    b = mapping.parcel_record(parcel.Parcel(_spec()))
+    assert (a.code, a.items, a.weight_kg, a.weight_class) == (b.code, b.items, b.weight_kg, b.weight_class)
+    assert (a.label_digest, a.declared_value, a.scanned_at) == (
+        b.label_digest,
+        b.declared_value,
+        b.scanned_at,
+    )
+
+
+def test_record_carries_a_changed_leaf_through_the_mapping() -> None:
+    record = mapping.parcel_record(parcel.Parcel(_spec(items=7, declared_value="0.01")))
+    assert record.items == 7
+    assert record.declared_value == "0.01"
 
 
 def test_record_diverges_from_spec_by_construction() -> None:
