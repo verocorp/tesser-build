@@ -5,6 +5,21 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.49.0] - 2026-08-16
+
+Third and largest pairing wave: python-app reaches
+one-implementation-file-one-test-file — 28 new sibling test files, 356 new
+tests (137→509).
+
+### Changed
+- **Every implementation module in python-app has exactly one sibling test
+  file.** campaign folds `test_roundtrip_law.py` into the leaf files whose
+  laws it held; linkpolicy, reports, and the app shell gain their isolated
+  tiers. `srv/http/main.py` is tested as a subprocess — env access and a
+  real blocking server put it beyond in-process reach, and the subprocess
+  is the honest door. Zero suppressions added anywhere; TB073 refused
+  helpers wherever no `ts.Spec` existed to return.
+
 ## [0.0.48.0] - 2026-08-16
 
 Second pairing wave: errorspy, layout, and tessercheck-py reach
