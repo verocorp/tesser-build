@@ -969,7 +969,7 @@ class Codebase(ts.AggregateRoot):
             found.extend(self._module_violations(module, blocks, contexts))
             if self._export == TESSER and self._locate(
                 module.name(), module.is_package(), contexts, self._export
-            ) in ("test", "eval", "conftest", "conftest-root"):
+            ) == "test":
                 continue
             for cls in module.class_defs():
                 block = blocks.get((module.name(), cls.name))
@@ -3976,20 +3976,19 @@ class Codebase(ts.AggregateRoot):
         for edge in module.import_edges():
             if str(edge._target).split(".")[0] in contexts:
                 found.extend(self._form_violations(module, edge))
-        if self._export == TESSER:
-            return tuple(found)
-        found.extend(
-            self._tesser_import_violations(
-                module,
-                "test",
-                "tesser.testing",
-                "a test module's tesser imports are tesser.testing, "
-                "tesser.errors, tesser.lifecycle, and tesser.serialization",
-                "a test module imports tesser.testing at most once, as ts",
-                None,
-                NORM_IMPORTS["test"],
+        if self._export != TESSER:
+            found.extend(
+                self._tesser_import_violations(
+                    module,
+                    "test",
+                    "tesser.testing",
+                    "a test module's tesser imports are tesser.testing, "
+                    "tesser.errors, tesser.lifecycle, and tesser.serialization",
+                    "a test module imports tesser.testing at most once, as ts",
+                    None,
+                    NORM_IMPORTS["test"],
+                )
             )
-        )
         for stmt in module.body():
             if isinstance(stmt, (ast.Import, ast.ImportFrom)):
                 continue
@@ -4010,6 +4009,8 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
             elif isinstance(stmt, ast.ClassDef):
+                if self._export == TESSER:
+                    continue
                 where = f"{module.name()}.{stmt.name}"
                 if not self._declared(module, stmt, "fake"):
                     found.append(

@@ -177,9 +177,17 @@ modules are governed by **shells rows** instead of domain-content rows:
   narrow typing stdlib (`__future__`, `typing`, `collections.abc`) — the
   bar the shells impose is the bar they meet, with room to spare (verified:
   that list is their entire external surface today).
-- **Tests invert the consumer rule**: this tree's tests may import any
-  `tesser.*`, because the shells are their subject — the mirror image of
-  consumer tests, which may touch only `tesser.testing`.
+- **Tests invert exactly two consumer rules, and keep the rest**: this
+  tree's tests may import any `tesser.*` (the shells are their subject —
+  the mirror image of consumer tests, which may touch only
+  `tesser.testing`), and their module-level classes are free (probe
+  subclasses of the shells are the tests' method, not test doubles).
+  Function totality still applies — every module-level function is a test
+  or a declared helper — as do the comments norm, the mock-library ban,
+  and placement. The mutmut ecosystem harness is subprocess
+  infrastructure that cannot meet the helper shape, so it is skipped by
+  declaration (`skip ecosystem`), visibly, with its rationale in that
+  directory's README.
 
 This is the entire remaining specialness of tesser-py, and it lives in the
 analyzer — the same file that already names `tesser` in every import row —

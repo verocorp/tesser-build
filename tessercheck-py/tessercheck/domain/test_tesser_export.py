@@ -48,6 +48,7 @@ def test_a_tesser_init_only_reexports_from_the_distribution() -> None:
                     "tesser/testing/__init__.py",
                     "tesser.testing",
                     "from tesser.declared import fake as fake\n"
+                    "from . import declared as declared\n"
                     "import subprocess\n"
                     "X = 1\n",
                     True,
@@ -67,6 +68,7 @@ def test_a_tesser_init_only_reexports_from_the_distribution() -> None:
         for f in findings
     ), findings
     assert not any("imports tesser.declared" in f for f in findings), findings
+    assert not any("tesser.testing.declared" in f for f in findings), findings
 
 
 def test_the_distribution_holds_only_consumer_namespaces() -> None:
@@ -111,7 +113,7 @@ def test_a_shell_module_stays_on_the_shell_stdlib() -> None:
     assert not any("imports tesser.domain" in f for f in findings), findings
 
 
-def test_the_shells_tests_are_inverted() -> None:
+def test_the_shells_tests_probe_freely_with_any_tesser_import() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in checks.Codebase(_spec(
@@ -123,8 +125,6 @@ def test_the_shells_tests_are_inverted() -> None:
                     "import tesser.domain\n"
                     "class Probe(tesser.domain.ValueObject):\n"
                     "    pass\n"
-                    "def helper() -> int:\n"
-                    "    return 1\n"
                     "def test_probe() -> None:\n"
                     "    assert Probe() == Probe()\n",
                     False,
@@ -133,3 +133,33 @@ def test_the_shells_tests_are_inverted() -> None:
         )).violations()
     )
     assert findings == (), findings
+
+
+def test_the_shells_tests_keep_function_totality() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(
+            sources=(
+                (
+                    "tests/test_shells.py",
+                    "tests.test_shells",
+                    "import tesser.domain\n"
+                    "def helper() -> int:\n"
+                    "    return 1\n"
+                    "print('loose')\n"
+                    "def test_ok() -> None:\n"
+                    "    assert True\n",
+                    False,
+                ),
+            ),
+        )).violations()
+    )
+    assert any(
+        "is neither a test nor a declared helper; a test module holds "
+        "tests, @ts.helper builders, and @ts.fake doubles" in f
+        for f in findings
+    ), findings
+    assert any(
+        "a test module holds only imports, tests, helpers, and fakes" in f
+        for f in findings
+    ), findings

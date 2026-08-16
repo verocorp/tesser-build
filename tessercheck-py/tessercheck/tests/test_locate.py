@@ -29,6 +29,7 @@ def test_every_place_is_earned_by_a_checked_tree_or_is_a_finding() -> None:
     reader = source_repository.FilesystemSourceReader()
     exercised: set[str] = set()
     checked_trees = 0
+    exporting_trees = 0
     for key, kind in sorted(manifest.items()):
         if kind != "app" or not (repo / key / ".tesser-root").is_file():
             continue
@@ -38,6 +39,8 @@ def test_every_place_is_earned_by_a_checked_tree_or_is_a_finding() -> None:
             (s.name, s.form is source_reader.ModuleForm.PACKAGE) for s in read.sources
         ]
         export = read.exports[0] if len(read.exports) == 1 else None
+        if export is not None:
+            exporting_trees += 1
         tree_contexts = frozenset(
             name.split(".")[0]
             for name, _ in names
@@ -53,6 +56,10 @@ def test_every_place_is_earned_by_a_checked_tree_or_is_a_finding() -> None:
     assert checked_trees >= 2, (
         f"only {checked_trees} checked trees found from {repo / 'manifest.json'}; "
         "this test must run from the tesser-build repo checkout"
+    )
+    assert exporting_trees >= 1, (
+        "no checked tree declares an export; the export branch of _locate is "
+        "reachable only from such a tree, so without one it is unearned"
     )
     tokens = conftest.returned_tokens(conftest.function_tree(checks.Codebase._locate))
     unearned = tokens - exercised - finding_places
