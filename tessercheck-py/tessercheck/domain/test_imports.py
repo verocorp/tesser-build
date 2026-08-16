@@ -1243,7 +1243,7 @@ def test_a_vendored_tesser_package_is_not_the_tree() -> None:
     )
 
 
-def test_a_root_module_is_a_leaf() -> None:
+def test_a_root_module_is_homeless() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
@@ -1255,13 +1255,11 @@ def test_a_root_module_is_a_leaf() -> None:
             ),
         ))).violations()
                )
-    assert any("helpers belongs to no governed package" in f for f in findings)
     assert any(
-        "helpers imports app.domain.thing; "
-        "a root module is a leaf that imports nothing from its tree" in f
+        "helpers belongs to no governed package; every module belongs to a "
+        "context, a kernel, srv, bootstrap, tests, or the protocol package" in f
         for f in findings
     )
-    assert not any("helpers imports enum" in f for f in findings)
 
 
 def test_a_root_conftest_is_a_leaf() -> None:

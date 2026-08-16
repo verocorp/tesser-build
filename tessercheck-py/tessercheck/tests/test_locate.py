@@ -9,6 +9,7 @@ import tessercheck.tests.conftest as conftest
 
 def test_every_place_is_earned_by_a_checked_tree_or_is_a_finding() -> None:
     finding_rows = (
+        ("homeless", False, "root"),
         ("app.stray", False, "context-stray"),
         ("app.tests.util", False, "context-tests-stray"),
         ("app.application.ports.test_x", False, "ports-stray"),

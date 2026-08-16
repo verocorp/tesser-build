@@ -18,6 +18,10 @@ class FakeCheckClient(client.Client):
         self.roots.append(request.root)
         return client.CheckResponse(findings=self.findings)
 
+    def rulebook(self, request: client.RulebookRequest) -> client.RulebookResponse:
+        self.roots.append(request.root)
+        return client.RulebookResponse(rendered="| rendered |")
+
 
 def test_the_tree_argument_reaches_the_client() -> None:
     fake = FakeCheckClient()

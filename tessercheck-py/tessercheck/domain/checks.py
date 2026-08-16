@@ -1115,7 +1115,7 @@ class Codebase(ts.AggregateRoot):
         if place == "protocol":
             return self._protocol_module_violations(module, blocks, contexts)
         if place == "root":
-            return self._homeless_violations(module) + self._root_leaf_violations(module)
+            return self._homeless_violations(module)
         if place == "kernel-init":
             return self._kernel_init_violations(module)
         if place == "kernel-file":
@@ -1491,18 +1491,6 @@ class Codebase(ts.AggregateRoot):
                 "TB065",
                 f"{module.name()} imports {target}; "
                 "a conftest is a leaf that imports nothing from its tree",
-            )
-            for target, lineno in self._tree_edges(module)
-        )
-
-    def _root_leaf_violations(self, module: Module) -> tuple[Violation, ...]:
-        return tuple(
-            Violation(
-                module.path(),
-                lineno,
-                "TB065",
-                f"{module.name()} imports {target}; "
-                "a root module is a leaf that imports nothing from its tree",
             )
             for target, lineno in self._tree_edges(module)
         )

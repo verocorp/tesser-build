@@ -1,16 +1,14 @@
-import ast  # tessercheck:ignore-file TB040
+from __future__ import annotations
+
+import ast
 import re
-import sys
-from pathlib import Path
+from typing import Final
 
-ROOT = Path(__file__).parent
-DOMAIN = ROOT / "tessercheck" / "domain" / "checks.py"
-TESTS = ROOT / "tessercheck" / "tests" / "test_checks.py"
-SIBLING_TESTS = sorted((ROOT / "tessercheck" / "domain").glob("test_*.py"))
-CONTRACTS = ROOT / ".importlinter"
-OUTPUT = ROOT / "RULES.md"
+import tesser.domain as ts
 
-HOLE_NAMES: dict[str, str] = {
+import tessercheck.domain.checks as checks
+
+HOLE_NAMES: Final[dict[str, str]] = {
     "where": "⟨module.Class.method⟩",
     "module.name()": "⟨module⟩",
     "cls.name": "⟨class⟩",
@@ -48,7 +46,7 @@ HOLE_NAMES: dict[str, str] = {
     "named": "⟨types⟩",
 }
 
-APPLIES_TO: dict[str, str] = {
+APPLIES_TO: Final[dict[str, str]] = {
     "Codebase.__init__": "checked source file",
     "Codebase.violations": "ignore comment",
     "Codebase._declaration_violations": "the checked tree itself",
@@ -102,7 +100,6 @@ APPLIES_TO: dict[str, str] = {
     "Codebase._context_tests_init_violations": "context tests `__init__`",
     "Codebase._homeless_violations": "top-level module",
     "Codebase._conftest_leaf_violations": "conftest module",
-    "Codebase._root_leaf_violations": "root module",
     "Codebase._shell_reach_violations": "test module, by where it is placed",
     "Codebase._tests_package_violations": "tests package module",
     "Codebase._role_init_violations": "role package `__init__`",
@@ -127,26 +124,53 @@ APPLIES_TO: dict[str, str] = {
     "Codebase._dto_violations": "request/response DTO",
 }
 
-WHERE_PREFIX = re.compile(r"^(?:⟨[^⟩]+⟩[.:]*)+\s*")
+WHERE_PREFIX: Final[re.Pattern[str]] = re.compile(r"^(?:⟨[^⟩]+⟩[.:]*)+\s*")
 
 
-class RuleRow:
+class RuleRow(ts.ValueObject):
 
-    def __init__(self, clause: str, code: str, applies_to: str) -> None:
-        self.clause = clause
-        self.code = code
-        self.applies_to = applies_to
-        self.shapes: list[str] = []
-        self.linenos: list[int] = []
+    _clause: checks.Text
+    _code: checks.Code
+    _applies_to: checks.Text
+    _shapes: tuple[checks.Text, ...]
+    _linenos: tuple[checks.Line, ...]
 
-    def add(self, shape: str, lineno: int) -> None:
-        if shape not in self.shapes:
-            self.shapes.append(shape)
-        if lineno not in self.linenos:
-            self.linenos.append(lineno)
+    def __init__(
+        self,
+        clause: str,
+        code: str,
+        applies_to: str,
+        shapes: tuple[str, ...],
+        linenos: tuple[int, ...],
+    ) -> None:
+        object.__setattr__(self, "_clause", checks.Text(clause))
+        object.__setattr__(self, "_code", checks.Code(code))
+        object.__setattr__(self, "_applies_to", checks.Text(applies_to))
+        object.__setattr__(
+            self, "_shapes", tuple(checks.Text(shape) for shape in shapes)
+        )
+        object.__setattr__(
+            self, "_linenos", tuple(checks.Line(line) for line in linenos)
+        )
+
+    def clause(self) -> checks.Text:
+        return self._clause
+
+    def code(self) -> checks.Code:
+        return self._code
+
+    def applies_to(self) -> checks.Text:
+        return self._applies_to
+
+    def shapes(self) -> tuple[checks.Text, ...]:
+        return self._shapes
+
+    def linenos(self) -> tuple[checks.Line, ...]:
+        return self._linenos
 
 
-def ts_name_map(tree: ast.Module) -> dict[str, str]:
+@ts.function
+def _ts_name_map(tree: ast.Module) -> dict[str, str]:
     for node in tree.body:
         if (
             isinstance(node, ast.AnnAssign)
@@ -167,7 +191,10 @@ def ts_name_map(tree: ast.Module) -> dict[str, str]:
     raise RuntimeError("TS_NAME_BY_BLOCK not found in checks.py")
 
 
-def instantiations(tree: ast.Module, method: ast.FunctionDef) -> list[dict[str, str | None]]:
+@ts.function
+def _instantiations(
+    tree: ast.Module, method: ast.FunctionDef
+) -> list[dict[str, str | None]]:
     params = [arg.arg for arg in method.args.args if arg.arg != "self"]
     found: list[dict[str, str | None]] = []
     for node in ast.walk(tree):
@@ -180,14 +207,17 @@ def instantiations(tree: ast.Module, method: ast.FunctionDef) -> list[dict[str, 
         ):
             binding: dict[str, str | None] = {}
             for name, arg in zip(params, node.args):
-                if isinstance(arg, ast.Constant) and (arg.value is None or isinstance(arg.value, str)):
+                if isinstance(arg, ast.Constant) and (
+                    arg.value is None or isinstance(arg.value, str)
+                ):
                     binding[name] = arg.value
             if binding not in found:
                 found.append(binding)
     return found or [{}]
 
 
-def local_aliases(method: ast.FunctionDef) -> dict[str, str]:
+@ts.function
+def _local_aliases(method: ast.FunctionDef) -> dict[str, str]:
     out: dict[str, str] = {}
     for node in method.body:
         if (
@@ -203,7 +233,8 @@ def local_aliases(method: ast.FunctionDef) -> dict[str, str]:
     return out
 
 
-def fill_hole(
+@ts.function
+def _fill_hole(
     expr: ast.expr,
     binding: dict[str, str | None],
     aliases: dict[str, str],
@@ -237,10 +268,13 @@ def fill_hole(
         if block is None:
             return None
         return ts_map[block]
-    raise RuntimeError(f"checks.py:{lineno}: no reader name for message hole {{{text}}}; extend HOLE_NAMES")
+    raise RuntimeError(
+        f"checks.py:{lineno}: no reader name for message hole {{{text}}}; extend HOLE_NAMES"
+    )
 
 
-def render_message(
+@ts.function
+def _render_message(
     node: ast.expr,
     binding: dict[str, str | None],
     aliases: dict[str, str],
@@ -248,23 +282,26 @@ def render_message(
     lineno: int,
 ) -> str | None:
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return node.value
+        return str(node.value)
     if not isinstance(node, ast.JoinedStr):
-        raise RuntimeError(f"checks.py:{lineno}: violation message is not a literal or f-string")
+        raise RuntimeError(
+            f"checks.py:{lineno}: violation message is not a literal or f-string"
+        )
     parts: list[str] = []
     for value in node.values:
         if isinstance(value, ast.Constant) and isinstance(value.value, str):
             parts.append(value.value)
             continue
         assert isinstance(value, ast.FormattedValue)
-        filled = fill_hole(value.value, binding, aliases, ts_map, lineno)
+        filled = _fill_hole(value.value, binding, aliases, ts_map, lineno)
         if filled is None:
             return None
         parts.append(filled)
     return "".join(parts)
 
 
-def protocol_package(tree: ast.Module) -> str:
+@ts.function
+def _protocol_package(tree: ast.Module) -> str:
     for node in tree.body:
         if (
             isinstance(node, ast.AnnAssign)
@@ -273,13 +310,18 @@ def protocol_package(tree: ast.Module) -> str:
             and isinstance(node.value, ast.Constant)
             and isinstance(node.value.value, str)
         ):
-            return node.value.value
+            return str(node.value.value)
     raise RuntimeError("PROTOCOL_PACKAGE not found in checks.py")
 
 
-def rule_rows(tree: ast.Module) -> list[RuleRow]:
-    ts_map = ts_name_map(tree)
-    rows: dict[str, RuleRow] = {}
+@ts.function
+def rule_rows(tree: ast.Module) -> tuple[RuleRow, ...]:
+    ts_map = _ts_name_map(tree)
+    order: list[str] = []
+    codes: dict[str, str] = {}
+    applies: dict[str, str] = {}
+    shapes: dict[str, list[str]] = {}
+    linenos: dict[str, list[int]] = {}
     for cls in (n for n in tree.body if isinstance(n, ast.ClassDef)):
         for method in (n for n in cls.body if isinstance(n, ast.FunctionDef)):
             calls = [
@@ -291,8 +333,8 @@ def rule_rows(tree: ast.Module) -> list[RuleRow]:
             ]
             if not calls:
                 continue
-            aliases = local_aliases(method)
-            for binding in instantiations(tree, method):
+            aliases = _local_aliases(method)
+            for binding in _instantiations(tree, method):
                 for call in calls:
                     if call.keywords or len(call.args) != 4:
                         raise RuntimeError(
@@ -300,7 +342,9 @@ def rule_rows(tree: ast.Module) -> list[RuleRow]:
                             "positional arguments (path, line, code, message)"
                         )
                     code_expr = call.args[2]
-                    if isinstance(code_expr, ast.Constant) and isinstance(code_expr.value, str):
+                    if isinstance(code_expr, ast.Constant) and isinstance(
+                        code_expr.value, str
+                    ):
                         code: str | None = code_expr.value
                     elif isinstance(code_expr, ast.Name) and code_expr.id in binding:
                         code = binding[code_expr.id]
@@ -311,7 +355,9 @@ def rule_rows(tree: ast.Module) -> list[RuleRow]:
                         )
                     if code is None:
                         continue
-                    message = render_message(call.args[3], binding, aliases, ts_map, call.lineno)
+                    message = _render_message(
+                        call.args[3], binding, aliases, ts_map, call.lineno
+                    )
                     if message is None:
                         continue
                     if "; " not in message:
@@ -325,23 +371,49 @@ def rule_rows(tree: ast.Module) -> list[RuleRow]:
                         )
                     shape = WHERE_PREFIX.sub("", head)
                     subject = binding.get("subject")
-                    key = subject if isinstance(subject, str) else f"{cls.name}.{method.name}"
+                    key = (
+                        subject
+                        if isinstance(subject, str)
+                        else f"{cls.name}.{method.name}"
+                    )
                     if key not in APPLIES_TO:
-                        raise RuntimeError(f"no APPLIES_TO entry for {key!r}; extend the map")
-                    row = rows.setdefault(clause, RuleRow(clause, code, APPLIES_TO[key]))
-                    if row.code != code:
+                        raise RuntimeError(
+                            f"no APPLIES_TO entry for {key!r}; extend the map"
+                        )
+                    if clause not in codes:
+                        order.append(clause)
+                        codes[clause] = code
+                        applies[clause] = APPLIES_TO[key]
+                        shapes[clause] = []
+                        linenos[clause] = []
+                    if codes[clause] != code:
                         raise RuntimeError(
                             f"checks.py:{call.lineno}: clause {clause!r} carries code {code}, "
-                            f"but an earlier site carries {row.code}; one clause has one code"
+                            f"but an earlier site carries {codes[clause]}; one clause has one code"
                         )
-                    row.add(shape, call.lineno)
-    return list(rows.values())
+                    if shape not in shapes[clause]:
+                        shapes[clause].append(shape)
+                    if call.lineno not in linenos[clause]:
+                        linenos[clause].append(call.lineno)
+    return tuple(
+        RuleRow(
+            clause,
+            codes[clause],
+            applies[clause],
+            tuple(shapes[clause]),
+            tuple(linenos[clause]),
+        )
+        for clause in order
+    )
 
 
-def test_assertions() -> dict[str, list[str]]:
-    out: dict[str, list[str]] = {}
-    for path in [TESTS, *SIBLING_TESTS]:
-        tree = ast.parse(path.read_text())
+@ts.function
+def test_assertions(
+    modules: tuple[tuple[str, str], ...] = (),
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    out: list[tuple[str, tuple[str, ...]]] = []
+    for _, text in modules:
+        tree = ast.parse(text)
         for fn in tree.body:
             if not isinstance(fn, ast.FunctionDef) or not fn.name.startswith("test_"):
                 continue
@@ -349,20 +421,32 @@ def test_assertions() -> dict[str, list[str]]:
             for node in ast.walk(fn):
                 if isinstance(node, ast.Assert):
                     for sub in ast.walk(node):
-                        if isinstance(sub, ast.Constant) and isinstance(sub.value, str) and len(sub.value) >= 8:
+                        if (
+                            isinstance(sub, ast.Constant)
+                            and isinstance(sub.value, str)
+                            and len(sub.value) >= 8
+                        ):
                             literals.append(sub.value)
-            out[fn.name] = literals
-    return out
+            out.append((fn.name, tuple(literals)))
+    return tuple(out)
 
 
-def covering_tests(clause: str, assertions: dict[str, list[str]]) -> list[str]:
-    return [name for name, literals in assertions.items() if any(clause in literal for literal in literals)]
+@ts.function
+def covering_tests(
+    clause: str, assertions: tuple[tuple[str, tuple[str, ...]], ...] = ()
+) -> tuple[str, ...]:
+    return tuple(
+        name
+        for name, literals in assertions
+        if any(clause in literal for literal in literals)
+    )
 
 
-def contracts() -> list[tuple[str, str]]:
+@ts.function
+def contracts(text: str) -> tuple[tuple[str, str], ...]:
     found: list[tuple[str, str]] = []
     contract_id = None
-    for line in CONTRACTS.read_text().splitlines():
+    for line in text.splitlines():
         header = re.match(r"\[importlinter:contract:(.+)\]", line.strip())
         if header:
             contract_id = header.group(1)
@@ -371,18 +455,24 @@ def contracts() -> list[tuple[str, str]]:
         if name and contract_id is not None:
             found.append((contract_id, name.group(1)))
             contract_id = None
-    return found
+    return tuple(found)
 
 
-def render() -> str:
-    tree = ast.parse(DOMAIN.read_text())
-    assertions = test_assertions()
+@ts.function
+def render(
+    checks_text: str,
+    test_modules: tuple[tuple[str, str], ...] = (),
+    contracts_text: str = "",
+) -> str:
+    tree = ast.parse(checks_text)
+    assertions = test_assertions(test_modules)
     lines = [
         "# Rules implemented in the spike",
         "",
-        "Generated from the implementation by `rules.py` — never hand-edit.",
-        "`python3 rules.py --check` fails when this file drifts from the code.",
-        "One row per rule: the normative clause every violation message ends",
+        "Generated from the implementation by the rulebook — never hand-edit.",
+        "`python3 -m srv.cli.rules --check` fails when this file drifts from the",
+        "code; regenerate with `python3 -m srv.cli.rules`. One row per rule: the",
+        "normative clause every violation message ends",
         "with. ⟨…⟩ marks a value filled in per violation. Fixture coverage is",
         "exact: a test covers a rule when an assert literal contains the clause.",
         "",
@@ -392,14 +482,16 @@ def render() -> str:
         "|---|---|---|---|---|---|",
     ]
     for row in rule_rows(tree):
-        covered = covering_tests(row.clause, assertions)
+        covered = covering_tests(str(row.clause()), assertions)
         coverage = ", ".join(covered) if covered else "NONE"
-        shapes = " · ".join(row.shapes).replace("|", "\\|")
-        source = "domain/checks.py:" + ",".join(str(n) for n in sorted(row.linenos))
-        lines.append(
-            f"| {row.code} | {row.clause} | {row.applies_to} | {shapes} | {source} | {coverage} |"
+        shapes = " · ".join(str(shape) for shape in row.shapes()).replace("|", "\\|")
+        source = "domain/checks.py:" + ",".join(
+            str(int(line)) for line in sorted(row.linenos(), key=int)
         )
-    package = protocol_package(tree)
+        lines.append(
+            f"| {row.code()} | {row.clause()} | {row.applies_to()} | {shapes} | {source} | {coverage} |"
+        )
+    package = _protocol_package(tree)
     lines += [
         "",
         "## Named exemptions (carve-outs the code makes on purpose, not rules)",
@@ -418,7 +510,7 @@ def render() -> str:
         "| Contract | Rule |",
         "|---|---|",
     ]
-    for contract_id, name in contracts():
+    for contract_id, name in contracts(contracts_text):
         lines.append(f"| {contract_id} | {name} |")
     lines += [
         "",
@@ -428,20 +520,3 @@ def render() -> str:
         "",
     ]
     return "\n".join(lines)
-
-
-def main() -> int:
-    rendered = render()
-    if "--check" in sys.argv:
-        if not OUTPUT.exists() or OUTPUT.read_text() != rendered:
-            print("RULES.md is stale; regenerate with: python3 rules.py")
-            return 1
-        print("RULES.md is current")
-        return 0
-    OUTPUT.write_text(rendered)
-    print(f"wrote {OUTPUT}")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
