@@ -5,6 +5,37 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.60.0] - 2026-08-17
+
+The directory names catch up with the kinds. `wiring/` becomes `component/` and
+`bootstrap/` becomes `app/`, in every tree and in the rules that read them.
+
+### Changed
+- **`<context>/wiring/` → `<context>/component/`,** and `wire.py` →
+  `component.py`. The role held a `build()` that wired things together; it now
+  holds a component that owns infrastructure. `ROLES`, `KIND_ROLE`,
+  `ROLE_TESSER_PACKAGE`, `NORM_IMPORTS`, `SAME_CONTEXT_IMPORTS`,
+  `TEST_TIER_HOME`, and the import matrix follow.
+- **`bootstrap/` → `app/`,** with `APP_PACKAGES` and the placement `shell-app`.
+  Every clause that named the old directory is reworded: "an app module's tesser
+  imports are…", "an app function declares itself with @ts.load", "only an app,
+  an app loader, an app config, an app config spec, and a config repository live
+  in an app module".
+- **`skills/tesser-build/wiring.md` → `component.md`, `bootstrap.md` →
+  `app.md`,** with every cross-reference and the roadmap registry rows.
+
+### Added
+- **`app` joins the reserved tree-root names.** A bounded context can no longer
+  be called `app`, the way one already cannot be called `srv`, `tests`,
+  `protocol`, or `kernel`. This surfaced through the analyzer's own fixtures,
+  whose context was named `app` and began classifying as the shell.
+
+### Fixed
+- **A generated clause read "a app constant is Final".** The template took an
+  article it could not vary, so it is now article-free: "app constants are
+  Final", "kernel constants are Final". Same for the tier label the placement
+  message interpolates, which now reads "a test placed in an app".
+
 ## [0.0.59.0] - 2026-08-17
 
 ### Fixed
