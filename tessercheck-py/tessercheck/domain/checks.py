@@ -4774,17 +4774,15 @@ class Codebase(ts.AggregateRoot):
         self, module: Module, where: str, fn: ast.FunctionDef | ast.AsyncFunctionDef
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        first = fn.body[0].lineno
-        last = fn.body[-1].end_lineno or fn.body[-1].lineno
-        span = last - first + 1
+        span = sum(1 for node in ast.walk(fn) if isinstance(node, ast.stmt)) - 1
         if span > 10:
             found.append(
                 Violation(
                     module.path(),
                     fn.lineno,
                     "TB082",
-                    f"{where} body spans {span} source lines; "
-                    "a service method body is at most 10 source lines",
+                    f"{where} body spans {span} statements; "
+                    "a service method body is at most 10 statements",
                 )
             )
         for node in ast.walk(fn):
