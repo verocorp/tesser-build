@@ -53,10 +53,10 @@ class ListLinksRequest(ts.Request):
 
 class LinkView(ts.Response):
 
-    def __init__(self, slug: str, target_url: str, active: bool) -> None:
+    def __init__(self, slug: str, target_url: str, status: str) -> None:
         self.slug = slug
         self.target_url = target_url
-        self.active = active
+        self.status = status
 
 
 class ListLinksResponse(ts.Response):

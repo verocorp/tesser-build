@@ -59,7 +59,7 @@ def _campaign_body(view: client.CampaignView) -> JSONObject:
         "campaign_id": view.campaign_id,
         "budget": {"amount": view.budget_amount, "currency": view.budget_currency},
         "links": [
-            {"slug": link.slug, "target_url": link.target_url, "active": link.active}
+            {"slug": link.slug, "target_url": link.target_url, "status": link.status}
             for link in view.links
         ],
     }

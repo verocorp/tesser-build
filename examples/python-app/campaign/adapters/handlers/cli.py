@@ -45,5 +45,5 @@ class Handler(ts.Handler):
         view = self._client.deactivate_link(
             client.DeactivateLinkRequest(campaign_id=campaign_id, slug=slug)
         )
-        active = sum(1 for link in view.links if link.active)
+        active = sum(1 for link in view.links if link.status == "active")
         return CliResponse.ok(f"campaign {view.campaign_id} now has {active} active link(s)")

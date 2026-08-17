@@ -26,7 +26,7 @@ def campaign_view(c: campaign.Campaign) -> client.CampaignView:
 @ts.do_not_use_function
 def _domain_link_view(link: short_link.ShortLink) -> client.LinkView:
     return client.LinkView(
-        slug=str(link.slug), target_url=str(link.target_url), active=str(link.status) == "active"
+        slug=str(link.slug), target_url=str(link.target_url), status=str(link.status)
     )
 
 
@@ -35,7 +35,7 @@ def link_view(record: campaign_repository.LinkRecord) -> client.LinkView:
     return client.LinkView(
         slug=record.slug,
         target_url=record.target_url,
-        active=record.status == campaign_repository.LinkStatus.ACTIVE,
+        status=record.status,
     )
 
 
@@ -55,12 +55,9 @@ def _money_record(c: campaign.Campaign) -> campaign_repository.MoneyRecord:
 
 @ts.do_not_use_function
 def _link_record(link: short_link.ShortLink) -> campaign_repository.LinkRecord:
-    status = (
-        campaign_repository.LinkStatus.ACTIVE
-        if str(link.status) == "active"
-        else campaign_repository.LinkStatus.INACTIVE
+    return campaign_repository.LinkRecord(
+        slug=str(link.slug), target_url=str(link.target_url), status=str(link.status)
     )
-    return campaign_repository.LinkRecord(slug=str(link.slug), target_url=str(link.target_url), status=status)
 
 
 @ts.do_not_use_function
@@ -72,7 +69,7 @@ def campaign_spec(record: campaign_repository.CampaignRecord) -> campaign.Campai
             short_link.ShortLinkSpec(
                 slug=link.slug,
                 target_url=link.target_url,
-                active=link.status == campaign_repository.LinkStatus.ACTIVE,
+                active=link.status == "active",
             )
             for link in record.links
         ),
@@ -106,7 +103,7 @@ def resolved_target(found: campaign_repository.FindCampaignResponse, slug: str) 
 @ts.do_not_use_function
 def active_target(record: campaign_repository.CampaignRecord, slug: str) -> str:
     for link in record.links:
-        if link.slug == slug and link.status == campaign_repository.LinkStatus.ACTIVE:
+        if link.slug == slug and link.status == "active":
             return link.target_url
     raise not_found("link_missing", f"no active link for slug {slug!r}")
 

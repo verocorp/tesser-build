@@ -43,8 +43,8 @@ def test_campaign_view_reports_an_active_link_as_active() -> None:
 
     view = views.campaign_view(c)
 
-    assert [(link.slug, link.target_url, link.active) for link in view.links] == [
-        ("promo", "https://ok.example/x", True)
+    assert [(link.slug, link.target_url, link.status) for link in view.links] == [
+        ("promo", "https://ok.example/x", "active")
     ]
 
 
@@ -53,31 +53,31 @@ def test_campaign_view_reports_a_deactivated_link_as_inactive() -> None:
 
     view = views.campaign_view(c)
 
-    assert [link.active for link in view.links] == [False]
+    assert [link.status for link in view.links] == ["inactive"]
 
 
 def test_link_view_reports_an_active_record_as_active() -> None:
     record = campaign_repository.LinkRecord(
         slug="promo",
         target_url="https://ok.example/x",
-        status=campaign_repository.LinkStatus.ACTIVE,
+        status="active",
     )
 
     view = views.link_view(record)
 
     assert view.slug == "promo"
     assert view.target_url == "https://ok.example/x"
-    assert view.active is True
+    assert view.status == "active"
 
 
 def test_link_view_reports_an_inactive_record_as_inactive() -> None:
     record = campaign_repository.LinkRecord(
         slug="promo",
         target_url="https://ok.example/x",
-        status=campaign_repository.LinkStatus.INACTIVE,
+        status="inactive",
     )
 
-    assert views.link_view(record).active is False
+    assert views.link_view(record).status == "inactive"
 
 
 def test_save_request_carries_the_id_and_budget_of_the_aggregate() -> None:
@@ -96,7 +96,7 @@ def test_save_request_records_a_deactivated_link_as_inactive() -> None:
     request = views.save_request(c)
 
     assert [(link.slug, link.status) for link in request.links] == [
-        ("promo", campaign_repository.LinkStatus.INACTIVE)
+        ("promo", "inactive")
     ]
 
 
@@ -105,7 +105,7 @@ def test_save_request_records_an_active_link_as_active() -> None:
 
     request = views.save_request(c)
 
-    assert [link.status for link in request.links] == [campaign_repository.LinkStatus.ACTIVE]
+    assert [link.status for link in request.links] == ["active"]
 
 
 def test_a_saved_campaign_rebuilds_into_the_same_aggregate() -> None:
@@ -187,7 +187,7 @@ def test_active_target_refuses_a_link_that_was_deactivated() -> None:
             campaign_repository.LinkRecord(
                 slug="promo",
                 target_url="https://ok.example/x",
-                status=campaign_repository.LinkStatus.INACTIVE,
+                status="inactive",
             ),
         ),
     )

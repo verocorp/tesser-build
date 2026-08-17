@@ -5,6 +5,49 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.61.0] - 2026-08-17
+
+`create_campaign` stops calling module functions. The translation the service
+used to delegate to `views.py` now lives in **mappers** — classes that take
+whole objects and expose the parts of a DTO, which the service then assembles
+in the open. One method of the worked example is converted; the rules that
+would force the same shape elsewhere are not written yet.
+
+### Added
+- **`ts.Mapper` in `tesser.application`.** A plain marker base, the same shape
+  as `ts.ApplicationService` — no behavior, no `__slots__`, nothing for a
+  subclass to satisfy. The convention it carries: a mapper takes whole objects,
+  derives nothing of its own, and exposes one accessor per field of its target.
+- **`mapper` joins the kind table.** `("tesser.application", "Mapper")` maps to
+  the `mapper` block, `KIND_NAME` reads "a mapper", and `KIND_ROLE` puts its
+  home in `application`, so a mapper in any other role is a TB052 finding —
+  pinned by `test_a_mapper_lives_only_in_the_application_role`.
+- **`CampaignIdentity` — a port for minting a campaign's identity.**
+  `secrets.token_hex(8)` left `campaign.application.service` for a gateway
+  (`SecretsCampaignIdentity`), injected into `CampaignService` and constructed
+  by the campaign component. The service's `# tessercheck:ignore TB062` for
+  `secrets` is deleted with it: the pure-core allowlist candidate resolved by
+  injection, which is what its TODOS entry predicted.
+
+### Changed
+- **`create_campaign` reads as five statements.** A mapper per boundary
+  crossing — `MapToCampaignSpec` (with a nested `MapToMoneySpec`),
+  `MapToSaveCampaignRequest` (with a nested `MapToMoneyRecord`), and
+  `MapToCampaignView` — then the service constructs `CampaignSpec`,
+  `SaveCampaignRequest`, and `CampaignView` itself, naming every field. No
+  `str()` call and no string literal remains in the method.
+- **`LinkView` reports a status string, not an `active` bool.** The bool forced
+  every translator to compare against the literal `"active"`; the string is a
+  pass-through of the domain's `values.LinkStatus`. The HTTP link payload is
+  now `{"slug": ..., "target_url": ..., "status": "active"}`.
+
+### Removed
+- **`campaign_repository.LinkStatus`.** The port enum re-encoded a string as
+  itself: `LinkRecord.status` is a plain `str`, and the branch that mapped
+  domain status to enum collapsed to `str(link.status)`. Lookup-outcome enums
+  (`CampaignLookup`, `SlugAvailability`) are untouched — those encode an answer
+  shape, which this never did.
+
 ## [0.0.60.0] - 2026-08-17
 
 The directory names catch up with the kinds. `wiring/` becomes `component/` and

@@ -9,6 +9,7 @@ import tesser.domain as ts
 
 TESSER_BASE_BLOCKS: Final[dict[tuple[str, str], str]] = {
     ("tesser.application", "ApplicationService"): "service",
+    ("tesser.application", "Mapper"): "mapper",
     ("tesser.application", "Port"): "port",
     ("tesser.application", "Request"): "port_request",
     ("tesser.application", "Response"): "port_response",
@@ -87,6 +88,7 @@ KIND_ROLE: Final[dict[str, str]] = {
     "valueobject": "domain",
     "spec": "domain",
     "service": "application",
+    "mapper": "application",
     "port": PORTS_HOME,
     "port_request": PORTS_HOME,
     "port_response": PORTS_HOME,
@@ -112,6 +114,7 @@ KIND_NAME: Final[dict[str, str]] = {
     "valueobject": "a value object",
     "spec": "a spec",
     "service": "a service",
+    "mapper": "a mapper",
     "port": "a port",
     "port_request": "a port request DTO",
     "port_response": "a port response DTO",

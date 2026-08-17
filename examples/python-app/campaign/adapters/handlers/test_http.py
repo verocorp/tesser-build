@@ -149,7 +149,7 @@ def test_add_link_answers_200_with_the_links_of_the_campaign() -> None:
         "0123456789abcdef",
         "100.00",
         "USD",
-        (campaign_client.LinkView("promo", "https://ok.example/x", True),),
+        (campaign_client.LinkView("promo", "https://ok.example/x", "active"),),
     )
     handler = http.Handler(FakeCampaignClientScripted(view))
 
@@ -167,7 +167,7 @@ def test_add_link_answers_200_with_the_links_of_the_campaign() -> None:
 
     assert resp.status_code == 200
     assert resp.json_body()["links"] == [
-        {"slug": "promo", "target_url": "https://ok.example/x", "active": True}
+        {"slug": "promo", "target_url": "https://ok.example/x", "status": "active"}
     ]
 
 
@@ -213,7 +213,7 @@ def test_deactivate_link_answers_200_with_the_link_reported_inactive() -> None:
         "0123456789abcdef",
         "100.00",
         "USD",
-        (campaign_client.LinkView("promo", "https://ok.example/x", False),),
+        (campaign_client.LinkView("promo", "https://ok.example/x", "inactive"),),
     )
     handler = http.Handler(FakeCampaignClientScripted(view))
 
@@ -225,7 +225,7 @@ def test_deactivate_link_answers_200_with_the_link_reported_inactive() -> None:
 
     assert resp.status_code == 200
     assert resp.json_body()["links"] == [
-        {"slug": "promo", "target_url": "https://ok.example/x", "active": False}
+        {"slug": "promo", "target_url": "https://ok.example/x", "status": "inactive"}
     ]
 
 
