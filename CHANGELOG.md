@@ -11,7 +11,7 @@ The rules catch up with the shells. A component must release, a config must
 construct from a spec, and the lifecycle package retires.
 
 ### Added
-- **TB080: a component releases what it constructed.** `ts.Component` was a
+- **TB081: a component releases what it constructed.** `ts.Component` was a
   marker, so a component with no `close()` was legal — the one thing standing
   between the base and what it was introduced to mean.
 - **TB080: a config constructs from exactly one `ts.Spec`,** at both levels.

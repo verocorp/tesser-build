@@ -1030,15 +1030,9 @@ class Codebase(ts.AggregateRoot):
                 elif block == "component":
                     found.extend(self._component_violations(module, cls))
                 elif block == "component_config":
-                    found.extend(
-                        self._constructor_violations(
-                            module, cls, blocks, "a config", "component_spec"
-                        )
-                    )
+                    found.extend(self._component_config_violations(module, cls, blocks))
                 elif block == "app_config":
-                    found.extend(
-                        self._constructor_violations(module, cls, blocks, "a config", "app_spec")
-                    )
+                    found.extend(self._app_config_violations(module, cls, blocks))
                 elif block == "valueobject":
                     found.extend(self._valueobject_violations(module, cls, blocks))
                     found.extend(self._vo_field_violations(module, cls))
@@ -4573,7 +4567,7 @@ class Codebase(ts.AggregateRoot):
             Violation(
                 module.path(),
                 cls.lineno,
-                "TB080",
+                "TB081",
                 f"{module.name()}.{cls.name} defines no close; "
                 "a component releases what it constructed",
             ),
@@ -4585,7 +4579,6 @@ class Codebase(ts.AggregateRoot):
         cls: ast.ClassDef,
         blocks: dict[tuple[str, str], str],
         subject: str,
-        param_block: str = "spec",
     ) -> tuple[Violation, ...]:
         init = self._init_of(cls)
         if init is None:
@@ -4599,14 +4592,44 @@ class Codebase(ts.AggregateRoot):
                 ),
             )
         where = f"{module.name()}.{cls.name}.__init__"
-        if param_block == "spec":
-            return self._signature_violations(
-                module, where, init.lineno, init, "spec", None, "a domain constructor", "TB080", blocks
+        return self._signature_violations(
+            module, where, init.lineno, init, "spec", None, "a domain constructor", "TB080", blocks
+        )
+
+    def _app_config_violations(
+        self, module: Module, cls: ast.ClassDef, blocks: dict[tuple[str, str], str]
+    ) -> tuple[Violation, ...]:
+        init = self._init_of(cls)
+        if init is None:
+            return (
+                Violation(
+                    module.path(),
+                    cls.lineno,
+                    "TB080",
+                    f"{module.name()}.{cls.name} defines no __init__; "
+                    "a config constructs from exactly one ts.Spec",
+                ),
             )
-        if param_block == "app_spec":
-            return self._signature_violations(
-                module, where, init.lineno, init, "app_spec", None, "a config constructor", "TB080", blocks
+        where = f"{module.name()}.{cls.name}.__init__"
+        return self._signature_violations(
+            module, where, init.lineno, init, "app_spec", None, "a config constructor", "TB080", blocks
+        )
+
+    def _component_config_violations(
+        self, module: Module, cls: ast.ClassDef, blocks: dict[tuple[str, str], str]
+    ) -> tuple[Violation, ...]:
+        init = self._init_of(cls)
+        if init is None:
+            return (
+                Violation(
+                    module.path(),
+                    cls.lineno,
+                    "TB080",
+                    f"{module.name()}.{cls.name} defines no __init__; "
+                    "a config constructs from exactly one ts.Spec",
+                ),
             )
+        where = f"{module.name()}.{cls.name}.__init__"
         return self._signature_violations(
             module,
             where,

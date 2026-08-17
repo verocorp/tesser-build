@@ -19,6 +19,12 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   (patching `LinkPolicy.close`), which TB030 bans in a test.
 - [ ] **Idempotent close is undecided.** Hosts call close in a `finally`; a CLI
   that also closes explicitly would double-close. Nothing currently guards it.
+- [ ] **The component-close check does not see an inherited `close`.** It scans
+  the class body only, so a component subclassing another component and
+  inheriting its `close` is flagged despite having one. Narrow: it needs one
+  component to extend another, which is itself questionable. The signature is
+  already covered — `App.close()` calls `component.close()` with no arguments,
+  so a wrong arity fails mypy before the analyzer sees it.
 - [ ] **Bare `pytest` fails for python-app outside `scripts/verify`.** The
   config repository encapsulates the environment, so the runner supplies one.
   A developer running `pytest` directly gets a confusing failure in `srv` and

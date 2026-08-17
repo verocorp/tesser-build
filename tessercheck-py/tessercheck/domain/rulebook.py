@@ -127,6 +127,8 @@ APPLIES_TO: Final[dict[str, str]] = {
     "Codebase._dependency_violations": "service `__init__`",
     "Codebase._valueobject_violations": "value object `__init__`",
     "Codebase._component_violations": "component class",
+    "Codebase._app_config_violations": "config class",
+    "Codebase._component_config_violations": "config class",
     "Codebase._spec_violations": "spec class",
     "Codebase._dto_violations": "request/response DTO",
 }
