@@ -7317,17 +7317,17 @@ def test_a_config_constructs_from_exactly_one_spec() -> None:
     assert not any("loose.wiring.config.Right" in f for f in findings)
 
 
-def test_a_private_tesser_module_is_not_a_consumer_namespace() -> None:
+def test_a_do_not_use_tesser_module_is_not_a_consumer_namespace() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in checks.Codebase(_tesser_export_spec(
             sources=(
-                ("tesser/_declared.py", "tesser._declared", "def function(fn: object) -> object:\n    return fn\n", False),
-                ("tesser/test__declared.py", "tesser.test__declared", "def test_declared() -> None:\n    assert True\n", False),
+                ("tesser/do_not_use_declared.py", "tesser.do_not_use_declared", "def function(fn: object) -> object:\n    return fn\n", False),
+                ("tesser/test_do_not_use_declared.py", "tesser.test_do_not_use_declared", "def test_declared() -> None:\n    assert True\n", False),
                 ("tesser/stray.py", "tesser.stray", "", False),
                 ("tesser/test_stray.py", "tesser.test_stray", "def test_stray() -> None:\n    assert True\n", False),
             ),
         )).violations()
     )
-    assert not any("tesser._declared is not a consumer namespace" in f for f in findings)
+    assert not any("tesser.do_not_use_declared is not a consumer namespace" in f for f in findings)
     assert any("tesser.stray is not a consumer namespace" in f for f in findings)

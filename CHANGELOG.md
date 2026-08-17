@@ -15,15 +15,15 @@ the module nobody should import says so in Python.
   to `tesser.testing` since the decorators existed; only the runtime lagged,
   re-exporting them from `tesser.declared`. Each now has its own module and its
   own sibling test.
-- **`tesser.declared` becomes `tesser._declared`,** holding only `function` and
-  `load` — the two decorators five shells re-export. The leading underscore is
-  Python's own way of saying "not for consumers", which beats a name that says
-  it in English.
+- **`tesser.declared` becomes `tesser.do_not_use_declared`,** holding only
+  `function` and `load` — the two decorators six shells re-export. The name is
+  the instruction: a reader who reaches for it has already been told not to,
+  and an underscore only says that to readers who know the convention.
 
 ### Added
-- **A private tesser module is not a consumer namespace.** The namespace
-  totality rule skips a leading-underscore module rather than demanding it be
-  something a consumer imports. It is not a loophole: `tesser._declared` is in
+- **A `do_not_use_` module is not a consumer namespace.** The namespace
+  totality rule skips that prefix rather than demanding the module be something
+  a consumer imports. It is not a loophole: `tesser.do_not_use_declared` is in
   no placement's allowed imports, so a tree reaching for it is a finding on the
   import rules regardless.
 

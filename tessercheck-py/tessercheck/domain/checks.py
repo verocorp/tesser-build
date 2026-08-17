@@ -155,6 +155,8 @@ DECLARED_UNREADABLE: Final[str] = "unreadable"
 
 DECLARED_UNRECOGNIZED: Final[str] = "unrecognized"
 
+DO_NOT_USE_PREFIX: Final[str] = "do_not_use_"
+
 KERNEL_PACKAGE: Final[str] = "kernel"
 
 TESSER: Final[str] = "tesser"
@@ -1735,7 +1737,11 @@ class Codebase(ts.AggregateRoot):
     def _tesser_init_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
         parts = module.name().split(".")
-        if len(parts) >= 2 and not parts[1].startswith("_") and parts[1] not in TESSER_NAMESPACES:
+        if (
+            len(parts) >= 2
+            and not parts[1].startswith(DO_NOT_USE_PREFIX)
+            and parts[1] not in TESSER_NAMESPACES
+        ):
             found.append(
                 Violation(
                     module.path(),
@@ -1775,7 +1781,7 @@ class Codebase(ts.AggregateRoot):
         found: list[Violation] = []
         found.extend(self._stray_import_violations(module))
         parts = module.name().split(".")
-        if not parts[1].startswith("_") and parts[1] not in TESSER_NAMESPACES:
+        if not parts[1].startswith(DO_NOT_USE_PREFIX) and parts[1] not in TESSER_NAMESPACES:
             found.append(
                 Violation(
                     module.path(),

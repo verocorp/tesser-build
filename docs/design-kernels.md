@@ -90,7 +90,7 @@ python-app/                          tesser-py/
     money.py                           tesser/
   campaign/  reports/  linkpolicy/       domain/ application/ adapters/
   srv/  bootstrap/  protocol/            context/ srv/ testing/
-  tests/  conftest.py                    _declared.py  py.typed
+  tests/  conftest.py                    do_not_use_declared.py  py.typed
                                        tests/
 ```
 
@@ -179,7 +179,7 @@ modules are governed by **shells rows** instead of domain-content rows:
 - **Totality**: the distribution's members — modules and subpackages alike
   — are exactly the consumer namespaces (`domain`, `application`,
   `adapters`, `context`, `srv`, `testing`, `lifecycle`, `errors`,
-  `serialization`) plus the private `_declared.py`; anything else is a finding.
+  `serialization`) plus `do_not_use_declared.py`; anything else is a finding.
 - **Purity**: a shell module imports only its own distribution and the
   shell stdlib (`__future__`, `typing`, `collections`, `enum`, `datetime`,
   `decimal`, `dataclasses`) — the measured external surface of the

@@ -1,4 +1,4 @@
-from tesser._declared import function, load
+from tesser.do_not_use_declared import function, load
 
 
 def test_function_returns_the_same_object_it_decorates() -> None:
