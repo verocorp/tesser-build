@@ -5,6 +5,29 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.62.0] - 2026-08-17
+
+TB082's body-length rule stops counting formatting. A service method body is now
+at most **10 statements**, not 10 source lines.
+
+### Changed
+- **`_body_violations` counts statements.** `sum(1 for node in ast.walk(fn) if
+  isinstance(node, ast.stmt)) - 1` — every statement including nested block
+  bodies, so the count cannot be gamed by wrapping work in a `for` or an `if`.
+  The clause text is the rule, so `RULES.md` regenerates from it. Statement count
+  is always <= line count (a statement occupies at least one line and this
+  codebase never uses `;`), so the change can only turn a finding into a pass —
+  no green tree could go red.
+- **`create_campaign` drops its `# tessercheck:ignore TB082`.** Seven statements
+  over 34 source lines: it failed the line rule on its argument-per-line
+  formatting and passes the statement rule on its actual shape. The ignore landed
+  in v0.0.61.0 purely to hold the gate open until this change; nothing else in
+  the repo carried one for TB082.
+- **A fixture pins the difference.** `test_a_body_spread_over_many_lines_is_counted_by_its_statements`
+  builds a two-statement method spread over 20+ lines and asserts no finding —
+  the case the old counter got wrong. The existing 12-statement fixture still
+  fires, so both directions are covered.
+
 ## [0.0.61.0] - 2026-08-17
 
 `create_campaign` stops calling module functions. The translation the service

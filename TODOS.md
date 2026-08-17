@@ -4,18 +4,12 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 
 ## Mapper wave follow-ups (2026-08-17, v0.0.61.0)
 
-- [ ] **TB082 counts source lines, not statements.** `create_campaign` is seven
-  statements and 34 source lines, so the 10-line body rule fires on formatting
-  rather than complexity. Ruling (Chris, 2026-08-17): count statements via
-  `sum(1 for n in ast.walk(fn) if isinstance(n, ast.stmt)) - 1` — the variant
-  that cannot be gamed by wrapping work in a block. The change is four lines in
-  `_body_violations` (`domain/checks.py`) plus the clause text, which is the
-  rule; `RULES.md` regenerates from it and the existing fixture
-  (`test_service_body_rules_are_flagged`, 12 statements on 12 lines) still
-  fires either way. Statement count is always <= line count, so no green tree
-  can go red. Then pick the threshold — 10 statements is a much stronger bar
-  than 10 lines. Until it lands, `campaign/application/service.py` carries a
-  site-level `# tessercheck:ignore TB082` on `create_campaign`.
+- [x] **TB082 counts source lines, not statements — RESOLVED v0.0.62.0.** The
+  counter is now `sum(1 for node in ast.walk(fn) if isinstance(node, ast.stmt)) - 1`
+  and the clause reads "a service method body is at most 10 statements". The
+  threshold stayed at 10: `create_campaign` is seven statements, so there is
+  headroom, and tightening it is a separate call with its own evidence. The
+  `# tessercheck:ignore TB082` on `create_campaign` is deleted.
 - [ ] **Nothing forces the mapper shape.** `ts.Mapper` ships with a kind row
   and a placement rule (application only) and nothing else. Undecided and
   unenforced: whether a mapper may construct its target DTO (today it does not,
