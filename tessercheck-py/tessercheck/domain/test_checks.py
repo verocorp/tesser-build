@@ -767,6 +767,45 @@ def test_every_declared_block_has_a_name_and_a_home() -> None:
     assert not (checks.APP_KINDS & set(checks.KIND_ROLE))
 
 
+def test_a_mapper_lives_only_in_the_application_role() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/application/mapping.py",
+                "shop.application.mapping",
+                "import tesser.application as ts\n"
+                "class MapToThing(ts.Mapper):\n"
+                "    pass\n",
+                False,
+            ),
+            (
+                "shop/domain/mapping.py",
+                "shop.domain.mapping",
+                "import tesser.application as ts\n"
+                "class MapToOther(ts.Mapper):\n"
+                "    pass\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any(
+        "shop.application.mapping.MapToThing" in f and "declares no ts.* base" in f
+        for f in findings
+    )
+    assert not any(
+        "shop.application.mapping.MapToThing" in f
+        and "a kind lives only in its role module" in f
+        for f in findings
+    )
+    assert any(
+        "shop.domain.mapping.MapToOther" in f
+        and "is a mapper, whose home is application.py" in f
+        and "a kind lives only in its role module" in f
+        for f in findings
+    )
+
+
 def test_every_kind_row_names_a_real_tesser_export() -> None:
     root = Path(__file__).resolve().parents[3] / "tesser-py"
     rows = list(checks.TESSER_BASE_BLOCKS) + list(checks.TESSER_DECORATORS)
