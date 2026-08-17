@@ -63,7 +63,7 @@ def test_the_context_takes_no_settings_yet() -> None:
 
 def test_a_config_wires_a_client_that_serves_a_report() -> None:
     links = FakeCampaignClient(
-        campaign_client.LinkView("spring-sale", "https://a.example/s", True)
+        campaign_client.LinkView("spring-sale", "https://a.example/s", "active")
     )
     verdicts = FakeLinkPolicyClient(
         linkpolicy_client.VerdictView("https://a.example/s", True, "on the allowlist")

@@ -3,11 +3,26 @@ from __future__ import annotations
 import pytest
 import tesser.testing as ts
 
+import campaign.application.ports.campaign_identity as campaign_identity
 import campaign.application.ports.campaign_repository as campaign_repository
 import campaign.application.ports.target_policy as target_policy
 import campaign.application.service as service
 import campaign.client.client as client
 from tesser.errors import DomainError, InfraError, Kind
+
+
+@ts.fake
+class FakeCampaignIdentity(campaign_identity.CampaignIdentity):
+
+    def __init__(self) -> None:
+        self.issued = 0
+
+    def issue(
+        self, request: campaign_identity.IssueCampaignIdentityRequest
+    ) -> campaign_identity.IssueCampaignIdentityResponse:
+        self.issued += 1
+        campaign_id = f"{self.issued:016x}"
+        return campaign_identity.IssueCampaignIdentityResponse(campaign_id=campaign_id)
 
 
 @ts.fake
@@ -78,7 +93,7 @@ class FakeTargetPolicyAllowAll(target_policy.TargetPolicy):
 
 def test_rejection_is_a_conflict_and_creates_nothing() -> None:
     repo = FakeCampaignRepositoryRecording()
-    svc = service.CampaignService(repo, FakeTargetPolicyBlocking())
+    svc = service.CampaignService(repo, FakeTargetPolicyBlocking(), FakeCampaignIdentity())
     req = client.AddLinkRequest(campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x")
     with pytest.raises(DomainError) as caught:
         svc.add_link(req)
@@ -88,7 +103,7 @@ def test_rejection_is_a_conflict_and_creates_nothing() -> None:
 
 def test_outage_propagates_and_creates_nothing() -> None:
     repo = FakeCampaignRepositoryRecording()
-    svc = service.CampaignService(repo, FakeTargetPolicyOutage())
+    svc = service.CampaignService(repo, FakeTargetPolicyOutage(), FakeCampaignIdentity())
     req = client.AddLinkRequest(campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x")
     with pytest.raises(InfraError):
         svc.add_link(req)
@@ -97,7 +112,7 @@ def test_outage_propagates_and_creates_nothing() -> None:
 
 def test_allowed_verdict_creates_the_link() -> None:
     repo = FakeCampaignRepositoryRecording()
-    svc = service.CampaignService(repo, FakeTargetPolicyAllowAll())
+    svc = service.CampaignService(repo, FakeTargetPolicyAllowAll(), FakeCampaignIdentity())
     req = client.AddLinkRequest(campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x")
     view = svc.add_link(req)
     assert [link.slug for link in view.links] == ["promo"]

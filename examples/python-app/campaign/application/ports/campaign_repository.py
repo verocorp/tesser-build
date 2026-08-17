@@ -6,11 +6,6 @@ from typing import Protocol
 import tesser.application as ts
 
 
-class LinkStatus(enum.Enum):
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-
-
 class CampaignLookup(enum.Enum):
     FOUND = "found"
     MISSING = "missing"
@@ -30,7 +25,7 @@ class MoneyRecord(ts.Response):
 
 class LinkRecord(ts.Response):
 
-    def __init__(self, slug: str, target_url: str, status: LinkStatus) -> None:
+    def __init__(self, slug: str, target_url: str, status: str) -> None:
         self.slug = slug
         self.target_url = target_url
         self.status = status

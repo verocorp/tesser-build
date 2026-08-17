@@ -65,7 +65,7 @@ def test_a_slug_finds_the_campaign_that_owns_it() -> None:
                 campaign_repository.LinkRecord(
                     slug="promo",
                     target_url="https://ok.example/x",
-                    status=campaign_repository.LinkStatus.ACTIVE,
+                    status="active",
                 ),
             ),
         )
@@ -96,7 +96,7 @@ def test_a_slug_finds_a_deactivated_link_because_the_store_does_not_judge_status
                 campaign_repository.LinkRecord(
                     slug="promo",
                     target_url="https://ok.example/x",
-                    status=campaign_repository.LinkStatus.INACTIVE,
+                    status="inactive",
                 ),
             ),
         )
@@ -117,7 +117,7 @@ def test_a_registered_slug_reads_as_taken() -> None:
                 campaign_repository.LinkRecord(
                     slug="promo",
                     target_url="https://ok.example/x",
-                    status=campaign_repository.LinkStatus.ACTIVE,
+                    status="active",
                 ),
             ),
         )

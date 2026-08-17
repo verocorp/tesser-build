@@ -64,7 +64,7 @@ class FakeLinkPolicyClient(linkpolicy_client.Client):
 
 def test_the_wired_client_joins_a_link_to_the_verdict_recorded_for_it() -> None:
     links = FakeCampaignClient(
-        campaign_client.LinkView("spring-sale", "https://a.example/s", True)
+        campaign_client.LinkView("spring-sale", "https://a.example/s", "active")
     )
     verdicts = FakeLinkPolicyClient(
         linkpolicy_client.VerdictView("https://a.example/s", False, "host blocked")
@@ -82,7 +82,7 @@ def test_the_wired_client_joins_a_link_to_the_verdict_recorded_for_it() -> None:
 
 def test_the_wired_client_reports_a_link_no_policy_has_ruled_on() -> None:
     links = FakeCampaignClient(
-        campaign_client.LinkView("spring-sale", "https://a.example/s", True)
+        campaign_client.LinkView("spring-sale", "https://a.example/s", "active")
     )
     verdicts = FakeLinkPolicyClient()
 

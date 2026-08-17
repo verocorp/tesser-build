@@ -96,7 +96,7 @@ def test_handler_translates_wire_to_client_dtos() -> None:
             "0123456789abcdef",
             "100.00",
             "USD",
-            (client.LinkView("promo", "https://ok.example/x", True),),
+            (client.LinkView("promo", "https://ok.example/x", "active"),),
         ),
     )
     handler = http.Handler(scripted)
@@ -132,7 +132,7 @@ def test_handler_translates_wire_to_client_dtos() -> None:
     assert added.json_body() == {
         "campaign_id": "0123456789abcdef",
         "budget": {"amount": "100.00", "currency": "USD"},
-        "links": [{"slug": "promo", "target_url": "https://ok.example/x", "active": True}],
+        "links": [{"slug": "promo", "target_url": "https://ok.example/x", "status": "active"}],
     }
     add_request = scripted.requests[1]
     assert isinstance(add_request, campaign_client.AddLinkRequest)

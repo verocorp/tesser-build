@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tesser.component as ts
 
+import campaign.adapters.gateways.campaign_identity as campaign_identity
 import campaign.adapters.gateways.repo_memory as repo_memory
 import campaign.application.ports.target_policy as target_policy
 import campaign.application.service as service
@@ -14,7 +15,10 @@ class Campaign(ts.Component):
 
     def __init__(self, cfg: config.Config, policy: target_policy.TargetPolicy) -> None:
         self._repo = self._repo_for(cfg)
-        self.client: client.Client = service.CampaignService(self._repo, policy)
+        self._identity_gateway = campaign_identity.SecretsCampaignIdentity()
+        self.client: client.Client = service.CampaignService(
+            self._repo, policy, self._identity_gateway
+        )
 
     def _repo_for(self, cfg: config.Config) -> repo_memory.InMemoryCampaignRepository:
         if cfg.storage == "memory":

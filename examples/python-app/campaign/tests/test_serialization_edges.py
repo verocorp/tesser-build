@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 import tesser.testing as ts
 
+import campaign.adapters.gateways.campaign_identity as campaign_identity
 import campaign.adapters.gateways.repo_memory as repo_memory
 import campaign.adapters.handlers.http as http
 import campaign.application.ports.campaign_repository as campaign_repository
@@ -63,27 +64,27 @@ def test_row_golden_locks_the_storage_shape() -> None:
         "0123456789abcdef",
         "100.00",
         "USD",
-        (("promo", "https://ok.example/x", campaign_repository.LinkStatus.ACTIVE),),
+        (("promo", "https://ok.example/x", "active"),),
     )
 
 
 def test_wire_golden_locks_the_campaign_payload() -> None:
     repo = repo_memory.InMemoryCampaignRepository()
     repo.save(views.save_request(campaign.Campaign(campaign_spec())))
-    handler = http.Handler(service.CampaignService(repo, FakeTargetPolicyAllowAll()))
+    handler = http.Handler(service.CampaignService(repo, FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity()))
     resp = handler.get_campaign(HttpRequest("GET", "/", {"campaign_id": "0123456789abcdef"}, {}, {}, b""))
     assert resp.status_code == 200
     assert resp.json_body() == {
         "campaign_id": "0123456789abcdef",
         "budget": {"amount": "100.00", "currency": "USD"},
-        "links": [{"slug": "promo", "target_url": "https://ok.example/x", "active": True}],
+        "links": [{"slug": "promo", "target_url": "https://ok.example/x", "status": "active"}],
     }
 
 
 def test_wire_golden_locks_resolve_as_a_real_redirect() -> None:
     repo = repo_memory.InMemoryCampaignRepository()
     repo.save(views.save_request(campaign.Campaign(campaign_spec())))
-    handler = http.Handler(service.CampaignService(repo, FakeTargetPolicyAllowAll()))
+    handler = http.Handler(service.CampaignService(repo, FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity()))
     resp = handler.resolve(HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
     assert resp.status_code == 302
     assert resp.body == b""

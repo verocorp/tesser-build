@@ -50,8 +50,8 @@ class FakeCampaignClient(campaign_client.Client):
 
 def test_every_link_the_campaign_context_serves_becomes_a_link_record() -> None:
     links = FakeCampaignClient(
-        campaign_client.LinkView("spring-sale", "https://a.example/s", True),
-        campaign_client.LinkView("winter-sale", "https://a.example/w", False),
+        campaign_client.LinkView("spring-sale", "https://a.example/s", "active"),
+        campaign_client.LinkView("winter-sale", "https://a.example/w", "inactive"),
     )
 
     resp = campaign_links.CampaignLinkGateway(links).links(link_source.ListLinksRequest())
@@ -64,7 +64,7 @@ def test_every_link_the_campaign_context_serves_becomes_a_link_record() -> None:
 
 def test_the_gateway_hands_back_records_and_never_the_foreign_view() -> None:
     links = FakeCampaignClient(
-        campaign_client.LinkView("spring-sale", "https://a.example/s", True)
+        campaign_client.LinkView("spring-sale", "https://a.example/s", "active")
     )
 
     resp = campaign_links.CampaignLinkGateway(links).links(link_source.ListLinksRequest())
