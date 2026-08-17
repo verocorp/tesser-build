@@ -1,2 +1,2 @@
-from tesser.declared import fake as fake
-from tesser.declared import helper as helper
+from tesser.testing.fake import fake as fake
+from tesser.testing.helper import helper as helper

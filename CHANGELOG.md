@@ -5,6 +5,28 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.57.0] - 2026-08-17
+
+`helper` and `fake` move to where the analyzer already thought they lived, and
+the module nobody should import says so in Python.
+
+### Changed
+- **`tesser.testing` owns `helper` and `fake`.** The kind table has keyed them
+  to `tesser.testing` since the decorators existed; only the runtime lagged,
+  re-exporting them from `tesser.declared`. Each now has its own module and its
+  own sibling test.
+- **`tesser.declared` becomes `tesser.do_not_use_declared`,** holding only
+  `function` and `load` — the two decorators six shells re-export. The name is
+  the instruction: a reader who reaches for it has already been told not to,
+  and an underscore only says that to readers who know the convention.
+
+### Added
+- **A `do_not_use_` module is not a consumer namespace.** The namespace
+  totality rule skips that prefix rather than demanding the module be something
+  a consumer imports. It is not a loophole: `tesser.do_not_use_declared` is in
+  no placement's allowed imports, so a tree reaching for it is a finding on the
+  import rules regardless.
+
 ## [0.0.56.0] - 2026-08-16
 
 The rules catch up with the shells. A component must release, a config must
