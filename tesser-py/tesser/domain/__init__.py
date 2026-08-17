@@ -1,4 +1,4 @@
-from tesser.declared import function as function
+from tesser._declared import function as function
 from tesser.domain.aggregate import AggregateRoot as AggregateRoot
 from tesser.domain.entity import Entity as Entity
 from tesser.domain.spec import Spec as Spec

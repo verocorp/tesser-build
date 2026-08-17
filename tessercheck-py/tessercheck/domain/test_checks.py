@@ -7022,13 +7022,13 @@ def test_a_tesser_init_only_reexports_from_the_distribution() -> None:
                 (
                     "tesser/testing/__init__.py",
                     "tesser.testing",
-                    "from tesser.declared import fake as fake\n"
+                    "from tesser.testing.fake import fake as fake\n"
                     "from . import declared as declared\n"
                     "import subprocess\n"
                     "X = 1\n",
                     True,
                 ),
-                ("tesser/declared.py", "tesser.declared", "", False),
+                ("tesser/testing/fake.py", "tesser.testing.fake", "", False),
             ),
         )).violations()
     )
@@ -7042,7 +7042,7 @@ def test_a_tesser_init_only_reexports_from_the_distribution() -> None:
         "a tesser __init__ only re-exports from the distribution" in f
         for f in findings
     ), findings
-    assert not any("imports tesser.declared" in f for f in findings), findings
+    assert not any("imports tesser.testing.fake" in f for f in findings), findings
     assert not any("tesser.testing.declared" in f for f in findings), findings
 
 
@@ -7315,3 +7315,19 @@ def test_a_config_constructs_from_exactly_one_spec() -> None:
         for f in findings
     )
     assert not any("loose.wiring.config.Right" in f for f in findings)
+
+
+def test_a_private_tesser_module_is_not_a_consumer_namespace() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_tesser_export_spec(
+            sources=(
+                ("tesser/_declared.py", "tesser._declared", "def function(fn: object) -> object:\n    return fn\n", False),
+                ("tesser/test__declared.py", "tesser.test__declared", "def test_declared() -> None:\n    assert True\n", False),
+                ("tesser/stray.py", "tesser.stray", "", False),
+                ("tesser/test_stray.py", "tesser.test_stray", "def test_stray() -> None:\n    assert True\n", False),
+            ),
+        )).violations()
+    )
+    assert not any("tesser._declared is not a consumer namespace" in f for f in findings)
+    assert any("tesser.stray is not a consumer namespace" in f for f in findings)

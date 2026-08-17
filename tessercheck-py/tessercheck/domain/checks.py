@@ -169,7 +169,6 @@ TESSER_NAMESPACES: Final[frozenset[str]] = frozenset(
         "context",
         "srv",
         "testing",
-        "declared",
         "errors",
         "serialization",
     }
@@ -1736,7 +1735,7 @@ class Codebase(ts.AggregateRoot):
     def _tesser_init_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
         parts = module.name().split(".")
-        if len(parts) >= 2 and parts[1] not in TESSER_NAMESPACES:
+        if len(parts) >= 2 and not parts[1].startswith("_") and parts[1] not in TESSER_NAMESPACES:
             found.append(
                 Violation(
                     module.path(),
@@ -1776,7 +1775,7 @@ class Codebase(ts.AggregateRoot):
         found: list[Violation] = []
         found.extend(self._stray_import_violations(module))
         parts = module.name().split(".")
-        if parts[1] not in TESSER_NAMESPACES:
+        if not parts[1].startswith("_") and parts[1] not in TESSER_NAMESPACES:
             found.append(
                 Violation(
                     module.path(),

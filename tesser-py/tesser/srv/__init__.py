@@ -1,4 +1,4 @@
-from tesser.declared import function as function
+from tesser._declared import function as function
 from tesser.srv.host import Host as Host
 from tesser.srv.port import Port as Port
 from tesser.srv.record import Record as Record
