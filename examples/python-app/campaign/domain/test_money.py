@@ -39,6 +39,24 @@ def test_a_money_amount_that_is_not_a_number_is_rejected(value: str) -> None:
     assert "is not a number" in caught.value.message
 
 
+@pytest.mark.parametrize(
+    "value", ["Infinity", "-Infinity", "inf", "-inf", "NaN", "-NaN", "sNaN"]
+)
+def test_a_money_amount_that_is_not_finite_is_rejected(value: str) -> None:
+    with pytest.raises(DomainError) as caught:
+        money.MoneyAmount(value)
+
+    assert caught.value.kind is Kind.VALIDATION
+    assert caught.value.code == "invalid_budget_amount"
+    assert "is not a finite number" in caught.value.message
+
+
+@pytest.mark.parametrize("value", ["NaN", "Infinity"])
+def test_a_non_finite_money_amount_never_leaks_a_decimal_error(value: str) -> None:
+    with pytest.raises(DomainError):
+        money.MoneyAmount(value)
+
+
 @pytest.mark.parametrize("value", ["-0.01", "-1", "-1000000"])
 def test_a_negative_money_amount_is_rejected(value: str) -> None:
     with pytest.raises(DomainError) as caught:

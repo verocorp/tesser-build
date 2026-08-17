@@ -495,16 +495,22 @@ Deferred work with context. Each entry carries enough for a cold pickup.
     (the negative control — it exists *because* it is a dataclass) and
     `tessercheck-py/testdata/tb031/` (analyzer fixtures under test).
 
-- [ ] **`examples/python-app`'s Money accepts non-finite amounts** (found in
-  the 2026-08-01 review, verified still live 2026-08-16). The path in the
-  old note (`examples/python/catalog/money.py`) no longer exists; the code
-  is `examples/python-app/campaign/domain/money.py`. Measured:
-  `MoneyAmount("Infinity")` is **accepted** (`Decimal("Infinity") < 0` is
-  False), and `MoneyAmount("NaN")` escapes as `decimal.InvalidOperation`
-  rather than a `DomainError` — the `parsed < 0` comparison sits outside the
-  try. Also check `add` for silent rounding past 28 significant digits, and
-  sweep the other VOs for the same class of gap. This is the behavioral
-  ground the retired vobase Money port had covered.
+- [x] **`examples/python-app`'s Money accepts non-finite amounts — RESOLVED
+  2026-08-17 (v0.0.59.0).** `MoneyAmount` now requires `is_finite()`, so
+  Infinity, -Infinity, NaN, and sNaN are all `invalid_budget_amount` rather
+  than one accepted and one leaking `decimal.InvalidOperation` from the
+  `parsed < 0` comparison. Kept for the record: the leak was not in the parse
+  — `Decimal("NaN")` constructs happily and it is the comparison that signals,
+  which is why a try around the parse alone never caught it.
+
+- [ ] **Money's remaining numeric questions** (split out of the non-finite fix,
+  2026-08-17). Two are open and both need a policy rather than a bug fix:
+  (1) magnitude — `MoneyAmount("1e400")` is finite and therefore accepted;
+  bounding it means choosing a maximum, which is a domain call, not a
+  correctness one. (2) `add` may still round silently past 28 significant
+  digits (decimal's default context). Then sweep the other VOs for the same
+  class of gap. This is the behavioral ground the retired vobase Money port
+  had covered.
 
 - [ ] **TB031 construction-completeness checker** (contract landed 2026-07-20,
   v0.0.5.0)
