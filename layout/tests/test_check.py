@@ -5,8 +5,8 @@ from pathlib import Path
 import tesser.testing as ts
 
 import repo.client.client as client
-import repo.wiring.config as config
-import repo.wiring.wire as wire
+import repo.component.config as config
+import repo.component.component as wire
 
 
 @ts.helper

@@ -7,7 +7,7 @@ from typing import Any, Final
 
 import tesser.srv as ts
 
-from bootstrap.app import App
+from app.app import App
 import campaign.adapters.handlers.http as http
 from tesser.errors import DomainError, InfraError, status_for
 from protocol.http import BadRequest, HttpRequest, HttpResponse, PayloadTooLarge, StreamingUnsupported

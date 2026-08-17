@@ -7,7 +7,7 @@ from typing import Final
 import tesser.srv as ts
 
 import tessercheck.adapters.handlers.cli as cli
-from bootstrap.loader import load
+from app.loader import load
 from protocol.cli import CliRequest, CliResponse, UsageError
 
 _USAGE: Final[str] = "usage: python -m srv.cli.main [tree]"

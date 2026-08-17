@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import bootstrap.app as app
+import app.app as app
 import campaign.client.client as client
 import reports.client.client as reports_client
 from tesser.errors import DomainError

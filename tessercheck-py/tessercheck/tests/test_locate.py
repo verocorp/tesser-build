@@ -10,14 +10,14 @@ import tessercheck.tests.conftest as conftest
 def test_every_place_is_earned_by_a_checked_tree_or_is_a_finding() -> None:
     finding_rows = (
         ("homeless", False, "root"),
-        ("app.stray", False, "context-stray"),
-        ("app.tests.util", False, "context-tests-stray"),
-        ("app.application.ports.test_x", False, "ports-stray"),
-        ("app.application.ports", False, "ports-file"),
-        ("app.domain", False, "role-file"),
+        ("shop.stray", False, "context-stray"),
+        ("shop.tests.util", False, "context-tests-stray"),
+        ("shop.application.ports.test_x", False, "ports-stray"),
+        ("shop.application.ports", False, "ports-file"),
+        ("shop.domain", False, "role-file"),
         ("kernel", False, "kernel-file"),
     )
-    contexts = frozenset({"app"})
+    contexts = frozenset({"shop"})
     for name, is_package, expected in finding_rows:
         got = checks.Codebase._locate(name, is_package, contexts)
         assert got == expected, (

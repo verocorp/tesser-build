@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tesser.srv as ts
 
-from bootstrap.loader import load
+from app.loader import load
 from srv.http.host import HttpHost
 from srv.run import run_until_signal
 

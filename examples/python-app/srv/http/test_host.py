@@ -6,7 +6,7 @@ import threading
 
 import pytest
 
-import bootstrap.loader as loader
+import app.loader as loader
 from protocol.http import BadRequest, HttpResponse, PayloadTooLarge, StreamingUnsupported
 from tesser.errors import InfraError, conflict, invalid, not_found
 from srv.http.host import MAX_BUFFERED_BODY, HttpHost, buffered_length, make_server, respond, routes_for

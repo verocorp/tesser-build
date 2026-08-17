@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from bootstrap.app import App
-import bootstrap.loader as loader
+from app.app import App
+import app.loader as loader
 from protocol.cli import CliRequest, CliResponse, UsageError
 from tesser.errors import InfraError, conflict, invalid, not_found
 from srv.cli.main import commands_for, dispatch, respond

@@ -6,8 +6,8 @@ from typing import Final
 
 import tesser.srv as ts
 
-from bootstrap.app import App
-from bootstrap.loader import load
+from app.app import App
+from app.loader import load
 import campaign.adapters.handlers.cli as cli
 from protocol.cli import CliRequest, CliResponse, Command, UsageError
 from tesser.errors import DomainError, InfraError, exit_code_for

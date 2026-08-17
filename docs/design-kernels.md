@@ -158,7 +158,7 @@ reinterpreted under the kernel rules — loudly, by design — and must rename.
   content), the domain pure stdlib (`CORE_STDLIB["domain"]`), and
   `import`-declared external kernels. Never a context, never the app shell,
   never IO.
-- **Adapters/wiring/srv** — unchanged. They may already reach more than the
+- **Adapters/component/srv** — unchanged. They may already reach more than the
   pure roles can; kernels add nothing they need.
 - **Tests** — kernel companion tests sit beside kernel modules and follow
   the domain-companion tier: they may import the kernel and `tesser.testing`.

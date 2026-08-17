@@ -59,7 +59,7 @@ TS_NAME_BY_BLOCK: Final[dict[str, str]] = {
     "component_spec": "ts.Spec",
 }
 
-ROLES: Final[tuple[str, ...]] = ("domain", "application", "client", "adapters", "wiring")
+ROLES: Final[tuple[str, ...]] = ("domain", "application", "client", "adapters", "component")
 
 PORTS_PACKAGE: Final[str] = "ports"
 
@@ -71,7 +71,7 @@ PORTS_IMPORT_PATH: Final[str] = "application.ports"
 
 PORTS_KINDS: Final[frozenset[str]] = frozenset({"port", "port_request", "port_response"})
 
-APP_PACKAGES: Final[tuple[str, ...]] = ("srv", "bootstrap")
+APP_PACKAGES: Final[tuple[str, ...]] = ("srv", "app")
 
 APP_KINDS: Final[frozenset[str]] = frozenset(
     {"app", "loader", "app_config", "app_spec", "config_repository"}
@@ -96,9 +96,9 @@ KIND_ROLE: Final[dict[str, str]] = {
     "repository": "adapters",
     "gateway": "adapters",
     "handler": "adapters",
-    "component": "wiring",
-    "component_config": "wiring",
-    "component_spec": "wiring",
+    "component": "component",
+    "component_config": "component",
+    "component_spec": "component",
 }
 
 KIND_HOME: Final[dict[str, str]] = {
@@ -240,7 +240,7 @@ ROLE_TESSER_PACKAGE: Final[dict[str, str]] = {
     "application": "tesser.application",
     "client": "tesser.context",
     "adapters": "tesser.adapters",
-    "wiring": "tesser.component",
+    "component": "tesser.component",
 }
 
 DTO_BLOCKS: Final[frozenset[str]] = frozenset(
@@ -260,15 +260,15 @@ DTO_BLOCKS: Final[frozenset[str]] = frozenset(
 )
 
 PAIRED_PLACES: Final[frozenset[str]] = frozenset(
-    {"role", "kernel", "shell-srv", "shell-bootstrap", "protocol"}
+    {"role", "kernel", "shell-srv", "shell-app", "protocol"}
 )
 
 NORM_IMPORTS: Final[dict[str, frozenset[str]]] = {
     "domain": frozenset({"tesser.errors", "tesser.serialization"}),
     "application": frozenset({"tesser.errors"}),
     "adapters": frozenset({"tesser.errors"}),
-    "wiring": frozenset({"tesser.errors"}),
-    "bootstrap": frozenset({"tesser.errors"}),
+    "component": frozenset({"tesser.errors"}),
+    "app": frozenset({"tesser.errors"}),
     "srv": frozenset({"tesser.errors"}),
     "test": frozenset(
         {"tesser.app", "tesser.errors", "tesser.serialization"}
@@ -280,7 +280,7 @@ SAME_CONTEXT_IMPORTS: Final[dict[str, tuple[str, ...]]] = {
     "client": (),
     "application": ("domain", "client"),
     "adapters": (PORTS_IMPORT_PATH,),
-    "wiring": ("application", "adapters", "client"),
+    "component": ("application", "adapters", "client"),
 }
 
 TESTS_ROLE: Final[str] = "tests"
@@ -293,7 +293,7 @@ TEST_TIER_HOME: Final[dict[str, tuple[str, str | None]]] = {
     "domain": ("domain", None),
     "application": ("application", None),
     "client": ("client", None),
-    "wiring": ("wiring", None),
+    "component": ("component", None),
     "handlers": ("adapters", "handlers"),
     "gateways": ("adapters", "gateways"),
     "repositories": ("adapters", "repositories"),
@@ -303,7 +303,7 @@ TEST_TIER_REACH: Final[dict[str, tuple[str, ...]]] = {
     "domain": SAME_CONTEXT_IMPORTS["domain"],
     "application": SAME_CONTEXT_IMPORTS["application"],
     "client": SAME_CONTEXT_IMPORTS["client"],
-    "wiring": SAME_CONTEXT_IMPORTS["wiring"],
+    "component": SAME_CONTEXT_IMPORTS["component"],
     "handlers": ("client",),
     "gateways": SAME_CONTEXT_IMPORTS["adapters"],
     "repositories": SAME_CONTEXT_IMPORTS["adapters"],
@@ -312,7 +312,7 @@ TEST_TIER_REACH: Final[dict[str, tuple[str, ...]]] = {
 
 TEST_TIER_FOREIGN: Final[dict[str, tuple[str, ...]]] = {
     "gateways": ("client",),
-    "wiring": ("client",),
+    "component": ("client",),
     TESTS_ROLE: ("application", "client"),
 }
 
@@ -320,28 +320,28 @@ ADAPTER_TEST_TIERS: Final[frozenset[str]] = frozenset({"handlers", "gateways", "
 
 SRV_TIER: Final[str] = "srv"
 
-BOOTSTRAP_TIER: Final[str] = "bootstrap"
+APP_TIER: Final[str] = "an app"
 
 PROTOCOL_TIER: Final[str] = "protocol"
 
 STRAY_TIER: Final[str] = "stray"
 
-APP_TIER: Final[str] = "the root tests package"
+ROOT_TESTS_TIER: Final[str] = "the root tests package"
 
 SHELL_PACKAGES: Final[frozenset[str]] = frozenset(APP_PACKAGES) | {PROTOCOL_PACKAGE, TESTS_ROLE}
 
 KERNEL_TIER: Final[str] = "kernel"
 
 TEST_TIER_SHELL: Final[dict[str, frozenset[str]]] = {
-    APP_TIER: SHELL_PACKAGES,
-    SRV_TIER: frozenset({"srv", "bootstrap", "protocol"}),
-    BOOTSTRAP_TIER: frozenset({"bootstrap"}),
+    ROOT_TESTS_TIER: SHELL_PACKAGES,
+    SRV_TIER: frozenset({"srv", "app", "protocol"}),
+    APP_TIER: frozenset({"app"}),
     PROTOCOL_TIER: frozenset({"protocol"}),
     KERNEL_TIER: frozenset(),
     "domain": frozenset(),
     "application": frozenset(),
     "client": frozenset(),
-    "wiring": frozenset(),
+    "component": frozenset(),
     "handlers": frozenset({"protocol"}),
     "gateways": frozenset(),
     "repositories": frozenset(),
@@ -1156,7 +1156,7 @@ class Codebase(ts.AggregateRoot):
         "eval",
         "shell-init",
         "shell-srv",
-        "shell-bootstrap",
+        "shell-app",
         "root-tests",
         "protocol-init",
         "protocol",
@@ -1201,7 +1201,7 @@ class Codebase(ts.AggregateRoot):
                 return "shell-init"
             if parts[0] == "srv":
                 return "shell-srv"
-            return "shell-bootstrap"
+            return "shell-app"
         if parts[0] == TESTS_ROLE:
             return "root-tests"
         if parts[0] == PROTOCOL_PACKAGE:
@@ -1253,8 +1253,8 @@ class Codebase(ts.AggregateRoot):
             return self._srv_module_violations(module, blocks) + self._app_import_violations(
                 module, parts[0], contexts, blocks
             )
-        if place == "shell-bootstrap":
-            return self._bootstrap_module_violations(module, blocks) + self._app_import_violations(
+        if place == "shell-app":
+            return self._app_module_violations(module, blocks) + self._app_import_violations(
                 module, parts[0], contexts, blocks
             )
         if place == "root-tests":
@@ -1345,7 +1345,7 @@ class Codebase(ts.AggregateRoot):
                 1,
                 "TB041",
                 f"{module.name()} is not a context module; "
-                "a context holds only domain, application, client, adapters, wiring, and tests modules",
+                "a context holds only domain, application, client, adapters, component, and tests modules",
             ),
         )
 
@@ -1638,7 +1638,7 @@ class Codebase(ts.AggregateRoot):
                 1,
                 "TB040",
                 f"{module.name()} belongs to no governed package; "
-                "every module belongs to a context, a kernel, srv, bootstrap, tests, "
+                "every module belongs to a context, a kernel, srv, app, tests, "
                 "or the protocol package",
             ),
         )
@@ -1692,7 +1692,7 @@ class Codebase(ts.AggregateRoot):
                 f"{module.name()} is neither a test module nor conftest; "
                 "a tests package holds only test modules and conftest",
             ),
-        ) + self._test_placement_violations(module, "", APP_TIER, contexts)
+        ) + self._test_placement_violations(module, "", ROOT_TESTS_TIER, contexts)
 
     def _context_tests_init_violations(self, module: Module) -> tuple[Violation, ...]:
         return tuple(
@@ -1932,7 +1932,7 @@ class Codebase(ts.AggregateRoot):
                 module.path(),
                 stmt.lineno,
                 "TB042",
-                f"{module.name()} __init__ declares code; a srv or bootstrap __init__ is empty",
+                f"{module.name()} __init__ declares code; a srv or app __init__ is empty",
             )
             for stmt in module.body()
         )
@@ -2051,7 +2051,7 @@ class Codebase(ts.AggregateRoot):
                             stmt.lineno,
                             "TB051",
                             f"{module.name()} declares a module constant without Final; "
-                            f"a {subject} constant is Final",
+                            f"{subject} constants are Final",
                         )
                     )
             elif isinstance(stmt, ast.Assign):
@@ -2061,7 +2061,7 @@ class Codebase(ts.AggregateRoot):
                         stmt.lineno,
                         "TB051",
                         f"{module.name()} declares a module constant without Final; "
-                        f"a {subject} constant is Final",
+                        f"{subject} constants are Final",
                     )
                 )
             else:
@@ -2828,7 +2828,7 @@ class Codebase(ts.AggregateRoot):
             return Codebase._annotation_head(parsed.body)
         return None
 
-    def _bootstrap_module_violations(
+    def _app_module_violations(
         self,
         module: Module,
         blocks: dict[tuple[str, str], str],
@@ -2838,13 +2838,13 @@ class Codebase(ts.AggregateRoot):
         found.extend(
             self._tesser_import_violations(
                 module,
-                "bootstrap",
+                "app",
                 "tesser.app",
-                "a bootstrap module's tesser imports are tesser.app, "
+                "an app module's tesser imports are tesser.app, "
                 "and tesser.errors",
-                "a bootstrap module imports tesser.app exactly once, as ts",
-                "a bootstrap module imports tesser.app exactly once, as ts",
-                NORM_IMPORTS["bootstrap"],
+                "an app module imports tesser.app exactly once, as ts",
+                "an app module imports tesser.app exactly once, as ts",
+                NORM_IMPORTS["app"],
             )
         )
         for stmt in module.body():
@@ -2855,7 +2855,7 @@ class Codebase(ts.AggregateRoot):
                         stmt.lineno,
                         "TB051",
                         f"{module.name()}.{stmt.name} is an undeclared module function; "
-                        "a bootstrap function declares itself with @ts.load",
+                        "an app function declares itself with @ts.load",
                     )
                 )
             if isinstance(stmt, ast.ClassDef):
@@ -2868,7 +2868,7 @@ class Codebase(ts.AggregateRoot):
                             stmt.lineno,
                             "TB052",
                             f"{where} declares no ts.* base; "
-                            "every bootstrap class declares its block",
+                            "every app class declares its block",
                         )
                     )
                 elif block not in APP_KINDS:
@@ -2878,15 +2878,15 @@ class Codebase(ts.AggregateRoot):
                             stmt.lineno,
                             "TB052",
                             f"{where} is {KIND_NAME[block]}; only an app, an app loader, an app "
-                            "config, an app config spec, and a config repository live in a "
-                            "bootstrap module",
+                            "config, an app config spec, and a config repository live in an "
+                            "app module",
                         )
                     )
         found.extend(
             self._statement_violations(
                 module,
-                "bootstrap",
-                "a bootstrap module holds only imports, classes, declared functions, and Final constants",
+                "app",
+                "an app module holds only imports, classes, declared functions, and Final constants",
             )
         )
         return tuple(found)
@@ -2983,7 +2983,7 @@ class Codebase(ts.AggregateRoot):
                         lineno,
                         "TB064",
                         f"{module.name()} imports {target}; "
-                        "a protocol module never imports srv or bootstrap",
+                        "a protocol module never imports srv or app",
                     )
                 )
             elif head != PROTOCOL_PACKAGE and head in self._tree_tops():
@@ -3732,13 +3732,13 @@ class Codebase(ts.AggregateRoot):
                     NORM_IMPORTS[role],
                 )
             )
-        elif role == "wiring":
+        elif role == "component":
             found.extend(
                 self._tesser_import_violations(
                     module,
                     "role",
                     ROLE_TESSER_PACKAGE[role],
-                    "a wiring module's tesser imports are tesser.component, "
+                    "a component module's tesser imports are tesser.component, "
                     "and tesser.errors",
                     "a role module imports its tesser package exactly once, as ts",
                     "a role module imports its tesser package exactly once, as ts",
@@ -3785,17 +3785,17 @@ class Codebase(ts.AggregateRoot):
                                 "TB060",
                                 f"{module.name()} imports {target}; the same-context matrix is "
                                 "a role to itself, application to domain and client, adapters to "
-                                "application/ports, wiring to application, adapters, and client",
+                                "application/ports, component to application, adapters, and client",
                             )
                         )
-                elif tail != "client" or not (role == "wiring" or (role == "adapters" and holds_gateway)):
+                elif tail != "client" or not (role == "component" or (role == "adapters" and holds_gateway)):
                     denied.append(
                         Violation(
                             module.path(),
                             lineno,
                             "TB061",
                             f"{module.name()} imports {target}; a context reaches another context "
-                            "only through its client, and only from gateways and wiring",
+                            "only through its client, and only from gateways and components",
                         )
                     )
                 found.extend(denied)
@@ -3867,20 +3867,20 @@ class Codebase(ts.AggregateRoot):
                             "a host reaches a context only through its handlers",
                         )
                     )
-                elif package == "bootstrap" and tail not in ("wiring", "client", "adapters"):
+                elif package == "app" and tail not in ("component", "client", "adapters"):
                     denied.append(
                         Violation(
                             module.path(),
                             lineno,
                             "TB063",
-                            f"{module.name()} imports {target}; bootstrap builds from "
-                            "wiring, clients, and adapters, never domain or application",
+                            f"{module.name()} imports {target}; an app builds from "
+                            "components, clients, and adapters, never domain or application",
                         )
                     )
                 found.extend(denied)
                 if not denied:
                     found.extend(self._form_violations(module, edge))
-            elif package == "bootstrap" and pieces[0] == "srv":
+            elif package == "app" and pieces[0] == "srv":
                 found.append(
                     Violation(
                         module.path(),
@@ -3899,14 +3899,14 @@ class Codebase(ts.AggregateRoot):
                         "production code never imports the tests package",
                     )
                 )
-            elif package == "bootstrap" and pieces[0] == PROTOCOL_PACKAGE:
+            elif package == "app" and pieces[0] == PROTOCOL_PACKAGE:
                 found.append(
                     Violation(
                         module.path(),
                         lineno,
                         "TB066",
                         f"{module.name()} imports {target}; "
-                        "bootstrap composes the application and never imports protocol",
+                        "an app composes the application and never imports protocol",
                     )
                 )
         return tuple(found)
@@ -3917,12 +3917,12 @@ class Codebase(ts.AggregateRoot):
             return ("", KERNEL_TIER)
         if parts[0] == "srv" and len(parts) >= 2:
             return ("", SRV_TIER)
-        if parts[0] == "bootstrap" and len(parts) >= 2:
-            return ("", BOOTSTRAP_TIER)
+        if parts[0] == "app" and len(parts) >= 2:
+            return ("", APP_TIER)
         if parts[0] == PROTOCOL_PACKAGE and len(parts) >= 2:
             return ("", PROTOCOL_TIER)
         if parts[0] == TESTS_ROLE and len(parts) >= 2:
-            return ("", APP_TIER)
+            return ("", ROOT_TESTS_TIER)
         if len(parts) < 3 or parts[0] not in contexts:
             return None
         if parts[1] == TESTS_ROLE:
@@ -3977,14 +3977,14 @@ class Codebase(ts.AggregateRoot):
                 ),
             )
         found.extend(self._shell_reach_violations(module, tier))
-        if tier == APP_TIER:
+        if tier == ROOT_TESTS_TIER:
             for edge in module.import_edges():
                 target = str(edge._target)
                 lineno = int(edge._lineno)
                 pieces = target.split(".")
                 if pieces[0] not in contexts:
                     continue
-                if len(pieces) >= 2 and pieces[1] in ("wiring", "client"):
+                if len(pieces) >= 2 and pieces[1] in ("component", "client"):
                     continue
                 found.append(
                     Violation(
@@ -3993,7 +3993,7 @@ class Codebase(ts.AggregateRoot):
                         "TB070",
                         f"{module.name()} imports {target}, but a test placed in "
                         "the root tests package reaches a context only through its "
-                        "wiring and client; "
+                        "component and client; "
                         "a test reaches only what its placement allows",
                     )
                 )
@@ -4036,14 +4036,14 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
             return tuple(found)
-        if tier == BOOTSTRAP_TIER:
+        if tier == APP_TIER:
             for edge in module.import_edges():
                 target = str(edge._target)
                 lineno = int(edge._lineno)
                 pieces = target.split(".")
                 if pieces[0] not in contexts:
                     continue
-                if len(pieces) >= 2 and pieces[1] in ("wiring", "client", "adapters"):
+                if len(pieces) >= 2 and pieces[1] in ("component", "client", "adapters"):
                     continue
                 found.append(
                     Violation(
@@ -4051,7 +4051,7 @@ class Codebase(ts.AggregateRoot):
                         lineno,
                         "TB070",
                         f"{module.name()} imports {target}, but a test placed in "
-                        "bootstrap reaches a context only through its wiring, client, "
+                        "an app reaches a context only through its component, client, "
                         "and adapters; "
                         "a test reaches only what its placement allows",
                     )

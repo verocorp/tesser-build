@@ -42,12 +42,12 @@ behind an interface the calling context owns?* Yes → cross-context gateway.
    peer's `Client` and translates the peer's DTOs into the caller's own types —
    the peer's vocabulary never crosses inward. The composition root constructs
    the adapter (it is the one place allowed to know both contexts) and injects
-   it (`bootstrap.md`).
+   it (`app.md`).
 3. **Dependencies run one way.** campaign → linkpolicy means linkpolicy never
    imports campaign — locked by a `forbidden` contract in the verified impl
    (`examples/python-app/.importlinter`, with injected-violation teeth in
    `tests/test_architecture_teeth.py`). A would-be cycle is a
-   boundary error, not a wiring problem (`strategic-design.md#bounded-contexts`).
+   boundary error, not a construction problem (`strategic-design.md#bounded-contexts`).
 4. **Synchronous calls are fail-closed.** A policy rejection *or* a peer outage
    fails the use case honestly — the gateway propagates the peer's infra error,
    it never swallows it into a default (locked by
@@ -59,4 +59,4 @@ Not yet materialized beyond the rules above (see status note). The verified impl
 to imitate: `examples/python-app/campaign/adapters/gateways/target_policy.py`
 (the `TargetPolicy` port and its request/response DTOs in campaign's
 `application/ports/`, the outcome an enum; adapter over `linkpolicy.Client`;
-wired in `examples/python-app/bootstrap/app.py`).
+wired in `examples/python-app/app/app.py`).

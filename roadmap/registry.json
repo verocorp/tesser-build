@@ -218,11 +218,11 @@
       "rationale": []
     },
     {
-      "key": "wiring",
+      "key": "component",
       "title": "Context wiring",
-      "skill": "wiring.md",
+      "skill": "component.md",
       "py_example": [
-        "examples/python-app/campaign/wiring"
+        "examples/python-app/campaign/component"
       ],
       "go_example": [
         "examples/app"
@@ -230,17 +230,17 @@
       "go_analyzers": [],
       "py_checks": [],
       "enforcement_tests": [
-        "examples/python-app/campaign/wiring/test_wire.py",
-        "examples/python-app/linkpolicy/wiring/test_wire.py"
+        "examples/python-app/campaign/component/test_component.py",
+        "examples/python-app/linkpolicy/component/test_component.py"
       ],
       "rationale": []
     },
     {
-      "key": "bootstrap",
-      "title": "bootstrap + app config + lifecycle",
-      "skill": "bootstrap.md",
+      "key": "app",
+      "title": "app + config + lifecycle",
+      "skill": "app.md",
       "py_example": [
-        "examples/python-app/bootstrap"
+        "examples/python-app/app"
       ],
       "go_example": [
         "examples/app"
@@ -251,9 +251,9 @@
         "examples/python-app/tests/test_enforcement.py",
         "examples/python-app/tests/test_architecture_teeth.py",
         "examples/python-app/tests/test_bootstrap_once.py",
-        "examples/python-app/bootstrap/test_app.py",
-        "examples/python-app/bootstrap/test_loader.py",
-        "examples/python-app/bootstrap/test_repository.py"
+        "examples/python-app/app/test_app.py",
+        "examples/python-app/app/test_loader.py",
+        "examples/python-app/app/test_repository.py"
       ],
       "rationale": []
     },

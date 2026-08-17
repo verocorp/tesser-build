@@ -21,7 +21,7 @@ Legend: ✅ done · 🟡 partial · ❌ absent · — intentionally n/a.
 | Gateway: cross-context | ✅ | ❌ | 🟡 partial | 🟡 in-example | ❌ |
 | Gateway: vendor/ACL | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Context wiring | ✅ | ❌ | ✅ | 🟡 in-example | ❌ |
-| bootstrap + app config + lifecycle | ✅ | ❌ | ✅ | 🟡 in-example | ❌ |
+| app + config + lifecycle | ✅ | ❌ | ✅ | 🟡 in-example | ❌ |
 | srv hosts | ✅ | ❌ | ✅ | 🟡 in-example | ❌ |
 | The map | — | — | ✅ | 🟡 Py only (TB040, TB041, TB042, TB043, TB044, TB045, TB051, TB052, TB069) | ❌ |
 | Strategic design | — | — | ✅ | — | ❌ |

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import tessercheck.adapters.handlers.cli as cli
-from bootstrap.loader import load
+from app.loader import load
 from protocol.cli import CliResponse, UsageError
 from srv.cli.main import dispatch, respond, run
 

@@ -52,7 +52,7 @@ Yes → handler.
    host: the body is opaque bytes to it, and the content type is the handler's
    call.
 3. **The `Client` is injected.** The handler is constructed with the `Client`
-   (`bootstrap.md` wires it, via the host); it never builds or fetches one.
+   (`app.md` wires it, via the host); it never builds or fetches one.
 4. **Cross-cutting concerns belong to the host, not the handler.** Auth
    *policy*, logging, recovery, rate limits are middleware at the host layer
    (`srv.md`); a handler that imports another context to do auth has leaked a
@@ -227,7 +227,7 @@ transform. Everything else is review plus the domain-logic leakage signal list
   kind set at one endpoint; conflict and not-found become indistinguishable
   on the wire. Always the shared mapper.
 - **Handler builds its dependencies.** Constructing the service or fetching
-  the `Client` from a registry — construction belongs to wiring/bootstrap;
+  the `Client` from a registry — construction belongs to component/bootstrap;
   the handler receives.
 - **The transport leaking into the signature.** A handler method taking the
   framework's request object, or a loose `campaign_id: str` and `raw: bytes`

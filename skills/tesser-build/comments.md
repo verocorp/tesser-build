@@ -11,7 +11,7 @@ judgment call made inline at write time (Chris ruling 2026-07-19).
 ## The norm
 
 1. **No code comments.** No line comments, no block comments, no doc
-   comments — in domain code, boundaries, adapters, wiring, hosts, and tests
+   comments — in domain code, boundaries, adapters, components, hosts, and tests
    alike. There is no test exemption: the norm covers the whole tree.
 2. **No docstrings, and no bare string-literal statements.** A Python
    docstring and a Go doc comment are the same thing under this norm: prose
@@ -65,7 +65,7 @@ judgment call made inline at write time (Chris ruling 2026-07-19).
 ## Where the norm applies
 
 - **Constructed-app code** — what the skill routes you to build in a
-  consumer repo, at every layer (domain, application, adapters, wiring,
+  consumer repo, at every layer (domain, application, adapters, component,
   bootstrap, srv, tests).
 - **The example trees** (`examples/`) — they are production templates and
   the norm's verified impls; they conform and are gated in CI.

@@ -5,8 +5,8 @@ import tessercheck.tests.conftest as conftest
 
 
 def test_no_module_shape_is_silent(tmp_path: Path) -> None:
-    bait = "import app.domain.thing\nimport tesser.domain\nX = 1\n"
-    test_bait = "import app.domain.thing\ndef test_ok() -> None:\n    assert True\n"
+    bait = "import shop.domain.thing\nimport tesser.domain\nX = 1\n"
+    test_bait = "import shop.domain.thing\ndef test_ok() -> None:\n    assert True\n"
     corpus = (
         ("solo.py", bait),
         ("conftest.py", bait),
@@ -25,30 +25,30 @@ def test_no_module_shape_is_silent(tmp_path: Path) -> None:
         ("srv/__main__.py", bait),
         ("srv/conftest.py", bait),
         ("srv/deep/handler.py", bait),
-        ("bootstrap/__main__.py", bait),
+        ("app/__main__.py", bait),
         ("protocol/__main__.py", bait),
         ("protocol/conftest.py", bait),
-        ("app/__main__.py", "import app.domain.thing\n"),
-        ("app/domain/__main__.py", "import app.application.service\n"),
-        ("app/adapters/gateways/__main__.py", "import app.domain.thing\n"),
-        ("app/application/ports/__main__.py", "import app.domain.thing\n"),
-        ("app/application/ports/sub/deep.py", "import app.domain.thing\n"),
-        ("app/application/ports/test_support.py", test_bait),
-        ("app/tests/__main__.py", bait),
+        ("app/__main__.py", "import shop.domain.thing\n"),
+        ("shop/domain/__main__.py", "import shop.application.service\n"),
+        ("shop/adapters/gateways/__main__.py", "import shop.domain.thing\n"),
+        ("shop/application/ports/__main__.py", "import shop.domain.thing\n"),
+        ("shop/application/ports/sub/deep.py", "import shop.domain.thing\n"),
+        ("shop/application/ports/test_support.py", test_bait),
+        ("shop/tests/__main__.py", bait),
         ("app/conftest.py", bait),
-        ("app/adapters/conftest.py", bait),
+        ("shop/adapters/conftest.py", bait),
         ("app/test_direct.py", test_bait),
-        ("app/domain/sub/deep.py", "import app.application.service\n"),
-        ("app/stray.py", bait),
-        ("app/stray_pkg/mod.py", bait),
-        ("app/domain/eval_bad.py", test_bait),
+        ("shop/domain/sub/deep.py", "import shop.application.service\n"),
+        ("shop/stray.py", bait),
+        ("shop/stray_pkg/mod.py", bait),
+        ("shop/domain/eval_bad.py", test_bait),
         ("tests.py", bait),
         ("srv.py", bait),
         ("app.py", bait),
+        ("shop.py", bait),
         ("protocol.py", bait),
-        ("bootstrap.py", bait),
-        ("app/tests.py", "import app.application.service\n"),
-        ("app/application/ports.py", "import app.domain.thing\n"),
+        ("shop/tests.py", "import shop.application.service\n"),
+        ("shop/application/ports.py", "import shop.domain.thing\n"),
         ("kernel.py", bait),
         ("kernel/money_bait.py", bait),
         ("kernel/test_money.py", test_bait),
@@ -56,10 +56,10 @@ def test_no_module_shape_is_silent(tmp_path: Path) -> None:
         ("__main__.py", bait),
         ("weird/__init__.py", bait),
         ("srv/deep/__init__.py", bait),
-        ("app/stray_pkg/__init__.py", bait),
+        ("shop/stray_pkg/__init__.py", bait),
         ("tests/test_utils/__init__.py", bait),
-        ("app/domain/eval_pkg/__init__.py", bait),
-        ("app/adapters/conftest/__init__.py", bait),
+        ("shop/domain/eval_pkg/__init__.py", bait),
+        ("shop/adapters/conftest/__init__.py", bait),
     )
     conftest.conforming_tree(tmp_path)
     for rel, source in corpus:
@@ -75,7 +75,7 @@ def test_no_module_shape_is_silent(tmp_path: Path) -> None:
         f"import — a location the walk does not govern: {silent}"
     )
     covered = frozenset(
-        checks.Codebase._locate(rel[:-3].replace("/", "."), False, frozenset({"app"}))
+        checks.Codebase._locate(rel[:-3].replace("/", "."), False, frozenset({"shop"}))
         for rel, _ in corpus
         if not rel.endswith("__init__.py")
     )

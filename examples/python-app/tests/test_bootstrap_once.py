@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import bootstrap.app as app
+import app.app as app
 import campaign.client.client as client
 from tests.support import app_config
 

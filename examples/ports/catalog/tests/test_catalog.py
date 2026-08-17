@@ -6,7 +6,7 @@ import catalog.application.ports.item_repository as item_repository
 import catalog.application.ports.name_policy as name_policy
 import catalog.application.service as service
 import catalog.client.client as client
-import catalog.wiring.wire as wire
+import catalog.component.component as wire
 
 
 @ts.fake
