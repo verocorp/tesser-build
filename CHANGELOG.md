@@ -5,6 +5,20 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.59.0] - 2026-08-17
+
+### Fixed
+- **`MoneyAmount` rejects a non-finite amount.** In the tree the skill points at
+  as the verified impl, `MoneyAmount("Infinity")` was accepted — `Decimal("Infinity") < 0`
+  is False — and `MoneyAmount("NaN")` escaped as `decimal.InvalidOperation`
+  rather than a `DomainError`. Both are now `invalid_budget_amount`.
+
+  The leak was not where the old note assumed. `Decimal("NaN")` parses happily;
+  it is the `parsed < 0` comparison on the next line that signals, and that line
+  sits outside the try. A finiteness check before the comparison fixes both
+  symptoms at once, because the value that cannot be compared is exactly the
+  value that is not finite.
+
 ## [0.0.58.0] - 2026-08-17
 
 `@ts.function` becomes `@ts.do_not_use_function`. Declaring a module function

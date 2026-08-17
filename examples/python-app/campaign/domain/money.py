@@ -26,6 +26,8 @@ class MoneyAmount(ts.ValueObject):
             parsed = Decimal(value)
         except InvalidOperation as e:
             raise invalid("invalid_budget_amount", f"budget amount {value!r} is not a number") from e
+        if not parsed.is_finite():
+            raise invalid("invalid_budget_amount", f"budget amount {value!r} is not a finite number")
         if parsed < 0:
             raise invalid("invalid_budget_amount", f"budget amount must not be negative: {parsed}")
         object.__setattr__(self, "_value", parsed)
