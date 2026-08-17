@@ -21,7 +21,7 @@ _USAGE: Final[str] = (
 )
 
 
-@ts.function
+@ts.do_not_use_function
 def commands_for(app: App) -> dict[str, Command]:
     campaign = cli.Handler(app.campaign.client)
     return {
@@ -31,7 +31,7 @@ def commands_for(app: App) -> dict[str, Command]:
     }
 
 
-@ts.function
+@ts.do_not_use_function
 def respond(run: Callable[[], CliResponse]) -> CliResponse:
     try:
         return run()
@@ -45,14 +45,14 @@ def respond(run: Callable[[], CliResponse]) -> CliResponse:
         return CliResponse(1, stdout="", stderr="unexpected error")
 
 
-@ts.function
+@ts.do_not_use_function
 def dispatch(commands: dict[str, Command], argv: list[str]) -> CliResponse:
     if not argv or argv[0] not in commands:
         return CliResponse(2, stdout="", stderr=_USAGE)
     return respond(lambda: commands[argv[0]](CliRequest(args=tuple(argv[1:]))))
 
 
-@ts.function
+@ts.do_not_use_function
 def run(argv: list[str]) -> int:
     app = load()
     try:

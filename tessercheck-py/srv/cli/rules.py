@@ -18,7 +18,7 @@ _OUTPUT: Final[str] = "RULES.md"
 _HERE: Final[str] = "."
 
 
-@ts.function
+@ts.do_not_use_function
 def respond(run: Callable[[], CliResponse]) -> CliResponse:
     try:
         return run()
@@ -28,12 +28,12 @@ def respond(run: Callable[[], CliResponse]) -> CliResponse:
         return CliResponse(1, stdout="", stderr="unexpected error")
 
 
-@ts.function
+@ts.do_not_use_function
 def dispatch(handler: cli.Handler, args: list[str]) -> CliResponse:
     return respond(lambda: handler.rulebook(CliRequest(args=tuple(args))))
 
 
-@ts.function
+@ts.do_not_use_function
 def settle(rendered: str, output: Path, check: bool) -> int:
     if check:
         if not output.exists() or output.read_text() != rendered:
@@ -49,7 +49,7 @@ def settle(rendered: str, output: Path, check: bool) -> int:
     return 0
 
 
-@ts.function
+@ts.do_not_use_function
 def run(argv: list[str]) -> int:
     check = "--check" in argv
     args = [arg for arg in argv if arg != "--check"]

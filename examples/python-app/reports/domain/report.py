@@ -77,7 +77,7 @@ class LinkVerdict(ts.ValueObject):
     _reason: values.Reason
 
 
-@ts.function
+@ts.do_not_use_function
 def join_links_with_verdicts(
     links: tuple[Link, ...], verdicts: tuple[RecordedVerdict, ...]
 ) -> tuple[LinkVerdict, ...]:

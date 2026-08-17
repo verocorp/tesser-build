@@ -17,7 +17,7 @@ from srv.http.router import Route, match
 MAX_BUFFERED_BODY: Final[int] = 1_048_576
 
 
-@ts.function
+@ts.do_not_use_function
 def buffered_length(headers: Iterable[tuple[str, str]]) -> int:
     lengths: list[str] = []
     streaming = False
@@ -44,7 +44,7 @@ def buffered_length(headers: Iterable[tuple[str, str]]) -> int:
     return declared
 
 
-@ts.function
+@ts.do_not_use_function
 def respond(run: Callable[[], HttpResponse]) -> HttpResponse:
     try:
         return run()
@@ -62,7 +62,7 @@ def respond(run: Callable[[], HttpResponse]) -> HttpResponse:
         return HttpResponse.problem(500, "internal", "unexpected error")
 
 
-@ts.function
+@ts.do_not_use_function
 def routes_for(app: App) -> tuple[Route, ...]:
     campaign = http.Handler(app.campaign.client)
     reports = reports_http.Handler(app.reports.client)
@@ -76,7 +76,7 @@ def routes_for(app: App) -> tuple[Route, ...]:
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
     routes = routes_for(app)
 

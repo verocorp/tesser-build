@@ -5,7 +5,7 @@ from typing import Final
 import tesser.domain as ts
 
 
-@ts.function
+@ts.do_not_use_function
 def canonical_str(value: str) -> str:
     return value
 

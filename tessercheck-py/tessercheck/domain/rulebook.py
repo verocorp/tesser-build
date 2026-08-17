@@ -178,7 +178,7 @@ class RuleRow(ts.ValueObject):
         return self._linenos
 
 
-@ts.function
+@ts.do_not_use_function
 def _ts_name_map(tree: ast.Module) -> dict[str, str]:
     for node in tree.body:
         if (
@@ -200,7 +200,7 @@ def _ts_name_map(tree: ast.Module) -> dict[str, str]:
     raise RuntimeError("TS_NAME_BY_BLOCK not found in checks.py")
 
 
-@ts.function
+@ts.do_not_use_function
 def _instantiations(
     tree: ast.Module, method: ast.FunctionDef
 ) -> list[dict[str, str | None]]:
@@ -225,7 +225,7 @@ def _instantiations(
     return found or [{}]
 
 
-@ts.function
+@ts.do_not_use_function
 def _local_aliases(method: ast.FunctionDef) -> dict[str, str]:
     out: dict[str, str] = {}
     for node in method.body:
@@ -242,7 +242,7 @@ def _local_aliases(method: ast.FunctionDef) -> dict[str, str]:
     return out
 
 
-@ts.function
+@ts.do_not_use_function
 def _fill_hole(
     expr: ast.expr,
     binding: dict[str, str | None],
@@ -282,7 +282,7 @@ def _fill_hole(
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def _render_message(
     node: ast.expr,
     binding: dict[str, str | None],
@@ -309,7 +309,7 @@ def _render_message(
     return "".join(parts)
 
 
-@ts.function
+@ts.do_not_use_function
 def _protocol_package(tree: ast.Module) -> str:
     for node in tree.body:
         if (
@@ -323,7 +323,7 @@ def _protocol_package(tree: ast.Module) -> str:
     raise RuntimeError("PROTOCOL_PACKAGE not found in checks.py")
 
 
-@ts.function
+@ts.do_not_use_function
 def rule_rows(tree: ast.Module) -> tuple[RuleRow, ...]:
     ts_map = _ts_name_map(tree)
     order: list[str] = []
@@ -416,7 +416,7 @@ def rule_rows(tree: ast.Module) -> tuple[RuleRow, ...]:
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def test_assertions(
     modules: tuple[tuple[str, str], ...] = (),
 ) -> tuple[tuple[str, tuple[str, ...]], ...]:
@@ -440,7 +440,7 @@ def test_assertions(
     return tuple(out)
 
 
-@ts.function
+@ts.do_not_use_function
 def covering_tests(
     clause: str, assertions: tuple[tuple[str, tuple[str, ...]], ...] = ()
 ) -> tuple[str, ...]:
@@ -451,7 +451,7 @@ def covering_tests(
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def contracts(text: str) -> tuple[tuple[str, str], ...]:
     found: list[tuple[str, str]] = []
     contract_id = None
@@ -467,7 +467,7 @@ def contracts(text: str) -> tuple[tuple[str, str], ...]:
     return tuple(found)
 
 
-@ts.function
+@ts.do_not_use_function
 def render(
     checks_text: str,
     test_modules: tuple[tuple[str, str], ...] = (),

@@ -8,12 +8,12 @@ import reports.client.client as client
 import reports.domain.report as report
 
 
-@ts.function
+@ts.do_not_use_function
 def domain_links(listed: link_source.ListLinksResponse) -> tuple[report.Link, ...]:
     return tuple(report.Link(slug=f.slug, target_url=f.target_url) for f in listed.links)
 
 
-@ts.function
+@ts.do_not_use_function
 def domain_verdicts(listed: verdict_source.ListVerdictsResponse) -> tuple[report.RecordedVerdict, ...]:
     return tuple(
         report.RecordedVerdict(f.target_url, f.decision == verdict_source.VerdictDecision.ALLOWED, f.reason)
@@ -21,7 +21,7 @@ def domain_verdicts(listed: verdict_source.ListVerdictsResponse) -> tuple[report
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def links_by_verdict_response(rows: tuple[report.LinkVerdict, ...]) -> client.LinksByVerdictResponse:
     views = tuple(
         client.LinkVerdictView(str(r.slug), str(r.target_url), str(r.allowed) == "allowed", str(r.reason))

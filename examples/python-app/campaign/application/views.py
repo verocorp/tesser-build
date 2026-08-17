@@ -13,7 +13,7 @@ import campaign.domain.short_link as short_link
 from tesser.errors import conflict, not_found
 
 
-@ts.function
+@ts.do_not_use_function
 def campaign_view(c: campaign.Campaign) -> client.CampaignView:
     return client.CampaignView(
         campaign_id=str(c.id),
@@ -23,14 +23,14 @@ def campaign_view(c: campaign.Campaign) -> client.CampaignView:
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def _domain_link_view(link: short_link.ShortLink) -> client.LinkView:
     return client.LinkView(
         slug=str(link.slug), target_url=str(link.target_url), active=str(link.status) == "active"
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def link_view(record: campaign_repository.LinkRecord) -> client.LinkView:
     return client.LinkView(
         slug=record.slug,
@@ -39,7 +39,7 @@ def link_view(record: campaign_repository.LinkRecord) -> client.LinkView:
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def save_request(c: campaign.Campaign) -> campaign_repository.SaveCampaignRequest:
     return campaign_repository.SaveCampaignRequest(
         id=str(c.id),
@@ -48,12 +48,12 @@ def save_request(c: campaign.Campaign) -> campaign_repository.SaveCampaignReques
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def _money_record(c: campaign.Campaign) -> campaign_repository.MoneyRecord:
     return campaign_repository.MoneyRecord(amount=str(c.budget.amount), currency=str(c.budget.currency))
 
 
-@ts.function
+@ts.do_not_use_function
 def _link_record(link: short_link.ShortLink) -> campaign_repository.LinkRecord:
     status = (
         campaign_repository.LinkStatus.ACTIVE
@@ -63,7 +63,7 @@ def _link_record(link: short_link.ShortLink) -> campaign_repository.LinkRecord:
     return campaign_repository.LinkRecord(slug=str(link.slug), target_url=str(link.target_url), status=status)
 
 
-@ts.function
+@ts.do_not_use_function
 def campaign_spec(record: campaign_repository.CampaignRecord) -> campaign.CampaignSpec:
     return campaign.CampaignSpec(
         id=record.id,
@@ -79,7 +79,7 @@ def campaign_spec(record: campaign_repository.CampaignRecord) -> campaign.Campai
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def required_campaign(
     found: campaign_repository.FindCampaignResponse, campaign_id: str
 ) -> campaign.Campaign:
@@ -92,7 +92,7 @@ def required_campaign(
             typing.assert_never(unreachable)
 
 
-@ts.function
+@ts.do_not_use_function
 def resolved_target(found: campaign_repository.FindCampaignResponse, slug: str) -> str:
     match found.outcome:
         case campaign_repository.CampaignLookup.FOUND:
@@ -103,7 +103,7 @@ def resolved_target(found: campaign_repository.FindCampaignResponse, slug: str) 
             typing.assert_never(unreachable)
 
 
-@ts.function
+@ts.do_not_use_function
 def active_target(record: campaign_repository.CampaignRecord, slug: str) -> str:
     for link in record.links:
         if link.slug == slug and link.status == campaign_repository.LinkStatus.ACTIVE:
@@ -111,7 +111,7 @@ def active_target(record: campaign_repository.CampaignRecord, slug: str) -> str:
     raise not_found("link_missing", f"no active link for slug {slug!r}")
 
 
-@ts.function
+@ts.do_not_use_function
 def ensure_target_allowed(checked: target_policy.CheckTargetResponse) -> None:
     match checked.verdict:
         case target_policy.PolicyVerdict.ALLOWED:
@@ -122,7 +122,7 @@ def ensure_target_allowed(checked: target_policy.CheckTargetResponse) -> None:
             typing.assert_never(unreachable)
 
 
-@ts.function
+@ts.do_not_use_function
 def ensure_slug_available(checked: campaign_repository.SlugTakenResponse, slug: str) -> None:
     match checked.availability:
         case campaign_repository.SlugAvailability.FREE:

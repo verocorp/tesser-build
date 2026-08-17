@@ -5,6 +5,26 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.58.0] - 2026-08-17
+
+`@ts.function` becomes `@ts.do_not_use_function`. Declaring a module function
+should look like what it is.
+
+### Changed
+- **The decorator every module function carries is renamed at all five
+  placements** — `tesser.domain`, `tesser.application`, `tesser.adapters`,
+  `tesser.context`, `tesser.srv`. The kind it declares is unchanged; only the
+  name consumers write moves. 132 call sites across every tree, and every
+  clause that names it: "a kernel function declares itself with
+  @ts.do_not_use_function", and the same for srv, protocol, bootstrap's peer,
+  and context modules.
+- `ts.load` keeps its name. It marks the one no-argument function an app is
+  meant to have, which is the opposite of a thing to discourage.
+
+The rename is the point rather than a side effect: a module function is legal
+where the rules still allow one, and reading `@ts.do_not_use_function` at the
+top of it is meant to be uncomfortable.
+
 ## [0.0.57.0] - 2026-08-17
 
 `helper` and `fake` move to where the analyzer already thought they lived, and

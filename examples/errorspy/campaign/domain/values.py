@@ -117,7 +117,7 @@ class DateWindow(ts.ValueObject):
     _end: Day
 
 
-@ts.function
+@ts.do_not_use_function
 def _day(value: str, *, field: str) -> Day:
     try:
         return Day(value)

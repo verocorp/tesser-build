@@ -283,7 +283,7 @@ def test_placement_totality_is_flagged() -> None:
     )
     assert any(
         "plain.domain.thing.stray" in f
-        and "a module function declares itself with @ts.function" in f
+        and "a module function declares itself with @ts.do_not_use_function" in f
         for f in findings
     )
     assert any("a module constant is Final" in f for f in findings)
@@ -311,7 +311,7 @@ def test_declared_function_and_final_constant_pass() -> None:
                 "from typing import Final\n"
                 "import tesser.domain as ts\n"
                 "LIMIT: Final[int] = 3\n"
-                "@ts.function\n"
+                "@ts.do_not_use_function\n"
                 "def declared() -> None:\n"
                 "    return None\n",
                 False,
@@ -597,10 +597,10 @@ def test_protocol_module_totality_is_flagged() -> None:
                 "    pass\n"
                 "class Server(ts.Host):\n"
                 "    pass\n"
-                "@ts.function\n"
+                "@ts.do_not_use_function\n"
                 "def fine() -> None:\n"
                 "    return None\n"
-                "@ts.function\n"
+                "@ts.do_not_use_function\n"
                 "def lazy() -> None:\n"
                 "    import tesser.domain\n"
                 "def stray() -> None:\n"
@@ -641,7 +641,7 @@ def test_protocol_module_totality_is_flagged() -> None:
     )
     assert any(
         "protocol.box.stray" in f
-        and "a protocol function declares itself with @ts.function" in f
+        and "a protocol function declares itself with @ts.do_not_use_function" in f
         for f in findings
     )
     assert (
@@ -1683,7 +1683,7 @@ def test_srv_and_bootstrap_statement_totality() -> None:
                 "srv.box",
                 "import tesser.srv as ts\n"
                 "import tesser.domain as td\n"
-                "@ts.function\n"
+                "@ts.do_not_use_function\n"
                 "def fine() -> None:\n"
                 "    return None\n"
                 "def stray() -> None:\n"
@@ -1716,7 +1716,7 @@ def test_srv_and_bootstrap_statement_totality() -> None:
     )
     assert any(
         "srv.box.stray" in f
-        and "a srv function declares itself with @ts.function" in f
+        and "a srv function declares itself with @ts.do_not_use_function" in f
         for f in findings
     )
     assert not any("srv.box.fine" in f for f in findings)
@@ -1999,7 +1999,7 @@ def test_srv_and_bootstrap_tesser_form_modes() -> None:
                 "srv.dup",
                 "import tesser.srv as ts\n"
                 "import tesser.srv as ts\n"
-                "@ts.function\n"
+                "@ts.do_not_use_function\n"
                 "def go() -> None:\n"
                 "    return None\n",
                 False,
@@ -3249,7 +3249,7 @@ def test_a_bootstrap_test_reaches_a_context_like_production_bootstrap() -> None:
                 "bootstrap/boot.py",
                 "bootstrap.boot",
                 "import tesser.context as ts\n"
-                "@ts.function\n"
+                "@ts.do_not_use_function\n"
                 "def boot() -> int:\n"
                 "    return 1\n",
                 False,
@@ -4250,7 +4250,7 @@ def test_exit_norms_leaf_and_structured() -> None:
                 "app/domain/exits.py",
                 "app.domain.exits",
                 "import tesser.domain as ts\n"
-                "@ts.function\n"
+                "@ts.do_not_use_function\n"
                 "def canonical_str(value: str) -> str:\n"
                 "    return value\n"
                 "class GoodLeaf(ts.ValueObject):\n"
@@ -4345,7 +4345,7 @@ def test_a_value_object_has_one_construction_door() -> None:
                 "app/domain/doors.py",
                 "app.domain.doors",
                 "import tesser.domain as ts\n"
-                "@ts.function\n"
+                "@ts.do_not_use_function\n"
                 "def canonical_str(value: str) -> str:\n"
                 "    return value\n"
                 "class Slug(ts.ValueObject):\n"
@@ -4415,7 +4415,7 @@ def test_review_pins_for_the_shape_norms() -> None:
                 "app.domain.pins",
                 "import tesser.domain as ts\n"
                 "from typing import ClassVar, Self\n"
-                "@ts.function\n"
+                "@ts.do_not_use_function\n"
                 "def canonical_str(value: str) -> str:\n"
                 "    return value\n"
                 "class SelfDoor(ts.ValueObject):\n"
@@ -4469,7 +4469,7 @@ def test_module_qualified_canonical_delegation_passes() -> None:
                 "app/domain/policy.py",
                 "app.domain.policy",
                 "import tesser.domain as ts\n"
-                "@ts.function\n"
+                "@ts.do_not_use_function\n"
                 "def canonical_str(value: str) -> str:\n"
                 "    return value\n",
                 False,
@@ -6488,7 +6488,7 @@ def test_kernel_statement_totality() -> None:
     )
     assert any("a kernel constant is Final" in f for f in findings), findings
     assert any(
-        "a kernel function declares itself with @ts.function" in f for f in findings
+        "a kernel function declares itself with @ts.do_not_use_function" in f for f in findings
     ), findings
     assert any(
         "a kernel module holds only imports, classes, declared functions, "

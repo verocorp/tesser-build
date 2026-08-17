@@ -81,11 +81,11 @@ def test_declaration_decorators_return_their_target_unchanged() -> None:
     class Double:
         pass
 
-    assert tesser.domain.function(build) is build
-    assert tesser.application.function(build) is build
-    assert tesser.adapters.function(build) is build
-    assert tesser.context.function(build) is build
-    assert tesser.srv.function(build) is build
+    assert tesser.domain.do_not_use_function(build) is build
+    assert tesser.application.do_not_use_function(build) is build
+    assert tesser.adapters.do_not_use_function(build) is build
+    assert tesser.context.do_not_use_function(build) is build
+    assert tesser.srv.do_not_use_function(build) is build
     assert tesser.testing.helper(build) is build
     assert tesser.testing.fake(Double) is Double
 

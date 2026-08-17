@@ -8,7 +8,7 @@ import tessercheck.domain.checks as domain
 import tessercheck.domain.rulebook as rulebook
 
 
-@ts.function
+@ts.do_not_use_function
 def findings(read: source_reader.ReadSourcesResponse) -> tuple[str, ...]:
     codebase = domain.Codebase(
         domain.CodebaseSpec(
@@ -28,7 +28,7 @@ def findings(read: source_reader.ReadSourcesResponse) -> tuple[str, ...]:
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def _declared(read: source_reader.ReadSourcesResponse) -> str:
     match read.root:
         case source_reader.RootForm.APP:
@@ -43,7 +43,7 @@ def _declared(read: source_reader.ReadSourcesResponse) -> str:
             typing.assert_never(unreachable)
 
 
-@ts.function
+@ts.do_not_use_function
 def _sources(
     read: source_reader.ReadSourcesResponse,
 ) -> tuple[tuple[str, str, str | None, bool], ...]:
@@ -53,7 +53,7 @@ def _sources(
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def _is_package(source: source_reader.SourceFile) -> bool:
     match source.form:
         case source_reader.ModuleForm.PACKAGE:
@@ -64,7 +64,7 @@ def _is_package(source: source_reader.SourceFile) -> bool:
             typing.assert_never(unreachable)
 
 
-@ts.function
+@ts.do_not_use_function
 def _text(source: source_reader.SourceFile) -> str | None:
     match source.state:
         case source_reader.SourceState.READ:
@@ -75,7 +75,7 @@ def _text(source: source_reader.SourceFile) -> str | None:
             typing.assert_never(unreachable)
 
 
-@ts.function
+@ts.do_not_use_function
 def rendered_rulebook(read: rulebook_sources.ReadRulebookResponse) -> str:
     return rulebook.render(
         read.checks_text,

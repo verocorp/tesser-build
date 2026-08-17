@@ -81,7 +81,7 @@ class Handler(ts.Handler):
             )
 
 
-@ts.function
+@ts.do_not_use_function
 def _link_body(value: object) -> client.LinkBody:
     link = http.object_field(value, "link")
     return client.LinkBody(
@@ -90,7 +90,7 @@ def _link_body(value: object) -> client.LinkBody:
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def _problem(code: str, title: str, status: int, detail: str) -> http.JSONObject:
     return {
         "type": f"/problems/{code}",
@@ -100,7 +100,7 @@ def _problem(code: str, title: str, status: int, detail: str) -> http.JSONObject
     }
 
 
-@ts.function
+@ts.do_not_use_function
 def _problem_for(err: DomainError, status: int) -> http.JSONObject:
     body = _problem(err.code, err.code.replace("_", " "), status, err.message)
     if err.field is not None:

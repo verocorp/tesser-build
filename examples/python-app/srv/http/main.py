@@ -7,7 +7,7 @@ from srv.http.host import HttpHost
 from srv.run import run_until_signal
 
 
-@ts.function
+@ts.do_not_use_function
 def main() -> None:
     app = load()
     host = HttpHost((app.http.host, app.http.port), app)

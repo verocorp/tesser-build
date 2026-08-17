@@ -56,7 +56,7 @@ class Campaign(ts.AggregateRoot):
     __hash__ = None  # type: ignore[assignment]
 
 
-@ts.function
+@ts.do_not_use_function
 def _admit(links: list[short_link.ShortLink], link: short_link.ShortLink) -> list[short_link.ShortLink]:
     for existing in links:
         if existing.slug == link.slug:

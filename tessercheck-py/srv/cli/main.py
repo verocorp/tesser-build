@@ -13,7 +13,7 @@ from protocol.cli import CliRequest, CliResponse, UsageError
 _USAGE: Final[str] = "usage: python -m srv.cli.main [tree]"
 
 
-@ts.function
+@ts.do_not_use_function
 def respond(run: Callable[[], CliResponse]) -> CliResponse:
     try:
         return run()
@@ -23,12 +23,12 @@ def respond(run: Callable[[], CliResponse]) -> CliResponse:
         return CliResponse(1, stdout="", stderr="unexpected error")
 
 
-@ts.function
+@ts.do_not_use_function
 def dispatch(handler: cli.Handler, argv: list[str]) -> CliResponse:
     return respond(lambda: handler.check(CliRequest(args=tuple(argv))))
 
 
-@ts.function
+@ts.do_not_use_function
 def run(argv: list[str]) -> int:
     app = load()
     try:

@@ -53,7 +53,7 @@ class Handler(ts.Handler):
         return HttpResponse.redirect(resp.target_url)
 
 
-@ts.function
+@ts.do_not_use_function
 def _campaign_body(view: client.CampaignView) -> JSONObject:
     return {
         "campaign_id": view.campaign_id,

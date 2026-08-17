@@ -6,7 +6,7 @@ import parcel.application.ports.parcel_wire as parcel_wire
 import parcel.domain.parcel as parcel
 
 
-@ts.function
+@ts.do_not_use_function
 def parcel_record(p: parcel.Parcel) -> parcel_wire.ParcelRecord:
     return parcel_wire.ParcelRecord(
         code=str(p.code),

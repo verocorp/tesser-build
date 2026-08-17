@@ -20,7 +20,7 @@ class Response(ts.Response):
     body: JSONObject
 
 
-@ts.function
+@ts.do_not_use_function
 def json_object(raw: str) -> JSONObject:
     try:
         data = json.loads(raw)
@@ -31,21 +31,21 @@ def json_object(raw: str) -> JSONObject:
     return data
 
 
-@ts.function
+@ts.do_not_use_function
 def object_field(value: object, name: str) -> JSONObject:
     if not isinstance(value, dict):
         raise BadRequest(f"{name!r} must be an object")
     return value
 
 
-@ts.function
+@ts.do_not_use_function
 def array_field(value: object, name: str) -> list[object]:
     if not isinstance(value, list):
         raise BadRequest(f"{name!r} must be an array")
     return value
 
 
-@ts.function
+@ts.do_not_use_function
 def string_field(value: object) -> str:
     if not isinstance(value, str):
         raise BadRequest("expected a string field")

@@ -10,14 +10,14 @@ import scheduling.client.client as client
 import scheduling.domain.scheduling as domain
 
 
-@ts.function
+@ts.do_not_use_function
 def _booking(view: booking_repository.BookingView) -> domain.Booking:
     return domain.Booking(
         domain.BookingSpec(step=view.step, name=view.name, chosen=view.chosen, offered=view.offered)
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def only(found: booking_repository.FindBookingResponse) -> booking_repository.BookingView:
     match found.presence:
         case booking_repository.BookingPresence.PRESENT:
@@ -28,7 +28,7 @@ def only(found: booking_repository.FindBookingResponse) -> booking_repository.Bo
             typing.assert_never(unreachable)
 
 
-@ts.function
+@ts.do_not_use_function
 def loaded(found: booking_repository.FindBookingResponse) -> domain.Booking:
     match found.presence:
         case booking_repository.BookingPresence.PRESENT:
@@ -39,7 +39,7 @@ def loaded(found: booking_repository.FindBookingResponse) -> domain.Booking:
             typing.assert_never(unreachable)
 
 
-@ts.function
+@ts.do_not_use_function
 def began(found: booking_repository.FindBookingResponse) -> domain.Booking:
     match found.presence:
         case booking_repository.BookingPresence.PRESENT:
@@ -52,7 +52,7 @@ def began(found: booking_repository.FindBookingResponse) -> domain.Booking:
             typing.assert_never(unreachable)
 
 
-@ts.function
+@ts.do_not_use_function
 def begin_reply(found: booking_repository.FindBookingResponse) -> str:
     match found.presence:
         case booking_repository.BookingPresence.PRESENT:
@@ -63,7 +63,7 @@ def begin_reply(found: booking_repository.FindBookingResponse) -> str:
             typing.assert_never(unreachable)
 
 
-@ts.function
+@ts.do_not_use_function
 def save_request(booking_id: str, booking: domain.Booking) -> booking_repository.SaveBookingRequest:
     name = booking.name()
     chosen = booking.chosen()
@@ -76,7 +76,7 @@ def save_request(booking_id: str, booking: domain.Booking) -> booking_repository
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def state(booking: domain.Booking, reply: str) -> client.BookingStateResponse:
     return client.BookingStateResponse(
         step=str(booking.step()),
@@ -85,14 +85,14 @@ def state(booking: domain.Booking, reply: str) -> client.BookingStateResponse:
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def reoffered(view: booking_repository.BookingView, available: tuple[str, ...]) -> domain.Booking:
     booking = _booking(view)
     booking.reoffer(tuple(domain.Slot(label) for label in available))
     return booking
 
 
-@ts.function
+@ts.do_not_use_function
 def confirmed(
     reserved: slot_directory.ReserveSlotResponse,
     booking: domain.Booking,
@@ -107,7 +107,7 @@ def confirmed(
             typing.assert_never(unreachable)
 
 
-@ts.function
+@ts.do_not_use_function
 def confirm_reply(reserved: slot_directory.ReserveSlotResponse, booking: domain.Booking) -> str:
     match reserved.outcome:
         case slot_directory.ReservationOutcome.RESERVED:

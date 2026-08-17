@@ -98,7 +98,7 @@ class Endpoint(ts.Port, Protocol):
     def __call__(self, request: HttpRequest, /) -> HttpResponse: ...
 
 
-@ts.function
+@ts.do_not_use_function
 def _json_object(raw: bytes) -> JSONObject:
     if not raw:
         return {}
@@ -111,14 +111,14 @@ def _json_object(raw: bytes) -> JSONObject:
     return data
 
 
-@ts.function
+@ts.do_not_use_function
 def object_field(value: object) -> JSONObject:
     if not isinstance(value, dict):
         raise BadRequest("expected a JSON object field")
     return value
 
 
-@ts.function
+@ts.do_not_use_function
 def string_field(value: object) -> str:
     if not isinstance(value, str):
         raise BadRequest("expected a string field")
