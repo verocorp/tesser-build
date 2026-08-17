@@ -24,7 +24,7 @@ from tests.support import ROOT
 
 def test_required_roles_present_per_context() -> None:
     for ctx in discovered_contexts():
-        for role in ("domain", "application", "wiring"):
+        for role in ("domain", "application", "component"):
             assert (ROOT / ctx / role).is_dir(), f"{ctx}/{role} missing"
 
 
@@ -46,9 +46,9 @@ def test_public_interface_is_client_plus_dtos_in_the_client_module() -> None:
             )
 
 
-def test_config_lives_in_wiring_not_on_public_top_level() -> None:
+def test_config_lives_in_the_component_not_on_the_public_top_level() -> None:
     for ctx in discovered_contexts():
-        assert (ROOT / ctx / "wiring" / "config.py").is_file()
+        assert (ROOT / ctx / "component" / "config.py").is_file()
         assert not (ROOT / ctx / "config.py").exists(), f"{ctx} config leaked to the public top level"
 
 
@@ -154,7 +154,7 @@ class FakeReportsClientFailing(reports_client.Client):
         raise InfraError("the campaign store is unreachable")
 
 
-def test_reports_handler_translates_client_dtos_to_wire() -> None:
+def test_reports_handler_translates_client_dtos_to_component() -> None:
     resp = reports_http.Handler(FakeReportsClientStub()).links_by_verdict(HttpRequest("GET", "/", {}, {}, {}, b""))
     assert resp.status_code == 200
     assert resp.json_body() == {

@@ -12,8 +12,8 @@ def test_a_declared_tree_of_conforming_modules_yields_no_findings() -> None:
         symlinked=(),
         sources=(
             source_reader.SourceFile(
-                path="app/domain/thing.py",
-                name="app.domain.thing",
+                path="shop/domain/thing.py",
+                name="shop.domain.thing",
                 text=(
                     "import tesser.domain as ts\n"
                     "class ThingSpec(ts.Spec):\n"
@@ -27,8 +27,8 @@ def test_a_declared_tree_of_conforming_modules_yields_no_findings() -> None:
                 form=source_reader.ModuleForm.MODULE,
             ),
             source_reader.SourceFile(
-                path="app/domain/test_thing.py",
-                name="app.domain.test_thing",
+                path="shop/domain/test_thing.py",
+                name="shop.domain.test_thing",
                 text=("def test_thing_exists() -> None:\n    assert True\n"),
                 state=source_reader.SourceState.READ,
                 form=source_reader.ModuleForm.MODULE,
@@ -48,8 +48,8 @@ def test_an_undeclared_tree_is_the_only_thing_reported() -> None:
         symlinked=(),
         sources=(
             source_reader.SourceFile(
-                path="app/domain/thing.py",
-                name="app.domain.thing",
+                path="shop/domain/thing.py",
+                name="shop.domain.thing",
                 text="import os\n",
                 state=source_reader.SourceState.READ,
                 form=source_reader.ModuleForm.MODULE,
@@ -119,8 +119,8 @@ def test_a_finding_reads_path_line_code_then_message() -> None:
         symlinked=(),
         sources=(
             source_reader.SourceFile(
-                path="app/domain/thing.py",
-                name="app.domain.thing",
+                path="shop/domain/thing.py",
+                name="shop.domain.thing",
                 text="import os\n",
                 state=source_reader.SourceState.READ,
                 form=source_reader.ModuleForm.MODULE,
@@ -133,7 +133,7 @@ def test_a_finding_reads_path_line_code_then_message() -> None:
     found = mapping.findings(read)
     assert found != ()
     head, _, rest = found[0].partition(": ")
-    assert head == "app/domain/thing.py:1"
+    assert head == "shop/domain/thing.py:1"
     assert rest.split(" ")[0].startswith("TB0")
 
 
@@ -144,8 +144,8 @@ def test_an_unreadable_source_is_reported_rather_than_read_as_empty() -> None:
         symlinked=(),
         sources=(
             source_reader.SourceFile(
-                path="app/domain/thing.py",
-                name="app.domain.thing",
+                path="shop/domain/thing.py",
+                name="shop.domain.thing",
                 text="",
                 state=source_reader.SourceState.UNREADABLE,
                 form=source_reader.ModuleForm.MODULE,
@@ -156,7 +156,7 @@ def test_an_unreadable_source_is_reported_rather_than_read_as_empty() -> None:
         stdlib=(),
     )
     found = mapping.findings(read)
-    assert any("app/domain/thing.py" in finding for finding in found)
+    assert any("shop/domain/thing.py" in finding for finding in found)
 
 
 def test_the_package_form_of_a_source_changes_the_judgement() -> None:
@@ -166,8 +166,8 @@ def test_the_package_form_of_a_source_changes_the_judgement() -> None:
         symlinked=(),
         sources=(
             source_reader.SourceFile(
-                path="app/domain/__init__.py",
-                name="app.domain",
+                path="shop/domain/__init__.py",
+                name="shop.domain",
                 text="",
                 state=source_reader.SourceState.READ,
                 form=source_reader.ModuleForm.PACKAGE,
@@ -183,8 +183,8 @@ def test_the_package_form_of_a_source_changes_the_judgement() -> None:
         symlinked=(),
         sources=(
             source_reader.SourceFile(
-                path="app/domain/__init__.py",
-                name="app.domain",
+                path="shop/domain/__init__.py",
+                name="shop.domain",
                 text="",
                 state=source_reader.SourceState.READ,
                 form=source_reader.ModuleForm.MODULE,

@@ -4,7 +4,7 @@ import sys
 
 import tesser.srv as ts
 
-from bootstrap.loader import load
+from app.loader import load
 import repo.adapters.handlers.cli as cli
 from protocol.cli import CliRequest, CliResponse, UsageError
 

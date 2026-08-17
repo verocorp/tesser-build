@@ -599,7 +599,7 @@ class StorageCampaignRepository(ts.Repository):
 ## The composition root
 
 The public interface + the wiring site (`public-interface.md`,
-`bootstrap.md`). The context's `client.py` holds the `ts.Client` `Protocol`
+`app.md`). The context's `client.py` holds the `ts.Client` `Protocol`
 and its `ts.Request`/`ts.Response` DTOs; the application service **satisfies
 the Protocol structurally** (no inheritance, no adapter code); the app-level
 `bootstrap` chooses the concretes and injects the `Client` into the handlers.
@@ -634,8 +634,8 @@ type checking stops there. **Reshape only when the surface must differ**
 (rename, subset, composition) — then an explicit class that holds the
 service and delegates.
 
-**The composition root — the settled app anatomy** (`bootstrap.md`,
-`wiring.md`; verified impl `examples/python-app/`). Each context owns a
+**The composition root — the settled app anatomy** (`app.md`,
+`component.md`; verified impl `examples/python-app/`). Each context owns a
 `wiring/` package (its spec-shaped `Config` + a `build` contract); the
 app-level `bootstrap` nests the configs and constructs each component in
 dependency order. A component's impl selection is a private method; module
@@ -643,7 +643,7 @@ constants are `Final`; a context module is imported **as an aliased module,
 never its members** (TB053).
 
 ```python
-# campaign/wiring/wire.py (verified impl) — coordinate-driven, fail-fast, uniform
+# campaign/component/component.py (verified impl) — coordinate-driven, fail-fast, uniform
     def _repo_for(self, cfg: config.Config) -> repo_memory.InMemoryCampaignRepository:
         if cfg.storage == "memory":
             return repo_memory.InMemoryCampaignRepository()

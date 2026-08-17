@@ -10,7 +10,7 @@ from tests.support import ROOT
 
 def test_ruff_config_flags_env_reads_and_exits_below_the_edge(tmp_path: pathlib.Path) -> None:
     shutil.copy(ROOT / "ruff.toml", tmp_path / "ruff.toml")
-    offender = tmp_path / "campaign" / "wiring" / "wire.py"
+    offender = tmp_path / "campaign" / "component" / "component.py"
     offender.parent.mkdir(parents=True)
     offender.write_text(
         "import os\nimport sys\n\n\ndef wire() -> None:\n"
@@ -60,10 +60,10 @@ def test_ruff_config_lifts_the_bans_only_at_the_host_edge(tmp_path: pathlib.Path
 def test_ruff_config_lifts_the_env_ban_only_at_the_config_repository(tmp_path: pathlib.Path) -> None:
     shutil.copy(ROOT / "ruff.toml", tmp_path / "ruff.toml")
     read = "import os\n\n\ndef get() -> None:\n    os.environ['X']\n"
-    (tmp_path / "bootstrap").mkdir(parents=True)
-    (tmp_path / "bootstrap" / "loader.py").write_text(read, encoding="utf-8")
-    (tmp_path / "bootstrap" / "repository.py").write_text(read, encoding="utf-8")
-    (tmp_path / "bootstrap" / "app.py").write_text(read, encoding="utf-8")
+    (tmp_path / "app").mkdir(parents=True)
+    (tmp_path / "app" / "loader.py").write_text(read, encoding="utf-8")
+    (tmp_path / "app" / "repository.py").write_text(read, encoding="utf-8")
+    (tmp_path / "app" / "app.py").write_text(read, encoding="utf-8")
     result = subprocess.run(
         [sys.executable, "-m", "ruff", "check", "--no-cache", "--output-format", "concise", "."],
         cwd=tmp_path,
@@ -72,8 +72,8 @@ def test_ruff_config_lifts_the_env_ban_only_at_the_config_repository(tmp_path: p
         check=False,
     )
     assert result.returncode == 1, result.stdout
-    flagged = [line.split(":")[0] for line in result.stdout.splitlines() if line.startswith("bootstrap/")]
-    assert sorted(flagged) == ["bootstrap/app.py", "bootstrap/loader.py"], result.stdout
+    flagged = [line.split(":")[0] for line in result.stdout.splitlines() if line.startswith("app/")]
+    assert sorted(flagged) == ["app/app.py", "app/loader.py"], result.stdout
 
 
 def test_ruff_config_never_lifts_the_bare_exit_ban(tmp_path: pathlib.Path) -> None:
@@ -115,9 +115,9 @@ def test_import_contracts_break_on_a_host_reaching_past_handlers(tmp_path: pathl
     ):
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / rel).write_text("", encoding="utf-8")
-    (tmp_path / "bootstrap").mkdir()
-    (tmp_path / "bootstrap" / "__init__.py").write_text("import linkpolicy\n", encoding="utf-8")
-    (tmp_path / "srv" / "http" / "main.py").write_text("import bootstrap\n", encoding="utf-8")
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "__init__.py").write_text("import linkpolicy\n", encoding="utf-8")
+    (tmp_path / "srv" / "http" / "main.py").write_text("import app\n", encoding="utf-8")
     (tmp_path / "srv" / "http" / "host.py").write_text(
         "from campaign.adapters.handlers.http import Handler as CampaignHandler\n"
         "from reports.adapters.handlers.http import Handler as ReportsHandler\n"
@@ -148,7 +148,7 @@ def test_import_contracts_break_on_a_host_reaching_past_handlers(tmp_path: pathl
     assert "campaign.client -> reports.client" in result.stdout
 
 
-def test_import_contracts_allow_a_host_reaching_a_context_through_bootstrap(
+def test_import_contracts_allow_a_host_reaching_a_context_through_the_app(
     tmp_path: pathlib.Path,
 ) -> None:
     shutil.copy(ROOT / ".importlinter", tmp_path / ".importlinter")
@@ -174,9 +174,9 @@ def test_import_contracts_allow_a_host_reaching_a_context_through_bootstrap(
     ):
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / rel).write_text("", encoding="utf-8")
-    (tmp_path / "bootstrap").mkdir()
-    (tmp_path / "bootstrap" / "__init__.py").write_text("import linkpolicy\n", encoding="utf-8")
-    (tmp_path / "srv" / "http" / "main.py").write_text("import bootstrap\n", encoding="utf-8")
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "__init__.py").write_text("import linkpolicy\n", encoding="utf-8")
+    (tmp_path / "srv" / "http" / "main.py").write_text("import app\n", encoding="utf-8")
     (tmp_path / "srv" / "http" / "host.py").write_text(
         "from campaign.adapters.handlers.http import Handler as CampaignHandler\n"
         "from reports.adapters.handlers.http import Handler as ReportsHandler\n",

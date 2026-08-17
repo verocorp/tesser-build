@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import tesser.testing as ts
 
-from bootstrap.loader import load
+from app.loader import load
 import repo.adapters.handlers.cli as cli
 from srv.cli.trees import respond, run
 

@@ -116,7 +116,7 @@ Construction mechanics — the embedding struct that satisfies it:
 structural signal `tessercheck` keys on today — it is caught by **review, not the
 compiler** (a `tessercheck` no-leak analyzer on `Client` signatures is a candidate
 future increment; the import-boundary side lives with the composition root,
-`bootstrap.md#how-the-machine-sees-it`). The tells a reviewer looks for:
+`app.md#how-the-machine-sees-it`). The tells a reviewer looks for:
 - a **domain type in a `Client` method signature** — a boundary leak;
 - a **forwarding method that reshapes nothing** — embedding already promoted it;
 - a **caller importing the impl package** instead of the public one — the boundary
@@ -145,7 +145,7 @@ future increment; the import-boundary side lives with the composition root,
   methods only to *reshape* the contract.
 - **A handler holding a concrete.** `handler{ svc *OrderService }` instead of
   `handler{ client orders.Client }`. Depend on the interface; the composition
-  root injects it (`handlers.md`, `bootstrap.md`).
+  root injects it (`handlers.md`, `app.md`).
 
 ## Now build it
 

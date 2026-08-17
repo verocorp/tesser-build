@@ -13,12 +13,12 @@ def test_skip_dirs_are_not_walked(tmp_path: Path) -> None:
 
 def test_a_utf8_bom_file_is_checked_normally(tmp_path: Path) -> None:
     conftest.conforming_tree(tmp_path)
-    (tmp_path / "app" / "domain" / "bom.py").write_bytes(
+    (tmp_path / "shop" / "domain" / "bom.py").write_bytes(
         b"\xef\xbb\xbfimport tesser.domain as ts\n"
     )
     conftest.write_module(
         tmp_path,
-        "app/domain/test_bom.py",
+        "shop/domain/test_bom.py",
         "def test_bom_exists() -> None:\n"
         "    assert True\n",
     )
@@ -77,7 +77,7 @@ def test_a_dotted_import_declaration_parses_and_reaches_a_domain(tmp_path: Path)
     (tmp_path / ".tesser-root").write_text("app\nimport money.kernel\n")
     conftest.write_module(
         tmp_path,
-        "app/domain/price.py",
+        "shop/domain/price.py",
         "import tesser.domain as ts\n"
         "import money.kernel\n"
         "class PriceSpec(ts.Spec):\n"
@@ -86,7 +86,7 @@ def test_a_dotted_import_declaration_parses_and_reaches_a_domain(tmp_path: Path)
     )
     conftest.write_module(
         tmp_path,
-        "app/domain/test_price.py",
+        "shop/domain/test_price.py",
         "def test_price_exists() -> None:\n"
         "    assert True\n",
     )
@@ -127,7 +127,7 @@ def test_an_import_declaration_reaches_the_pure_roles_end_to_end(tmp_path: Path)
     (tmp_path / ".tesser-root").write_text("app\nimport money_kernel\n")
     conftest.write_module(
         tmp_path,
-        "app/domain/price.py",
+        "shop/domain/price.py",
         "import tesser.domain as ts\n"
         "import money_kernel\n"
         "class PriceSpec(ts.Spec):\n"
@@ -165,7 +165,7 @@ def test_a_bom_prefixed_declaration_still_reads(tmp_path: Path) -> None:
 def test_a_nested_declaration_is_a_finding_and_masks_the_walk(tmp_path: Path) -> None:
     conftest.conforming_tree(tmp_path)
     conftest.write_module(tmp_path, "stray.py", "import os\n")
-    (tmp_path / "app" / ".tesser-root").write_text("app\n")
+    (tmp_path / "shop" / ".tesser-root").write_text("app\n")
     findings = conftest.check_tree(tmp_path)
     assert len(findings) == 1, findings
     assert any(
@@ -237,5 +237,5 @@ def test_an_undeclared_testdata_dir_is_walked(tmp_path: Path) -> None:
 def test_a_declared_skip_applies_at_any_depth(tmp_path: Path) -> None:
     conftest.conforming_tree(tmp_path)
     (tmp_path / ".tesser-root").write_text("app\nskip fixtures\n")
-    conftest.write_module(tmp_path, "app/domain/fixtures/bad.py", "def f(:\n")
+    conftest.write_module(tmp_path, "shop/domain/fixtures/bad.py", "def f(:\n")
     assert conftest.check_raw(tmp_path) == ()

@@ -1,7 +1,7 @@
 ---
 name: tesser-build
-description: Application-construction entry point (DDD). Load whenever creating or modifying domain types OR the code around them — adding a field to a struct/class, creating a new type, modeling a new concept, writing a constructor, adding validation, comparing domain objects in tests, deciding between a value object/entity/aggregate, AND whenever writing a handler/endpoint, a use-case or application/domain service, or persistence/repository code (where to put business logic, how to load or save an aggregate, keeping domain math out of controllers), AND whenever wiring an application together — writing an entry point / `main` / composition root / host, exposing a component behind a public interface (a `Client` + DTOs), connecting two bounded contexts (a cross-context call or read), or placing a web UI / frontend / SPA (where presentation code lives), AND whenever reasoning about strategic design — subdomains, bounded contexts, or ubiquitous language. Routes the task through the decomposition procedure to the right component doc.
-skill-version: 46
+description: Application-construction entry point (DDD). Load whenever creating or modifying domain types OR the code around them — adding a field to a struct/class, creating a new type, modeling a new concept, writing a constructor, adding validation, comparing domain objects in tests, deciding between a value object/entity/aggregate, AND whenever writing a handler/endpoint, a use-case or application/domain service, or persistence/repository code (where to put business logic, how to load or save an aggregate, keeping domain math out of controllers), AND whenever component an application together — writing an entry point / `main` / composition root / host, exposing a component behind a public interface (a `Client` + DTOs), connecting two bounded contexts (a cross-context call or read), or placing a web UI / frontend / SPA (where presentation code lives), AND whenever reasoning about strategic design — subdomains, bounded contexts, or ubiquitous language. Routes the task through the decomposition procedure to the right component doc.
+skill-version: 47
 source: https://github.com/verocorp/tesser-build (skills/tesser-build/)
 ---
 
@@ -47,8 +47,8 @@ these two features talk") — decompose instead. The full procedure and the
 anatomy it walks are in `map.md`; the three steps:
 
 1. **Name the pieces the job touches.** Which context(s), and within them which
-   roles — domain, application, adapters (handlers/gateways), wiring, or the
-   app-level bootstrap/srv (`map.md#the-anatomy`). For the *domain* pieces,
+   roles — domain, application, adapters (handlers/gateways), component, or the
+   app-level app/srv (`map.md#the-anatomy`). For the *domain* pieces,
    work through the feature's nouns, rules, and use cases:
    - For each **noun**, run the taxonomy tests above, in order (value object →
      entity → aggregate). Most domain nouns are value objects; identity must be
@@ -80,7 +80,7 @@ placement failure, not a mis-picked noun:
 - load or save an aggregate → **repository**
 - reach a peer context → **cross-context gateway** (`gateway-cross-context.md`)
 - a domain type two or more contexts must agree on → **kernel** (`kernels.md`)
-- choose a concrete impl / build the object graph → **wiring / bootstrap**
+- choose a concrete impl / build the object graph → **component / app**
 - read the environment, exit the process → **host** (`srv.md`) — nowhere else
 - computing a domain result (sum/decision) in a handler or service → it's
   misplaced; move it onto a domain type
@@ -108,8 +108,8 @@ Route on the task:
 | Making one context call or read another | Read `gateway-cross-context.md` (the caller owns the port; fail-closed) and `map.md#how-contexts-connect` (a read composing two peers becomes its own context) |
 | Two contexts needing the same domain type (a shared Money/Quantity), or shipping domain-level code other apps import directly | Read `kernels.md` — the direct-import tier: app-scoped `kernel/` vs the one exported kernel; content follows the domain conventions; purity is the domain's bar, transitively |
 | Exposing a component/service behind a public interface (a `Client` + DTOs) | Read `public-interface.md` — a decoupling boundary, satisfied by embedding the service; speaks DTOs, never domain objects |
-| Wiring a context's own construction / its config | Read `wiring.md` — coordinate-driven impl selection, config in the wiring, cross-context deps injected |
-| Writing the app's composition root / `main` / app config / lifecycle | Read `bootstrap.md` — service-owned `new(cfg) → App`, builds the graph once, never reads the environment |
+| Constructing a context / its config | Read `component.md` — coordinate-driven impl selection, config in the component, cross-context deps injected |
+| Writing the app's composition root / `main` / app config / lifecycle | Read `app.md` — service-owned `new(cfg) → App`, builds the graph once, never reads the environment |
 | Writing an entry point / server / CLI host, or reading the environment | Read `srv.md` — one host per delivery mechanism; the host is the env edge; only the edge exits |
 | Placing a web UI / frontend / SPA / admin console — where presentation code lives | Read `map.md#presentation` — a driving actor at the edge; server-rendered HTML is an inbound handler, a client-side app is an app-level `web/<app>` deployable |
 | Business logic that "wants" to live in a service or handler | Read `application-services.md#domain-logic-leakage-checks` — move it onto the owning domain type |

@@ -20,8 +20,8 @@ def _spec(
     stdlib: tuple[str, ...] = (),
     base: tuple[tuple[str, str, str | None, bool], ...] = (
         (
-            "app/domain/thing.py",
-            "app.domain.thing",
+            "shop/domain/thing.py",
+            "shop.domain.thing",
             "import tesser.domain as ts\n"
             "class ThingSpec(ts.Spec):\n"
             "    def __init__(self, text: str) -> None:\n"
@@ -32,22 +32,22 @@ def _spec(
             False,
         ),
         (
-            "app/domain/test_thing.py",
-            "app.domain.test_thing",
+            "shop/domain/test_thing.py",
+            "shop.domain.test_thing",
             "def test_thing_exists() -> None:\n"
             "    assert True\n",
             False,
         ),
         (
-            "app/application/test_service.py",
-            "app.application.test_service",
+            "shop/application/test_service.py",
+            "shop.application.test_service",
             "def test_service_exists() -> None:\n"
             "    assert True\n",
             False,
         ),
         (
-            "app/client/client.py",
-            "app.client.client",
+            "shop/client/client.py",
+            "shop.client.client",
             "import tesser.context as ts\n"
             "class AskRequest(ts.Request):\n"
             "    def __init__(self, text: str) -> None:\n"
@@ -58,10 +58,10 @@ def _spec(
             False,
         ),
         (
-            "app/application/service.py",
-            "app.application.service",
+            "shop/application/service.py",
+            "shop.application.service",
             "import tesser.application as ts\n"
-            "import app.client.client as client\n"
+            "import shop.client.client as client\n"
             "class AskService(ts.ApplicationService):\n"
             "    def ask(self, request: client.AskRequest) -> client.AskResponse:\n"
             "        return client.AskResponse(text=request.text)\n"
@@ -83,7 +83,7 @@ def _spec(
 
 
 def test_locate_is_the_single_routing_decision() -> None:
-    contexts = frozenset({"app", "two"})
+    contexts = frozenset({"shop", "two"})
     table = (
         ("solo", False, "root"),
         ("test_solo", False, "test"),
@@ -110,49 +110,49 @@ def test_locate_is_the_single_routing_decision() -> None:
         ("srv.__main__", False, "shell-srv"),
         ("srv.conftest", False, "conftest"),
         ("srv.deep.handler", False, "shell-srv"),
-        ("bootstrap", True, "shell-init"),
-        ("bootstrap", False, "shell-bootstrap"),
-        ("bootstrap.wire", False, "shell-bootstrap"),
-        ("bootstrap.__main__", False, "shell-bootstrap"),
+        ("app", True, "shell-init"),
+        ("app", False, "shell-app"),
+        ("app.wire", False, "shell-app"),
+        ("app.__main__", False, "shell-app"),
         ("protocol", True, "protocol-init"),
         ("protocol", False, "protocol"),
         ("protocol.http", False, "protocol"),
         ("protocol.__main__", False, "protocol"),
         ("protocol.conftest", False, "conftest"),
-        ("app", True, "context-init"),
-        ("app", False, "context-init"),
-        ("app.__main__", False, "context-stray"),
-        ("app.domain", True, "role-init"),
-        ("app.domain", False, "role-file"),
-        ("app.domain.thing", False, "role"),
-        ("app.domain.__main__", False, "role"),
-        ("app.domain.sub.deep", False, "role"),
-        ("app.domain.test_thing", False, "test"),
-        ("app.domain.eval_bad", False, "eval"),
-        ("app.domain.eval_pkg", True, "eval"),
-        ("app.domain.conftest", False, "conftest"),
-        ("app.application", True, "role-init"),
-        ("app.application.service", False, "role"),
-        ("app.application.ports", True, "ports-init"),
-        ("app.application.ports", False, "ports-file"),
-        ("app.application.ports.repo", False, "ports"),
-        ("app.application.ports.sub.deep", False, "ports"),
-        ("app.application.ports.__main__", False, "ports"),
-        ("app.application.ports.test_repo", False, "ports-stray"),
-        ("app.application.ports.conftest", False, "ports-stray"),
-        ("app.application.ports.eval_repo", False, "ports-stray"),
-        ("app.adapters.gateways.__main__", False, "role"),
-        ("app.adapters.conftest", False, "conftest"),
-        ("app.adapters.conftest", True, "conftest"),
-        ("app.tests", True, "context-tests-init"),
-        ("app.tests", False, "context-tests-stray"),
-        ("app.tests.support", False, "context-tests-stray"),
-        ("app.tests.test_thing", False, "test"),
-        ("app.tests.__main__", False, "context-tests-stray"),
-        ("app.test_direct", False, "test"),
-        ("app.stray", False, "context-stray"),
-        ("app.stray_pkg.mod", False, "context-stray"),
-        ("app.conftest", False, "conftest"),
+        ("shop", True, "context-init"),
+        ("shop", False, "context-init"),
+        ("shop.__main__", False, "context-stray"),
+        ("shop.domain", True, "role-init"),
+        ("shop.domain", False, "role-file"),
+        ("shop.domain.thing", False, "role"),
+        ("shop.domain.__main__", False, "role"),
+        ("shop.domain.sub.deep", False, "role"),
+        ("shop.domain.test_thing", False, "test"),
+        ("shop.domain.eval_bad", False, "eval"),
+        ("shop.domain.eval_pkg", True, "eval"),
+        ("shop.domain.conftest", False, "conftest"),
+        ("shop.application", True, "role-init"),
+        ("shop.application.service", False, "role"),
+        ("shop.application.ports", True, "ports-init"),
+        ("shop.application.ports", False, "ports-file"),
+        ("shop.application.ports.repo", False, "ports"),
+        ("shop.application.ports.sub.deep", False, "ports"),
+        ("shop.application.ports.__main__", False, "ports"),
+        ("shop.application.ports.test_repo", False, "ports-stray"),
+        ("shop.application.ports.conftest", False, "ports-stray"),
+        ("shop.application.ports.eval_repo", False, "ports-stray"),
+        ("shop.adapters.gateways.__main__", False, "role"),
+        ("shop.adapters.conftest", False, "conftest"),
+        ("shop.adapters.conftest", True, "conftest"),
+        ("shop.tests", True, "context-tests-init"),
+        ("shop.tests", False, "context-tests-stray"),
+        ("shop.tests.support", False, "context-tests-stray"),
+        ("shop.tests.test_thing", False, "test"),
+        ("shop.tests.__main__", False, "context-tests-stray"),
+        ("shop.test_direct", False, "test"),
+        ("shop.stray", False, "context-stray"),
+        ("shop.stray_pkg.mod", False, "context-stray"),
+        ("shop.conftest", False, "conftest"),
         ("kernel", True, "kernel-init"),
         ("kernel", False, "kernel-file"),
         ("kernel.money", False, "kernel"),
@@ -286,7 +286,7 @@ def test_placement_totality_is_flagged() -> None:
         and "a module function declares itself with @ts.do_not_use_function" in f
         for f in findings
     )
-    assert any("a module constant is Final" in f for f in findings)
+    assert any("module constants are Final" in f for f in findings)
     assert any(
         "a context module holds only imports, classes, declared functions, and "
         "Final constants" in f
@@ -304,7 +304,7 @@ def test_declared_function_and_final_constant_pass() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
-            ("app/domain2.py", "app.domain2", "", False),
+            ("shop/domain2.py", "shop.domain2", "", False),
             (
                 "plain/domain/thing.py",
                 "plain.domain.thing",
@@ -343,7 +343,7 @@ def test_homeless_modules_are_flagged() -> None:
                )
     assert any(
         "loose belongs to no governed package; every module belongs to a context, "
-        "a kernel, srv, bootstrap, tests, or the protocol package" in f
+        "a kernel, srv, app, tests, or the protocol package" in f
         for f in findings
     )
     assert any(
@@ -356,20 +356,20 @@ def test_non_context_module_and_nonempty_init_are_flagged() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/util.py",
-                "app.util",
+                "shop/util.py",
+                "shop.util",
                 "def anything() -> None:\n    return None\n",
                 False,
             ),
-            ("app/__init__.py", "app", "X = 1\n", True),
+            ("shop/__init__.py", "shop", "X = 1\n", True),
         ))).violations()
                )
     assert any(
-        "app.util" in f
-        and "a context holds only domain, application, client, adapters, wiring, and tests modules" in f
+        "shop.util" in f
+        and "a context holds only domain, application, client, adapters, component, and tests modules" in f
         for f in findings
     )
-    assert any("app" in f and "a context __init__ is empty" in f for f in findings)
+    assert any("shop" in f and "a context __init__ is empty" in f for f in findings)
 
 
 def test_a_role_must_be_a_package() -> None:
@@ -477,11 +477,11 @@ def test_wiring_is_a_role() -> None:
                 False,
             ),
             (
-                "app/wiring/wire.py",
-                "app.wiring.wire",
+                "shop/component/component.py",
+                "shop.component.component",
                 "import tesser.component as ts\n"
-                "import app.application.service as application\n"
-                "import app.client.client as client\n"
+                "import shop.application.service as application\n"
+                "import shop.client.client as client\n"
                 "import two.client.client as two_client\n"
                 "import two.domain.thing\n"
                 "class AskWiring(ts.Component):\n"
@@ -491,24 +491,24 @@ def test_wiring_is_a_role() -> None:
         ))).violations()
                )
     assert not any(
-        "app.wiring.wire" in f and "not a context module" in f for f in findings
+        "shop.component.component" in f and "not a context module" in f for f in findings
     )
     assert not any(
-        "app.wiring.wire" in f and "imports app.application.service" in f
+        "shop.component.component" in f and "imports shop.application.service" in f
         for f in findings
     )
     assert not any(
-        "app.wiring.wire" in f and "imports two.client.client" in f for f in findings
+        "shop.component.component" in f and "imports two.client.client" in f for f in findings
     )
     assert not any(
-        "app.wiring.wire.AskWiring" in f
+        "shop.component.component.AskWiring" in f
         and "a kind lives only in its role module" in f
         for f in findings
     )
     assert any(
-        "app.wiring.wire" in f
+        "shop.component.component" in f
         and "imports two.domain.thing" in f
-        and "a context reaches another context only through its client, and only from gateways and wiring" in f
+        and "a context reaches another context only through its client, and only from gateways and components" in f
         for f in findings
     )
 
@@ -552,16 +552,16 @@ def test_a_context_main_is_a_stray_module() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/__main__.py",
-                "app.__main__",
-                "import app.application.service as service\nimport app.wiring.wire as wire\n",
+                "shop/__main__.py",
+                "shop.__main__",
+                "import shop.application.service as service\nimport shop.component.component as wire\n",
                 False,
             ),
         ))).violations()
                )
     assert any(
-        "app.__main__ is not a context module; a context holds only domain, "
-        "application, client, adapters, wiring, and tests modules" in f
+        "shop.__main__ is not a context module; a context holds only domain, "
+        "application, client, adapters, component, and tests modules" in f
         for f in findings
     )
     assert not any("__main__ composes from" in f for f in findings)
@@ -576,7 +576,7 @@ def test_protocol_module_totality_is_flagged() -> None:
                 "protocol.box",
                 "import tesser.srv as ts\n"
                 "import json\n"
-                "import app.client.client\n"
+                "import shop.client.client\n"
                 "import srv.host\n"
                 "from typing import Final, Protocol\n"
                 "class BoxRequest(ts.Request):\n"
@@ -621,11 +621,11 @@ def test_protocol_module_totality_is_flagged() -> None:
     assert not any("protocol.box.fine" in f for f in findings)
     assert not any("protocol.box belongs to no governed package" in f for f in findings)
     assert any(
-        "protocol.box imports app.client.client; a protocol module is context-generic and imports no context" in f
+        "protocol.box imports shop.client.client; a protocol module is context-generic and imports no context" in f
         for f in findings
     )
     assert any(
-        "protocol.box imports srv.host; a protocol module never imports srv or bootstrap" in f
+        "protocol.box imports srv.host; a protocol module never imports srv or app" in f
         for f in findings
     )
     assert any(
@@ -650,7 +650,7 @@ def test_protocol_module_totality_is_flagged() -> None:
                 f
                 for f in findings
                 if "protocol.box" in f
-                and "declares a module constant without Final; a protocol constant is Final" in f
+                and "declares a module constant without Final; protocol constants are Final" in f
             ]
         )
         == 2
@@ -780,8 +780,8 @@ def test_primitive_parameter_and_return_are_flagged() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/bad.py",
-                "app.bad",
+                "shop/bad.py",
+                "shop.bad",
                 "import tesser.application as ts\n"
                 "class BadService(ts.ApplicationService):\n"
                 "    def ask(self, text: str) -> str:\n"
@@ -806,10 +806,10 @@ def test_arity_and_missing_annotations_are_flagged() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/bad.py",
-                "app.bad",
+                "shop/bad.py",
+                "shop.bad",
                 "import tesser.application as ts\n"
-                "from app.client.client import AskRequest, AskResponse\n"
+                "from shop.client.client import AskRequest, AskResponse\n"
                 "class BadService(ts.ApplicationService):\n"
                 "    def two(self, a: AskRequest, b: AskRequest) -> AskResponse:\n"
                 "        return AskResponse(text='')\n"
@@ -841,10 +841,10 @@ def test_aggregate_constructor_violations_are_flagged() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/badroots.py",
-                "app.badroots",
+                "shop/badroots.py",
+                "shop.badroots",
                 "import tesser.domain as ts\n"
-                "from app.domain.thing import ThingSpec\n"
+                "from shop.domain.thing import ThingSpec\n"
                 "class Primitive(ts.AggregateRoot):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n"
@@ -880,10 +880,10 @@ def test_service_body_rules_are_flagged() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/busy.py",
-                "app.busy",
+                "shop/busy.py",
+                "shop.busy",
                 "import tesser.application as ts\n"
-                "from app.client.client import AskRequest, AskResponse\n"
+                "from shop.client.client import AskRequest, AskResponse\n"
                 "class BusyService(ts.ApplicationService):\n"
                 "    def long(self, request: AskRequest) -> AskResponse:\n"
                 + "".join(f"        step_{i} = request.text\n" for i in range(11))
@@ -936,10 +936,10 @@ def test_service_delegation_is_flagged() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/helped.py",
-                "app.helped",
+                "shop/helped.py",
+                "shop.helped",
                 "import tesser.application as ts\n"
-                "from app.client.client import AskRequest, AskResponse\n"
+                "from shop.client.client import AskRequest, AskResponse\n"
                 "def shape(text: str) -> str:\n"
                 "    return text\n"
                 "class HelpedService(ts.ApplicationService):\n"
@@ -970,10 +970,10 @@ def test_elif_chain_is_one_level() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/chained.py",
-                "app.chained",
+                "shop/chained.py",
+                "shop.chained",
                 "import tesser.application as ts\n"
-                "from app.client.client import AskRequest, AskResponse\n"
+                "from shop.client.client import AskRequest, AskResponse\n"
                 "class ChainService(ts.ApplicationService):\n"
                 "    def pick(self, request: AskRequest) -> AskResponse:\n"
                 "        if request.ready():\n"
@@ -996,10 +996,10 @@ def test_indirect_subclass_still_classifies() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/derived.py",
-                "app.derived",
-                "from app.application.service import AskService\n"
-                "from app.client.client import AskRequest\n"
+                "shop/derived.py",
+                "shop.derived",
+                "from shop.application.service import AskService\n"
+                "from shop.client.client import AskRequest\n"
                 "class DerivedService(AskService):\n"
                 "    def again(self, request: AskRequest) -> AskRequest:\n"
                 "        return request\n",
@@ -1019,10 +1019,10 @@ def test_service_dependencies_must_be_ports() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/extra.py",
-                "app.extra",
+                "shop/extra.py",
+                "shop.extra",
                 "import tesser.application as ts\n"
-                "from app.client.client import AskRequest, AskResponse\n"
+                "from shop.client.client import AskRequest, AskResponse\n"
                 "class NeedyService(ts.ApplicationService):\n"
                 "    def __init__(self, db: str) -> None:\n"
                 "        self._db = db\n"
@@ -1044,8 +1044,8 @@ def test_client_method_rules_are_flagged() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/extra2.py",
-                "app.extra2",
+                "shop/extra2.py",
+                "shop.extra2",
                 "from typing import Protocol\n"
                 "import tesser.context as tc\n"
                 "class BadClient(tc.Client, Protocol):\n"
@@ -1072,12 +1072,12 @@ def test_records_never_carry_domain_objects() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/extra3.py",
-                "app.extra3",
+                "shop/extra3.py",
+                "shop.extra3",
                 "from typing import Protocol\n"
                 "import tesser.adapters as ta\n"
                 "import tesser.application as tap\n"
-                "from app.domain.thing import Thing\n"
+                "from shop.domain.thing import Thing\n"
                 "class LoadingRepo(ta.Repository):\n"
                 "    def load(self, key: str) -> Thing: ...\n"
                 "class LoadingPort(tap.Port, Protocol):\n"
@@ -1101,8 +1101,8 @@ def test_domain_field_rules_are_flagged() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/extra4.py",
-                "app.extra4",
+                "shop/extra4.py",
+                "shop.extra4",
                 "import tesser.domain as ts\n"
                 "import tesser.context as tc\n"
                 "class Money(ts.ValueObject):\n"
@@ -1164,8 +1164,8 @@ def test_optional_construction_data_is_the_only_union() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/opt.py",
-                "app.domain.opt",
+                "shop/domain/opt.py",
+                "shop.domain.opt",
                 "import tesser.domain as ts\n"
                 "class OptSpec(ts.Spec):\n"
                 "    def __init__(self, text: str | None, items: list | None, mix: str | int) -> None:\n"
@@ -1190,8 +1190,8 @@ def test_bytes_is_construction_primitive() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/digest.py",
-                "app.domain.digest",
+                "shop/domain/digest.py",
+                "shop.domain.digest",
                 "import tesser.domain as ts\n"
                 "class Digest(ts.ValueObject):\n"
                 "    _value: bytes\n"
@@ -1211,8 +1211,8 @@ def test_async_def_is_not_a_way_around_a_method_rule() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/client/async_client.py",
-                "app.client.async_client",
+                "shop/client/async_client.py",
+                "shop.client.async_client",
                 "from __future__ import annotations\n"
                 "from typing import Protocol\n"
                 "import tesser.context as ts\n"
@@ -1224,11 +1224,11 @@ def test_async_def_is_not_a_way_around_a_method_rule() -> None:
                 False,
             ),
             (
-                "app/adapters/gateways/async_repo.py",
-                "app.adapters.gateways.async_repo",
+                "shop/adapters/gateways/async_repo.py",
+                "shop.adapters.gateways.async_repo",
                 "from __future__ import annotations\n"
                 "import tesser.adapters as ts\n"
-                "import app.domain.thing as thing\n"
+                "import shop.domain.thing as thing\n"
                 "class Loose(ts.Repository):\n"
                 "    async def save(self, entity: thing.Thing) -> None: ...\n",
                 False,
@@ -1236,12 +1236,12 @@ def test_async_def_is_not_a_way_around_a_method_rule() -> None:
         ))).violations()
                )
     assert any(
-        "app.client.async_client.Loose.ask" in f
+        "shop.client.async_client.Loose.ask" in f
         and "a client method takes exactly one" in f
         for f in findings
     ), f"an async client method escaped the client shape rule: {findings}"
     assert any(
-        "app.adapters.gateways.async_repo.Loose.save carries an aggregate in its signature"
+        "shop.adapters.gateways.async_repo.Loose.save carries an aggregate in its signature"
         in f
         for f in findings
     ), f"an async adapter method escaped the record rule: {findings}"
@@ -1252,8 +1252,8 @@ def test_an_adapters_module_holds_one_kind() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/adapters/gateways.py",
-                "app.adapters.gateways",
+                "shop/adapters/gateways.py",
+                "shop.adapters.gateways",
                 "import tesser.adapters as ts\n"
                 "class HttpHandler(ts.Handler):\n"
                 "    pass\n"
@@ -1264,7 +1264,7 @@ def test_an_adapters_module_holds_one_kind() -> None:
         ))).violations()
                )
     assert any(
-        "app.adapters.gateways mixes adapter kinds" in f
+        "shop.adapters.gateways mixes adapter kinds" in f
         and "an adapters module holds one adapter kind" in f
         for f in findings
     )
@@ -1275,12 +1275,12 @@ def test_a_dotted_module_base_resolves() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/test_doubles.py",
-                "app.test_doubles",
+                "shop/test_doubles.py",
+                "shop.test_doubles",
                 "import tesser.testing as th\n"
-                "import app.application.service\n"
+                "import shop.application.service\n"
                 "@th.fake\n"
-                "class FakePort(app.application.service.AskService):\n"
+                "class FakePort(shop.application.service.AskService):\n"
                 "    pass\n",
                 False,
             ),
@@ -1313,7 +1313,7 @@ def test_import_matrix_is_flagged() -> None:
                 "two/adapters/gateways.py",
                 "two.adapters.gateways",
                 "import tesser.adapters as ts\n"
-                "import app.client.client as app_client\n"
+                "import shop.client.client as shop_client\n"
                 "class Bridge(ts.Gateway):\n"
                 "    pass\n",
                 False,
@@ -1332,31 +1332,31 @@ def test_import_matrix_is_flagged() -> None:
                 "two/application/service.py",
                 "two.application.service",
                 "import tesser.application as ts\n"
-                "import app.domain.thing\n",
+                "import shop.domain.thing\n",
                 False,
             ),
         ))).violations()
                )
     assert any(
         "two.domain.thing" in f
-        and "the same-context matrix is a role to itself, application to domain and client, adapters to application/ports, wiring to application, adapters, and client" in f
+        and "the same-context matrix is a role to itself, application to domain and client, adapters to application/ports, component to application, adapters, and client" in f
         for f in findings
     )
     assert any(
         "two.application.service" in f
-        and "a context reaches another context only through its client, and only from gateways and wiring" in f
+        and "a context reaches another context only through its client, and only from gateways and components" in f
         for f in findings
     )
-    assert not any("two.adapters.gateways" in f and "imports app.client.client" in f for f in findings)
+    assert not any("two.adapters.gateways" in f and "imports shop.client.client" in f for f in findings)
 
 
-def test_srv_and_bootstrap_import_rows() -> None:
+def test_srv_and_app_import_rows() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/adapters/gateways.py",
-                "app.adapters.gateways",
+                "shop/adapters/gateways.py",
+                "shop.adapters.gateways",
                 "import tesser.adapters as ts\n"
                 "class HttpHandler(ts.Handler):\n"
                 "    pass\n",
@@ -1382,25 +1382,25 @@ def test_srv_and_bootstrap_import_rows() -> None:
             (
                 "srv/http.py",
                 "srv.http",
-                "import app.application.service\n"
-                "import app.adapters.gateways as app_adapters\n"
+                "import shop.application.service\n"
+                "import shop.adapters.gateways as app_adapters\n"
                 "import two.adapters.gateways\n"
-                "import bootstrap.wire\n",
+                "import app.wire\n",
                 False,
             ),
             (
-                "bootstrap/wire.py",
-                "bootstrap.wire",
-                "import app.domain.thing\n"
-                "import app.wiring.wire as wiring\n"
-                "import app.client.client as app_client\n"
+                "app/wire.py",
+                "app.wire",
+                "import shop.domain.thing\n"
+                "import shop.component.component as wiring\n"
+                "import shop.client.client as shop_client\n"
                 "import srv.http\n",
                 False,
             ),
         ))).violations()
                )
     assert any(
-        "srv.http" in f and "imports app.application.service" in f
+        "srv.http" in f and "imports shop.application.service" in f
         and "a host reaches a context only through its handlers" in f
         for f in findings
     )
@@ -1409,17 +1409,17 @@ def test_srv_and_bootstrap_import_rows() -> None:
         and "a host reaches a context only through its handlers" in f
         for f in findings
     )
-    assert not any("srv.http" in f and "imports app.adapters.gateways" in f for f in findings)
-    assert not any("srv.http" in f and "imports bootstrap.wire" in f for f in findings)
+    assert not any("srv.http" in f and "imports shop.adapters.gateways" in f for f in findings)
+    assert not any("srv.http" in f and "imports app.wire" in f for f in findings)
     assert any(
-        "bootstrap.wire" in f and "imports app.domain.thing" in f
-        and "bootstrap builds from wiring, clients, and adapters, never domain or application" in f
+        "app.wire" in f and "imports shop.domain.thing" in f
+        and "an app builds from components, clients, and adapters, never domain or application" in f
         for f in findings
     )
-    assert not any("bootstrap.wire" in f and "imports app.wiring.wire" in f for f in findings)
-    assert not any("bootstrap.wire" in f and "imports app.client.client" in f for f in findings)
+    assert not any("app.wire" in f and "imports shop.component.component" in f for f in findings)
+    assert not any("app.wire" in f and "imports shop.client.client" in f for f in findings)
     assert any(
-        "bootstrap.wire" in f and "imports srv.http" in f
+        "app.wire" in f and "imports srv.http" in f
         and "the composition root never imports a host" in f
         for f in findings
     )
@@ -1430,13 +1430,13 @@ def test_only_a_handler_imports_its_own_client() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/adapters/gateways.py",
-                "app.adapters.gateways",
+                "shop/adapters/gateways.py",
+                "shop.adapters.gateways",
                 "import tesser.adapters as ts\n"
-                "import app.client.client as app_client\n"
+                "import shop.client.client as shop_client\n"
                 "class HttpHandler(ts.Handler):\n"
                 "    def ask(self, body: str) -> str:\n"
-                "        return app_client.AskRequest(text=body).text\n",
+                "        return shop_client.AskRequest(text=body).text\n",
                 False,
             ),
             (
@@ -1459,7 +1459,7 @@ def test_only_a_handler_imports_its_own_client() -> None:
             ),
         ))).violations()
                )
-    assert not any("app.adapters.gateways" in f and "imports app.client.client" in f for f in findings)
+    assert not any("shop.adapters.gateways" in f and "imports shop.client.client" in f for f in findings)
     assert any(
         "two.adapters.gateways" in f and "imports two.client.client" in f
         and "only a handler imports its own context's client" in f
@@ -1481,8 +1481,8 @@ def test_only_a_gateway_reaches_a_foreign_client() -> None:
                 False,
             ),
             (
-                "app/adapters/gateways.py",
-                "app.adapters.gateways",
+                "shop/adapters/gateways.py",
+                "shop.adapters.gateways",
                 "import tesser.adapters as ts\n"
                 "import two.client.client\n"
                 "class HttpHandler(ts.Handler):\n"
@@ -1492,8 +1492,8 @@ def test_only_a_gateway_reaches_a_foreign_client() -> None:
         ))).violations()
                )
     assert any(
-        "app.adapters.gateways" in f and "imports two.client.client" in f
-        and "a context reaches another context only through its client, and only from gateways and wiring" in f
+        "shop.adapters.gateways" in f and "imports two.client.client" in f
+        and "a context reaches another context only through its client, and only from gateways and components" in f
         for f in findings
     )
 
@@ -1674,7 +1674,7 @@ def test_a_role_init_may_import_a_module_but_never_a_class() -> None:
     )
 
 
-def test_srv_and_bootstrap_statement_totality() -> None:
+def test_srv_and_app_statement_totality() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
@@ -1697,8 +1697,8 @@ def test_srv_and_bootstrap_statement_totality() -> None:
                 False,
             ),
             (
-                "bootstrap/wire.py",
-                "bootstrap.wire",
+                "app/wire.py",
+                "app.wire",
                 "def build() -> None:\n"
                 "    return None\n"
                 "class App:\n"
@@ -1726,7 +1726,7 @@ def test_srv_and_bootstrap_statement_totality() -> None:
     )
     assert not any("srv.box.Server" in f for f in findings)
     assert any(
-        "srv.box" in f and "declares a module constant without Final; a srv constant is Final" in f
+        "srv.box" in f and "declares a module constant without Final; srv constants are Final" in f
         for f in findings
     )
     assert any(
@@ -1735,28 +1735,28 @@ def test_srv_and_bootstrap_statement_totality() -> None:
         for f in findings
     )
     assert any(
-        "bootstrap.wire never imports tesser.app; "
-        "a bootstrap module imports tesser.app exactly once, as ts" in f
+        "app.wire never imports tesser.app; "
+        "an app module imports tesser.app exactly once, as ts" in f
         for f in findings
     )
     assert any(
-        "bootstrap.wire.build" in f
-        and "a bootstrap function declares itself with @ts.load" in f
+        "app.wire.build" in f
+        and "an app function declares itself with @ts.load" in f
         for f in findings
     )
     assert any(
-        "bootstrap.wire.App" in f
-            and "declares no ts.* base; every bootstrap class declares its block" in f
+        "app.wire.App" in f
+            and "declares no ts.* base; every app class declares its block" in f
         for f in findings
     )
     assert any(
-        "bootstrap.wire" in f
-        and "declares a module constant without Final; a bootstrap constant is Final" in f
+        "app.wire" in f
+        and "declares a module constant without Final; app constants are Final" in f
         for f in findings
     )
     assert any(
-        "bootstrap.wire" in f
-        and "has a loose module-level statement; a bootstrap module holds only imports, "
+        "app.wire" in f
+        and "has a loose module-level statement; an app module holds only imports, "
         "classes, declared functions, and Final constants" in f
         for f in findings
     )
@@ -1835,8 +1835,8 @@ def test_context_module_import_form() -> None:
                 False,
             ),
             (
-                "form/wiring/wire.py",
-                "form.wiring.wire",
+                "form/component/component.py",
+                "form.component.component",
                 "import tesser.component as ts\n"
                 "import form.application.service\n"
                 "class PingWiring(ts.Component):\n"
@@ -1851,7 +1851,7 @@ def test_context_module_import_form() -> None:
         for f in findings
     )
     assert any(
-        "form.wiring.wire imports form.application.service without an alias; "
+        "form.component.component imports form.application.service without an alias; "
         "a context module is imported as an aliased module, never its members" in f
         for f in findings
     )
@@ -1886,8 +1886,8 @@ def test_relative_imports_resolve_against_the_package() -> None:
                 False,
             ),
             (
-                "rel/wiring/wire.py",
-                "rel.wiring.wire",
+                "rel/component/component.py",
+                "rel.component.component",
                 "import tesser.component as ts\n"
                 "from ..client.client import RelRequest\n"
                 "class RelWiring(ts.Component):\n"
@@ -1921,7 +1921,7 @@ def test_relative_imports_resolve_against_the_package() -> None:
         for f in findings
     )
     assert any(
-        "rel.wiring.wire imports names from rel.client.client; "
+        "rel.component.component imports names from rel.client.client; "
         "a context module is imported as an aliased module, never its members" in f
         for f in findings
     )
@@ -1990,7 +1990,7 @@ def test_nested_imports_neither_classify_nor_satisfy_presence() -> None:
     )
 
 
-def test_srv_and_bootstrap_tesser_form_modes() -> None:
+def test_srv_and_app_tesser_form_modes() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
@@ -2028,8 +2028,8 @@ def test_srv_and_bootstrap_tesser_form_modes() -> None:
                 False,
             ),
             (
-                "bootstrap/fromform.py",
-                "bootstrap.fromform",
+                "app/fromform.py",
+                "app.fromform",
                 "from tesser.app import load\n"
                 "@load\n"
                 "def go() -> None:\n"
@@ -2037,22 +2037,22 @@ def test_srv_and_bootstrap_tesser_form_modes() -> None:
                 False,
             ),
             (
-                "bootstrap/test_fromform.py",
-                "bootstrap.test_fromform",
+                "app/test_fromform.py",
+                "shop.test_fromform",
                 "def test_fromform_exists() -> None:\n"
                 "    assert True\n",
                 False,
             ),
             (
-                "bootstrap/wrongpkg.py",
-                "bootstrap.wrongpkg",
+                "app/wrongpkg.py",
+                "app.wrongpkg",
                 "import tesser.context as ts\n"
                 "import tesser.domain as td\n",
                 False,
             ),
             (
-                "bootstrap/test_wrongpkg.py",
-                "bootstrap.test_wrongpkg",
+                "app/test_wrongpkg.py",
+                "shop.test_wrongpkg",
                 "def test_wrongpkg_exists() -> None:\n"
                 "    assert True\n",
                 False,
@@ -2100,7 +2100,7 @@ def test_srv_and_bootstrap_tesser_form_modes() -> None:
                 False,
             ),
             ("srv/__init__.py", "srv", "X = 1\n", True),
-            ("bootstrap/__init__.py", "bootstrap", "", True),
+            ("app/__init__.py", "app", "", True),
             (
                 "konst/domain/thing.py",
                 "konst.domain.thing",
@@ -2128,13 +2128,13 @@ def test_srv_and_bootstrap_tesser_form_modes() -> None:
         for f in findings
     )
     assert any(
-        "bootstrap.fromform imports names from tesser.app; "
-        "a bootstrap module imports tesser.app exactly once, as ts" in f
+        "app.fromform imports names from tesser.app; "
+        "an app module imports tesser.app exactly once, as ts" in f
         for f in findings
     )
     assert any(
-        "bootstrap.wrongpkg imports tesser.domain; "
-        "a bootstrap module's tesser imports are tesser.app, "
+        "app.wrongpkg imports tesser.domain; "
+        "an app module's tesser imports are tesser.app, "
         "and tesser.errors" in f
         for f in findings
     )
@@ -2145,7 +2145,7 @@ def test_srv_and_bootstrap_tesser_form_modes() -> None:
     )
     assert any(
         "srv.annconst declares a module constant without Final; "
-        "a srv constant is Final" in f
+        "srv constants are Final" in f
         for f in findings
     )
     assert not any("srv.tfinal" in f for f in findings)
@@ -2155,7 +2155,7 @@ def test_srv_and_bootstrap_tesser_form_modes() -> None:
         for f in findings
     )
     assert any(
-        "srv __init__ declares code; a srv or bootstrap __init__ is empty" in f
+        "srv __init__ declares code; a srv or app __init__ is empty" in f
         for f in findings
     )
     assert not any("bootstrap __init__ declares code" in f for f in findings)
@@ -2203,8 +2203,8 @@ def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/adapters/gateways.py",
-                "app.adapters.gateways",
+                "shop/adapters/gateways.py",
+                "shop.adapters.gateways",
                 "import tesser.adapters as ts\n"
                 "import tesser.srv\n"
                 "from typing import Protocol\n"
@@ -2236,30 +2236,30 @@ def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv() -> None:
         ))).violations()
                )
     assert any(
-        "app.adapters.gateways.Sneaky" in f
+        "shop.adapters.gateways.Sneaky" in f
         and "is a host; a host lives in srv and a protocol kind in a protocol module, never a context" in f
         for f in findings
     )
     assert any(
-        "app.adapters.gateways.WireAsk" in f
+        "shop.adapters.gateways.WireAsk" in f
         and "is a protocol request record; a host lives in srv and a protocol kind in a protocol module, "
         "never a context" in f
         for f in findings
     )
     assert any(
-        "app.adapters.gateways.WireReply" in f
+        "shop.adapters.gateways.WireReply" in f
         and "is a protocol response record; a host lives in srv and a protocol kind in a protocol module, "
         "never a context" in f
         for f in findings
     )
     assert any(
-        "app.adapters.gateways.WireDoor" in f
+        "shop.adapters.gateways.WireDoor" in f
         and "is a protocol port; a host lives in srv and a protocol kind in a protocol module, "
         "never a context" in f
         for f in findings
     )
     assert any(
-        "app.adapters.gateways.WireLabel" in f
+        "shop.adapters.gateways.WireLabel" in f
         and "is a protocol record; a host lives in srv and a protocol kind in a protocol module, "
         "never a context" in f
         for f in findings
@@ -2285,16 +2285,16 @@ def test_form_rule_fires_in_tests_and_srv_and_skips_illegal_edges() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/test_forms.py",
-                "app.test_forms",
-                "from app.domain.thing import Thing\n"
+                "shop/test_forms.py",
+                "shop.test_forms",
+                "from shop.domain.thing import Thing\n"
                 "def test_thing() -> None:\n"
                 "    assert Thing\n",
                 False,
             ),
             (
-                "app/adapters/gateways.py",
-                "app.adapters.gateways",
+                "shop/adapters/gateways.py",
+                "shop.adapters.gateways",
                 "import tesser.adapters as ts\n"
                 "class HttpHandler(ts.Handler):\n"
                 "    pass\n",
@@ -2303,14 +2303,14 @@ def test_form_rule_fires_in_tests_and_srv_and_skips_illegal_edges() -> None:
             (
                 "srv/http.py",
                 "srv.http",
-                "from app.adapters.gateways import HttpHandler\n",
+                "from shop.adapters.gateways import HttpHandler\n",
                 False,
             ),
             (
                 "skipctx/domain/thing.py",
                 "skipctx.domain.thing",
                 "import tesser.domain as ts\n"
-                "from app.client.client import AskRequest\n"
+                "from shop.client.client import AskRequest\n"
                 "class SkipSpec(ts.Spec):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n",
@@ -2319,18 +2319,18 @@ def test_form_rule_fires_in_tests_and_srv_and_skips_illegal_edges() -> None:
         ))).violations()
                )
     assert any(
-        "app.test_forms imports names from app.domain.thing; "
+        "shop.test_forms imports names from shop.domain.thing; "
         "a context module is imported as an aliased module, never its members" in f
         for f in findings
     )
     assert any(
-        "srv.http imports names from app.adapters.gateways; "
+        "srv.http imports names from shop.adapters.gateways; "
         "a context module is imported as an aliased module, never its members" in f
         for f in findings
     )
     assert any(
-        "skipctx.domain.thing imports app.client.client; a context reaches another context "
-        "only through its client, and only from gateways and wiring" in f
+        "skipctx.domain.thing imports shop.client.client; a context reaches another context "
+        "only through its client, and only from gateways and components" in f
         for f in findings
     )
     assert not any(
@@ -2347,13 +2347,13 @@ def test_a_denied_app_edge_is_not_form_checked() -> None:
                 "srv/host.py",
                 "srv.host",
                 "import tesser.srv as ts\n"
-                "from app.domain import thing\n",
+                "from shop.domain import thing\n",
                 False,
             ),
         ))).violations()
                )
     assert any(
-        "srv.host imports app.domain" in f
+        "srv.host imports shop.domain" in f
         and "a host reaches a context only through its handlers" in f
         for f in findings
     )
@@ -2377,8 +2377,8 @@ def test_production_never_imports_the_tests_package() -> None:
                 False,
             ),
             (
-                "bootstrap/wire.py",
-                "bootstrap.wire",
+                "app/wire.py",
+                "app.wire",
                 "import protocol.http\nimport tests.test_ok\n",
                 False,
             ),
@@ -2396,13 +2396,13 @@ def test_production_never_imports_the_tests_package() -> None:
         for f in findings
     )
     assert any(
-        "bootstrap.wire imports tests.test_ok; "
+        "app.wire imports tests.test_ok; "
         "production code never imports the tests package" in f
         for f in findings
     )
     assert any(
-        "bootstrap.wire imports protocol.http; "
-        "bootstrap composes the application and never imports protocol" in f
+        "app.wire imports protocol.http; "
+        "an app composes the application and never imports protocol" in f
         for f in findings
     )
 
@@ -2418,8 +2418,8 @@ def test_a_context_role_reaches_the_app_shell_only_as_handlers_to_protocol() -> 
                 False,
             ),
             (
-                "app/adapters/handlers.py",
-                "app.adapters.handlers",
+                "shop/adapters/handlers.py",
+                "shop.adapters.handlers",
                 "import tesser.adapters as ts\n"
                 "import protocol.http as http\n"
                 "import srv.http as host\n"
@@ -2428,15 +2428,15 @@ def test_a_context_role_reaches_the_app_shell_only_as_handlers_to_protocol() -> 
                 False,
             ),
             (
-                "app/wiring/wire.py",
-                "app.wiring.wire",
+                "shop/component/component.py",
+                "shop.component.component",
                 "import tesser.component as ts\n"
                 "import protocol.http as http\n",
                 False,
             ),
             (
-                "app/adapters/gateways.py",
-                "app.adapters.gateways",
+                "shop/adapters/gateways.py",
+                "shop.adapters.gateways",
                 "import tesser.adapters as ts\n"
                 "import protocol.http as http\n"
                 "class PeerGateway(ts.Gateway):\n"
@@ -2444,16 +2444,16 @@ def test_a_context_role_reaches_the_app_shell_only_as_handlers_to_protocol() -> 
                 False,
             ),
             (
-                "app/adapters/handlers_support.py",
-                "app.adapters.handlers_support",
+                "shop/adapters/handlers_support.py",
+                "shop.adapters.handlers_support",
                 "import tesser.adapters as ts\n"
                 "import protocol.http as http\n",
                 False,
             ),
-            ("app/adapters/repositories/__init__.py", "app.adapters.repositories", "", True),
+            ("shop/adapters/repositories/__init__.py", "shop.adapters.repositories", "", True),
             (
-                "app/adapters/repositories/smuggle.py",
-                "app.adapters.repositories.smuggle",
+                "shop/adapters/repositories/smuggle.py",
+                "shop.adapters.repositories.smuggle",
                 "import tesser.adapters as ts\n"
                 "import protocol.http as http\n"
                 "class SmuggleHandler(ts.Handler):\n"
@@ -2465,21 +2465,21 @@ def test_a_context_role_reaches_the_app_shell_only_as_handlers_to_protocol() -> 
                )
     clause = "of the app shell a context imports only protocol, and only from its handlers"
     assert any(
-        "app.adapters.handlers imports srv.http; "
+        "shop.adapters.handlers imports srv.http; "
         "of the app shell a context imports only protocol, and only from its handlers" in f
         for f in findings
     )
-    assert not any("app.adapters.handlers imports protocol.http" in f for f in findings)
-    assert any(f"app.wiring.wire imports protocol.http; {clause}" in f for f in findings)
+    assert not any("shop.adapters.handlers imports protocol.http" in f for f in findings)
+    assert any(f"shop.component.component imports protocol.http; {clause}" in f for f in findings)
     assert any(
-        f"app.adapters.gateways imports protocol.http; {clause}" in f for f in findings
+        f"shop.adapters.gateways imports protocol.http; {clause}" in f for f in findings
     ), f"a gateway imported protocol without a finding: {findings}"
     assert any(
-        f"app.adapters.handlers_support imports protocol.http; {clause}" in f
+        f"shop.adapters.handlers_support imports protocol.http; {clause}" in f
         for f in findings
     ), f"a handlers-adjacent name bought the grant without the placement: {findings}"
     assert any(
-        f"app.adapters.repositories.smuggle imports protocol.http; {clause}" in f
+        f"shop.adapters.repositories.smuggle imports protocol.http; {clause}" in f
         for f in findings
     ), f"a Handler class declared outside handlers/ bought the grant: {findings}"
 
@@ -2489,10 +2489,10 @@ def test_a_classless_module_inside_handlers_may_speak_protocol() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             ("protocol/http.py", "protocol.http", "import tesser.srv as ts\n", False),
-            ("app/adapters/handlers/__init__.py", "app.adapters.handlers", "", True),
+            ("shop/adapters/handlers/__init__.py", "shop.adapters.handlers", "", True),
             (
-                "app/adapters/handlers/usage.py",
-                "app.adapters.handlers.usage",
+                "shop/adapters/handlers/usage.py",
+                "shop.adapters.handlers.usage",
                 "import tesser.adapters as ts\n"
                 "import protocol.http as http\n",
                 False,
@@ -2500,7 +2500,7 @@ def test_a_classless_module_inside_handlers_may_speak_protocol() -> None:
         ))).violations()
                )
     assert not any(
-        "app.adapters.handlers.usage imports protocol.http" in f for f in findings
+        "shop.adapters.handlers.usage imports protocol.http" in f for f in findings
     ), f"a helper module inside handlers/ was denied protocol: {findings}"
 
 
@@ -2509,22 +2509,22 @@ def test_a_shell_name_missing_from_the_tree_is_not_the_shell() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/test_thing.py",
-                "app.domain.test_thing",
+                "shop/domain/test_thing.py",
+                "shop.domain.test_thing",
                 "import protocol.thirdparty\n"
                 "def test_ok() -> None:\n    assert True\n",
                 False,
             ),
             (
-                "app/wiring/wire.py",
-                "app.wiring.wire",
+                "shop/component/component.py",
+                "shop.component.component",
                 "import tesser.context as ts\nimport bootstrap\n",
                 False,
             ),
         ))).violations()
                )
-    assert not any("app.domain.test_thing imports protocol.thirdparty" in f for f in findings)
-    assert not any("app.wiring.wire imports bootstrap" in f for f in findings)
+    assert not any("shop.domain.test_thing imports protocol.thirdparty" in f for f in findings)
+    assert not any("shop.component.component imports bootstrap" in f for f in findings)
 
 
 def test_a_vendored_tesser_package_is_not_the_tree() -> None:
@@ -2549,14 +2549,14 @@ def test_a_root_module_is_homeless() -> None:
             (
                 "helpers.py",
                 "helpers",
-                "import app.domain.thing\nimport enum\n",
+                "import shop.domain.thing\nimport enum\n",
                 False,
             ),
         ))).violations()
                )
     assert any(
         "helpers belongs to no governed package; every module belongs to a "
-        "context, a kernel, srv, bootstrap, tests, or the protocol package" in f
+        "context, a kernel, srv, app, tests, or the protocol package" in f
         for f in findings
     )
 
@@ -2568,13 +2568,13 @@ def test_a_root_conftest_is_a_leaf() -> None:
             (
                 "conftest.py",
                 "conftest",
-                "import os\nimport sys\nimport app.domain.thing\n",
+                "import os\nimport sys\nimport shop.domain.thing\n",
                 False,
             ),
         ))).violations()
                )
     assert any(
-        "conftest imports app.domain.thing; "
+        "conftest imports shop.domain.thing; "
         "a conftest is a leaf that imports nothing from its tree" in f
         for f in findings
     )
@@ -2699,8 +2699,8 @@ def test_wiring_bootstrap_and_srv_may_from_import_tesser_errors() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/wiring/wire.py",
-                "app.wiring.wire",
+                "shop/component/component.py",
+                "shop.component.component",
                 "import tesser.component as ts\n"
                 "from tesser.errors import invalid\n"
                 "class Wiring(ts.Component):\n"
@@ -2709,22 +2709,22 @@ def test_wiring_bootstrap_and_srv_may_from_import_tesser_errors() -> None:
                 False,
             ),
             (
-                "app/wiring/test_wire.py",
-                "app.wiring.test_wire",
+                "shop/component/test_component.py",
+                "shop.component.test_component",
                 "def test_wire_exists() -> None:\n"
                 "    assert True\n",
                 False,
             ),
             (
-                "bootstrap/wire.py",
-                "bootstrap.wire",
+                "app/wire.py",
+                "app.wire",
                 "import tesser.app as ts\n"
                 "from tesser.errors import invalid\n",
                 False,
             ),
             (
-                "bootstrap/test_wire.py",
-                "bootstrap.test_wire",
+                "app/test_component.py",
+                "app.test_component",
                 "def test_wire_exists() -> None:\n"
                 "    assert True\n",
                 False,
@@ -2744,8 +2744,8 @@ def test_wiring_bootstrap_and_srv_may_from_import_tesser_errors() -> None:
                 False,
             ),
             (
-                "astray/wiring/wire.py",
-                "astray.wiring.wire",
+                "astray/component/component.py",
+                "astray.component.component",
                 "import tesser.component as ts\n"
                 "import tesser.domain\n"
                 "class Wiring(ts.Component):\n"
@@ -2753,20 +2753,20 @@ def test_wiring_bootstrap_and_srv_may_from_import_tesser_errors() -> None:
                 False,
             ),
             (
-                "astray/wiring/test_wire.py",
-                "astray.wiring.test_wire",
+                "astray/component/test_component.py",
+                "astray.component.test_component",
                 "def test_wire_exists() -> None:\n"
                 "    assert True\n",
                 False,
             ),
         ))).violations()
                )
-    assert not any("app.wiring.wire" in f for f in findings)
-    assert not any("bootstrap.wire" in f and "tesser.errors" in f for f in findings)
+    assert not any("shop.component.component" in f for f in findings)
+    assert not any("app.wire" in f and "tesser.errors" in f for f in findings)
     assert not any("srv.run" in f and "tesser.errors" in f for f in findings)
     assert any(
-        "astray.wiring.wire imports tesser.domain; "
-        "a wiring module's tesser imports are tesser.component, "
+        "astray.component.component imports tesser.domain; "
+        "a component module's tesser imports are tesser.component, "
         "and tesser.errors" in f
         for f in findings
     )
@@ -2777,8 +2777,8 @@ def test_any_role_but_client_may_from_import_tesser_errors() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/money.py",
-                "app.domain.money",
+                "shop/domain/money.py",
+                "shop.domain.money",
                 "import tesser.domain as ts\n"
                 "from tesser.errors import invalid\n"
                 "class MoneySpec(ts.Spec):\n"
@@ -2789,17 +2789,17 @@ def test_any_role_but_client_may_from_import_tesser_errors() -> None:
                 False,
             ),
             (
-                "app/domain/test_money.py",
-                "app.domain.test_money",
+                "shop/domain/test_money.py",
+                "shop.domain.test_money",
                 "def test_money_exists() -> None:\n"
                 "    assert True\n",
                 False,
             ),
             (
-                "app/application/views.py",
-                "app.application.views",
+                "shop/application/views.py",
+                "shop.application.views",
                 "import tesser.application as ts\n"
-                "import app.client.client as client\n"
+                "import shop.client.client as client\n"
                 "from tesser.errors import not_found\n"
                 "class ViewService(ts.ApplicationService):\n"
                 "    def ask(self, request: client.AskRequest) -> client.AskResponse:\n"
@@ -2807,15 +2807,15 @@ def test_any_role_but_client_may_from_import_tesser_errors() -> None:
                 False,
             ),
             (
-                "app/application/test_views.py",
-                "app.application.test_views",
+                "shop/application/test_views.py",
+                "shop.application.test_views",
                 "def test_views_exists() -> None:\n"
                 "    assert True\n",
                 False,
             ),
             (
-                "app/adapters/gateways.py",
-                "app.adapters.gateways",
+                "shop/adapters/gateways.py",
+                "shop.adapters.gateways",
                 "import tesser.adapters as ts\n"
                 "from tesser.errors import InfraError\n"
                 "class MemoryGateway(ts.Gateway):\n"
@@ -2824,8 +2824,8 @@ def test_any_role_but_client_may_from_import_tesser_errors() -> None:
                 False,
             ),
             (
-                "app/adapters/test_gateways.py",
-                "app.adapters.test_gateways",
+                "shop/adapters/test_gateways.py",
+                "shop.adapters.test_gateways",
                 "def test_gateways_exists() -> None:\n"
                 "    assert True\n",
                 False,
@@ -2866,9 +2866,9 @@ def test_any_role_but_client_may_from_import_tesser_errors() -> None:
             ),
         ))).violations()
                )
-    assert not any("app.domain.money" in f for f in findings)
-    assert not any("app.application.views" in f for f in findings)
-    assert not any("app.adapters.gateways" in f for f in findings)
+    assert not any("shop.domain.money" in f for f in findings)
+    assert not any("shop.application.views" in f for f in findings)
+    assert not any("shop.adapters.gateways" in f for f in findings)
     assert any(
         "stray.client.client imports tesser.errors; "
         "a role module imports only its own tesser package" in f
@@ -2889,16 +2889,16 @@ def test_an_eval_lives_only_in_a_gateway() -> None:
         "    assert True\n"
     )
     loose = (
-        ("app/adapters/eval_flat.py", "app.adapters.eval_flat", body, False),
-        ("app/tests/__init__.py", "app.tests", "", True),
-        ("app/tests/eval_tier.py", "app.tests.eval_tier", body, False),
-        ("app/domain/eval_role.py", "app.domain.eval_role", body, False),
+        ("shop/adapters/eval_flat.py", "shop.adapters.eval_flat", body, False),
+        ("shop/tests/__init__.py", "shop.tests", "", True),
+        ("shop/tests/eval_tier.py", "shop.tests.eval_tier", body, False),
+        ("shop/domain/eval_role.py", "shop.domain.eval_role", body, False),
     )
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=loose)).violations()
                )
-    for outside in ("app.adapters.eval_flat", "app.tests.eval_tier", "app.domain.eval_role"):
+    for outside in ("shop.adapters.eval_flat", "shop.tests.eval_tier", "shop.domain.eval_role"):
         assert any(
             f"{outside} is an eval outside a gateway; an eval lives only in a gateway, "
             "the one place a sampled real-model call is honest" in f
@@ -2910,32 +2910,32 @@ def test_an_eval_lives_only_in_a_gateway() -> None:
                  for v in checks.Codebase(_spec(sources=loose
         + (
             (
-                "app/adapters/gateways/__init__.py",
-                "app.adapters.gateways",
+                "shop/adapters/gateways/__init__.py",
+                "shop.adapters.gateways",
                 "",
                 True,
             ),
             (
-                "app/adapters/gateways/eval_llm.py",
-                "app.adapters.gateways.eval_llm",
+                "shop/adapters/gateways/eval_llm.py",
+                "shop.adapters.gateways.eval_llm",
                 body,
                 False,
             ),
             (
-                "app/adapters/gateways/llm/__init__.py",
-                "app.adapters.gateways.llm",
+                "shop/adapters/gateways/llm/__init__.py",
+                "shop.adapters.gateways.llm",
                 "",
                 True,
             ),
             (
-                "app/adapters/gateways/llm/evals/__init__.py",
-                "app.adapters.gateways.llm.evals",
+                "shop/adapters/gateways/llm/evals/__init__.py",
+                "shop.adapters.gateways.llm.evals",
                 "",
                 True,
             ),
             (
-                "app/adapters/gateways/llm/evals/eval_tools.py",
-                "app.adapters.gateways.llm.evals.eval_tools",
+                "shop/adapters/gateways/llm/evals/eval_tools.py",
+                "shop.adapters.gateways.llm.evals.eval_tools",
                 body,
                 False,
             ),
@@ -2950,40 +2950,40 @@ def test_a_handler_sibling_fakes_only_the_client() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/adapters/handlers/http.py",
-                "app.adapters.handlers.http",
+                "shop/adapters/handlers/http.py",
+                "shop.adapters.handlers.http",
                 "import tesser.adapters as ts\n"
-                "import app.client.client as client\n"
+                "import shop.client.client as client\n"
                 "class Handler(ts.Handler):\n"
                 "    def __init__(self, c: client.Client) -> None:\n"
                 "        self._c = c\n",
                 False,
             ),
-            ("app/adapters/handlers/__init__.py", "app.adapters.handlers", "", True),
-            ("app/adapters/__init__.py", "app.adapters", "", True),
+            ("shop/adapters/handlers/__init__.py", "shop.adapters.handlers", "", True),
+            ("shop/adapters/__init__.py", "shop.adapters", "", True),
             (
-                "app/adapters/handlers/test_http.py",
-                "app.adapters.handlers.test_http",
+                "shop/adapters/handlers/test_http.py",
+                "shop.adapters.handlers.test_http",
                 "import tesser.testing as ts\n"
-                "import app.adapters.handlers.http as http\n"
-                "import app.client.client as client\n"
-                "import app.application.service as application\n"
-                "import app.adapters.gateways as gateways\n"
+                "import shop.adapters.handlers.http as http\n"
+                "import shop.client.client as client\n"
+                "import shop.application.service as application\n"
+                "import shop.adapters.gateways as gateways\n"
                 "def test_x() -> None:\n"
                 "    assert True\n",
                 False,
             ),
-            ("app/adapters/gateways/__init__.py", "app.adapters.gateways", "", True),
+            ("shop/adapters/gateways/__init__.py", "shop.adapters.gateways", "", True),
         ))).violations()
                )
     assert any(
-        "app.adapters.handlers.test_http imports app.application.service, but a test "
+        "shop.adapters.handlers.test_http imports shop.application.service, but a test "
         "placed in handlers reaches only adapters.handlers, client of its own context; "
         "a test reaches only what its placement allows" in f
         for f in findings
     )
     assert any(
-        "app.adapters.handlers.test_http imports app.adapters.gateways, but a test "
+        "shop.adapters.handlers.test_http imports shop.adapters.gateways, but a test "
         "placed in handlers reaches only adapters.handlers, client of its own context; "
         "a test reaches only what its placement allows" in f
         for f in findings
@@ -2997,23 +2997,23 @@ def test_a_srv_test_reaches_a_context_only_through_its_handlers() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/adapters/handlers/http.py",
-                "app.adapters.handlers.http",
+                "shop/adapters/handlers/http.py",
+                "shop.adapters.handlers.http",
                 "import tesser.adapters as ts\n"
-                "import app.client.client as client\n"
+                "import shop.client.client as client\n"
                 "class Handler(ts.Handler):\n"
                 "    def __init__(self, c: client.Client) -> None:\n"
                 "        self._c = c\n",
                 False,
             ),
-            ("app/adapters/handlers/__init__.py", "app.adapters.handlers", "", True),
-            ("app/adapters/__init__.py", "app.adapters", "", True),
+            ("shop/adapters/handlers/__init__.py", "shop.adapters.handlers", "", True),
+            ("shop/adapters/__init__.py", "shop.adapters", "", True),
             (
                 "srv/test_router.py",
                 "srv.test_router",
                 "import tesser.testing as ts\n"
-                "import app.adapters.handlers.http as http\n"
-                "import app.application.service as application\n"
+                "import shop.adapters.handlers.http as http\n"
+                "import shop.application.service as application\n"
                 "def test_x() -> None:\n"
                 "    assert True\n",
                 False,
@@ -3021,7 +3021,7 @@ def test_a_srv_test_reaches_a_context_only_through_its_handlers() -> None:
         ))).violations()
                )
     assert any(
-        "srv.test_router imports app.application.service, but a test placed in "
+        "srv.test_router imports shop.application.service, but a test placed in "
         "srv reaches a context only through its handlers; "
         "a test reaches only what its placement allows" in f
         for f in findings
@@ -3038,7 +3038,7 @@ def test_a_test_reaches_only_what_its_placement_allows() -> None:
                 "far.domain.test_thing",
                 "import tesser.testing as ts\n"
                 "import far.client.client as client\n"
-                "import app.client.client as foreign\n"
+                "import shop.client.client as foreign\n"
                 "def test_x() -> None:\n"
                 "    assert True\n",
                 False,
@@ -3071,7 +3071,7 @@ def test_a_test_reaches_only_what_its_placement_allows() -> None:
         for f in findings
     )
     assert any(
-        "far.domain.test_thing imports app.client.client, but a test placed in domain "
+        "far.domain.test_thing imports shop.client.client, but a test placed in domain "
         "reaches no neighbouring context; "
         "a test reaches only what its placement allows" in f
         for f in findings
@@ -3083,8 +3083,8 @@ def test_a_repository_sibling_test_reaches_its_kind_and_application_only() -> No
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/adapters/repositories/words.py",
-                "app.adapters.repositories.words",
+                "shop/adapters/repositories/words.py",
+                "shop.adapters.repositories.words",
                 "import tesser.adapters as ts\n"
                 "class WordsRepository(ts.Repository):\n"
                 "    def __init__(self) -> None:\n"
@@ -3092,18 +3092,18 @@ def test_a_repository_sibling_test_reaches_its_kind_and_application_only() -> No
                 False,
             ),
             (
-                "app/adapters/repositories/__init__.py",
-                "app.adapters.repositories",
+                "shop/adapters/repositories/__init__.py",
+                "shop.adapters.repositories",
                 "",
                 True,
             ),
-            ("app/adapters/__init__.py", "app.adapters", "", True),
+            ("shop/adapters/__init__.py", "shop.adapters", "", True),
             (
-                "app/adapters/repositories/test_words.py",
-                "app.adapters.repositories.test_words",
-                "import app.adapters.repositories.words as words\n"
-                "import app.application.ports.words as words_port\n"
-                "import app.domain.thing as thing\n"
+                "shop/adapters/repositories/test_words.py",
+                "shop.adapters.repositories.test_words",
+                "import shop.adapters.repositories.words as words\n"
+                "import shop.application.ports.words as words_port\n"
+                "import shop.domain.thing as thing\n"
                 "import far.client.client as farclient\n"
                 "def test_x() -> None:\n"
                 "    assert True\n",
@@ -3132,13 +3132,13 @@ def test_a_repository_sibling_test_reaches_its_kind_and_application_only() -> No
         ))).violations()
                )
     assert any(
-        "app.adapters.repositories.test_words imports app.domain.thing, but a test placed "
+        "shop.adapters.repositories.test_words imports shop.domain.thing, but a test placed "
         "in repositories reaches only adapters.repositories, application.ports of its own context; "
         "a test reaches only what its placement allows" in f
         for f in findings
     )
     assert any(
-        "app.adapters.repositories.test_words imports far.client.client, but a test placed "
+        "shop.adapters.repositories.test_words imports far.client.client, but a test placed "
         "in repositories reaches no neighbouring context; "
         "a test reaches only what its placement allows" in f
         for f in findings
@@ -3147,14 +3147,14 @@ def test_a_repository_sibling_test_reaches_its_kind_and_application_only() -> No
     assert not any("test_words.py:2:" in f for f in findings)
 
 
-def test_a_wiring_sibling_test_mirrors_production_wiring_reach() -> None:
+def test_a_component_sibling_test_mirrors_production_component_reach() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
-            ("app/wiring/__init__.py", "app.wiring", "", True),
+            ("shop/component/__init__.py", "shop.component", "", True),
             (
-                "app/wiring/wire.py",
-                "app.wiring.wire",
+                "shop/component/component.py",
+                "shop.component.component",
                 "import tesser.component as ts\n"
                 "class Wiring(ts.Component):\n"
                 "    def close(self) -> None:\n"
@@ -3162,11 +3162,11 @@ def test_a_wiring_sibling_test_mirrors_production_wiring_reach() -> None:
                 False,
             ),
             (
-                "app/wiring/test_wire.py",
-                "app.wiring.test_wire",
-                "import app.application.service as service\n"
+                "shop/component/test_component.py",
+                "shop.component.test_component",
+                "import shop.application.service as service\n"
                 "import far.client.client as farclient\n"
-                "import app.domain.thing as thing\n"
+                "import shop.domain.thing as thing\n"
                 "def test_x() -> None:\n"
                 "    assert True\n",
                 False,
@@ -3208,13 +3208,13 @@ def test_a_wiring_sibling_test_mirrors_production_wiring_reach() -> None:
         ))).violations()
                )
     assert any(
-        "app.wiring.test_wire imports app.domain.thing, but a test placed in wiring "
-        "reaches only wiring, application, adapters, client of its own context; "
+        "shop.component.test_component imports shop.domain.thing, but a test placed in component "
+        "reaches only component, application, adapters, client of its own context; "
         "a test reaches only what its placement allows" in f
         for f in findings
     )
-    assert not any("test_wire.py:1:" in f for f in findings)
-    assert not any("test_wire.py:2:" in f for f in findings)
+    assert not any("test_component.py:1:" in f for f in findings)
+    assert not any("test_component.py:2:" in f for f in findings)
 
 
 def test_a_client_sibling_test_reaches_only_its_own_client() -> None:
@@ -3222,10 +3222,10 @@ def test_a_client_sibling_test_reaches_only_its_own_client() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/client/test_client.py",
-                "app.client.test_client",
-                "import app.client.client as client\n"
-                "import app.domain.thing as thing\n"
+                "shop/client/test_client.py",
+                "shop.client.test_client",
+                "import shop.client.client as client\n"
+                "import shop.domain.thing as thing\n"
                 "def test_x() -> None:\n"
                 "    assert True\n",
                 False,
@@ -3233,7 +3233,7 @@ def test_a_client_sibling_test_reaches_only_its_own_client() -> None:
         ))).violations()
                )
     assert any(
-        "app.client.test_client imports app.domain.thing, but a test placed in client "
+        "shop.client.test_client imports shop.domain.thing, but a test placed in client "
         "reaches only client of its own context; "
         "a test reaches only what its placement allows" in f
         for f in findings
@@ -3241,13 +3241,13 @@ def test_a_client_sibling_test_reaches_only_its_own_client() -> None:
     assert not any("test_client.py:1:" in f for f in findings)
 
 
-def test_a_bootstrap_test_reaches_a_context_like_production_bootstrap() -> None:
+def test_an_app_test_reaches_a_context_like_a_production_app() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "bootstrap/boot.py",
-                "bootstrap.boot",
+                "app/boot.py",
+                "app.boot",
                 "import tesser.context as ts\n"
                 "@ts.do_not_use_function\n"
                 "def boot() -> int:\n"
@@ -3255,20 +3255,20 @@ def test_a_bootstrap_test_reaches_a_context_like_production_bootstrap() -> None:
                 False,
             ),
             (
-                "bootstrap/test_boot.py",
-                "bootstrap.test_boot",
-                "import app.client.client as client\n"
-                "import app.domain.thing as thing\n"
+                "app/test_boot.py",
+                "app.test_boot",
+                "import shop.client.client as client\n"
+                "import shop.domain.thing as thing\n"
                 "def test_x() -> None:\n"
                 "    assert True\n",
                 False,
             ),
-            ("bootstrap/__init__.py", "bootstrap", "", True),
+            ("app/__init__.py", "app", "", True),
         ))).violations()
                )
     assert any(
-        "bootstrap.test_boot imports app.domain.thing, but a test placed in "
-        "bootstrap reaches a context only through its wiring, client, and adapters; "
+        "app.test_boot imports shop.domain.thing, but a test placed in "
+        "an app reaches a context only through its component, client, and adapters; "
         "a test reaches only what its placement allows" in f
         for f in findings
     )
@@ -3282,7 +3282,7 @@ def test_a_protocol_test_reaches_no_context() -> None:
             (
                 "protocol/test_proto.py",
                 "protocol.test_proto",
-                "import app.client.client as client\n"
+                "import shop.client.client as client\n"
                 "def test_x() -> None:\n"
                 "    assert True\n",
                 False,
@@ -3291,7 +3291,7 @@ def test_a_protocol_test_reaches_no_context() -> None:
         ))).violations()
                )
     assert any(
-        "protocol.test_proto imports app.client.client, but a test placed in "
+        "protocol.test_proto imports shop.client.client, but a test placed in "
         "protocol reaches no context; "
         "a test reaches only what its placement allows" in f
         for f in findings
@@ -3303,29 +3303,29 @@ def test_a_test_that_resolves_to_no_tier_is_itself_a_finding() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/adapters/test_flat.py",
-                "app.adapters.test_flat",
+                "shop/adapters/test_flat.py",
+                "shop.adapters.test_flat",
                 "def test_x() -> None:\n    assert True\n",
                 False,
             ),
             (
-                "app/adapters/blobs/test_blob.py",
-                "app.adapters.blobs.test_blob",
+                "shop/adapters/blobs/test_blob.py",
+                "shop.adapters.blobs.test_blob",
                 "def test_x() -> None:\n    assert True\n",
                 False,
             ),
-            ("app/adapters/blobs/__init__.py", "app.adapters.blobs", "", True),
-            ("app/adapters/__init__.py", "app.adapters", "", True),
+            ("shop/adapters/blobs/__init__.py", "shop.adapters.blobs", "", True),
+            ("shop/adapters/__init__.py", "shop.adapters", "", True),
         ))).violations()
                )
     assert any(
-        "app.adapters.test_flat resolves to no test tier; "
+        "shop.adapters.test_flat resolves to no test tier; "
         "a sibling test lives in a role package or an adapter kind package "
         "(handlers, gateways, repositories)" in f
         for f in findings
     )
     assert any(
-        "app.adapters.blobs.test_blob resolves to no test tier; "
+        "shop.adapters.blobs.test_blob resolves to no test tier; "
         "a sibling test lives in a role package or an adapter kind package "
         "(handlers, gateways, repositories)" in f
         for f in findings
@@ -3358,7 +3358,7 @@ def test_a_context_tier_test_reaches_its_whole_context_and_a_neighbours_applicat
             "near.tests.test_wiring",
             "import tesser.testing as ts\n"
             "import near.domain.thing as thing\n"
-            "import app.application.service as neighbour\n"
+            "import shop.application.service as neighbour\n"
             "def test_x() -> None:\n"
             "    assert True\n",
             False,
@@ -3392,24 +3392,24 @@ def test_a_context_tier_test_reaches_its_whole_context_and_a_neighbours_applicat
     )
 
 
-def test_a_root_test_reaches_a_context_only_through_wiring_and_client() -> None:
+def test_a_root_test_reaches_a_context_only_through_component_and_client() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/wiring/wire.py",
-                "app.wiring.wire",
+                "shop/component/component.py",
+                "shop.component.component",
                 "import tesser.component as ts\n",
                 False,
             ),
             (
                 "tests/test_app.py",
                 "tests.test_app",
-                "import app.client.client as client\n"
-                "import app.wiring.wire as wire\n"
-                "import app.domain.thing as thing\n"
-                "import app.application.service as service\n"
-                "import bootstrap.wire\n"
+                "import shop.client.client as client\n"
+                "import shop.component.component as wire\n"
+                "import shop.domain.thing as thing\n"
+                "import shop.application.service as service\n"
+                "import app.wire\n"
                 "import tests.support\n"
                 "def test_ok() -> None:\n    assert True\n",
                 False,
@@ -3417,34 +3417,34 @@ def test_a_root_test_reaches_a_context_only_through_wiring_and_client() -> None:
             (
                 "tests/support.py",
                 "tests.support",
-                "import app.domain.thing as thing\n",
+                "import shop.domain.thing as thing\n",
                 False,
             ),
-            ("bootstrap/wire.py", "bootstrap.wire", "", False),
+            ("app/wire.py", "app.wire", "", False),
         ))).violations()
                )
     reach = (
-        "reaches a context only through its wiring and client; "
+        "reaches a context only through its component and client; "
         "a test reaches only what its placement allows"
     )
     assert any(
-        "tests.test_app imports app.domain.thing, but a test placed in "
-        "the root tests package reaches a context only through its wiring and client; "
+        "tests.test_app imports shop.domain.thing, but a test placed in "
+        "the root tests package reaches a context only through its component and client; "
         "a test reaches only what its placement allows" in f
         for f in findings
     )
     assert any(
-        "tests.test_app imports app.application.service" in f and reach in f for f in findings
+        "tests.test_app imports shop.application.service" in f and reach in f for f in findings
     )
-    assert not any("tests.test_app imports app.client.client" in f for f in findings)
-    assert not any("tests.test_app imports app.wiring.wire" in f for f in findings)
-    assert not any("tests.test_app imports bootstrap.wire" in f for f in findings)
+    assert not any("tests.test_app imports shop.client.client" in f for f in findings)
+    assert not any("tests.test_app imports shop.component.component" in f for f in findings)
+    assert not any("tests.test_app imports app.wire" in f for f in findings)
     assert not any("tests.test_app imports tests.support" in f for f in findings)
     assert any(
         "tests.support is neither a test module nor conftest" in f for f in findings
     )
     assert any(
-        f"tests.support imports app.domain.thing, but a test placed in the root tests package {reach}" in f
+        f"tests.support imports shop.domain.thing, but a test placed in the root tests package {reach}" in f
         for f in findings
     )
 
@@ -3454,8 +3454,8 @@ def test_a_placed_test_reaches_the_app_shell_only_where_its_placement_does() -> 
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/test_thing.py",
-                "app.domain.test_thing",
+                "shop/domain/test_thing.py",
+                "shop.domain.test_thing",
                 "import srv.http\n"
                 "def test_ok() -> None:\n    assert True\n",
                 False,
@@ -3463,7 +3463,7 @@ def test_a_placed_test_reaches_the_app_shell_only_where_its_placement_does() -> 
             (
                 "srv/test_host.py",
                 "srv.test_host",
-                "import bootstrap.wire\n"
+                "import app.wire\n"
                 "import tests.test_root\n"
                 "def test_ok() -> None:\n    assert True\n",
                 False,
@@ -3475,31 +3475,31 @@ def test_a_placed_test_reaches_the_app_shell_only_where_its_placement_does() -> 
                 False,
             ),
             (
-                "bootstrap/test_wire.py",
-                "bootstrap.test_wire",
+                "app/test_component.py",
+                "app.test_component",
                 "import srv.http\n"
                 "def test_ok() -> None:\n    assert True\n",
                 False,
             ),
             ("srv/http.py", "srv.http", "", False),
-            ("bootstrap/wire.py", "bootstrap.wire", "", False),
+            ("app/wire.py", "app.wire", "", False),
         ))).violations()
                )
     clause = "does not reach that package; a test reaches only what its placement allows"
     assert any(
-        "app.domain.test_thing imports srv.http, but a test placed in domain "
+        "shop.domain.test_thing imports srv.http, but a test placed in domain "
         "does not reach that package; "
         "a test reaches only what its placement allows" in f
         for f in findings
     )
-    assert not any("srv.test_host imports bootstrap.wire" in f for f in findings)
+    assert not any("srv.test_host imports app.wire" in f for f in findings)
     assert any(
         "srv.test_host imports tests.test_root, but a test placed in srv "
         "does not reach that package" in f
         for f in findings
     )
     assert any(
-        f"bootstrap.test_wire imports srv.http, but a test placed in bootstrap {clause}" in f
+        f"app.test_component imports srv.http, but a test placed in an app {clause}" in f
         for f in findings
     )
 
@@ -3508,16 +3508,16 @@ def test_a_context_tests_module_reaches_its_own_tests_package() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
-            ("app/tests/__init__.py", "app.tests", "", True),
+            ("shop/tests/__init__.py", "shop.tests", "", True),
             (
-                "app/tests/test_thing.py",
-                "app.tests.test_thing",
-                "import app.tests.conftest as helpers\n"
+                "shop/tests/test_thing.py",
+                "shop.tests.test_thing",
+                "import shop.tests.conftest as helpers\n"
                 "import two.tests.test_two as foreign\n"
                 "def test_ok() -> None:\n    assert True\n",
                 False,
             ),
-            ("app/tests/conftest.py", "app.tests.conftest", "", False),
+            ("shop/tests/conftest.py", "shop.tests.conftest", "", False),
             (
                 "two/client/client.py",
                 "two.client.client",
@@ -3533,9 +3533,9 @@ def test_a_context_tests_module_reaches_its_own_tests_package() -> None:
             ),
         ))).violations()
                )
-    assert not any("app.tests.test_thing imports app.tests.conftest" in f for f in findings)
+    assert not any("shop.tests.test_thing imports shop.tests.conftest" in f for f in findings)
     assert any(
-        "app.tests.test_thing imports two.tests.test_two, but a test placed in tests "
+        "shop.tests.test_thing imports two.tests.test_two, but a test placed in tests "
         "reaches only application, client of a neighbouring context; "
         "a test reaches only what its placement allows" in f
         for f in findings
@@ -3549,7 +3549,7 @@ def test_an_unplaced_test_module_is_still_governed() -> None:
             (
                 "weird/test_nested.py",
                 "weird.test_nested",
-                "import app.domain.thing as thing\n"
+                "import shop.domain.thing as thing\n"
                 "def test_ok() -> None:\n    assert True\n",
                 False,
             ),
@@ -3575,31 +3575,31 @@ def test_a_conftest_off_the_tier_map_is_a_leaf() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/adapters/conftest.py",
-                "app.adapters.conftest",
-                "import os\nimport app.domain.thing\n",
+                "shop/adapters/conftest.py",
+                "shop.adapters.conftest",
+                "import os\nimport shop.domain.thing\n",
                 False,
             ),
             (
-                "app/conftest.py",
-                "app.conftest",
-                "import app.domain.thing\n",
+                "shop/conftest.py",
+                "shop.conftest",
+                "import shop.domain.thing\n",
                 False,
             ),
         ))).violations()
                )
     assert any(
-        "app.adapters.conftest imports app.domain.thing; "
+        "shop.adapters.conftest imports shop.domain.thing; "
         "a conftest is a leaf that imports nothing from its tree" in f
         for f in findings
     )
     assert any(
-        "app.conftest imports app.domain.thing; "
+        "shop.conftest imports shop.domain.thing; "
         "a conftest is a leaf that imports nothing from its tree" in f
         for f in findings
     )
-    assert not any("app.adapters.conftest resolves to no test tier" in f for f in findings)
-    assert not any("app.adapters.conftest imports os" in f for f in findings)
+    assert not any("shop.adapters.conftest resolves to no test tier" in f for f in findings)
+    assert not any("shop.adapters.conftest imports os" in f for f in findings)
 
 
 def test_a_placed_conftest_carries_its_tier() -> None:
@@ -3609,30 +3609,30 @@ def test_a_placed_conftest_carries_its_tier() -> None:
             (
                 "tests/conftest.py",
                 "tests.conftest",
-                "import bootstrap.wire\nimport app.domain.thing\n",
+                "import app.wire\nimport shop.domain.thing\n",
                 False,
             ),
-            ("app/tests/__init__.py", "app.tests", "", True),
+            ("shop/tests/__init__.py", "shop.tests", "", True),
             (
-                "app/tests/conftest.py",
-                "app.tests.conftest",
-                "import app.domain.thing as thing\nimport srv.http\n",
+                "shop/tests/conftest.py",
+                "shop.tests.conftest",
+                "import shop.domain.thing as thing\nimport srv.http\n",
                 False,
             ),
-            ("bootstrap/wire.py", "bootstrap.wire", "", False),
+            ("app/wire.py", "app.wire", "", False),
             ("srv/http.py", "srv.http", "", False),
         ))).violations()
                )
     assert any(
-        "tests.conftest imports app.domain.thing, but a test placed in "
-        "the root tests package reaches a context only through its wiring and client; "
+        "tests.conftest imports shop.domain.thing, but a test placed in "
+        "the root tests package reaches a context only through its component and client; "
         "a test reaches only what its placement allows" in f
         for f in findings
     )
-    assert not any("tests.conftest imports bootstrap.wire" in f for f in findings)
-    assert not any("app.tests.conftest imports app.domain.thing" in f for f in findings)
+    assert not any("tests.conftest imports app.wire" in f for f in findings)
+    assert not any("shop.tests.conftest imports shop.domain.thing" in f for f in findings)
     assert any(
-        "app.tests.conftest imports srv.http, but a test placed in tests "
+        "shop.tests.conftest imports srv.http, but a test placed in tests "
         "does not reach that package" in f
         for f in findings
     )
@@ -3644,10 +3644,10 @@ def test_adapter_kind_and_protocol_tests_shell_reach() -> None:
         entry
         for kind in kinds
         for entry in (
-            (f"app/adapters/{kind}/__init__.py", f"app.adapters.{kind}", "", True),
+            (f"shop/adapters/{kind}/__init__.py", f"shop.adapters.{kind}", "", True),
             (
-                f"app/adapters/{kind}/test_{kind}.py",
-                f"app.adapters.{kind}.test_{kind}",
+                f"shop/adapters/{kind}/test_{kind}.py",
+                f"shop.adapters.{kind}.test_{kind}",
                 "import protocol.http as http\n"
                 "import srv.http\n"
                 "def test_ok() -> None:\n    assert True\n",
@@ -3674,18 +3674,18 @@ def test_adapter_kind_and_protocol_tests_shell_reach() -> None:
         ))).violations()
                )
     assert not any(
-        "app.adapters.handlers.test_handlers imports protocol.http" in f
+        "shop.adapters.handlers.test_handlers imports protocol.http" in f
         for f in findings
     ), f"a handlers-tier test was denied protocol: {findings}"
     for kind in ("gateways", "repositories"):
         assert any(
-            f"app.adapters.{kind}.test_{kind} imports protocol.http" in f
+            f"shop.adapters.{kind}.test_{kind} imports protocol.http" in f
             and "does not reach that package" in f
             for f in findings
         ), f"a {kind} test reached protocol; only srv and handlers speak protocol: {findings}"
     for kind in ("handlers", "gateways", "repositories"):
         assert any(
-            f"app.adapters.{kind}.test_{kind} imports srv.http" in f
+            f"shop.adapters.{kind}.test_{kind} imports srv.http" in f
             and "does not reach that package; "
             "a test reaches only what its placement allows" in f
             for f in findings
@@ -3704,10 +3704,10 @@ def test_an_eval_in_a_gateway_reaches_no_shell_package() -> None:
                    for v in checks.Codebase(_spec(sources=(
             ("protocol/http.py", "protocol.http", "import tesser.srv as ts\n", False),
             ("srv/http.py", "srv.http", "", False),
-            ("app/adapters/gateways/__init__.py", "app.adapters.gateways", "", True),
+            ("shop/adapters/gateways/__init__.py", "shop.adapters.gateways", "", True),
             (
-                "app/adapters/gateways/eval_model.py",
-                "app.adapters.gateways.eval_model",
+                "shop/adapters/gateways/eval_model.py",
+                "shop.adapters.gateways.eval_model",
                 "import protocol.http as http\n"
                 "import srv.http\n"
                 "def test_ok() -> None:\n    assert True\n",
@@ -3716,12 +3716,12 @@ def test_an_eval_in_a_gateway_reaches_no_shell_package() -> None:
         ))).violations()
                )
     assert any(
-        "app.adapters.gateways.eval_model imports protocol.http" in f
+        "shop.adapters.gateways.eval_model imports protocol.http" in f
         and "does not reach that package" in f
         for f in findings
     ), f"a gateway eval reached protocol; only srv and handlers speak protocol: {findings}"
     assert any(
-        "app.adapters.gateways.eval_model imports srv.http, but a test placed in gateways "
+        "shop.adapters.gateways.eval_model imports srv.http, but a test placed in gateways "
         "does not reach that package" in f
         for f in findings
     )
@@ -3731,25 +3731,25 @@ def test_a_context_tests_helper_answers_for_its_imports() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
-            ("app/tests/__init__.py", "app.tests", "", True),
+            ("shop/tests/__init__.py", "shop.tests", "", True),
             (
-                "app/tests/support.py",
-                "app.tests.support",
-                "import app.domain.thing as thing\nimport srv.http\n",
+                "shop/tests/support.py",
+                "shop.tests.support",
+                "import shop.domain.thing as thing\nimport srv.http\n",
                 False,
             ),
             ("srv/http.py", "srv.http", "", False),
         ))).violations()
                )
     assert any(
-        "app.tests.support is neither a test module nor conftest" in f for f in findings
+        "shop.tests.support is neither a test module nor conftest" in f for f in findings
     )
     assert any(
-        "app.tests.support imports srv.http, but a test placed in tests "
+        "shop.tests.support imports srv.http, but a test placed in tests "
         "does not reach that package" in f
         for f in findings
     )
-    assert not any("app.tests.support imports app.domain.thing" in f for f in findings)
+    assert not any("shop.tests.support imports shop.domain.thing" in f for f in findings)
 
 
 def test_a_main_below_the_context_root_is_a_governed_module() -> None:
@@ -3757,33 +3757,33 @@ def test_a_main_below_the_context_root_is_a_governed_module() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/__main__.py",
-                "app.domain.__main__",
-                "import app.application.service as service\n",
+                "shop/domain/__main__.py",
+                "shop.domain.__main__",
+                "import shop.application.service as service\n",
                 False,
             ),
-            ("app/tests/__init__.py", "app.tests", "", True),
+            ("shop/tests/__init__.py", "shop.tests", "", True),
             (
-                "app/tests/__main__.py",
-                "app.tests.__main__",
-                "import app.application.service as service\n",
+                "shop/tests/__main__.py",
+                "shop.tests.__main__",
+                "import shop.application.service as service\n",
                 False,
             ),
         ))).violations()
                )
     assert any(
-        "app.domain.__main__ imports app.application.service; the same-context matrix is" in f
+        "shop.domain.__main__ imports shop.application.service; the same-context matrix is" in f
         for f in findings
     )
     assert any(
-        "app.tests.__main__ is neither a test module nor conftest" in f for f in findings
+        "shop.tests.__main__ is neither a test module nor conftest" in f for f in findings
     )
 
 
 def test_every_test_tier_has_a_shell_row() -> None:
     tiers = (
         set(checks.TEST_TIER_REACH)
-        | {checks.SRV_TIER, checks.BOOTSTRAP_TIER, checks.PROTOCOL_TIER, checks.APP_TIER}
+        | {checks.SRV_TIER, checks.APP_TIER, checks.PROTOCOL_TIER, checks.APP_TIER}
     )
     assert tiers <= set(checks.TEST_TIER_SHELL)
 
@@ -3793,8 +3793,8 @@ def test_test_module_tesser_import_rules() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/test_imports.py",
-                "app.test_imports",
+                "shop/test_imports.py",
+                "shop.test_imports",
                 "import tesser.domain as ts\n"
                 "import tesser.testing as th\n"
                 "import tesser.testing as ts2\n"
@@ -3803,8 +3803,8 @@ def test_test_module_tesser_import_rules() -> None:
                 False,
             ),
             (
-                "app/test_fromform.py",
-                "app.test_fromform",
+                "shop/test_fromform.py",
+                "shop.test_fromform",
                 "from tesser.testing import fake\n"
                 "def test_nothing() -> None:\n"
                 "    assert fake is not None\n",
@@ -3813,23 +3813,23 @@ def test_test_module_tesser_import_rules() -> None:
         ))).violations()
                )
     assert any(
-        "app.test_imports imports tesser.domain; a test module's tesser imports "
+        "shop.test_imports imports tesser.domain; a test module's tesser imports "
         "are tesser.testing, tesser.errors, "
         "and tesser.serialization" in f
         for f in findings
     )
     assert any(
-        "app.test_imports imports tesser.testing without the ts alias; "
+        "shop.test_imports imports tesser.testing without the ts alias; "
         "a test module imports tesser.testing at most once, as ts" in f
         for f in findings
     )
     assert any(
-        "app.test_imports imports tesser.testing again; "
+        "shop.test_imports imports tesser.testing again; "
         "a test module imports tesser.testing at most once, as ts" in f
         for f in findings
     )
     assert any(
-        "app.test_fromform imports names from tesser.testing; "
+        "shop.test_fromform imports names from tesser.testing; "
         "a test module imports tesser.testing at most once, as ts" in f
         for f in findings
     )
@@ -3855,8 +3855,8 @@ def test_test_module_totality_is_flagged() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/test_junk.py",
-                "app.test_junk",
+                "shop/test_junk.py",
+                "shop.test_junk",
                 "import tesser.testing as th\n"
                 "def build() -> None:\n"
                 "    return None\n"
@@ -3887,10 +3887,10 @@ def test_helper_rules_are_flagged() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/test_helpers.py",
-                "app.test_helpers",
+                "shop/test_helpers.py",
+                "shop.test_helpers",
                 "import tesser.testing as th\n"
-                "from app.domain.thing import Thing, ThingSpec\n"
+                "from shop.domain.thing import Thing, ThingSpec\n"
                 "@th.helper\n"
                 "def bad_builder(thing: Thing, count: int) -> Thing:\n"
                 "    if count:\n"
@@ -3926,8 +3926,8 @@ def test_a_fake_may_implement_a_protocol_port() -> None:
                 False,
             ),
             (
-                "app/test_doors.py",
-                "app.test_doors",
+                "shop/test_doors.py",
+                "shop.test_doors",
                 "import tesser.testing as ts\n"
                 "from protocol.box import BoxDoor\n"
                 "@ts.fake\n"
@@ -3940,7 +3940,7 @@ def test_a_fake_may_implement_a_protocol_port() -> None:
             ),
         ))).violations()
                )
-    assert not any("app.test_doors.FakeDoor" in f for f in findings)
+    assert not any("shop.test_doors.FakeDoor" in f for f in findings)
 
 
 def test_a_test_module_may_from_import_tesser_serialization() -> None:
@@ -3948,8 +3948,8 @@ def test_a_test_module_may_from_import_tesser_serialization() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/test_thing.py",
-                "app.domain.test_thing",
+                "shop/domain/test_thing.py",
+                "shop.domain.test_thing",
                 "from tesser.serialization import canonical_str\n"
                 "def test_canonical() -> None:\n"
                 '    assert canonical_str("x") == "x"\n',
@@ -3957,7 +3957,7 @@ def test_a_test_module_may_from_import_tesser_serialization() -> None:
             ),
         ))).violations()
                )
-    assert not any("app.domain.test_thing" in f for f in findings)
+    assert not any("shop.domain.test_thing" in f for f in findings)
 
 
 def test_comments_docstrings_and_bare_strings_are_flagged() -> None:
@@ -4109,8 +4109,8 @@ def test_a_value_object_mutable_collection_field_is_flagged() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/bag.py",
-                "app.domain.bag",
+                "shop/domain/bag.py",
+                "shop.domain.bag",
                 "import tesser.domain as ts\n"
                 "class Bag(ts.ValueObject):\n"
                 "    _items: list[str]\n"
@@ -4136,8 +4136,8 @@ def test_mutable_set_and_quoted_annotations_are_still_mutable_collections() -> N
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/holder.py",
-                "app.domain.holder",
+                "shop/domain/holder.py",
+                "shop.domain.holder",
                 "import tesser.domain as ts\n"
                 "from typing import MutableSet\n"
                 "class Holder(ts.ValueObject):\n"
@@ -4159,8 +4159,8 @@ def test_a_value_object_hides_its_representation() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/leaky.py",
-                "app.domain.leaky",
+                "shop/domain/leaky.py",
+                "shop.domain.leaky",
                 "import tesser.domain as ts\n"
                 "class Leaky(ts.ValueObject):\n"
                 "    amount: int\n"
@@ -4192,8 +4192,8 @@ def test_an_accessor_never_hands_back_the_backing_collection() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/box.py",
-                "app.domain.box",
+                "shop/domain/box.py",
+                "shop.domain.box",
                 "import tesser.domain as ts\n"
                 "class BoxSpec(ts.Spec):\n"
                 "    def __init__(self, item: str) -> None:\n"
@@ -4220,10 +4220,10 @@ def test_an_aggregate_is_referenced_by_id_never_held() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/pair.py",
-                "app.domain.pair",
+                "shop/domain/pair.py",
+                "shop.domain.pair",
                 "import tesser.domain as ts\n"
-                "import app.domain.thing as thing\n"
+                "import shop.domain.thing as thing\n"
                 "class PairSpec(ts.Spec):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n"
@@ -4247,8 +4247,8 @@ def test_exit_norms_leaf_and_structured() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/exits.py",
-                "app.domain.exits",
+                "shop/domain/exits.py",
+                "shop.domain.exits",
                 "import tesser.domain as ts\n"
                 "@ts.do_not_use_function\n"
                 "def canonical_str(value: str) -> str:\n"
@@ -4307,8 +4307,8 @@ def test_composition_norms() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/shapes.py",
-                "app.domain.shapes",
+                "shop/domain/shapes.py",
+                "shop.domain.shapes",
                 "import tesser.domain as ts\n"
                 "class Flag(ts.ValueObject):\n"
                 "    _value: bool\n"
@@ -4342,8 +4342,8 @@ def test_a_value_object_has_one_construction_door() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/doors.py",
-                "app.domain.doors",
+                "shop/domain/doors.py",
+                "shop.domain.doors",
                 "import tesser.domain as ts\n"
                 "@ts.do_not_use_function\n"
                 "def canonical_str(value: str) -> str:\n"
@@ -4373,8 +4373,8 @@ def test_domain_returns_and_spec_returns() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/returns.py",
-                "app.domain.returns",
+                "shop/domain/returns.py",
+                "shop.domain.returns",
                 "import tesser.domain as ts\n"
                 "class WidgetSpec(ts.Spec):\n"
                 "    def __init__(self, text: str) -> None:\n"
@@ -4411,8 +4411,8 @@ def test_review_pins_for_the_shape_norms() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/pins.py",
-                "app.domain.pins",
+                "shop/domain/pins.py",
+                "shop.domain.pins",
                 "import tesser.domain as ts\n"
                 "from typing import ClassVar, Self\n"
                 "@ts.do_not_use_function\n"
@@ -4466,8 +4466,8 @@ def test_module_qualified_canonical_delegation_passes() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/policy.py",
-                "app.domain.policy",
+                "shop/domain/policy.py",
+                "shop.domain.policy",
                 "import tesser.domain as ts\n"
                 "@ts.do_not_use_function\n"
                 "def canonical_str(value: str) -> str:\n"
@@ -4475,10 +4475,10 @@ def test_module_qualified_canonical_delegation_passes() -> None:
                 False,
             ),
             (
-                "app/domain/word.py",
-                "app.domain.word",
+                "shop/domain/word.py",
+                "shop.domain.word",
                 "import tesser.domain as ts\n"
-                "import app.domain.policy as policy\n"
+                "import shop.domain.policy as policy\n"
                 "class Word(ts.ValueObject):\n"
                 "    _value: str\n"
                 "    def __init__(self, value: str) -> None:\n"
@@ -4497,8 +4497,8 @@ def test_undeclared_backing_collection_is_still_caught() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/sack.py",
-                "app.domain.sack",
+                "shop/domain/sack.py",
+                "shop.domain.sack",
                 "import tesser.domain as ts\n"
                 "class SackSpec(ts.Spec):\n"
                 "    def __init__(self, item: str) -> None:\n"
@@ -4546,14 +4546,14 @@ def test_a_stale_ignore_is_itself_a_finding() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/extra.py",
-                "app.domain.extra",
+                "shop/domain/extra.py",
+                "shop.domain.extra",
                 "import tesser.domain as ts  # tessercheck:ignore\n",
                 False,
             ),
             (
-                "app/domain/test_extra.py",
-                "app.domain.test_extra",
+                "shop/domain/test_extra.py",
+                "shop.domain.test_extra",
                 "def test_extra_exists() -> None:\n"
                 "    assert True\n",
                 False,
@@ -4561,7 +4561,7 @@ def test_a_stale_ignore_is_itself_a_finding() -> None:
         ))).violations()
                )
     assert any(
-        "app/domain/extra.py:1: TB090" in f
+        "shop/domain/extra.py:1: TB090" in f
         and "an ignore comment suppresses an actual finding" in f
         for f in findings
     )
@@ -4631,15 +4631,15 @@ def test_a_bare_line_ignore_is_line_scoped() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/extra.py",
-                "app.domain.extra",
+                "shop/domain/extra.py",
+                "shop.domain.extra",
                 "import os\nimport tesser.domain as ts  # tessercheck:ignore\n",
                 False,
             ),
         ))).violations()
                )
-    assert any("app.domain.extra imports os" in f and " TB062 " in f for f in findings)
-    assert any("app/domain/extra.py:2: TB090" in f for f in findings)
+    assert any("shop.domain.extra imports os" in f and " TB062 " in f for f in findings)
+    assert any("shop/domain/extra.py:2: TB090" in f for f in findings)
 
 
 def test_tb090_itself_cannot_be_ignored() -> None:
@@ -4647,15 +4647,15 @@ def test_tb090_itself_cannot_be_ignored() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/extra.py",
-                "app.domain.extra",
+                "shop/domain/extra.py",
+                "shop.domain.extra",
                 "import tesser.domain as ts  # tessercheck:ignore-file TB090\n",
                 False,
             ),
         ))).violations()
                )
     assert any(
-        "app/domain/extra.py:1: TB090" in f
+        "shop/domain/extra.py:1: TB090" in f
         and "an ignore comment suppresses an actual finding" in f
         for f in findings
     )
@@ -4686,7 +4686,7 @@ def test_an_unparseable_module_is_a_finding_not_a_crash() -> None:
     assert any(
         "broken.py:1: TB043" in f and "every checked module parses" in f for f in findings
     )
-    assert any("app/domain/thing.py" not in f for f in findings)
+    assert any("shop/domain/thing.py" not in f for f in findings)
 
 
 def test_a_non_utf8_file_is_a_finding_not_a_crash() -> None:
@@ -4737,8 +4737,8 @@ def test_ports_is_a_package_never_a_module() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports.py",
-                "app.application.ports",
+                "shop/application/ports.py",
+                "shop.application.ports",
                 "import tesser.application as ts\n"
                 "class Sink(ts.Port):\n"
                 "    pass\n",
@@ -4747,7 +4747,7 @@ def test_ports_is_a_package_never_a_module() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports is a ports module; ports is a package, never a module" in f
+        "shop.application.ports is a ports module; ports is a package, never a module" in f
         for f in findings
     )
 
@@ -4757,15 +4757,15 @@ def test_a_ports_init_is_empty() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "X = 1\n",
                 True,
             ),
         ))).violations()
                )
     assert any(
-        "app.application.ports __init__ declares code; a ports __init__ is empty" in f
+        "shop.application.ports __init__ declares code; a ports __init__ is empty" in f
         for f in findings
     )
 
@@ -4775,25 +4775,25 @@ def test_a_ports_module_is_a_leaf() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/other.py",
-                "app.application.ports.other",
+                "shop/application/ports/other.py",
+                "shop.application.ports.other",
                 "import tesser.application as ts\n"
                 "class OtherSink(ts.Port):\n"
                 "    pass\n",
                 False,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "import tesser.application as ts\n"
-                "import app.domain.thing as thing\n"
-                "import app.application.ports.other as other\n"
+                "import shop.domain.thing as thing\n"
+                "import shop.application.ports.other as other\n"
                 "class Sink(ts.Port):\n"
                 "    pass\n",
                 False,
@@ -4801,12 +4801,12 @@ def test_a_ports_module_is_a_leaf() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink imports app.domain.thing; a ports module is a leaf "
+        "shop.application.ports.sink imports shop.domain.thing; a ports module is a leaf "
         "and imports nothing from its tree, its own siblings included" in f
         for f in findings
     )
     assert any(
-        "app.application.ports.sink imports app.application.ports.other; a ports module is a leaf "
+        "shop.application.ports.sink imports shop.application.ports.other; a ports module is a leaf "
         "and imports nothing from its tree, its own siblings included" in f
         for f in findings
     )
@@ -4817,14 +4817,14 @@ def test_a_ports_module_stdlib_allowlist() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "import enum\n"
                 "import socket\n"
                 "import tesser.application as ts\n"
@@ -4835,7 +4835,7 @@ def test_a_ports_module_stdlib_allowlist() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink imports socket; a ports module imports "
+        "shop.application.ports.sink imports socket; a ports module imports "
         "only tesser.application and the pure stdlib" in f
         for f in findings
     )
@@ -4847,22 +4847,22 @@ def test_a_ports_module_tesser_import_rules() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "import tesser.domain as ts\n"
                 "class Sink(ts.Port):\n"
                 "    pass\n",
                 False,
             ),
             (
-                "app/application/ports/plain.py",
-                "app.application.ports.plain",
+                "shop/application/ports/plain.py",
+                "shop.application.ports.plain",
                 "import tesser.application\n"
                 "class Plain(tesser.application.Port):\n"
                 "    pass\n",
@@ -4871,7 +4871,7 @@ def test_a_ports_module_tesser_import_rules() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink imports tesser.domain; "
+        "shop.application.ports.sink imports tesser.domain; "
         "a ports module imports only tesser.application" in f
         for f in findings
     )
@@ -4885,14 +4885,14 @@ def test_a_ports_module_holds_only_imports_and_classes() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "import tesser.application as ts\n"
                 "FOUND = 'found'\n"
                 "class Sink(ts.Port):\n"
@@ -4902,7 +4902,7 @@ def test_a_ports_module_holds_only_imports_and_classes() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink has a loose module-level statement; "
+        "shop.application.ports.sink has a loose module-level statement; "
         "a ports module holds only imports and classes" in f
         for f in findings
     )
@@ -4913,14 +4913,14 @@ def test_a_ports_module_declares_exactly_one_port() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/two.py",
-                "app.application.ports.two",
+                "shop/application/ports/two.py",
+                "shop.application.ports.two",
                 "import tesser.application as ts\n"
                 "class First(ts.Port):\n"
                 "    pass\n"
@@ -4929,8 +4929,8 @@ def test_a_ports_module_declares_exactly_one_port() -> None:
                 False,
             ),
             (
-                "app/application/ports/none.py",
-                "app.application.ports.none",
+                "shop/application/ports/none.py",
+                "shop.application.ports.none",
                 "import tesser.application as ts\n"
                 "class Stray(ts.Request):\n"
                 "    def __init__(self, text: str) -> None:\n"
@@ -4940,12 +4940,12 @@ def test_a_ports_module_declares_exactly_one_port() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.two declares 2 ports; a ports module "
+        "shop.application.ports.two declares 2 ports; a ports module "
         "declares exactly one port, so no two ports can share a request or a response" in f
         for f in findings
     )
     assert any(
-        "app.application.ports.none declares no port; a ports module "
+        "shop.application.ports.none declares no port; a ports module "
         "declares exactly one port, so no two ports can share a request or a response" in f
         for f in findings
     )
@@ -4956,14 +4956,14 @@ def test_a_ports_module_holds_only_port_kinds() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "import tesser.application as ts\n"
                 "class Bare:\n"
                 "    pass\n"
@@ -4976,11 +4976,11 @@ def test_a_ports_module_holds_only_port_kinds() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.Bare declares no ts.* base; a ports class declares its block" in f
+        "shop.application.ports.sink.Bare declares no ts.* base; a ports class declares its block" in f
         for f in findings
     )
     assert any(
-        "app.application.ports.sink.Leaked is a service; only a port and the requests "
+        "shop.application.ports.sink.Leaked is a service; only a port and the requests "
         "and responses it speaks live in a ports module" in f
         for f in findings
     )
@@ -4991,14 +4991,14 @@ def test_a_port_method_speaks_one_request_and_one_response() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "import tesser.application as ts\n"
                 "class SaveRequest(ts.Request):\n"
                 "    def __init__(self, text: str) -> None:\n"
@@ -5015,17 +5015,17 @@ def test_a_port_method_speaks_one_request_and_one_response() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.Sink.save parameter 'text' is not a ts.Request; "
+        "shop.application.ports.sink.Sink.save parameter 'text' is not a ts.Request; "
         "a port method takes exactly one ts.Request" in f
         for f in findings
     )
     assert any(
-        "app.application.ports.sink.Sink.load does not return a ts.Response; "
+        "shop.application.ports.sink.Sink.load does not return a ts.Response; "
         "a port method returns a ts.Response" in f
         for f in findings
     )
     assert any(
-        "app.application.ports.sink.Sink.both takes 2 parameters; "
+        "shop.application.ports.sink.Sink.both takes 2 parameters; "
         "a port method takes exactly one ts.Request" in f
         for f in findings
     )
@@ -5036,25 +5036,25 @@ def test_an_adapter_reaches_application_only_through_ports() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "import tesser.application as ts\n"
                 "class Sink(ts.Port):\n"
                 "    pass\n",
                 False,
             ),
             (
-                "app/adapters/gateways/memory.py",
-                "app.adapters.gateways.memory",
+                "shop/adapters/gateways/memory.py",
+                "shop.adapters.gateways.memory",
                 "import tesser.adapters as ts\n"
-                "import app.application.ports.sink as sink\n"
-                "import app.application.service as service\n"
+                "import shop.application.ports.sink as sink\n"
+                "import shop.application.service as service\n"
                 "class MemorySink(ts.Repository):\n"
                 "    pass\n",
                 False,
@@ -5062,12 +5062,12 @@ def test_an_adapter_reaches_application_only_through_ports() -> None:
         ))).violations()
                )
     assert any(
-        "app.adapters.gateways.memory imports app.application.service; "
+        "shop.adapters.gateways.memory imports shop.application.service; "
         "the same-context matrix is a role to itself, application to domain and client, "
-        "adapters to application/ports, wiring to application, adapters, and client" in f
+        "adapters to application/ports, component to application, adapters, and client" in f
         for f in findings
     )
-    assert not any("imports app.application.ports.sink;" in f for f in findings)
+    assert not any("imports shop.application.ports.sink;" in f for f in findings)
 
 
 def test_a_port_dto_field_is_never_a_union() -> None:
@@ -5075,14 +5075,14 @@ def test_a_port_dto_field_is_never_a_union() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "import tesser.application as ts\n"
                 "class ItemView(ts.Response):\n"
@@ -5098,7 +5098,7 @@ def test_a_port_dto_field_is_never_a_union() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.FindResponse.__init__ field 'item' is a union; "
+        "shop.application.ports.sink.FindResponse.__init__ field 'item' is a union; "
         "a port DTO field is never a union, optional included — model the outcome as an enum" in f
         for f in findings
     )
@@ -5109,8 +5109,8 @@ def test_a_client_dto_field_may_still_be_optional() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/client/optional.py",
-                "app.client.optional",
+                "shop/client/optional.py",
+                "shop.client.optional",
                 "from __future__ import annotations\n"
                 "import tesser.context as ts\n"
                 "class Inner(ts.Response):\n"
@@ -5123,7 +5123,7 @@ def test_a_client_dto_field_may_still_be_optional() -> None:
             ),
         ))).violations()
                )
-    assert not any("app.client.optional" in f and "is a union" in f for f in findings)
+    assert not any("shop.client.optional" in f and "is a union" in f for f in findings)
 
 
 def test_a_conforming_ports_module_is_silent() -> None:
@@ -5131,14 +5131,14 @@ def test_a_conforming_ports_module_is_silent() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "import enum\n"
                 "from typing import Protocol\n"
@@ -5166,7 +5166,7 @@ def test_a_conforming_ports_module_is_silent() -> None:
             ),
         ))).violations()
                )
-    assert not any("app/application/ports/sink.py" in f for f in findings), (
+    assert not any("shop/application/ports/sink.py" in f for f in findings), (
         f"a conforming ports module produced findings: "
         f"{[f for f in findings if 'ports/sink.py' in f]}"
     )
@@ -5177,24 +5177,24 @@ def test_a_ports_package_holds_only_ports_modules() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "import tesser.application as ts\n"
                 "class Sink(ts.Port):\n"
                 "    pass\n",
                 False,
             ),
             (
-                "app/application/ports/test_support.py",
-                "app.application.ports.test_support",
+                "shop/application/ports/test_support.py",
+                "shop.application.ports.test_support",
                 "import tesser.testing as ts\n"
-                "import app.application.ports.sink as sink\n"
+                "import shop.application.ports.sink as sink\n"
                 "@ts.fake\n"
                 "class Lookup(sink.Sink):\n"
                 "    pass\n"
@@ -5203,20 +5203,20 @@ def test_a_ports_package_holds_only_ports_modules() -> None:
                 False,
             ),
             (
-                "app/application/ports/conftest.py",
-                "app.application.ports.conftest",
+                "shop/application/ports/conftest.py",
+                "shop.application.ports.conftest",
                 "",
                 False,
             ),
         ))).violations()
                )
     assert any(
-        "app.application.ports.test_support is not a ports module; a ports package holds "
+        "shop.application.ports.test_support is not a ports module; a ports package holds "
         "only ports modules, and test_/eval_/conftest are reserved names, because a fake "
         "here would be an implementation adapters may import" in f
         for f in findings
     ), f"a fake could live in the package adapters may import: {findings}"
-    assert any("app.application.ports.conftest is not a ports module" in f for f in findings)
+    assert any("shop.application.ports.conftest is not a ports module" in f for f in findings)
 
 
 def test_a_client_dto_with_a_sibling_enum_stays_strict() -> None:
@@ -5224,8 +5224,8 @@ def test_a_client_dto_with_a_sibling_enum_stays_strict() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/client/verdict.py",
-                "app.client.verdict",
+                "shop/client/verdict.py",
+                "shop.client.verdict",
                 "from __future__ import annotations\n"
                 "import tesser.context as ts\n"
                 "class Verdict:\n"
@@ -5238,7 +5238,7 @@ def test_a_client_dto_with_a_sibling_enum_stays_strict() -> None:
         ))).violations()
                )
     assert any(
-        "app.client.verdict.VerdictResponse.__init__ parameter 'verdict' is not allowed; "
+        "shop.client.verdict.VerdictResponse.__init__ parameter 'verdict' is not allowed; "
         "a DTO field is a primitive or another DTO" in f
         for f in findings
     )
@@ -5249,14 +5249,14 @@ def test_a_port_dto_field_is_never_a_bare_bool() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "import enum\n"
                 "import tesser.application as ts\n"
@@ -5274,7 +5274,7 @@ def test_a_port_dto_field_is_never_a_bare_bool() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.FlagResponse.__init__ field 'found' is a bool; "
+        "shop.application.ports.sink.FlagResponse.__init__ field 'found' is a bool; "
         "a port DTO field is never a bare bool — model the outcome as an enum" in f
         for f in findings
     )
@@ -5286,14 +5286,14 @@ def test_a_port_dto_is_never_subclassed() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "import tesser.application as ts\n"
                 "class FindResponse(ts.Response):\n"
@@ -5309,7 +5309,7 @@ def test_a_port_dto_is_never_subclassed() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.FoundItem subclasses a port DTO; a port DTO is never "
+        "shop.application.ports.sink.FoundItem subclasses a port DTO; a port DTO is never "
         "subclassed, because a response hierarchy is a union mypy cannot check for exhaustiveness" in f
         for f in findings
     )
@@ -5320,14 +5320,14 @@ def test_a_port_method_shape_survives_async_and_dunder_call() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "import tesser.application as ts\n"
                 "class Sink(ts.Port):\n"
@@ -5338,12 +5338,12 @@ def test_a_port_method_shape_survives_async_and_dunder_call() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.Sink.fetch takes 2 parameters; "
+        "shop.application.ports.sink.Sink.fetch takes 2 parameters; "
         "a port method takes exactly one ts.Request" in f
         for f in findings
     ), f"async def bypassed the port shape rule: {findings}"
     assert any(
-        "app.application.ports.sink.Sink.__call__ parameter 'name' is not a ts.Request" in f
+        "shop.application.ports.sink.Sink.__call__ parameter 'name' is not a ts.Request" in f
         for f in findings
     ), f"__call__ bypassed the port shape rule: {findings}"
 
@@ -5353,14 +5353,14 @@ def test_a_fake_implementing_a_port_may_expose_inspection_methods() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "from typing import Protocol\n"
                 "import tesser.application as ts\n"
@@ -5375,10 +5375,10 @@ def test_a_fake_implementing_a_port_may_expose_inspection_methods() -> None:
                 False,
             ),
             (
-                "app/application/test_sink.py",
-                "app.application.test_sink",
+                "shop/application/test_sink.py",
+                "shop.application.test_sink",
                 "import tesser.testing as ts\n"
-                "import app.application.ports.sink as sink\n"
+                "import shop.application.ports.sink as sink\n"
                 "@ts.fake\n"
                 "class FakeSink(sink.Sink):\n"
                 "    def __init__(self) -> None:\n"
@@ -5405,14 +5405,14 @@ def test_a_ports_enum_is_a_plain_enum() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "import enum\n"
                 "import tesser.application as ts\n"
@@ -5427,7 +5427,7 @@ def test_a_ports_enum_is_a_plain_enum() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.Loose is an enum.StrEnum; a ports enum is an enum.Enum, "
+        "shop.application.ports.sink.Loose is an enum.StrEnum; a ports enum is an enum.Enum, "
         "because a str- or int-backed member compares equal to a raw literal "
         "and reopens the typo the enum closes" in f
         for f in findings
@@ -5440,14 +5440,14 @@ def test_a_port_method_declares_a_shape_and_never_a_body() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "from typing import Protocol\n"
                 "import tesser.application as ts\n"
@@ -5466,7 +5466,7 @@ def test_a_port_method_declares_a_shape_and_never_a_body() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.Sink.save carries a body; a port method declares a shape "
+        "shop.application.ports.sink.Sink.save carries a body; a port method declares a shape "
         "and never a body, because a ports module holds no logic to import" in f
         for f in findings
     )
@@ -5478,11 +5478,11 @@ def test_an_ignored_ports_file_is_still_governed() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports.py",
-                "app.application.ports",
+                "shop/application/ports.py",
+                "shop.application.ports",
                 "import subprocess  # tessercheck:ignore TB067\n"
                 "import tesser.application as ts  # tessercheck:ignore-file TB041\n"
-                "import app.domain.thing as thing\n"
+                "import shop.domain.thing as thing\n"
                 "class First(ts.Port):\n"
                 "    pass\n"
                 "class Second(ts.Port):\n"
@@ -5494,11 +5494,11 @@ def test_an_ignored_ports_file_is_still_governed() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports imports app.domain.thing; a ports module is a leaf" in f
+        "shop.application.ports imports shop.domain.thing; a ports module is a leaf" in f
         for f in findings
     ), f"an ignored TB041 unlocked the module: {findings}"
     assert any("declares 2 ports" in f for f in findings)
-    assert any("app.application.ports.Leaked is a service" in f for f in findings)
+    assert any("shop.application.ports.Leaked is a service" in f for f in findings)
 
 
 def test_an_enum_base_cannot_hide_a_second_port() -> None:
@@ -5506,14 +5506,14 @@ def test_an_enum_base_cannot_hide_a_second_port() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "import enum\n"
                 "import tesser.application as ts\n"
@@ -5535,14 +5535,14 @@ def test_an_enum_is_resolved_by_its_binding_not_its_spelling() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/masked.py",
-                "app.application.ports.masked",
+                "shop/application/ports/masked.py",
+                "shop.application.ports.masked",
                 "from __future__ import annotations\n"
                 "import typing as enum\n"
                 "import tesser.application as ts\n"
@@ -5553,8 +5553,8 @@ def test_an_enum_is_resolved_by_its_binding_not_its_spelling() -> None:
                 False,
             ),
             (
-                "app/application/ports/aliased.py",
-                "app.application.ports.aliased",
+                "shop/application/ports/aliased.py",
+                "shop.application.ports.aliased",
                 "from __future__ import annotations\n"
                 "import enum as e\n"
                 "import tesser.application as ts\n"
@@ -5567,7 +5567,7 @@ def test_an_enum_is_resolved_by_its_binding_not_its_spelling() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.masked.Rules declares no ts.* base" in f for f in findings
+        "shop.application.ports.masked.Rules declares no ts.* base" in f for f in findings
     ), f"a name bound to something else was accepted as an enum: {findings}"
     assert not any("aliased.Outcome" in f for f in findings), (
         f"a properly bound enum alias was rejected: {findings}"
@@ -5579,34 +5579,34 @@ def test_a_dynamic_import_is_not_a_way_around_the_matrix() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "import tesser.application as ts\n"
                 "class Sink(ts.Port):\n"
                 "    pass\n",
                 False,
             ),
             (
-                "app/adapters/gateways/memory.py",
-                "app.adapters.gateways.memory",
+                "shop/adapters/gateways/memory.py",
+                "shop.adapters.gateways.memory",
                 "import importlib\n"
                 "import tesser.adapters as ts\n"
-                "import app.application.ports.sink as sink\n"
+                "import shop.application.ports.sink as sink\n"
                 "class MemorySink(ts.Repository):\n"
                 "    def __init__(self) -> None:\n"
-                "        self._service = importlib.import_module('app.application.service')\n",
+                "        self._service = importlib.import_module('shop.application.service')\n",
                 False,
             ),
         ))).violations()
                )
     assert any(
-        "app.adapters.gateways.memory imports dynamically through importlib.import_module; "
+        "shop.adapters.gateways.memory imports dynamically through importlib.import_module; "
         "an import is a statement the walk can read, never a call" in f
         for f in findings
     ), f"importlib walked around the import matrix: {findings}"
@@ -5617,14 +5617,14 @@ def test_a_dto_declares_its_fields_where_the_rules_can_read_them() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "import tesser.application as ts\n"
                 "class ClassLevel(ts.Response):\n"
@@ -5641,12 +5641,12 @@ def test_a_dto_declares_its_fields_where_the_rules_can_read_them() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.ClassLevel carries a class-level statement; a port DTO "
+        "shop.application.ports.sink.ClassLevel carries a class-level statement; a port DTO "
         "declares its fields as __init__ parameters, where the field rules can read them" in f
         for f in findings
     ), f"a class-level bool field walked around the bare-bool rule: {findings}"
     assert any(
-        "app.application.ports.sink.Splatted.__init__ uses *args/**kwargs; a DTO declares "
+        "shop.application.ports.sink.Splatted.__init__ uses *args/**kwargs; a DTO declares "
         "its fields as named __init__ parameters, where the field rules can read them" in f
         for f in findings
     ), f"**kwargs walked around every DTO field rule: {findings}"
@@ -5657,14 +5657,14 @@ def test_an_async_method_on_a_dto_is_still_a_method() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "import tesser.application as ts\n"
                 "class Loaded(ts.Response):\n"
@@ -5679,7 +5679,7 @@ def test_an_async_method_on_a_dto_is_still_a_method() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.Loaded.resolve defines a method on a DTO; "
+        "shop.application.ports.sink.Loaded.resolve defines a method on a DTO; "
         "a DTO carries data and nothing else" in f
         for f in findings
     ), f"async def carried logic onto a DTO: {findings}"
@@ -5690,14 +5690,14 @@ def test_a_nested_class_cannot_hide_a_second_port() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "import tesser.application as ts\n"
                 "class First(ts.Port):\n"
@@ -5712,7 +5712,7 @@ def test_a_nested_class_cannot_hide_a_second_port() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.Holder.Second is a nested class; a ports module declares "
+        "shop.application.ports.sink.Holder.Second is a nested class; a ports module declares "
         "its port and its DTOs at module level, where the one-port count can see them" in f
         for f in findings
     ), f"a nested class hid a second port sharing every DTO: {findings}"
@@ -5723,33 +5723,33 @@ def test_a_dynamic_import_is_resolved_by_binding_not_spelling() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "import tesser.application as ts\nclass Sink(ts.Port):\n    pass\n",
                 False,
             ),
             (
-                "app/adapters/gateways/memory.py",
-                "app.adapters.gateways.memory",
+                "shop/adapters/gateways/memory.py",
+                "shop.adapters.gateways.memory",
                 "from importlib import import_module\n"
                 "import tesser.adapters as ts\n"
-                "import app.application.ports.sink as sink\n"
+                "import shop.application.ports.sink as sink\n"
                 "class MemorySink(ts.Repository):\n"
                 "    def __init__(self) -> None:\n"
-                "        self._service = import_module('app.application.service')\n",
+                "        self._service = import_module('shop.application.service')\n",
                 False,
             ),
             (
-                "app/adapters/gateways/local.py",
-                "app.adapters.gateways.local",
+                "shop/adapters/gateways/local.py",
+                "shop.adapters.gateways.local",
                 "import tesser.adapters as ts\n"
-                "import app.application.ports.sink as sink\n"
+                "import shop.application.ports.sink as sink\n"
                 "class LocalSink(ts.Repository):\n"
                 "    def __init__(self, importlib: object) -> None:\n"
                 "        self._loader = importlib\n",
@@ -5758,7 +5758,7 @@ def test_a_dynamic_import_is_resolved_by_binding_not_spelling() -> None:
         ))).violations()
                )
     assert any(
-        "app.adapters.gateways.memory imports dynamically through importlib.import_module" in f
+        "shop.adapters.gateways.memory imports dynamically through importlib.import_module" in f
         for f in findings
     ), f"a from-import of import_module walked around TB068: {findings}"
     assert not any("local" in f and "TB068" in f for f in findings), (
@@ -5771,14 +5771,14 @@ def test_a_port_speaks_shapes_it_declares_itself() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "from typing import Protocol\n"
                 "import tesser.application as ts\n"
@@ -5796,7 +5796,7 @@ def test_a_port_speaks_shapes_it_declares_itself() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.Sink.bare names a shape it does not declare; a port "
+        "shop.application.ports.sink.Sink.bare names a shape it does not declare; a port "
         "method speaks requests and responses declared in its own ports module, never a "
         "bare ts.Request or ts.Response, which two ports would share" in f
         for f in findings
@@ -5809,14 +5809,14 @@ def test_a_ports_class_carries_no_class_level_statement() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "import enum\n"
                 "from typing import Protocol\n"
@@ -5837,7 +5837,7 @@ def test_a_ports_class_carries_no_class_level_statement() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.Sink carries a class-level statement; only an enum "
+        "shop.application.ports.sink.Sink carries a class-level statement; only an enum "
         "member is class-level data in a ports module, because anything else runs at "
         "import in the one application module adapters may import" in f
         for f in findings
@@ -5850,14 +5850,14 @@ def test_a_private_port_method_carries_no_body() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "from typing import Protocol\n"
                 "import tesser.application as ts\n"
@@ -5876,7 +5876,7 @@ def test_a_private_port_method_carries_no_body() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.Sink._score carries a body; a port method declares a "
+        "shop.application.ports.sink.Sink._score carries a body; a port method declares a "
         "shape and never a body" in f
         for f in findings
     ), f"a private method carried logic every implementer inherits: {findings}"
@@ -5887,20 +5887,20 @@ def test_a_stub_cannot_shadow_the_shape_the_rules_read() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "import tesser.application as ts\nclass Sink(ts.Port):\n    pass\n",
                 False,
             ),
             (
-                "app/application/ports/sink.pyi",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.pyi",
+                "shop.application.ports.sink",
                 "import tesser.application as ts\n"
                 "class Loose(ts.Response):\n"
                 "    allowed: bool\n",
@@ -5909,7 +5909,7 @@ def test_a_stub_cannot_shadow_the_shape_the_rules_read() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink is a stub; a module carries its own shape, because a "
+        "shop.application.ports.sink is a stub; a module carries its own shape, because a "
         "stub is what the type checker reads and the walk cannot" in f
         for f in findings
     ), f"a stub bypassed every ports rule at the type level: {findings}"
@@ -5920,14 +5920,14 @@ def test_a_ports_enum_carries_nothing_but_its_members() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "import enum\n"
                 "import tesser.application as ts\n"
@@ -5943,7 +5943,7 @@ def test_a_ports_enum_carries_nothing_but_its_members() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.Outcome carries more than its members; a ports enum "
+        "shop.application.ports.sink.Outcome carries more than its members; a ports enum "
         "is a closed set of names and nothing else, because a method or a decorator here "
         "is logic every adapter imports" in f
         for f in findings
@@ -5956,14 +5956,14 @@ def test_a_port_dto_constructor_only_assigns_its_parameters() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "import tesser.application as ts\n"
                 "class Validating(ts.Response):\n"
@@ -5985,7 +5985,7 @@ def test_a_port_dto_constructor_only_assigns_its_parameters() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.Validating.__init__ carries logic; a port DTO "
+        "shop.application.ports.sink.Validating.__init__ carries logic; a port DTO "
         "constructor only assigns its parameters, because a ports module holds no "
         "logic to import" in f
         for f in findings
@@ -5998,14 +5998,14 @@ def test_a_port_declares_only_the_calls_an_implementer_provides() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "from typing import Protocol\n"
                 "import tesser.application as ts\n"
@@ -6024,7 +6024,7 @@ def test_a_port_declares_only_the_calls_an_implementer_provides() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.Sink._raw is not a call an implementer provides; "
+        "shop.application.ports.sink.Sink._raw is not a call an implementer provides; "
         "a port declares only its public calls and __call__, because a private name is "
         "not private to anyone implementing or holding the port" in f
         for f in findings
@@ -6038,14 +6038,14 @@ def test_a_ports_module_runs_nothing_at_import() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "import enum\n"
                 "import tesser.application as ts\n"
@@ -6072,24 +6072,24 @@ def test_a_ports_module_runs_nothing_at_import() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.Decorated is decorated; a ports module holds no "
+        "shop.application.ports.sink.Decorated is decorated; a ports module holds no "
         "decorator, because a decorator is a call that runs at import in the one "
         "application module adapters may import" in f
         for f in findings
     ), f"a decorator ran arbitrary code at import of the ports leaf: {findings}"
     assert any(
-        "app.application.ports.sink.Defaulted.__init__ carries a computed default; a ports "
+        "shop.application.ports.sink.Defaulted.__init__ carries a computed default; a ports "
         "module holds no expression that runs at import, because every adapter imports it" in f
         for f in findings
     ), f"a default parameter expression ran at import: {findings}"
     assert any(
-        "app.application.ports.sink.Computed computes a base; a ports module holds no "
+        "shop.application.ports.sink.Computed computes a base; a ports module holds no "
         "expression that runs at import, and a base built by a call is logic every "
         "adapter imports" in f
         for f in findings
     ), f"a computed base ran at import: {findings}"
     assert any(
-        "app.application.ports.sink.Generic is generic; a ports module names concrete "
+        "shop.application.ports.sink.Generic is generic; a ports module names concrete "
         "shapes, because a type parameter is a slot the shape rules cannot read and a "
         "bound is an expression" in f
         for f in findings
@@ -6105,14 +6105,14 @@ def test_an_async_port_method_runs_nothing_at_import() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "from typing import Protocol\n"
                 "import tesser.application as ts\n"
@@ -6130,7 +6130,7 @@ def test_an_async_port_method_runs_nothing_at_import() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.Sink.audit carries a computed default; a ports module "
+        "shop.application.ports.sink.Sink.audit carries a computed default; a ports module "
         "holds no expression that runs at import, because every adapter imports it" in f
         for f in findings
     ), f"an async def default expression ran at import: {findings}"
@@ -6141,14 +6141,14 @@ def test_a_port_dto_binds_only_its_own_parameters() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "import tesser.application as ts\n"
                 "class Capability(ts.Response):\n"
@@ -6166,7 +6166,7 @@ def test_a_port_dto_binds_only_its_own_parameters() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.Capability.__init__ carries logic; a port DTO "
+        "shop.application.ports.sink.Capability.__init__ carries logic; a port DTO "
         "constructor only assigns its parameters" in f
         for f in findings
     ), f"a DTO bound a live capability an adapter could call: {findings}"
@@ -6178,14 +6178,14 @@ def test_a_ports_class_carries_no_keyword() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "import tesser.application as ts\n"
                 "class Meta(ts.Response, metaclass=type):\n"
@@ -6198,7 +6198,7 @@ def test_a_ports_class_carries_no_keyword() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.Meta carries a class keyword; a ports module holds no "
+        "shop.application.ports.sink.Meta carries a class keyword; a ports module holds no "
         "expression that runs at import, and a metaclass is logic every adapter imports" in f
         for f in findings
     ), f"a metaclass ran logic at import of the ports leaf: {findings}"
@@ -6209,14 +6209,14 @@ def test_an_enum_member_may_be_negative_or_annotated() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "import enum\n"
                 "import tesser.application as ts\n"
@@ -6235,7 +6235,7 @@ def test_an_enum_member_may_be_negative_or_annotated() -> None:
         f"a legitimate enum member was rejected: {findings}"
     )
     assert any(
-        "app.application.ports.sink.Outcome carries more than its members" in f
+        "shop.application.ports.sink.Outcome carries more than its members" in f
         for f in findings
     ), f"a dunder assignment laundered prose past the comments norm: {findings}"
 
@@ -6245,14 +6245,14 @@ def test_a_ports_module_computes_no_annotation() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from typing import Annotated, Protocol\n"
                 "import tesser.application as ts\n"
                 "class SaveRequest(ts.Request):\n"
@@ -6268,13 +6268,13 @@ def test_a_ports_module_computes_no_annotation() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.SaveRequest.__init__ computes an annotation; a ports "
+        "shop.application.ports.sink.SaveRequest.__init__ computes an annotation; a ports "
         "module holds no expression that runs at import, and an annotation is evaluated "
         "like any other" in f
         for f in findings
     ), f"an annotation ran code at import of the ports leaf: {findings}"
     assert any(
-        "app.application.ports.sink.Sink.save is generic" in f for f in findings
+        "shop.application.ports.sink.Sink.save is generic" in f for f in findings
     ), f"a generic port method went ungoverned: {findings}"
 
 
@@ -6283,67 +6283,67 @@ def test_every_spelling_of_a_dynamic_import_is_a_finding() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "import tesser.application as ts\nclass Sink(ts.Port):\n    pass\n",
                 False,
             ),
             (
-                "app/adapters/gateways/rebound.py",
-                "app.adapters.gateways.rebound",
+                "shop/adapters/gateways/rebound.py",
+                "shop.adapters.gateways.rebound",
                 "import importlib\n"
                 "_load = importlib.import_module\n"
                 "import tesser.adapters as ts\n"
-                "import app.application.ports.sink as sink\n"
+                "import shop.application.ports.sink as sink\n"
                 "class ReachRebound(ts.Repository):\n"
                 "    def __init__(self) -> None:\n"
-                "        self.svc = _load('app.application.service')\n",
+                "        self.svc = _load('shop.application.service')\n",
                 False,
             ),
             (
-                "app/adapters/gateways/indirect.py",
-                "app.adapters.gateways.indirect",
+                "shop/adapters/gateways/indirect.py",
+                "shop.adapters.gateways.indirect",
                 "import importlib\n"
                 "import tesser.adapters as ts\n"
-                "import app.application.ports.sink as sink\n"
+                "import shop.application.ports.sink as sink\n"
                 "class ReachIndirect(ts.Repository):\n"
                 "    def __init__(self) -> None:\n"
                 "        self.svc = getattr(importlib, 'import_module')"
-                "('app.application.service')\n",
+                "('shop.application.service')\n",
                 False,
             ),
             (
-                "app/adapters/gateways/builtin.py",
-                "app.adapters.gateways.builtin",
+                "shop/adapters/gateways/builtin.py",
+                "shop.adapters.gateways.builtin",
                 "import builtins\n"
                 "import tesser.adapters as ts\n"
-                "import app.application.ports.sink as sink\n"
+                "import shop.application.ports.sink as sink\n"
                 "class ReachBuiltin(ts.Repository):\n"
                 "    def __init__(self) -> None:\n"
-                "        self.svc = builtins.__import__('app.application.service')\n",
+                "        self.svc = builtins.__import__('shop.application.service')\n",
                 False,
             ),
             (
-                "app/adapters/gateways/registry.py",
-                "app.adapters.gateways.registry",
+                "shop/adapters/gateways/registry.py",
+                "shop.adapters.gateways.registry",
                 "import sys\n"
                 "import tesser.adapters as ts\n"
-                "import app.application.ports.sink as sink\n"
+                "import shop.application.ports.sink as sink\n"
                 "class ReachRegistry(ts.Repository):\n"
                 "    def __init__(self) -> None:\n"
-                "        self.svc = sys.modules['app.application.service']\n",
+                "        self.svc = sys.modules['shop.application.service']\n",
                 False,
             ),
         ))).violations()
                )
     for name in ("rebound", "indirect", "builtin", "registry"):
-        assert any(f"app.adapters.gateways.{name} imports dynamically" in f for f in findings), (
+        assert any(f"shop.adapters.gateways.{name} imports dynamically" in f for f in findings), (
             f"the {name} spelling reached application with no import edge: {findings}"
         )
 
@@ -6353,14 +6353,14 @@ def test_a_ports_module_holds_only_shapes_the_rules_can_read() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/sink.py",
-                "app.application.ports.sink",
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
                 "from typing import Annotated, Protocol\n"
                 "import tesser.application as ts\n"
                 "class SaveRequest(ts.Request):\n"
@@ -6380,13 +6380,13 @@ def test_a_ports_module_holds_only_shapes_the_rules_can_read() -> None:
         ))).violations()
                )
     assert any(
-        "app.application.ports.sink.SaveRequest.__init__ holds a Delete; a ports module "
+        "shop.application.ports.sink.SaveRequest.__init__ holds a Delete; a ports module "
         "holds only the shapes its rules can read, so anything else is a finding by "
         "default rather than a gap nobody enumerated" in f
         for f in findings
     ), f"a statement kind nobody enumerated passed silently: {findings}"
     assert any(
-        "app.application.ports.sink.Header holds a Subscript" in f for f in findings
+        "shop.application.ports.sink.Header holds a Subscript" in f for f in findings
     ), f"an expression in a class base ran at import: {findings}"
 
 
@@ -6416,7 +6416,7 @@ def test_an_export_that_is_no_package_is_a_finding() -> None:
 
 
 def test_an_export_never_takes_a_shell_or_kernel_name() -> None:
-    for taken in ("srv", "kernel", "tests", "protocol", "bootstrap"):
+    for taken in ("srv", "kernel", "tests", "protocol", "app"):
         findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False)), exports=(taken,))).violations()
@@ -6443,10 +6443,10 @@ def test_kernel_is_a_package_never_a_module() -> None:
 def test_a_kernel_init_only_reexports_from_its_own_kernel() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/__init__.py', 'kernel', 'import app.domain.thing as thing\nX = 1\n', True)))).violations()
+        for v in checks.Codebase(_spec(sources=(('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/__init__.py', 'kernel', 'import shop.domain.thing as thing\nX = 1\n', True)))).violations()
     )
     assert any(
-        "kernel imports app.domain.thing; "
+        "kernel imports shop.domain.thing; "
         "a kernel __init__ only re-exports from its own kernel" in f
         for f in findings
     ), findings
@@ -6486,7 +6486,7 @@ def test_kernel_statement_totality() -> None:
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/loose.py', 'kernel.loose', 'import tesser.domain as ts\nLIMIT = 3\ndef helper() -> int:\n    return LIMIT\nprint(LIMIT)\n', False)))).violations()
     )
-    assert any("a kernel constant is Final" in f for f in findings), findings
+    assert any("kernel constants are Final" in f for f in findings), findings
     assert any(
         "a kernel function declares itself with @ts.do_not_use_function" in f for f in findings
     ), findings
@@ -6518,10 +6518,10 @@ def test_kernel_tesser_import_rules() -> None:
 def test_kernel_import_allowlist() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/prices.py', 'kernel.prices', 'import tesser.domain as ts\nfrom decimal import Decimal\nimport kernel.money\nimport app.domain.thing\nimport requests\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False)))).violations()
+        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/prices.py', 'kernel.prices', 'import tesser.domain as ts\nfrom decimal import Decimal\nimport kernel.money\nimport shop.domain.thing\nimport requests\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False)))).violations()
     )
     assert any(
-        "kernel.prices imports app.domain.thing; a kernel imports only its "
+        "kernel.prices imports shop.domain.thing; a kernel imports only its "
         "kernel, tesser.domain, declared kernels, and the pure stdlib" in f
         for f in findings
     ), findings
@@ -6557,25 +6557,25 @@ def test_pure_roles_may_import_kernels() -> None:
                 "def test_money_exists() -> None:\n"
                 "    assert True\n",
                 False,
-            ), ('app/domain/price.py', 'app.domain.price', 'import tesser.domain as ts\nfrom kernel.money import Money\nimport money_kernel\nclass PriceSpec(ts.Spec):\n    def __init__(self, money: Money) -> None:\n        self.money = money\n', False),
+            ), ('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nfrom kernel.money import Money\nimport money_kernel\nclass PriceSpec(ts.Spec):\n    def __init__(self, money: Money) -> None:\n        self.money = money\n', False),
             (
-                "app/domain/test_price.py",
-                "app.domain.test_price",
+                "shop/domain/test_price.py",
+                "shop.domain.test_price",
                 "def test_price_exists() -> None:\n"
                 "    assert True\n",
                 False,
             )), imports=('money_kernel',))).violations()
     )
-    assert not any("app/domain/price.py" in f for f in findings), findings
+    assert not any("shop/domain/price.py" in f for f in findings), findings
 
 
 def test_an_undeclared_package_in_a_pure_role_is_still_a_finding() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('app/domain/price.py', 'app.domain.price', 'import tesser.domain as ts\nimport money_kernel\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False)))).violations()
+        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nimport money_kernel\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False)))).violations()
     )
     assert any(
-        "app.domain.price imports money_kernel; domain, client, and application "
+        "shop.domain.price imports money_kernel; domain, client, and application "
         "import only their context, their kernels, their tesser package, "
         "and the pure stdlib" in f
         for f in findings
@@ -6585,10 +6585,10 @@ def test_an_undeclared_package_in_a_pure_role_is_still_a_finding() -> None:
 def test_a_kernel_test_reaches_only_its_kernel() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/test_money.py', 'kernel.test_money', 'import tesser.testing as ts\nfrom kernel.money import Money\nimport app.domain.thing\ndef test_money() -> None:\n    assert Money(1) == Money(1)\n', False)))).violations()
+        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/test_money.py', 'kernel.test_money', 'import tesser.testing as ts\nfrom kernel.money import Money\nimport shop.domain.thing\ndef test_money() -> None:\n    assert Money(1) == Money(1)\n', False)))).violations()
     )
     assert any(
-        "kernel.test_money imports app.domain.thing, but a test placed in "
+        "kernel.test_money imports shop.domain.thing, but a test placed in "
         "a kernel reaches no context; "
         "a test reaches only what its placement allows" in f
         for f in findings
@@ -6613,10 +6613,10 @@ def test_an_exported_kernel_is_governed_like_a_kernel() -> None:
                 "def test_svc_exists() -> None:\n"
                 "    assert True\n",
                 False,
-            ), ('app/domain/price.py', 'app.domain.price', 'import tesser.domain as ts\nfrom shells.svc import Svc\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False),
+            ), ('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nfrom shells.svc import Svc\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False),
             (
-                "app/domain/test_price.py",
-                "app.domain.test_price",
+                "shop/domain/test_price.py",
+                "shop.domain.test_price",
                 "def test_price_exists() -> None:\n"
                 "    assert True\n",
                 False,
@@ -6625,7 +6625,7 @@ def test_an_exported_kernel_is_governed_like_a_kernel() -> None:
     assert any(
         "a kernel holds only domain kinds" in f for f in findings
     ), findings
-    assert not any("app/domain/price.py" in f for f in findings), findings
+    assert not any("shop/domain/price.py" in f for f in findings), findings
 
 
 def test_a_context_shaped_export_is_a_finding() -> None:
@@ -6641,7 +6641,7 @@ def test_a_context_shaped_export_is_a_finding() -> None:
 
 
 def test_an_import_declaration_never_names_this_tree() -> None:
-    for declared in ("srv", "kernel", "tests", "app"):
+    for declared in ("srv", "kernel", "tests", "shop"):
         findings = tuple(
             f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
             for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False)), imports=(declared,))).violations()
@@ -6739,7 +6739,7 @@ def test_a_declared_import_matches_on_the_package_boundary() -> None:
 def test_a_kernel_import_is_only_trusted_when_its_module_was_walked() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('app/domain/price.py', 'app.domain.price', 'import tesser.domain as ts\nfrom kernel.money import Money\nfrom kernel.vendored.impure import Client\nclass PriceSpec(ts.Spec):\n    def __init__(self, money: Money) -> None:\n        self.money = money\n', False)))).violations()
+        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nfrom kernel.money import Money\nfrom kernel.vendored.impure import Client\nclass PriceSpec(ts.Spec):\n    def __init__(self, money: Money) -> None:\n        self.money = money\n', False)))).violations()
     )
     assert any("imports kernel.vendored.impure" in f for f in findings), findings
     assert not any("imports kernel.money" in f for f in findings), findings
@@ -6748,10 +6748,10 @@ def test_a_kernel_import_is_only_trusted_when_its_module_was_walked() -> None:
 def test_a_pure_role_kernel_import_needs_the_kernel_to_exist() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('app/domain/price.py', 'app.domain.price', 'import tesser.domain as ts\nfrom kernel.money import Money\nclass PriceSpec(ts.Spec):\n    def __init__(self, money: Money) -> None:\n        self.money = money\n', False),))).violations()
+        for v in checks.Codebase(_spec(sources=(('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nfrom kernel.money import Money\nclass PriceSpec(ts.Spec):\n    def __init__(self, money: Money) -> None:\n        self.money = money\n', False),))).violations()
     )
     assert any(
-        "app.domain.price imports kernel.money; domain, client, and application "
+        "shop.domain.price imports kernel.money; domain, client, and application "
         "import only their context, their kernels, their tesser package, "
         "and the pure stdlib" in f
         for f in findings
@@ -6772,7 +6772,7 @@ def test_a_role_named_subpackage_of_the_fixed_kernel_stays_kernel_governed() -> 
 def test_a_kernel_init_rejects_a_near_miss_package() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/__init__.py', 'kernel', 'import kernelish.money as money\n', True), ('kernelish/__init__.py', 'kernelish', '', True), ('kernelish/money.py', 'kernelish.money', 'import app.domain.thing\n', False)))).violations()
+        for v in checks.Codebase(_spec(sources=(('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/__init__.py', 'kernel', 'import kernelish.money as money\n', True), ('kernelish/__init__.py', 'kernelish', '', True), ('kernelish/money.py', 'kernelish.money', 'import shop.domain.thing\n', False)))).violations()
     )
     assert any(
         "kernel imports kernelish.money; "
@@ -6813,8 +6813,8 @@ def test_an_implementation_module_carries_exactly_one_sibling_test() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/money.py",
-                "app.domain.money",
+                "shop/domain/money.py",
+                "shop.domain.money",
                 "import tesser.domain as ts\n"
                 "class MoneySpec(ts.Spec):\n"
                 "    def __init__(self, code: str) -> None:\n"
@@ -6822,8 +6822,8 @@ def test_an_implementation_module_carries_exactly_one_sibling_test() -> None:
                 False,
             ),
             (
-                "app/domain/test_thing.py",
-                "app.domain.test_thing",
+                "shop/domain/test_thing.py",
+                "shop.domain.test_thing",
                 "def test_thing_exists() -> None:\n"
                 "    assert True\n",
                 False,
@@ -6831,11 +6831,11 @@ def test_an_implementation_module_carries_exactly_one_sibling_test() -> None:
         ))).violations()
                )
     assert any(
-        "app.domain.money has no sibling test file; an implementation "
+        "shop.domain.money has no sibling test file; an implementation "
         "module carries exactly one test_<module>.py beside it" in f
         for f in findings
     )
-    assert not any("app.domain.thing has no sibling test" in f for f in findings)
+    assert not any("shop.domain.thing has no sibling test" in f for f in findings)
 
 
 def test_a_sibling_test_names_the_module_beside_it() -> None:
@@ -6843,28 +6843,28 @@ def test_a_sibling_test_names_the_module_beside_it() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/test_thing.py",
-                "app.domain.test_thing",
+                "shop/domain/test_thing.py",
+                "shop.domain.test_thing",
                 "def test_thing_exists() -> None:\n"
                 "    assert True\n",
                 False,
             ),
             (
-                "app/domain/test_ghost.py",
-                "app.domain.test_ghost",
+                "shop/domain/test_ghost.py",
+                "shop.domain.test_ghost",
                 "def test_ghost() -> None:\n"
                 "    assert True\n",
                 False,
             ),
             (
-                "app/tests/__init__.py",
-                "app.tests",
+                "shop/tests/__init__.py",
+                "shop.tests",
                 "",
                 True,
             ),
             (
-                "app/tests/test_wired_flow.py",
-                "app.tests.test_wired_flow",
+                "shop/tests/test_wired_flow.py",
+                "shop.tests.test_wired_flow",
                 "def test_flow() -> None:\n"
                 "    assert True\n",
                 False,
@@ -6872,12 +6872,12 @@ def test_a_sibling_test_names_the_module_beside_it() -> None:
         ))).violations()
                )
     assert any(
-        "app.domain.test_ghost pairs with no implementation module; a sibling "
+        "shop.domain.test_ghost pairs with no implementation module; a sibling "
         "test file is named test_<module>.py for the module beside it" in f
         for f in findings
     )
-    assert not any("app.domain.test_thing pairs with no" in f for f in findings)
-    assert not any("app.tests.test_wired_flow pairs with no" in f for f in findings)
+    assert not any("shop.domain.test_thing pairs with no" in f for f in findings)
+    assert not any("shop.tests.test_wired_flow pairs with no" in f for f in findings)
 
 
 def test_a_declaration_only_module_needs_no_sibling_test() -> None:
@@ -6885,16 +6885,16 @@ def test_a_declaration_only_module_needs_no_sibling_test() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/test_thing.py",
-                "app.domain.test_thing",
+                "shop/domain/test_thing.py",
+                "shop.domain.test_thing",
                 "def test_thing_exists() -> None:\n"
                 "    assert True\n",
                 False,
             ),
         ), base=(
             (
-                "app/domain/thing.py",
-                "app.domain.thing",
+                "shop/domain/thing.py",
+                "shop.domain.thing",
                 "import tesser.domain as ts\n"
                 "class ThingSpec(ts.Spec):\n"
                 "    def __init__(self, text: str) -> None:\n"
@@ -6905,8 +6905,8 @@ def test_a_declaration_only_module_needs_no_sibling_test() -> None:
                 False,
             ),
             (
-                "app/client/client.py",
-                "app.client.client",
+                "shop/client/client.py",
+                "shop.client.client",
                 "import tesser.context as ts\n"
                 "class AskRequest(ts.Request):\n"
                 "    def __init__(self, text: str) -> None:\n"
@@ -6919,7 +6919,7 @@ def test_a_declaration_only_module_needs_no_sibling_test() -> None:
         ))).violations()
                )
     assert not any(
-        "app.client.client has no sibling test file" in f for f in findings
+        "shop.client.client has no sibling test file" in f for f in findings
     )
 
 
@@ -6928,28 +6928,28 @@ def test_a_ports_module_and_an_init_need_no_sibling_test() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "app/domain/test_thing.py",
-                "app.domain.test_thing",
+                "shop/domain/test_thing.py",
+                "shop.domain.test_thing",
                 "def test_thing_exists() -> None:\n"
                 "    assert True\n",
                 False,
             ),
             (
-                "app/application/test_service.py",
-                "app.application.test_service",
+                "shop/application/test_service.py",
+                "shop.application.test_service",
                 "def test_service_exists() -> None:\n"
                 "    assert True\n",
                 False,
             ),
             (
-                "app/application/ports/__init__.py",
-                "app.application.ports",
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
                 "",
                 True,
             ),
             (
-                "app/application/ports/asker.py",
-                "app.application.ports.asker",
+                "shop/application/ports/asker.py",
+                "shop.application.ports.asker",
                 "from typing import Protocol\n"
                 "import tesser.application as ts\n"
                 "class AskPortRequest(ts.Request):\n"
@@ -6968,7 +6968,7 @@ def test_a_ports_module_and_an_init_need_no_sibling_test() -> None:
         "asker has no sibling test file" in f for f in findings
     )
     assert not any(
-        "app.domain has no sibling test file" in f for f in findings
+        "shop.domain has no sibling test file" in f for f in findings
     )
 
 
@@ -7207,13 +7207,13 @@ def test_a_conftest_leaf_counts_tesser_edges_in_the_exporting_tree() -> None:
     ), findings
 
 
-def test_a_bootstrap_module_holds_only_app_kinds() -> None:
+def test_an_app_module_holds_only_app_kinds() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "bootstrap/wrong.py",
-                "bootstrap.wrong",
+                "app/wrong.py",
+                "app.wrong",
                 "import tesser.app as ts\n"
                 "import tesser.component as tc\n"
                 "class Slice(tc.Component):\n"
@@ -7223,8 +7223,8 @@ def test_a_bootstrap_module_holds_only_app_kinds() -> None:
                 False,
             ),
             (
-                "bootstrap/test_wrong.py",
-                "bootstrap.test_wrong",
+                "app/test_wrong.py",
+                "shop.test_wrong",
                 "def test_wrong_exists() -> None:\n"
                 "    assert True\n",
                 False,
@@ -7232,11 +7232,11 @@ def test_a_bootstrap_module_holds_only_app_kinds() -> None:
         ))).violations()
                )
     assert any(
-        "bootstrap.wrong.Slice is a component; only an app, an app loader, an app config, "
-        "an app config spec, and a config repository live in a bootstrap module" in f
+        "app.wrong.Slice is a component; only an app, an app loader, an app config, "
+        "an app config spec, and a config repository live in an app module" in f
         for f in findings
     )
-    assert not any("bootstrap.wrong.Root" in f and "TB052" in f for f in findings)
+    assert not any("app.wrong.Root" in f and "TB052" in f for f in findings)
 
 
 def test_a_component_releases_what_it_constructed() -> None:
@@ -7244,8 +7244,8 @@ def test_a_component_releases_what_it_constructed() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "leaky/wiring/wire.py",
-                "leaky.wiring.wire",
+                "leaky/component/component.py",
+                "leaky.component.component",
                 "import tesser.component as ts\n"
                 "class Leaky(ts.Component):\n"
                 "    def __init__(self) -> None:\n"
@@ -7258,8 +7258,8 @@ def test_a_component_releases_what_it_constructed() -> None:
                 False,
             ),
             (
-                "leaky/wiring/test_wire.py",
-                "leaky.wiring.test_wire",
+                "leaky/component/test_component.py",
+                "leaky.component.test_component",
                 "def test_wire_exists() -> None:\n"
                 "    assert True\n",
                 False,
@@ -7267,11 +7267,11 @@ def test_a_component_releases_what_it_constructed() -> None:
         ))).violations()
                )
     assert any(
-        "leaky.wiring.wire.Leaky defines no close; "
+        "leaky.component.component.Leaky defines no close; "
         "a component releases what it constructed" in f
         for f in findings
     )
-    assert not any("leaky.wiring.wire.Tidy" in f for f in findings)
+    assert not any("leaky.component.component.Tidy" in f for f in findings)
 
 
 def test_a_config_constructs_from_exactly_one_spec() -> None:
@@ -7279,8 +7279,8 @@ def test_a_config_constructs_from_exactly_one_spec() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "loose/wiring/config.py",
-                "loose.wiring.config",
+                "loose/component/config.py",
+                "loose.component.config",
                 "import tesser.component as ts\n"
                 "class Spec(ts.Spec):\n"
                 "    def __init__(self, storage: str) -> None:\n"
@@ -7296,8 +7296,8 @@ def test_a_config_constructs_from_exactly_one_spec() -> None:
                 False,
             ),
             (
-                "loose/wiring/test_config.py",
-                "loose.wiring.test_config",
+                "loose/component/test_config.py",
+                "loose.component.test_config",
                 "def test_config_exists() -> None:\n"
                 "    assert True\n",
                 False,
@@ -7305,16 +7305,16 @@ def test_a_config_constructs_from_exactly_one_spec() -> None:
         ))).violations()
                )
     assert any(
-        "loose.wiring.config.Doorless defines no __init__; "
+        "loose.component.config.Doorless defines no __init__; "
         "a config constructs from exactly one ts.Spec" in f
         for f in findings
     )
     assert any(
-        "loose.wiring.config.Wide.__init__ takes 2 parameters; "
+        "loose.component.config.Wide.__init__ takes 2 parameters; "
         "a config constructor takes exactly one ts.Spec" in f
         for f in findings
     )
-    assert not any("loose.wiring.config.Right" in f for f in findings)
+    assert not any("loose.component.config.Right" in f for f in findings)
 
 
 def test_a_do_not_use_tesser_module_is_not_a_consumer_namespace() -> None:

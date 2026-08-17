@@ -18,13 +18,13 @@ packages = [
     "tessercheck.adapters.handlers",
     "tessercheck.adapters.repositories",
     "tessercheck.client",
-    "tessercheck.wiring",
+    "tessercheck.component",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-testpaths = ["bootstrap", "protocol", "tessercheck", "srv"]
+testpaths = ["app", "protocol", "tessercheck", "srv"]
 
 [tool.mypy]
 strict = true
-files = ["tessercheck", "srv", "bootstrap", "protocol"]
+files = ["tessercheck", "srv", "app", "protocol"]

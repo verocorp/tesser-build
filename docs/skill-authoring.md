@@ -8,9 +8,9 @@ future author must not silently break.
 ## The three templates
 
 Every **component doc** (`value-objects.md`, `entities.md`, `aggregates.md`,
-`application-services.md`, `public-interface.md`, `bootstrap.md`, the gateway
+`application-services.md`, `public-interface.md`, `app.md`, the gateway
 family `repositories.md` / `gateway-cross-context.md`, `handlers.md`,
-`wiring.md`, `srv.md`, and the grouped `strategic-design.md`) follows one
+`component.md`, `srv.md`, and the grouped `strategic-design.md`) follows one
 structure; every **mechanics doc** (`go.md`, `python.md`) follows another; the
 **map doc** (`map.md`) is a third shape of its own (below).
 The structures are designed for how an agent consumes them mid-task — routed in
@@ -77,7 +77,7 @@ services, repositories are not domain objects, but their mechanics live here).
 ## Application ports     ← the `application/ports/` package (python.md; the Go
                            mirror is pending)
 ## Repositories
-## The composition root  ← public interface + wiring/bootstrap mechanics
+## The composition root  ← public interface + component/bootstrap mechanics
 ## Inbound handlers and hosts   ← the transport edge (python.md; go.md pending
                                   the settled anatomy's Go mirror)
 ## The Spec pattern     ← cross-cutting construction pattern(s)

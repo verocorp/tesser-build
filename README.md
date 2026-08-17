@@ -129,7 +129,7 @@ object to `TB010`–`TB014` and the serialization norm).
 
 tesser-build ships a tool, not a CI pipeline. You pin `tessercheck` in your own
 module and run it in your own workflow, the same way you'd consume staticcheck
-or NilAway. There is no tesser-build-owned GitHub Action; CI wiring stays
+or NilAway. There is no tesser-build-owned GitHub Action; CI component stays
 yours, so you keep control of your Go version, package scoping, and caching.
 
 **1. Pin the tool** (records a `tool` directive in your `go.mod`; Renovate/
@@ -271,7 +271,7 @@ structure, import, and boundary-signature checks (TB040–TB090,
 `tessercheck-py/RULES.md`) over every context in the tree
 (`tessercheck-py/README.md`).
 The skill teaches the broader construction conventions — entities, aggregates,
-services, repositories, wiring, bootstrap, hosts — ahead of what the analyzers
+services, repositories, component, app, hosts — ahead of what the analyzers
 cover. The original three, briefly:
 
 1. **Value objects get `MustNew*` helpers.** Value objects are cheap to construct; tests should be able to write `MustNewCustomerID("cust-1")` inline without error-handling noise. Aggregates and entities are not value objects; they carry real construction risk and don't get `Must*` constructors.

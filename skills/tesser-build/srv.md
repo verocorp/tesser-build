@@ -22,7 +22,7 @@ Yes → a host.
 - A **handler** (`handlers.md`) — per-context wire↔`Client` translation. The
   host *mounts* handlers; a handler never owns the server, the middleware, or
   the process.
-- The **composition root** (`bootstrap.md`) — builds the object graph from a
+- The **composition root** (`app.md`) — builds the object graph from a
   `Config`; it never reads the environment and never serves. The host calls
   it; it is not it.
 - A **worker loop / consumer** that polls a queue — that *is* a host

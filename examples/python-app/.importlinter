@@ -3,7 +3,7 @@
 # tests/test_direction.py.
 #
 # `allow_indirect_imports = true` on every contract is load-bearing: import-linter's
-# default `forbidden` is transitive, so `srv.http.main -> bootstrap.bootstrap ->
+# default `forbidden` is transitive, so `srv.http.main -> app.app ->
 # linkpolicy` reads as a violation when it is exactly what a composition root is
 # for. These rules are about what a module *writes in its own import block*.
 #
@@ -16,13 +16,13 @@ root_packages =
     linkpolicy
     reports
     srv
-    bootstrap
+    app
     kernel
 include_external_packages = False
 unmatched_ignore_imports_alerting = error
 
 # A host reaches a context only through that context's handlers — never its
-# service, domain, client, or wiring. The wildcard is deliberate: it says "the
+# service, domain, client, or component. The wildcard is deliberate: it says "the
 # handlers role", so a context adding a subpackage does not open a hole, and a
 # new legal handler import needs no config edit. linkpolicy is listed with no
 # ignore because it owns no handler — no host may reach it at all.
@@ -75,4 +75,4 @@ forbidden_modules =
     linkpolicy
     reports
     srv
-    bootstrap
+    app

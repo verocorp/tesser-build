@@ -39,7 +39,7 @@ prescribed):
 | **domain** | VOs / entities / aggregates | `value-objects.md`, `entities.md`, `aggregates.md`, `domain-services.md` |
 | **application** | use-case services (Convert → Delegate → Persist → Respond); no business logic — plus the **outbound ports the context owns**, in an `application/ports/` package (one port per module, with the request/response DTOs it speaks), and the domain ↔ port-DTO mapping | `application-services.md`, `repositories.md` |
 | **adapters** | inbound `handlers` + outbound `gateways` (taxonomy below) | `handlers.md`, `repositories.md`, `gateway-cross-context.md` |
-| **wiring** | the context's own construction + its `Config` | `wiring.md` |
+| **component** | the context's own construction + its `Config` | `component.md` |
 
 The context's **`client` role is its public interface**: the `Client` interface +
 primitive DTOs in `client.py` (or a `client/` package as it grows), with the
@@ -50,8 +50,8 @@ context's `__init__.py` empty (`public-interface.md`). There is no separate
 
 **App-level, not per-context** — three roles:
 
-- **`bootstrap`** — the composition root: `new(cfg) → App`, builds the graph
-  once (`bootstrap.md`).
+- **`app`** — the composition root: `new(cfg) → App`, builds the graph
+  once (`app.md`).
 - **`srv/`** — the hosts, one per *in-process* delivery mechanism; the host is
   the env edge and owns the process lifecycle (`srv.md`). A platform-required
   health/metrics listener is part of the host it reports on, not a second host.
@@ -99,12 +99,12 @@ shape, not settled doctrine.)
 ## How contexts connect {#how-contexts-connect}
 
 **Dependency direction is the load-bearing rule.** Within a context, adapters
-and wiring depend inward on application and domain, never the reverse. Between
+and component depend inward on application and domain, never the reverse. Between
 contexts, every edge points one way, and the graph stays acyclic:
 
 ```
 srv/* hosts ──▶ handlers ──▶ Client ──▶ application ──▶ domain
-bootstrap ──▶ each context's wiring          (constructs, never the reverse)
+app ──▶ each context's component          (constructs, never the reverse)
 gateways ──implement──▶ ports in each context's application/ports
 ```
 
@@ -150,7 +150,7 @@ The guardrails that keep this honest:
 direction first (as above); hoist into a real orchestrating context **only when
 it is a genuine cross-context workflow**; N-context cycles need events, not a
 third service. **Never nil-then-setter** — passing `nil` and mutating later is
-a wiring bug, not a cycle break.
+a component bug, not a cycle break.
 
 ## App vs library {#app-vs-library}
 
@@ -161,9 +161,9 @@ Which roles a context carries is decided by **application vs library**
   a context and key discovery.
 - **application — required when the context has use cases.**
 - **adapters — optional** (present where the context touches the outside).
-- **wiring — required for app contexts, absent for library contexts.** A
-  library ships the roles but no wiring and no hosts — the consumer supplies
-  them; an app has `bootstrap` + `srv` too.
+- **component — required for app contexts, absent for library contexts.** A
+  library ships the roles but no component and no hosts — the consumer supplies
+  them; an app has `app` + `srv` too.
 
 ## Presentation — web and other out-of-process clients {#presentation}
 
@@ -221,7 +221,7 @@ two features talk"). Jobs are too many to catalog; decompose instead:
 
 1. **Name the pieces the job touches.** Walk the anatomy above and list the
    components involved — which context(s), and within them which roles: a new
-   domain type? a use case? a handler? a gateway? wiring? a host?
+   domain type? a use case? a handler? a gateway? component? a host?
 2. **Survey the codebase for which already exist.** Find the context by its
    `Client`; check each named piece against what is already there. What exists
    is the convention to follow — imitate before inventing.
@@ -244,9 +244,9 @@ two features talk"). Jobs are too many to catalog; decompose instead:
 | Gateway: repository | `repositories.md` | full |
 | Gateway: cross-context | `gateway-cross-context.md` | core rules settled; rest stub |
 | Gateway: vendor/ACL | — no file | gap: no verified impl anywhere |
-| Context wiring | `wiring.md` | full |
-| bootstrap + app config + lifecycle | `bootstrap.md` | full |
+| Context component | `component.md` | full |
+| app + app config + lifecycle | `app.md` | full |
 | srv hosts | `srv.md` | full |
 | Presentation: web / out-of-process clients | `map.md#presentation` | doctrine only; no verified impl yet |
 | Strategic design (subdomains, contexts, language) | `strategic-design.md` | full |
-| Language mechanics | `go.md`, `python.md` | full for the domain + interface concepts; app-level anatomy mechanics (wiring/bootstrap/handlers/hosts) in `python.md` only — the Go mirror is pending |
+| Language mechanics | `go.md`, `python.md` | full for the domain + interface concepts; app-level anatomy mechanics (component/app/handlers/hosts) in `python.md` only — the Go mirror is pending |
