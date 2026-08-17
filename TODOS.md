@@ -2,6 +2,55 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Mapper wave follow-ups (2026-08-17, v0.0.61.0)
+
+- [ ] **TB082 counts source lines, not statements.** `create_campaign` is seven
+  statements and 34 source lines, so the 10-line body rule fires on formatting
+  rather than complexity. Ruling (Chris, 2026-08-17): count statements via
+  `sum(1 for n in ast.walk(fn) if isinstance(n, ast.stmt)) - 1` — the variant
+  that cannot be gamed by wrapping work in a block. The change is four lines in
+  `_body_violations` (`domain/checks.py`) plus the clause text, which is the
+  rule; `RULES.md` regenerates from it and the existing fixture
+  (`test_service_body_rules_are_flagged`, 12 statements on 12 lines) still
+  fires either way. Statement count is always <= line count, so no green tree
+  can go red. Then pick the threshold — 10 statements is a much stronger bar
+  than 10 lines. Until it lands, `campaign/application/service.py` carries a
+  site-level `# tessercheck:ignore TB082` on `create_campaign`.
+- [ ] **Nothing forces the mapper shape.** `ts.Mapper` ships with a kind row
+  and a placement rule (application only) and nothing else. Undecided and
+  unenforced: whether a mapper may construct its target DTO (today it does not,
+  except for collection *elements* — `MapToSaveCampaignRequest` builds every
+  `LinkRecord`, `MapToCampaignView` every `LinkView`, because a per-element
+  mapper would hand the service a tuple of mappers to loop over); whether a
+  mapper may originate data (the ruling is no — that is why `links=()` is
+  passed in at the call site); whether accessors must be one-per-target-field;
+  and how a nested mapper is named (`budget_mapper`, so the reader knows to
+  keep dotting). No skill doc yet — `skills/tesser-build/` has no mapper page,
+  and `rationale/coverage.md`'s skill-materializations matrix has no row.
+- [ ] **Inbound is not symmetric with outbound, and the rules should say so.**
+  Outbound has exactly one source (the aggregate). Inbound has N (the request
+  plus whatever the service obtained — identity now, a clock or a policy
+  verdict later), so `MapToCampaignSpec` takes three arguments. A GoF builder
+  was tried for the inbound half and reverted: `build()` returning `None` plus
+  `| None` state cost five completeness guards and a temporal "build first"
+  contract that mappers do not have. `ts.Builder` was added and removed in the
+  same branch; do not re-add it without solving that.
+- [ ] **Two `"active"` literals survive, both outside the converted method.**
+  `campaign/adapters/handlers/cli.py:48` counts active links for its message
+  (handler — ruled out of scope), and `campaign/application/views.py:72` builds
+  a `ShortLinkSpec` from a stored record on the reconstitution path. The second
+  is the interesting one: `ShortLinkSpec.active` is a bool, so the domain's own
+  construction spec is the last place link state is boolean, and that is what
+  forced the literal into every translator. A `-> bool` predicate on the entity
+  (`ShortLink.is_active()`) was tried and reverted — TB019 forbids it, and the
+  ruling (Chris, 2026-08-17) is that TB019 stands and no bools cross the
+  boundary.
+- [ ] **`skills/tesser-build/testing.md:55` asserts `link.active is spec.active`
+  on a `ShortLink`.** The entity exposes `status`, not `active` — the snippet
+  was already wrong before this branch. One line, but editing a skill doc means
+  bumping `skill-version` and walking the materializations matrix, so it waits
+  for the docs pass.
+
 ## App/component follow-ups (2026-08-16, PRs #98-#101)
 
 - [ ] **`srv` still holds module functions, and Chris ruled the design has
@@ -114,9 +163,10 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `urllib.parse` in `campaign.domain.values` / `linkpolicy.domain.policy`
   (pure parsing — likely admit; the matcher accepts exact dotted entries, so
   `urllib.parse` can be admitted without opening `urllib.request`), `copy` in
-  `campaign.domain.short_link` (pure — likely admit), `secrets` in
-  `campaign.application.service` (ambient entropy — likely inject through a
-  port instead of admitting).
+  `campaign.domain.short_link` (pure — likely admit). The `secrets` half is
+  RESOLVED v0.0.61.0: it was injected through the `CampaignIdentity` port
+  rather than admitted, and the service's `# tessercheck:ignore TB062` is
+  deleted — the outcome the entry predicted.
 - [ ] **Named soundness holes in the import walker (from the ship adversarial
   reviews — evasion paths, none live on the current trees; relative-import
   resolution and top-level-only classification were fixed in-wave):**
