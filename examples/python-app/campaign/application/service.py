@@ -175,7 +175,7 @@ class CampaignService(ts.ApplicationService):
         self._policy = policy
         self._identity_gateway = identity_gateway
 
-    def create_campaign(self, req: client.CreateCampaignRequest) -> client.CampaignView:  # tessercheck:ignore TB082
+    def create_campaign(self, req: client.CreateCampaignRequest) -> client.CampaignView:
         issued_campaign_identity = self._identity_gateway.issue(
             campaign_identity.IssueCampaignIdentityRequest()
         )
