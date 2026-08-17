@@ -16,7 +16,7 @@ class Handler(ts.Handler):
         return HttpResponse.json(200, {"links": rows})
 
 
-@ts.function
+@ts.do_not_use_function
 def _row(view: client.LinkVerdictView) -> JSONObject:
     return {
         "slug": view.slug,

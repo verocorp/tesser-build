@@ -6,7 +6,7 @@ import scheduling.adapters.handlers.handlers as handlers
 import protocol.voice as voice
 
 
-@ts.function
+@ts.do_not_use_function
 def tools_for(handler: handlers.LlmToolHandler) -> tuple[voice.Route, ...]:
     return (
         voice.Route(handlers.PROVIDE_NAME, handler.provide_name),
@@ -15,7 +15,7 @@ def tools_for(handler: handlers.LlmToolHandler) -> tuple[voice.Route, ...]:
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def match(routes: tuple[voice.Route, ...], name: str) -> voice.Route | None:
     for route in routes:
         if route.name == name:

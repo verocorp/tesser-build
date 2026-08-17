@@ -72,10 +72,10 @@ exact: a test covers a rule when an assert literal contains the clause.
 | TB050 | an adapters module's tesser imports are tesser.adapters and tesser.errors | context role module | imports ⟨import⟩ | domain/checks.py:1972 | test_any_role_but_client_may_from_import_tesser_errors |
 | TB050 | a wiring module's tesser imports are tesser.component, and tesser.errors | context role module | imports ⟨import⟩ | domain/checks.py:1972 | test_wiring_bootstrap_and_srv_may_from_import_tesser_errors |
 | TB050 | a role module imports only its own tesser package | context role module | imports ⟨import⟩ | domain/checks.py:1972 | test_any_role_but_client_may_from_import_tesser_errors |
-| TB051 | a kernel function declares itself with @ts.function | kernel module | is an undeclared module function | domain/checks.py:2024 | test_kernel_statement_totality |
-| TB051 | a srv function declares itself with @ts.function | srv module | is an undeclared module function | domain/checks.py:2024 | test_srv_and_bootstrap_statement_totality |
-| TB051 | a protocol function declares itself with @ts.function | protocol module | is an undeclared module function | domain/checks.py:2024 | test_protocol_module_totality_is_flagged |
-| TB051 | a module function declares itself with @ts.function | context role module | is an undeclared module function | domain/checks.py:2024 | test_placement_totality_is_flagged |
+| TB051 | a kernel function declares itself with @ts.do_not_use_function | kernel module | is an undeclared module function | domain/checks.py:2024 | test_kernel_statement_totality |
+| TB051 | a srv function declares itself with @ts.do_not_use_function | srv module | is an undeclared module function | domain/checks.py:2024 | test_srv_and_bootstrap_statement_totality |
+| TB051 | a protocol function declares itself with @ts.do_not_use_function | protocol module | is an undeclared module function | domain/checks.py:2024 | test_protocol_module_totality_is_flagged |
+| TB051 | a module function declares itself with @ts.do_not_use_function | context role module | is an undeclared module function | domain/checks.py:2024 | test_placement_totality_is_flagged |
 | TB051 | a kernel constant is Final | kernel module | declares a module constant without Final | domain/checks.py:2049,2059 | test_kernel_statement_totality |
 | TB051 | a kernel module holds only imports, classes, declared functions, and Final constants | kernel module | has a loose module-level statement | domain/checks.py:2069 | test_kernel_statement_totality |
 | TB051 | a bootstrap constant is Final | bootstrap module | declares a module constant without Final | domain/checks.py:2049,2059 | test_srv_and_bootstrap_statement_totality |

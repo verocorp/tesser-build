@@ -4,7 +4,7 @@ from typing import TypeVar
 F = TypeVar("F", bound=Callable[..., object])
 
 
-def function(fn: F) -> F:
+def do_not_use_function(fn: F) -> F:
     return fn
 
 

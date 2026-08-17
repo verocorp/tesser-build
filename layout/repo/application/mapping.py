@@ -8,7 +8,7 @@ import repo.application.ports.repo_reader as repo_reader
 import repo.domain.rules as domain
 
 
-@ts.function
+@ts.do_not_use_function
 def repo(read: repo_reader.ReadRepoResponse) -> domain.Repo:
     return domain.Repo(
         domain.RepoSpec(
@@ -26,7 +26,7 @@ def repo(read: repo_reader.ReadRepoResponse) -> domain.Repo:
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def report(
     read: repo_reader.ReadRepoResponse,
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -37,17 +37,17 @@ def report(
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def trees(read: repo_reader.ReadRepoResponse) -> tuple[str, ...]:
     return tuple(str(tree) for tree in repo(read).trees())
 
 
-@ts.function
+@ts.do_not_use_function
 def _file(record: repo_reader.FileRecord) -> tuple[str, str]:
     return (_state(record.state), record.text)
 
 
-@ts.function
+@ts.do_not_use_function
 def _manifest(
     record: repo_reader.ManifestRecord,
 ) -> tuple[str, tuple[tuple[str, str], ...], str]:
@@ -55,7 +55,7 @@ def _manifest(
     return (_manifest_state(record.state), rows, record.note)
 
 
-@ts.function
+@ts.do_not_use_function
 def _manifest_state(state: repo_reader.ManifestState) -> str:
     match state:
         case repo_reader.ManifestState.READ:
@@ -72,12 +72,12 @@ def _manifest_state(state: repo_reader.ManifestState) -> str:
             typing.assert_never(unreachable)
 
 
-@ts.function
+@ts.do_not_use_function
 def _entries(records: tuple[repo_reader.EntryRecord, ...]) -> tuple[tuple[str, str], ...]:
     return tuple((record.name, _form(record.form)) for record in records)
 
 
-@ts.function
+@ts.do_not_use_function
 def _state(state: repo_reader.FileState) -> str:
     match state:
         case repo_reader.FileState.READ:
@@ -90,7 +90,7 @@ def _state(state: repo_reader.FileState) -> str:
             typing.assert_never(unreachable)
 
 
-@ts.function
+@ts.do_not_use_function
 def _form(form: repo_reader.EntryForm) -> str:
     match form:
         case repo_reader.EntryForm.DIRECTORY:

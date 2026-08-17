@@ -22,14 +22,14 @@ class Match:  # tessercheck:ignore TB052
     query_params: dict[str, str]
 
 
-@ts.function
+@ts.do_not_use_function
 def split(raw_path: str) -> tuple[str, dict[str, str]]:
     parts = urllib.parse.urlsplit(raw_path)
     query = {name: values[-1] for name, values in urllib.parse.parse_qs(parts.query).items()}
     return parts.path, query
 
 
-@ts.function
+@ts.do_not_use_function
 def match(routes: tuple[Route, ...], method: str, raw_path: str) -> Match | None:
     path, query_params = split(raw_path)
     for route in routes:
@@ -42,7 +42,7 @@ def match(routes: tuple[Route, ...], method: str, raw_path: str) -> Match | None
     return None
 
 
-@ts.function
+@ts.do_not_use_function
 def _path_params(pattern: str, path: str) -> dict[str, str] | None:
     expected = pattern.strip("/").split("/")
     actual = path.strip("/").split("/")

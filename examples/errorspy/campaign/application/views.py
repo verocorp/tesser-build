@@ -12,7 +12,7 @@ import campaign.domain.values as values
 from tesser.errors import DomainError, InfraError, not_found
 
 
-@ts.function
+@ts.do_not_use_function
 def campaign_view(c: campaign.Campaign) -> client.CampaignView:
     return client.CampaignView(
         campaign_id=c.id,
@@ -20,7 +20,7 @@ def campaign_view(c: campaign.Campaign) -> client.CampaignView:
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def create_spec(req: client.CreateCampaignRequest) -> campaign.CampaignSpec:
     return campaign.CampaignSpec(
         id=req.campaign_id,
@@ -32,7 +32,7 @@ def create_spec(req: client.CreateCampaignRequest) -> campaign.CampaignSpec:
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def save_request(c: campaign.Campaign) -> campaign_repository.SaveCampaignRequest:
     return campaign_repository.SaveCampaignRequest(
         id=c.id,
@@ -41,7 +41,7 @@ def save_request(c: campaign.Campaign) -> campaign_repository.SaveCampaignReques
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def required_campaign(
     found: campaign_repository.FindCampaignResponse, campaign_id: str
 ) -> campaign.Campaign:
@@ -54,7 +54,7 @@ def required_campaign(
             typing.assert_never(unreachable)
 
 
-@ts.function
+@ts.do_not_use_function
 def rebuilt_campaign(record: campaign_repository.CampaignRecord) -> campaign.Campaign:
     try:
         return campaign.Campaign(_campaign_spec(record))
@@ -62,7 +62,7 @@ def rebuilt_campaign(record: campaign_repository.CampaignRecord) -> campaign.Cam
         raise InfraError(f"corrupted campaign record {record.id!r}: {e}") from e
 
 
-@ts.function
+@ts.do_not_use_function
 def _campaign_spec(record: campaign_repository.CampaignRecord) -> campaign.CampaignSpec:
     return campaign.CampaignSpec(
         id=record.id,
@@ -74,11 +74,11 @@ def _campaign_spec(record: campaign_repository.CampaignRecord) -> campaign.Campa
     )
 
 
-@ts.function
+@ts.do_not_use_function
 def _window_record(c: campaign.Campaign) -> campaign_repository.WindowRecord:
     return campaign_repository.WindowRecord(start=str(c.window.start), end=str(c.window.end))
 
 
-@ts.function
+@ts.do_not_use_function
 def _link_record(link: short_link.ShortLink) -> campaign_repository.LinkRecord:
     return campaign_repository.LinkRecord(slug=str(link.slug), target_url=str(link.target))

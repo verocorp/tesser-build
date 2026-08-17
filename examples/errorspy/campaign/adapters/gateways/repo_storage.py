@@ -37,7 +37,7 @@ class StorageCampaignRepository(ts.Repository):
         )
 
 
-@ts.function
+@ts.do_not_use_function
 def _to_record(request: campaign_repository.SaveCampaignRequest) -> Record:
     return {
         "window": {"start": request.window.start, "end": request.window.end},
@@ -48,7 +48,7 @@ def _to_record(request: campaign_repository.SaveCampaignRequest) -> Record:
     }
 
 
-@ts.function
+@ts.do_not_use_function
 def _from_record(campaign_id: str, row: Record) -> campaign_repository.CampaignRecord:
     return campaign_repository.CampaignRecord(
         id=campaign_id,

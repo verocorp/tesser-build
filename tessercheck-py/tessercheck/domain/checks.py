@@ -39,11 +39,11 @@ TESSER_BASE_BLOCKS: Final[dict[tuple[str, str], str]] = {
 }
 
 TESSER_DECORATORS: Final[dict[tuple[str, str], str]] = {
-    ("tesser.domain", "function"): "function",
-    ("tesser.application", "function"): "function",
-    ("tesser.adapters", "function"): "function",
-    ("tesser.context", "function"): "function",
-    ("tesser.srv", "function"): "function",
+    ("tesser.domain", "do_not_use_function"): "function",
+    ("tesser.application", "do_not_use_function"): "function",
+    ("tesser.adapters", "do_not_use_function"): "function",
+    ("tesser.context", "do_not_use_function"): "function",
+    ("tesser.srv", "do_not_use_function"): "function",
     ("tesser.app", "load"): "load",
     ("tesser.testing", "helper"): "helper",
     ("tesser.testing", "fake"): "fake",
@@ -458,12 +458,12 @@ RETURN_WRAPPERS: Final[frozenset[str]] = frozenset(
 SELF_NAMES: Final[frozenset[str]] = frozenset({"Self", "Never", "NoReturn", "None"})
 
 
-@ts.function
+@ts.do_not_use_function
 def canonical_str(value: str) -> str:
     return value
 
 
-@ts.function
+@ts.do_not_use_function
 def canonical_int(value: int) -> int:
     return value
 
@@ -2026,7 +2026,7 @@ class Codebase(ts.AggregateRoot):
                         stmt.lineno,
                         "TB051",
                         f"{module.name()}.{stmt.name} is an undeclared module function; "
-                        f"a {subject} function declares itself with @ts.function",
+                        f"a {subject} function declares itself with @ts.do_not_use_function",
                     )
                 )
         return tuple(found)

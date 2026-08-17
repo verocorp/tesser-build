@@ -9,7 +9,7 @@ import repo.adapters.handlers.cli as cli
 from protocol.cli import CliRequest, CliResponse, UsageError
 
 
-@ts.function
+@ts.do_not_use_function
 def respond(handler: cli.Handler, argv: list[str]) -> CliResponse:
     try:
         return handler.trees(CliRequest(args=tuple(argv)))
@@ -17,7 +17,7 @@ def respond(handler: cli.Handler, argv: list[str]) -> CliResponse:
         return CliResponse(2, stdout="", stderr=str(error))
 
 
-@ts.function
+@ts.do_not_use_function
 def run(argv: list[str]) -> int:
     response = respond(cli.Handler(load().repo.client), argv)
     if response.stdout:

@@ -34,7 +34,7 @@ ARM_SHAPE: Final[re.Pattern[str]] = re.compile(
 )
 
 
-@ts.function
+@ts.do_not_use_function
 def canonical_str(value: str) -> str:
     return value
 

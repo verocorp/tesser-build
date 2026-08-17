@@ -92,7 +92,7 @@ class LlmToolHandler(ts.Handler):
         return voice.Tool(name=name, description=description, parameters=parameters(state))
 
 
-@ts.function
+@ts.do_not_use_function
 def _params(properties: dict[str, object], required: tuple[str, ...]) -> dict[str, object]:
     schema: dict[str, object] = {"type": "object", "properties": properties}
     if required:

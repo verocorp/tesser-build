@@ -11,7 +11,7 @@ import tesser.srv as ts
 from protocol.lifecycle import Host
 
 
-@ts.function
+@ts.do_not_use_function
 def run_until_signal(host: Host, close: Callable[[], None]) -> None:
     stop = threading.Event()
 
