@@ -5,6 +5,33 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.56.0] - 2026-08-16
+
+The rules catch up with the shells. A component must release, a config must
+construct from a spec, and the lifecycle package retires.
+
+### Added
+- **TB081: a component releases what it constructed.** `ts.Component` was a
+  marker, so a component with no `close()` was legal — the one thing standing
+  between the base and what it was introduced to mean.
+- **TB080: a config constructs from exactly one `ts.Spec`,** at both levels.
+  Configs were spec-shaped by discipline; now they are spec-shaped by rule, the
+  same clause a domain constructor already answers to.
+
+### Removed
+- **`tesser.lifecycle`.** Nothing travels any more: a component holds what it
+  made in its own type, the app holds its components, and the runner takes a
+  callable. With no return value to type, the shared release contract had no
+  remaining job. The kind row, its TB052 production-base clause, and its TB072
+  fake grant go with it.
+- `srv/test_run.py`'s `FakeAppSpy` — the runner takes a callable, so the
+  recorder is a list, and it doubles no contract to be a fake of.
+
+### Changed
+- `wiring.md` teaches the component contract rather than
+  `build(cfg, deps) → (Client, Closeable)`; `python.md`'s impl-selection example
+  is a private method. skill-version 44.
+
 ## [0.0.55.0] - 2026-08-16
 
 The design gets its own shells. `tesser.app` and `tesser.component` name the two

@@ -22,7 +22,7 @@ Yes → the context's wiring.
 **Near-misses that are NOT context wiring:**
 - The **composition root** (`bootstrap.md`) — app-wide assembly: calls every
   context's wiring in dependency order, constructs cross-context adapters, owns
-  the cleanup stack. Wiring is one context; bootstrap is all of them.
+  each component's teardown. Wiring is one context; the app is all of them.
 - An **application service** — *receives* its repository injected
   (`application-services.md`); it never chooses which implementation.
 - A **repository/adapter constructor** — builds *one* concrete. Wiring calls
@@ -37,10 +37,12 @@ Yes → the context's wiring.
    for library contexts (`map.md#app-vs-library`) — a library exports types and
    is constructed by its caller; an app context must be buildable by
    `bootstrap` through one uniform build contract.
-2. **One uniform build contract: `build(cfg, <injected deps>) → (Client, Closeable)`.**
-   Every context exposes the same shape, so `bootstrap` composes contexts
-   without special cases. A context with no resources still returns a no-op
-   `Closeable` — uniformity is what keeps the root readable as the graph grows.
+2. **One uniform construction contract: a component class taking one `Config`.**
+   Every context exposes the same shape — `ts.Component` with a validating
+   `__init__`, a `client`, and a `close()` — so the app composes components
+   without special cases. A component with no infrastructure has an empty
+   `close()`, which is honest rather than ceremonial; the analyzer requires the
+   method, not a resource.
 3. **The context's `Config` lives in its wiring, never on the public interface.**
    `wiring/config` is spec-shaped: a frozen struct, primitive leaves, no
    methods, no constructor logic. The app `Config` nests the per-context ones
@@ -62,15 +64,19 @@ Yes → the context's wiring.
 
 ```
 <context>/wiring/
-  config.py / config.go     ← the context's Config: spec-shaped, primitive leaves
-  wire.py / wire.go         ← repo_for(cfg) + build(cfg, deps) → (Client, Closeable)
+  config.py                 ← ts.Spec + ts.Config: the component's own slice
+  wire.py                   ← ts.Component: __init__(cfg, deps), client, close()
 
-def build(cfg: Config, policy: TargetPolicy) -> tuple[Client, Closeable]:
-    repo, closeable = repo_for(cfg)              # coordinate-driven, fail-fast
-    return CampaignService(repo, policy), closeable
+class Campaign(ts.Component):
+    def __init__(self, cfg: Config, policy: TargetPolicy) -> None:
+        self._repo = self._repo_for(cfg)         # coordinate-driven, fail-fast
+        self.client: Client = CampaignService(self._repo, policy)
+
+    def close(self) -> None:
+        self._repo.close()                       # only what it constructed
 ```
 
-`repo_for` is the impl-selection site — the only place that changes when the
+`_repo_for` is the impl-selection site — the only place that changes when the
 context swaps infrastructure. Construction mechanics:
 `python.md#the-composition-root`; verified impl:
 `examples/python-app/campaign/wiring/` (full case, with an injected
@@ -83,11 +89,11 @@ resources, empty config, uniform build contract kept).
    whose scheme maps to the SQL repo, `"memory"` for the in-process one. The
    toolkit prescribes *coordinate-driven and fail-fast*, never the vocabulary —
    config fields are irreducibly per-service.
-2. **What does the `Closeable` wrap?** Whatever the chosen implementation
-   holds — a pool, a client, nothing. An in-memory repo can be its own
-   near-no-op closeable; a context with no resources returns a named no-op
-   stand-in so the build contract stays uniform (`bootstrap.md#lifecycle`).
-3. **Where do injected peer ports come from?** Always parameters of `build`,
+2. **What does `close()` release?** Whatever this component constructed — a
+   pool, a client, nothing. Ownership is strict: a component never reaches
+   into a peer's infrastructure, which is what makes teardown order free
+   (`bootstrap.md#lifecycle`).
+3. **Where do injected peer ports come from?** Always constructor parameters,
    constructed by the composition root. If you are tempted to construct one in
    wiring "just for now", you are moving the two-contexts-at-once knowledge
    out of the one place allowed to have it.

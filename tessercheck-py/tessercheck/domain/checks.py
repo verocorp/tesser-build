@@ -10,7 +10,6 @@ import tesser.domain as ts
 TESSER_BASE_BLOCKS: Final[dict[tuple[str, str], str]] = {
     ("tesser.application", "ApplicationService"): "service",
     ("tesser.application", "Port"): "port",
-    ("tesser.lifecycle", "Closeable"): "closeable",
     ("tesser.application", "Request"): "port_request",
     ("tesser.application", "Response"): "port_response",
     ("tesser.context", "Request"): "request",
@@ -56,6 +55,8 @@ TS_NAME_BY_BLOCK: Final[dict[str, str]] = {
     "port_request": "ts.Request",
     "port_response": "ts.Response",
     "spec": "ts.Spec",
+    "app_spec": "ts.Spec",
+    "component_spec": "ts.Spec",
 }
 
 ROLES: Final[tuple[str, ...]] = ("domain", "application", "client", "adapters", "wiring")
@@ -134,7 +135,6 @@ KIND_NAME: Final[dict[str, str]] = {
     "protocol_rejection": "a protocol rejection",
     "protocol_request": "a protocol request record",
     "protocol_response": "a protocol response record",
-    "closeable": "the lifecycle contract",
 }
 
 SRV_KINDS: Final[frozenset[str]] = frozenset(
@@ -169,7 +169,6 @@ TESSER_NAMESPACES: Final[frozenset[str]] = frozenset(
         "context",
         "srv",
         "testing",
-        "lifecycle",
         "declared",
         "errors",
         "serialization",
@@ -267,11 +266,11 @@ NORM_IMPORTS: Final[dict[str, frozenset[str]]] = {
     "domain": frozenset({"tesser.errors", "tesser.serialization"}),
     "application": frozenset({"tesser.errors"}),
     "adapters": frozenset({"tesser.errors"}),
-    "wiring": frozenset({"tesser.errors", "tesser.lifecycle"}),
-    "bootstrap": frozenset({"tesser.errors", "tesser.lifecycle"}),
-    "srv": frozenset({"tesser.errors", "tesser.lifecycle"}),
+    "wiring": frozenset({"tesser.errors"}),
+    "bootstrap": frozenset({"tesser.errors"}),
+    "srv": frozenset({"tesser.errors"}),
     "test": frozenset(
-        {"tesser.app", "tesser.errors", "tesser.lifecycle", "tesser.serialization"}
+        {"tesser.app", "tesser.errors", "tesser.serialization"}
     ),
 }
 
@@ -1028,6 +1027,12 @@ class Codebase(ts.AggregateRoot):
                     found.extend(self._constructor_violations(module, cls, blocks, "an aggregate"))
                 elif block == "entity":
                     found.extend(self._constructor_violations(module, cls, blocks, "an entity"))
+                elif block == "component":
+                    found.extend(self._component_violations(module, cls))
+                elif block == "component_config":
+                    found.extend(self._component_config_violations(module, cls, blocks))
+                elif block == "app_config":
+                    found.extend(self._app_config_violations(module, cls, blocks))
                 elif block == "valueobject":
                     found.extend(self._valueobject_violations(module, cls, blocks))
                     found.extend(self._vo_field_violations(module, cls))
@@ -2831,7 +2836,7 @@ class Codebase(ts.AggregateRoot):
                 "bootstrap",
                 "tesser.app",
                 "a bootstrap module's tesser imports are tesser.app, "
-                "tesser.errors, and tesser.lifecycle",
+                "and tesser.errors",
                 "a bootstrap module imports tesser.app exactly once, as ts",
                 "a bootstrap module imports tesser.app exactly once, as ts",
                 NORM_IMPORTS["bootstrap"],
@@ -2894,7 +2899,7 @@ class Codebase(ts.AggregateRoot):
                 "srv",
                 "tesser.srv",
                 "a srv module's tesser imports are tesser.srv, "
-                "tesser.errors, and tesser.lifecycle",
+                "and tesser.errors",
                 "a srv module imports tesser.srv exactly once, as ts",
                 "a srv module imports tesser.srv exactly once, as ts",
                 NORM_IMPORTS["srv"],
@@ -3619,16 +3624,6 @@ class Codebase(ts.AggregateRoot):
                             "a host lives in srv and a protocol kind in a protocol module, never a context",
                         )
                     )
-                elif block == "closeable":
-                    found.append(
-                        Violation(
-                            module.path(),
-                            stmt.lineno,
-                            "TB052",
-                            f"{where} declares the lifecycle contract as a base; production "
-                            "satisfies Closeable structurally — only a test fake declares it",
-                        )
-                    )
                 elif KIND_ROLE[block] != role:
                     found.append(
                         Violation(
@@ -3739,7 +3734,7 @@ class Codebase(ts.AggregateRoot):
                     "role",
                     ROLE_TESSER_PACKAGE[role],
                     "a wiring module's tesser imports are tesser.component, "
-                    "tesser.errors, and tesser.lifecycle",
+                    "and tesser.errors",
                     "a role module imports its tesser package exactly once, as ts",
                     "a role module imports its tesser package exactly once, as ts",
                     NORM_IMPORTS[role],
@@ -4182,7 +4177,7 @@ class Codebase(ts.AggregateRoot):
                     "test",
                     "tesser.testing",
                     "a test module's tesser imports are tesser.testing, "
-                    "tesser.errors, tesser.lifecycle, and tesser.serialization",
+                    "tesser.errors, and tesser.serialization",
                     "a test module imports tesser.testing at most once, as ts",
                     None,
                     NORM_IMPORTS["test"],
@@ -4221,7 +4216,7 @@ class Codebase(ts.AggregateRoot):
                         )
                     )
                 elif not any(
-                    blocks.get(key) in ("port", "client", "protocol_port", "closeable", "config_repository")
+                    blocks.get(key) in ("port", "client", "protocol_port", "config_repository")
                     for key in self._base_keys(module, stmt)
                 ):
                     found.append(
@@ -4229,8 +4224,8 @@ class Codebase(ts.AggregateRoot):
                             module.path(),
                             stmt.lineno,
                             "TB072",
-                            f"{where} implements no application port, protocol port, client, config repository, "
-                            "or lifecycle contract; a fake implements the contract it doubles",
+                            f"{where} implements no application port, protocol port, client, "
+                            "or config repository; a fake implements the contract it doubles",
                         )
                     )
             else:
@@ -4564,6 +4559,20 @@ class Codebase(ts.AggregateRoot):
                     )
         return tuple(found)
 
+    def _component_violations(self, module: Module, cls: ast.ClassDef) -> tuple[Violation, ...]:
+        for item in cls.body:
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "close":
+                return ()
+        return (
+            Violation(
+                module.path(),
+                cls.lineno,
+                "TB081",
+                f"{module.name()}.{cls.name} defines no close; "
+                "a component releases what it constructed",
+            ),
+        )
+
     def _constructor_violations(
         self,
         module: Module,
@@ -4585,6 +4594,52 @@ class Codebase(ts.AggregateRoot):
         where = f"{module.name()}.{cls.name}.__init__"
         return self._signature_violations(
             module, where, init.lineno, init, "spec", None, "a domain constructor", "TB080", blocks
+        )
+
+    def _app_config_violations(
+        self, module: Module, cls: ast.ClassDef, blocks: dict[tuple[str, str], str]
+    ) -> tuple[Violation, ...]:
+        init = self._init_of(cls)
+        if init is None:
+            return (
+                Violation(
+                    module.path(),
+                    cls.lineno,
+                    "TB080",
+                    f"{module.name()}.{cls.name} defines no __init__; "
+                    "a config constructs from exactly one ts.Spec",
+                ),
+            )
+        where = f"{module.name()}.{cls.name}.__init__"
+        return self._signature_violations(
+            module, where, init.lineno, init, "app_spec", None, "a config constructor", "TB080", blocks
+        )
+
+    def _component_config_violations(
+        self, module: Module, cls: ast.ClassDef, blocks: dict[tuple[str, str], str]
+    ) -> tuple[Violation, ...]:
+        init = self._init_of(cls)
+        if init is None:
+            return (
+                Violation(
+                    module.path(),
+                    cls.lineno,
+                    "TB080",
+                    f"{module.name()}.{cls.name} defines no __init__; "
+                    "a config constructs from exactly one ts.Spec",
+                ),
+            )
+        where = f"{module.name()}.{cls.name}.__init__"
+        return self._signature_violations(
+            module,
+            where,
+            init.lineno,
+            init,
+            "component_spec",
+            None,
+            "a config constructor",
+            "TB080",
+            blocks,
         )
 
     def _classify(self) -> dict[tuple[str, str], str]:

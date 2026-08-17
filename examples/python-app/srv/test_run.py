@@ -8,16 +8,6 @@ import tesser.testing as ts
 
 from protocol.lifecycle import Host
 from srv.run import run_until_signal
-from tesser.lifecycle import Closeable
-
-
-@ts.fake
-class FakeAppSpy(Closeable):
-    def __init__(self) -> None:
-        self.closes = 0
-
-    def close(self) -> None:
-        self.closes += 1
 
 
 @ts.fake
@@ -56,8 +46,9 @@ def test_the_host_runs_once_with_an_unset_stop() -> None:
     original_int = signal.getsignal(signal.SIGINT)
     original_term = signal.getsignal(signal.SIGTERM)
     try:
+        closes: list[None] = []
         host = FakeHostReturning()
-        run_until_signal(host, FakeAppSpy().close)
+        run_until_signal(host, lambda: closes.append(None))
         assert host.runs == 1
         assert host.stop_was_set is False
     finally:
@@ -69,9 +60,9 @@ def test_the_app_closes_when_the_host_returns() -> None:
     original_int = signal.getsignal(signal.SIGINT)
     original_term = signal.getsignal(signal.SIGTERM)
     try:
-        app = FakeAppSpy()
-        run_until_signal(FakeHostReturning(), app.close)
-        assert app.closes == 1
+        closes: list[None] = []
+        run_until_signal(FakeHostReturning(), lambda: closes.append(None))
+        assert len(closes) == 1
     finally:
         signal.signal(signal.SIGINT, original_int)
         signal.signal(signal.SIGTERM, original_term)
@@ -81,11 +72,11 @@ def test_the_app_closes_when_the_host_crashes_and_the_crash_still_surfaces() -> 
     original_int = signal.getsignal(signal.SIGINT)
     original_term = signal.getsignal(signal.SIGTERM)
     try:
-        app = FakeAppSpy()
+        closes: list[None] = []
         with pytest.raises(RuntimeError) as caught:
-            run_until_signal(FakeHostRaising(), app.close)
+            run_until_signal(FakeHostRaising(), lambda: closes.append(None))
         assert "serve loop crashed" in str(caught.value)
-        assert app.closes == 1
+        assert len(closes) == 1
     finally:
         signal.signal(signal.SIGINT, original_int)
         signal.signal(signal.SIGTERM, original_term)
@@ -95,8 +86,9 @@ def test_an_interrupt_signal_sets_the_stop_the_host_waits_on() -> None:
     original_int = signal.getsignal(signal.SIGINT)
     original_term = signal.getsignal(signal.SIGTERM)
     try:
+        closes: list[None] = []
         host = FakeHostCallingTheInstalledHandler(signal.SIGINT)
-        run_until_signal(host, FakeAppSpy().close)
+        run_until_signal(host, lambda: closes.append(None))
         assert host.handler_was_callable is True
         assert host.stop_was_set is True
     finally:
@@ -108,8 +100,9 @@ def test_a_termination_signal_sets_the_stop_the_host_waits_on() -> None:
     original_int = signal.getsignal(signal.SIGINT)
     original_term = signal.getsignal(signal.SIGTERM)
     try:
+        closes: list[None] = []
         host = FakeHostCallingTheInstalledHandler(signal.SIGTERM)
-        run_until_signal(host, FakeAppSpy().close)
+        run_until_signal(host, lambda: closes.append(None))
         assert host.handler_was_callable is True
         assert host.stop_was_set is True
     finally:
