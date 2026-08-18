@@ -10,6 +10,7 @@ import campaign.client.client as client
 import campaign.domain.campaign as campaign
 import campaign.domain.money as money
 import campaign.domain.short_link as short_link
+import campaign.domain.short_links as short_links
 from tesser.errors import conflict, not_found
 
 
@@ -65,13 +66,15 @@ def campaign_spec(record: campaign_repository.CampaignRecord) -> campaign.Campai
     return campaign.CampaignSpec(
         id=record.id,
         budget=money.MoneySpec(amount=record.budget.amount, currency=record.budget.currency),
-        links=tuple(
-            short_link.ShortLinkSpec(
-                slug=link.slug,
-                target_url=link.target_url,
-                active=link.status == "active",
+        links=short_links.ShortLinksSpec(
+            links=tuple(
+                short_link.ShortLinkSpec(
+                    slug=link.slug,
+                    target_url=link.target_url,
+                    active=link.status == "active",
+                )
+                for link in record.links
             )
-            for link in record.links
         ),
     )
 

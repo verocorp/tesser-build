@@ -14,6 +14,7 @@ import campaign.client.client as client
 import campaign.domain.campaign as campaign
 import campaign.domain.money as money
 import campaign.domain.short_link as short_link
+import campaign.domain.short_links as short_links
 import campaign.domain.values as values
 from tesser.errors import DomainError, Kind
 from protocol.http import HttpRequest
@@ -154,10 +155,10 @@ def test_campaign_rejects_a_duplicate_slug() -> None:
             campaign.CampaignSpec(
                 id="0123456789abcdef",
                 budget=money.MoneySpec(amount="1.00", currency="USD"),
-                links=(
+                links=short_links.ShortLinksSpec(links=(
                     short_link.ShortLinkSpec(slug="promo", target_url="https://ok.example/a", active=True),
                     short_link.ShortLinkSpec(slug="promo", target_url="https://ok.example/b", active=True),
-                ),
+                )),
             )
         )
     assert e.value.kind is Kind.CONFLICT
@@ -170,10 +171,10 @@ def test_campaign_wraps_an_invalid_link_with_its_index() -> None:
             campaign.CampaignSpec(
                 id="0123456789abcdef",
                 budget=money.MoneySpec(amount="1.00", currency="USD"),
-                links=(
+                links=short_links.ShortLinksSpec(links=(
                     short_link.ShortLinkSpec(slug="ok", target_url="https://ok.example/a", active=True),
                     short_link.ShortLinkSpec(slug="BAD SLUG", target_url="https://ok.example/b", active=True),
-                ),
+                )),
             )
         )
     assert e.value.code == "invalid_short_link"

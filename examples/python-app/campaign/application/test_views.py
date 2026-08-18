@@ -9,6 +9,7 @@ import campaign.application.views as views
 import campaign.domain.campaign as campaign
 import campaign.domain.money as money
 import campaign.domain.short_link as short_link
+import campaign.domain.short_links as short_links
 from tesser.errors import DomainError, Kind
 
 
@@ -24,7 +25,7 @@ def _campaign_spec(
     return campaign.CampaignSpec(
         id=id,
         budget=money.MoneySpec(amount=amount, currency=currency),
-        links=(short_link.ShortLinkSpec(slug=slug, target_url=target_url, active=active),),
+        links=short_links.ShortLinksSpec(links=(short_link.ShortLinkSpec(slug=slug, target_url=target_url, active=active),)),
     )
 
 

@@ -10,6 +10,7 @@ import campaign.client.client as client
 import campaign.domain.campaign as campaign
 import campaign.domain.money as money
 import campaign.domain.short_link as short_link
+import campaign.domain.short_links as short_links
 import campaign.domain.values as values
 
 
@@ -39,7 +40,7 @@ class MapToCampaignSpec(ts.Mapper):
         self,
         create_campaign_request: client.CreateCampaignRequest,
         issued_campaign_identity: campaign_identity.IssueCampaignIdentityResponse,
-        links: tuple[short_link.ShortLinkSpec, ...],
+        links: short_links.ShortLinksSpec,
     ) -> None:
         self._create_campaign_request = create_campaign_request
         self._issued_campaign_identity = issued_campaign_identity
@@ -64,7 +65,7 @@ class MapToCampaignSpec(ts.Mapper):
         return self._budget_mapper
 
     @property
-    def links(self) -> tuple[short_link.ShortLinkSpec, ...]:
+    def links(self) -> short_links.ShortLinksSpec:
         return self._links
 
 
@@ -182,7 +183,7 @@ class CampaignService(ts.ApplicationService):
         campaign_spec_mapper = MapToCampaignSpec(
             create_campaign_request=req,
             issued_campaign_identity=issued_campaign_identity,
-            links=(),
+            links=short_links.ShortLinksSpec(links=()),
         )
         c = campaign.Campaign(campaign.CampaignSpec(
             id=campaign_spec_mapper.campaign_id,
