@@ -8,7 +8,7 @@ import repo.domain.rules as domain
 
 
 @ts.helper
-def _empty_response(  # tessercheck:ignore TB073
+def _empty_response(
     note: str = "",
 ) -> repo_reader.ReadRepoResponse:
     return repo_reader.ReadRepoResponse(

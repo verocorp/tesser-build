@@ -481,19 +481,38 @@ def test_list_links_is_empty_before_anything_is_created() -> None:
     assert svc.list_links(client.ListLinksRequest()).links == ()
 
 
-def test_the_campaign_view_mapper_exposes_what_it_was_given() -> None:
-    request = campaign_queries.FindCampaignViewRequest(campaign_id="0123456789abcdef")
-    found = campaign_queries.FindCampaignViewResponse(
+@ts.helper
+def _found_campaign_view(
+    campaign_id: str = "0123456789abcdef",
+    budget_amount: str = "10.00",
+    budget_currency: str = "USD",
+    slug: str = "promo",
+    target_url: str = "https://ok.example/x",
+    status: str = "inactive",
+) -> campaign_queries.FindCampaignViewResponse:
+    return campaign_queries.FindCampaignViewResponse(
         outcome=campaign_queries.CampaignViewLookup.FOUND,
         campaigns=(campaign_queries.CampaignViewRow(
-            campaign_id="0123456789abcdef",
-            budget_amount="10.00",
-            budget_currency="USD",
+            campaign_id=campaign_id,
+            budget_amount=budget_amount,
+            budget_currency=budget_currency,
             links=(campaign_queries.LinkViewRow(
-                slug="promo", target_url="https://ok.example/x", status="inactive"
+                slug=slug, target_url=target_url, status=status
             ),),
         ),),
     )
+
+
+@ts.helper
+def _missing_campaign_view() -> campaign_queries.FindCampaignViewResponse:
+    return campaign_queries.FindCampaignViewResponse(
+        outcome=campaign_queries.CampaignViewLookup.MISSING, campaigns=()
+    )
+
+
+def test_the_campaign_view_mapper_exposes_what_it_was_given() -> None:
+    request = campaign_queries.FindCampaignViewRequest(campaign_id="0123456789abcdef")
+    found = _found_campaign_view()
     mapper = service.MapToCampaignView(
         find_campaign_view_request=request, found_campaign_view=found
     )
@@ -506,17 +525,7 @@ def test_the_campaign_view_mapper_copies_the_row_into_the_view() -> None:
         find_campaign_view_request=campaign_queries.FindCampaignViewRequest(
             campaign_id="0123456789abcdef"
         ),
-        found_campaign_view=campaign_queries.FindCampaignViewResponse(
-            outcome=campaign_queries.CampaignViewLookup.FOUND,
-            campaigns=(campaign_queries.CampaignViewRow(
-                campaign_id="0123456789abcdef",
-                budget_amount="10.00",
-                budget_currency="USD",
-                links=(campaign_queries.LinkViewRow(
-                    slug="promo", target_url="https://ok.example/x", status="inactive"
-                ),),
-            ),),
-        ),
+        found_campaign_view=_found_campaign_view(),
     )
     assert mapper.campaign_id == "0123456789abcdef"
     assert mapper.budget_amount == "10.00"
@@ -531,9 +540,7 @@ def test_the_campaign_view_mapper_refuses_a_missing_campaign() -> None:
             find_campaign_view_request=campaign_queries.FindCampaignViewRequest(
                 campaign_id="0123456789abcdef"
             ),
-            found_campaign_view=campaign_queries.FindCampaignViewResponse(
-                outcome=campaign_queries.CampaignViewLookup.MISSING, campaigns=()
-            ),
+            found_campaign_view=_missing_campaign_view(),
         )
     assert caught.value.code == "campaign_missing"
 
