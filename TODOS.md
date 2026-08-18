@@ -10,17 +10,27 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   threshold stayed at 10: `create_campaign` is seven statements, so there is
   headroom, and tightening it is a separate call with its own evidence. The
   `# tessercheck:ignore TB082` on `create_campaign` is deleted.
-- [ ] **Nothing forces the mapper shape.** `ts.Mapper` ships with a kind row
-  and a placement rule (application only) and nothing else. Undecided and
-  unenforced: whether a mapper may construct its target DTO (today it does not,
-  except for collection *elements* — `MapToSaveCampaignRequest` builds every
-  `LinkRecord`, `MapToCampaignView` every `LinkView`, because a per-element
-  mapper would hand the service a tuple of mappers to loop over); whether a
-  mapper may originate data (the ruling is no — that is why `links=()` is
-  passed in at the call site); whether accessors must be one-per-target-field;
-  and how a nested mapper is named (`budget_mapper`, so the reader knows to
-  keep dotting). No skill doc yet — `skills/tesser-build/` has no mapper page,
-  and `rationale/coverage.md`'s skill-materializations matrix has no row.
+- [x] **Nothing forces the mapper shape — MOSTLY RESOLVED v0.0.63.0.** Five
+  TB080 clauses now hold it: MapTo naming, whole-object parameters, no
+  originated literals, properties only, and `_mapper` on a nested accessor. Two
+  stated norms are still unenforced and both need a refactor wave first:
+  (1) **a mapper never constructs its target DTO** — true today except for
+  collection *elements* (`MapToSaveCampaignRequest` builds every `LinkRecord`),
+  and no rule distinguishes the element case from the top-level one;
+  (2) **the DTO is assembled from accessors on a single mapper** — decidable in
+  principle (every attribute-access argument shares one base) but the nested
+  `money.MoneySpec(...)` argument in `create_campaign` is a legitimate
+  counter-example, so the clause needs shaping before it can be written.
+  Still no skill doc and no `rationale/coverage.md` row.
+- [ ] **A call is still allowed in an argument position — 61 sites.** The stated
+  norm is that computation is named in a local and only bare names, attribute
+  chains, and declared-kind constructions appear as arguments. Measured across
+  every governed tree: 61 distinct sites in `ApplicationService` methods pass a
+  call as an argument, in errorspy, llmport, ports, python-app, serdepy, layout,
+  and tessercheck-py. Its converse (a straight-accessor local) shipped in
+  v0.0.63.0 because it had zero sites. This one needs the sweep before the
+  clause, and it overlaps the `views.py` module functions that are still
+  unconverted — do them together.
 - [ ] **Inbound is not symmetric with outbound, and the rules should say so.**
   Outbound has exactly one source (the aggregate). Inbound has N (the request
   plus whatever the service obtained — identity now, a clock or a policy

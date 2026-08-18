@@ -5,6 +5,35 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.63.0] - 2026-08-18
+
+The mapper stops being a convention and becomes a rule. Five TB080 clauses give
+`ts.Mapper` a shape the analyzer can hold, and one TB082 clause locks the naming
+norm the mapper wave established. `examples/python-app`'s five mappers pass every
+one of them unchanged — the shape was dogfooded before it was enforced.
+
+### Added
+- **`a mapper is named for what it maps to`.** A mapper class starts with
+  `MapTo`. Its parameters already say what it maps from, so the name carries only
+  the target — `MapToCampaignSpec`, not `MapCreateCampaignRequestAndIssuedIdentityToCampaignSpec`.
+- **`a mapper takes whole objects, never a field already pulled off one`.** No
+  `__init__` parameter is a primitive. A mapper is handed the request, the
+  aggregate, the issued response — not `budget_amount: str`.
+- **`a mapper originates nothing — every value it exposes comes from what it was
+  given`.** No literal in the class body (`None` and the `...` of a tuple
+  annotation excepted). This is the rule that sent `links=()` back to the call
+  site: a mapper that invents a value hides it.
+- **`a mapper holds only __init__ and the accessors it exposes`.** Every other
+  member is a `@property`. A mapper with a method is doing work the caller cannot
+  see.
+- **`a nested mapper accessor ends in _mapper, so the reader knows to keep
+  dotting`.** A property whose return type is another mapper says so in its name
+  — `budget_mapper.amount`, never `budget.amount`, which would read as a value.
+- **`a service method names what it computes, and reads an accessor where it is
+  used`** (TB082). An assignment whose right-hand side is a bare name or
+  attribute chain with no call is a finding. Zero sites in the repo today; the
+  clause keeps it that way.
+
 ## [0.0.62.0] - 2026-08-17
 
 TB082's body-length rule stops counting formatting. A service method body is now
