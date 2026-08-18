@@ -10,17 +10,23 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   threshold stayed at 10: `create_campaign` is seven statements, so there is
   headroom, and tightening it is a separate call with its own evidence. The
   `# tessercheck:ignore TB082` on `create_campaign` is deleted.
-- [ ] **Nothing forces the mapper shape.** `ts.Mapper` ships with a kind row
-  and a placement rule (application only) and nothing else. Undecided and
-  unenforced: whether a mapper may construct its target DTO (today it does not,
-  except for collection *elements* — `MapToSaveCampaignRequest` builds every
-  `LinkRecord`, `MapToCampaignView` every `LinkView`, because a per-element
-  mapper would hand the service a tuple of mappers to loop over); whether a
-  mapper may originate data (the ruling is no — that is why `links=()` is
-  passed in at the call site); whether accessors must be one-per-target-field;
-  and how a nested mapper is named (`budget_mapper`, so the reader knows to
-  keep dotting). No skill doc yet — `skills/tesser-build/` has no mapper page,
-  and `rationale/coverage.md`'s skill-materializations matrix has no row.
+- [x] **Nothing forces the mapper shape — RESOLVED v0.0.63.0.** Six TB080
+  clauses hold it: MapTo naming, whole-object parameters, no originated
+  literals, properties only, `_mapper` on a nested accessor, and never
+  constructing what it maps to. Two TB082 clauses hold the service side: a call
+  in an argument position, and a declared kind assembled from more than one
+  reader. Still no skill doc and no `rationale/coverage.md` row.
+- [ ] **27 ignores to burn — the argument-position debt.** v0.0.63.0 shipped the
+  clauses with site-level ignores instead of a refactor, by ruling (Chris,
+  2026-08-18). The set: python-app 10, llmport 9, errorspy 4, ports 1, layout 1,
+  tessercheck-py 2 — every one a service method computing inside an argument —
+  plus 2 mapper sites (`MapToSaveCampaignRequest`, `MapToCampaignView`) that
+  construct their collection *elements*. Burning an ignore is the refactor:
+  convert the method the way `create_campaign` was converted, which is why it
+  carries none. The element-construction pair is different — it needs the clause
+  to distinguish an element from the top-level target before the ignore can go,
+  and a per-element mapper would hand the service a tuple of mappers to loop
+  over, which is worse. TB090 keeps the set from rotting.
 - [ ] **Inbound is not symmetric with outbound, and the rules should say so.**
   Outbound has exactly one source (the aggregate). Inbound has N (the request
   plus whatever the service obtained — identity now, a clock or a policy

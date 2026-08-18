@@ -767,6 +767,102 @@ def test_every_declared_block_has_a_name_and_a_home() -> None:
     assert not (checks.APP_KINDS & set(checks.KIND_ROLE))
 
 
+def test_mapper_shape_rules_are_flagged() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/application/sloppy.py",
+                "shop.application.sloppy",
+                "import tesser.application as ts\n"
+                "from shop.client.client import AskRequest\n"
+                "class Sloppy(ts.Mapper):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self._text = text\n"
+                "        self._tag = 'fixed'\n"
+                "    def compute(self) -> str:\n"
+                "        return self._text\n",
+                False,
+            ),
+            (
+                "shop/application/nested.py",
+                "shop.application.nested",
+                "import tesser.application as ts\n"
+                "from shop.client.client import AskRequest\n"
+                "class MapToOther(ts.Mapper):\n"
+                "    def __init__(self, request: AskRequest) -> None:\n"
+                "        self._request = request\n"
+                "class MapToThing(ts.Mapper):\n"
+                "    def __init__(self, request: AskRequest) -> None:\n"
+                "        self._other = MapToOther(request)\n"
+                "    @property\n"
+                "    def other(self) -> MapToOther:\n"
+                "        return self._other\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "shop.application.sloppy.Sloppy" in f
+        and "does not start with MapTo" in f
+        and "a mapper is named for what it maps to, because its parameters "
+        "already say what it maps from" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.sloppy.Sloppy parameter 'text' is a primitive" in f
+        and "a mapper takes whole objects, never a field already pulled off one" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.sloppy.Sloppy.compute is a method" in f
+        and "a mapper holds only __init__ and the accessors it exposes" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.sloppy.Sloppy carries the literal 'fixed'" in f
+        and "a mapper originates nothing — every value it exposes comes from "
+        "what it was given" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.nested.MapToThing.other returns a mapper" in f
+        and "a nested mapper accessor ends in _mapper, so the reader knows to "
+        "keep dotting" in f
+        for f in findings
+    )
+
+
+def test_a_conformant_mapper_passes_every_shape_rule() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/application/good.py",
+                "shop.application.good",
+                "import tesser.application as ts\n"
+                "from shop.client.client import AskRequest\n"
+                "class MapToInner(ts.Mapper):\n"
+                "    def __init__(self, request: AskRequest) -> None:\n"
+                "        self._request = request\n"
+                "        self._text = request.text\n"
+                "    @property\n"
+                "    def text(self) -> str:\n"
+                "        return self._text\n"
+                "class MapToOuter(ts.Mapper):\n"
+                "    def __init__(self, request: AskRequest) -> None:\n"
+                "        self._request = request\n"
+                "        self._inner_mapper = MapToInner(request)\n"
+                "    @property\n"
+                "    def inner_mapper(self) -> MapToInner:\n"
+                "        return self._inner_mapper\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any("a mapper" in f for f in findings), findings
+
+
 def test_a_mapper_lives_only_in_the_application_role() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
@@ -912,6 +1008,121 @@ def test_aggregate_constructor_violations_are_flagged() -> None:
         and "defines no __init__; an aggregate constructs from exactly one ts.Spec" in f
         for f in findings
     )
+
+
+def test_computing_in_an_argument_and_assembling_from_two_readers_are_flagged() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/client/client.py",
+                "shop.client.client",
+                "import tesser.context as ts\n"
+                "class AskRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class AskResponse(ts.Response):\n"
+                "    def __init__(self, text: str, tag: str) -> None:\n"
+                "        self.text = text\n"
+                "        self.tag = tag\n",
+                False,
+            ),
+            (
+                "shop/application/service.py",
+                "shop.application.service",
+                "import tesser.application as ts\n"
+                "import shop.client.client as client\n"
+                "class NestingService(ts.ApplicationService):\n"
+                "    def ask(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        return client.AskResponse(text=str(request.text), tag='t')\n"
+                "    def spread(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        first = self._one(request)\n"
+                "        second = self._two(request)\n"
+                "        return client.AskResponse(text=first.text, tag=second.tag)\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "NestingService.ask computes in an argument" in f
+        and "a service method names what it computes in a local, and passes a name, "
+        "a reader, or a declared kind" in f
+        for f in findings
+    )
+    assert any(
+        "NestingService.spread assembles from 2 readers" in f
+        and "a declared kind is assembled from the accessors of one mapper" in f
+        for f in findings
+    )
+
+
+def test_a_mapper_that_constructs_its_target_is_flagged() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/client/client.py",
+                "shop.client.client",
+                "import tesser.context as ts\n"
+                "class AskRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class AskResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n",
+                False,
+            ),
+            (
+                "shop/application/eager.py",
+                "shop.application.eager",
+                "import tesser.application as ts\n"
+                "import shop.client.client as client\n"
+                "class MapToAskResponse(ts.Mapper):\n"
+                "    def __init__(self, request: client.AskRequest) -> None:\n"
+                "        self._request = request\n"
+                "        self._response = client.AskResponse(text=request.text)\n"
+                "    @property\n"
+                "    def response(self) -> client.AskResponse:\n"
+                "        return self._response\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "shop.application.eager.MapToAskResponse constructs what it maps to" in f
+        and "a mapper exposes the parts and the caller assembles them, so every field "
+        "is named where it is read" in f
+        for f in findings
+    )
+
+
+def test_a_straight_accessor_local_is_flagged() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/naming.py",
+                "shop.naming",
+                "import tesser.application as ts\n"
+                "from shop.client.client import AskRequest, AskResponse\n"
+                "class NamingService(ts.ApplicationService):\n"
+                "    def echo(self, request: AskRequest) -> AskResponse:\n"
+                "        text = request.text\n"
+                "        return AskResponse(text=text)\n"
+                "    def computes(self, request: AskRequest) -> AskResponse:\n"
+                "        text = str(request.text)\n"
+                "        return AskResponse(text=text)\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "NamingService.echo names a straight accessor" in f
+        and "a service method names what it computes, and reads an accessor "
+        "where it is used" in f
+        for f in findings
+    )
+    assert not any("NamingService.computes names a straight accessor" in f for f in findings)
 
 
 def test_a_body_spread_over_many_lines_is_counted_by_its_statements() -> None:

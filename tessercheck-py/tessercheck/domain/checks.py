@@ -353,6 +353,10 @@ TEST_TIER_SHELL: Final[dict[str, frozenset[str]]] = {
 
 PRIMITIVES: Final[frozenset[str]] = frozenset({"str", "int", "float", "bool", "bytes"})
 
+MAPPER_PREFIX: Final[str] = "MapTo"
+
+MAPPER_SUFFIX: Final[str] = "_mapper"
+
 PORT_DTO_PRIMITIVES: Final[frozenset[str]] = PRIMITIVES - frozenset({"bool"})
 
 ENUM_BASES: Final[frozenset[str]] = frozenset({"Enum"})
@@ -1061,6 +1065,8 @@ class Codebase(ts.AggregateRoot):
                         found.extend(self._port_violations(module, cls, blocks))
                 elif block == "service":
                     found.extend(self._service_violations(module, cls, blocks))
+                elif block == "mapper":
+                    found.extend(self._mapper_violations(module, cls, blocks))
         found.extend(self._pairing_violations(contexts, blocks))
         return tuple(found)
 
@@ -4327,7 +4333,7 @@ class Codebase(ts.AggregateRoot):
                     module, where, item.lineno, item, "request", "response", "a service method", "TB081", blocks
                 )
             )
-            found.extend(self._body_violations(module, where, item))
+            found.extend(self._body_violations(module, where, item, blocks))
         return tuple(found)
 
     def _dependency_violations(
@@ -4567,6 +4573,111 @@ class Codebase(ts.AggregateRoot):
                     )
         return tuple(found)
 
+    def _mapper_violations(
+        self, module: Module, cls: ast.ClassDef, blocks: dict[tuple[str, str], str]
+    ) -> tuple[Violation, ...]:
+        where = f"{module.name()}.{cls.name}"
+        found: list[Violation] = []
+        if not cls.name.startswith(MAPPER_PREFIX):
+            found.append(
+                Violation(
+                    module.path(),
+                    cls.lineno,
+                    "TB080",
+                    f"{where} does not start with MapTo; a mapper is named for "
+                    "what it maps to, because its parameters already say what it maps from",
+                )
+            )
+        init = self._init_of(cls)
+        if init is not None:
+            for arg in list(init.args.args)[1:] + list(init.args.kwonlyargs):
+                if arg.annotation is None:
+                    continue
+                if self._annotation_head(arg.annotation) in PRIMITIVES:
+                    found.append(
+                        Violation(
+                            module.path(),
+                            arg.lineno,
+                            "TB080",
+                            f"{where} parameter {arg.arg!r} is a primitive; a mapper takes "
+                            "whole objects, never a field already pulled off one",
+                        )
+                    )
+        for item in cls.body:
+            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if item.name == "__init__":
+                continue
+            if not self._is_property(item):
+                found.append(
+                    Violation(
+                        module.path(),
+                        item.lineno,
+                        "TB080",
+                        f"{where}.{item.name} is a method; a mapper holds only __init__ "
+                        "and the accessors it exposes",
+                    )
+                )
+                continue
+            if self._annotation_block(
+                module, item.returns, blocks
+            ) == "mapper" and not item.name.endswith(MAPPER_SUFFIX):
+                found.append(
+                    Violation(
+                        module.path(),
+                        item.lineno,
+                        "TB080",
+                        f"{where}.{item.name} returns a mapper; a nested mapper accessor "
+                        "ends in _mapper, so the reader knows to keep dotting",
+                    )
+                )
+        for node in ast.walk(cls):
+            if isinstance(node, ast.Call):
+                built = self._annotation_block(module, node.func, blocks)
+                if built in DTO_BLOCKS or built == "spec":
+                    found.append(
+                        Violation(
+                            module.path(),
+                            node.lineno,
+                            "TB080",
+                            f"{where} constructs what it maps to; a mapper exposes the parts "
+                            "and the caller assembles them, so every field is named where it is read",
+                        )
+                    )
+            if not isinstance(node, ast.Constant):
+                continue
+            if node.value is None or node.value is Ellipsis:
+                continue
+            found.append(
+                Violation(
+                    module.path(),
+                    node.lineno,
+                    "TB080",
+                    f"{where} carries the literal {node.value!r}; a mapper originates "
+                    "nothing — every value it exposes comes from what it was given",
+                )
+            )
+        return tuple(found)
+
+    @staticmethod
+    def _reader_base(node: ast.expr) -> str | None:
+        parts: list[str] = []
+        current: ast.expr = node
+        while isinstance(current, ast.Attribute):
+            parts.append(current.attr)
+            current = current.value
+        if not isinstance(current, ast.Name):
+            return None
+        parts.append(current.id)
+        return ".".join(reversed(parts[1:]))
+
+    @staticmethod
+    def _is_property(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+        for decorator in fn.decorator_list:
+            if isinstance(decorator, ast.Name) and decorator.id == "property":
+                return True
+        return False
+
     def _component_violations(self, module: Module, cls: ast.ClassDef) -> tuple[Violation, ...]:
         for item in cls.body:
             if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "close":
@@ -4771,7 +4882,11 @@ class Codebase(ts.AggregateRoot):
         return tuple(found)
 
     def _body_violations(
-        self, module: Module, where: str, fn: ast.FunctionDef | ast.AsyncFunctionDef
+        self,
+        module: Module,
+        where: str,
+        fn: ast.FunctionDef | ast.AsyncFunctionDef,
+        blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         span = sum(1 for node in ast.walk(fn) if isinstance(node, ast.stmt)) - 1
@@ -4785,6 +4900,58 @@ class Codebase(ts.AggregateRoot):
                     "a service method body is at most 10 statements",
                 )
             )
+        for stmt in fn.body:
+            if not isinstance(stmt, ast.Assign):
+                continue
+            if not isinstance(stmt.value, (ast.Name, ast.Attribute)):
+                continue
+            if any(isinstance(node, ast.Call) for node in ast.walk(stmt.value)):
+                continue
+            found.append(
+                Violation(
+                    module.path(),
+                    stmt.lineno,
+                    "TB082",
+                    f"{where} names a straight accessor; a service method names what it "
+                    "computes, and reads an accessor where it is used",
+                )
+            )
+        for node in ast.walk(fn):
+            if not isinstance(node, ast.Call):
+                continue
+            for value in list(node.args) + [kw.value for kw in node.keywords]:
+                if not isinstance(value, ast.Call):
+                    continue
+                if self._annotation_block(module, value.func, blocks) is not None:
+                    continue
+                found.append(
+                    Violation(
+                        module.path(),
+                        value.lineno,
+                        "TB082",
+                        f"{where} computes in an argument; a service method names what it "
+                        "computes in a local, and passes a name, a reader, or a declared kind",
+                    )
+                )
+            built = self._annotation_block(module, node.func, blocks)
+            if built not in DTO_BLOCKS and built != "spec":
+                continue
+            bases = {
+                self._reader_base(value)
+                for value in list(node.args) + [kw.value for kw in node.keywords]
+                if isinstance(value, ast.Attribute)
+            }
+            bases.discard(None)
+            if len(bases) > 1:
+                found.append(
+                    Violation(
+                        module.path(),
+                        node.lineno,
+                        "TB082",
+                        f"{where} assembles from {len(bases)} readers; a declared kind is "
+                        "assembled from the accessors of one mapper",
+                    )
+                )
         for node in ast.walk(fn):
             if isinstance(node, ast.If):
                 if not isinstance(node.test, ast.Call):
