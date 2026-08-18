@@ -5,6 +5,35 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.65.0] - 2026-08-18
+
+`create_campaign` reads its response back through a query port instead of
+deriving it from the aggregate it just built. The write side and the read side
+are now separate ports, satisfied by one repository.
+
+### Added
+- **`campaign_queries.CampaignQueries` — the read port.** `find_view` answers
+  with view-shaped rows (`CampaignViewRow`, `LinkViewRow`) and a measured
+  `CampaignViewLookup` outcome, the same shape rules every other port follows.
+  `InMemoryCampaignRepository` satisfies it alongside `CampaignRepository`: one
+  repository, two ports.
+
+### Changed
+- **`MapToCampaignView` maps a query answer, not an aggregate.** It takes the
+  request and the response, reads the outcome with `match` + `assert_never`, and
+  raises `not_found` on `MISSING`. Both sides are flat records now, so the mapper
+  contains no `str()` call and never touches the domain — the `match` that used
+  to live in `views.required_campaign`, a module function, has a home.
+- **`CampaignService` takes a fourth dependency**, the query port. The component
+  passes the repository for both.
+
+### Fixed
+- **Two false positives in the originates-nothing clause.** A literal used as a
+  subscript index (`campaigns[0]`) and a literal inside a `raise` (an error code
+  and its message) are not values a mapper exposes. Both are exempt now, pinned
+  by `test_an_index_and_an_error_message_are_not_originated_data`. The clause got
+  sharper from contact rather than collecting ignores.
+
 ## [0.0.64.0] - 2026-08-18
 
 A campaign's links become a domain object. `ShortLinks` owns the rules the
