@@ -4,12 +4,12 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 
 ## Mapper wave follow-ups (2026-08-17, v0.0.61.0)
 
-- [ ] **`@ts.helper` builds a spec, and it should build any DTO-like object.**
-  TB073 rejected a helper returning a port DTO ("does not return a ts.Spec"), so
-  three mapper tests in `campaign/application/test_service.py` inline a whole
-  `FindCampaignViewResponse` literal instead. Ruling (Chris, 2026-08-18): a
-  helper should build any DTO-like object, and we want specific helpers per
-  shape. Widen the clause, then put those fixtures back behind helpers.
+- [x] **`@ts.helper` builds a spec, and it should build any DTO-like object —
+  RESOLVED v0.0.66.0.** TB073 now reads "a helper builds a spec or a DTO",
+  checked against the new `DATA_BLOCKS`. A helper may not return a Protocol
+  (that is `@ts.fake`) nor a domain object (ruling, Chris 2026-08-18: build the
+  aggregate from a spec so the construction path runs). Two ignores in `layout/`
+  retired on their own, and the inlined fixtures went back behind helpers.
 - [ ] **Only `create_campaign` reads through the query port.** `get_campaign`,
   `resolve`, and `list_links` still load records, rebuild an aggregate through
   `views.campaign_spec` / `required_campaign`, and project it — the over-fetch

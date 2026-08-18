@@ -246,7 +246,7 @@ ROLE_TESSER_PACKAGE: Final[dict[str, str]] = {
     "component": "tesser.component",
 }
 
-DTO_BLOCKS: Final[frozenset[str]] = frozenset(
+DECLARATION_BLOCKS: Final[frozenset[str]] = frozenset(
     {
         "request",
         "response",
@@ -255,6 +255,22 @@ DTO_BLOCKS: Final[frozenset[str]] = frozenset(
         "port_request",
         "port_response",
         "protocol_port",
+        "protocol_record",
+        "protocol_rejection",
+        "protocol_request",
+        "protocol_response",
+    }
+)
+
+DATA_BLOCKS: Final[frozenset[str]] = frozenset(
+    {
+        "spec",
+        "app_spec",
+        "component_spec",
+        "request",
+        "response",
+        "port_request",
+        "port_response",
         "protocol_record",
         "protocol_rejection",
         "protocol_request",
@@ -1077,7 +1093,7 @@ class Codebase(ts.AggregateRoot):
                 continue
             if not isinstance(stmt, ast.ClassDef):
                 return False
-            if blocks.get((module.name(), stmt.name)) not in DTO_BLOCKS:
+            if blocks.get((module.name(), stmt.name)) not in DECLARATION_BLOCKS:
                 return False
             for item in stmt.body:
                 if not isinstance(item, ast.FunctionDef):
@@ -4290,13 +4306,13 @@ class Codebase(ts.AggregateRoot):
                     "a helper takes only defaulted primitives",
                 )
             )
-        if self._annotation_block(module, fn.returns, blocks) != "spec":
+        if self._annotation_block(module, fn.returns, blocks) not in DATA_BLOCKS:
             found.append(
                 Violation(
                     module.path(),
                     line,
                     "TB073",
-                    f"{where} does not return a ts.Spec; a helper builds a spec",
+                    f"{where} returns no construction data; a helper builds a spec or a DTO",
                 )
             )
         for node in ast.walk(fn):
@@ -4640,7 +4656,7 @@ class Codebase(ts.AggregateRoot):
         for node in ast.walk(cls):
             if isinstance(node, ast.Call):
                 built = self._annotation_block(module, node.func, blocks)
-                if built in DTO_BLOCKS or built == "spec":
+                if built in DATA_BLOCKS:
                     found.append(
                         Violation(
                             module.path(),
@@ -4942,7 +4958,7 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
             built = self._annotation_block(module, node.func, blocks)
-            if built not in DTO_BLOCKS and built != "spec":
+            if built not in DATA_BLOCKS:
                 continue
             bases = {
                 self._reader_base(value)

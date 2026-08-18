@@ -20,7 +20,7 @@ class FakeRepoReader(repo_reader.RepoReader):
 
 
 @ts.helper
-def _response(  # tessercheck:ignore TB073
+def _response(
     kind: str = "app",
 ) -> repo_reader.ReadRepoResponse:
     return repo_reader.ReadRepoResponse(

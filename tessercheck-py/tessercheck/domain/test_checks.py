@@ -4203,8 +4203,67 @@ def test_helper_rules_are_flagged() -> None:
         "bad_builder" in f and "parameter 'count' has no default; a helper takes only defaulted primitives" in f
         for f in findings
     )
-    assert any("bad_builder" in f and "does not return a ts.Spec; a helper builds a spec" in f for f in findings)
+    assert any(
+        "bad_builder" in f
+        and "returns no construction data; a helper builds a spec or a DTO" in f
+        for f in findings
+    )
     assert any("bad_builder" in f and "has control flow" in f and "a helper only constructs" in f for f in findings)
+
+
+def test_a_helper_builds_any_construction_data_but_never_a_protocol_or_a_domain_object() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/application/ports/thing_reader.py",
+                "shop.application.ports.thing_reader",
+                "from typing import Protocol\n"
+                "import tesser.application as ts\n"
+                "class ReadThingRequest(ts.Request):\n"
+                "    def __init__(self, thing_id: str) -> None:\n"
+                "        self.thing_id = thing_id\n"
+                "class ReadThingResponse(ts.Response):\n"
+                "    def __init__(self, name: str) -> None:\n"
+                "        self.name = name\n"
+                "class ThingReader(ts.Port, Protocol):\n"
+                "    def read(self, request: ReadThingRequest) -> ReadThingResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/application/test_readers.py",
+                "shop.application.test_readers",
+                "import tesser.testing as th\n"
+                "import shop.application.ports.thing_reader as thing_reader\n"
+                "import shop.domain.thing as thing\n"
+                "@th.helper\n"
+                "def a_response(name: str = 'x') -> thing_reader.ReadThingResponse:\n"
+                "    return thing_reader.ReadThingResponse(name=name)\n"
+                "@th.helper\n"
+                "def a_request(thing_id: str = 'x') -> thing_reader.ReadThingRequest:\n"
+                "    return thing_reader.ReadThingRequest(thing_id=thing_id)\n"
+                "@th.helper\n"
+                "def a_port(name: str = 'x') -> thing_reader.ThingReader:\n"
+                "    return thing_reader.ThingReader()\n"
+                "@th.helper\n"
+                "def a_domain_object(name: str = 'x') -> thing.Thing:\n"
+                "    return thing.Thing(thing.ThingSpec(name=name))\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any(
+        "a_response" in f and "a helper builds a spec or a DTO" in f for f in findings
+    ), findings
+    assert not any(
+        "a_request" in f and "a helper builds a spec or a DTO" in f for f in findings
+    ), findings
+    assert any(
+        "a_port" in f and "a helper builds a spec or a DTO" in f for f in findings
+    )
+    assert any(
+        "a_domain_object" in f and "a helper builds a spec or a DTO" in f for f in findings
+    )
 
 
 def test_a_fake_may_implement_a_protocol_port() -> None:

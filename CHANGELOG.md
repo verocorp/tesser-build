@@ -5,6 +5,40 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.66.0] - 2026-08-18
+
+A helper builds any construction data, not just a spec — and the constant that
+made the old rule hard to widen is split into the two concepts it was serving.
+
+### Changed
+- **`DTO_BLOCKS` splits into `DECLARATION_BLOCKS` and `DATA_BLOCKS`.** Three call
+  sites asked it two different questions: *is this module nothing but
+  declarations?* (which wants `client`, `port`, and `protocol_port` in the set)
+  and *is this call building a data carrier?* (which must not, because a Protocol
+  cannot be constructed). The tell was already in the code — both construction
+  sites wrote `built in DTO_BLOCKS or built == "spec"`, patching a set that was
+  missing a member its callers needed. `DATA_BLOCKS` carries the spec family, and
+  the `or` is gone from both.
+- **`a helper builds a spec` becomes `a helper builds a spec or a DTO`** (TB073),
+  checked against `DATA_BLOCKS`. A helper may return a request, a response, a
+  port DTO, a protocol record, or any spec. It still may not return a Protocol —
+  that is what `@ts.fake` is for — and it may not return a domain object, by
+  ruling: a test that wants an aggregate builds it from a spec so the
+  construction path runs.
+- **The mapper's constructs-what-it-maps-to clause narrows with it.** Under the
+  old set it would have flagged a mapper constructing a `Client` or a port. No
+  mapper does, so nothing was wrong, but the rule said something it did not mean.
+
+### Removed
+- **Two `# tessercheck:ignore TB073` comments in `layout/`.** `_empty_response`
+  and `_response` build a `ReadRepoResponse` and were suppressing the
+  spec-only rule. The widening made both legal, TB090 flagged the now-empty
+  ignores, and they are deleted — the ignore set shrinking on its own is the
+  gate working.
+- **Three inlined `FindCampaignViewResponse` literals** in
+  `campaign/application/test_service.py`, back behind
+  `_found_campaign_view()` and `_missing_campaign_view()` where they belong.
+
 ## [0.0.65.0] - 2026-08-18
 
 `create_campaign` reads its response back through a query port instead of
