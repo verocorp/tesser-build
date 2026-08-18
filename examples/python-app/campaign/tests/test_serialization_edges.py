@@ -13,6 +13,7 @@ import campaign.application.views as views
 import campaign.domain.campaign as campaign
 import campaign.domain.money as money
 import campaign.domain.short_link as short_link
+import campaign.domain.short_links as short_links
 from tesser.errors import DomainError
 from protocol.http import HttpRequest
 
@@ -41,7 +42,7 @@ def campaign_spec(slug: str = "promo") -> campaign.CampaignSpec:
     return campaign.CampaignSpec(
         id="0123456789abcdef",
         budget=money.MoneySpec(amount="100.00", currency="USD"),
-        links=(short_link.ShortLinkSpec(slug=slug, target_url="https://ok.example/x", active=True),),
+        links=short_links.ShortLinksSpec(links=(short_link.ShortLinkSpec(slug=slug, target_url="https://ok.example/x", active=True),)),
     )
 
 

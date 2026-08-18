@@ -11,6 +11,7 @@ import campaign.client.client as client
 import campaign.domain.campaign as campaign
 import campaign.domain.money as money
 import campaign.domain.short_link as short_link
+import campaign.domain.short_links as short_links
 from tesser.errors import DomainError, InfraError, Kind
 
 
@@ -445,7 +446,7 @@ def test_the_campaign_view_mapper_exposes_the_aggregate_it_was_given() -> None:
     aggregate = campaign.Campaign(campaign.CampaignSpec(
         id="0123456789abcdef",
         budget=money.MoneySpec(amount="10.00", currency="USD"),
-        links=(),
+        links=short_links.ShortLinksSpec(links=()),
     ))
     mapper = service.MapToCampaignView(campaign_aggregate=aggregate)
     assert mapper.campaign_aggregate is aggregate
@@ -455,9 +456,9 @@ def test_the_campaign_view_mapper_stringifies_the_aggregate_into_the_view() -> N
     aggregate = campaign.Campaign(campaign.CampaignSpec(
         id="0123456789abcdef",
         budget=money.MoneySpec(amount="10.00", currency="USD"),
-        links=(short_link.ShortLinkSpec(
+        links=short_links.ShortLinksSpec(links=(short_link.ShortLinkSpec(
             slug="promo", target_url="https://ok.example/x", active=False
-        ),),
+        ),)),
     ))
     mapper = service.MapToCampaignView(campaign_aggregate=aggregate)
     assert mapper.campaign_id == "0123456789abcdef"
@@ -471,7 +472,7 @@ def test_the_save_request_mapper_exposes_the_aggregate_it_was_given() -> None:
     aggregate = campaign.Campaign(campaign.CampaignSpec(
         id="0123456789abcdef",
         budget=money.MoneySpec(amount="10.00", currency="USD"),
-        links=(),
+        links=short_links.ShortLinksSpec(links=()),
     ))
     mapper = service.MapToSaveCampaignRequest(campaign_aggregate=aggregate)
     assert mapper.campaign_aggregate is aggregate
@@ -481,10 +482,10 @@ def test_the_save_request_mapper_stringifies_the_aggregate_into_records() -> Non
     aggregate = campaign.Campaign(campaign.CampaignSpec(
         id="0123456789abcdef",
         budget=money.MoneySpec(amount="10.00", currency="USD"),
-        links=(
+        links=short_links.ShortLinksSpec(links=(
             short_link.ShortLinkSpec(slug="promo", target_url="https://ok.example/x", active=True),
             short_link.ShortLinkSpec(slug="old", target_url="https://ok.example/y", active=False),
-        ),
+        )),
     ))
     mapper = service.MapToSaveCampaignRequest(campaign_aggregate=aggregate)
     assert mapper.record_id == "0123456789abcdef"
@@ -498,7 +499,7 @@ def test_the_save_request_mapper_maps_no_links_to_no_records() -> None:
     aggregate = campaign.Campaign(campaign.CampaignSpec(
         id="0123456789abcdef",
         budget=money.MoneySpec(amount="10.00", currency="USD"),
-        links=(),
+        links=short_links.ShortLinksSpec(links=()),
     ))
     mapper = service.MapToSaveCampaignRequest(campaign_aggregate=aggregate)
     assert mapper.link_records == ()
@@ -507,7 +508,9 @@ def test_the_save_request_mapper_maps_no_links_to_no_records() -> None:
 def test_the_campaign_spec_mapper_exposes_what_it_was_given() -> None:
     request = client.CreateCampaignRequest(budget_amount="10.00", budget_currency="USD")
     issued = campaign_identity.IssueCampaignIdentityResponse(campaign_id="0123456789abcdef")
-    given = (short_link.ShortLinkSpec(slug="promo", target_url="https://ok.example/x", active=True),)
+    given = short_links.ShortLinksSpec(
+        links=(short_link.ShortLinkSpec(slug="promo", target_url="https://ok.example/x", active=True),)
+    )
     mapper = service.MapToCampaignSpec(
         create_campaign_request=request,
         issued_campaign_identity=issued,
@@ -526,7 +529,7 @@ def test_the_campaign_spec_mapper_takes_the_id_from_the_issued_identity() -> Non
         issued_campaign_identity=campaign_identity.IssueCampaignIdentityResponse(
             campaign_id="0123456789abcdef"
         ),
-        links=(),
+        links=short_links.ShortLinksSpec(links=()),
     )
     assert mapper.campaign_id == "0123456789abcdef"
 
@@ -538,7 +541,7 @@ def test_the_nested_budget_mapper_takes_the_money_parts_from_the_request() -> No
         issued_campaign_identity=campaign_identity.IssueCampaignIdentityResponse(
             campaign_id="0123456789abcdef"
         ),
-        links=(),
+        links=short_links.ShortLinksSpec(links=()),
     )
     assert mapper.budget_mapper.create_campaign_request is request
     assert mapper.budget_mapper.amount == "10.00"
