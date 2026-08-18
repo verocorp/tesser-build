@@ -4,6 +4,7 @@ import pytest
 import tesser.testing as ts
 
 import campaign.application.ports.campaign_identity as campaign_identity
+import campaign.application.ports.campaign_queries as campaign_queries
 import campaign.application.ports.campaign_repository as campaign_repository
 import campaign.application.ports.target_policy as target_policy
 import campaign.application.service as service
@@ -70,6 +71,25 @@ class FakeCampaignRepositoryRecording(campaign_repository.CampaignRepository):
     ) -> campaign_repository.ListCampaignsResponse:
         return campaign_repository.ListCampaignsResponse(campaigns=(self._record,))
 
+    def find_view(
+        self, request: campaign_queries.FindCampaignViewRequest
+    ) -> campaign_queries.FindCampaignViewResponse:
+        row = self._record
+        links: list[campaign_queries.LinkViewRow] = []
+        for link in row.links:
+            links.append(campaign_queries.LinkViewRow(
+                slug=link.slug, target_url=link.target_url, status=link.status
+            ))
+        view = campaign_queries.CampaignViewRow(
+            campaign_id=row.id,
+            budget_amount=row.budget.amount,
+            budget_currency=row.budget.currency,
+            links=tuple(links),
+        )
+        return campaign_queries.FindCampaignViewResponse(
+            outcome=campaign_queries.CampaignViewLookup.FOUND, campaigns=(view,)
+        )
+
 
 @ts.fake
 class FakeTargetPolicyBlocking(target_policy.TargetPolicy):
@@ -93,7 +113,7 @@ class FakeTargetPolicyAllowAll(target_policy.TargetPolicy):
 
 def test_rejection_is_a_conflict_and_creates_nothing() -> None:
     repo = FakeCampaignRepositoryRecording()
-    svc = service.CampaignService(repo, FakeTargetPolicyBlocking(), FakeCampaignIdentity())
+    svc = service.CampaignService(repo, FakeTargetPolicyBlocking(), FakeCampaignIdentity(), repo)
     req = client.AddLinkRequest(campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x")
     with pytest.raises(DomainError) as caught:
         svc.add_link(req)
@@ -103,7 +123,7 @@ def test_rejection_is_a_conflict_and_creates_nothing() -> None:
 
 def test_outage_propagates_and_creates_nothing() -> None:
     repo = FakeCampaignRepositoryRecording()
-    svc = service.CampaignService(repo, FakeTargetPolicyOutage(), FakeCampaignIdentity())
+    svc = service.CampaignService(repo, FakeTargetPolicyOutage(), FakeCampaignIdentity(), repo)
     req = client.AddLinkRequest(campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x")
     with pytest.raises(InfraError):
         svc.add_link(req)
@@ -112,7 +132,7 @@ def test_outage_propagates_and_creates_nothing() -> None:
 
 def test_allowed_verdict_creates_the_link() -> None:
     repo = FakeCampaignRepositoryRecording()
-    svc = service.CampaignService(repo, FakeTargetPolicyAllowAll(), FakeCampaignIdentity())
+    svc = service.CampaignService(repo, FakeTargetPolicyAllowAll(), FakeCampaignIdentity(), repo)
     req = client.AddLinkRequest(campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x")
     view = svc.add_link(req)
     assert [link.slug for link in view.links] == ["promo"]

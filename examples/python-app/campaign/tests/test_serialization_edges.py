@@ -72,7 +72,7 @@ def test_row_golden_locks_the_storage_shape() -> None:
 def test_wire_golden_locks_the_campaign_payload() -> None:
     repo = repo_memory.InMemoryCampaignRepository()
     repo.save(views.save_request(campaign.Campaign(campaign_spec())))
-    handler = http.Handler(service.CampaignService(repo, FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity()))
+    handler = http.Handler(service.CampaignService(repo, FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity(), repo))
     resp = handler.get_campaign(HttpRequest("GET", "/", {"campaign_id": "0123456789abcdef"}, {}, {}, b""))
     assert resp.status_code == 200
     assert resp.json_body() == {
@@ -85,7 +85,7 @@ def test_wire_golden_locks_the_campaign_payload() -> None:
 def test_wire_golden_locks_resolve_as_a_real_redirect() -> None:
     repo = repo_memory.InMemoryCampaignRepository()
     repo.save(views.save_request(campaign.Campaign(campaign_spec())))
-    handler = http.Handler(service.CampaignService(repo, FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity()))
+    handler = http.Handler(service.CampaignService(repo, FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity(), repo))
     resp = handler.resolve(HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
     assert resp.status_code == 302
     assert resp.body == b""

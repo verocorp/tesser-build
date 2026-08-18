@@ -17,7 +17,7 @@ class Campaign(ts.Component):
         self._repo = self._repo_for(cfg)
         self._identity_gateway = campaign_identity.SecretsCampaignIdentity()
         self.client: client.Client = service.CampaignService(
-            self._repo, policy, self._identity_gateway
+            self._repo, policy, self._identity_gateway, self._repo
         )
 
     def _repo_for(self, cfg: config.Config) -> repo_memory.InMemoryCampaignRepository:

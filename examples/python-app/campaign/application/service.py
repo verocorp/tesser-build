@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import typing
+
 import tesser.application as ts
 
 import campaign.application.ports.campaign_identity as campaign_identity
+import campaign.application.ports.campaign_queries as campaign_queries
 import campaign.application.ports.campaign_repository as campaign_repository
 import campaign.application.ports.target_policy as target_policy
 import campaign.application.views as campaign_views
@@ -12,6 +15,7 @@ import campaign.domain.money as money
 import campaign.domain.short_link as short_link
 import campaign.domain.short_links as short_links
 import campaign.domain.values as values
+from tesser.errors import not_found
 
 
 class MapToMoneySpec(ts.Mapper):
@@ -126,26 +130,42 @@ class MapToSaveCampaignRequest(ts.Mapper):
 
 class MapToCampaignView(ts.Mapper):
 
-    def __init__(self, campaign_aggregate: campaign.Campaign) -> None:
+    def __init__(
+        self,
+        find_campaign_view_request: campaign_queries.FindCampaignViewRequest,
+        found_campaign_view: campaign_queries.FindCampaignViewResponse,
+    ) -> None:
+        match found_campaign_view.outcome:
+            case campaign_queries.CampaignViewLookup.FOUND:
+                row = found_campaign_view.campaigns[0]
+            case campaign_queries.CampaignViewLookup.MISSING:
+                raise not_found(
+                    "campaign_missing",
+                    f"no campaign with id {find_campaign_view_request.campaign_id!r}",
+                )
+            case _ as unreachable:
+                typing.assert_never(unreachable)
         link_views: list[client.LinkView] = []
-        for link in campaign_aggregate.links:
-            view_slug = str(link.slug)
-            view_target_url = str(link.target_url)
-            view_status = str(link.status)
+        for link in row.links:
             link_views.append(client.LinkView(  # tessercheck:ignore TB080
-                slug=view_slug,
-                target_url=view_target_url,
-                status=view_status,
+                slug=link.slug,
+                target_url=link.target_url,
+                status=link.status,
             ))
-        self._campaign_aggregate = campaign_aggregate
-        self._campaign_id = str(campaign_aggregate.id)
-        self._budget_amount = str(campaign_aggregate.budget.amount)
-        self._budget_currency = str(campaign_aggregate.budget.currency)
+        self._find_campaign_view_request = find_campaign_view_request
+        self._found_campaign_view = found_campaign_view
+        self._campaign_id = row.campaign_id
+        self._budget_amount = row.budget_amount
+        self._budget_currency = row.budget_currency
         self._link_views = tuple(link_views)
 
     @property
-    def campaign_aggregate(self) -> campaign.Campaign:
-        return self._campaign_aggregate
+    def find_campaign_view_request(self) -> campaign_queries.FindCampaignViewRequest:
+        return self._find_campaign_view_request
+
+    @property
+    def found_campaign_view(self) -> campaign_queries.FindCampaignViewResponse:
+        return self._found_campaign_view
 
     @property
     def campaign_id(self) -> str:
@@ -171,10 +191,12 @@ class CampaignService(ts.ApplicationService):
         repo: campaign_repository.CampaignRepository,
         policy: target_policy.TargetPolicy,
         identity_gateway: campaign_identity.CampaignIdentity,
+        queries: campaign_queries.CampaignQueries,
     ) -> None:
         self._repo = repo
         self._policy = policy
         self._identity_gateway = identity_gateway
+        self._queries = queries
 
     def create_campaign(self, req: client.CreateCampaignRequest) -> client.CampaignView:
         issued_campaign_identity = self._identity_gateway.issue(
@@ -204,7 +226,14 @@ class CampaignService(ts.ApplicationService):
             links=save_request_mapper.link_records,
         ))
 
-        campaign_view_mapper = MapToCampaignView(campaign_aggregate=c)
+        find_campaign_view_request = campaign_queries.FindCampaignViewRequest(
+            campaign_id=save_request_mapper.record_id,
+        )
+        found_campaign_view = self._queries.find_view(find_campaign_view_request)
+        campaign_view_mapper = MapToCampaignView(
+            find_campaign_view_request=find_campaign_view_request,
+            found_campaign_view=found_campaign_view,
+        )
         return client.CampaignView(
             campaign_id=campaign_view_mapper.campaign_id,
             budget_amount=campaign_view_mapper.budget_amount,
