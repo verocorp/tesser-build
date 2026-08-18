@@ -5,6 +5,42 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.64.0] - 2026-08-18
+
+A campaign's links become a domain object. `ShortLinks` owns the rules the
+aggregate was hand-rolling around a bare `list`, and `CampaignSpec.links` becomes
+a child spec like `budget` already was.
+
+### Added
+- **`ShortLinks` and `ShortLinksSpec` (`campaign/domain/short_links.py`).** The
+  collection holds what a collection knows: uniqueness by slug on construction
+  and on add, index-aware error wrapping (`invalid short link at index 1`),
+  find-and-deactivate by slug, and the defensive copy on read. Seven tests cover
+  it directly, including that its accessor hands back copies.
+
+### Changed
+- **`Campaign` drops 24 lines and gains 5.** The build loop, the clone-on-read
+  comprehension, the find-by-slug scan, and the duplicate check are all gone from
+  the aggregate; three methods became one-line delegations. `Campaign` is now
+  three value objects and three delegations.
+- **`CampaignSpec.links` is a `ShortLinksSpec`, not a `tuple[ShortLinkSpec, ...]`.**
+  It now matches `budget`, which was already a child spec, and satisfies TB080's
+  "a spec field is a primitive, a value object, or a child spec" by naming rather
+  than by structure. The aggregate stops re-wrapping a tuple it was handed one
+  line after receiving it.
+- **`MapToCampaignSpec` takes and exposes the child spec**, so the mapper's
+  whole-objects rule is satisfied by a named kind instead of a bare tuple. The
+  empty stays visible at the call site as `ShortLinksSpec(links=())`.
+
+### Removed
+- **`_admit`.** The duplicate-slug invariant lived in a module function because
+  the collection had a rule and nowhere to put it. It is a private method on
+  `ShortLinks` now, and one of the repo's module functions retires with it.
+- **`campaign.py`'s `tesser.errors` import.** All four of `DomainError`,
+  `conflict`, `invalid`, and `not_found` went unused — every error the aggregate
+  raised was collection logic. The aggregate raises nothing of its own; its value
+  objects do.
+
 ## [0.0.63.0] - 2026-08-18
 
 The mapper stops being a convention and becomes a rule. Five TB080 clauses give

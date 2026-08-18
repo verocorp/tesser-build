@@ -4,6 +4,19 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 
 ## Mapper wave follow-ups (2026-08-17, v0.0.61.0)
 
+- [ ] **`ShortLinks` is declared `ts.Entity` and has no identity.** It is the
+  only kind whose rules a collection can satisfy — TB080 requires an entity to
+  construct from exactly one `ts.Spec`, which is what forced `ShortLinksSpec`
+  into existence and is a good outcome. But a collection is not an entity: it
+  has no identity of its own, it is not an aggregate root, and it cannot be a
+  value object while it holds mutable entities and `deactivate` mutates in
+  place. Declaring it an entity is a kind aliased for mechanical convenience —
+  the same class of thing as the `Closeable -> "port"` row flagged in #86.
+  Candidate: a `ts.Collection` kind in `tesser.domain`, with its own row in
+  `KIND_NAME`/`KIND_ROLE` and its own shape rules (constructs from one spec,
+  accessor returns a defensive copy, holds one backing sequence). Needs a ruling
+  before more collections are written this way. `python.md:22` already speaks of
+  a "collection value object `Labels`", so the vocabulary predates the kind.
 - [x] **TB082 counts source lines, not statements — RESOLVED v0.0.62.0.** The
   counter is now `sum(1 for node in ast.walk(fn) if isinstance(node, ast.stmt)) - 1`
   and the clause reads "a service method body is at most 10 statements". The
