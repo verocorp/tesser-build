@@ -29,10 +29,36 @@ one of them unchanged — the shape was dogfooded before it was enforced.
 - **`a nested mapper accessor ends in _mapper, so the reader knows to keep
   dotting`.** A property whose return type is another mapper says so in its name
   — `budget_mapper.amount`, never `budget.amount`, which would read as a value.
+- **`a mapper exposes the parts and the caller assembles them, so every field is
+  named where it is read`.** A mapper never constructs the DTO or spec it maps
+  to. Two sites carry an ignore: `MapToSaveCampaignRequest` and
+  `MapToCampaignView` build their collection *elements* (`LinkRecord`,
+  `LinkView`), which the clause does not yet distinguish from the top-level
+  construction it is aimed at.
 - **`a service method names what it computes, and reads an accessor where it is
   used`** (TB082). An assignment whose right-hand side is a bare name or
   attribute chain with no call is a finding. Zero sites in the repo today; the
   clause keeps it that way.
+- **`a service method names what it computes in a local, and passes a name, a
+  reader, or a declared kind`** (TB082). A call in an argument position is a
+  finding — a construction of a declared kind is not, which is what lets
+  `self._repo.save(SaveCampaignRequest(...))` stand.
+- **`a declared kind is assembled from the accessors of one mapper`** (TB082).
+  When a service constructs a DTO or spec, every attribute-access argument
+  shares one base. `create_campaign` satisfies it already: the spec reads from
+  `campaign_spec_mapper`, the record from `save_request_mapper`, the view from
+  `campaign_view_mapper`.
+
+### Deferred, and visible
+
+The two argument-position clauses land with **27 site-level ignores** rather than
+a refactor: 10 in python-app, 9 in llmport, 4 in errorspy, and one each in ports,
+layout, and tessercheck-py, plus the 2 mapper-element sites above. Every one is a
+service method that computes inside an argument — the shape `create_campaign` was
+converted away from, and the shape every unconverted `views.py` caller still has.
+`create_campaign` itself needs no ignore for any of the three: it is the worked
+example the clauses were written from. Burning an ignore is the refactor; TB090
+keeps the set honest in the meantime.
 
 ## [0.0.62.0] - 2026-08-17
 

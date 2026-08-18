@@ -10,27 +10,23 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   threshold stayed at 10: `create_campaign` is seven statements, so there is
   headroom, and tightening it is a separate call with its own evidence. The
   `# tessercheck:ignore TB082` on `create_campaign` is deleted.
-- [x] **Nothing forces the mapper shape — MOSTLY RESOLVED v0.0.63.0.** Five
-  TB080 clauses now hold it: MapTo naming, whole-object parameters, no
-  originated literals, properties only, and `_mapper` on a nested accessor. Two
-  stated norms are still unenforced and both need a refactor wave first:
-  (1) **a mapper never constructs its target DTO** — true today except for
-  collection *elements* (`MapToSaveCampaignRequest` builds every `LinkRecord`),
-  and no rule distinguishes the element case from the top-level one;
-  (2) **the DTO is assembled from accessors on a single mapper** — decidable in
-  principle (every attribute-access argument shares one base) but the nested
-  `money.MoneySpec(...)` argument in `create_campaign` is a legitimate
-  counter-example, so the clause needs shaping before it can be written.
-  Still no skill doc and no `rationale/coverage.md` row.
-- [ ] **A call is still allowed in an argument position — 61 sites.** The stated
-  norm is that computation is named in a local and only bare names, attribute
-  chains, and declared-kind constructions appear as arguments. Measured across
-  every governed tree: 61 distinct sites in `ApplicationService` methods pass a
-  call as an argument, in errorspy, llmport, ports, python-app, serdepy, layout,
-  and tessercheck-py. Its converse (a straight-accessor local) shipped in
-  v0.0.63.0 because it had zero sites. This one needs the sweep before the
-  clause, and it overlaps the `views.py` module functions that are still
-  unconverted — do them together.
+- [x] **Nothing forces the mapper shape — RESOLVED v0.0.63.0.** Six TB080
+  clauses hold it: MapTo naming, whole-object parameters, no originated
+  literals, properties only, `_mapper` on a nested accessor, and never
+  constructing what it maps to. Two TB082 clauses hold the service side: a call
+  in an argument position, and a declared kind assembled from more than one
+  reader. Still no skill doc and no `rationale/coverage.md` row.
+- [ ] **27 ignores to burn — the argument-position debt.** v0.0.63.0 shipped the
+  clauses with site-level ignores instead of a refactor, by ruling (Chris,
+  2026-08-18). The set: python-app 10, llmport 9, errorspy 4, ports 1, layout 1,
+  tessercheck-py 2 — every one a service method computing inside an argument —
+  plus 2 mapper sites (`MapToSaveCampaignRequest`, `MapToCampaignView`) that
+  construct their collection *elements*. Burning an ignore is the refactor:
+  convert the method the way `create_campaign` was converted, which is why it
+  carries none. The element-construction pair is different — it needs the clause
+  to distinguish an element from the top-level target before the ignore can go,
+  and a per-element mapper would hand the service a tuple of mappers to loop
+  over, which is worse. TB090 keeps the set from rotting.
 - [ ] **Inbound is not symmetric with outbound, and the rules should say so.**
   Outbound has exactly one source (the aggregate). Inbound has N (the request
   plus whatever the service obtained — identity now, a clock or a policy

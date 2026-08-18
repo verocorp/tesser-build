@@ -19,4 +19,4 @@ class LayoutService(ts.ApplicationService):
 
     def trees(self, request: client.TreesRequest) -> client.TreesResponse:
         read = self._reader.read(repo_reader.ReadRepoRequest(root=request.root))
-        return client.TreesResponse(trees=mapping.trees(read))
+        return client.TreesResponse(trees=mapping.trees(read))  # tessercheck:ignore TB082

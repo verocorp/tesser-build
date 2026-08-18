@@ -18,10 +18,10 @@ class TessercheckService(ts.ApplicationService):
 
     def check(self, request: client.CheckRequest) -> client.CheckResponse:
         read = self._reader.sources(source_reader.ReadSourcesRequest(root=request.root))
-        return client.CheckResponse(findings=mapping.findings(read))
+        return client.CheckResponse(findings=mapping.findings(read))  # tessercheck:ignore TB082
 
     def rulebook(self, request: client.RulebookRequest) -> client.RulebookResponse:
         read = self._rulebook_reader.read(
             rulebook_sources.ReadRulebookRequest(root=request.root)
         )
-        return client.RulebookResponse(rendered=mapping.rendered_rulebook(read))
+        return client.RulebookResponse(rendered=mapping.rendered_rulebook(read))  # tessercheck:ignore TB082
