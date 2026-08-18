@@ -6,6 +6,7 @@ import tesser.testing as ts
 import campaign.domain.campaign as campaign
 import campaign.domain.money as money
 import campaign.domain.short_link as short_link
+import campaign.domain.short_links as short_links
 import campaign.domain.values as values
 from tesser.errors import DomainError, Kind
 
@@ -22,7 +23,7 @@ def _campaign_spec(
     return campaign.CampaignSpec(
         id=id,
         budget=money.MoneySpec(amount=amount, currency=currency),
-        links=(short_link.ShortLinkSpec(slug=slug, target_url=target_url, active=active),),
+        links=short_links.ShortLinksSpec(links=(short_link.ShortLinkSpec(slug=slug, target_url=target_url, active=active),)),
     )
 
 
@@ -33,7 +34,7 @@ def test_a_campaign_carries_every_field_of_its_spec() -> None:
 
     assert c.id == values.CampaignID(spec.id)
     assert c.budget == money.Money(spec.budget.amount, spec.budget.currency)
-    assert [link.slug for link in c.links] == [values.Slug(spec.links[0].slug)]
+    assert [link.slug for link in c.links] == [values.Slug(spec.links.links[0].slug)]
 
 
 def test_a_campaign_may_start_with_no_links() -> None:
@@ -41,7 +42,7 @@ def test_a_campaign_may_start_with_no_links() -> None:
         campaign.CampaignSpec(
             id="0123456789abcdef",
             budget=money.MoneySpec(amount="100.00", currency="USD"),
-            links=(),
+            links=short_links.ShortLinksSpec(links=()),
         )
     )
 
@@ -97,14 +98,14 @@ def test_construction_refuses_a_duplicate_slug_in_the_spec() -> None:
             campaign.CampaignSpec(
                 id="0123456789abcdef",
                 budget=money.MoneySpec(amount="100.00", currency="USD"),
-                links=(
+                links=short_links.ShortLinksSpec(links=(
                     short_link.ShortLinkSpec(
                         slug="promo", target_url="https://ok.example/a", active=True
                     ),
                     short_link.ShortLinkSpec(
                         slug="promo", target_url="https://ok.example/b", active=True
                     ),
-                ),
+                )),
             )
         )
 
@@ -118,14 +119,14 @@ def test_construction_names_the_index_of_the_link_it_refused() -> None:
             campaign.CampaignSpec(
                 id="0123456789abcdef",
                 budget=money.MoneySpec(amount="100.00", currency="USD"),
-                links=(
+                links=short_links.ShortLinksSpec(links=(
                     short_link.ShortLinkSpec(
                         slug="promo", target_url="https://ok.example/a", active=True
                     ),
                     short_link.ShortLinkSpec(
                         slug="promo-two", target_url="ftp://bad.example", active=True
                     ),
-                ),
+                )),
             )
         )
 
