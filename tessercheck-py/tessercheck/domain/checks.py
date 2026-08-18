@@ -4631,6 +4631,12 @@ class Codebase(ts.AggregateRoot):
                         "ends in _mapper, so the reader knows to keep dotting",
                     )
                 )
+        exempt: set[int] = set()
+        for node in ast.walk(cls):
+            if isinstance(node, ast.Raise):
+                exempt.update(id(inner) for inner in ast.walk(node))
+            elif isinstance(node, ast.Subscript):
+                exempt.update(id(inner) for inner in ast.walk(node.slice))
         for node in ast.walk(cls):
             if isinstance(node, ast.Call):
                 built = self._annotation_block(module, node.func, blocks)
@@ -4647,6 +4653,8 @@ class Codebase(ts.AggregateRoot):
             if not isinstance(node, ast.Constant):
                 continue
             if node.value is None or node.value is Ellipsis:
+                continue
+            if id(node) in exempt:
                 continue
             found.append(
                 Violation(
