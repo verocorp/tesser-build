@@ -4,6 +4,7 @@ import pytest
 import tesser.testing as ts
 
 import campaign.application.ports.campaign_identity as campaign_identity
+import campaign.application.ports.campaign_queries as campaign_queries
 import campaign.application.ports.campaign_repository as campaign_repository
 import campaign.application.ports.target_policy as target_policy
 import campaign.application.service as service
@@ -72,6 +73,29 @@ class FakeCampaignStore(campaign_repository.CampaignRepository):
     ) -> campaign_repository.ListCampaignsResponse:
         return campaign_repository.ListCampaignsResponse(campaigns=tuple(self.rows.values()))
 
+    def find_view(
+        self, request: campaign_queries.FindCampaignViewRequest
+    ) -> campaign_queries.FindCampaignViewResponse:
+        row = self.rows.get(request.campaign_id)
+        if row is None:
+            return campaign_queries.FindCampaignViewResponse(
+                outcome=campaign_queries.CampaignViewLookup.MISSING, campaigns=()
+            )
+        links: list[campaign_queries.LinkViewRow] = []
+        for link in row.links:
+            links.append(campaign_queries.LinkViewRow(
+                slug=link.slug, target_url=link.target_url, status=link.status
+            ))
+        view = campaign_queries.CampaignViewRow(
+            campaign_id=row.id,
+            budget_amount=row.budget.amount,
+            budget_currency=row.budget.currency,
+            links=tuple(links),
+        )
+        return campaign_queries.FindCampaignViewResponse(
+            outcome=campaign_queries.CampaignViewLookup.FOUND, campaigns=(view,)
+        )
+
 
 @ts.fake
 class FakeCampaignIdentity(campaign_identity.CampaignIdentity):
@@ -123,7 +147,8 @@ class FakeTargetPolicyDown(target_policy.TargetPolicy):
 
 
 def test_create_campaign_returns_the_budget_it_was_asked_for() -> None:
-    svc = service.CampaignService(FakeCampaignStore(), FakeTargetPolicyAllowing(), FakeCampaignIdentity())
+    store = FakeCampaignStore()
+    svc = service.CampaignService(store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), store)
 
     view = svc.create_campaign(
         client.CreateCampaignRequest(budget_amount="250.00", budget_currency="EUR")
@@ -136,7 +161,7 @@ def test_create_campaign_returns_the_budget_it_was_asked_for() -> None:
 
 def test_create_campaign_persists_the_campaign_it_returns() -> None:
     repo = FakeCampaignStore()
-    svc = service.CampaignService(repo, FakeTargetPolicyAllowing(), FakeCampaignIdentity())
+    svc = service.CampaignService(repo, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), repo)
 
     view = svc.create_campaign(
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
@@ -146,7 +171,8 @@ def test_create_campaign_persists_the_campaign_it_returns() -> None:
 
 
 def test_create_campaign_mints_a_distinct_id_per_campaign() -> None:
-    svc = service.CampaignService(FakeCampaignStore(), FakeTargetPolicyAllowing(), FakeCampaignIdentity())
+    store = FakeCampaignStore()
+    svc = service.CampaignService(store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), store)
 
     first = svc.create_campaign(
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
@@ -160,7 +186,7 @@ def test_create_campaign_mints_a_distinct_id_per_campaign() -> None:
 
 def test_create_campaign_refuses_a_malformed_currency_and_saves_nothing() -> None:
     repo = FakeCampaignStore()
-    svc = service.CampaignService(repo, FakeTargetPolicyAllowing(), FakeCampaignIdentity())
+    svc = service.CampaignService(repo, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), repo)
 
     with pytest.raises(DomainError) as caught:
         svc.create_campaign(
@@ -173,7 +199,7 @@ def test_create_campaign_refuses_a_malformed_currency_and_saves_nothing() -> Non
 
 def test_add_link_puts_the_link_on_the_campaign() -> None:
     repo = FakeCampaignStore()
-    svc = service.CampaignService(repo, FakeTargetPolicyAllowing(), FakeCampaignIdentity())
+    svc = service.CampaignService(repo, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), repo)
     created = svc.create_campaign(
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
@@ -191,7 +217,8 @@ def test_add_link_puts_the_link_on_the_campaign() -> None:
 
 def test_add_link_asks_the_policy_about_the_target_before_admitting_it() -> None:
     policy = FakeTargetPolicyAllowing()
-    svc = service.CampaignService(FakeCampaignStore(), policy, FakeCampaignIdentity())
+    store = FakeCampaignStore()
+    svc = service.CampaignService(store, policy, FakeCampaignIdentity(), store)
     created = svc.create_campaign(
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
@@ -207,11 +234,11 @@ def test_add_link_asks_the_policy_about_the_target_before_admitting_it() -> None
 
 def test_add_link_refuses_a_blocked_destination_and_saves_nothing() -> None:
     repo = FakeCampaignStore()
-    allowing = service.CampaignService(repo, FakeTargetPolicyAllowing(), FakeCampaignIdentity())
+    allowing = service.CampaignService(repo, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), repo)
     created = allowing.create_campaign(
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
-    svc = service.CampaignService(repo, FakeTargetPolicyBlocking(), FakeCampaignIdentity())
+    svc = service.CampaignService(repo, FakeTargetPolicyBlocking(), FakeCampaignIdentity(), repo)
     before = len(repo.saved)
 
     with pytest.raises(DomainError) as caught:
@@ -229,11 +256,11 @@ def test_add_link_refuses_a_blocked_destination_and_saves_nothing() -> None:
 
 def test_add_link_lets_a_policy_outage_surface_and_saves_nothing() -> None:
     repo = FakeCampaignStore()
-    allowing = service.CampaignService(repo, FakeTargetPolicyAllowing(), FakeCampaignIdentity())
+    allowing = service.CampaignService(repo, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), repo)
     created = allowing.create_campaign(
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
-    svc = service.CampaignService(repo, FakeTargetPolicyDown(), FakeCampaignIdentity())
+    svc = service.CampaignService(repo, FakeTargetPolicyDown(), FakeCampaignIdentity(), repo)
     before = len(repo.saved)
 
     with pytest.raises(InfraError):
@@ -248,7 +275,7 @@ def test_add_link_lets_a_policy_outage_surface_and_saves_nothing() -> None:
 
 def test_add_link_refuses_a_slug_another_campaign_already_uses() -> None:
     repo = FakeCampaignStore()
-    svc = service.CampaignService(repo, FakeTargetPolicyAllowing(), FakeCampaignIdentity())
+    svc = service.CampaignService(repo, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), repo)
     first = svc.create_campaign(
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
@@ -274,7 +301,8 @@ def test_add_link_refuses_a_slug_another_campaign_already_uses() -> None:
 
 def test_add_link_refuses_a_malformed_slug_without_touching_the_policy() -> None:
     policy = FakeTargetPolicyAllowing()
-    svc = service.CampaignService(FakeCampaignStore(), policy, FakeCampaignIdentity())
+    store = FakeCampaignStore()
+    svc = service.CampaignService(store, policy, FakeCampaignIdentity(), store)
 
     with pytest.raises(DomainError) as caught:
         svc.add_link(
@@ -288,7 +316,8 @@ def test_add_link_refuses_a_malformed_slug_without_touching_the_policy() -> None
 
 
 def test_add_link_refuses_a_campaign_that_does_not_exist() -> None:
-    svc = service.CampaignService(FakeCampaignStore(), FakeTargetPolicyAllowing(), FakeCampaignIdentity())
+    store = FakeCampaignStore()
+    svc = service.CampaignService(store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), store)
 
     with pytest.raises(DomainError) as caught:
         svc.add_link(
@@ -302,7 +331,8 @@ def test_add_link_refuses_a_campaign_that_does_not_exist() -> None:
 
 
 def test_deactivate_link_leaves_the_link_inactive_for_later_readers() -> None:
-    svc = service.CampaignService(FakeCampaignStore(), FakeTargetPolicyAllowing(), FakeCampaignIdentity())
+    store = FakeCampaignStore()
+    svc = service.CampaignService(store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), store)
     created = svc.create_campaign(
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
@@ -321,7 +351,8 @@ def test_deactivate_link_leaves_the_link_inactive_for_later_readers() -> None:
 
 
 def test_deactivate_link_refuses_a_slug_the_campaign_does_not_carry() -> None:
-    svc = service.CampaignService(FakeCampaignStore(), FakeTargetPolicyAllowing(), FakeCampaignIdentity())
+    store = FakeCampaignStore()
+    svc = service.CampaignService(store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), store)
     created = svc.create_campaign(
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
@@ -336,7 +367,8 @@ def test_deactivate_link_refuses_a_slug_the_campaign_does_not_carry() -> None:
 
 
 def test_get_campaign_returns_the_budget_it_was_created_with() -> None:
-    svc = service.CampaignService(FakeCampaignStore(), FakeTargetPolicyAllowing(), FakeCampaignIdentity())
+    store = FakeCampaignStore()
+    svc = service.CampaignService(store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), store)
     created = svc.create_campaign(
         client.CreateCampaignRequest(budget_amount="99.95", budget_currency="GBP")
     )
@@ -349,7 +381,8 @@ def test_get_campaign_returns_the_budget_it_was_created_with() -> None:
 
 
 def test_get_campaign_refuses_a_campaign_that_does_not_exist() -> None:
-    svc = service.CampaignService(FakeCampaignStore(), FakeTargetPolicyAllowing(), FakeCampaignIdentity())
+    store = FakeCampaignStore()
+    svc = service.CampaignService(store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), store)
 
     with pytest.raises(DomainError) as caught:
         svc.get_campaign(client.GetCampaignRequest(campaign_id="0123456789abcdef"))
@@ -359,7 +392,8 @@ def test_get_campaign_refuses_a_campaign_that_does_not_exist() -> None:
 
 
 def test_resolve_hands_back_the_target_of_an_active_link() -> None:
-    svc = service.CampaignService(FakeCampaignStore(), FakeTargetPolicyAllowing(), FakeCampaignIdentity())
+    store = FakeCampaignStore()
+    svc = service.CampaignService(store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), store)
     created = svc.create_campaign(
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
@@ -375,7 +409,8 @@ def test_resolve_hands_back_the_target_of_an_active_link() -> None:
 
 
 def test_resolve_refuses_a_slug_nobody_registered() -> None:
-    svc = service.CampaignService(FakeCampaignStore(), FakeTargetPolicyAllowing(), FakeCampaignIdentity())
+    store = FakeCampaignStore()
+    svc = service.CampaignService(store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), store)
 
     with pytest.raises(DomainError) as caught:
         svc.resolve(client.ResolveRequest(slug="nosuch"))
@@ -385,7 +420,8 @@ def test_resolve_refuses_a_slug_nobody_registered() -> None:
 
 
 def test_resolve_refuses_a_malformed_slug() -> None:
-    svc = service.CampaignService(FakeCampaignStore(), FakeTargetPolicyAllowing(), FakeCampaignIdentity())
+    store = FakeCampaignStore()
+    svc = service.CampaignService(store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), store)
 
     with pytest.raises(DomainError) as caught:
         svc.resolve(client.ResolveRequest(slug="BAD SLUG"))
@@ -394,7 +430,8 @@ def test_resolve_refuses_a_malformed_slug() -> None:
 
 
 def test_list_links_gathers_the_links_of_every_campaign() -> None:
-    svc = service.CampaignService(FakeCampaignStore(), FakeTargetPolicyAllowing(), FakeCampaignIdentity())
+    store = FakeCampaignStore()
+    svc = service.CampaignService(store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), store)
     first = svc.create_campaign(
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
@@ -418,7 +455,8 @@ def test_list_links_gathers_the_links_of_every_campaign() -> None:
 
 
 def test_list_links_reports_a_deactivated_link_as_inactive() -> None:
-    svc = service.CampaignService(FakeCampaignStore(), FakeTargetPolicyAllowing(), FakeCampaignIdentity())
+    store = FakeCampaignStore()
+    svc = service.CampaignService(store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), store)
     created = svc.create_campaign(
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
@@ -437,35 +475,67 @@ def test_list_links_reports_a_deactivated_link_as_inactive() -> None:
 
 
 def test_list_links_is_empty_before_anything_is_created() -> None:
-    svc = service.CampaignService(FakeCampaignStore(), FakeTargetPolicyAllowing(), FakeCampaignIdentity())
+    store = FakeCampaignStore()
+    svc = service.CampaignService(store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), store)
 
     assert svc.list_links(client.ListLinksRequest()).links == ()
 
 
-def test_the_campaign_view_mapper_exposes_the_aggregate_it_was_given() -> None:
-    aggregate = campaign.Campaign(campaign.CampaignSpec(
-        id="0123456789abcdef",
-        budget=money.MoneySpec(amount="10.00", currency="USD"),
-        links=short_links.ShortLinksSpec(links=()),
-    ))
-    mapper = service.MapToCampaignView(campaign_aggregate=aggregate)
-    assert mapper.campaign_aggregate is aggregate
+def test_the_campaign_view_mapper_exposes_what_it_was_given() -> None:
+    request = campaign_queries.FindCampaignViewRequest(campaign_id="0123456789abcdef")
+    found = campaign_queries.FindCampaignViewResponse(
+        outcome=campaign_queries.CampaignViewLookup.FOUND,
+        campaigns=(campaign_queries.CampaignViewRow(
+            campaign_id="0123456789abcdef",
+            budget_amount="10.00",
+            budget_currency="USD",
+            links=(campaign_queries.LinkViewRow(
+                slug="promo", target_url="https://ok.example/x", status="inactive"
+            ),),
+        ),),
+    )
+    mapper = service.MapToCampaignView(
+        find_campaign_view_request=request, found_campaign_view=found
+    )
+    assert mapper.find_campaign_view_request is request
+    assert mapper.found_campaign_view is found
 
 
-def test_the_campaign_view_mapper_stringifies_the_aggregate_into_the_view() -> None:
-    aggregate = campaign.Campaign(campaign.CampaignSpec(
-        id="0123456789abcdef",
-        budget=money.MoneySpec(amount="10.00", currency="USD"),
-        links=short_links.ShortLinksSpec(links=(short_link.ShortLinkSpec(
-            slug="promo", target_url="https://ok.example/x", active=False
-        ),)),
-    ))
-    mapper = service.MapToCampaignView(campaign_aggregate=aggregate)
+def test_the_campaign_view_mapper_copies_the_row_into_the_view() -> None:
+    mapper = service.MapToCampaignView(
+        find_campaign_view_request=campaign_queries.FindCampaignViewRequest(
+            campaign_id="0123456789abcdef"
+        ),
+        found_campaign_view=campaign_queries.FindCampaignViewResponse(
+            outcome=campaign_queries.CampaignViewLookup.FOUND,
+            campaigns=(campaign_queries.CampaignViewRow(
+                campaign_id="0123456789abcdef",
+                budget_amount="10.00",
+                budget_currency="USD",
+                links=(campaign_queries.LinkViewRow(
+                    slug="promo", target_url="https://ok.example/x", status="inactive"
+                ),),
+            ),),
+        ),
+    )
     assert mapper.campaign_id == "0123456789abcdef"
     assert mapper.budget_amount == "10.00"
     assert mapper.budget_currency == "USD"
     assert [link.slug for link in mapper.link_views] == ["promo"]
     assert [link.status for link in mapper.link_views] == ["inactive"]
+
+
+def test_the_campaign_view_mapper_refuses_a_missing_campaign() -> None:
+    with pytest.raises(DomainError) as caught:
+        service.MapToCampaignView(
+            find_campaign_view_request=campaign_queries.FindCampaignViewRequest(
+                campaign_id="0123456789abcdef"
+            ),
+            found_campaign_view=campaign_queries.FindCampaignViewResponse(
+                outcome=campaign_queries.CampaignViewLookup.MISSING, campaigns=()
+            ),
+        )
+    assert caught.value.code == "campaign_missing"
 
 
 def test_the_save_request_mapper_exposes_the_aggregate_it_was_given() -> None:

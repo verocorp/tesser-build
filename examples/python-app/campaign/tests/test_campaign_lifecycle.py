@@ -29,7 +29,8 @@ class FakeTargetPolicyAllowAll(target_policy.TargetPolicy):
 
 
 def test_deactivate_link_flips_the_link_inactive() -> None:
-    svc = service.CampaignService(repo_memory.InMemoryCampaignRepository(), FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity())
+    store = repo_memory.InMemoryCampaignRepository()
+    svc = service.CampaignService(store, FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity(), store)
     id = svc.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
     svc.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     view = svc.deactivate_link(client.DeactivateLinkRequest(campaign_id=id, slug="promo"))
@@ -37,7 +38,8 @@ def test_deactivate_link_flips_the_link_inactive() -> None:
 
 
 def test_deactivate_link_survives_a_reload() -> None:
-    svc = service.CampaignService(repo_memory.InMemoryCampaignRepository(), FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity())
+    store = repo_memory.InMemoryCampaignRepository()
+    svc = service.CampaignService(store, FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity(), store)
     id = svc.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
     svc.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     svc.deactivate_link(client.DeactivateLinkRequest(campaign_id=id, slug="promo"))
@@ -46,7 +48,8 @@ def test_deactivate_link_survives_a_reload() -> None:
 
 
 def test_resolve_refuses_a_deactivated_link() -> None:
-    svc = service.CampaignService(repo_memory.InMemoryCampaignRepository(), FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity())
+    store = repo_memory.InMemoryCampaignRepository()
+    svc = service.CampaignService(store, FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity(), store)
     id = svc.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
     svc.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     assert svc.resolve(client.ResolveRequest(slug="promo")).target_url == "https://ok.example/x"
@@ -58,7 +61,8 @@ def test_resolve_refuses_a_deactivated_link() -> None:
 
 
 def test_deactivate_link_rejects_an_unknown_slug() -> None:
-    svc = service.CampaignService(repo_memory.InMemoryCampaignRepository(), FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity())
+    store = repo_memory.InMemoryCampaignRepository()
+    svc = service.CampaignService(store, FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity(), store)
     id = svc.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
     svc.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     with pytest.raises(DomainError) as e:
@@ -68,7 +72,8 @@ def test_deactivate_link_rejects_an_unknown_slug() -> None:
 
 
 def test_deactivate_link_rejects_an_unknown_campaign() -> None:
-    svc = service.CampaignService(repo_memory.InMemoryCampaignRepository(), FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity())
+    store = repo_memory.InMemoryCampaignRepository()
+    svc = service.CampaignService(store, FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity(), store)
     id = svc.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
     svc.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     with pytest.raises(DomainError) as e:
@@ -80,7 +85,8 @@ def test_deactivate_link_rejects_an_unknown_campaign() -> None:
 
 
 def test_deactivate_link_endpoint_returns_the_campaign_payload() -> None:
-    svc = service.CampaignService(repo_memory.InMemoryCampaignRepository(), FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity())
+    store = repo_memory.InMemoryCampaignRepository()
+    svc = service.CampaignService(store, FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity(), store)
     id = svc.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
     svc.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     handler = http.Handler(svc)
@@ -94,7 +100,8 @@ def test_deactivate_link_endpoint_returns_the_campaign_payload() -> None:
 
 
 def test_deactivate_link_endpoint_maps_a_missing_link_to_404() -> None:
-    svc = service.CampaignService(repo_memory.InMemoryCampaignRepository(), FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity())
+    store = repo_memory.InMemoryCampaignRepository()
+    svc = service.CampaignService(store, FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity(), store)
     id = svc.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
     svc.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     handler = http.Handler(svc)
@@ -107,7 +114,8 @@ def test_deactivate_link_endpoint_maps_a_missing_link_to_404() -> None:
 
 
 def test_resolve_endpoint_maps_a_deactivated_link_to_404() -> None:
-    svc = service.CampaignService(repo_memory.InMemoryCampaignRepository(), FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity())
+    store = repo_memory.InMemoryCampaignRepository()
+    svc = service.CampaignService(store, FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity(), store)
     id = svc.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
     svc.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     handler = http.Handler(svc)
@@ -182,7 +190,8 @@ def test_campaign_wraps_an_invalid_link_with_its_index() -> None:
 
 
 def test_create_campaign_endpoint_rejects_a_non_object_budget() -> None:
-    handler = http.Handler(service.CampaignService(repo_memory.InMemoryCampaignRepository(), FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity()))
+    store = repo_memory.InMemoryCampaignRepository()
+    handler = http.Handler(service.CampaignService(store, FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity(), store))
     resp = respond(
         lambda: handler.create_campaign(
             HttpRequest("POST", "/", {}, {}, {}, json.dumps({"budget": "100.00"}).encode("utf-8"))

@@ -833,6 +833,29 @@ def test_mapper_shape_rules_are_flagged() -> None:
     )
 
 
+def test_an_index_and_an_error_message_are_not_originated_data() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/application/reading.py",
+                "shop.application.reading",
+                "import tesser.application as ts\n"
+                "import shop.client.client as client\n"
+                "from tesser.errors import not_found\n"
+                "class MapToFirst(ts.Mapper):\n"
+                "    def __init__(self, answer: client.AskResponse) -> None:\n"
+                "        if not answer.rows:\n"
+                "            raise not_found('row_missing', 'no row in the answer')\n"
+                "        self._answer = answer\n"
+                "        self._first = answer.rows[0]\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any("originates nothing" in f for f in findings), findings
+
+
 def test_a_conformant_mapper_passes_every_shape_rule() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tesser.adapters as ts
 
+import campaign.application.ports.campaign_queries as campaign_queries
 import campaign.application.ports.campaign_repository as campaign_repository
 from tesser.errors import InfraError
 
@@ -22,6 +23,33 @@ class InMemoryCampaignRepository(ts.Repository):
             id=request.id, budget=request.budget, links=request.links
         )
         return campaign_repository.SaveCampaignResponse()
+
+    def find_view(
+        self, request: campaign_queries.FindCampaignViewRequest
+    ) -> campaign_queries.FindCampaignViewResponse:
+        if self._down:
+            raise InfraError("campaign store unavailable")
+        row = self._rows.get(request.campaign_id)
+        if row is None:
+            return campaign_queries.FindCampaignViewResponse(
+                outcome=campaign_queries.CampaignViewLookup.MISSING, campaigns=()
+            )
+        links: list[campaign_queries.LinkViewRow] = []
+        for link in row.links:
+            links.append(campaign_queries.LinkViewRow(
+                slug=link.slug,
+                target_url=link.target_url,
+                status=link.status,
+            ))
+        view = campaign_queries.CampaignViewRow(
+            campaign_id=row.id,
+            budget_amount=row.budget.amount,
+            budget_currency=row.budget.currency,
+            links=tuple(links),
+        )
+        return campaign_queries.FindCampaignViewResponse(
+            outcome=campaign_queries.CampaignViewLookup.FOUND, campaigns=(view,)
+        )
 
     def find(
         self, request: campaign_repository.FindCampaignRequest
