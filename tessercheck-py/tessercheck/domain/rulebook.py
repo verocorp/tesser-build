@@ -16,6 +16,7 @@ HOLE_NAMES: Final[dict[str, str]] = {
     "callee.id": "⟨function⟩",
     "len(params)": "⟨count⟩",
     "len(ports)": "⟨count⟩",
+    "len(bases)": "⟨count⟩",
     "arg.arg": "⟨name⟩",
     "node.value": "⟨literal⟩",
     "stmt.name": "⟨name⟩",

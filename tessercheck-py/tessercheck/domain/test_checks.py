@@ -1010,6 +1010,92 @@ def test_aggregate_constructor_violations_are_flagged() -> None:
     )
 
 
+def test_computing_in_an_argument_and_assembling_from_two_readers_are_flagged() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/client/client.py",
+                "shop.client.client",
+                "import tesser.context as ts\n"
+                "class AskRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class AskResponse(ts.Response):\n"
+                "    def __init__(self, text: str, tag: str) -> None:\n"
+                "        self.text = text\n"
+                "        self.tag = tag\n",
+                False,
+            ),
+            (
+                "shop/application/service.py",
+                "shop.application.service",
+                "import tesser.application as ts\n"
+                "import shop.client.client as client\n"
+                "class NestingService(ts.ApplicationService):\n"
+                "    def ask(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        return client.AskResponse(text=str(request.text), tag='t')\n"
+                "    def spread(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        first = self._one(request)\n"
+                "        second = self._two(request)\n"
+                "        return client.AskResponse(text=first.text, tag=second.tag)\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "NestingService.ask computes in an argument" in f
+        and "a service method names what it computes in a local, and passes a name, "
+        "a reader, or a declared kind" in f
+        for f in findings
+    )
+    assert any(
+        "NestingService.spread assembles from 2 readers" in f
+        and "a declared kind is assembled from the accessors of one mapper" in f
+        for f in findings
+    )
+
+
+def test_a_mapper_that_constructs_its_target_is_flagged() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/client/client.py",
+                "shop.client.client",
+                "import tesser.context as ts\n"
+                "class AskRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class AskResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n",
+                False,
+            ),
+            (
+                "shop/application/eager.py",
+                "shop.application.eager",
+                "import tesser.application as ts\n"
+                "import shop.client.client as client\n"
+                "class MapToAskResponse(ts.Mapper):\n"
+                "    def __init__(self, request: client.AskRequest) -> None:\n"
+                "        self._request = request\n"
+                "        self._response = client.AskResponse(text=request.text)\n"
+                "    @property\n"
+                "    def response(self) -> client.AskResponse:\n"
+                "        return self._response\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "shop.application.eager.MapToAskResponse constructs what it maps to" in f
+        and "a mapper exposes the parts and the caller assembles them, so every field "
+        "is named where it is read" in f
+        for f in findings
+    )
+
+
 def test_a_straight_accessor_local_is_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
