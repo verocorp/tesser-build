@@ -5,6 +5,71 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.68.0] - 2026-08-19
+
+The analyzer becomes runnable from an install. It shipped as packages with no
+command, so the only working invocation outside a checkout was the pre-graduation
+`python -m tessercheck --app-root .` — a different analyzer against a different
+ruleset.
+
+### Added
+- **`tessercheck-cli` — the console entry point, `tessercheck-check <tree>`.**
+  A second distribution holding one composition root and nothing else. Same exit
+  codes as the checkout host: `0` clean, `1` findings one per line, `2` usage.
+  Unexpected errors raise rather than collapsing into an exit code, because a
+  consumer debugging a CI crash wants the traceback. An `ungated` manifest row —
+  it is packaging, and holds no domain rules to check.
+
+  It is a separate distribution because the host is not shippable, and that is
+  structural. `srv/cli/main.py` imports `app.loader` and `protocol.cli`, and
+  TB040 mandates those names: every module belongs to a context, a kernel,
+  `srv`, `app`, `tests`, or `protocol`. A consumer of the analyzer is typically
+  a tesser app itself, with its own top-level `app/`, `srv/`, and `protocol/`;
+  a wheel that put those three names in site-packages would give its type
+  checker, test runner, and import linter two candidates for each, resolved by
+  working directory. So the wheel ships what a distribution can honestly ship —
+  the component and its client — and the command ships under a name nothing
+  collides with. `tessercheck-check` is deliberately distinct from
+  `python -m tessercheck`, so a repo migrating off the old analyzer can carry
+  both without either shadowing the other.
+- **`scripts/verify-packaging` and the `packaging` CI job — the gate on what
+  `pip install` gets you.** Every tree gate runs from a checkout with
+  `PYTHONPATH` pointed at the source, where a module missing from a wheel's
+  package list imports perfectly well; that is why both defects below survived.
+  It builds the three distributions from a pristine copy, installs them into a
+  clean virtualenv with no source tree on the path, imports every shipped
+  module, and runs `tessercheck-check` against a clean tree and a dirty one.
+  Verified to fail on each defect and pass without it.
+
+  The pristine copy is load-bearing. setuptools keeps a full duplicate of the
+  source under `build/lib` and does not prune it, so a package dropped from
+  `pyproject.toml` still ships from the stale copy and the wheel disagrees with
+  the package list that produced it. That is how the removal below first
+  appeared not to take.
+
+### Fixed
+- **`tessercheck-py` stops shipping `tessercheck.adapters.handlers`.** That
+  module imports `protocol.cli`, so `import tessercheck.adapters.handlers.cli`
+  has never worked from an install — `ModuleNotFoundError: No module named
+  'protocol'`, reproduced in a clean venv. The distribution's public interface
+  is the client and the component; the CLI handler belongs to the app in the
+  checkout.
+- **`tessercheck-py` requires Python 3.11**, matching the `tesser` dependency it
+  already declared. Under `>=3.10` the install resolved and then failed.
+
+### Known, and recorded rather than worked around
+- **The wheels ship their own sibling test modules**, which import pytest.
+  TB074 puts every test beside the module it names and setuptools ships every
+  `.py` in a listed package, so keeping them out needs a custom `build_py` or a
+  different test placement. The packaging gate's import walk skips test modules
+  until that is ruled on, with the reason written into the script.
+- **`export` has no shape for a tree that is both a library and an app.** It is
+  defined for kernels — "a bounded context's domain is never exported" — yet the
+  wheel ships `tessercheck.*`, a context, and `tessercheck-py/.tesser-root`
+  carries no `export` line. TB044 already describes a distributed library
+  (`export tesser`, top level is the kernel and tests) and the norm describes a
+  runnable app; `tessercheck-py` is both, and that combination is undecided.
+
 ## [0.0.67.1] - 2026-08-19
 
 ### Fixed
