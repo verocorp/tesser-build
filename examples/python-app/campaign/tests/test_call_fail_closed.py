@@ -39,6 +39,9 @@ class FakeCampaignRepositoryRecording(campaign_repository.CampaignRepository):
         self, request: campaign_repository.SaveCampaignRequest
     ) -> campaign_repository.SaveCampaignResponse:
         self.saved.append(request)
+        self._record = campaign_repository.CampaignRecord(
+            id=request.id, budget=request.budget, links=request.links
+        )
         return campaign_repository.SaveCampaignResponse()
 
     def find(
