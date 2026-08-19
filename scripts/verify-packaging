@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+#
+# The gate on what `pip install` actually gets you.
+#
+# scripts/verify runs every tree from a checkout, with PYTHONPATH pointing at
+# the source. That says nothing about the distributions: a module can be
+# absent from a wheel's package list, or import a package the wheel does not
+# ship, and every checkout gate stays green. Both have happened — the
+# tessercheck.application.ports omission, and tessercheck.adapters.handlers
+# importing protocol.cli, which is unshippable.
+#
+# So this builds the three distributions, installs them into a throwaway
+# virtualenv with no source tree on the path, imports every shipped module,
+# and runs the console script for real against a known-clean example tree.
+set -uo pipefail
+
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$ROOT" || exit 1
+
+VENV=$(mktemp -d)
+trap 'rm -rf "$VENV"' EXIT
+
+step() { echo "  → $*"; }
+
+step "clean virtualenv"
+python3 -m venv "$VENV/venv" || exit 1
+PY="$VENV/venv/bin/python"
+"$PY" -m pip install --quiet --upgrade pip >/dev/null || exit 1
+
+# Build from a pristine copy, never from the working tree. setuptools keeps a
+# full duplicate of the source under build/lib, and it does not prune: a
+# package dropped from pyproject.toml still ships, from the stale copy, and the
+# wheel silently disagrees with the package list that produced it. Verified —
+# it is how the tessercheck.adapters.handlers removal appeared not to take.
+step "pristine copy of the three distributions"
+for dist in tesser-py tessercheck-py tessercheck-cli; do
+  cp -R "$ROOT/$dist" "$VENV/$dist" || exit 1
+  rm -rf "$VENV/$dist/build" "$VENV/$dist"/*.egg-info
+done
+
+step "pip install tesser-py tessercheck-py tessercheck-cli"
+"$PY" -m pip install --quiet "$VENV/tesser-py" "$VENV/tessercheck-py" "$VENV/tessercheck-cli" || exit 1
+
+# Every module the wheel ships has to import from the wheel alone. The walk is
+# over what is installed, not over a hand-kept list, so a package added to
+# pyproject.toml is covered the moment it ships.
+#
+# Sibling test modules are skipped, and that is a compromise, not a decision.
+# TB074 puts every test beside the module it names, and setuptools ships every
+# .py in a listed package, so the wheels carry their own test modules and those
+# import pytest, which is not a runtime dependency. Keeping the wheels free of
+# them needs a custom build_py, or tests somewhere other than beside the code.
+# Until that is ruled on, the walk covers production modules only.
+step "every shipped module imports"
+(cd "$VENV" && "$PY" - <<'PY'
+import importlib
+import pkgutil
+import sys
+
+failed = []
+for dist in ("tesser", "tessercheck", "tessercheck_cli"):
+    package = importlib.import_module(dist)
+    for info in pkgutil.walk_packages(package.__path__, dist + "."):
+        leaf = info.name.rsplit(".", 1)[-1]
+        if leaf.startswith("test_") or leaf == "conftest":
+            continue
+        try:
+            importlib.import_module(info.name)
+        except Exception as error:
+            failed.append(f"{info.name}: {type(error).__name__}: {error}")
+for line in failed:
+    print(line, file=sys.stderr)
+sys.exit(1 if failed else 0)
+PY
+) || exit 1
+
+# From $VENV, not from the repo: the console script has to work with no source
+# tree anywhere near the working directory.
+step "tessercheck-check over a clean tree"
+(cd "$VENV" && "$VENV/venv/bin/tessercheck-check" "$ROOT/examples/ports")
+case $? in
+  0) ;;
+  1) echo "tessercheck-check reported findings on examples/ports, which is a gated clean tree" >&2; exit 1 ;;
+  *) echo "tessercheck-check failed to run" >&2; exit 1 ;;
+esac
+
+# A tree with findings has to come back as exit 1, or a green CI run would only
+# mean the command started.
+step "tessercheck-check reports findings"
+FIXTURE="$VENV/dirty"
+mkdir -p "$FIXTURE" || exit 1
+printf 'app\n' > "$FIXTURE/.tesser-root"
+printf 'x = 1\n' > "$FIXTURE/homeless.py"
+(cd "$VENV" && "$VENV/venv/bin/tessercheck-check" "$FIXTURE" >/dev/null)
+if [ $? -ne 1 ]; then
+  echo "tessercheck-check did not report findings on a tree that has them" >&2
+  exit 1
+fi
+
+step "usage"
+(cd "$VENV" && "$VENV/venv/bin/tessercheck-check" a b >/dev/null 2>&1)
+if [ $? -ne 2 ]; then
+  echo "tessercheck-check did not reject extra arguments with exit 2" >&2
+  exit 1
+fi
+
+echo
+echo "packaging green"

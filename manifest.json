@@ -24,5 +24,6 @@
   "scripts": "ungated",
   "skills": "ungated",
   "tesser-py": "app",
+  "tessercheck-cli": "ungated",
   "tessercheck-py": "app"
 }

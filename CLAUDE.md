@@ -5,7 +5,9 @@ inspiration, chosen for changeability, enforced where mechanically decidable;
 the build-side member of the tesser family): the `go/analysis` analyzers in
 `cmd/tessercheck` (composed from `internal/analyzers.All`), a golangci-lint module
 plugin (`gclplugin/`), the Python analyzer (`tessercheck-py/` — the `TB0*`
-checks), a Python runtime library (`tesser-py/` — `tesser.domain.ValueObject`,
+checks) and its packaged console entry point (`tessercheck-cli/` — the
+`tessercheck-check` command, so a consumer repo can run the analyzer from an
+install instead of a checkout), a Python runtime library (`tesser-py/` — `tesser.domain.ValueObject`,
 the repo's first shipped runtime dependency rather than a build-time checker;
 candidate mutation-testable VO base — the mutmut-visibility claim is asserted
 by the ecosystem test in `tesser-py/tests/ecosystem/mutmut/`), an executable

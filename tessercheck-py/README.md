@@ -9,9 +9,10 @@ against its declaration. It is written in the idiom it checks and runs over
 its own tree in CI.
 
 The full rule set is [`RULES.md`](RULES.md) — generated from the
-implementation by `rules.py`, never hand-edited; one row per normative
-clause, with a family code and exact fixture coverage. `python3 rules.py
---check` (and a test) fails when it drifts.
+implementation by `srv/cli/rules.py`, never hand-edited; one row per
+normative clause, with a family code and exact fixture coverage.
+`PYTHONPATH=.:../tesser-py python3 -m srv.cli.rules --check` (and a test)
+fails when it drifts.
 
 The pre-merge analyzer (the frozen-dataclass-era `TB001`–`TB033` checks with
 the structural classifier) is gone: every example tree now declares its
@@ -73,6 +74,33 @@ to hide stays visible. TB043 reader findings (unparseable, unreadable, or
 twice-defined files) are never inline-suppressible — a file the parser
 cannot read cannot carry a working marker, so those are fixed, not excused.
 
+### From an install, outside a checkout
+
+A consumer repo cannot depend on a checkout being there, and the host is not
+shippable: `srv/cli/main.py` imports `app.loader` and `protocol.cli`, and
+`app`, `srv`, and `protocol` are the names TB040 mandates — every tesser app
+has its own, so a wheel that put them in site-packages would give the consumer
+two of each. The wheel therefore ships what a distribution can honestly ship,
+the component and its client, and the console entry point lives in its own
+distribution, [`tessercheck-cli`](../tessercheck-cli/):
+
+```sh
+tessercheck-check /path/to/tree
+```
+
+Same exit codes, same one-finding-per-line output. `tessercheck-check` is a
+distinct command from the pre-graduation `python -m tessercheck --app-root .`,
+so a repo migrating off the old analyzer can install both without either
+shadowing the other. Installation, and why all three distributions are named
+in one `pip install`, are in that directory's README.
+
+`scripts/verify-packaging` is the gate on all of this: it builds the three
+distributions from a pristine copy, installs them into a clean virtualenv with
+no source tree on the path, imports every shipped module, and runs
+`tessercheck-check` for real. The checkout gates cannot see packaging defects —
+they run with `PYTHONPATH` pointed at the source, where a module missing from
+a wheel's package list imports perfectly well.
+
 ## What to expect on an arbitrary tree
 
 - **The target is parsed, never imported.** It needs nothing installed and
@@ -100,7 +128,7 @@ cannot read cannot carry a working marker, so those are fixed, not excused.
 
 ```sh
 PYTHONPATH=.:../tesser-py python3 -m srv.cli.main .  # self-check: must be clean
-python3 rules.py --check                             # RULES.md drift gate
+python3 -m srv.cli.rules --check                     # RULES.md drift gate
 MYPYPATH=.:../tesser-py mypy                         # --strict via pyproject
 pytest -q
 PYTHONPATH=.:../tesser-py lint-imports --no-cache    # the import contracts

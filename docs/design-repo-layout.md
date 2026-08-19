@@ -83,7 +83,30 @@ when someone has a real performance problem):
   `ts.ValueObject` but skips a dataclass — is now an ecosystem test in
   `tesser-py/tests/ecosystem/mutmut/`, so the tree retired.)
 - `ungated` — not part of the Python gates (Go directories are covered by the
-  Go jobs; docs and skills by their own checks).
+  Go jobs; docs and skills by their own checks; `tessercheck-cli` by the
+  packaging job, below).
+
+`tessercheck-cli` is the one `ungated` row that holds production Python, and
+it is worth saying why rather than leaving it to look like an oversight. It is
+the console entry point for the analyzer — the `tessercheck-check` command a
+consumer repo installs. It cannot be part of `tessercheck-py`, because the
+analyzer's own host is `srv/cli/main.py` and it imports `app.loader` and
+`protocol.cli`: TB040 mandates those names, every tesser app has its own set,
+and a wheel that put them in site-packages would give a consumer two of each,
+resolved by working directory. So the wheel ships the component and its
+client, the entry point ships separately under a name nothing collides with,
+and the shim holds one composition root and no domain rules — there is nothing
+for tessercheck to check.
+
+The gap that leaves is real, and `scripts/verify-packaging` closes it. Every
+tree gate runs from a checkout with `PYTHONPATH` pointed at the source, which
+means a module missing from a wheel's package list — or one importing a
+package the wheel cannot ship — passes every gate in this repo. Both have
+happened. The packaging job builds the three distributions from a pristine
+copy (setuptools does not prune `build/lib`, so a package dropped from
+`pyproject.toml` still ships from the stale duplicate), installs them into a
+clean virtualenv with no source tree on the path, imports everything shipped,
+and runs `tessercheck-check` for real against a clean tree and a dirty one.
 
 Earlier drafts had eleven kinds; nine were labels that nothing read, so they
 could rot without anything noticing. And a word in a file can be typo'd, so
