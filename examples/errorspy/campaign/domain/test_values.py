@@ -48,3 +48,17 @@ def test_date_window_order_invariant() -> None:
         values.DateWindow("2026-02-01", "2026-01-01")
     assert ei.value.kind is Kind.VALIDATION
     assert ei.value.code == "window_order"
+
+
+def test_campaign_id_valid() -> None:
+    assert str(values.CampaignID("c1")) == "c1"
+    assert values.CampaignID("c1") == values.CampaignID("c1")
+    assert values.CampaignID("c1") != values.CampaignID("c2")
+
+
+def test_campaign_id_empty_raises_validation() -> None:
+    with pytest.raises(DomainError) as ei:
+        values.CampaignID("")
+    assert ei.value.kind is Kind.VALIDATION
+    assert ei.value.code == "bad_campaign_id"
+    assert ei.value.field == "campaign_id"

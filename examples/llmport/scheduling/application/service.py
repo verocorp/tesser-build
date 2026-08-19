@@ -18,37 +18,57 @@ class BookingService(ts.ApplicationService):
         self._repository = repository
 
     def begin(self, request: client.BeginBookingRequest) -> client.BookingStateResponse:
-        found = self._repository.find(booking_repository.FindBookingRequest(booking_id=request.booking_id))  # tessercheck:ignore TB082
+        booking_id = domain.BookingID(request.booking_id)
+        booking_id_text = str(booking_id)
+        found = self._repository.find(booking_repository.FindBookingRequest(booking_id=booking_id_text))
         booking = views.began(found)
-        self._repository.save(views.save_request(request.booking_id, booking))  # tessercheck:ignore TB082
-        return views.state(booking, views.begin_reply(found))  # tessercheck:ignore TB082
+        save_booking_request = views.save_request(booking_id_text, booking)
+        self._repository.save(save_booking_request)
+        begin_reply = views.begin_reply(found)
+        return views.state(booking, begin_reply)
 
     def provide_name(self, request: client.ProvideNameRequest) -> client.BookingStateResponse:
-        found = self._repository.find(booking_repository.FindBookingRequest(booking_id=request.booking_id))  # tessercheck:ignore TB082
+        booking_id = domain.BookingID(request.booking_id)
+        booking_id_text = str(booking_id)
+        found = self._repository.find(booking_repository.FindBookingRequest(booking_id=booking_id_text))
         booking = views.loaded(found)
         available = self._directory.available(slot_directory.AvailableSlotsRequest())
         offered = tuple(domain.Slot(label) for label in available.slots)
         booking.provide_name(domain.CustomerName(request.name), offered)
-        self._repository.save(views.save_request(request.booking_id, booking))  # tessercheck:ignore TB082
+        save_booking_request = views.save_request(booking_id_text, booking)
+        self._repository.save(save_booking_request)
         return views.state(booking, "offer the caller the available slots")
 
     def choose_slot(self, request: client.ChooseSlotRequest) -> client.BookingStateResponse:
-        found = self._repository.find(booking_repository.FindBookingRequest(booking_id=request.booking_id))  # tessercheck:ignore TB082
+        booking_id = domain.BookingID(request.booking_id)
+        booking_id_text = str(booking_id)
+        found = self._repository.find(booking_repository.FindBookingRequest(booking_id=booking_id_text))
         booking = views.loaded(found)
         booking.choose_slot(domain.Slot(request.slot))
-        self._repository.save(views.save_request(request.booking_id, booking))  # tessercheck:ignore TB082
+        save_booking_request = views.save_request(booking_id_text, booking)
+        self._repository.save(save_booking_request)
         return views.state(booking, f"slot {booking.chosen()} selected; ask the caller to confirm")
 
-    def confirm(self, request: client.ConfirmBookingRequest) -> client.BookingStateResponse:
-        found = self._repository.find(booking_repository.FindBookingRequest(booking_id=request.booking_id))  # tessercheck:ignore TB082
+    def confirm(self, request: client.ConfirmBookingRequest) -> client.BookingStateResponse:  # tessercheck:ignore TB082
+        booking_id = domain.BookingID(request.booking_id)
+        booking_id_text = str(booking_id)
+        found = self._repository.find(booking_repository.FindBookingRequest(booking_id=booking_id_text))
         booking = views.loaded(found)
         booking.confirm()
-        slot, name = str(booking.chosen()), str(booking.name())  # tessercheck:ignore TB082
+        chosen_slot = booking.chosen()
+        customer_name = booking.name()
+        slot, name = str(chosen_slot), str(customer_name)
         reserved = self._directory.reserve(slot_directory.ReserveSlotRequest(slot=slot, name=name))
-        settled = views.confirmed(reserved, booking, views.only(found))  # tessercheck:ignore TB082
-        self._repository.save(views.save_request(request.booking_id, settled))  # tessercheck:ignore TB082
-        return views.state(settled, views.confirm_reply(reserved, booking))  # tessercheck:ignore TB082
+        only = views.only(found)
+        settled = views.confirmed(reserved, booking, only)
+        save_booking_request = views.save_request(booking_id_text, settled)
+        self._repository.save(save_booking_request)
+        confirm_reply = views.confirm_reply(reserved, booking)
+        return views.state(settled, confirm_reply)
 
     def status(self, request: client.StatusRequest) -> client.BookingStateResponse:
-        found = self._repository.find(booking_repository.FindBookingRequest(booking_id=request.booking_id))  # tessercheck:ignore TB082
-        return views.state(views.loaded(found), "continue the booking")  # tessercheck:ignore TB082
+        booking_id = domain.BookingID(request.booking_id)
+        booking_id_text = str(booking_id)
+        found = self._repository.find(booking_repository.FindBookingRequest(booking_id=booking_id_text))
+        loaded = views.loaded(found)
+        return views.state(loaded, "continue the booking")

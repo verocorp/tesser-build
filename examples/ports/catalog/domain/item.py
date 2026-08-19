@@ -1,5 +1,20 @@
 import tesser.domain as ts
 
+from tesser.serialization import canonical_str
+
+
+class ItemID(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        if not value:
+            raise ValueError("id must be non-empty")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return canonical_str(self._value)
+
 
 class ItemSpec(ts.Spec):
 

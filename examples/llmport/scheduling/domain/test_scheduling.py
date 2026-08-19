@@ -198,3 +198,18 @@ def test_reconstitution_rejects_inconsistent_parts() -> None:
         domain.Booking(domain.BookingSpec(step="collect_name", name="Ada", chosen="", offered=()))
     with pytest.raises(ValueError):
         domain.Booking(domain.BookingSpec(step="confirm", name="Ada", chosen="wed-4pm", offered=("mon-9am",)))
+
+
+def test_booking_id_equality() -> None:
+    assert domain.BookingID("b1") == domain.BookingID("b1")
+    assert domain.BookingID("b1") != domain.BookingID("b2")
+    assert hash(domain.BookingID("b1")) == hash(domain.BookingID("b1"))
+
+
+def test_a_booking_id_must_be_non_empty() -> None:
+    with pytest.raises(ValueError, match="booking id must be non-empty"):
+        domain.BookingID("")
+
+
+def test_a_booking_id_is_kept_exactly_as_it_was_given() -> None:
+    assert str(domain.BookingID(" b1 ")) == " b1 "
