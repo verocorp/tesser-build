@@ -5,6 +5,52 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.67.0] - 2026-08-19
+
+Nothing raw from the wire reaches a port. A new TB082 clause says so, and two
+contexts gained the domain object they were missing in order to satisfy it.
+
+### Added
+- **`a value crossing into a port has passed through a domain type`** (TB082).
+  A service method may not put a field of its request into a port call. The
+  value goes through a value object or an aggregate first, which is where
+  validation lives. Measured before it was written: 21 sites across every tree
+  but one, each an unvalidated lookup key handed to a repository.
+- **`checks.TreeRoot` (tessercheck-py) and `rules.RepoRoot` (layout).** Both
+  carry the invariants a *given* location has and a *reported* one does not —
+  non-empty, no trailing separator. Existence stays in the reader: a value
+  object that stats the disk stops being a value.
+
+### Changed
+- **`root` becomes `tree` throughout tessercheck-py.** The analyzer's own rules
+  say "the checked tree" in four places and its code said `root`, which is the
+  reader's word. The correction runs through the client DTO, both port requests,
+  and the adapters. `ReadSourcesResponse.root: RootForm` keeps its name — that is
+  the parsed `.tesser-root` declaration, a different concept.
+- **`root` becomes `repo_root` throughout layout**, where the missing piece was
+  the type rather than the word: `Repo` is an aggregate with no ID value object,
+  which TB012 would have wanted.
+- **`get_campaign` reads through the query port.** It validates the id with
+  `values.CampaignID` — 16 lowercase hex — before the lookup, so a malformed id
+  is a validation error rather than a not-found. `required_campaign` and
+  `campaign_view` lose their last caller on this path.
+- **`add_link` maps instead of delegating.** The two guard functions
+  (`ensure_target_allowed`, `ensure_slug_available`) fold into
+  `MapToShortLinkSpec`, which reads both measured outcomes and raises, so the
+  spec cannot be built unless both checks pass. `MapToCampaignSpecFromRecord`
+  replaces `required_campaign` on the write path; `MapToCheckTargetRequest` and
+  `MapToSlugTakenRequest` take a domain value object and expose the primitive
+  their port speaks, so no `str()` call remains in the service.
+
+### Ignored, not fixed
+Twelve sites carry a site-level ignore for the new clause — errorspy 3, llmport
+5, ports 2, python-app 2. Every one is an unvalidated lookup key. `ports` is the
+exemplar tree for the ports convention and should be fixed rather than
+suppressed; it is the first thing to pick up next.
+
+`create_campaign` and `get_campaign` carry **no ignore of any kind**. `add_link`
+carries one, for body length, by ruling.
+
 ## [0.0.66.0] - 2026-08-18
 
 A helper builds any construction data, not just a spec — and the constant that
