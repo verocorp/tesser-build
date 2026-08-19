@@ -16,7 +16,9 @@ class ReportsService(ts.ApplicationService):
         self._verdicts = verdicts
 
     def links_by_verdict(self, req: client.LinksByVerdictRequest) -> client.LinksByVerdictResponse:
-        links = reports_views.domain_links(self._links.links(link_source.ListLinksRequest()))  # tessercheck:ignore TB082
-        verdicts = reports_views.domain_verdicts(self._verdicts.verdicts(verdict_source.ListVerdictsRequest()))  # tessercheck:ignore TB082
+        listed_links = self._links.links(link_source.ListLinksRequest())
+        links = reports_views.domain_links(listed_links)
+        listed_verdicts = self._verdicts.verdicts(verdict_source.ListVerdictsRequest())
+        verdicts = reports_views.domain_verdicts(listed_verdicts)
         rows = report.join_links_with_verdicts(links, verdicts)
         return reports_views.links_by_verdict_response(rows)

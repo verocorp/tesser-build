@@ -15,8 +15,11 @@ class LinkPolicyService(ts.ApplicationService):
         self._policy = policy.Policy()
 
     def check(self, req: client.CheckRequest) -> client.CheckResponse:
-        verdict = self._policy.evaluate(req.target_url)  # tessercheck:ignore TB082
-        self._repo.record(linkpolicy_views.record_request(verdict))  # tessercheck:ignore TB082
+        target_url = policy.TargetURL(req.target_url)
+        target_url_text = str(target_url)
+        verdict = self._policy.evaluate(target_url_text)
+        record_verdict_request = linkpolicy_views.record_request(verdict)
+        self._repo.record(record_verdict_request)
         return linkpolicy_views.check_response(verdict)
 
     def list_verdicts(self, req: client.ListVerdictsRequest) -> client.ListVerdictsResponse:
