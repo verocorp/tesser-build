@@ -530,8 +530,8 @@ def test_the_campaign_view_mapper_copies_the_row_into_the_view() -> None:
     assert mapper.campaign_id == "0123456789abcdef"
     assert mapper.budget_amount == "10.00"
     assert mapper.budget_currency == "USD"
-    assert [link.slug for link in mapper.link_views] == ["promo"]
-    assert [link.status for link in mapper.link_views] == ["inactive"]
+    assert [link.slug for link in mapper.link_rows] == ["promo"]
+    assert [link.status for link in mapper.link_rows] == ["inactive"]
 
 
 def test_the_campaign_view_mapper_refuses_a_missing_campaign() -> None:
@@ -568,8 +568,8 @@ def test_the_save_request_mapper_stringifies_the_aggregate_into_records() -> Non
     assert mapper.record_id == "0123456789abcdef"
     assert mapper.money_record_mapper.amount == "10.00"
     assert mapper.money_record_mapper.currency == "USD"
-    assert [record.slug for record in mapper.link_records] == ["promo", "old"]
-    assert [record.status for record in mapper.link_records] == ["active", "inactive"]
+    assert [m.slug for m in mapper.link_record_mappers] == ["promo", "old"]
+    assert [m.status for m in mapper.link_record_mappers] == ["active", "inactive"]
 
 
 def test_the_save_request_mapper_maps_no_links_to_no_records() -> None:
@@ -579,7 +579,7 @@ def test_the_save_request_mapper_maps_no_links_to_no_records() -> None:
         links=short_links.ShortLinksSpec(links=()),
     ))
     mapper = service.MapToSaveCampaignRequest(campaign_aggregate=aggregate)
-    assert mapper.link_records == ()
+    assert mapper.link_record_mappers == ()
 
 
 def test_the_campaign_spec_mapper_exposes_what_it_was_given() -> None:

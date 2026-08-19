@@ -93,23 +93,41 @@ class MapToMoneyRecord(ts.Mapper):
         return self._currency
 
 
+class MapToLinkRecord(ts.Mapper):
+
+    def __init__(self, short_link_entity: short_link.ShortLink) -> None:
+        self._short_link_entity = short_link_entity
+        self._slug = str(short_link_entity.slug)
+        self._target_url = str(short_link_entity.target_url)
+        self._status = str(short_link_entity.status)
+
+    @property
+    def short_link_entity(self) -> short_link.ShortLink:
+        return self._short_link_entity
+
+    @property
+    def slug(self) -> str:
+        return self._slug
+
+    @property
+    def target_url(self) -> str:
+        return self._target_url
+
+    @property
+    def status(self) -> str:
+        return self._status
+
+
 class MapToSaveCampaignRequest(ts.Mapper):
 
     def __init__(self, campaign_aggregate: campaign.Campaign) -> None:
-        record_links: list[campaign_repository.LinkRecord] = []
+        link_record_mappers: list[MapToLinkRecord] = []
         for link in campaign_aggregate.links:
-            record_slug = str(link.slug)
-            record_target_url = str(link.target_url)
-            record_status = str(link.status)
-            record_links.append(campaign_repository.LinkRecord(  # tessercheck:ignore TB080
-                slug=record_slug,
-                target_url=record_target_url,
-                status=record_status,
-            ))
+            link_record_mappers.append(MapToLinkRecord(short_link_entity=link))
         self._campaign_aggregate = campaign_aggregate
         self._record_id = str(campaign_aggregate.id)
         self._money_record_mapper = MapToMoneyRecord(campaign_aggregate=campaign_aggregate)
-        self._link_records = tuple(record_links)
+        self._link_record_mappers = tuple(link_record_mappers)
 
     @property
     def campaign_aggregate(self) -> campaign.Campaign:
@@ -124,8 +142,8 @@ class MapToSaveCampaignRequest(ts.Mapper):
         return self._money_record_mapper
 
     @property
-    def link_records(self) -> tuple[campaign_repository.LinkRecord, ...]:
-        return self._link_records
+    def link_record_mappers(self) -> tuple[MapToLinkRecord, ...]:
+        return self._link_record_mappers
 
 
 class MapToCampaignView(ts.Mapper):
@@ -145,19 +163,12 @@ class MapToCampaignView(ts.Mapper):
                 )
             case _ as unreachable:
                 typing.assert_never(unreachable)
-        link_views: list[client.LinkView] = []
-        for link in row.links:
-            link_views.append(client.LinkView(  # tessercheck:ignore TB080
-                slug=link.slug,
-                target_url=link.target_url,
-                status=link.status,
-            ))
         self._find_campaign_view_request = find_campaign_view_request
         self._found_campaign_view = found_campaign_view
         self._campaign_id = row.campaign_id
         self._budget_amount = row.budget_amount
         self._budget_currency = row.budget_currency
-        self._link_views = tuple(link_views)
+        self._link_rows = row.links
 
     @property
     def find_campaign_view_request(self) -> campaign_queries.FindCampaignViewRequest:
@@ -180,8 +191,8 @@ class MapToCampaignView(ts.Mapper):
         return self._budget_currency
 
     @property
-    def link_views(self) -> tuple[client.LinkView, ...]:
-        return self._link_views
+    def link_rows(self) -> tuple[campaign_queries.LinkViewRow, ...]:
+        return self._link_rows
 
 
 class MapToCheckTargetRequest(ts.Mapper):
@@ -284,19 +295,12 @@ class MapToCampaignSpecFromRecord(ts.Mapper):
                 )
             case _ as unreachable:
                 typing.assert_never(unreachable)
-        link_specs: list[short_link.ShortLinkSpec] = []
-        for link in record.links:
-            link_specs.append(short_link.ShortLinkSpec(  # tessercheck:ignore TB080
-                slug=link.slug,
-                target_url=link.target_url,
-                active=link.status == "active",  # tessercheck:ignore TB080
-            ))
         self._find_campaign_request = find_campaign_request
         self._found_campaign = found_campaign
         self._campaign_id = record.id
         self._budget_amount = record.budget.amount
         self._budget_currency = record.budget.currency
-        self._links = short_links.ShortLinksSpec(links=tuple(link_specs))  # tessercheck:ignore TB080
+        self._link_records = record.links
 
     @property
     def find_campaign_request(self) -> campaign_repository.FindCampaignRequest:
@@ -319,8 +323,8 @@ class MapToCampaignSpecFromRecord(ts.Mapper):
         return self._budget_currency
 
     @property
-    def links(self) -> short_links.ShortLinksSpec:
-        return self._links
+    def link_records(self) -> tuple[campaign_repository.LinkRecord, ...]:
+        return self._link_records
 
 
 class CampaignService(ts.ApplicationService):
@@ -337,7 +341,7 @@ class CampaignService(ts.ApplicationService):
         self._identity_gateway = identity_gateway
         self._queries = queries
 
-    def create_campaign(self, req: client.CreateCampaignRequest) -> client.CampaignView:
+    def create_campaign(self, req: client.CreateCampaignRequest) -> client.CampaignView:  # tessercheck:ignore TB082
         issued_campaign_identity = self._identity_gateway.issue(
             campaign_identity.IssueCampaignIdentityRequest()
         )
@@ -356,13 +360,21 @@ class CampaignService(ts.ApplicationService):
         ))
 
         save_request_mapper = MapToSaveCampaignRequest(campaign_aggregate=c)
+        link_records = tuple(
+            campaign_repository.LinkRecord(
+                slug=link_record_mapper.slug,
+                target_url=link_record_mapper.target_url,
+                status=link_record_mapper.status,
+            )
+            for link_record_mapper in save_request_mapper.link_record_mappers
+        )
         self._repo.save(campaign_repository.SaveCampaignRequest(
             id=save_request_mapper.record_id,
             budget=campaign_repository.MoneyRecord(
                 amount=save_request_mapper.money_record_mapper.amount,
                 currency=save_request_mapper.money_record_mapper.currency,
             ),
-            links=save_request_mapper.link_records,
+            links=link_records,
         ))
 
         find_campaign_view_request = campaign_queries.FindCampaignViewRequest(
@@ -373,11 +385,15 @@ class CampaignService(ts.ApplicationService):
             find_campaign_view_request=find_campaign_view_request,
             found_campaign_view=found_campaign_view,
         )
+        link_views = tuple(
+            client.LinkView(slug=link.slug, target_url=link.target_url, status=link.status)
+            for link in campaign_view_mapper.link_rows
+        )
         return client.CampaignView(
             campaign_id=campaign_view_mapper.campaign_id,
             budget_amount=campaign_view_mapper.budget_amount,
             budget_currency=campaign_view_mapper.budget_currency,
-            links=campaign_view_mapper.link_views,
+            links=link_views,
         )
 
     def add_link(self, req: client.AddLinkRequest) -> client.CampaignView:  # tessercheck:ignore TB082
@@ -406,13 +422,22 @@ class CampaignService(ts.ApplicationService):
             find_campaign_request=find_campaign_request,
             found_campaign=found_campaign,
         )
+        link_specs = tuple(
+            short_link.ShortLinkSpec(
+                slug=link_record.slug,
+                target_url=link_record.target_url,
+                active=link_record.status == "active",
+            )
+            for link_record in campaign_spec_mapper.link_records
+        )
+        links_spec = short_links.ShortLinksSpec(links=link_specs)
         c = campaign.Campaign(campaign.CampaignSpec(
             id=campaign_spec_mapper.campaign_id,
             budget=money.MoneySpec(
                 amount=campaign_spec_mapper.budget_amount,
                 currency=campaign_spec_mapper.budget_currency,
             ),
-            links=campaign_spec_mapper.links,
+            links=links_spec,
         ))
         c.add_short_link(short_link.ShortLinkSpec(
             slug=short_link_spec_mapper.slug,
@@ -421,13 +446,21 @@ class CampaignService(ts.ApplicationService):
         ))
 
         save_request_mapper = MapToSaveCampaignRequest(campaign_aggregate=c)
+        link_records = tuple(
+            campaign_repository.LinkRecord(
+                slug=link_record_mapper.slug,
+                target_url=link_record_mapper.target_url,
+                status=link_record_mapper.status,
+            )
+            for link_record_mapper in save_request_mapper.link_record_mappers
+        )
         self._repo.save(campaign_repository.SaveCampaignRequest(
             id=save_request_mapper.record_id,
             budget=campaign_repository.MoneyRecord(
                 amount=save_request_mapper.money_record_mapper.amount,
                 currency=save_request_mapper.money_record_mapper.currency,
             ),
-            links=save_request_mapper.link_records,
+            links=link_records,
         ))
 
         find_campaign_view_request = campaign_queries.FindCampaignViewRequest(
@@ -438,18 +471,25 @@ class CampaignService(ts.ApplicationService):
             find_campaign_view_request=find_campaign_view_request,
             found_campaign_view=found_campaign_view,
         )
+        link_views = tuple(
+            client.LinkView(slug=link.slug, target_url=link.target_url, status=link.status)
+            for link in campaign_view_mapper.link_rows
+        )
         return client.CampaignView(
             campaign_id=campaign_view_mapper.campaign_id,
             budget_amount=campaign_view_mapper.budget_amount,
             budget_currency=campaign_view_mapper.budget_currency,
-            links=campaign_view_mapper.link_views,
+            links=link_views,
         )
 
     def deactivate_link(self, req: client.DeactivateLinkRequest) -> client.CampaignView:
-        found = self._repo.find(campaign_repository.FindCampaignRequest(campaign_id=req.campaign_id))  # tessercheck:ignore TB082
-        c = campaign_views.required_campaign(found, req.campaign_id)
+        campaign_id = values.CampaignID(req.campaign_id)
+        campaign_id_text = str(campaign_id)
+        found = self._repo.find(campaign_repository.FindCampaignRequest(campaign_id=campaign_id_text))
+        c = campaign_views.required_campaign(found, campaign_id_text)
         c.deactivate_short_link(values.Slug(req.slug))
-        self._repo.save(campaign_views.save_request(c))  # tessercheck:ignore TB082
+        save_campaign_request = campaign_views.save_request(c)
+        self._repo.save(save_campaign_request)
         return campaign_views.campaign_view(c)
 
     def get_campaign(self, req: client.GetCampaignRequest) -> client.CampaignView:
@@ -463,17 +503,22 @@ class CampaignService(ts.ApplicationService):
             find_campaign_view_request=find_campaign_view_request,
             found_campaign_view=found_campaign_view,
         )
+        link_views = tuple(
+            client.LinkView(slug=link.slug, target_url=link.target_url, status=link.status)
+            for link in campaign_view_mapper.link_rows
+        )
         return client.CampaignView(
             campaign_id=campaign_view_mapper.campaign_id,
             budget_amount=campaign_view_mapper.budget_amount,
             budget_currency=campaign_view_mapper.budget_currency,
-            links=campaign_view_mapper.link_views,
+            links=link_views,
         )
 
     def resolve(self, req: client.ResolveRequest) -> client.ResolveResponse:
         slug = str(values.Slug(req.slug))
         found = self._repo.find_by_slug(campaign_repository.FindCampaignBySlugRequest(slug=slug))
-        return client.ResolveResponse(target_url=campaign_views.resolved_target(found, slug))  # tessercheck:ignore TB082
+        target_url = campaign_views.resolved_target(found, slug)
+        return client.ResolveResponse(target_url=target_url)
 
     def list_links(self, req: client.ListLinksRequest) -> client.ListLinksResponse:
         listed = self._repo.all(campaign_repository.ListCampaignsRequest())
