@@ -5,6 +5,16 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.67.1] - 2026-08-19
+
+### Fixed
+- **`pip install tessercheck-py` now ships `tessercheck.application.ports`.**
+  The explicit `[tool.setuptools]` packages list omitted the ports subpackage,
+  so an installed wheel failed at import time on
+  `tessercheck.application.ports` even though the source tree worked. The
+  missing row is added; verified with a clean-venv install and an import of
+  both port modules.
+
 ## [0.0.67.0] - 2026-08-19
 
 Nothing raw from the wire reaches a port. A new TB082 clause says so, and two
