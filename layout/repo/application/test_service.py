@@ -15,7 +15,7 @@ class FakeRepoReader(repo_reader.RepoReader):
         self.roots: list[str] = []
 
     def read(self, request: repo_reader.ReadRepoRequest) -> repo_reader.ReadRepoResponse:
-        self.roots.append(request.root)
+        self.roots.append(request.repo_root)
         return self._response
 
 
@@ -73,19 +73,19 @@ def _response(
 
 def test_check_passes_the_root_to_the_port() -> None:
     reader = FakeRepoReader(_response())
-    service.LayoutService(reader).check(client.CheckRequest(root="/somewhere"))
+    service.LayoutService(reader).check(client.CheckRequest(repo_root="/somewhere"))
     assert reader.roots == ["/somewhere"]
 
 
 def test_trees_passes_the_root_to_the_port() -> None:
     reader = FakeRepoReader(_response())
-    service.LayoutService(reader).trees(client.TreesRequest(root="/elsewhere"))
+    service.LayoutService(reader).trees(client.TreesRequest(repo_root="/elsewhere"))
     assert reader.roots == ["/elsewhere"]
 
 
 def test_a_clean_read_checks_clean_with_counts() -> None:
     response = service.LayoutService(FakeRepoReader(_response())).check(
-        client.CheckRequest(root=".")
+        client.CheckRequest(repo_root=".")
     )
     assert response.problems == ()
     assert response.counts == ("2", "1")
@@ -93,7 +93,7 @@ def test_a_clean_read_checks_clean_with_counts() -> None:
 
 def test_problems_come_back_rendered_as_text() -> None:
     response = service.LayoutService(FakeRepoReader(_response(kind="library"))).check(
-        client.CheckRequest(root=".")
+        client.CheckRequest(repo_root=".")
     )
     assert any(
         "manifest.json row 'appone' declares unknown kind 'library'" in problem
@@ -103,6 +103,6 @@ def test_problems_come_back_rendered_as_text() -> None:
 
 def test_trees_returns_the_app_rows() -> None:
     response = service.LayoutService(FakeRepoReader(_response())).trees(
-        client.TreesRequest(root=".")
+        client.TreesRequest(repo_root=".")
     )
     assert response.trees == ("appone",)

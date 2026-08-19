@@ -9,7 +9,7 @@ import tessercheck.domain.rulebook as rulebook
 def test_rules_md_is_current() -> None:
     root = Path(__file__).resolve().parents[2]
     read = rulebook_repository.FilesystemRulebookSources().read(
-        rulebook_sources.ReadRulebookRequest(root=str(root))
+        rulebook_sources.ReadRulebookRequest(tree=str(root))
     )
     rendered = rulebook.render(
         read.checks_text,
@@ -26,7 +26,7 @@ def test_rules_md_is_current() -> None:
 def test_every_rule_has_a_fixture() -> None:
     root = Path(__file__).resolve().parents[2]
     read = rulebook_repository.FilesystemRulebookSources().read(
-        rulebook_sources.ReadRulebookRequest(root=str(root))
+        rulebook_sources.ReadRulebookRequest(tree=str(root))
     )
     assertions = rulebook.test_assertions(
         tuple((module.name, module.text) for module in read.test_modules)

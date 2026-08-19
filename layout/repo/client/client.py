@@ -7,8 +7,8 @@ import tesser.context as ts
 
 class CheckRequest(ts.Request):
 
-    def __init__(self, root: str) -> None:
-        self.root = root
+    def __init__(self, repo_root: str) -> None:
+        self.repo_root = repo_root
 
 
 class CheckResponse(ts.Response):
@@ -20,8 +20,8 @@ class CheckResponse(ts.Response):
 
 class TreesRequest(ts.Request):
 
-    def __init__(self, root: str) -> None:
-        self.root = root
+    def __init__(self, repo_root: str) -> None:
+        self.repo_root = repo_root
 
 
 class TreesResponse(ts.Response):

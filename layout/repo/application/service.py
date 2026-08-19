@@ -3,6 +3,7 @@ from __future__ import annotations
 import tesser.application as ts
 
 import repo.application.mapping as mapping
+import repo.domain.rules as rules
 import repo.application.ports.repo_reader as repo_reader
 import repo.client.client as client
 
@@ -13,10 +14,14 @@ class LayoutService(ts.ApplicationService):
         self._reader = reader
 
     def check(self, request: client.CheckRequest) -> client.CheckResponse:
-        read = self._reader.read(repo_reader.ReadRepoRequest(root=request.root))
+        repo_root = rules.RepoRoot(request.repo_root)
+        root = str(repo_root)
+        read = self._reader.read(repo_reader.ReadRepoRequest(repo_root=root))
         problems, counts = mapping.report(read)
         return client.CheckResponse(problems=problems, counts=counts)
 
     def trees(self, request: client.TreesRequest) -> client.TreesResponse:
-        read = self._reader.read(repo_reader.ReadRepoRequest(root=request.root))
+        repo_root = rules.RepoRoot(request.repo_root)
+        root = str(repo_root)
+        read = self._reader.read(repo_reader.ReadRepoRequest(repo_root=root))
         return client.TreesResponse(trees=mapping.trees(read))  # tessercheck:ignore TB082

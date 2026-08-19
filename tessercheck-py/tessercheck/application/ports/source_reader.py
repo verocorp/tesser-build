@@ -37,8 +37,8 @@ class SourceFile(ts.Response):
 
 class ReadSourcesRequest(ts.Request):
 
-    def __init__(self, root: str) -> None:
-        self.root = root
+    def __init__(self, tree: str) -> None:
+        self.tree = tree
 
 
 class ReadSourcesResponse(ts.Response):

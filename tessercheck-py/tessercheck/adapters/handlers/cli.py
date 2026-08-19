@@ -22,7 +22,7 @@ class Handler(ts.Handler):
     def check(self, req: CliRequest) -> CliResponse:
         root = req.arg(0, _HERE)
         req.no_extra_args(1, _CHECK_USAGE)
-        view = self._client.check(client.CheckRequest(root=root))
+        view = self._client.check(client.CheckRequest(tree=root))
         return CliResponse(
             1 if view.findings else 0,
             stdout="\n".join(view.findings),
@@ -32,5 +32,5 @@ class Handler(ts.Handler):
     def rulebook(self, req: CliRequest) -> CliResponse:
         root = req.arg(0, _HERE)
         req.no_extra_args(1, _RULES_USAGE)
-        view = self._client.rulebook(client.RulebookRequest(root=root))
+        view = self._client.rulebook(client.RulebookRequest(tree=root))
         return CliResponse(0, stdout=view.rendered, stderr="")

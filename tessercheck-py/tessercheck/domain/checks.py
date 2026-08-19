@@ -491,6 +491,21 @@ def canonical_int(value: int) -> int:
     return value
 
 
+class TreeRoot(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        if not value:
+            raise ValueError("tree root must be non-empty")
+        if value.endswith("/") and value != "/":
+            raise ValueError("tree root carries no trailing separator")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return canonical_str(self._value)
+
+
 class Path(ts.ValueObject):
 
     _value: str
@@ -4683,6 +4698,54 @@ class Codebase(ts.AggregateRoot):
             )
         return tuple(found)
 
+    def _provenance_violations(
+        self, module: Module, where: str, fn: ast.FunctionDef | ast.AsyncFunctionDef
+    ) -> tuple[Violation, ...]:
+        positional = list(fn.args.args)
+        if len(positional) < 2:
+            return ()
+        request = positional[1].arg
+        found: list[Violation] = []
+        for node in ast.walk(fn):
+            if not isinstance(node, ast.Call) or not self._is_port_call(node):
+                continue
+            for inner in ast.walk(node):
+                if not isinstance(inner, ast.Attribute):
+                    continue
+                if not self._rooted_at(inner, request):
+                    continue
+                found.append(
+                    Violation(
+                        module.path(),
+                        inner.lineno,
+                        "TB082",
+                        f"{where} sends {inner.attr} from its request straight to a port; "
+                        "a value crossing into a port has passed through a domain type",
+                    )
+                )
+        return tuple(found)
+
+    @staticmethod
+    def _rooted_at(node: ast.expr, name: str) -> bool:
+        current: ast.expr = node
+        while isinstance(current, ast.Attribute):
+            current = current.value
+        return isinstance(current, ast.Name) and current.id == name
+
+    @staticmethod
+    def _is_port_call(node: ast.Call) -> bool:
+        callee = node.func
+        if not isinstance(callee, ast.Attribute):
+            return False
+        holder = callee.value
+        if not isinstance(holder, ast.Attribute):
+            return False
+        return (
+            isinstance(holder.value, ast.Name)
+            and holder.value.id == "self"
+            and holder.attr.startswith("_")
+        )
+
     @staticmethod
     def _reader_base(node: ast.expr) -> str | None:
         parts: list[str] = []
@@ -4924,6 +4987,7 @@ class Codebase(ts.AggregateRoot):
                     "a service method body is at most 10 statements",
                 )
             )
+        found.extend(self._provenance_violations(module, where, fn))
         for stmt in fn.body:
             if not isinstance(stmt, ast.Assign):
                 continue
