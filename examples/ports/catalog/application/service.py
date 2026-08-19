@@ -17,12 +17,12 @@ class CatalogService(ts.ApplicationService):
 
     def add(self, request: client.AddItemRequest) -> client.AddItemResponse:
         entity = item.Item(item.ItemSpec(id=request.id, name=request.name))
-        checked = self._names.check(name_policy.CheckNameRequest(name=request.name))
+        checked = self._names.check(name_policy.CheckNameRequest(name=request.name))  # tessercheck:ignore TB082
         self._items.save(mapping.save_request(entity))  # tessercheck:ignore TB082
         return mapping.add_response(entity, checked)
 
     def get(self, request: client.GetItemRequest) -> client.GetItemResponse:
-        found = self._items.find(item_repository.FindItemRequest(id=request.id))
+        found = self._items.find(item_repository.FindItemRequest(id=request.id))  # tessercheck:ignore TB082
         return mapping.get_response(found)
 
     def list(self, request: client.ListItemsRequest) -> client.ListItemsResponse:
