@@ -5,6 +5,15 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.67.2] - 2026-08-19
+
+### Fixed
+- **tessercheck-py's own package version moves to 0.2.1.** The 0.0.67.1
+  packages-list fix changed what the built wheel contains while the wheel's
+  version stayed 0.2.0, so two different artifacts shared one name in any
+  cache keyed on version. Separate stream from the repo version, bumped for
+  the same change.
+
 ## [0.0.67.1] - 2026-08-19
 
 ### Fixed
