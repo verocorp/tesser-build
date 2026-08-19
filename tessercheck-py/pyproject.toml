@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tessercheck-py"
-version = "0.2.0"
+version = "0.3.0"
 description = "The tesser-build construction analyzer for Python: declare-then-verify over the tesser shell classes"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = ["tesser"]
 
 [tool.setuptools]
@@ -16,7 +16,6 @@ packages = [
     "tessercheck.application",
     "tessercheck.application.ports",
     "tessercheck.adapters",
-    "tessercheck.adapters.handlers",
     "tessercheck.adapters.repositories",
     "tessercheck.client",
     "tessercheck.component",

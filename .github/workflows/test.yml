@@ -228,3 +228,20 @@ jobs:
         run: pip install -r tessercheck-py/requirements-dev.txt
       - name: tessercheck-py — self-check + RULES.md drift + mypy --strict + pytest + import contracts
         run: scripts/verify tessercheck-py
+
+  packaging:
+    # What `pip install` gets you, which no other job covers: every other gate
+    # runs from a checkout with PYTHONPATH pointed at the source, so a module
+    # missing from a wheel's package list — or one importing a package the
+    # wheel cannot ship — stays invisible. Installs the three distributions
+    # into a clean virtualenv with no source tree on the path, imports
+    # everything shipped, and runs the console script for real.
+    name: packaging (clean-venv install + tessercheck-check smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: pip install the distributions and run tessercheck-check
+        run: scripts/verify-packaging

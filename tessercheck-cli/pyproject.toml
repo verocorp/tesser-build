@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tessercheck-cli"
+version = "0.1.0"
+description = "Console entry point for the tessercheck analyzer: composes the tessercheck component and runs a check over a tree"
+requires-python = ">=3.11"
+dependencies = ["tessercheck-py"]
+
+[project.scripts]
+tessercheck-check = "tessercheck_cli.main:main"
+
+[tool.setuptools]
+packages = ["tessercheck_cli"]
