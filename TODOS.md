@@ -4,31 +4,38 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 
 ## Mapper wave follow-ups (2026-08-17, v0.0.61.0)
 
-- [ ] **12 provenance ignores, and `ports` is the wrong tree to have them.**
-  v0.0.67.0 landed "a value crossing into a port has passed through a domain
-  type" with site-level ignores in errorspy (3), llmport (5), ports (2), and
-  python-app (2 — `deactivate_link`, `linkpolicy.check`). All the same defect:
-  an unvalidated lookup key handed to a repository. `examples/ports` is the
-  exemplar people copy for the ports convention, so it should be fixed first.
-  The fix is the one `get_campaign` shows: construct the ID value object, name
-  its canonical text, pass that.
-- [ ] **`add_link` is 20 statements and carries a body-length ignore.** It does
-  six things — validate, check policy, check availability, load, mutate, save,
-  respond — and the mapper style costs a statement per boundary crossing. Either
-  the method splits, the read-back goes (it is the only reason the last three
-  statements exist), or the threshold changes. Ruling (Chris, 2026-08-19): body
-  length may be ignored here for now.
+- [x] **12 provenance ignores, and `ports` is the wrong tree to have them —
+  RESOLVED v0.0.69.0.** All twelve burned by construction, none by ignore:
+  `ports` gained `ItemID` (and `add` passes the aggregate's own reading to the
+  name policy), errorspy gained `CampaignID`, llmport gained `BookingID`,
+  python-app's `deactivate_link` validates `values.CampaignID`, and
+  `linkpolicy.check` passes through `policy.TargetURL`. A malformed lookup key
+  is now a validation error at the door instead of a lookup miss — the same
+  behaviour change `get_campaign` precedented. Every new ID value object
+  validates shape only (non-empty); existence stays with the adapter.
+- [ ] **`add_link` carries the body-length ignore, now at 24 statements.** It
+  does six things — validate, check policy, check availability, load, mutate,
+  save, respond — and the mapper style costs a statement per boundary crossing;
+  the v0.0.69.0 caller-side collection assemblies added four more. Either the
+  method splits, the read-back goes, or the threshold changes. Ruling (Chris,
+  2026-08-19): body length may be ignored here for now. `create_campaign` (11)
+  and llmport's `confirm` (15) joined the body-length-ignore set in v0.0.69.0 —
+  the only ignore kind left in any service.
 - [ ] **`MapToShortLinkSpec` takes the raw request while its neighbours take
   value objects.** `MapToCheckTargetRequest` and `MapToSlugTakenRequest` take
   `values.TargetURL` / `values.Slug`; `MapToShortLinkSpec` takes
   `add_link_request` and reads `.slug` / `.target_url` off the wire. Harmless
   only because `canonical_str` is the identity function today — the moment it
   normalizes, the slug checked for availability and the slug stored diverge.
-- [ ] **`MapToCampaignSpecFromRecord` trips three mapper clauses.** It
-  constructs `ShortLinkSpec` elements (the known collection case), constructs
-  `ShortLinksSpec` (the collection spec itself — a *second* case the clause does
-  not distinguish), and carries the literal `'active'` (the inbound bool
-  conversion, unresolvable while `ShortLinkSpec.active` is a bool).
+- [x] **`MapToCampaignSpecFromRecord` trips three mapper clauses — RESOLVED
+  v0.0.69.0.** The mapper stopped constructing: it exposes `link_records` (the
+  records it was given, passed through) and the *service* assembles the
+  `ShortLinkSpec` elements, the `ShortLinksSpec`, and the `CampaignSpec`,
+  naming each in a local. The `'active'` literal moved into the service
+  comprehension (`link_record.status == "active"`), where originating is
+  legal. Same treatment for the other two collection mappers:
+  `MapToSaveCampaignRequest` hands the service a tuple of per-element
+  `MapToLinkRecord` mappers, and `MapToCampaignView` exposes `link_rows`.
 - [x] **`@ts.helper` builds a spec, and it should build any DTO-like object —
   RESOLVED v0.0.66.0.** TB073 now reads "a helper builds a spec or a DTO",
   checked against the new `DATA_BLOCKS`. A helper may not return a Protocol
@@ -68,17 +75,15 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   constructing what it maps to. Two TB082 clauses hold the service side: a call
   in an argument position, and a declared kind assembled from more than one
   reader. Still no skill doc and no `rationale/coverage.md` row.
-- [ ] **27 ignores to burn — the argument-position debt.** v0.0.63.0 shipped the
-  clauses with site-level ignores instead of a refactor, by ruling (Chris,
-  2026-08-18). The set: python-app 10, llmport 9, errorspy 4, ports 1, layout 1,
-  tessercheck-py 2 — every one a service method computing inside an argument —
-  plus 2 mapper sites (`MapToSaveCampaignRequest`, `MapToCampaignView`) that
-  construct their collection *elements*. Burning an ignore is the refactor:
-  convert the method the way `create_campaign` was converted, which is why it
-  carries none. The element-construction pair is different — it needs the clause
-  to distinguish an element from the top-level target before the ignore can go,
-  and a per-element mapper would hand the service a tuple of mappers to loop
-  over, which is worse. TB090 keeps the set from rotting.
+- [x] **27 ignores to burn — the argument-position debt — RESOLVED v0.0.69.0.**
+  Every computing-in-an-argument site was converted the way `create_campaign`
+  was: the computed value gets a name, the port DTO gets a name, the method
+  passes names and readers. The element-construction pair went two ways: the
+  save path DID get the per-element mapper tuple (`MapToLinkRecord` — the shape
+  this entry predicted would be worse reads fine in practice), and the two read
+  paths avoided it by exposing the rows/records they were given for the service
+  to assemble. No TB080 or argument-position TB082 ignore remains anywhere;
+  the only service ignores left are the three body-length ones.
 - [ ] **Inbound is not symmetric with outbound, and the rules should say so.**
   Outbound has exactly one source (the aggregate). Inbound has N (the request
   plus whatever the service obtained — identity now, a clock or a policy
@@ -87,10 +92,13 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `| None` state cost five completeness guards and a temporal "build first"
   contract that mappers do not have. `ts.Builder` was added and removed in the
   same branch; do not re-add it without solving that.
-- [ ] **Two `"active"` literals survive, both outside the converted method.**
+- [ ] **The `"active"` literals survive outside the mappers — three now.**
   `campaign/adapters/handlers/cli.py:48` counts active links for its message
-  (handler — ruled out of scope), and `campaign/application/views.py:72` builds
-  a `ShortLinkSpec` from a stored record on the reconstitution path. The second
+  (handler — ruled out of scope), `campaign/application/views.py:72` builds
+  a `ShortLinkSpec` from a stored record on the reconstitution path, and since
+  v0.0.69.0 the `add_link` service comprehension converts
+  `link_record.status == "active"` inbound, because a mapper may not originate
+  the literal. The second
   is the interesting one: `ShortLinkSpec.active` is a bool, so the domain's own
   construction spec is the last place link state is boolean, and that is what
   forced the literal into every translator. A `-> bool` predicate on the entity

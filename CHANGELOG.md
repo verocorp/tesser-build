@@ -5,6 +5,48 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.69.0] - 2026-08-19
+
+Every service conforms. The 40 suppressed findings across the eight service
+files are fixed in code, not excused; the only ignores left in any service are
+three body-length ones, by the 2026-08-19 line-count ruling.
+
+### Added
+- **`ItemID` (ports), `CampaignID` (errorspy), `BookingID` (llmport).** Each
+  service was sending a raw request field to a repository because the context
+  had no type for its lookup key. Same invariant class as `TreeRoot`/`RepoRoot`:
+  shape only (non-empty), existence stays with the adapter. A malformed lookup
+  key is now a validation error at the door instead of a lookup miss — the
+  behaviour change `get_campaign` precedented, propagated. Each new value
+  object carries construction, exactness, and equality tests.
+- **`MapToLinkRecord` (python-app).** The first per-element mapper:
+  `MapToSaveCampaignRequest` now exposes `link_record_mappers` and the service
+  assembles the `LinkRecord` DTOs, so "a mapper exposes the parts and the
+  caller assembles them" holds with no collection exception.
+
+### Changed
+- **Mappers stopped constructing.** `MapToCampaignView` exposes `link_rows`
+  (the query rows it was given) and `MapToCampaignSpecFromRecord` exposes
+  `link_records`; the service assembles the `LinkView`s, the `ShortLinkSpec`s,
+  the `ShortLinksSpec`, and the `CampaignSpec`, naming each in a local. The
+  `'active'` literal moved into the service comprehension, where originating
+  is legal — a mapper originates nothing.
+- **Every computing-in-an-argument site names its value.** errorspy, ports,
+  llmport, python-app (`deactivate_link`, `resolve`, reports, linkpolicy),
+  layout (`trees`), and tessercheck-py (`check`, `rulebook`) now compute in a
+  local and pass names, readers, or declared kinds.
+- **`linkpolicy.check` validates through `policy.TargetURL`; python-app
+  `deactivate_link` validates `values.CampaignID`.** The last two provenance
+  ignores in python-app burn with them.
+- **`ports.add` passes the aggregate's own reading to the name policy** —
+  the value that reaches the port went through `Item`, not the wire.
+
+### Ignores
+- Service-file ignores: 40 → 3. What remains is body length only:
+  `add_link` (24 statements), `create_campaign` (11), llmport `confirm` (15).
+  The count grew where the caller-side collection assemblies and named locals
+  cost statements — the trade the line-count ruling anticipated.
+
 ## [0.0.68.0] - 2026-08-19
 
 The analyzer becomes runnable from an install. It shipped as packages with no
