@@ -1119,6 +1119,39 @@ def test_a_mapper_that_constructs_its_target_is_flagged() -> None:
     )
 
 
+def test_a_raw_request_value_reaching_a_port_is_flagged() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/provenance.py",
+                "shop.provenance",
+                "import tesser.application as ts\n"
+                "import shop.domain.thing as thing\n"
+                "from shop.client.client import AskRequest, AskResponse\n"
+                "from shop.application.ports.thing_repository import FindThingRequest\n"
+                "class ProvenanceService(ts.ApplicationService):\n"
+                "    def raw(self, request: AskRequest) -> AskResponse:\n"
+                "        found = self._repo.find(FindThingRequest(name=request.name))\n"
+                "        return AskResponse(text=found.name)\n"
+                "    def through_the_domain(self, request: AskRequest) -> AskResponse:\n"
+                "        name = thing.Name(request.name)\n"
+                "        found = self._repo.find(FindThingRequest(name=str(name)))\n"
+                "        return AskResponse(text=found.name)\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "ProvenanceService.raw sends name from its request straight to a port" in f
+        and "a value crossing into a port has passed through a domain type" in f
+        for f in findings
+    )
+    assert not any(
+        "ProvenanceService.through_the_domain sends" in f for f in findings
+    ), findings
+
+
 def test_a_straight_accessor_local_is_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"

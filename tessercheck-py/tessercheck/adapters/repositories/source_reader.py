@@ -40,7 +40,7 @@ class FilesystemSourceReader(ts.Repository):
     def sources(
         self, request: source_reader.ReadSourcesRequest
     ) -> source_reader.ReadSourcesResponse:
-        base = Path(request.root)
+        base = Path(request.tree)
         form, skips, exports, imports = self._declaration(base)
         found: list[source_reader.SourceFile] = []
         nested: list[str] = []

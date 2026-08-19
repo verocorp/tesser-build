@@ -34,7 +34,7 @@ def test_every_place_is_earned_by_a_checked_tree_or_is_a_finding() -> None:
         if kind != "app" or not (repo / key / ".tesser-root").is_file():
             continue
         checked_trees += 1
-        read = reader.sources(source_reader.ReadSourcesRequest(root=str(repo / key)))
+        read = reader.sources(source_reader.ReadSourcesRequest(tree=str(repo / key)))
         names = [
             (s.name, s.form is source_reader.ModuleForm.PACKAGE) for s in read.sources
         ]

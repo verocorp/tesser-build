@@ -38,13 +38,13 @@ REQUIREMENTS: Final[str] = "requirements-dev.txt"
 class FilesystemRepoReader(ts.Repository):
 
     def read(self, request: repo_reader.ReadRepoRequest) -> repo_reader.ReadRepoResponse:
-        base = Path(request.root)
+        base = Path(request.repo_root)
         if not base.is_dir():
             return repo_reader.ReadRepoResponse(
                 manifest=repo_reader.ManifestRecord(
                     state=repo_reader.ManifestState.MALFORMED,
                     rows=(),
-                    note=f"{request.root} is not a directory",
+                    note=f"{request.repo_root} is not a directory",
                 ),
                 verify=repo_reader.FileRecord(
                     state=repo_reader.FileState.MISSING, text=""

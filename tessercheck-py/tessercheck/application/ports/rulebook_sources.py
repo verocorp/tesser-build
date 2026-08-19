@@ -14,8 +14,8 @@ class TestModuleText(ts.Response):
 
 class ReadRulebookRequest(ts.Request):
 
-    def __init__(self, root: str) -> None:
-        self.root = root
+    def __init__(self, tree: str) -> None:
+        self.tree = tree
 
 
 class ReadRulebookResponse(ts.Response):

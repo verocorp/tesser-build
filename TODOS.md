@@ -4,6 +4,31 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 
 ## Mapper wave follow-ups (2026-08-17, v0.0.61.0)
 
+- [ ] **12 provenance ignores, and `ports` is the wrong tree to have them.**
+  v0.0.67.0 landed "a value crossing into a port has passed through a domain
+  type" with site-level ignores in errorspy (3), llmport (5), ports (2), and
+  python-app (2 — `deactivate_link`, `linkpolicy.check`). All the same defect:
+  an unvalidated lookup key handed to a repository. `examples/ports` is the
+  exemplar people copy for the ports convention, so it should be fixed first.
+  The fix is the one `get_campaign` shows: construct the ID value object, name
+  its canonical text, pass that.
+- [ ] **`add_link` is 20 statements and carries a body-length ignore.** It does
+  six things — validate, check policy, check availability, load, mutate, save,
+  respond — and the mapper style costs a statement per boundary crossing. Either
+  the method splits, the read-back goes (it is the only reason the last three
+  statements exist), or the threshold changes. Ruling (Chris, 2026-08-19): body
+  length may be ignored here for now.
+- [ ] **`MapToShortLinkSpec` takes the raw request while its neighbours take
+  value objects.** `MapToCheckTargetRequest` and `MapToSlugTakenRequest` take
+  `values.TargetURL` / `values.Slug`; `MapToShortLinkSpec` takes
+  `add_link_request` and reads `.slug` / `.target_url` off the wire. Harmless
+  only because `canonical_str` is the identity function today — the moment it
+  normalizes, the slug checked for availability and the slug stored diverge.
+- [ ] **`MapToCampaignSpecFromRecord` trips three mapper clauses.** It
+  constructs `ShortLinkSpec` elements (the known collection case), constructs
+  `ShortLinksSpec` (the collection spec itself — a *second* case the clause does
+  not distinguish), and carries the literal `'active'` (the inbound bool
+  conversion, unresolvable while `ShortLinkSpec.active` is a bool).
 - [x] **`@ts.helper` builds a spec, and it should build any DTO-like object —
   RESOLVED v0.0.66.0.** TB073 now reads "a helper builds a spec or a DTO",
   checked against the new `DATA_BLOCKS`. A helper may not return a Protocol

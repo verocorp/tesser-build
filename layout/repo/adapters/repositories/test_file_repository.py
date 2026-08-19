@@ -25,7 +25,7 @@ def _repo(root: Path) -> Path:  # tessercheck:ignore TB073
 @ts.helper
 def _read(root: Path) -> repo_reader.ReadRepoResponse:  # tessercheck:ignore TB073
     reader = file_repository.FilesystemRepoReader()
-    return reader.read(repo_reader.ReadRepoRequest(root=str(root)))
+    return reader.read(repo_reader.ReadRepoRequest(repo_root=str(root)))
 
 
 def test_a_repo_reads_whole(tmp_path: Path) -> None:

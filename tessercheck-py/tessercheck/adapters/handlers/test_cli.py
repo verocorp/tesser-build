@@ -15,11 +15,11 @@ class FakeCheckClient(client.Client):
         self.roots: list[str] = []
 
     def check(self, request: client.CheckRequest) -> client.CheckResponse:
-        self.roots.append(request.root)
+        self.roots.append(request.tree)
         return client.CheckResponse(findings=self.findings)
 
     def rulebook(self, request: client.RulebookRequest) -> client.RulebookResponse:
-        self.roots.append(request.root)
+        self.roots.append(request.tree)
         return client.RulebookResponse(rendered="| rendered |")
 
 

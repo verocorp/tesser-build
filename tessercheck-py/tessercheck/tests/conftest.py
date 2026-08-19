@@ -19,7 +19,7 @@ def check_tree(root: Path) -> tuple[str, ...]:
 
 def check_raw(root: Path) -> tuple[str, ...]:
     service = TessercheckService(FilesystemSourceReader(), FilesystemRulebookSources())
-    return service.check(CheckRequest(root=str(root))).findings
+    return service.check(CheckRequest(tree=str(root))).findings
 
 
 def write_module(root: Path, rel: str, source: str) -> None:

@@ -10,7 +10,7 @@ class FilesystemRulebookSources(ts.Repository):
     def read(
         self, request: rulebook_sources.ReadRulebookRequest
     ) -> rulebook_sources.ReadRulebookResponse:
-        base = Path(request.root)
+        base = Path(request.tree)
         modules = [
             base / "tessercheck" / "tests" / "test_checks.py",
             *sorted((base / "tessercheck" / "domain").glob("test_*.py")),

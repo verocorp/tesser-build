@@ -63,6 +63,21 @@ class Problem(ts.ValueObject):
         return self._text
 
 
+class RepoRoot(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        if not value:
+            raise ValueError("repo root must be non-empty")
+        if value.endswith("/") and value != "/":
+            raise ValueError("repo root carries no trailing separator")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return canonical_str(self._value)
+
+
 class RepoSpec(ts.Spec):
 
     def __init__(

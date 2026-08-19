@@ -23,7 +23,7 @@ def test_the_read_carries_the_checks_text_and_the_contracts_text(
         "[importlinter:contract:pure]\nname = domain stays pure\n", encoding="utf-8"
     )
     read = rulebook_repository.FilesystemRulebookSources().read(
-        rulebook_sources.ReadRulebookRequest(root=str(tmp_path))
+        rulebook_sources.ReadRulebookRequest(tree=str(tmp_path))
     )
     assert read.checks_text == "CODES = ('TB040',)\n"
     assert "domain stays pure" in read.contracts_text
@@ -48,7 +48,7 @@ def test_the_wired_module_leads_and_the_domain_siblings_follow_in_order(
     )
     (tmp_path / ".importlinter").write_text("[importlinter]\n", encoding="utf-8")
     read = rulebook_repository.FilesystemRulebookSources().read(
-        rulebook_sources.ReadRulebookRequest(root=str(tmp_path))
+        rulebook_sources.ReadRulebookRequest(tree=str(tmp_path))
     )
     assert [module.name for module in read.test_modules] == [
         "tessercheck/tests/test_checks.py",
@@ -76,7 +76,7 @@ def test_a_domain_module_that_is_not_a_test_is_left_out(tmp_path: Path) -> None:
     )
     (tmp_path / ".importlinter").write_text("[importlinter]\n", encoding="utf-8")
     read = rulebook_repository.FilesystemRulebookSources().read(
-        rulebook_sources.ReadRulebookRequest(root=str(tmp_path))
+        rulebook_sources.ReadRulebookRequest(tree=str(tmp_path))
     )
     assert [module.name for module in read.test_modules] == [
         "tessercheck/tests/test_checks.py"
@@ -92,7 +92,7 @@ def test_a_tree_without_the_checks_module_refuses_to_answer(tmp_path: Path) -> N
     (tmp_path / ".importlinter").write_text("[importlinter]\n", encoding="utf-8")
     with pytest.raises(OSError):
         rulebook_repository.FilesystemRulebookSources().read(
-            rulebook_sources.ReadRulebookRequest(root=str(tmp_path))
+            rulebook_sources.ReadRulebookRequest(tree=str(tmp_path))
         )
 
 
@@ -107,5 +107,5 @@ def test_a_tree_without_the_contracts_file_refuses_to_answer(tmp_path: Path) -> 
     )
     with pytest.raises(OSError):
         rulebook_repository.FilesystemRulebookSources().read(
-            rulebook_sources.ReadRulebookRequest(root=str(tmp_path))
+            rulebook_sources.ReadRulebookRequest(tree=str(tmp_path))
         )

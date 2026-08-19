@@ -17,7 +17,7 @@ class FakeSourceReader(source_reader.SourceReader):
     def sources(
         self, request: source_reader.ReadSourcesRequest
     ) -> source_reader.ReadSourcesResponse:
-        self.roots.append(request.root)
+        self.roots.append(request.tree)
         return source_reader.ReadSourcesResponse(
             root=self.form,
             nested=(),
@@ -38,7 +38,7 @@ class FakeRulebookSources(rulebook_sources.RulebookSources):
     def read(
         self, request: rulebook_sources.ReadRulebookRequest
     ) -> rulebook_sources.ReadRulebookResponse:
-        self.roots.append(request.root)
+        self.roots.append(request.tree)
         return rulebook_sources.ReadRulebookResponse(
             checks_text=self.checks_text,
             test_modules=(),
@@ -49,7 +49,7 @@ class FakeRulebookSources(rulebook_sources.RulebookSources):
 def test_the_requested_root_reaches_the_source_reader() -> None:
     reader = FakeSourceReader(source_reader.RootForm.APP)
     checker = service.TessercheckService(reader, FakeRulebookSources(""))
-    checker.check(client.CheckRequest(root="some/tree"))
+    checker.check(client.CheckRequest(tree="some/tree"))
     assert reader.roots == ["some/tree"]
 
 
@@ -57,7 +57,7 @@ def test_a_declared_empty_tree_answers_with_no_findings() -> None:
     checker = service.TessercheckService(
         FakeSourceReader(source_reader.RootForm.APP), FakeRulebookSources("")
     )
-    response = checker.check(client.CheckRequest(root="."))
+    response = checker.check(client.CheckRequest(tree="."))
     assert response.findings == ()
 
 
@@ -65,7 +65,7 @@ def test_an_undeclared_tree_answers_with_the_declaration_finding() -> None:
     checker = service.TessercheckService(
         FakeSourceReader(source_reader.RootForm.MISSING), FakeRulebookSources("")
     )
-    response = checker.check(client.CheckRequest(root="."))
+    response = checker.check(client.CheckRequest(tree="."))
     assert len(response.findings) == 1
     assert "TB044" in response.findings[0]
 
@@ -80,7 +80,7 @@ def test_the_rulebook_never_reaches_the_source_reader() -> None:
         "        Violation('p', 1, 'TB020', 'a shape; the served tail')\n"
     )
     checker = service.TessercheckService(reader, sources)
-    checker.rulebook(client.RulebookRequest(root="some/tree"))
+    checker.rulebook(client.RulebookRequest(tree="some/tree"))
     assert reader.roots == []
     assert sources.roots == ["some/tree"]
 
@@ -96,6 +96,6 @@ def test_the_rulebook_answer_carries_the_rendered_rules_and_contracts() -> None:
     checker = service.TessercheckService(
         FakeSourceReader(source_reader.RootForm.APP), sources
     )
-    response = checker.rulebook(client.RulebookRequest(root="."))
+    response = checker.rulebook(client.RulebookRequest(tree="."))
     assert "| TB020 | the served tail | every module |" in response.rendered
     assert "| pure | domain stays pure |" in response.rendered

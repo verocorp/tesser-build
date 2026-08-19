@@ -13,7 +13,7 @@ def test_every_tesser_allowlist_entry_is_earned_by_the_shipped_distribution() ->
     for key, kind in sorted(manifest.items()):
         if kind != "app" or not (repo / key / ".tesser-root").is_file():
             continue
-        read = reader.sources(source_reader.ReadSourcesRequest(root=str(repo / key)))
+        read = reader.sources(source_reader.ReadSourcesRequest(tree=str(repo / key)))
         if read.exports != (checks.TESSER,):
             continue
         names = [source.name for source in read.sources]

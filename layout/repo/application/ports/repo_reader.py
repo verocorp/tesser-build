@@ -66,8 +66,8 @@ class DeclarationRecord(ts.Response):
 
 class ReadRepoRequest(ts.Request):
 
-    def __init__(self, root: str) -> None:
-        self.root = root
+    def __init__(self, repo_root: str) -> None:
+        self.repo_root = repo_root
 
 
 class ReadRepoResponse(ts.Response):
