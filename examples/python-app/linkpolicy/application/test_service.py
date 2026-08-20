@@ -6,7 +6,7 @@ import tesser.testing as ts
 import linkpolicy.application.ports.verdict_repository as verdict_repository
 import linkpolicy.application.service as service
 import linkpolicy.client.client as client
-from tesser.errors import InfraError
+from tesser.errors import DomainError, InfraError
 
 
 @ts.fake
@@ -140,3 +140,11 @@ def test_list_verdicts_propagates_a_repository_failure() -> None:
 
     with pytest.raises(InfraError):
         service.LinkPolicyService(repo).list_verdicts(client.ListVerdictsRequest())
+
+
+def test_check_refuses_an_empty_url_and_records_nothing() -> None:
+    repo = FakeVerdictRepository()
+    with pytest.raises(DomainError) as ei:
+        service.LinkPolicyService(repo).check(client.CheckRequest(""))
+    assert ei.value.code == "invalid_target_url"
+    assert repo.records == []

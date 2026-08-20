@@ -131,3 +131,12 @@ def test_listing_an_empty_catalog_answers_nothing() -> None:
     )
     listed = svc.list(client.ListItemsRequest())
     assert listed.items == ()
+
+
+def test_getting_an_empty_id_is_refused_rather_than_answering_nothing() -> None:
+    svc = service.CatalogService(
+        FakeItemRepository(outcome=item_repository.ItemLookup.FOUND),
+        FakeNamePolicy(verdict=name_policy.NameVerdict.ALLOWED, reason=""),
+    )
+    with pytest.raises(ValueError, match="id must be non-empty"):
+        svc.get(client.GetItemRequest(id=""))
