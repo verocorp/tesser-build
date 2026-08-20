@@ -40,6 +40,16 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   When the format question gets its ruling, decide where the format truth
   lives (domain vs gateway) at the same time.
 
+- [ ] **`skills/tesser-build/python.md:396-412` teaches the shape TB082 now
+  rejects.** The block tagged `verified impl: examples/errorspy/` shows the
+  pre-v0.0.69.0 service bodies, including
+  `self._repo.find(...FindCampaignRequest(campaign_id=req.campaign_id))` — a
+  raw request field straight to a port, exactly what the provenance clause
+  flags. Fix is a materializations pass, not a hot edit: update the snippet to
+  the current bodies, walk the row in `rationale/coverage.md`, bump
+  `skill-version` (rules in `docs/skill-authoring.md`). Found by the
+  v0.0.69.0 doc sweep, 2026-08-20.
+
 ## Mapper wave follow-ups (2026-08-17, v0.0.61.0)
 
 - [x] **12 provenance ignores, and `ports` is the wrong tree to have them —
