@@ -302,3 +302,51 @@ def test_deactivating_a_link_named_by_an_invalid_slug_is_a_validation_failure() 
         svc.deactivate_link(client.DeactivateLinkRequest(campaign_id="c1", slug="BAD"))
     assert ei.value.kind is Kind.VALIDATION
     assert ei.value.code == "bad_slug"
+
+
+def test_an_empty_campaign_id_is_a_validation_failure_before_the_repository_is_read() -> None:
+    repo = FakeCampaignRepository()
+    with pytest.raises(DomainError) as ei:
+        service.CampaignService(repo).get_campaign(client.GetCampaignRequest(campaign_id=""))
+    assert ei.value.kind is Kind.VALIDATION
+    assert ei.value.code == "bad_campaign_id"
+    assert repo.finds == []
+
+
+def test_deactivating_with_an_empty_campaign_id_is_a_validation_failure() -> None:
+    repo = FakeCampaignRepository()
+    with pytest.raises(DomainError) as ei:
+        service.CampaignService(repo).deactivate_link(
+            client.DeactivateLinkRequest(campaign_id="", slug="spring-sale")
+        )
+    assert ei.value.kind is Kind.VALIDATION
+    assert ei.value.code == "bad_campaign_id"
+    assert repo.finds == []
+
+
+def test_adding_a_link_collects_the_campaign_id_problem_with_its_siblings() -> None:
+    repo = FakeCampaignRepository()
+    with pytest.raises(DomainError) as ei:
+        service.CampaignService(repo).add_link(
+            client.AddLinkRequest(campaign_id="", slug="BAD", target_url="ftp://x")
+        )
+    assert ei.value.kind is Kind.VALIDATION
+    assert ei.value.code == "validation_failed"
+    assert [p.field for p in ei.value.problems] == ["campaign_id", "slug", "target_url"]
+    assert repo.finds == []
+
+
+def test_creating_a_campaign_with_an_empty_id_is_refused_before_anything_is_stored() -> None:
+    repo = FakeCampaignRepository()
+    with pytest.raises(DomainError) as ei:
+        service.CampaignService(repo).create_campaign(
+            client.CreateCampaignRequest(
+                campaign_id="",
+                window_start="2026-01-01",
+                window_end="2026-02-01",
+                links=(),
+            )
+        )
+    assert ei.value.kind is Kind.VALIDATION
+    assert ei.value.code == "bad_campaign_id"
+    assert repo.saves == []

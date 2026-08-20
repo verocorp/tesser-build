@@ -32,6 +32,7 @@ class CampaignService(ts.ApplicationService):
 
     def add_link(self, req: client.AddLinkRequest) -> client.CampaignView:
         collect(
+            campaign_id=lambda: values.CampaignID(req.campaign_id),
             slug=lambda: values.Slug(req.slug),
             target_url=lambda: values.TargetURL(req.target_url),
         )

@@ -168,7 +168,7 @@ class MapToCampaignView(ts.Mapper):
         self._campaign_id = row.campaign_id
         self._budget_amount = row.budget_amount
         self._budget_currency = row.budget_currency
-        self._link_rows = row.links
+        self._link_rows = tuple(row.links)
 
     @property
     def find_campaign_view_request(self) -> campaign_queries.FindCampaignViewRequest:
@@ -300,7 +300,7 @@ class MapToCampaignSpecFromRecord(ts.Mapper):
         self._campaign_id = record.id
         self._budget_amount = record.budget.amount
         self._budget_currency = record.budget.currency
-        self._link_records = record.links
+        self._link_records = tuple(record.links)
 
     @property
     def find_campaign_request(self) -> campaign_repository.FindCampaignRequest:
