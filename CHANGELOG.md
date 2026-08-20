@@ -41,6 +41,32 @@ three body-length ones, by the 2026-08-19 line-count ruling.
 - **`ports.add` passes the aggregate's own reading to the name policy** —
   the value that reaches the port went through `Item`, not the wire.
 
+### Fixed (ship review, 2026-08-20)
+- **errorspy's write path validates the campaign id.** `Campaign` constructs
+  `values.CampaignID` from its spec, so `create_campaign` can no longer store
+  a record under an id every read path refuses — and `campaign_id` joined the
+  `collect(...)` in `add_link`, so all three field problems aggregate in the
+  tree that exists to demonstrate aggregated errors.
+- **ports' `Item` delegates its id rule to `ItemID`.** One definition of the
+  invariant instead of two that could drift; the write path now validates
+  through the same value object the read path uses.
+- **The read mappers copy the collections they were given.**
+  `MapToCampaignView.link_rows` and `MapToCampaignSpecFromRecord.link_records`
+  materialize a fresh tuple, so a port implementation returning a list can
+  never hand the service a mutable alias into adapter state.
+
+### Tests (ship review, 2026-08-20)
+- Service-level tests pin validation at the door in every affected tree: an
+  empty or malformed lookup key raises before any port is touched (ports,
+  errorspy ×4 including aggregation and the write path, llmport, python-app,
+  linkpolicy).
+- A regression test pins that `add_link` keeps an earlier-deactivated link
+  inactive through the record round-trip (the `active=False` reconstitution
+  branch).
+- `MapToLinkRecord` and `MapToCampaignSpecFromRecord` gained direct unit
+  tests; three mapper test names were updated to describe the
+  expose-the-parts shape they now assert.
+
 ### Ignores
 - Service-file ignores: 40 → 3. What remains is body length only:
   `add_link` (24 statements), `create_campaign` (11), llmport `confirm` (15).

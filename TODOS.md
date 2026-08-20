@@ -2,6 +2,44 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Service-conformance wave follow-ups (2026-08-20, v0.0.69.0 ship review)
+
+- [ ] **`ports.add` stores an item the name policy rejected — a policy bypass
+  in the exemplar tree (P1, deferred by ruling 2026-08-20).**
+  `CatalogService.add` saves unconditionally; only afterwards does
+  `mapping.add_response` branch on the verdict and answer blank for
+  `RESERVED`. The caller is told "refused" while the row is readable via
+  `get`/`list`. Pre-existing (the v0.0.69.0 diff did not change the
+  ordering). Every test asserts the response tuple only — none asserts
+  nothing was saved (contrast python-app's
+  `test_add_link_refuses_a_blocked_destination_and_saves_nothing`). The fix
+  needs a contract ruling first: keep the blank-response style or raise like
+  python-app — then reshape the service under the TB082 branch rules.
+- [ ] **python-app `add_link` consults the policy gateway and the global slug
+  index before checking the campaign exists (P2, deferred by ruling
+  2026-08-20).** Order today: validate → `policy.check` → `slug_taken`
+  (global) → `find`. Consequences: a well-formed id for a nonexistent
+  campaign still drives the outbound policy gateway (cost/rate
+  amplification), and `duplicate_slug` vs `campaign_missing` leaks whether a
+  slug exists in *anyone's* campaign. Moving `find` first flips the error
+  precedence two tests pin
+  (`test_add_link_refuses_a_campaign_that_does_not_exist` reaches the policy
+  today), so it needs its own ruling. Same window: `find` → mutate → `save`
+  rewrites the whole record with no conditional write — concurrent
+  `add_link`s are last-writer-wins, and `slug_taken` is a TOCTOU against it.
+- [ ] **The new ID value objects check non-empty only — a floor, not a
+  ceiling (deferred by ruling 2026-08-20).** `ItemID`, errorspy `CampaignID`,
+  and `BookingID` validate shape-free because those trees' ids are
+  client-chosen opaque strings. A consumer copying them where the id keys a
+  filesystem path or datastore should add a format rule — python-app's
+  `CampaignID` (16-hex `fullmatch`) is the model. Counter-caveat from the
+  same review: python-app's regex encodes the identity *gateway's*
+  `secrets.token_hex(8)` format, and only the read/mutate paths enforce it —
+  swap the gateway (UUIDs, prefixed ids) and reads break for existing
+  campaigns while `create_campaign`/`resolve`/`list_links` keep working.
+  When the format question gets its ruling, decide where the format truth
+  lives (domain vs gateway) at the same time.
+
 ## Mapper wave follow-ups (2026-08-17, v0.0.61.0)
 
 - [x] **12 provenance ignores, and `ports` is the wrong tree to have them —
@@ -98,7 +136,13 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   a `ShortLinkSpec` from a stored record on the reconstitution path, and since
   v0.0.69.0 the `add_link` service comprehension converts
   `link_record.status == "active"` inbound, because a mapper may not originate
-  the literal. The second
+  the literal. Adversarial note (2026-08-20): the collapse is one-directional
+  and *persisted* — any stored status that is not exactly `"active"` (an
+  external writer, a case variant, a future third state) reads back as
+  inactive, and the next `add_link`/`deactivate_link` full-record rewrite
+  stores that collapse; meanwhile the view path passes the raw stored string
+  through unvalidated, so the view and the aggregate can answer differently
+  for the same record. All of it traces to `ShortLinkSpec.active: bool`. The second
   is the interesting one: `ShortLinkSpec.active` is a bool, so the domain's own
   construction spec is the last place link state is boolean, and that is what
   forced the literal into every translator. A `-> bool` predicate on the entity
