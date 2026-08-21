@@ -5,6 +5,30 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.71.1] - 2026-08-21
+
+Ledger only — no code changed.
+
+### Changed
+- **Five packaging gaps moved into `TODOS.md`, and PR #114 closed.** #114 asked
+  to bump the `tessercheck-py` wheel 0.2.0 → 0.2.1 after #113 changed its
+  contents without changing its version; `main` reached 0.3.0 first, so the
+  bump was already superseded. The PR's real value was its description, which
+  was the only record of four packaging findings from #113's adversarial pass —
+  filed as no issue and in no ledger. They are now entries, each re-verified
+  against this tree rather than transcribed, and a fifth was added: the
+  packaging gate cannot observe the defect class it advertises, because it
+  installs all three distributions from local paths in one resolution and so
+  never queries an index.
+  - The one with a deadline: `tessercheck-py` declares `dependencies =
+    ["tesser"]`, and `tesser` on PyPI is an unrelated trading-engine SDK at
+    `0.9.1` — the same name `tesser-py` publishes under. Nothing is broken
+    today (`tessercheck-py` is not on PyPI), but it blocks first publication
+    and it decides a public name.
+- **Six references to `v0.0.69.0` in `TODOS.md` corrected to `v0.0.71.0`.**
+  That version never shipped: the service-conformance wave was renumbered when
+  it merged after the sentinel rename, and the renumbering missed the prose.
+
 ## [0.0.71.0] - 2026-08-21
 
 Every service conforms. The 40 suppressed findings across the eight service

@@ -2,14 +2,84 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
-## Service-conformance wave follow-ups (2026-08-20, v0.0.69.0 ship review)
+## Packaging gaps (2026-08-19 adversarial review of PR #113; rescued from PR #114 before it was closed)
+
+These were found by the adversarial pass on #113 and recorded only in the
+description of PR #114. #114 itself went obsolete — it asked to bump the
+`tessercheck-py` wheel 0.2.0 → 0.2.1, and `main` reached 0.3.0 first — so it
+was closed on 2026-08-21 and its findings moved here. Each was re-verified
+against `main` at v0.0.71.0 rather than transcribed.
+
+- [ ] **P1 — `tessercheck-py` depends on `tesser`, and that name belongs to
+  someone else on PyPI.** `tessercheck-py/pyproject.toml` declares
+  `dependencies = ["tesser"]`, meaning this repo's own runtime library, which
+  `tesser-py/pyproject.toml` publishes as `name = "tesser"` at `0.1.0`.
+  - **Verified 2026-08-21:** PyPI already has `tesser` — "Python SDK for Tesser
+    Trading Engine", version `0.9.1`, uploaded 2025-11-27, pulling gRPC,
+    pandas, and protobuf. Unrelated project, live, and ahead of us in version.
+  - **Consequence, both directions:** the name cannot be claimed, so
+    `tesser-py` has no publishable identity as written; and a published
+    `tessercheck-py` would resolve `tesser` to that SDK and import
+    `tesser.domain.ValueObject` out of a trading library.
+  - **Latent, not live:** `tessercheck-py` is not on PyPI (404 as of
+    2026-08-21), so nothing is broken for anyone today. It is a hard blocker on
+    first publication, and it decides a public name, which is why it is P1
+    despite hurting nobody yet.
+  - **Start at:** this is a rename, not a pin — pick the distribution name for
+    the runtime library, then update `tessercheck-py`'s dependency, the
+    packaging gate, and every install instruction in the READMEs together.
+
+- [ ] **P1 — `scripts/verify-packaging` cannot see the defect class it
+  advertises.** Its header calls it "the gate on what `pip install` actually
+  gets you", but it installs all three distributions from local paths in one
+  invocation: `pip install "$VENV/tesser-py" "$VENV/tessercheck-py"
+  "$VENV/tessercheck-cli"`. The local `tesser-py` satisfies the `tesser`
+  requirement in that same resolution, so pip never queries an index. The gate
+  is green and structurally blind to the entry above.
+  - **Why it matters beyond this one bug:** every dependency-resolution defect
+    is invisible to it, not just this one. A gate that names a guarantee it
+    does not check is worse than no gate, because it is read as coverage.
+  - **Start at:** decide what the gate is for. If it is "the wheel's contents
+    are importable", say that and stop claiming the install path. If it is
+    "what `pip install` gets you", it needs a resolution step that is allowed
+    to reach an index (or a deliberate local index that proves the names
+    resolve to what we think).
+
+- [ ] **P2 — `tessercheck/adapters/handlers/cli.py` imports a package the wheel
+  does not ship.** Line 8 is `from protocol.cli import CliRequest,
+  CliResponse`, and `protocol` is a top-level package; the `[tool.setuptools]
+  packages` list contains only `tessercheck.*` entries. From an install, that
+  module raises `ModuleNotFoundError`. Same bug class as #113 (`ports` missing
+  from the list), but the fix is not another list entry — `protocol`, `app`,
+  and `srv` are the names `TB040` mandates for every tesser app, so shipping
+  this one's `protocol` into site-packages would collide with the consumer's.
+  Needs the design answer, not the mechanical one.
+
+- [ ] **P2 — an explicit `packages` list has no totality check, and it already
+  failed once.** `tessercheck-py` enumerates its eight packages by hand, so
+  omitting one builds a valid wheel that silently lacks a module — exactly how
+  #113 shipped without `tessercheck.application.ports`. Nothing fails in the
+  under-listing direction. `tesser-py` already uses the discovering form
+  (`[tool.setuptools.packages.find] include = ["tesser*"]`), so the repo holds
+  both strategies and the hand-maintained one is the one with a defect history.
+
+- [ ] **P3 — the rulebook reads a path the wheel excludes.**
+  `tessercheck/adapters/repositories/rulebook_sources.py:15` reads
+  `<tree>/tessercheck/tests/test_checks.py`, and `tessercheck.tests` is not in
+  the packages list. The path is built from `request.tree`, so it resolves
+  against the *analyzed* tree rather than the installed package — which makes
+  the rulebook command a checkout-only path. That may well be intended, but it
+  is undocumented, and it is inconsistent with the sibling `test_*.py` files
+  that do ship. Decide which, then say so.
+
+## Service-conformance wave follow-ups (2026-08-20, v0.0.71.0 ship review)
 
 - [ ] **`ports.add` stores an item the name policy rejected — a policy bypass
   in the exemplar tree (P1, deferred by ruling 2026-08-20).**
   `CatalogService.add` saves unconditionally; only afterwards does
   `mapping.add_response` branch on the verdict and answer blank for
   `RESERVED`. The caller is told "refused" while the row is readable via
-  `get`/`list`. Pre-existing (the v0.0.69.0 diff did not change the
+  `get`/`list`. Pre-existing (the v0.0.71.0 diff did not change the
   ordering). Every test asserts the response tuple only — none asserts
   nothing was saved (contrast python-app's
   `test_add_link_refuses_a_blocked_destination_and_saves_nothing`). The fix
@@ -42,13 +112,13 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 
 - [ ] **`skills/tesser-build/python.md:396-412` teaches the shape TB082 now
   rejects.** The block tagged `verified impl: examples/errorspy/` shows the
-  pre-v0.0.69.0 service bodies, including
+  pre-v0.0.71.0 service bodies, including
   `self._repo.find(...FindCampaignRequest(campaign_id=req.campaign_id))` — a
   raw request field straight to a port, exactly what the provenance clause
   flags. Fix is a materializations pass, not a hot edit: update the snippet to
   the current bodies, walk the row in `rationale/coverage.md`, bump
   `skill-version` (rules in `docs/skill-authoring.md`). Found by the
-  v0.0.69.0 doc sweep, 2026-08-20.
+  v0.0.71.0 doc sweep, 2026-08-20.
 
 ## Mapper wave follow-ups (2026-08-17, v0.0.61.0)
 
@@ -76,7 +146,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   only because `canonical_str` is the identity function today — the moment it
   normalizes, the slug checked for availability and the slug stored diverge.
 - [x] **`MapToCampaignSpecFromRecord` trips three mapper clauses — RESOLVED
-  v0.0.69.0.** The mapper stopped constructing: it exposes `link_records` (the
+  v0.0.71.0.** The mapper stopped constructing: it exposes `link_records` (the
   records it was given, passed through) and the *service* assembles the
   `ShortLinkSpec` elements, the `ShortLinksSpec`, and the `CampaignSpec`,
   naming each in a local. The `'active'` literal moved into the service
@@ -144,7 +214,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `campaign/adapters/handlers/cli.py:48` counts active links for its message
   (handler — ruled out of scope), `campaign/application/views.py:72` builds
   a `ShortLinkSpec` from a stored record on the reconstitution path, and since
-  v0.0.69.0 the `add_link` service comprehension converts
+  v0.0.71.0 the `add_link` service comprehension converts
   `link_record.status == "active"` inbound, because a mapper may not originate
   the literal. Adversarial note (2026-08-20): the collapse is one-directional
   and *persisted* — any stored status that is not exactly `"active"` (an
