@@ -6,7 +6,7 @@ from typing import Protocol
 
 import tesser.srv as ts
 
-JSONObject = dict[str, object]  # tessercheck:ignore TB051
+JSONObject = dict[str, object]  # tesser:debt TB051
 
 
 class BadRequest(ts.Rejection):

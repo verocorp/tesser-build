@@ -48,8 +48,8 @@ directory inside the tree is `TB045`, because the walk never follows symlinks
 and must say what it could not see. When a TB044 or TB045 fires it is the only
 finding reported, so pointing the analyzer at a directory that never claimed
 to be a tree reports that fact instead of walking it — and these findings land
-on files that cannot carry a Python comment, so an inline ignore can never
-silence them.
+on files that cannot carry a Python comment, so an inline debt marker can
+never silence them.
 
 Exit 0 when clean; exit 1 with one finding per line, flake8-style:
 
@@ -61,14 +61,14 @@ The clause after the semicolon is the rule — the same text as its RULES.md
 row — and the `TB0xx` code names the rule family (RULES.md's Code column).
 Codes are reporting affordances, not an adoption mechanism: CI is always
 zero-findings, and the only opt-out is per instance, at the site. A trailing
-`# tessercheck:ignore` suppresses the findings *reported at* that line (for
-a signature finding that is the `def` line); `# tessercheck:ignore TB052`
+`# tesser:debt` suppresses the findings *reported at* that line (for
+a signature finding that is the `def` line); `# tesser:debt TB052`
 suppresses exactly that family on the line (several codes may follow,
-space- or comma-separated); `# tessercheck:ignore-file TB040` anywhere in a
+space- or comma-separated); `# tesser:debt-file TB040` anywhere in a
 file suppresses the family module-wide — the file form **requires** codes,
-because a blanket module switch is not a per-instance opt-out. An ignore
+because a blanket module switch is not a per-instance opt-out. A debt marker
 that suppresses nothing is itself a finding (TB090), TB090 itself cannot be
-ignored, and the grammar is strict: a typo in the marker word or a token
+suppressed, and the grammar is strict: a typo in the marker word or a token
 that is not a `TB0xx` code makes the comment inert, so the finding it meant
 to hide stays visible. TB043 reader findings (unparseable, unreadable, or
 twice-defined files) are never inline-suppressible — a file the parser
@@ -120,9 +120,9 @@ a wheel's package list imports perfectly well.
   defined twice is a TB043 finding, never a crashed run.
 - **Whole-tree per run, opt-out per instance.** There is no `--exclude` and
   no code-family off switch. A finding is either fixed or carries a
-  site-level `# tessercheck:ignore` (see above) — every gated tree,
+  site-level `# tesser:debt` (see above) — every gated tree,
   `examples/python-app` included, runs at zero findings with its
-  ruling-blocked sites carrying coded ignores that TB090 keeps honest.
+  ruling-blocked sites carrying coded debt markers that TB090 keeps honest.
 
 ## Verify this tree
 

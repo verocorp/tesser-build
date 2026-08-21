@@ -10,7 +10,7 @@ import repo.application.ports.repo_reader as repo_reader
 
 
 @ts.helper
-def _repo(root: Path) -> Path:  # tessercheck:ignore TB073
+def _repo(root: Path) -> Path:  # tesser:debt TB073
     (root / "manifest.json").write_text('{"appone": "app"}')
     (root / "scripts").mkdir()
     (root / "scripts" / "verify").write_text("run_appone() {\n}\n")
@@ -23,7 +23,7 @@ def _repo(root: Path) -> Path:  # tessercheck:ignore TB073
 
 
 @ts.helper
-def _read(root: Path) -> repo_reader.ReadRepoResponse:  # tessercheck:ignore TB073
+def _read(root: Path) -> repo_reader.ReadRepoResponse:  # tesser:debt TB073
     reader = file_repository.FilesystemRepoReader()
     return reader.read(repo_reader.ReadRepoRequest(repo_root=str(root)))
 

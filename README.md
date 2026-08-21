@@ -101,7 +101,7 @@ path/to/tree` — the target must
 carry a `.tesser-root` file declaring `app` at its root, or the run reports
 `TB044` instead of walking (`docs/design-repo-layout.md`); flake8-style
 output; suppress a single finding with a trailing
-`# tessercheck:ignore TB0xx`.
+`# tesser:debt TB0xx`.
 
 ### `tesser-py`: the Python runtime library
 

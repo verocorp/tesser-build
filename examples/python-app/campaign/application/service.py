@@ -101,7 +101,7 @@ class MapToSaveCampaignRequest(ts.Mapper):
             record_slug = str(link.slug)
             record_target_url = str(link.target_url)
             record_status = str(link.status)
-            record_links.append(campaign_repository.LinkRecord(  # tessercheck:ignore TB080
+            record_links.append(campaign_repository.LinkRecord(  # tesser:debt TB080
                 slug=record_slug,
                 target_url=record_target_url,
                 status=record_status,
@@ -147,7 +147,7 @@ class MapToCampaignView(ts.Mapper):
                 typing.assert_never(unreachable)
         link_views: list[client.LinkView] = []
         for link in row.links:
-            link_views.append(client.LinkView(  # tessercheck:ignore TB080
+            link_views.append(client.LinkView(  # tesser:debt TB080
                 slug=link.slug,
                 target_url=link.target_url,
                 status=link.status,
@@ -286,17 +286,17 @@ class MapToCampaignSpecFromRecord(ts.Mapper):
                 typing.assert_never(unreachable)
         link_specs: list[short_link.ShortLinkSpec] = []
         for link in record.links:
-            link_specs.append(short_link.ShortLinkSpec(  # tessercheck:ignore TB080
+            link_specs.append(short_link.ShortLinkSpec(  # tesser:debt TB080
                 slug=link.slug,
                 target_url=link.target_url,
-                active=link.status == "active",  # tessercheck:ignore TB080
+                active=link.status == "active",  # tesser:debt TB080
             ))
         self._find_campaign_request = find_campaign_request
         self._found_campaign = found_campaign
         self._campaign_id = record.id
         self._budget_amount = record.budget.amount
         self._budget_currency = record.budget.currency
-        self._links = short_links.ShortLinksSpec(links=tuple(link_specs))  # tessercheck:ignore TB080
+        self._links = short_links.ShortLinksSpec(links=tuple(link_specs))  # tesser:debt TB080
 
     @property
     def find_campaign_request(self) -> campaign_repository.FindCampaignRequest:
@@ -380,7 +380,7 @@ class CampaignService(ts.ApplicationService):
             links=campaign_view_mapper.link_views,
         )
 
-    def add_link(self, req: client.AddLinkRequest) -> client.CampaignView:  # tessercheck:ignore TB082
+    def add_link(self, req: client.AddLinkRequest) -> client.CampaignView:  # tesser:debt TB082
         slug = values.Slug(req.slug)
         target_url = values.TargetURL(req.target_url)
         campaign_id = values.CampaignID(req.campaign_id)
@@ -446,10 +446,10 @@ class CampaignService(ts.ApplicationService):
         )
 
     def deactivate_link(self, req: client.DeactivateLinkRequest) -> client.CampaignView:
-        found = self._repo.find(campaign_repository.FindCampaignRequest(campaign_id=req.campaign_id))  # tessercheck:ignore TB082
+        found = self._repo.find(campaign_repository.FindCampaignRequest(campaign_id=req.campaign_id))  # tesser:debt TB082
         c = campaign_views.required_campaign(found, req.campaign_id)
         c.deactivate_short_link(values.Slug(req.slug))
-        self._repo.save(campaign_views.save_request(c))  # tessercheck:ignore TB082
+        self._repo.save(campaign_views.save_request(c))  # tesser:debt TB082
         return campaign_views.campaign_view(c)
 
     def get_campaign(self, req: client.GetCampaignRequest) -> client.CampaignView:
@@ -473,7 +473,7 @@ class CampaignService(ts.ApplicationService):
     def resolve(self, req: client.ResolveRequest) -> client.ResolveResponse:
         slug = str(values.Slug(req.slug))
         found = self._repo.find_by_slug(campaign_repository.FindCampaignBySlugRequest(slug=slug))
-        return client.ResolveResponse(target_url=campaign_views.resolved_target(found, slug))  # tessercheck:ignore TB082
+        return client.ResolveResponse(target_url=campaign_views.resolved_target(found, slug))  # tesser:debt TB082
 
     def list_links(self, req: client.ListLinksRequest) -> client.ListLinksResponse:
         listed = self._repo.all(campaign_repository.ListCampaignsRequest())

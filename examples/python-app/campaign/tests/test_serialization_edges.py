@@ -18,7 +18,7 @@ from tesser.errors import DomainError
 from protocol.http import HttpRequest
 
 
-def _shape(  # tessercheck:ignore TB071
+def _shape(  # tesser:debt TB071
     id_: str, budget: campaign_repository.MoneyRecord, links: tuple[campaign_repository.LinkRecord, ...]
 ) -> tuple[object, ...]:
     return (
@@ -29,11 +29,11 @@ def _shape(  # tessercheck:ignore TB071
     )
 
 
-def record_tuple(record: campaign_repository.CampaignRecord) -> tuple[object, ...]:  # tessercheck:ignore TB071
+def record_tuple(record: campaign_repository.CampaignRecord) -> tuple[object, ...]:  # tesser:debt TB071
     return _shape(record.id, record.budget, record.links)
 
 
-def request_tuple(request: campaign_repository.SaveCampaignRequest) -> tuple[object, ...]:  # tessercheck:ignore TB071
+def request_tuple(request: campaign_repository.SaveCampaignRequest) -> tuple[object, ...]:  # tesser:debt TB071
     return _shape(request.id, request.budget, request.links)
 
 
@@ -52,7 +52,7 @@ class FakeTargetPolicyAllowAll(target_policy.TargetPolicy):
         return target_policy.CheckTargetResponse(verdict=target_policy.PolicyVerdict.ALLOWED, reason="ok")
 
 
-def _find(  # tessercheck:ignore TB071
+def _find(  # tesser:debt TB071
     repo: repo_memory.InMemoryCampaignRepository, campaign_id: str
 ) -> campaign_repository.FindCampaignResponse:
     return repo.find(campaign_repository.FindCampaignRequest(campaign_id=campaign_id))

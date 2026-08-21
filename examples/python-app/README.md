@@ -130,10 +130,10 @@ declares itself with the `ts.*` shells, so `tesser-py` is on both paths and
 ```
 
 That exits 0 — the conformance wave burned the import-totality bill down to
-fixes plus site-level `# tessercheck:ignore` markers on the ruling-blocked
+fixes plus site-level `# tesser:debt` markers on the ruling-blocked
 sites (the homeless root modules, the host-machinery and bootstrap classes,
 the type aliases with no conformant spelling, and the pure-core allowlist
-candidates — each named in TODOS.md). An ignore that stops suppressing
+candidates — each named in TODOS.md). A debt marker that stops suppressing
 anything is itself a finding, so the opt-outs cannot outlive their reasons.
 
 `mypy --strict` + `pytest` are the same bar the other examples meet. On top of

@@ -66,7 +66,7 @@ findings about a tree that never claimed to be a tree, or that the analyzer
 could not fully see, are noise. Run at the repo root, tessercheck reports one
 line per declared tree below it instead of treating the separate trees as
 one. TB044/TB045 report on files that cannot carry a Python comment, so they
-are the one family an inline ignore can never suppress.
+are the one family an inline debt marker can never suppress.
 
 **The repo declares its shape: `manifest.json`.** Every top-level directory
 and every `examples/` subdirectory has a row. There are exactly two kinds,

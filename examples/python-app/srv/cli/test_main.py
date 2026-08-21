@@ -7,7 +7,7 @@ from tesser.errors import InfraError, conflict, invalid, not_found
 from srv.cli.main import commands_for, dispatch, respond
 
 
-def _app() -> App:  # tessercheck:ignore TB071
+def _app() -> App:  # tesser:debt TB071
     return loader.load()
 
 

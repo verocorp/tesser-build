@@ -35,9 +35,9 @@ them.
 > structural typing vs Go's struct embedding, the absence of
 > `context.Context` — it is called out inline.
 
-(`tesser.errors` and `tesser.serialization` need no ignore markers: they are
+(`tesser.errors` and `tesser.serialization` need no debt markers: they are
 tesser norm modules the placement may from-import. The
-`# tessercheck:ignore TB062` markers earlier revisions of these excerpts
+`# tesser:debt TB062` markers earlier revisions of these excerpts
 carried are gone — the app-level `errors`/`serialization` root modules they
 excused moved into the tesser runtime.)
 

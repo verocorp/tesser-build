@@ -15,5 +15,5 @@ def main() -> None:
     run_until_signal(host, app.close)
 
 
-if __name__ == "__main__":  # tessercheck:ignore TB051
+if __name__ == "__main__":  # tesser:debt TB051
     main()

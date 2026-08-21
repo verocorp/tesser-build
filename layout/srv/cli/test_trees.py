@@ -11,7 +11,7 @@ from srv.cli.trees import respond, run
 
 
 @ts.helper
-def _repo(root: Path) -> Path:  # tessercheck:ignore TB073
+def _repo(root: Path) -> Path:  # tesser:debt TB073
     (root / "scripts").mkdir()
     (root / "scripts" / "verify").write_text(
         "run_appone() {\n"

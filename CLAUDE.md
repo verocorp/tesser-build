@@ -160,12 +160,12 @@ python3 roadmap/generate.py --check      # ROADMAP.md is generated — never han
 
 Every tessercheck gate is a plain zero-findings check — there is no ratchet
 and no code-family off switch. A finding is either fixed or carries a
-site-level `# tessercheck:ignore TB0xx` at the line it excuses. Bare codes, no
-brackets: an ignore whose payload does not parse as codes suppresses nothing,
-and an ignore that suppresses nothing is itself a finding. The one exception:
-`TB044` (the tree's `.tesser-root` file) and `TB045` (a symlinked directory)
-report on files that cannot carry a Python comment and run before the ignore
-filter — they are fixed, never suppressed.
+site-level `# tesser:debt TB0xx` at the line it excuses. Bare codes, no
+brackets: a debt marker whose payload does not parse as codes suppresses
+nothing, and a debt marker that suppresses nothing is itself a finding. The one
+exception: `TB044` (the tree's `.tesser-root` file) and `TB045` (a symlinked
+directory) report on files that cannot carry a Python comment and run before
+the suppression filter — they are fixed, never suppressed.
 
 ## Git & shipping
 

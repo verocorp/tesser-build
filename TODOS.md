@@ -61,7 +61,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   and the clause reads "a service method body is at most 10 statements". The
   threshold stayed at 10: `create_campaign` is seven statements, so there is
   headroom, and tightening it is a separate call with its own evidence. The
-  `# tessercheck:ignore TB082` on `create_campaign` is deleted.
+  `# tesser:debt TB082` on `create_campaign` is deleted.
 - [x] **Nothing forces the mapper shape — RESOLVED v0.0.63.0.** Six TB080
   clauses hold it: MapTo naming, whole-object parameters, no originated
   literals, properties only, `_mapper` on a nested accessor, and never
@@ -217,7 +217,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `urllib.parse` can be admitted without opening `urllib.request`), `copy` in
   `campaign.domain.short_link` (pure — likely admit). The `secrets` half is
   RESOLVED v0.0.61.0: it was injected through the `CampaignIdentity` port
-  rather than admitted, and the service's `# tessercheck:ignore TB062` is
+  rather than admitted, and the service's `# tesser:debt TB062` is
   deleted — the outcome the entry predicted.
 - [ ] **Named soundness holes in the import walker (from the ship adversarial
   reviews — evasion paths, none live on the current trees; relative-import
@@ -583,13 +583,13 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   these remain, and each is a real question rather than a mechanical swap:
   - `examples/python-app/bootstrap/config.py` (2) and
     `tessercheck-py/bootstrap/config.py` (1) — app-level config aggregation.
-    Each already carries `# tessercheck:ignore TB051`, because a bootstrap
+    Each already carries `# tesser:debt TB051`, because a bootstrap
     module holds imports, declared functions, and Final constants — **no
     class at all**. So the fix is not a different base: either the app-level
     config moves out of bootstrap to a home where a class is legal, or
     TB051 grows a declared config kind. Going off dataclasses here *deletes*
     suppressions, which is the sign the direction is right.
-  - `examples/python-app/srv/http/router.py` (1, `# tessercheck:ignore
+  - `examples/python-app/srv/http/router.py` (1, `# tesser:debt
     TB052`) — a `Route` record in a srv module; same shape of question.
   - `roadmap/generate.py`, `examples/spike-totalreturn/probe.py` — a
     Go/Python hybrid tool and an ungated spike; lowest stakes.
@@ -696,7 +696,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 
 - [ ] **Give `bootstrap` an injectable builder so the wiring tests drop their
   suppressions** (opened 2026-07-20, ship review, confidence 9)
-  - **What:** the three `# tessercheck:ignore` markers in
+  - **What:** the three `# tesser:debt` markers in
     `examples/python-app/tests/test_cleanup.py` and `test_bootstrap_once.py`
     are the norm's flagship example opting out of the norm. What they patch
     (`monkeypatch.setattr(linkpolicy_wire, "build", fake_build)`) is an
@@ -1033,9 +1033,9 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 - [ ] **Suppression is a substring scan on the OLD checkers — now with a
   verified repro** (2026-07-21; proven 2026-07-26)
   - **Confirmed by running it, both directions:**
-    - `@dataclass(repr=("# tessercheck:ignore"))` silences **TB001**
+    - `@dataclass(repr=("# tesser:debt"))` silences **TB001**
       (control fires TB001; spoofed returns nothing).
-    - `x = "# tessercheck:ignore"  # banned prose` silences **TB020**.
+    - `x = "# tesser:debt"  # banned prose` silences **TB020**.
     - The two checkers this wave ADDED resist it — TB032's `_comment_lines` and
       TB033's `_suppressed_lines` both filter `token.type == tokenize.COMMENT`,
       and a marker appearing only inside a string does NOT suppress them.
@@ -1047,7 +1047,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   - **Honest bound:** an author who can edit the file can equally write a real
     ignore comment, so this is an inconsistency and an audit-grep blind spot,
     not a privilege boundary. That is why it is not a P1 — but it IS the kind of
-    thing that makes a `grep -c 'tessercheck:ignore'` audit lie.
+    thing that makes a `grep -c 'tesser:debt'` audit lie.
 
 - [ ] **`@anything.fixture` exempts a function from TB032 with no declared fact**
   (found independently by two reviewers, 2026-07-26)
@@ -1066,12 +1066,12 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 
 - [ ] **Suppression is a substring scan, and TB017/TB018 give it a natural
   surface** (2026-07-21, wave C2 review)
-  - **What:** `# tessercheck:ignore` is resolved by scanning the raw source
+  - **What:** `# tesser:debt` is resolved by scanning the raw source
     line for the marker text, so a *string literal* containing it suppresses a
     real violation with no directive present. TB017 and TB018 suppress on the
     `def` line, where a string DEFAULT ARGUMENT carrying the marker is both
     mypy-clean and natural-looking:
-    `def parse(cls, raw: str = "# tessercheck:ignore") -> "Slug"` suppresses
+    `def parse(cls, raw: str = "# tesser:debt") -> "Slug"` suppresses
     TB017 with no comment anywhere. Earlier codes suppressed on field or
     statement lines, where a marker-bearing literal looks out of place.
   - **Also:** the line table is built with `str.splitlines()`, which splits on
@@ -1301,7 +1301,7 @@ change; each waits for a real need.
   - **Depends on:** ~~the ruff/import-linter work landing~~ — landed as v0.0.12.0
     (PR #40). The surviving set is now known and is exactly the five functions
     named above. Wants `/office-hours` before a plan.
-  - **State as of the TB032 wave:** all five carry `# tessercheck:ignore` in
+  - **State as of the TB032 wave:** all five carry `# tesser:debt` in
     `tests/test_enforcement.py`. That was chosen over a rushed redesign so the
     check could go live without a permanent exemption anywhere else — the debt is
     now named at the exact five lines rather than hidden behind a checker flag.

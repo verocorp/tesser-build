@@ -206,7 +206,7 @@ def test_a_symlinked_directory_is_a_finding(tmp_path: Path) -> None:
 
 def test_a_declaration_finding_is_never_inline_suppressible(tmp_path: Path) -> None:
     conftest.write_module(
-        tmp_path, "stray.py", "import os  # tessercheck:ignore TB044\n"
+        tmp_path, "stray.py", "import os  # tesser:debt TB044\n"
     )
     findings = conftest.check_raw(tmp_path)
     assert len(findings) == 1, findings

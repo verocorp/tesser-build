@@ -17,7 +17,7 @@
     },
     "py_checks": {
       "TB033": "language-level correctness, not a construction convention — it flags a builtin name bound and CALLED in one scope, which is a latent TypeError/UnboundLocalError rather than a rule anyone is taught. It has no skill doc because there is no convention to teach beyond 'do not write a crash', and no component or norm row owns it: the same bug is equally wrong in a value object, a handler, and a test. Ruled 2026-07-26 as the collision shape specifically, NOT the name-based ban (ruff A001/A002 already does that one, and on this repo it flags a BaseHTTPRequestHandler.log_message override whose signature the stdlib fixes).",
-      "TB090": "the analyzer's own suppression hygiene, not a taught convention — it flags a tessercheck:ignore that suppresses nothing (stale or mistyped), so the opt-out ledger can never rot silently. No component or norm row owns it because it governs the tool's markers, not application code; it is also the one code an ignore cannot suppress."
+      "TB090": "the analyzer's own suppression hygiene, not a taught convention — it flags a tesser:debt marker that suppresses nothing (stale or mistyped), so the opt-out ledger can never rot silently. No component or norm row owns it because it governs the tool's markers, not application code; it is also the one code a debt marker cannot suppress."
     }
   },
   "rows": [
