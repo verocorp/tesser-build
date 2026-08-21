@@ -24,7 +24,7 @@ else is a finding. A missing, unreadable, or wrong `.tesser-root`, or one
 nested inside another tree, is a `TB044` finding; a symlinked directory
 inside the tree is `TB045` (the walk never follows symlinks and must say what
 it could not see). When one of these fires it is the only finding reported,
-and no inline ignore can silence it: the analyzer says what the directory is
+and no inline debt marker can silence it: the analyzer says what the directory is
 (or isn't) before saying anything about its contents. When you create a
 new app tree, the declaration file comes first. And everything is an app —
 there is no library kind; a "library" is an app that does no IO but still

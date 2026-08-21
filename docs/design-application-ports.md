@@ -241,7 +241,7 @@ wiring concern, not a port's vocabulary.
 
 A `.pyi` stub is a finding anywhere in a governed tree, not only under ports: a
 stub is what the type checker reads and the walk cannot, so a governed tree
-cannot vendor one without a site-level ignore.
+cannot vendor one without a site-level debt marker.
 
 `enum` classes are permitted in a ports module and as a port-DTO field — the one
 deliberate widening, bought by Experiment 1. The enum base is resolved through
