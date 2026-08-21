@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from typing import Final
-from urllib.parse import urlparse  # tessercheck:ignore TB062
+from urllib.parse import urlparse  # tesser:debt TB062
 
 import tesser.domain as ts
 

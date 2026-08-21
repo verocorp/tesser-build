@@ -18,7 +18,7 @@ import campaign.domain.short_links as short_links
 import campaign.domain.values as values
 from tesser.errors import DomainError, Kind
 from protocol.http import HttpRequest
-from srv.http.host import respond  # tessercheck:ignore TB070
+from srv.http.host import respond  # tesser:debt TB070
 
 
 

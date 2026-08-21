@@ -4435,7 +4435,7 @@ def test_a_marked_patcher_seam_is_suppressed() -> None:
             (
                 "tests/test_seam.py",
                 "tests.test_seam",
-                "def test_a(monkeypatch) -> None:  # tessercheck:ignore TB030\n"
+                "def test_a(monkeypatch) -> None:  # tesser:debt TB030\n"
                 "    assert monkeypatch\n",
                 False,
             ),
@@ -4905,37 +4905,37 @@ def test_undeclared_backing_collection_is_still_caught() -> None:
     )
 
 
-def test_an_ignore_suppresses_exactly_its_finding() -> None:
+def test_a_debt_marker_suppresses_exactly_its_finding() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(("stray.py", "stray", "import os  # tessercheck:ignore TB040\n", False),))).violations()
+                   for v in checks.Codebase(_spec(sources=(("stray.py", "stray", "import os  # tesser:debt TB040\n", False),))).violations()
                )
     assert not any("stray" in f for f in findings)
 
 
-def test_a_scoped_ignore_leaves_other_codes_alone() -> None:
+def test_a_scoped_debt_marker_leaves_other_codes_alone() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(("stray.py", "stray", "import os  # tessercheck:ignore TB050\n", False),))).violations()
+                   for v in checks.Codebase(_spec(sources=(("stray.py", "stray", "import os  # tesser:debt TB050\n", False),))).violations()
                )
     assert any(
         "stray belongs to no governed package" in f and " TB040 " in f for f in findings
     )
     assert any(
         "stray.py:1: TB090" in f
-        and "an ignore comment suppresses an actual finding" in f
+        and "a debt marker suppresses an actual finding" in f
         for f in findings
     )
 
 
-def test_a_stale_ignore_is_itself_a_finding() -> None:
+def test_a_stale_debt_marker_is_itself_a_finding() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
                 "shop/domain/extra.py",
                 "shop.domain.extra",
-                "import tesser.domain as ts  # tessercheck:ignore\n",
+                "import tesser.domain as ts  # tesser:debt\n",
                 False,
             ),
             (
@@ -4949,19 +4949,19 @@ def test_a_stale_ignore_is_itself_a_finding() -> None:
                )
     assert any(
         "shop/domain/extra.py:1: TB090" in f
-        and "an ignore comment suppresses an actual finding" in f
+        and "a debt marker suppresses an actual finding" in f
         for f in findings
     )
 
 
-def test_a_file_level_ignore_covers_the_whole_module() -> None:
+def test_a_file_level_debt_marker_covers_the_whole_module() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
                 "srv/host.py",
                 "srv.host",
-                "# tessercheck:ignore-file TB050\nimport os\n",
+                "# tesser:debt-file TB050\nimport os\n",
                 False,
             ),
         ))).violations()
@@ -4974,18 +4974,18 @@ def test_a_marker_suppresses_several_codes_space_or_comma_separated() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
-            ("stray.py", "stray", "import os  # tessercheck:ignore TB040 TB050\n", False),
-            ("loose.py", "loose", "import os  # tessercheck:ignore TB040, TB050\n", False),
+            ("stray.py", "stray", "import os  # tesser:debt TB040 TB050\n", False),
+            ("loose.py", "loose", "import os  # tesser:debt TB040, TB050\n", False),
         ))).violations()
                )
     assert not any("stray" in f for f in findings)
     assert not any("loose" in f for f in findings)
 
 
-def test_a_file_level_ignore_requires_codes() -> None:
+def test_a_file_level_debt_marker_requires_codes() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(("stray.py", "stray", "import os  # tessercheck:ignore-file\n", False),))).violations()
+                   for v in checks.Codebase(_spec(sources=(("stray.py", "stray", "import os  # tesser:debt-file\n", False),))).violations()
                )
     assert any("stray belongs to no governed package" in f for f in findings)
     assert any("stray.py:1: TB090" in f for f in findings)
@@ -4995,14 +4995,14 @@ def test_a_typo_or_junk_token_makes_the_marker_inert() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
-            ("stray.py", "stray", "import os  # tessercheck:ignored TB040\n", False),
+            ("stray.py", "stray", "import os  # tesser:debts TB040\n", False),
             (
                 "loose.py",
                 "loose",
-                "import os  # tessercheck:ignore TB040 permanent\n",
+                "import os  # tesser:debt TB040 permanent\n",
                 False,
             ),
-            ("bracket.py", "bracket", "import os  # tessercheck:ignore [TB040]\n", False),
+            ("bracket.py", "bracket", "import os  # tesser:debt [TB040]\n", False),
         ))).violations()
                )
     assert any("stray belongs to no governed package" in f for f in findings)
@@ -5013,14 +5013,14 @@ def test_a_typo_or_junk_token_makes_the_marker_inert() -> None:
     assert any("bracket.py:1: TB090" in f for f in findings)
 
 
-def test_a_bare_line_ignore_is_line_scoped() -> None:
+def test_a_bare_line_debt_marker_is_line_scoped() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
                 "shop/domain/extra.py",
                 "shop.domain.extra",
-                "import os\nimport tesser.domain as ts  # tessercheck:ignore\n",
+                "import os\nimport tesser.domain as ts  # tesser:debt\n",
                 False,
             ),
         ))).violations()
@@ -5029,21 +5029,21 @@ def test_a_bare_line_ignore_is_line_scoped() -> None:
     assert any("shop/domain/extra.py:2: TB090" in f for f in findings)
 
 
-def test_tb090_itself_cannot_be_ignored() -> None:
+def test_tb090_itself_cannot_be_suppressed() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
                 "shop/domain/extra.py",
                 "shop.domain.extra",
-                "import tesser.domain as ts  # tessercheck:ignore-file TB090\n",
+                "import tesser.domain as ts  # tesser:debt-file TB090\n",
                 False,
             ),
         ))).violations()
                )
     assert any(
         "shop/domain/extra.py:1: TB090" in f
-        and "an ignore comment suppresses an actual finding" in f
+        and "a debt marker suppresses an actual finding" in f
         for f in findings
     )
 
@@ -5108,7 +5108,7 @@ def test_reader_findings_are_never_inline_suppressible() -> None:
             (
                 "broken.py",
                 "broken",
-                "# tessercheck:ignore-file TB043\ndef f(:\n",
+                "# tesser:debt-file TB043\ndef f(:\n",
                 False,
             ),
         ))).violations()
@@ -5860,15 +5860,15 @@ def test_a_port_method_declares_a_shape_and_never_a_body() -> None:
     assert not any("Sink.drop" in f for f in findings)
 
 
-def test_an_ignored_ports_file_is_still_governed() -> None:
+def test_a_debt_marked_ports_file_is_still_governed() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
                 "shop/application/ports.py",
                 "shop.application.ports",
-                "import subprocess  # tessercheck:ignore TB067\n"
-                "import tesser.application as ts  # tessercheck:ignore-file TB041\n"
+                "import subprocess  # tesser:debt TB067\n"
+                "import tesser.application as ts  # tesser:debt-file TB041\n"
                 "import shop.domain.thing as thing\n"
                 "class First(ts.Port):\n"
                 "    pass\n"
@@ -5883,7 +5883,7 @@ def test_an_ignored_ports_file_is_still_governed() -> None:
     assert any(
         "shop.application.ports imports shop.domain.thing; a ports module is a leaf" in f
         for f in findings
-    ), f"an ignored TB041 unlocked the module: {findings}"
+    ), f"a debt-marked TB041 unlocked the module: {findings}"
     assert any("declares 2 ports" in f for f in findings)
     assert any("shop.application.ports.Leaked is a service" in f for f in findings)
 

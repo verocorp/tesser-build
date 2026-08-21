@@ -1,4 +1,4 @@
-from __future__ import annotations  # tessercheck:ignore TB074
+from __future__ import annotations  # tesser:debt TB074
 
 import asyncio
 from collections.abc import Awaitable, Callable

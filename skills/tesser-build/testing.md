@@ -172,7 +172,7 @@ file says *how*, and it is the cross-cutting layer they assume.
   with that name anywhere else is an ordinary identifier.
 
   **The escape hatch, and its one honest use.** A test that must patch a boundary it
-  cannot inject through carries `# tessercheck:ignore` (suppression scans the
+  cannot inject through carries `# tesser:debt` (suppression scans the
   reported statement's whole line span, so it works on a formatter-wrapped
   import). Today the only sanctioned uses are the composition-root wiring tests
   in `examples/python-app`, which patch a wiring module's own `build` function
@@ -197,7 +197,7 @@ file says *how*, and it is the cross-cutting layer they assume.
   package (the wired tier pairs with the app, not a module). There are no
   temporary exemptions: a module that genuinely cannot be tested (one exists —
   an srv module bound to an uninstallable vendor SDK) carries a site-level
-  `# tessercheck:ignore TB074` where the finding lands, as visible debt.
+  `# tesser:debt TB074` where the finding lands, as visible debt.
 - **`TB071` + `TB073` (test-module totality)** — rule 9, and the analyzer's
   first **totality** check (they superseded the frozen-dataclass era's
   `TB032`). Every other check hunts a known-bad shape and stays quiet
@@ -214,7 +214,7 @@ file says *how*, and it is the cross-cutting layer they assume.
   flow, and builds a spec. A helper that legitimately builds something else —
   a wired object graph for an end-to-end test, a JSON payload — declares
   itself with `@ts.helper` and opts out of the shape rule with a per-instance
-  `# tessercheck:ignore TB073` at each line a finding lands on (the `def`
+  `# tesser:debt TB073` at each line a finding lands on (the `def`
   line for parameter/return shape; a control-flow finding reports at the
   offending statement); the declaration half is never optional.
 

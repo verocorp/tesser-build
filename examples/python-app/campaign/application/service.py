@@ -341,7 +341,7 @@ class CampaignService(ts.ApplicationService):
         self._identity_gateway = identity_gateway
         self._queries = queries
 
-    def create_campaign(self, req: client.CreateCampaignRequest) -> client.CampaignView:  # tessercheck:ignore TB082
+    def create_campaign(self, req: client.CreateCampaignRequest) -> client.CampaignView:  # tesser:debt TB082
         issued_campaign_identity = self._identity_gateway.issue(
             campaign_identity.IssueCampaignIdentityRequest()
         )
@@ -396,7 +396,7 @@ class CampaignService(ts.ApplicationService):
             links=link_views,
         )
 
-    def add_link(self, req: client.AddLinkRequest) -> client.CampaignView:  # tessercheck:ignore TB082
+    def add_link(self, req: client.AddLinkRequest) -> client.CampaignView:  # tesser:debt TB082
         slug = values.Slug(req.slug)
         target_url = values.TargetURL(req.target_url)
         campaign_id = values.CampaignID(req.campaign_id)

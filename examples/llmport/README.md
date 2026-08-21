@@ -54,7 +54,7 @@ The division of labor the checkers enforce:
   one `ts.Response` out, per use case (`begin`, `provide_name`, `choose_slot`,
   `confirm`, `status`), each body inline and under ten statements — except
   `confirm`, which sits at 15 and carries a body-length
-  `# tessercheck:ignore TB082` by the 2026-08-19 line-count ruling (TODOS.md).
+  `# tesser:debt TB082` by the 2026-08-19 line-count ruling (TODOS.md).
   The booking id arrives as a `BookingID` before any port sees it. The
   booking is loaded from the repository port's `BookingView`, driven through
   one guarded transition, and decomposed back to a `SaveBookingRequest`; a

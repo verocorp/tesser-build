@@ -73,7 +73,7 @@ def _spec(
 
 
 @ts.helper
-def _texts(repo: rules.Repo) -> tuple[str, ...]:  # tessercheck:ignore TB073
+def _texts(repo: rules.Repo) -> tuple[str, ...]:  # tesser:debt TB073
     return tuple(str(problem.text()) for problem in repo.problems())
 
 

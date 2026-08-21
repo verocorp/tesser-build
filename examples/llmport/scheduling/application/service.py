@@ -49,7 +49,7 @@ class BookingService(ts.ApplicationService):
         self._repository.save(save_booking_request)
         return views.state(booking, f"slot {booking.chosen()} selected; ask the caller to confirm")
 
-    def confirm(self, request: client.ConfirmBookingRequest) -> client.BookingStateResponse:  # tessercheck:ignore TB082
+    def confirm(self, request: client.ConfirmBookingRequest) -> client.BookingStateResponse:  # tesser:debt TB082
         booking_id = domain.BookingID(request.booking_id)
         booking_id_text = str(booking_id)
         found = self._repository.find(booking_repository.FindBookingRequest(booking_id=booking_id_text))

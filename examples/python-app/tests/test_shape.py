@@ -6,13 +6,13 @@ import json
 import campaign.client.client as campaign_client
 import linkpolicy.client.client as linkpolicy_client
 import reports.client.client as reports_client
-import tesser.context  # tessercheck:ignore TB050
+import tesser.context  # tesser:debt TB050
 import tesser.testing as ts
-import campaign.adapters.handlers.http as http  # tessercheck:ignore TB070
+import campaign.adapters.handlers.http as http  # tesser:debt TB070
 import campaign.client.client as client
 from tesser.errors import InfraError
 from protocol.http import HttpRequest
-import reports.adapters.handlers.http as reports_http  # tessercheck:ignore TB070
+import reports.adapters.handlers.http as reports_http  # tesser:debt TB070
 import reports.client.client as reports_client2
 from srv.http.host import respond
 from tests.discovery import discovered_contexts

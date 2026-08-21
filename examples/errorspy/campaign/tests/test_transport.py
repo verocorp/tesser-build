@@ -11,7 +11,7 @@ from storage import FakeStorage
 
 
 @ts.helper
-def _handler(*, down: bool = False) -> handlers.Handler:  # tessercheck:ignore TB073
+def _handler(*, down: bool = False) -> handlers.Handler:  # tesser:debt TB073
     return handlers.Handler(
         service.CampaignService(
             repo_storage.StorageCampaignRepository(FakeStorage(down=down))
@@ -20,7 +20,7 @@ def _handler(*, down: bool = False) -> handlers.Handler:  # tessercheck:ignore T
 
 
 @ts.helper
-def _valid_create() -> str:  # tessercheck:ignore TB073
+def _valid_create() -> str:  # tesser:debt TB073
     return json.dumps(
         {
             "window": {"start": "2026-01-01", "end": "2026-02-01"},

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import copy  # tessercheck:ignore TB062
+import copy  # tesser:debt TB062
 
 import tesser.domain as ts
 

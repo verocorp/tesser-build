@@ -200,14 +200,14 @@ BUILTINS: Final[str] = "builtins"
 
 SYS_MODULE: Final[str] = "sys"
 
-IGNORE_MARKER: Final[str] = "tessercheck:ignore"
+DEBT_MARKER: Final[str] = "tesser:debt"
 
-IGNORE_FILE_MARKER: Final[str] = "tessercheck:ignore-file"
+DEBT_FILE_MARKER: Final[str] = "tesser:debt-file"
 
 CODE_SHAPE: Final[re.Pattern[str]] = re.compile(r"TB[0-9]{3}\Z")
 
 DIRECTIVE: Final[re.Pattern[str]] = re.compile(
-    r"^#\s*(!|type:|noqa|tessercheck:ignore|pragma|fmt:|isort:|ruff:)"
+    r"^#\s*(!|type:|noqa|tesser:debt|pragma|fmt:|isort:|ruff:)"
 )
 
 CODING_DECL: Final[re.Pattern[str]] = re.compile(r"^#.*?coding[:=]\s*[-\w.]+")
@@ -597,26 +597,26 @@ class ImportForm(ts.ValueObject):
         return canonical_str(self._value)
 
 
-class IgnoreScope(ts.ValueObject):
+class DebtScope(ts.ValueObject):
 
     _value: str
 
     def __init__(self, value: str) -> None:
         if value not in ("line", "file"):
-            raise ValueError("ignore scope must be line or file")
+            raise ValueError("debt scope must be line or file")
         object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
         return canonical_str(self._value)
 
 
-class IgnoreForm(ts.ValueObject):
+class DebtForm(ts.ValueObject):
 
     _value: str
 
     def __init__(self, value: str) -> None:
         if value not in ("parsed", "malformed"):
-            raise ValueError("ignore form must be parsed or malformed")
+            raise ValueError("debt form must be parsed or malformed")
         object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
@@ -649,20 +649,20 @@ class Violation(ts.ValueObject):
         return self._text
 
 
-class Ignore(ts.ValueObject):
+class Debt(ts.ValueObject):
 
     _line: Line
     _codes: tuple[Code, ...]
-    _scope: IgnoreScope
-    _form: IgnoreForm
+    _scope: DebtScope
+    _form: DebtForm
 
     def __init__(
         self, line: int, codes: tuple[str, ...], file_level: bool, form: str = "parsed"
     ) -> None:
         object.__setattr__(self, "_line", Line(line))
         object.__setattr__(self, "_codes", tuple(Code(code) for code in codes))
-        object.__setattr__(self, "_scope", IgnoreScope("file" if file_level else "line"))
-        object.__setattr__(self, "_form", IgnoreForm(form))
+        object.__setattr__(self, "_scope", DebtScope("file" if file_level else "line"))
+        object.__setattr__(self, "_form", DebtForm(form))
 
     def _suppresses(self, violation: Violation) -> bool:
         if str(self._form) == "malformed":
@@ -736,7 +736,7 @@ class Module(ts.Entity):
         tree = ast.parse(spec.source)
         self._path = spec.path
         self._comments = self._scan_comments(spec.source)
-        self._ignores = self._ignores_from(self._comments)
+        self._debts = self._debts_from(self._comments)
         self._name = spec.name
         self._is_package = spec.is_package
         parts = spec.name.split(".")
@@ -828,15 +828,15 @@ class Module(ts.Entity):
         )
 
     @staticmethod
-    def _ignores_from(comments: tuple[Comment, ...]) -> tuple[Ignore, ...]:
-        found: list[Ignore] = []
+    def _debts_from(comments: tuple[Comment, ...]) -> tuple[Debt, ...]:
+        found: list[Debt] = []
         for comment in comments:
             text = str(comment._text).lstrip("#").strip()
-            if text.startswith(IGNORE_FILE_MARKER):
-                rest = text[len(IGNORE_FILE_MARKER) :]
+            if text.startswith(DEBT_FILE_MARKER):
+                rest = text[len(DEBT_FILE_MARKER) :]
                 file_level = True
-            elif text.startswith(IGNORE_MARKER):
-                rest = text[len(IGNORE_MARKER) :]
+            elif text.startswith(DEBT_MARKER):
+                rest = text[len(DEBT_MARKER) :]
                 file_level = False
             else:
                 continue
@@ -845,7 +845,7 @@ class Module(ts.Entity):
             codes = tuple(part for part in rest.replace(",", " ").split() if part)
             if any(not CODE_SHAPE.match(code) for code in codes):
                 found.append(
-                    Ignore(
+                    Debt(
                         line=int(comment._line),
                         codes=(),
                         file_level=file_level,
@@ -853,7 +853,7 @@ class Module(ts.Entity):
                     )
                 )
                 continue
-            found.append(Ignore(line=int(comment._line), codes=codes, file_level=file_level))
+            found.append(Debt(line=int(comment._line), codes=codes, file_level=file_level))
         return tuple(found)
 
     def _relative_base(self, level: int) -> tuple[str, ...]:
@@ -867,8 +867,8 @@ class Module(ts.Entity):
     def path(self) -> str:
         return self._path
 
-    def ignores(self) -> tuple[Ignore, ...]:
-        return self._ignores
+    def debts(self) -> tuple[Debt, ...]:
+        return self._debts
 
     def comments(self) -> tuple[Comment, ...]:
         return self._comments
@@ -1026,24 +1026,24 @@ class Codebase(ts.AggregateRoot):
             module = by_path.get(str(violation.path()))
             suppressed = False
             if module is not None:
-                for ignore in module.ignores():
-                    if ignore._suppresses(violation):
-                        used.add((module.path(), ignore._line))
+                for debt in module.debts():
+                    if debt._suppresses(violation):
+                        used.add((module.path(), debt._line))
                         suppressed = True
                 if suppressed:
                     continue
             kept.append(violation)
         kept = list(dict.fromkeys(kept))
         for module in self._modules:
-            for ignore in module.ignores():
-                if (module.path(), ignore._line) not in used:
+            for debt in module.debts():
+                if (module.path(), debt._line) not in used:
                     kept.append(
                         Violation(
                             module.path(),
-                            int(ignore._line),
+                            int(debt._line),
                             "TB090",
-                            f"{module.name()} carries an ignore that suppresses nothing; "
-                            "an ignore comment suppresses an actual finding",
+                            f"{module.name()} carries a debt marker that suppresses nothing; "
+                            "a debt marker suppresses an actual finding",
                         )
                     )
         return tuple(kept)
