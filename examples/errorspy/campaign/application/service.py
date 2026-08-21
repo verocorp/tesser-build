@@ -17,29 +17,40 @@ class CampaignService(ts.ApplicationService):
         self._repo = repo
 
     def create_campaign(self, req: client.CreateCampaignRequest) -> client.CampaignView:
-        c = campaign.Campaign(views.create_spec(req))  # tesser:debt TB082
-        self._repo.save(views.save_request(c))  # tesser:debt TB082
+        spec = views.create_spec(req)
+        c = campaign.Campaign(spec)
+        save_campaign_request = views.save_request(c)
+        self._repo.save(save_campaign_request)
         return views.campaign_view(c)
 
     def get_campaign(self, req: client.GetCampaignRequest) -> client.CampaignView:
-        found = self._repo.find(campaign_repository.FindCampaignRequest(campaign_id=req.campaign_id))  # tesser:debt TB082
-        c = views.required_campaign(found, req.campaign_id)
+        campaign_id = values.CampaignID(req.campaign_id)
+        campaign_id_text = str(campaign_id)
+        found = self._repo.find(campaign_repository.FindCampaignRequest(campaign_id=campaign_id_text))
+        c = views.required_campaign(found, campaign_id_text)
         return views.campaign_view(c)
 
     def add_link(self, req: client.AddLinkRequest) -> client.CampaignView:
         collect(
+            campaign_id=lambda: values.CampaignID(req.campaign_id),
             slug=lambda: values.Slug(req.slug),
             target_url=lambda: values.TargetURL(req.target_url),
         )
-        found = self._repo.find(campaign_repository.FindCampaignRequest(campaign_id=req.campaign_id))  # tesser:debt TB082
-        c = views.required_campaign(found, req.campaign_id)
+        campaign_id = values.CampaignID(req.campaign_id)
+        campaign_id_text = str(campaign_id)
+        found = self._repo.find(campaign_repository.FindCampaignRequest(campaign_id=campaign_id_text))
+        c = views.required_campaign(found, campaign_id_text)
         c.add_link(short_link.ShortLinkSpec(slug=req.slug, target_url=req.target_url))
-        self._repo.save(views.save_request(c))  # tesser:debt TB082
+        save_campaign_request = views.save_request(c)
+        self._repo.save(save_campaign_request)
         return views.campaign_view(c)
 
     def deactivate_link(self, req: client.DeactivateLinkRequest) -> client.CampaignView:
-        found = self._repo.find(campaign_repository.FindCampaignRequest(campaign_id=req.campaign_id))  # tesser:debt TB082
-        c = views.required_campaign(found, req.campaign_id)
+        campaign_id = values.CampaignID(req.campaign_id)
+        campaign_id_text = str(campaign_id)
+        found = self._repo.find(campaign_repository.FindCampaignRequest(campaign_id=campaign_id_text))
+        c = views.required_campaign(found, campaign_id_text)
         c.deactivate_link(values.Slug(req.slug))
-        self._repo.save(views.save_request(c))  # tesser:debt TB082
+        save_campaign_request = views.save_request(c)
+        self._repo.save(save_campaign_request)
         return views.campaign_view(c)

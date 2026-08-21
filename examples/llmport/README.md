@@ -17,7 +17,8 @@ scheduling/
   client/
     client.py     requests/responses (primitive DTOs) + SchedulingClient
   domain/
-    scheduling.py Step/CustomerName/Slot VOs, Booking aggregate, step constants
+    scheduling.py Step/CustomerName/Slot/BookingID VOs, Booking aggregate,
+                  step constants
     test_domain.py       sibling test — reaches the role it sits in
   application/
     ports/
@@ -51,7 +52,10 @@ The division of labor the checkers enforce:
 
 - **The service speaks only Requests and Responses** — one `ts.Request` in,
   one `ts.Response` out, per use case (`begin`, `provide_name`, `choose_slot`,
-  `confirm`, `status`), each body inline and under ten lines. The
+  `confirm`, `status`), each body inline and under ten statements — except
+  `confirm`, which sits at 15 and carries a body-length
+  `# tesser:debt TB082` by the 2026-08-19 line-count ruling (TODOS.md).
+  The booking id arrives as a `BookingID` before any port sees it. The
   booking is loaded from the repository port's `BookingView`, driven through
   one guarded transition, and decomposed back to a `SaveBookingRequest`; a
   rejected transition persists nothing.

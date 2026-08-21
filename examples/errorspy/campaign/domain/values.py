@@ -13,6 +13,19 @@ _SLUG_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[a-z0-9-]{4,20}$")
 _LINK_STATES: Final[frozenset[str]] = frozenset({"active", "inactive"})
 
 
+class CampaignID(ts.ValueObject):
+
+    def __init__(self, value: str) -> None:
+        if not value:
+            raise invalid("bad_campaign_id", "campaign id must be non-empty", field="campaign_id")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return canonical_str(self._value)
+
+    _value: str
+
+
 class Slug(ts.ValueObject):
 
     def __init__(self, value: str) -> None:

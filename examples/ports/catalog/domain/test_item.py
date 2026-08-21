@@ -28,3 +28,17 @@ def test_an_item_without_a_name_is_refused() -> None:
 def test_a_wholly_empty_spec_is_refused_for_its_id() -> None:
     with pytest.raises(ValueError, match="id must be non-empty"):
         item.Item(item.ItemSpec(id="", name=""))
+
+
+def test_an_item_id_compares_by_value() -> None:
+    assert item.ItemID("a1") == item.ItemID("a1")
+    assert item.ItemID("a1") != item.ItemID("a2")
+
+
+def test_an_item_id_is_kept_exactly_as_it_was_given() -> None:
+    assert str(item.ItemID(" a1 ")) == " a1 "
+
+
+def test_an_empty_item_id_is_refused() -> None:
+    with pytest.raises(ValueError, match="id must be non-empty"):
+        item.ItemID("")

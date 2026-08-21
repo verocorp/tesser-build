@@ -24,4 +24,5 @@ class LayoutService(ts.ApplicationService):
         repo_root = rules.RepoRoot(request.repo_root)
         root = str(repo_root)
         read = self._reader.read(repo_reader.ReadRepoRequest(repo_root=root))
-        return client.TreesResponse(trees=mapping.trees(read))  # tesser:debt TB082
+        listed = mapping.trees(read)
+        return client.TreesResponse(trees=listed)

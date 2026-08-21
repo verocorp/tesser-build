@@ -5,6 +5,74 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.71.0] - 2026-08-21
+
+Every service conforms. The 40 suppressed findings across the eight service
+files are fixed in code, not excused; the only debt markers left in any service are
+three body-length ones, by the 2026-08-19 line-count ruling.
+
+### Added
+- **`ItemID` (ports), `CampaignID` (errorspy), `BookingID` (llmport).** Each
+  service was sending a raw request field to a repository because the context
+  had no type for its lookup key. Same invariant class as `TreeRoot`/`RepoRoot`:
+  shape only (non-empty), existence stays with the adapter. A malformed lookup
+  key is now a validation error at the door instead of a lookup miss — the
+  behaviour change `get_campaign` precedented, propagated. Each new value
+  object carries construction, exactness, and equality tests.
+- **`MapToLinkRecord` (python-app).** The first per-element mapper:
+  `MapToSaveCampaignRequest` now exposes `link_record_mappers` and the service
+  assembles the `LinkRecord` DTOs, so "a mapper exposes the parts and the
+  caller assembles them" holds with no collection exception.
+
+### Changed
+- **Mappers stopped constructing.** `MapToCampaignView` exposes `link_rows`
+  (the query rows it was given) and `MapToCampaignSpecFromRecord` exposes
+  `link_records`; the service assembles the `LinkView`s, the `ShortLinkSpec`s,
+  the `ShortLinksSpec`, and the `CampaignSpec`, naming each in a local. The
+  `'active'` literal moved into the service comprehension, where originating
+  is legal — a mapper originates nothing.
+- **Every computing-in-an-argument site names its value.** errorspy, ports,
+  llmport, python-app (`deactivate_link`, `resolve`, reports, linkpolicy),
+  layout (`trees`), and tessercheck-py (`check`, `rulebook`) now compute in a
+  local and pass names, readers, or declared kinds.
+- **`linkpolicy.check` validates through `policy.TargetURL`; python-app
+  `deactivate_link` validates `values.CampaignID`.** The last two provenance
+  debt markers in python-app burn with them.
+- **`ports.add` passes the aggregate's own reading to the name policy** —
+  the value that reaches the port went through `Item`, not the wire.
+
+### Fixed (ship review, 2026-08-20)
+- **errorspy's write path validates the campaign id.** `Campaign` constructs
+  `values.CampaignID` from its spec, so `create_campaign` can no longer store
+  a record under an id every read path refuses — and `campaign_id` joined the
+  `collect(...)` in `add_link`, so all three field problems aggregate in the
+  tree that exists to demonstrate aggregated errors.
+- **ports' `Item` delegates its id rule to `ItemID`.** One definition of the
+  invariant instead of two that could drift; the write path now validates
+  through the same value object the read path uses.
+- **The read mappers copy the collections they were given.**
+  `MapToCampaignView.link_rows` and `MapToCampaignSpecFromRecord.link_records`
+  materialize a fresh tuple, so a port implementation returning a list can
+  never hand the service a mutable alias into adapter state.
+
+### Tests (ship review, 2026-08-20)
+- Service-level tests pin validation at the door in every affected tree: an
+  empty or malformed lookup key raises before any port is touched (ports,
+  errorspy ×4 including aggregation and the write path, llmport, python-app,
+  linkpolicy).
+- A regression test pins that `add_link` keeps an earlier-deactivated link
+  inactive through the record round-trip (the `active=False` reconstitution
+  branch).
+- `MapToLinkRecord` and `MapToCampaignSpecFromRecord` gained direct unit
+  tests; three mapper test names were updated to describe the
+  expose-the-parts shape they now assert.
+
+### Debt markers
+- Service-file debt markers: 40 → 3. What remains is body length only:
+  `add_link` (24 statements), `create_campaign` (11), llmport `confirm` (15).
+  The count grew where the caller-side collection assemblies and named locals
+  cost statements — the trade the line-count ruling anticipated.
+
 ## [0.0.70.0] - 2026-08-21
 
 The comment that excuses a finding now says what it is. `# tessercheck:ignore`

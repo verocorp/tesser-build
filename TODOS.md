@@ -2,33 +2,88 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Service-conformance wave follow-ups (2026-08-20, v0.0.69.0 ship review)
+
+- [ ] **`ports.add` stores an item the name policy rejected — a policy bypass
+  in the exemplar tree (P1, deferred by ruling 2026-08-20).**
+  `CatalogService.add` saves unconditionally; only afterwards does
+  `mapping.add_response` branch on the verdict and answer blank for
+  `RESERVED`. The caller is told "refused" while the row is readable via
+  `get`/`list`. Pre-existing (the v0.0.69.0 diff did not change the
+  ordering). Every test asserts the response tuple only — none asserts
+  nothing was saved (contrast python-app's
+  `test_add_link_refuses_a_blocked_destination_and_saves_nothing`). The fix
+  needs a contract ruling first: keep the blank-response style or raise like
+  python-app — then reshape the service under the TB082 branch rules.
+- [ ] **python-app `add_link` consults the policy gateway and the global slug
+  index before checking the campaign exists (P2, deferred by ruling
+  2026-08-20).** Order today: validate → `policy.check` → `slug_taken`
+  (global) → `find`. Consequences: a well-formed id for a nonexistent
+  campaign still drives the outbound policy gateway (cost/rate
+  amplification), and `duplicate_slug` vs `campaign_missing` leaks whether a
+  slug exists in *anyone's* campaign. Moving `find` first flips the error
+  precedence two tests pin
+  (`test_add_link_refuses_a_campaign_that_does_not_exist` reaches the policy
+  today), so it needs its own ruling. Same window: `find` → mutate → `save`
+  rewrites the whole record with no conditional write — concurrent
+  `add_link`s are last-writer-wins, and `slug_taken` is a TOCTOU against it.
+- [ ] **The new ID value objects check non-empty only — a floor, not a
+  ceiling (deferred by ruling 2026-08-20).** `ItemID`, errorspy `CampaignID`,
+  and `BookingID` validate shape-free because those trees' ids are
+  client-chosen opaque strings. A consumer copying them where the id keys a
+  filesystem path or datastore should add a format rule — python-app's
+  `CampaignID` (16-hex `fullmatch`) is the model. Counter-caveat from the
+  same review: python-app's regex encodes the identity *gateway's*
+  `secrets.token_hex(8)` format, and only the read/mutate paths enforce it —
+  swap the gateway (UUIDs, prefixed ids) and reads break for existing
+  campaigns while `create_campaign`/`resolve`/`list_links` keep working.
+  When the format question gets its ruling, decide where the format truth
+  lives (domain vs gateway) at the same time.
+
+- [ ] **`skills/tesser-build/python.md:396-412` teaches the shape TB082 now
+  rejects.** The block tagged `verified impl: examples/errorspy/` shows the
+  pre-v0.0.69.0 service bodies, including
+  `self._repo.find(...FindCampaignRequest(campaign_id=req.campaign_id))` — a
+  raw request field straight to a port, exactly what the provenance clause
+  flags. Fix is a materializations pass, not a hot edit: update the snippet to
+  the current bodies, walk the row in `rationale/coverage.md`, bump
+  `skill-version` (rules in `docs/skill-authoring.md`). Found by the
+  v0.0.69.0 doc sweep, 2026-08-20.
+
 ## Mapper wave follow-ups (2026-08-17, v0.0.61.0)
 
-- [ ] **12 provenance debt markers, and `ports` is the wrong tree to have them.**
-  v0.0.67.0 landed "a value crossing into a port has passed through a domain
-  type" with site-level debt markers in errorspy (3), llmport (5), ports (2), and
-  python-app (2 — `deactivate_link`, `linkpolicy.check`). All the same defect:
-  an unvalidated lookup key handed to a repository. `examples/ports` is the
-  exemplar people copy for the ports convention, so it should be fixed first.
-  The fix is the one `get_campaign` shows: construct the ID value object, name
-  its canonical text, pass that.
-- [ ] **`add_link` is 20 statements and carries a body-length debt marker.** It does
-  six things — validate, check policy, check availability, load, mutate, save,
-  respond — and the mapper style costs a statement per boundary crossing. Either
-  the method splits, the read-back goes (it is the only reason the last three
-  statements exist), or the threshold changes. Ruling (Chris, 2026-08-19): body
-  length may be ignored here for now.
+- [x] **12 provenance debt markers, and `ports` is the wrong tree to have them —
+  RESOLVED v0.0.71.0.** All twelve burned by construction, none by debt marker:
+  `ports` gained `ItemID` (and `add` passes the aggregate's own reading to the
+  name policy), errorspy gained `CampaignID`, llmport gained `BookingID`,
+  python-app's `deactivate_link` validates `values.CampaignID`, and
+  `linkpolicy.check` passes through `policy.TargetURL`. A malformed lookup key
+  is now a validation error at the door instead of a lookup miss — the same
+  behaviour change `get_campaign` precedented. Every new ID value object
+  validates shape only (non-empty); existence stays with the adapter.
+- [ ] **`add_link` carries the body-length debt marker, now at 24 statements.** It
+  does six things — validate, check policy, check availability, load, mutate,
+  save, respond — and the mapper style costs a statement per boundary crossing;
+  the v0.0.71.0 caller-side collection assemblies added four more. Either the
+  method splits, the read-back goes, or the threshold changes. Ruling (Chris,
+  2026-08-19): body length may be excused here for now. `create_campaign` (11)
+  and llmport's `confirm` (15) joined the body-length set in v0.0.71.0 —
+  the only debt-marker kind left in any service.
 - [ ] **`MapToShortLinkSpec` takes the raw request while its neighbours take
   value objects.** `MapToCheckTargetRequest` and `MapToSlugTakenRequest` take
   `values.TargetURL` / `values.Slug`; `MapToShortLinkSpec` takes
   `add_link_request` and reads `.slug` / `.target_url` off the wire. Harmless
   only because `canonical_str` is the identity function today — the moment it
   normalizes, the slug checked for availability and the slug stored diverge.
-- [ ] **`MapToCampaignSpecFromRecord` trips three mapper clauses.** It
-  constructs `ShortLinkSpec` elements (the known collection case), constructs
-  `ShortLinksSpec` (the collection spec itself — a *second* case the clause does
-  not distinguish), and carries the literal `'active'` (the inbound bool
-  conversion, unresolvable while `ShortLinkSpec.active` is a bool).
+- [x] **`MapToCampaignSpecFromRecord` trips three mapper clauses — RESOLVED
+  v0.0.69.0.** The mapper stopped constructing: it exposes `link_records` (the
+  records it was given, passed through) and the *service* assembles the
+  `ShortLinkSpec` elements, the `ShortLinksSpec`, and the `CampaignSpec`,
+  naming each in a local. The `'active'` literal moved into the service
+  comprehension (`link_record.status == "active"`), where originating is
+  legal. Same treatment for the other two collection mappers:
+  `MapToSaveCampaignRequest` hands the service a tuple of per-element
+  `MapToLinkRecord` mappers, and `MapToCampaignView` exposes `link_rows`.
 - [x] **`@ts.helper` builds a spec, and it should build any DTO-like object —
   RESOLVED v0.0.66.0.** TB073 now reads "a helper builds a spec or a DTO",
   checked against the new `DATA_BLOCKS`. A helper may not return a Protocol
@@ -68,17 +123,15 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   constructing what it maps to. Two TB082 clauses hold the service side: a call
   in an argument position, and a declared kind assembled from more than one
   reader. Still no skill doc and no `rationale/coverage.md` row.
-- [ ] **27 debt markers to burn — the argument-position debt.** v0.0.63.0 shipped the
-  clauses with site-level debt markers instead of a refactor, by ruling (Chris,
-  2026-08-18). The set: python-app 10, llmport 9, errorspy 4, ports 1, layout 1,
-  tessercheck-py 2 — every one a service method computing inside an argument —
-  plus 2 mapper sites (`MapToSaveCampaignRequest`, `MapToCampaignView`) that
-  construct their collection *elements*. Burning a debt marker is the refactor:
-  convert the method the way `create_campaign` was converted, which is why it
-  carries none. The element-construction pair is different — it needs the clause
-  to distinguish an element from the top-level target before the debt marker can go,
-  and a per-element mapper would hand the service a tuple of mappers to loop
-  over, which is worse. TB090 keeps the set from rotting.
+- [x] **27 debt markers to burn — the argument-position debt — RESOLVED v0.0.71.0.**
+  Every computing-in-an-argument site was converted the way `create_campaign`
+  was: the computed value gets a name, the port DTO gets a name, the method
+  passes names and readers. The element-construction pair went two ways: the
+  save path DID get the per-element mapper tuple (`MapToLinkRecord` — the shape
+  this entry predicted would be worse reads fine in practice), and the two read
+  paths avoided it by exposing the rows/records they were given for the service
+  to assemble. No TB080 or argument-position TB082 debt marker remains anywhere;
+  the only service debt markers left are the three body-length ones.
 - [ ] **Inbound is not symmetric with outbound, and the rules should say so.**
   Outbound has exactly one source (the aggregate). Inbound has N (the request
   plus whatever the service obtained — identity now, a clock or a policy
@@ -87,10 +140,19 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `| None` state cost five completeness guards and a temporal "build first"
   contract that mappers do not have. `ts.Builder` was added and removed in the
   same branch; do not re-add it without solving that.
-- [ ] **Two `"active"` literals survive, both outside the converted method.**
+- [ ] **The `"active"` literals survive outside the mappers — three now.**
   `campaign/adapters/handlers/cli.py:48` counts active links for its message
-  (handler — ruled out of scope), and `campaign/application/views.py:72` builds
-  a `ShortLinkSpec` from a stored record on the reconstitution path. The second
+  (handler — ruled out of scope), `campaign/application/views.py:72` builds
+  a `ShortLinkSpec` from a stored record on the reconstitution path, and since
+  v0.0.69.0 the `add_link` service comprehension converts
+  `link_record.status == "active"` inbound, because a mapper may not originate
+  the literal. Adversarial note (2026-08-20): the collapse is one-directional
+  and *persisted* — any stored status that is not exactly `"active"` (an
+  external writer, a case variant, a future third state) reads back as
+  inactive, and the next `add_link`/`deactivate_link` full-record rewrite
+  stores that collapse; meanwhile the view path passes the raw stored string
+  through unvalidated, so the view and the aggregate can answer differently
+  for the same record. All of it traces to `ShortLinkSpec.active: bool`. The second
   is the interesting one: `ShortLinkSpec.active` is a bool, so the domain's own
   construction spec is the last place link state is boolean, and that is what
   forced the literal into every translator. A `-> bool` predicate on the entity

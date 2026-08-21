@@ -211,3 +211,11 @@ def test_an_unknown_booking_id_is_not_a_domain_rejection() -> None:
 
     with pytest.raises(KeyError):
         service.status(client.StatusRequest(booking_id="ghost"))
+
+
+def test_an_empty_booking_id_is_refused_before_the_repository_is_read() -> None:
+    repository = FakeBookingRepository()
+    service = application.BookingService(FakeSlotDirectory(("mon-9am",)), repository)
+    with pytest.raises(ValueError, match="booking id must be non-empty"):
+        service.begin(client.BeginBookingRequest(booking_id=""))
+    assert repository.stored == {}

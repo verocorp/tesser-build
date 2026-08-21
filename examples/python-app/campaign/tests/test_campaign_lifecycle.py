@@ -199,3 +199,16 @@ def test_create_campaign_endpoint_rejects_a_non_object_budget() -> None:
     )
     assert resp.status_code == 400
     assert resp.json_body()["type"] == "/problems/malformed_request"
+
+
+def test_add_link_keeps_an_earlier_deactivated_link_inactive() -> None:
+    store = repo_memory.InMemoryCampaignRepository()
+    svc = service.CampaignService(store, FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity(), store)
+    id = svc.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
+    svc.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
+    svc.deactivate_link(client.DeactivateLinkRequest(campaign_id=id, slug="promo"))
+    view = svc.add_link(client.AddLinkRequest(campaign_id=id, slug="sale", target_url="https://ok.example/y"))
+    assert [(link.slug, link.status) for link in view.links] == [
+        ("promo", "inactive"),
+        ("sale", "active"),
+    ]
