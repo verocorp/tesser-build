@@ -5,6 +5,41 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.70.0] - 2026-08-21
+
+The comment that excuses a finding now says what it is. `# tessercheck:ignore`
+named the mechanism — the analyzer looks away — and said nothing about the
+thing itself. An excused finding is debt: a fix deferred, tracked, and owed.
+The marker reads that way now, and so does the analyzer that reads it.
+
+### Changed
+- **The suppression marker is `# tesser:debt`** (file form
+  `# tesser:debt-file`), replacing `# tessercheck:ignore` and
+  `# tessercheck:ignore-file`. Nothing else about the grammar moved: bare codes
+  with no brackets, space- or comma-separated, the file form still requires
+  codes, a typo in the marker word still makes the comment inert, and a marker
+  that suppresses nothing is still a finding.
+- **The analyzer's concept moved with its marker.** `Ignore`, `IgnoreScope`,
+  and `IgnoreForm` are `Debt`, `DebtScope`, and `DebtForm`; `IGNORE_MARKER` and
+  `IGNORE_FILE_MARKER` are `DEBT_MARKER` and `DEBT_FILE_MARKER`;
+  `Module.ignores()` is `Module.debts()`.
+- **`TB090` says debt.** The finding reads "⟨module⟩ carries a debt marker that
+  suppresses nothing; a debt marker suppresses an actual finding", and the
+  rulebook's applies-to column reads "debt marker". `RULES.md` is regenerated
+  from the implementation, as always.
+- **Every rendering of the marker moved in the same change**, per the
+  skill-materializations obligation: every marker site across the gated trees,
+  plus `CLAUDE.md`, both analyzer READMEs, `skills/tesser-build/`
+  (comments, python, testing), `rationale/coverage.md`, `roadmap/registry.json`,
+  `docs/design-repo-layout.md`, `TODOS.md`, and the CI job comment that
+  described the opt-out mechanism. The word "ignore" survives only where it
+  means something else — the `.tesser-root` `skip` directive, ruff's
+  `per-file-ignores`, and mypy's `# type: ignore`. `skill-version` 47 → 48.
+
+This file keeps the old spelling wherever it already appears. The entries below
+describe a tool that really did say `tessercheck:ignore` at the time, and
+rewriting them would make the history lie.
+
 ## [0.0.68.0] - 2026-08-19
 
 The analyzer becomes runnable from an install. It shipped as packages with no
