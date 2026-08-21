@@ -1050,9 +1050,14 @@ Deferred work with context. Each entry carries enough for a cold pickup.
     thing that makes a `grep -c 'tesser:debt'` audit lie.
 
 - [ ] **`DIRECTIVE` matches the marker word as a bare prefix, so a near-miss
-  marker is a free TB020 exemption** (found by the Codex adversarial pass during
-  the v0.0.70.0 sentinel rename; **pre-existing — verified identical on the
-  pre-rename tree**, so the rename preserved it rather than introducing it)
+  marker is a free TB020 exemption** (resurfaced by the Codex adversarial pass
+  during the v0.0.70.0 sentinel rename; **pre-existing — verified identical on
+  the pre-rename tree**, so the rename preserved it rather than introducing it)
+  - **Not new — this is comments norm v0's "prose may ride an exempt directive
+    prefix", accepted by ruling on 2026-07-19 as a known-by-design limit.** What
+    is new is the repro and the measurement below, which is what turns an
+    accepted limit into a fixable item: at v0 the cost was unmeasured, and the
+    answer to "how much does this leak today" turns out to be "nothing yet".
   - **What:** `DIRECTIVE` (`checks.py:209`) matches
     `^#\s*(...|tesser:debt|...)` with no boundary after the alternative, while
     `Module._debts_from` (`checks.py:843`) requires the next character to be a
