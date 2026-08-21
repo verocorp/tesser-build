@@ -4,15 +4,15 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 
 ## Mapper wave follow-ups (2026-08-17, v0.0.61.0)
 
-- [ ] **12 provenance ignores, and `ports` is the wrong tree to have them.**
+- [ ] **12 provenance debt markers, and `ports` is the wrong tree to have them.**
   v0.0.67.0 landed "a value crossing into a port has passed through a domain
-  type" with site-level ignores in errorspy (3), llmport (5), ports (2), and
+  type" with site-level debt markers in errorspy (3), llmport (5), ports (2), and
   python-app (2 — `deactivate_link`, `linkpolicy.check`). All the same defect:
   an unvalidated lookup key handed to a repository. `examples/ports` is the
   exemplar people copy for the ports convention, so it should be fixed first.
   The fix is the one `get_campaign` shows: construct the ID value object, name
   its canonical text, pass that.
-- [ ] **`add_link` is 20 statements and carries a body-length ignore.** It does
+- [ ] **`add_link` is 20 statements and carries a body-length debt marker.** It does
   six things — validate, check policy, check availability, load, mutate, save,
   respond — and the mapper style costs a statement per boundary crossing. Either
   the method splits, the read-back goes (it is the only reason the last three
@@ -33,7 +33,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   RESOLVED v0.0.66.0.** TB073 now reads "a helper builds a spec or a DTO",
   checked against the new `DATA_BLOCKS`. A helper may not return a Protocol
   (that is `@ts.fake`) nor a domain object (ruling, Chris 2026-08-18: build the
-  aggregate from a spec so the construction path runs). Two ignores in `layout/`
+  aggregate from a spec so the construction path runs). Two debt markers in `layout/`
   retired on their own, and the inlined fixtures went back behind helpers.
 - [ ] **Only `create_campaign` reads through the query port.** `get_campaign`,
   `resolve`, and `list_links` still load records, rebuild an aggregate through
@@ -68,15 +68,15 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   constructing what it maps to. Two TB082 clauses hold the service side: a call
   in an argument position, and a declared kind assembled from more than one
   reader. Still no skill doc and no `rationale/coverage.md` row.
-- [ ] **27 ignores to burn — the argument-position debt.** v0.0.63.0 shipped the
-  clauses with site-level ignores instead of a refactor, by ruling (Chris,
+- [ ] **27 debt markers to burn — the argument-position debt.** v0.0.63.0 shipped the
+  clauses with site-level debt markers instead of a refactor, by ruling (Chris,
   2026-08-18). The set: python-app 10, llmport 9, errorspy 4, ports 1, layout 1,
   tessercheck-py 2 — every one a service method computing inside an argument —
   plus 2 mapper sites (`MapToSaveCampaignRequest`, `MapToCampaignView`) that
-  construct their collection *elements*. Burning an ignore is the refactor:
+  construct their collection *elements*. Burning a debt marker is the refactor:
   convert the method the way `create_campaign` was converted, which is why it
   carries none. The element-construction pair is different — it needs the clause
-  to distinguish an element from the top-level target before the ignore can go,
+  to distinguish an element from the top-level target before the debt marker can go,
   and a per-element mapper would hand the service a tuple of mappers to loop
   over, which is worse. TB090 keeps the set from rotting.
 - [ ] **Inbound is not symmetric with outbound, and the rules should say so.**
@@ -177,21 +177,21 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   declared with `@ts.function`, and the missing `tesser.*` imports added;
   the ratchet script and baseline are deleted and the CI step is a plain
   zero-findings gate. The ruling-blocked residue is now 20 site-level
-  ignores instead of baseline entries, each still tracked by its own open
-  item below: 3 homeless modules (TB040 ignore-file), 2 tests-package
-  helper modules (TB041 ignore-file, conftest-governance followup), 6
+  debt markers instead of baseline entries, each still tracked by its own
+  open item below: 3 homeless modules (TB040 debt-file), 2 tests-package
+  helper modules (TB041 debt-file, conftest-governance followup), 6
   host-machinery/bootstrap classes (TB051/TB052 — the `tesser.app`
   question), 2 type aliases with no conformant spelling (TB051, the alias
   hard collision), 2 `if __name__ == "__main__"` guards (TB051 — a
   module-level `if` has no conformant form), 15 pure-core imports (TB062 —
   the allowlist candidates), and 1 shape test importing `tesser.context`
-  (TB050). Burning an ignore = resolving its ruling; TB090 keeps the set
+  (TB050). Burning a debt marker = resolving its ruling; TB090 keeps the set
   honest.
   The hard-collision detail preserved from the ratchet era: an exception
   must subclass `Exception`, so a declares-its-block rule has no satisfiable
   form for wire exception classes (the `ts.Error` track), and the only
   analyzer-clean alias spelling (`JSONObject: Final = ...`) is rejected by
-  `mypy --strict` [valid-type] — verified 2026-08-07. Those carry ignores
+  `mypy --strict` [valid-type] — verified 2026-08-07. Those carry debt markers
   until their rule changes land.
 - [ ] **Host-class vocabulary — PARTIALLY RESOLVED (srv-wire-vocabulary wave,
   2026-08-07).** `tesser.srv` now exists (Host, Port, Record, Request,
@@ -204,9 +204,9 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   half (`App`, `Config`, `HttpConfig`, `CleanupStack`).
 - [x] **Homeless root modules — RESOLVED v0.0.29.0 (import-totality wave,
   2026-08-12).** The ruling: app-level shared modules stay at the root, the
-  `ignore-file TB040` is their declaration, and TB065 governs their imports —
+  `tesser:debt-file TB040` is their declaration, and TB065 governs their imports —
   a root module is a leaf that imports nothing from its tree. The pure-core
-  half (domain importing `errors`/`serialization` under TB062 ignores) stays
+  half (domain importing `errors`/`serialization` under TB062 debt markers) stays
   with the allowlist-candidates item below. (`cliwire`/`httpwire`/`voicewire`
   left this list in the srv-wire-vocabulary wave: a top-level `*wire.py` is a
   governed wire module — imports `tesser.srv` exactly once as ts, holds wire
@@ -233,7 +233,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `node_modules`, …), and an unparseable module, a non-UTF-8 file, or a
   module defined twice is a per-file TB043 finding instead of a crashed
   run. (3) MOOT 2026-08-12: the ratchet is deleted — the zero-findings wave
-  replaced the baseline with site-level ignores, which are reviewed in the
+  replaced the baseline with site-level debt markers, which are reviewed in the
   diff like any code and self-report when stale (TB090). (4) quoted
   annotations (`money: 'domain.Money'`) bypass every classification-based
   rule — the exact bug class PR #44 / v0.0.13.1 fixed in tessercheck-py with
@@ -296,13 +296,13 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   pre-existing narrowness, widened by every srv wave; fold in here).
 - [x] **Make rules.py conformant — RESOLVED v0.0.29.0 (import-totality wave,
   2026-08-12).** `TOOLING_MODULES` is deleted; `rules.py` is a root module
-  like any other — `ignore-file TB040` declares it, TB065 governs its
+  like any other — `tesser:debt-file TB040` declares it, TB065 governs its
   imports (stdlib only — passes), the universal checks run on it (its one
   docstring is removed), and it appears in RULES.md's homeless-module row.
 - [x] **conftest governance — RESOLVED v0.0.29.0 (import-totality wave,
   2026-08-12).** A tree-root conftest is a TB065 leaf; a conftest inside a
   tests location carries that location's TB070 row. `tests.discovery` /
-  `tests.support` keep their TB041 ignore-files but now answer for their
+  `tests.support` keep their TB041 debt-file markers but now answer for their
   imports under the root-tests tier; `tests.test_shape`'s `tesser.context`
   import keeps its explicit TB050 pin.
 - [ ] **Test-module annotation.** When tests declare themselves, flip
@@ -472,7 +472,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   the reader's `is_package` bit instead of the child-name prefix, closing
   soundness hole (7) below.
 
-- [x] **Shared ignore-marker namespace during the merge transition** —
+- [x] **Shared debt-marker namespace during the merge transition** —
   RESOLVED 2026-08-12 (ports wave): TB030 ported into sigcheck, its
   fixture-param finding lands on the def line python-app's four markers
   sit on, so the markers are load-bearing again and the four TB090
@@ -484,7 +484,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   Path/Line/Code/Text leaf VOs with canonical_str/canonical_int policy
   exits, the finding renderer moved from Violation.__str__ (a banned
   compound exit) to the application service composing from leaves, internal
-  records (ImportEdge/TesserImport/Ignore/Comment) wrapped their slots and
+  records (ImportEdge/TesserImport/Debt/Comment) wrapped their slots and
   dropped their public accessors (same-module attribute reads — the rules
   judge public surface, and nothing outside the domain touches them), and
   llmport's Booking exposes Step/CustomerName/Slot leaves with the
@@ -1045,9 +1045,43 @@ Deferred work with context. Each entry carries enough for a cold pickup.
     `astutil.py` fixes both and collapses the `_SUPPRESS_MARKER` duplication
     tracked above.
   - **Honest bound:** an author who can edit the file can equally write a real
-    ignore comment, so this is an inconsistency and an audit-grep blind spot,
+    debt marker, so this is an inconsistency and an audit-grep blind spot,
     not a privilege boundary. That is why it is not a P1 — but it IS the kind of
     thing that makes a `grep -c 'tesser:debt'` audit lie.
+
+- [ ] **`DIRECTIVE` matches the marker word as a bare prefix, so a near-miss
+  marker is a free TB020 exemption** (found by the Codex adversarial pass during
+  the v0.0.70.0 sentinel rename; **pre-existing — verified identical on the
+  pre-rename tree**, so the rename preserved it rather than introducing it)
+  - **What:** `DIRECTIVE` (`checks.py:209`) matches
+    `^#\s*(...|tesser:debt|...)` with no boundary after the alternative, while
+    `Module._debts_from` (`checks.py:843`) requires the next character to be a
+    space or tab before it will register a debt. The two disagree on what counts
+    as the marker, and every code path downstream of that disagreement leaks.
+  - **Repro (run against both trees, same result):**
+    - `import os  # tesser:debts TB040` → `TB040` only. No `TB020` (the comment
+      was waved through as a directive) and no `TB090` (no debt was registered,
+      so there is nothing to call stale).
+    - `import os  # tesser:debtfile arbitrary banned prose` → same. Any prose
+      after a near-miss marker word is exempt from the comments norm.
+    - Control: `import os  # plain banned prose comment` → `TB020` + `TB040`.
+    - On the pre-rename tree, `# tessercheck:ignored TB040` and
+      `# tessercheck:ignorefile arbitrary banned prose` behave identically.
+  - **Why it matters:** the comments norm has no other opt-out, so this is an
+    *untracked* one — the one escape hatch the ledger cannot see. It also makes
+    `README.md`'s "a typo in the marker word … makes the comment inert" false in
+    one direction: the typo'd comment is inert as a suppressor of coded findings
+    but very much live as a TB020 exemption.
+  - **Start at:** decide whether `DIRECTIVE` should share the debt parser's
+    classification outright rather than carry a second, looser spelling of the
+    same grammar. Note the same unbounded-prefix property holds for `noqa`,
+    `pragma`, and `type:` in that alternation, so a fix that tightens only
+    `tesser:debt` buys consistency with the parser at the cost of consistency
+    within the regex — that trade is the actual decision, not the regex edit.
+    A tightened boundary will also newly fire TB020 on any near-miss marker
+    already sitting in a gated tree, so grep before changing it — as of
+    v0.0.70.0 that grep is clean (every `# tesser:debt` followed by a non-space
+    is markdown prose, none is Python source), so the fix costs nothing today.
 
 - [ ] **`@anything.fixture` exempts a function from TB032 with no declared fact**
   (found independently by two reviewers, 2026-07-26)
@@ -1213,7 +1247,7 @@ change; each waits for a real need.
     fixes made under ship pressure. This one has no user-visible symptom, so it
     waits for a change window where it can be the only thing moving.
 
-- [ ] **Every file is tokenized 3-4 times to build near-identical ignore sets**
+- [ ] **Every file is tokenized 3-4 times to build near-identical debt-marker sets**
   (performance review 2026-07-26, measured)
   - **What:** `comments_check`, `doubles_check`, `shadowing_check` and (on a test
     module) `helpers_check` each run their own `tokenize.generate_tokens` pass.

@@ -108,7 +108,7 @@ jobs:
         run: pip install -r examples/python-app/requirements-dev.txt
       - name: examples/python-app — ruff + import-linter + mypy --strict + pytest + tessercheck
         # Zero findings, no ratchet: the conformance wave burned the accepted
-        # debt to fixes plus site-level ignores (the only opt-out mechanism).
+        # debt to fixes plus site-level debt markers (the only opt-out mechanism).
         run: scripts/verify python-app
 
   ports-example:

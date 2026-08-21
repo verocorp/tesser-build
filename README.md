@@ -93,7 +93,7 @@ module/class structure (`TB040`–`TB043`), import form and the tier matrices
 with no exempt modules), test placement and module totality (`TB070`–`TB073`),
 construction doors and boundary signatures (`TB080`–`TB082`), and the
 tree-wide **norm checks** with no test exemption: zero comments (`TB020`),
-fakes-only test doubles (`TB030`), and ignore hygiene (`TB090` — a
+fakes-only test doubles (`TB030`), and debt-marker hygiene (`TB090` — a
 suppression that suppresses nothing is itself a finding). The full per-code
 table is [`tessercheck-py/RULES.md`](tessercheck-py/RULES.md), generated from the
 implementation. Run it from `tessercheck-py/` as `python -m srv.cli.main
