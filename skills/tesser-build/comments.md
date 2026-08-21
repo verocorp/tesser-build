@@ -22,7 +22,7 @@ judgment call made inline at write time (Chris ruling 2026-07-19).
    tool, not prose for a reader. The v0 ledger:
    - Python: shebang (`#!`), PEP 263 coding declarations (lines 1-2 only),
      `# type: ...` (mypy),
-     `# noqa...` (a reason may ride the directive), `# tessercheck:ignore`,
+     `# noqa...` (a reason may ride the directive), `# tesser:debt`,
      the roadmap marker grammar (`tb-cell` / `tb-status` /
      `tb-allow-missing` lines, `docs/skill-authoring.md`),
      `# pragma...`, and formatter/linter controls
@@ -86,7 +86,7 @@ type, not a test, not a doc. Each carve-out lands in this file with:
    the same change — `passes/comments/` and the TB020 rule in
    `tessercheck-py/tessercheck/domain/checks.py`).
 
-Until a case is in this file, it is not an exception. `# tessercheck:ignore`
+Until a case is in this file, it is not an exception. `# tesser:debt`
 / `//nolint:comments` exist for the one-off emergency; a suppression that
 recurs is a carve-out candidate to bring here, with its evidence.
 
@@ -94,7 +94,7 @@ recurs is a carve-out candidate to bring here, with its evidence.
 
 - **Python: `TB020` (no-comments)** flags every non-directive comment and
   every docstring, test files included. Suppress a line with
-  `# tessercheck:ignore` (itself a directive).
+  `# tesser:debt` (itself a directive).
 - **Go: the `comments` analyzer** in `tessercheck` flags every
   non-directive comment; generated files are skipped.
 - CI gates the norm on the example trees (`examples/ddd` via the Go

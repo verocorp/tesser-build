@@ -9,14 +9,14 @@ from protocol.http import Endpoint
 
 
 @dataclass(frozen=True)
-class Route:  # tessercheck:ignore TB052
+class Route:  # tesser:debt TB052
     method: str
     pattern: str
     endpoint: Endpoint
 
 
 @dataclass(frozen=True)
-class Match:  # tessercheck:ignore TB052
+class Match:  # tesser:debt TB052
     endpoint: Endpoint
     path_params: dict[str, str]
     query_params: dict[str, str]

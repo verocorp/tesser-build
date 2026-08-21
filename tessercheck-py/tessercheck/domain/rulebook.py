@@ -52,7 +52,7 @@ HOLE_NAMES: Final[dict[str, str]] = {
 
 APPLIES_TO: Final[dict[str, str]] = {
     "Codebase.__init__": "checked source file",
-    "Codebase.violations": "ignore comment",
+    "Codebase.violations": "debt marker",
     "Codebase._declaration_violations": "the checked tree itself",
     "Codebase._export_declaration_violations": "the checked tree itself",
     "Codebase._import_declaration_violations": "the checked tree itself",

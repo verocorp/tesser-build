@@ -138,8 +138,8 @@ An `import` declaration is a purity waiver, so it is validated like one
   rest of it is never a kernel (`import subprocess` cannot be declared
   away).
 - it must be *used* — a declaration that legalizes no edge is itself a
-  finding, mirroring TB090's rule that an ignore suppressing nothing rots
-  the ledger.
+  finding, mirroring TB090's rule that a debt marker suppressing nothing
+  rots the ledger.
 
 Kernel-target imports are trusted per **walked module**, not per top-level
 name: an import of `kernel.vendored.x` where `vendored/` is skipped from

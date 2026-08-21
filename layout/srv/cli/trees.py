@@ -27,5 +27,5 @@ def run(argv: list[str]) -> int:
     return response.exit_code
 
 
-if __name__ == "__main__":  # tessercheck:ignore TB051
+if __name__ == "__main__":  # tesser:debt TB051
     raise SystemExit(run(sys.argv[1:]))

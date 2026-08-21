@@ -7,7 +7,7 @@ import scheduling.adapters.repositories.repo_memory as repo_memory
 import scheduling.application.service as application
 import scheduling.client.client as client
 import scheduling.domain.scheduling as domain
-import srv.voice.router as router  # tessercheck:ignore TB070
+import srv.voice.router as router  # tesser:debt TB070
 import protocol.voice as voice
 
 
