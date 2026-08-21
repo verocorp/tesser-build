@@ -4976,17 +4976,6 @@ class Codebase(ts.AggregateRoot):
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        span = sum(1 for node in ast.walk(fn) if isinstance(node, ast.stmt)) - 1
-        if span > 10:
-            found.append(
-                Violation(
-                    module.path(),
-                    fn.lineno,
-                    "TB082",
-                    f"{where} body spans {span} statements; "
-                    "a service method body is at most 10 statements",
-                )
-            )
         found.extend(self._provenance_violations(module, where, fn))
         for stmt in fn.body:
             if not isinstance(stmt, ast.Assign):

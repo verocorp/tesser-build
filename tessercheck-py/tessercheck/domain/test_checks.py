@@ -1181,28 +1181,6 @@ def test_a_straight_accessor_local_is_flagged() -> None:
     assert not any("NamingService.computes names a straight accessor" in f for f in findings)
 
 
-def test_a_body_spread_over_many_lines_is_counted_by_its_statements() -> None:
-    findings = tuple(
-                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
-            (
-                "shop/airy.py",
-                "shop.airy",
-                "import tesser.application as ts\n"
-                "from shop.client.client import AskRequest, AskResponse\n"
-                "class AiryService(ts.ApplicationService):\n"
-                "    def spread(self, request: AskRequest) -> AskResponse:\n"
-                "        text = AskResponse(\n"
-                + "".join(f"            text=request.text,  # {i}\n" for i in range(20))
-                + "        )\n"
-                "        return text\n",
-                False,
-            ),
-        ))).violations()
-               )
-    assert not any("AiryService.spread" in f and "body spans" in f for f in findings)
-
-
 def test_service_body_rules_are_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
@@ -1213,9 +1191,6 @@ def test_service_body_rules_are_flagged() -> None:
                 "import tesser.application as ts\n"
                 "from shop.client.client import AskRequest, AskResponse\n"
                 "class BusyService(ts.ApplicationService):\n"
-                "    def long(self, request: AskRequest) -> AskResponse:\n"
-                + "".join(f"        step_{i} = request.text\n" for i in range(11))
-                + "        return AskResponse(text=step_0)\n"
                 "    def nested(self, request: AskRequest) -> AskResponse:\n"
                 "        if request.ping():\n"
                 "            if request.pong():\n"
@@ -1233,12 +1208,6 @@ def test_service_body_rules_are_flagged() -> None:
             ),
         ))).violations()
                )
-    assert any(
-        "BusyService.long" in f
-        and "body spans 12 statements; a service method body is at most 10 statements"
-        in f
-        for f in findings
-    )
     assert any(
         "BusyService.nested" in f
         and "nests a conditional" in f

@@ -5,6 +5,39 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.72.0] - 2026-08-21
+
+TB082's service-method statement cap is removed. Two independent regeneration
+runs, each building the same application from a characterization corpus with
+tessercheck in the loop, converged on the same report: of every rule in the set,
+the ten-statement cap was the one that shaped their design more than the domain
+did. A rule that reshapes a design toward itself rather than toward the problem
+is not earning its place, so it goes. TB082's other clauses — the delegation
+ban, the naming and provenance rules, the one-mapper rule, the branching and
+condition rules — are untouched.
+
+### Removed
+- **The ten-statement cap on service method bodies.** The `span` computation and
+  its `Violation` in `Codebase._body_violations`, the now-dead `"span"` entry in
+  `rulebook.HOLE_NAMES`, the `BusyService.long` fixture and its assertion inside
+  `test_service_body_rules_are_flagged`, and
+  `test_a_body_spread_over_many_lines_is_counted_by_its_statements` — that test
+  existed only to pin the cap's statement-vs-source-line counting, so with the
+  cap gone it asserted nothing. `RULES.md` was regenerated, not hand-edited; its
+  cap row is gone and the rest of the diff is `Source` line numbers shifting.
+
+### Changed
+- **The three body-length debt markers 0.0.71.0 left behind are deleted.** That
+  release recorded them as "the only debt markers left in any service" — each
+  suppressed the cap and only the cap, so removing the rule turned all three
+  into TB090 findings (a debt marker that suppresses nothing is itself a
+  finding). They were `create_campaign` and `add_link` in `examples/python-app`
+  and `confirm` in `examples/llmport`. That closes the 2026-08-19 line-count
+  ruling's remaining debt to zero.
+- **`examples/llmport/README.md` no longer documents the cap.** It described
+  `confirm` as sitting "at 15" against a ten-statement budget and carrying a
+  marker for it; the budget no longer exists.
+
 ## [0.0.71.1] - 2026-08-21
 
 Ledger only — no code changed.
