@@ -51,11 +51,12 @@ Yes → a host.
    away from the one place entitled to decide that.
 3. **One graph per process; the host owns the lifecycle.** The host calls
    `bootstrap.new` once at startup (build-once locked by
-   `examples/python-app/tests/test_bootstrap_once.py`; the runner's guaranteed
-   `close()` by `examples/python-app/tests/test_run.py`) and runs its `Host`
+   `examples/python-app/tests/test_bootstrap_once.py`) and runs its `Host`
    (`run(stop)` — serve, then drain on stop) under a runner that installs
    SIGINT/SIGTERM and calls `App.close()` in a `finally`
-   (`examples/python-app/srv/run.py`, `srv/http/host.py`). Installing the signal
+   (`examples/python-app/srv/http/main.py`, `srv/http/host.py`; both signals
+   locked to exit 0 by `examples/python-app/srv/http/test_main.py`, though the
+   close-on-crash path itself is currently unasserted). Installing the signal
    handler is **load-bearing**: a bare `finally: app.close()` does *not* survive
    the default SIGTERM (the process dies without unwinding), so a container stop
    would leak the graph. Drain ordering, readiness, and health are the host's
