@@ -23,7 +23,6 @@ HOLE_NAMES: Final[dict[str, str]] = {
     "stmt.name": "⟨name⟩",
     "inner.name": "⟨class⟩",
     "type(node).__name__": "⟨node⟩",
-    "span": "⟨count⟩",
     "target": "⟨import⟩",
     "package": "⟨package⟩",
     "self._export": "⟨export⟩",
