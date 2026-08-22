@@ -280,8 +280,8 @@ belongs to the edge, recorded where its golden test lives.
   `python.md#the-spec-pattern` (inbound door), `python.md#ports` (the ports
   package and its DTO rules). Compound shape verified in
   `examples/python-app/campaign/domain/money.py`; the walk-plus-DTO pair
-  verified in `examples/serdepy/parcel/application/mapping.py` and
-  `examples/serdepy/parcel/application/ports/parcel_wire.py`.
+  verified in `examples/serdepy/parcel/tests/test_record_construction.py`
+  and `examples/serdepy/parcel/application/ports/parcel_wire.py`.
 - The all-cases worked example: `examples/serdepy/` — every backing type's
   exit (all four conversion dunders, the Decimal and datetime text
   policies), the zero-dunder compound, a port DTO whose derived field
