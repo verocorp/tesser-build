@@ -23,7 +23,22 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 
-mapfile -t files < <(find examples layout tessercheck-py tesser-py -name requirements-dev.txt | sort)
+# Read with a while loop, not mapfile: mapfile is a bash 4 builtin and macOS
+# ships bash 3.2. CI does not run this script at all, so nothing but a local
+# run would ever catch a bash-4-ism here.
+files=()
+while IFS= read -r f; do
+  files+=("$f")
+done < <(find examples layout tessercheck-py tesser-py -name requirements-dev.txt | sort)
+
+# Guard the empty case explicitly. Installing nothing and reporting success is
+# the same failure scripts/verify guards against when its tree list comes back
+# empty, and on bash 3.2 the bare "${files[@]}" below would otherwise fail as
+# an unbound variable rather than saying what went wrong.
+if [ ${#files[@]} -eq 0 ]; then
+  echo "install-dev: found no requirements-dev.txt files" >&2
+  exit 1
+fi
 
 echo "installing dev tooling from ${#files[@]} requirements files:"
 printf '  %s\n' "${files[@]}"

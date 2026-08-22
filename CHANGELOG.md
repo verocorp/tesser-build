@@ -5,6 +5,44 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.72.1] - 2026-08-22
+
+### Fixed
+- **`scripts/verify` and `scripts/install-dev` now run on macOS.** Both built
+  their one array with `mapfile`, a bash 4 builtin; macOS ships bash 3.2, where
+  it is `command not found`. `scripts/verify` then died on `TREES: unbound
+  variable` before checking anything, and `scripts/install-dev` exited at once
+  under `set -e`. Both now read with a `while IFS= read -r` loop, which is
+  bash 3.2 clean and preserves the existing empty-list guard: an empty tree
+  list still fails loudly rather than reporting "all green (0 trees)".
+  - Every CI job runs on `ubuntu-latest` with bash 5, so CI could not observe
+    this in either direction — the failure was reachable only on the machine
+    the script exists to serve. That is worth stating plainly, because
+    `scripts/verify`'s own header argues that "green locally" and "green in CI"
+    have to mean the same thing, and for the whole life of the script one half
+    of that could not be run.
+  - `scripts/install-dev` also gained an explicit empty-list guard. Installing
+    nothing and reporting success is the failure `scripts/verify` already
+    guards against on its own tree list, and on bash 3.2 the bare
+    `"${files[@]}"` would otherwise fail as an unbound variable instead of
+    saying what went wrong.
+  - Each site carries a comment saying why it is not `mapfile`. A static guard
+    against the construct returning is filed in `TODOS.md`, unbuilt: CI cannot
+    catch a regression here, so the comment is currently the only defense.
+  - Verified on bash 3.2.57: full `scripts/verify` green across all 8 trees.
+- **Sweep for the same class:** every tracked shell file was checked for
+  `mapfile`, `readarray`, `declare -A`, `${v,,}`/`${v^^}`, `;;&`, and `coproc`.
+  Those two sites were the only ones; `scripts/verify-packaging` and
+  `rationale/measure-ablation.sh` were already clean.
+
+### Notes
+- A second, unrelated blocker sat *in front* of the `mapfile` one on Chris's
+  machine and is not a repo change: step 0 failed with `examples/python has no
+  manifest.json row`. `examples/python` retired in v0.0.26.0 (#68), but its
+  gitignored `__pycache__`, `.pytest_cache`, and `.mypy_cache` directories
+  stayed on disk, so the layout app enumerated it as an `examples/*` tree with
+  no manifest row while `git status` stayed silent. Deleting the directory
+  cleared it. The recurrence hazard is filed in `TODOS.md`.
 ## [0.0.72.0] - 2026-08-21
 
 TB082's service-method statement cap is removed. Two independent regeneration
