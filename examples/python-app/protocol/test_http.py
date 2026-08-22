@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from protocol.http import BadRequest, HttpRequest, HttpResponse, object_field, string_field
+from protocol.http import BadRequest, HttpRequest, HttpResponse
 
 
 def test_an_empty_body_reads_as_an_empty_object() -> None:
@@ -97,17 +97,3 @@ def test_a_redirect_target_carrying_a_control_character_is_rejected() -> None:
         with pytest.raises(BadRequest) as caught:
             HttpResponse.redirect(target)
         assert "control character" in str(caught.value)
-
-
-def test_an_object_field_reads_back_and_anything_else_is_rejected() -> None:
-    assert object_field({"a": 1}) == {"a": 1}
-    with pytest.raises(BadRequest) as caught:
-        object_field("a")
-    assert str(caught.value) == "expected a JSON object field"
-
-
-def test_a_string_field_reads_back_and_anything_else_is_rejected() -> None:
-    assert string_field("summer") == "summer"
-    with pytest.raises(BadRequest) as caught:
-        string_field(7)
-    assert str(caught.value) == "expected a string field"

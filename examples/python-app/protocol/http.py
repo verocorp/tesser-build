@@ -6,6 +6,7 @@ from typing import Protocol
 
 import tesser.srv as ts
 
+
 JSONObject = dict[str, object]  # tesser:debt TB051
 
 
@@ -49,7 +50,16 @@ class HttpRequest(ts.Request):
     body: bytes
 
     def json_body(self) -> JSONObject:
-        return _json_object(self.body)
+        raw = self.body
+        if not raw:
+            return {}
+        try:
+            data = json.loads(raw)
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            raise BadRequest(f"malformed JSON: {e}") from e
+        if not isinstance(data, dict):
+            raise BadRequest("expected a JSON object")
+        return data
 
     def path_param(self, name: str) -> str:
         value = self.path_params.get(name)
@@ -90,36 +100,18 @@ class HttpResponse(ts.Response):
         return cls(status_code, b"", {"Location": url})
 
     def json_body(self) -> JSONObject:
-        return _json_object(self.body)
+        raw = self.body
+        if not raw:
+            return {}
+        try:
+            data = json.loads(raw)
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            raise BadRequest(f"malformed JSON: {e}") from e
+        if not isinstance(data, dict):
+            raise BadRequest("expected a JSON object")
+        return data
 
 
 class Endpoint(ts.Port, Protocol):
 
     def __call__(self, request: HttpRequest, /) -> HttpResponse: ...
-
-
-@ts.do_not_use_function
-def _json_object(raw: bytes) -> JSONObject:  # tesser:debt TB051
-    if not raw:
-        return {}
-    try:
-        data = json.loads(raw)
-    except (json.JSONDecodeError, UnicodeDecodeError) as e:
-        raise BadRequest(f"malformed JSON: {e}") from e
-    if not isinstance(data, dict):
-        raise BadRequest("expected a JSON object")
-    return data
-
-
-@ts.do_not_use_function
-def object_field(value: object) -> JSONObject:  # tesser:debt TB051
-    if not isinstance(value, dict):
-        raise BadRequest("expected a JSON object field")
-    return value
-
-
-@ts.do_not_use_function
-def string_field(value: object) -> str:  # tesser:debt TB051
-    if not isinstance(value, str):
-        raise BadRequest("expected a string field")
-    return value
