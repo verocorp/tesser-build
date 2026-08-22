@@ -68,7 +68,8 @@ def test_an_archived_item_is_not_served_as_live() -> None:
 def test_a_reserved_name_is_refused_with_a_reason() -> None:
     svc = wire.Catalog().client
     added = svc.add(client.AddItemRequest(id="c3", name="admin"))
-    assert (added.id, added.reason) == ("", "name is reserved")
+    assert added.items == ()
+    assert added.reason == "name is reserved"
 
 
 def test_list_returns_every_stored_item() -> None:

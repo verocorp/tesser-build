@@ -51,7 +51,8 @@ def test_adding_an_item_answers_with_what_was_stored() -> None:
         FakeNamePolicy(verdict=name_policy.NameVerdict.ALLOWED, reason=""),
     )
     added = svc.add(client.AddItemRequest(id="a1", name="Anvil"))
-    assert (added.id, added.name, added.reason) == ("a1", "Anvil", "")
+    assert tuple((v.id, v.name) for v in added.items) == (("a1", "Anvil"),)
+    assert added.reason == ""
 
 
 def test_adding_an_item_asks_the_policy_about_the_requested_name() -> None:
@@ -71,7 +72,8 @@ def test_a_refused_name_answers_blank_with_the_reason_the_policy_gave() -> None:
         ),
     )
     added = svc.add(client.AddItemRequest(id="c3", name="admin"))
-    assert (added.id, added.name, added.reason) == ("", "", "name is reserved")
+    assert added.items == ()
+    assert added.reason == "name is reserved"
 
 
 def test_an_item_with_no_name_is_refused_before_any_port_is_touched() -> None:

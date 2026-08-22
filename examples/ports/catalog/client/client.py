@@ -21,9 +21,8 @@ class AddItemRequest(ts.Request):
 
 class AddItemResponse(ts.Response):
 
-    def __init__(self, id: str, name: str, reason: str) -> None:
-        self.id = id
-        self.name = name
+    def __init__(self, items: tuple[ItemView, ...], reason: str) -> None:
+        self.items = items
         self.reason = reason
 
 
