@@ -2,6 +2,38 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## scripts/verify portability (2026-08-22, v0.0.72.1)
+
+`scripts/verify` and `scripts/install-dev` could not run on macOS until
+v0.0.72.1: both used `mapfile`, a bash 4 builtin, and macOS ships bash 3.2.
+Every CI job runs on `ubuntu-latest`, so CI was structurally incapable of
+noticing. The builtins are gone; what is still open is anything stopping them
+coming back.
+
+- [ ] **No guard against a bash-4-ism returning.** The fix added a comment at
+  each site saying why it is a `while` loop and not `mapfile`, which is the
+  only thing standing between here and a well-meant "simplification" that CI
+  would wave straight through. A real guard would be a static check — grep the
+  four shell files (`scripts/verify`, `scripts/install-dev`,
+  `scripts/verify-packaging`, `rationale/measure-ablation.sh`) for `mapfile`,
+  `readarray`, `declare -A`, `${v,,}`/`${v^^}`, `;;&`, `coproc` — hung off the
+  packaging job or its own. The alternative, a macOS runner, costs 10x and
+  would be the only non-ubuntu job in the matrix. Deferred pending Chris's
+  call on whether a bespoke grep-lint earns its place.
+- [ ] **Retiring a Python example tree leaves dirt that breaks step 0.** When
+  `examples/python` retired in v0.0.26.0 (#68) its sources left the repo but
+  its `__pycache__`, `.pytest_cache`, and `.mypy_cache` directories stayed on
+  disk. The layout app's `SKIP_DIRS` skips those as *entries*, but
+  `examples/python` is itself an ordinary directory that happens to contain
+  only skipped ones, so it enumerated as an `examples/*` tree and demanded a
+  manifest row — failing step 0 with `examples/python has no manifest.json
+  row`. Because the contents are gitignored, `git status` said nothing. Fixed
+  on Chris's machine by deleting the directory; nothing in the repo changed,
+  and nothing stops the next retirement doing it again. Teaching the layout
+  app to ignore cache-only directories was considered and rejected: it would
+  also hide a genuinely emptied example tree, which is the opposite of what
+  the check is for. A retirement checklist item is the cheaper answer.
+
 ## Packaging gaps (2026-08-19 adversarial review of PR #113; rescued from PR #114 before it was closed)
 
 These were found by the adversarial pass on #113 and recorded only in the

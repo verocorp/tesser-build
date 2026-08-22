@@ -41,7 +41,13 @@ cd "$ROOT" || exit 1
 # loop below report "all green (0 trees)" — a check that passes without
 # checking anything.
 TREE_LIST=$( (cd "$ROOT/layout" && PYTHONPATH=.:../tesser-py python3 -m srv.cli.trees "$ROOT") ) || { echo "verify: could not derive trees from manifest.json" >&2; exit 1; }
-mapfile -t TREES <<<"$TREE_LIST"
+# Read with a while loop, not mapfile: mapfile is a bash 4 builtin and macOS
+# ships bash 3.2. Every CI job runs on ubuntu, so a bash-4-ism here fails only
+# on the machine this script exists to serve, and CI can never see it.
+TREES=()
+while IFS= read -r tree; do
+  if [ -n "$tree" ]; then TREES+=("$tree"); fi
+done <<<"$TREE_LIST"
 if [ ${#TREES[@]} -eq 0 ] || [ -z "${TREES[0]}" ]; then
   echo "verify: no gated trees derived from manifest.json" >&2
   exit 1
