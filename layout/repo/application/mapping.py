@@ -9,53 +9,6 @@ import repo.domain.rules as domain
 
 
 @ts.do_not_use_function
-def repo(read: repo_reader.ReadRepoResponse) -> domain.Repo:  # tesser:debt TB051
-    return domain.Repo(
-        domain.RepoSpec(
-            manifest=_manifest(read.manifest),
-            verify=_file(read.verify),
-            workflow=_file(read.workflow),
-            top=_entries(read.top),
-            examples=_entries(read.examples),
-            declarations=tuple(
-                (record.path, _state(record.state), record.text)
-                for record in read.declarations
-            ),
-            requirements=read.requirements,
-        )
-    )
-
-
-@ts.do_not_use_function
-def report(  # tesser:debt TB051
-    read: repo_reader.ReadRepoResponse,
-) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    built = repo(read)
-    return (
-        tuple(str(problem.text()) for problem in built.problems()),
-        tuple(str(count) for count in built.counts()),
-    )
-
-
-@ts.do_not_use_function
-def trees(read: repo_reader.ReadRepoResponse) -> tuple[str, ...]:  # tesser:debt TB051
-    return tuple(str(tree) for tree in repo(read).trees())
-
-
-@ts.do_not_use_function
-def _file(record: repo_reader.FileRecord) -> tuple[str, str]:  # tesser:debt TB051
-    return (_state(record.state), record.text)
-
-
-@ts.do_not_use_function
-def _manifest(  # tesser:debt TB051
-    record: repo_reader.ManifestRecord,
-) -> tuple[str, tuple[tuple[str, str], ...], str]:
-    rows = tuple((row.key, row.kind) for row in record.rows)
-    return (_manifest_state(record.state), rows, record.note)
-
-
-@ts.do_not_use_function
 def _manifest_state(state: repo_reader.ManifestState) -> str:  # tesser:debt TB051
     match state:
         case repo_reader.ManifestState.READ:
@@ -70,11 +23,6 @@ def _manifest_state(state: repo_reader.ManifestState) -> str:  # tesser:debt TB0
             return domain.MISSHAPEN
         case _ as unreachable:
             typing.assert_never(unreachable)
-
-
-@ts.do_not_use_function
-def _entries(records: tuple[repo_reader.EntryRecord, ...]) -> tuple[tuple[str, str], ...]:  # tesser:debt TB051
-    return tuple((record.name, _form(record.form)) for record in records)
 
 
 @ts.do_not_use_function

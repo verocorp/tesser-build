@@ -1,14 +1,11 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 
-import pytest
 import tesser.testing as ts
-
-from app.loader import load
-import repo.adapters.handlers.cli as cli
-from srv.cli.check import respond, run
-
 
 @ts.helper
 def _repo(root: Path) -> Path:  # tesser:debt TB073
@@ -40,57 +37,78 @@ def _repo(root: Path) -> Path:  # tesser:debt TB073
     return root
 
 
-def test_a_missing_root_argument_exits_two() -> None:
-    response = respond(cli.Handler(load().repo.client), [])
-    assert response.exit_code == 2
-    assert "usage: python -m srv.cli.check" in response.stderr
+def test_a_missing_root_argument_exits_two_with_the_usage() -> None:
+    tree = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, "-m", "srv.cli.check"],
+        cwd=tree,
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join(
+                [str(tree), str(tree.parent / "tesser-py")]
+            ),
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "usage: python -m srv.cli.check" in result.stderr
 
 
 def test_an_extra_argument_exits_two() -> None:
-    response = respond(cli.Handler(load().repo.client), ["/r", "extra"])
-    assert response.exit_code == 2
+    tree = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, "-m", "srv.cli.check", "/r", "extra"],
+        cwd=tree,
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join(
+                [str(tree), str(tree.parent / "tesser-py")]
+            ),
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert "usage: python -m srv.cli.check" in result.stderr
 
 
 def test_a_clean_repo_exits_zero_with_the_summary(tmp_path: Path) -> None:
-    response = respond(cli.Handler(load().repo.client), [str(_repo(tmp_path))])
-    assert response.exit_code == 0
-    assert "3 rows, 1 app trees" in response.stdout
+    tree = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, "-m", "srv.cli.check", str(_repo(tmp_path))],
+        cwd=tree,
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join(
+                [str(tree), str(tree.parent / "tesser-py")]
+            ),
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "3 rows, 1 app trees" in result.stdout
+    assert result.stderr == ""
 
 
 def test_problems_exit_one_on_stderr(tmp_path: Path) -> None:
     _repo(tmp_path)
     (tmp_path / "stray").mkdir()
-    response = respond(cli.Handler(load().repo.client), [str(tmp_path)])
-    assert response.exit_code == 1
-    assert "layout: " in response.stderr
-
-
-def test_run_prints_the_summary_to_stdout_and_returns_zero(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    code = run([str(_repo(tmp_path))])
-    captured = capsys.readouterr()
-    assert code == 0
-    assert "3 rows, 1 app trees" in captured.out
-    assert captured.err == ""
-
-
-def test_run_prints_a_usage_error_to_stderr_and_returns_two(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    code = run([])
-    captured = capsys.readouterr()
-    assert code == 2
-    assert captured.out == ""
-    assert "usage: python -m srv.cli.check" in captured.err
-
-
-def test_run_prints_problems_to_stderr_and_returns_one(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    _repo(tmp_path)
-    (tmp_path / "stray").mkdir()
-    code = run([str(tmp_path)])
-    captured = capsys.readouterr()
-    assert code == 1
-    assert "layout: " in captured.err
+    tree = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, "-m", "srv.cli.check", str(tmp_path)],
+        cwd=tree,
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join(
+                [str(tree), str(tree.parent / "tesser-py")]
+            ),
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert "layout: " in result.stderr

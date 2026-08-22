@@ -1,14 +1,11 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 
-import pytest
 import tesser.testing as ts
-
-from app.loader import load
-import repo.adapters.handlers.cli as cli
-from srv.cli.trees import respond, run
-
 
 @ts.helper
 def _repo(root: Path) -> Path:  # tesser:debt TB073
@@ -41,63 +38,97 @@ def _repo(root: Path) -> Path:  # tesser:debt TB073
 
 
 def test_a_clean_repo_exits_zero_with_the_app_rows(tmp_path: Path) -> None:
-    response = respond(cli.Handler(load().repo.client), [str(_repo(tmp_path))])
-    assert response.exit_code == 0
-    assert response.stdout == "appone"
-    assert response.stderr == ""
+    tree = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, "-m", "srv.cli.trees", str(_repo(tmp_path))],
+        cwd=tree,
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join(
+                [str(tree), str(tree.parent / "tesser-py")]
+            ),
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert result.stdout == "appone\n"
+    assert result.stderr == ""
 
 
 def test_a_missing_root_argument_exits_two_with_the_usage() -> None:
-    response = respond(cli.Handler(load().repo.client), [])
-    assert response.exit_code == 2
-    assert response.stdout == ""
-    assert "usage: python -m srv.cli.trees" in response.stderr
+    tree = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, "-m", "srv.cli.trees"],
+        cwd=tree,
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join(
+                [str(tree), str(tree.parent / "tesser-py")]
+            ),
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "usage: python -m srv.cli.trees" in result.stderr
 
 
 def test_an_extra_argument_exits_two_with_the_usage(tmp_path: Path) -> None:
-    response = respond(cli.Handler(load().repo.client), [str(_repo(tmp_path)), "extra"])
-    assert response.exit_code == 2
-    assert "usage: python -m srv.cli.trees" in response.stderr
+    tree = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, "-m", "srv.cli.trees", str(_repo(tmp_path)), "extra"],
+        cwd=tree,
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join(
+                [str(tree), str(tree.parent / "tesser-py")]
+            ),
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert "usage: python -m srv.cli.trees" in result.stderr
 
 
 def test_a_broken_manifest_exits_one_on_stderr(tmp_path: Path) -> None:
     _repo(tmp_path)
     (tmp_path / "manifest.json").write_text("{ truncated")
-    response = respond(cli.Handler(load().repo.client), [str(tmp_path)])
-    assert response.exit_code == 1
-    assert response.stdout == ""
-    assert "manifest.json is unreadable" in response.stderr
+    tree = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, "-m", "srv.cli.trees", str(tmp_path)],
+        cwd=tree,
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join(
+                [str(tree), str(tree.parent / "tesser-py")]
+            ),
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert "manifest.json is unreadable" in result.stderr
 
 
 def test_an_unregistered_directory_exits_one_before_listing(tmp_path: Path) -> None:
     _repo(tmp_path)
     (tmp_path / "utils").mkdir()
-    response = respond(cli.Handler(load().repo.client), [str(tmp_path)])
-    assert response.exit_code == 1
-    assert "no manifest.json row" in response.stderr
-
-
-def test_run_prints_the_trees_to_stdout_and_returns_zero(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    code = run([str(_repo(tmp_path))])
-    captured = capsys.readouterr()
-    assert code == 0
-    assert captured.out == "appone\n"
-    assert captured.err == ""
-
-
-def test_run_prints_a_usage_error_to_stderr_and_returns_two(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    code = run([])
-    captured = capsys.readouterr()
-    assert code == 2
-    assert captured.out == ""
-    assert "usage: python -m srv.cli.trees" in captured.err
-
-
-def test_run_prints_problems_to_stderr_and_returns_one(tmp_path: Path) -> None:
-    _repo(tmp_path)
-    (tmp_path / "manifest.json").write_text("{ truncated")
-    assert run([str(tmp_path)]) == 1
+    tree = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, "-m", "srv.cli.trees", str(tmp_path)],
+        cwd=tree,
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join(
+                [str(tree), str(tree.parent / "tesser-py")]
+            ),
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "no manifest.json row" in result.stderr
