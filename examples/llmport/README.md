@@ -43,9 +43,9 @@ protocol/
                   protocol/http.py; the app owns it, handlers define it, hosts
                   conform to it
 srv/
-  voice/router.py tools_for (the name -> endpoint table) + match — routing lives
-                  in srv, as it does for HTTP
-  voice/agent.py  ToolAgent (ts.Host) — the context-generic LiveKit host
+  voice/agent.py  ToolAgent (ts.Host) — the context-generic LiveKit host; it
+                  takes the name -> endpoint table in and walks it inline,
+                  TB051 having left no module a routing function could live in
 ```
 
 The division of labor the checkers enforce:
@@ -67,9 +67,9 @@ The division of labor the checkers enforce:
   names, the JSON schemas (the choose-slot schema embeds the *current* offered
   slots as an enum, rebuilt from every response), and the raw-argument
   parsing — one endpoint method per tool, exactly as an HTTP handler carries
-  one method per route. The name→endpoint table lives in `srv/voice/router.py`,
-  because routing is the host's job in every other srv. The context below the
-  handler never hears the word "tool".
+  one method per route. The name→endpoint table is handed to the host, which
+  walks it inline, because routing is the host's job in every other srv. The
+  context below the handler never hears the word "tool".
 - **A taken slot is an outcome, not an error.** `SlotDirectory.reserve`
   returns a `ReservationOutcome` enum (`RESERVED` / `SLOT_TAKEN`) plus payload
   rather than raising or returning a union, and `confirm` matches on it with
@@ -187,7 +187,7 @@ typed assertion in the handler tests is a plain assignment.
 ```sh
 (cd tessercheck-py && PYTHONPATH=.:../tesser-py python3 -m srv.cli.main ../examples/llmport)
 cd examples/llmport
-MYPYPATH=.:../../tesser-py mypy --strict scheduling protocol srv/voice/router.py conftest.py
+MYPYPATH=.:../../tesser-py mypy --strict scheduling protocol conftest.py
 pytest -q
 ```
 

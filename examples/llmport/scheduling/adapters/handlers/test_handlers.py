@@ -18,26 +18,35 @@ class FakeSchedulingClientScripted(client.SchedulingClient):
         self.error = error
         self.requests: list[object] = []
 
-    def _next(self, request: object) -> client.BookingStateResponse:  # tesser:debt TB051
+    def begin(self, request: client.BeginBookingRequest) -> client.BookingStateResponse:
         self.requests.append(request)
         if self.error is not None:
             raise self.error
         return self.pending.pop(0)
 
-    def begin(self, request: client.BeginBookingRequest) -> client.BookingStateResponse:
-        return self._next(request)
-
     def provide_name(self, request: client.ProvideNameRequest) -> client.BookingStateResponse:
-        return self._next(request)
+        self.requests.append(request)
+        if self.error is not None:
+            raise self.error
+        return self.pending.pop(0)
 
     def choose_slot(self, request: client.ChooseSlotRequest) -> client.BookingStateResponse:
-        return self._next(request)
+        self.requests.append(request)
+        if self.error is not None:
+            raise self.error
+        return self.pending.pop(0)
 
     def confirm(self, request: client.ConfirmBookingRequest) -> client.BookingStateResponse:
-        return self._next(request)
+        self.requests.append(request)
+        if self.error is not None:
+            raise self.error
+        return self.pending.pop(0)
 
     def status(self, request: client.StatusRequest) -> client.BookingStateResponse:
-        return self._next(request)
+        self.requests.append(request)
+        if self.error is not None:
+            raise self.error
+        return self.pending.pop(0)
 
 
 def test_the_handler_carries_the_instructions_the_model_opens_with() -> None:
