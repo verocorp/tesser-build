@@ -6,44 +6,80 @@ import tesser.application as ts
 
 import scheduling.application.ports.booking_repository as booking_repository
 import scheduling.application.ports.slot_directory as slot_directory
-import scheduling.client.client as client
 import scheduling.domain.scheduling as domain
 
 
-@ts.do_not_use_function
-def _booking(view: booking_repository.BookingView) -> domain.Booking:
-    return domain.Booking(
-        domain.BookingSpec(step=view.step, name=view.name, chosen=view.chosen, offered=view.offered)
-    )
+class MapToBookingSpec(ts.Mapper):
+
+    def __init__(self, found_booking: booking_repository.FindBookingResponse) -> None:
+        match found_booking.presence:
+            case booking_repository.BookingPresence.PRESENT:
+                view = found_booking.bookings[0]
+            case booking_repository.BookingPresence.ABSENT:
+                raise KeyError("booking not found")
+            case _ as unreachable:
+                typing.assert_never(unreachable)
+        self._step = view.step
+        self._name = view.name
+        self._chosen = view.chosen
+        self._offered = view.offered
+
+    @property
+    def step(self) -> str:
+        return self._step
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def chosen(self) -> str:
+        return self._chosen
+
+    @property
+    def offered(self) -> tuple[str, ...]:
+        return self._offered
+
+
+class MapToReofferedSlots(ts.Mapper):
+
+    def __init__(self, reserved_slot: slot_directory.ReserveSlotResponse) -> None:
+        self._slots = reserved_slot.available
+
+    @property
+    def slots(self) -> tuple[str, ...]:
+        return self._slots
+
+
+class MapToSettledBooking(ts.Mapper):
+
+    def __init__(self, reserved_slot: slot_directory.ReserveSlotResponse) -> None:
+        self._reoffered_slots_mappers: tuple[MapToReofferedSlots, ...] = ()
+        match reserved_slot.outcome:
+            case slot_directory.ReservationOutcome.RESERVED:
+                pass
+            case slot_directory.ReservationOutcome.SLOT_TAKEN:
+                self._reoffered_slots_mappers = (
+                    MapToReofferedSlots(reserved_slot=reserved_slot),
+                )
+            case _ as unreachable:
+                typing.assert_never(unreachable)
+
+    @property
+    def reoffered_slots_mappers(self) -> tuple[MapToReofferedSlots, ...]:
+        return self._reoffered_slots_mappers
 
 
 @ts.do_not_use_function
-def only(found: booking_repository.FindBookingResponse) -> booking_repository.BookingView:
+def began(found: booking_repository.FindBookingResponse) -> domain.Booking:  # tesser:debt TB051
     match found.presence:
         case booking_repository.BookingPresence.PRESENT:
-            return found.bookings[0]
-        case booking_repository.BookingPresence.ABSENT:
-            raise KeyError("booking not found")
-        case _ as unreachable:
-            typing.assert_never(unreachable)
-
-
-@ts.do_not_use_function
-def loaded(found: booking_repository.FindBookingResponse) -> domain.Booking:
-    match found.presence:
-        case booking_repository.BookingPresence.PRESENT:
-            return _booking(found.bookings[0])
-        case booking_repository.BookingPresence.ABSENT:
-            raise KeyError("booking not found")
-        case _ as unreachable:
-            typing.assert_never(unreachable)
-
-
-@ts.do_not_use_function
-def began(found: booking_repository.FindBookingResponse) -> domain.Booking:
-    match found.presence:
-        case booking_repository.BookingPresence.PRESENT:
-            return _booking(found.bookings[0])
+            view = found.bookings[0]
+            return domain.Booking(
+                domain.BookingSpec(
+                    step=view.step, name=view.name, chosen=view.chosen, offered=view.offered
+                )
+            )
         case booking_repository.BookingPresence.ABSENT:
             return domain.Booking(
                 domain.BookingSpec(step=domain.COLLECT_NAME, name="", chosen="", offered=())
@@ -53,7 +89,7 @@ def began(found: booking_repository.FindBookingResponse) -> domain.Booking:
 
 
 @ts.do_not_use_function
-def begin_reply(found: booking_repository.FindBookingResponse) -> str:
+def begin_reply(found: booking_repository.FindBookingResponse) -> str:  # tesser:debt TB051
     match found.presence:
         case booking_repository.BookingPresence.PRESENT:
             return "continue the booking"
@@ -64,51 +100,7 @@ def begin_reply(found: booking_repository.FindBookingResponse) -> str:
 
 
 @ts.do_not_use_function
-def save_request(booking_id: str, booking: domain.Booking) -> booking_repository.SaveBookingRequest:
-    name = booking.name()
-    chosen = booking.chosen()
-    return booking_repository.SaveBookingRequest(
-        booking_id=booking_id,
-        step=str(booking.step()),
-        name="" if name is None else str(name),
-        chosen="" if chosen is None else str(chosen),
-        offered=tuple(str(slot) for slot in booking.offered()),
-    )
-
-
-@ts.do_not_use_function
-def state(booking: domain.Booking, reply: str) -> client.BookingStateResponse:
-    return client.BookingStateResponse(
-        step=str(booking.step()),
-        offered_slots=tuple(str(slot) for slot in booking.offered()),
-        reply=reply,
-    )
-
-
-@ts.do_not_use_function
-def reoffered(view: booking_repository.BookingView, available: tuple[str, ...]) -> domain.Booking:
-    booking = _booking(view)
-    booking.reoffer(tuple(domain.Slot(label) for label in available))
-    return booking
-
-
-@ts.do_not_use_function
-def confirmed(
-    reserved: slot_directory.ReserveSlotResponse,
-    booking: domain.Booking,
-    view: booking_repository.BookingView,
-) -> domain.Booking:
-    match reserved.outcome:
-        case slot_directory.ReservationOutcome.RESERVED:
-            return booking
-        case slot_directory.ReservationOutcome.SLOT_TAKEN:
-            return reoffered(view, reserved.available)
-        case _ as unreachable:
-            typing.assert_never(unreachable)
-
-
-@ts.do_not_use_function
-def confirm_reply(reserved: slot_directory.ReserveSlotResponse, booking: domain.Booking) -> str:
+def confirm_reply(reserved: slot_directory.ReserveSlotResponse, booking: domain.Booking) -> str:  # tesser:debt TB051
     match reserved.outcome:
         case slot_directory.ReservationOutcome.RESERVED:
             return f"booked {booking.chosen()} for {booking.name()}"

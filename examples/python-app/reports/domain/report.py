@@ -75,24 +75,3 @@ class LinkVerdict(ts.ValueObject):
     _target_url: values.TargetURL
     _allowed: values.Decision
     _reason: values.Reason
-
-
-@ts.do_not_use_function
-def join_links_with_verdicts(
-    links: tuple[Link, ...], verdicts: tuple[RecordedVerdict, ...]
-) -> tuple[LinkVerdict, ...]:
-    by_url = {str(v.target_url): v for v in verdicts}
-    rows = [
-        LinkVerdict(
-            slug=str(link.slug),
-            target_url=str(link.target_url),
-            allowed=str(by_url[str(link.target_url)].allowed) == "allowed"
-            if str(link.target_url) in by_url
-            else True,
-            reason=str(by_url[str(link.target_url)].reason)
-            if str(link.target_url) in by_url
-            else "no verdict recorded",
-        )
-        for link in links
-    ]
-    return tuple(sorted(rows, key=lambda r: (str(r.allowed) == "allowed", str(r.slug))))

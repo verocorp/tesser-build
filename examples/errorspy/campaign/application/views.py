@@ -5,80 +5,61 @@ import typing
 import tesser.application as ts
 
 import campaign.application.ports.campaign_repository as campaign_repository
-import campaign.client.client as client
-import campaign.domain.campaign as campaign
-import campaign.domain.short_link as short_link
-import campaign.domain.values as values
-from tesser.errors import DomainError, InfraError, not_found
+from tesser.errors import not_found
 
 
-@ts.do_not_use_function
-def campaign_view(c: campaign.Campaign) -> client.CampaignView:
-    return client.CampaignView(
-        campaign_id=c.id,
-        links=tuple(str(link.slug) for link in c.links),
-    )
+class MapToShortLinkSpec(ts.Mapper):
+
+    def __init__(self, link_record: campaign_repository.LinkRecord) -> None:
+        self._slug = link_record.slug
+        self._target_url = link_record.target_url
+
+    @property
+    def slug(self) -> str:
+        return self._slug
+
+    @property
+    def target_url(self) -> str:
+        return self._target_url
 
 
-@ts.do_not_use_function
-def create_spec(req: client.CreateCampaignRequest) -> campaign.CampaignSpec:
-    return campaign.CampaignSpec(
-        id=req.campaign_id,
-        window=values.DateWindowSpec(start=req.window_start, end=req.window_end),
-        links=tuple(
-            short_link.ShortLinkSpec(slug=link.slug, target_url=link.target_url)
-            for link in req.links
-        ),
-    )
+class MapToCampaignSpec(ts.Mapper):
 
+    def __init__(
+        self,
+        find_campaign_request: campaign_repository.FindCampaignRequest,
+        found_campaign: campaign_repository.FindCampaignResponse,
+    ) -> None:
+        match found_campaign.outcome:
+            case campaign_repository.CampaignLookup.FOUND:
+                record = found_campaign.campaigns[0]
+            case campaign_repository.CampaignLookup.MISSING:
+                raise not_found(
+                    "campaign_missing",
+                    f"no campaign {find_campaign_request.campaign_id!r}",
+                )
+            case _ as unreachable:
+                typing.assert_never(unreachable)
+        self._campaign_id = record.id
+        self._window_start = record.window.start
+        self._window_end = record.window.end
+        self._short_link_spec_mappers = tuple(
+            MapToShortLinkSpec(link_record=link) for link in record.links
+        )
 
-@ts.do_not_use_function
-def save_request(c: campaign.Campaign) -> campaign_repository.SaveCampaignRequest:
-    return campaign_repository.SaveCampaignRequest(
-        id=c.id,
-        window=_window_record(c),
-        links=tuple(_link_record(link) for link in c.links),
-    )
+    @property
+    def campaign_id(self) -> str:
+        return self._campaign_id
 
+    @property
+    def window_start(self) -> str:
+        return self._window_start
 
-@ts.do_not_use_function
-def required_campaign(
-    found: campaign_repository.FindCampaignResponse, campaign_id: str
-) -> campaign.Campaign:
-    match found.outcome:
-        case campaign_repository.CampaignLookup.FOUND:
-            return rebuilt_campaign(found.campaigns[0])
-        case campaign_repository.CampaignLookup.MISSING:
-            raise not_found("campaign_missing", f"no campaign {campaign_id!r}")
-        case _ as unreachable:
-            typing.assert_never(unreachable)
+    @property
+    def window_end(self) -> str:
+        return self._window_end
 
+    @property
+    def short_link_spec_mappers(self) -> tuple[MapToShortLinkSpec, ...]:
+        return self._short_link_spec_mappers
 
-@ts.do_not_use_function
-def rebuilt_campaign(record: campaign_repository.CampaignRecord) -> campaign.Campaign:
-    try:
-        return campaign.Campaign(_campaign_spec(record))
-    except DomainError as e:
-        raise InfraError(f"corrupted campaign record {record.id!r}: {e}") from e
-
-
-@ts.do_not_use_function
-def _campaign_spec(record: campaign_repository.CampaignRecord) -> campaign.CampaignSpec:
-    return campaign.CampaignSpec(
-        id=record.id,
-        window=values.DateWindowSpec(start=record.window.start, end=record.window.end),
-        links=tuple(
-            short_link.ShortLinkSpec(slug=link.slug, target_url=link.target_url)
-            for link in record.links
-        ),
-    )
-
-
-@ts.do_not_use_function
-def _window_record(c: campaign.Campaign) -> campaign_repository.WindowRecord:
-    return campaign_repository.WindowRecord(start=str(c.window.start), end=str(c.window.end))
-
-
-@ts.do_not_use_function
-def _link_record(link: short_link.ShortLink) -> campaign_repository.LinkRecord:
-    return campaign_repository.LinkRecord(slug=str(link.slug), target_url=str(link.target))

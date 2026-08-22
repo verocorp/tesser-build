@@ -43,5 +43,8 @@ class Campaign(ts.AggregateRoot):
     def deactivate_short_link(self, slug: values.Slug) -> None:
         self._links.deactivate(slug)
 
+    def active_target(self, slug: values.Slug) -> values.TargetURL:
+        return self._links.active_target(slug)
+
     __eq__ = None  # type: ignore[assignment]
     __hash__ = None  # type: ignore[assignment]

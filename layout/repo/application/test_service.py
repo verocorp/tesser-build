@@ -71,6 +71,23 @@ def _response(
     )
 
 
+@ts.helper
+def _malformed(
+    note: str = "boom",
+) -> repo_reader.ReadRepoResponse:
+    return repo_reader.ReadRepoResponse(
+        manifest=repo_reader.ManifestRecord(
+            state=repo_reader.ManifestState.MALFORMED, rows=(), note=note
+        ),
+        verify=repo_reader.FileRecord(state=repo_reader.FileState.MISSING, text=""),
+        workflow=repo_reader.FileRecord(state=repo_reader.FileState.MISSING, text=""),
+        top=(),
+        examples=(),
+        declarations=(),
+        requirements=(),
+    )
+
+
 def test_check_passes_the_root_to_the_port() -> None:
     reader = FakeRepoReader(_response())
     service.LayoutService(reader).check(client.CheckRequest(repo_root="/somewhere"))
@@ -106,3 +123,18 @@ def test_trees_returns_the_app_rows() -> None:
         client.TreesRequest(repo_root=".")
     )
     assert response.trees == ("appone",)
+
+
+def test_a_malformed_manifest_renders_as_one_problem_and_zero_counts() -> None:
+    response = service.LayoutService(
+        FakeRepoReader(_malformed(note="line 1 column 2"))
+    ).check(client.CheckRequest(repo_root="."))
+    assert response.problems == ("manifest.json is unreadable: line 1 column 2",)
+    assert response.counts == ("0", "0")
+
+
+def test_trees_degrade_when_the_manifest_cannot_be_read() -> None:
+    response = service.LayoutService(FakeRepoReader(_malformed())).trees(
+        client.TreesRequest(repo_root=".")
+    )
+    assert response.trees == ()

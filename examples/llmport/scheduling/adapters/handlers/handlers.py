@@ -30,17 +30,31 @@ class LlmToolHandler(ts.Handler):
         ] = {
             PROVIDE_NAME: (
                 "Record the caller's full name.",
-                lambda _state: _params({"name": {"type": "string"}}, ("name",)),
+                lambda _state: {
+                    "type": "object",
+                    "properties": {"name": {"type": "string"}},
+                    "required": ["name"],
+                    "additionalProperties": False,
+                },
             ),
             CHOOSE_SLOT: (
                 "Record the slot the caller chose.",
-                lambda state: _params(
-                    {"slot": {"type": "string", "enum": list(state.offered_slots)}}, ("slot",)
-                ),
+                lambda state: {
+                    "type": "object",
+                    "properties": {
+                        "slot": {"type": "string", "enum": list(state.offered_slots)}
+                    },
+                    "required": ["slot"],
+                    "additionalProperties": False,
+                },
             ),
             CONFIRM_BOOKING: (
                 "Book the chosen slot after the caller confirms.",
-                lambda _state: _params({}, ()),
+                lambda _state: {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": False,
+                },
             ),
         }
 
@@ -51,52 +65,66 @@ class LlmToolHandler(ts.Handler):
         )
 
     def begin(self) -> voice.ToolTurn:
-        return self._turn(self._client.begin(client.BeginBookingRequest(booking_id=self._booking_id)))
+        state = self._client.begin(client.BeginBookingRequest(booking_id=self._booking_id))
+        tools: list[voice.Tool] = []
+        for name in TOOLS_FOR_STEP[state.step]:
+            if name not in self._declarations:
+                raise ValueError(f"unknown tool {name!r}")
+            description, parameters = self._declarations[name]
+            tools.append(
+                voice.Tool(name=name, description=description, parameters=parameters(state))
+            )
+        return voice.ToolTurn(reply=state.reply, tools=tuple(tools))
 
     def status(self) -> voice.ToolTurn:
-        return self._turn(self._client.status(client.StatusRequest(booking_id=self._booking_id)))
+        state = self._client.status(client.StatusRequest(booking_id=self._booking_id))
+        tools: list[voice.Tool] = []
+        for name in TOOLS_FOR_STEP[state.step]:
+            if name not in self._declarations:
+                raise ValueError(f"unknown tool {name!r}")
+            description, parameters = self._declarations[name]
+            tools.append(
+                voice.Tool(name=name, description=description, parameters=parameters(state))
+            )
+        return voice.ToolTurn(reply=state.reply, tools=tuple(tools))
 
     def provide_name(self, call: voice.ToolCall, /) -> voice.ToolTurn:
-        return self._turn(
-            self._client.provide_name(
-                client.ProvideNameRequest(
-                    booking_id=self._booking_id, name=call.text("name")
-                )
-            )
+        state = self._client.provide_name(
+            client.ProvideNameRequest(booking_id=self._booking_id, name=call.text("name"))
         )
+        tools: list[voice.Tool] = []
+        for name in TOOLS_FOR_STEP[state.step]:
+            if name not in self._declarations:
+                raise ValueError(f"unknown tool {name!r}")
+            description, parameters = self._declarations[name]
+            tools.append(
+                voice.Tool(name=name, description=description, parameters=parameters(state))
+            )
+        return voice.ToolTurn(reply=state.reply, tools=tuple(tools))
 
     def choose_slot(self, call: voice.ToolCall, /) -> voice.ToolTurn:
-        return self._turn(
-            self._client.choose_slot(
-                client.ChooseSlotRequest(
-                    booking_id=self._booking_id, slot=call.text("slot")
-                )
-            )
+        state = self._client.choose_slot(
+            client.ChooseSlotRequest(booking_id=self._booking_id, slot=call.text("slot"))
         )
+        tools: list[voice.Tool] = []
+        for name in TOOLS_FOR_STEP[state.step]:
+            if name not in self._declarations:
+                raise ValueError(f"unknown tool {name!r}")
+            description, parameters = self._declarations[name]
+            tools.append(
+                voice.Tool(name=name, description=description, parameters=parameters(state))
+            )
+        return voice.ToolTurn(reply=state.reply, tools=tuple(tools))
 
     def confirm(self, _call: voice.ToolCall, /) -> voice.ToolTurn:
-        return self._turn(
-            self._client.confirm(client.ConfirmBookingRequest(booking_id=self._booking_id))
-        )
-
-    def _turn(self, state: client.BookingStateResponse) -> voice.ToolTurn:
-        return voice.ToolTurn(
-            reply=state.reply,
-            tools=tuple(self._tool(name, state) for name in TOOLS_FOR_STEP[state.step]),
-        )
-
-    def _tool(self, name: str, state: client.BookingStateResponse) -> voice.Tool:
-        if name not in self._declarations:
-            raise ValueError(f"unknown tool {name!r}")
-        description, parameters = self._declarations[name]
-        return voice.Tool(name=name, description=description, parameters=parameters(state))
-
-
-@ts.do_not_use_function
-def _params(properties: dict[str, object], required: tuple[str, ...]) -> dict[str, object]:
-    schema: dict[str, object] = {"type": "object", "properties": properties}
-    if required:
-        schema["required"] = list(required)
-    schema["additionalProperties"] = False
-    return schema
+        state = self._client.confirm(client.ConfirmBookingRequest(booking_id=self._booking_id))
+        tools: list[voice.Tool] = []
+        for name in TOOLS_FOR_STEP[state.step]:
+            if name not in self._declarations:
+                raise ValueError(f"unknown tool {name!r}")
+            description, parameters = self._declarations[name]
+            tools.append(
+                voice.Tool(name=name, description=description, parameters=parameters(state))
+            )
+        return voice.ToolTurn(reply=state.reply, tools=tuple(tools))
 

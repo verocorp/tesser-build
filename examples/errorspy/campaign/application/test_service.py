@@ -6,7 +6,7 @@ import tesser.testing as ts
 import campaign.application.ports.campaign_repository as campaign_repository
 import campaign.application.service as service
 import campaign.client.client as client
-from tesser.errors import DomainError, Kind
+from tesser.errors import DomainError, InfraError, Kind
 
 
 @ts.fake
@@ -51,6 +51,19 @@ def test_creating_a_campaign_answers_the_view_of_what_was_built() -> None:
         )
     )
     assert (view.campaign_id, view.links) == ("c1", ("spring-sale",))
+
+
+def test_creating_a_campaign_with_no_links_answers_a_view_that_lists_nothing() -> None:
+    svc = service.CampaignService(FakeCampaignRepository())
+    view = svc.create_campaign(
+        client.CreateCampaignRequest(
+            campaign_id="c1",
+            window_start="2026-01-01",
+            window_end="2026-02-01",
+            links=(),
+        )
+    )
+    assert view.links == ()
 
 
 def test_creating_a_campaign_stores_its_window_and_links() -> None:
@@ -256,6 +269,7 @@ def test_deactivating_a_link_answers_the_campaign_and_stores_it() -> None:
         client.DeactivateLinkRequest(campaign_id="c1", slug="spring-sale")
     )
     assert view.campaign_id == "c1"
+    assert view.links == ("spring-sale",)
     assert repo.saves == ["c1", "c1"]
 
 
@@ -350,3 +364,53 @@ def test_creating_a_campaign_with_an_empty_id_is_refused_before_anything_is_stor
     assert ei.value.kind is Kind.VALIDATION
     assert ei.value.code == "bad_campaign_id"
     assert repo.saves == []
+
+
+def test_a_stored_record_with_a_corrupt_slug_is_infrastructure_not_validation() -> None:
+    repo = FakeCampaignRepository()
+    repo.rows["c1"] = campaign_repository.CampaignRecord(
+        id="c1",
+        window=campaign_repository.WindowRecord(start="2026-01-01", end="2026-02-01"),
+        links=(
+            campaign_repository.LinkRecord(slug="BAD SLUG", target_url="https://x.com"),
+        ),
+    )
+    with pytest.raises(InfraError) as ei:
+        service.CampaignService(repo).get_campaign(
+            client.GetCampaignRequest(campaign_id="c1")
+        )
+    assert not isinstance(ei.value, DomainError)
+    assert str(ei.value).startswith("corrupted campaign record 'c1': ")
+
+
+def test_a_corrupt_stored_record_keeps_the_domain_complaint_as_its_cause() -> None:
+    repo = FakeCampaignRepository()
+    repo.rows["c1"] = campaign_repository.CampaignRecord(
+        id="c1",
+        window=campaign_repository.WindowRecord(start="2026-01-01", end="2026-02-01"),
+        links=(
+            campaign_repository.LinkRecord(slug="BAD SLUG", target_url="https://x.com"),
+        ),
+    )
+    with pytest.raises(InfraError) as ei:
+        service.CampaignService(repo).get_campaign(
+            client.GetCampaignRequest(campaign_id="c1")
+        )
+    cause = ei.value.__cause__
+    assert isinstance(cause, DomainError)
+    assert cause.kind is Kind.VALIDATION
+    assert cause.code == "bad_slug"
+
+
+def test_a_stored_record_with_a_backwards_window_is_an_infrastructure_failure() -> None:
+    repo = FakeCampaignRepository()
+    repo.rows["c1"] = campaign_repository.CampaignRecord(
+        id="c1",
+        window=campaign_repository.WindowRecord(start="2026-02-01", end="2026-01-01"),
+        links=(),
+    )
+    with pytest.raises(InfraError) as ei:
+        service.CampaignService(repo).get_campaign(
+            client.GetCampaignRequest(campaign_id="c1")
+        )
+    assert str(ei.value).startswith("corrupted campaign record 'c1': ")

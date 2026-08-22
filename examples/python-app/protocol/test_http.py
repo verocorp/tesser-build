@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from protocol.http import BadRequest, HttpRequest, HttpResponse, object_field, string_field
+import tesser.testing as ts
+
+from protocol.http import BadRequest, Endpoint, HttpRequest, HttpResponse, Route, Router
 
 
 def test_an_empty_body_reads_as_an_empty_object() -> None:
@@ -99,15 +101,96 @@ def test_a_redirect_target_carrying_a_control_character_is_rejected() -> None:
         assert "control character" in str(caught.value)
 
 
-def test_an_object_field_reads_back_and_anything_else_is_rejected() -> None:
-    assert object_field({"a": 1}) == {"a": 1}
-    with pytest.raises(BadRequest) as caught:
-        object_field("a")
-    assert str(caught.value) == "expected a JSON object field"
+@ts.fake
+class FakeEndpointNamed(Endpoint):
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.calls = 0
+
+    def __call__(self, request: HttpRequest, /) -> HttpResponse:
+        self.calls += 1
+        return HttpResponse.json(200, {"endpoint": self.name})
 
 
-def test_a_string_field_reads_back_and_anything_else_is_rejected() -> None:
-    assert string_field("summer") == "summer"
-    with pytest.raises(BadRequest) as caught:
-        string_field(7)
-    assert str(caught.value) == "expected a string field"
+def test_an_exact_path_matches_its_route_and_captures_nothing() -> None:
+    endpoint = FakeEndpointNamed("create")
+    found = Router((Route("POST", "/campaigns", endpoint),)).match("POST", "/campaigns")
+    assert found is not None
+    assert found.endpoint is endpoint
+    assert found.path_params == {}
+    assert found.query_params == {}
+
+
+def test_a_path_parameter_is_captured_by_name() -> None:
+    endpoint = FakeEndpointNamed("get")
+    found = Router((Route("GET", "/campaigns/{campaign_id}", endpoint),)).match("GET", "/campaigns/c-1")
+    assert found is not None
+    assert found.path_params == {"campaign_id": "c-1"}
+
+
+def test_a_path_parameter_is_percent_decoded() -> None:
+    endpoint = FakeEndpointNamed("resolve")
+    found = Router((Route("GET", "/r/{slug}", endpoint),)).match("GET", "/r/summer%20sale")
+    assert found is not None
+    assert found.path_params == {"slug": "summer sale"}
+
+
+def test_a_method_mismatch_matches_nothing() -> None:
+    routes = (Route("POST", "/campaigns", FakeEndpointNamed("create")),)
+    assert Router(routes).match("GET", "/campaigns") is None
+
+
+def test_an_unknown_path_matches_nothing() -> None:
+    routes = (Route("GET", "/campaigns", FakeEndpointNamed("list")),)
+    assert Router(routes).match("GET", "/nope") is None
+
+
+def test_a_longer_path_matches_nothing() -> None:
+    routes = (Route("GET", "/campaigns/{campaign_id}", FakeEndpointNamed("get")),)
+    assert Router(routes).match("GET", "/campaigns/c-1/links") is None
+
+
+def test_an_empty_parameter_segment_matches_nothing() -> None:
+    routes = (Route("GET", "/r/{slug}", FakeEndpointNamed("resolve")),)
+    assert Router(routes).match("GET", "/r//") is None
+
+
+def test_a_trailing_slash_still_matches() -> None:
+    endpoint = FakeEndpointNamed("create")
+    found = Router((Route("POST", "/campaigns", endpoint),)).match("POST", "/campaigns/")
+    assert found is not None
+    assert found.endpoint is endpoint
+
+
+def test_query_parameters_ride_along_with_the_match() -> None:
+    endpoint = FakeEndpointNamed("report")
+    routes = (Route("GET", "/reports/links-by-verdict", endpoint),)
+    found = Router(routes).match("GET", "/reports/links-by-verdict?allowed=true&limit=10")
+    assert found is not None
+    assert found.query_params == {"allowed": "true", "limit": "10"}
+
+
+def test_a_repeated_query_parameter_takes_its_last_value() -> None:
+    endpoint = FakeEndpointNamed("report")
+    routes = (Route("GET", "/reports/links-by-verdict", endpoint),)
+    found = Router(routes).match("GET", "/reports/links-by-verdict?allowed=true&allowed=false")
+    assert found is not None
+    assert found.query_params == {"allowed": "false"}
+
+
+def test_the_first_declared_route_wins() -> None:
+    first = FakeEndpointNamed("first")
+    second = FakeEndpointNamed("second")
+    routes = (Route("GET", "/r/{slug}", first), Route("GET", "/r/{other}", second))
+    found = Router(routes).match("GET", "/r/summer")
+    assert found is not None
+    assert found.endpoint is first
+
+
+def test_the_matched_endpoint_is_the_one_that_answers() -> None:
+    endpoint = FakeEndpointNamed("create")
+    found = Router((Route("POST", "/campaigns", endpoint),)).match("POST", "/campaigns")
+    assert found is not None
+    resp = found.endpoint(HttpRequest("POST", "/campaigns", {}, {}, {}, b""))
+    assert endpoint.calls == 1
+    assert resp.json_body() == {"endpoint": "create"}

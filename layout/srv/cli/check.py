@@ -8,24 +8,14 @@ from app.loader import load
 import repo.adapters.handlers.cli as cli
 from protocol.cli import CliRequest, CliResponse, UsageError
 
-
-@ts.do_not_use_function
-def respond(handler: cli.Handler, argv: list[str]) -> CliResponse:
+if __name__ == "__main__":  # tesser:debt TB051
+    handler = cli.Handler(load().repo.client)
     try:
-        return handler.check(CliRequest(args=tuple(argv)))
+        response = handler.check(CliRequest(args=tuple(sys.argv[1:])))
     except UsageError as error:
-        return CliResponse(2, stdout="", stderr=str(error))
-
-
-@ts.do_not_use_function
-def run(argv: list[str]) -> int:
-    response = respond(cli.Handler(load().repo.client), argv)
+        response = CliResponse(2, stdout="", stderr=str(error))
     if response.stdout:
         print(response.stdout)
     if response.stderr:
         print(response.stderr, file=sys.stderr)
-    return response.exit_code
-
-
-if __name__ == "__main__":  # tesser:debt TB051
-    raise SystemExit(run(sys.argv[1:]))
+    raise SystemExit(response.exit_code)

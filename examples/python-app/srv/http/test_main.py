@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import signal
 import subprocess
 import sys
 
@@ -32,6 +33,32 @@ def test_the_edge_announces_its_address_and_exits_zero_when_signalled() -> None:
         with pytest.raises(subprocess.TimeoutExpired):
             proc.wait(timeout=1)
         proc.terminate()
+        stderr = proc.communicate(timeout=30)[1]
+    assert proc.returncode == 0
+    assert stderr == ""
+
+
+def test_the_edge_exits_zero_when_interrupted() -> None:
+    root = pathlib.Path(__file__).resolve().parents[2]
+    env = {
+        "PYTHONPATH": os.pathsep.join(entry for entry in sys.path if entry),
+        "PYTHONUNBUFFERED": "1",
+        "CAMPAIGN_STORAGE": "memory",
+        "LINKPOLICY_STORAGE": "memory",
+        "HTTP_HOST": "127.0.0.1",
+        "HTTP_PORT": "0",
+    }
+    with subprocess.Popen(
+        [sys.executable, "-m", "srv.http.main"],
+        cwd=root,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    ) as proc:
+        assert proc.stdout is not None
+        proc.stdout.readline()
+        proc.send_signal(signal.SIGINT)
         stderr = proc.communicate(timeout=30)[1]
     assert proc.returncode == 0
     assert stderr == ""

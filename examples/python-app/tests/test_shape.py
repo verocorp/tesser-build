@@ -10,11 +10,16 @@ import tesser.context  # tesser:debt TB050
 import tesser.testing as ts
 import campaign.adapters.handlers.http as http  # tesser:debt TB070
 import campaign.client.client as client
-from tesser.errors import InfraError
-from protocol.http import HttpRequest
+from tesser.errors import DomainError, InfraError, status_for
+from protocol.http import (
+    BadRequest,
+    HttpRequest,
+    HttpResponse,
+    PayloadTooLarge,
+    StreamingUnsupported,
+)
 import reports.adapters.handlers.http as reports_http  # tesser:debt TB070
 import reports.client.client as reports_client2
-from srv.http.host import respond
 from tests.discovery import discovered_contexts
 
 from tests.support import ROOT
@@ -58,27 +63,27 @@ class FakeCampaignClientScripted(campaign_client.Client):
         self.pending = list(views)
         self.requests: list[object] = []
 
-    def _next(self, request: object) -> campaign_client.CampaignView:
-        self.requests.append(request)
-        return self.pending.pop(0)
-
     def create_campaign(
         self, req: campaign_client.CreateCampaignRequest
     ) -> campaign_client.CampaignView:
-        return self._next(req)
+        self.requests.append(req)
+        return self.pending.pop(0)
 
     def add_link(self, req: campaign_client.AddLinkRequest) -> campaign_client.CampaignView:
-        return self._next(req)
+        self.requests.append(req)
+        return self.pending.pop(0)
 
     def deactivate_link(
         self, req: campaign_client.DeactivateLinkRequest
     ) -> campaign_client.CampaignView:
-        return self._next(req)
+        self.requests.append(req)
+        return self.pending.pop(0)
 
     def get_campaign(
         self, req: campaign_client.GetCampaignRequest
     ) -> campaign_client.CampaignView:
-        return self._next(req)
+        self.requests.append(req)
+        return self.pending.pop(0)
 
     def resolve(self, req: campaign_client.ResolveRequest) -> client.ResolveResponse:
         raise AssertionError("resolve is not under test here")
@@ -170,7 +175,20 @@ def test_reports_handler_translates_client_dtos_to_component() -> None:
 
 
 def test_reports_handler_maps_a_failure_to_a_problem_document() -> None:
-    resp = respond(lambda: reports_http.Handler(FakeReportsClientFailing()).links_by_verdict(HttpRequest("GET", "/", {}, {}, {}, b"")))
+    try:
+        resp = reports_http.Handler(FakeReportsClientFailing()).links_by_verdict(HttpRequest("GET", "/", {}, {}, {}, b""))
+    except BadRequest as e:
+        resp = HttpResponse.problem(400, "malformed_request", str(e))
+    except PayloadTooLarge as e:
+        resp = HttpResponse.problem(413, "payload_too_large", str(e))
+    except StreamingUnsupported as e:
+        resp = HttpResponse.problem(411, "length_required", str(e))
+    except DomainError as e:
+        resp = HttpResponse.problem(status_for(e.kind), e.code, e.message)
+    except InfraError:
+        resp = HttpResponse.problem(503, "unavailable", "a dependency is unavailable; please retry")
+    except Exception:
+        resp = HttpResponse.problem(500, "internal", "unexpected error")
     assert resp.status_code == 503
     assert resp.json_body() == {
         "type": "/problems/unavailable",

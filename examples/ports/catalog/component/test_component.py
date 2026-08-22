@@ -14,13 +14,15 @@ def test_the_wired_client_serves_an_item_it_stored() -> None:
 def test_the_wired_client_refuses_the_reserved_name() -> None:
     svc = wire.Catalog().client
     added = svc.add(client.AddItemRequest(id="c3", name="admin"))
-    assert (added.id, added.name, added.reason) == ("", "", "name is reserved")
+    assert added.items == ()
+    assert added.reason == "name is reserved"
 
 
 def test_the_wired_client_accepts_a_name_that_is_not_reserved() -> None:
     svc = wire.Catalog().client
     added = svc.add(client.AddItemRequest(id="a1", name="Anvil"))
-    assert (added.id, added.name, added.reason) == ("a1", "Anvil", "")
+    assert tuple((v.id, v.name) for v in added.items) == (("a1", "Anvil"),)
+    assert added.reason == ""
 
 
 def test_the_wired_client_lists_everything_it_stored() -> None:

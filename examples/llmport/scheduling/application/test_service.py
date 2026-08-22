@@ -70,6 +70,9 @@ def test_the_full_booking_flow_through_the_client_surface() -> None:
     state = service.begin(client.BeginBookingRequest(booking_id="b1"))
     assert isinstance(state, client.BookingStateResponse)
     assert state.step == "collect_name"
+    assert repository.stored["b1"].name == ""
+    assert repository.stored["b1"].chosen == ""
+    assert repository.stored["b1"].offered == ()
 
     state = service.provide_name(
         client.ProvideNameRequest(booking_id="b1", name="Ada Lovelace")

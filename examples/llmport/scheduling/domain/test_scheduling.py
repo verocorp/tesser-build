@@ -213,3 +213,44 @@ def test_a_booking_id_must_be_non_empty() -> None:
 
 def test_a_booking_id_is_kept_exactly_as_it_was_given() -> None:
     assert str(domain.BookingID(" b1 ")) == " b1 "
+
+
+def test_settling_with_no_reoffer_leaves_the_booking_booked() -> None:
+    booking = domain.Booking(
+        domain.BookingSpec(step="booked", name="Ada", chosen="mon-9am", offered=("mon-9am",))
+    )
+
+    booking.settle(())
+
+    assert str(booking.step()) == "booked"
+    assert str(booking.chosen()) == "mon-9am"
+
+
+def test_settling_with_a_reoffer_sends_the_booking_back_to_choosing() -> None:
+    booking = domain.Booking(
+        domain.BookingSpec(step="booked", name="Ada", chosen="mon-9am", offered=("mon-9am",))
+    )
+
+    booking.settle(((domain.Slot("tue-2pm"),),))
+
+    assert str(booking.step()) == "choose_slot"
+    assert booking.chosen() is None
+    assert tuple(str(slot) for slot in booking.offered()) == ("tue-2pm",)
+
+
+def test_settling_with_an_empty_reoffer_is_an_error() -> None:
+    booking = domain.Booking(
+        domain.BookingSpec(step="booked", name="Ada", chosen="mon-9am", offered=("mon-9am",))
+    )
+
+    with pytest.raises(ValueError, match="no slots are available"):
+        booking.settle(((),))
+
+
+def test_settling_a_booking_that_was_never_booked_is_an_error() -> None:
+    booking = domain.Booking(
+        domain.BookingSpec(step="confirm", name="Ada", chosen="mon-9am", offered=("mon-9am",))
+    )
+
+    with pytest.raises(ValueError, match="not available at step"):
+        booking.settle(())

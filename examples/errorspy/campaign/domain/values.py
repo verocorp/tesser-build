@@ -91,9 +91,6 @@ class Day(ts.ValueObject):
     def __str__(self) -> str:
         return self._value.isoformat()
 
-    def _before(self, other: "Day") -> bool:
-        return self._value < other._value
-
     _value: date
 
 
@@ -107,9 +104,15 @@ class DateWindowSpec(ts.Spec):
 class DateWindow(ts.ValueObject):
 
     def __init__(self, start_value: str, end_value: str) -> None:
-        start = _day(start_value, field="start")
-        end = _day(end_value, field="end")
-        if not start._before(end):
+        try:
+            start = Day(start_value)
+        except DomainError as e:
+            raise wrap(e, f"invalid start date {start_value!r}", field="start") from e.__cause__
+        try:
+            end = Day(end_value)
+        except DomainError as e:
+            raise wrap(e, f"invalid end date {end_value!r}", field="end") from e.__cause__
+        if not start._value < end._value:
             raise invalid(
                 "window_order",
                 f"window start {start} must be before end {end}",
@@ -128,11 +131,3 @@ class DateWindow(ts.ValueObject):
 
     _start: Day
     _end: Day
-
-
-@ts.do_not_use_function
-def _day(value: str, *, field: str) -> Day:
-    try:
-        return Day(value)
-    except DomainError as e:
-        raise wrap(e, f"invalid {field} date {value!r}", field=field) from e.__cause__

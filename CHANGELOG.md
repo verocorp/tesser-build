@@ -5,6 +5,48 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.73.0] - 2026-08-22
+
+TB051 stops asking module functions to declare themselves and bans them, and the
+ban extends to private methods on classes. `@ts.do_not_use_function` was pressure
+that applied none: two independent regeneration runs typed it 63 and 64 times, at a
+rate *below* the exemplar's own, because the exemplar taught them the rate. A name
+that disapproves changes nothing; a rule that fires changes designs.
+
+The 297 sites this opens are recorded as `# tesser:debt TB051`, not fixed here. They
+come out tree by tree in follow-up commits, each one putting the logic inline at the
+call site rather than relocating it behind a new name — the decomposition that exists
+today is an artifact of rules being removed, so it is demolished before anything is
+extracted. `@ts.do_not_use_function` itself is deleted from `tesser-py` in the commit
+that retires the last marker.
+
+### Changed
+- **A module function is a finding, declared or not** (`domain/checks.py`
+  `_module_function_violations`). The clause now reads `a ⟨kind⟩ module holds classes,
+  never functions` for kernel, srv, protocol, and context role modules. The check also
+  tested `ast.FunctionDef` alone, so an **async** module function slipped past it and
+  landed as a generic "loose module-level statement" — it is now caught by the rule
+  that means it.
+- **Three totality clauses drop "declared functions"** from what a kernel, srv,
+  protocol, or context module may hold, since none may hold one.
+- **`@ts.load` is untouched.** It governs composition-root wiring, not logic hiding.
+
+### Added
+- **`a class holds only public methods`** (`domain/checks.py`
+  `_private_method_violations`), placed in `_universal_violations` so it runs on every
+  module before placement dispatch and therefore reaches test modules. Dunders are
+  exempt; `_name` and `__name` are not.
+- `APPLIES_TO` and `HOLE_NAMES` entries for the new check and the `context role`
+  subject; `test_a_private_method_is_flagged_in_every_module_kind` as its fixture.
+
+### Fixed
+- **`conforming_tree` and the in-memory `_spec` base carried `AskService._helper`** —
+  fixtures that did not pass the checker they exist to exercise. Both now conform.
+- **`test_declared_function_and_final_constant_pass` asserted the opposite of the
+  rule** and is now
+  `test_a_final_constant_passes_and_a_declared_function_is_still_a_module_function`,
+  pinning that carrying the old decorator buys no exemption.
+
 ## [0.0.72.1] - 2026-08-22
 
 ### Fixed

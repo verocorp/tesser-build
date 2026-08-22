@@ -6,12 +6,11 @@ import pathlib
 from app.config import Config, HttpConfig, HttpSpec, Spec
 from campaign.component.config import Config as CampaignConfig
 from campaign.component.config import Spec as CampaignSpec
-from protocol.http import HttpRequest, HttpResponse
+from protocol.http import HttpRequest, HttpResponse, Route
 from linkpolicy.component.config import Config as LinkPolicyConfig
 from linkpolicy.component.config import Spec as LinkPolicySpec
 from reports.component.config import Config as ReportsConfig
 from reports.component.config import Spec as ReportsSpec
-from srv.http.router import Route
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 

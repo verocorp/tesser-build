@@ -246,7 +246,7 @@ def go_analyzer_names(root: Path, cmd: list[str]) -> set[str]:
 
 def py_check_codes(root: Path) -> set[str]:
     """The shipped Python check codes, from the same extraction RULES.md is
-    generated with: the rulebook domain module's rule_rows over the Violation
+    generated with: the rulebook domain module's render over the Violation
     call sites in tessercheck/domain/checks.py. The rulebook lives inside the
     tessercheck package (it imports tesser and its own context), so it is
     imported as a package module with tessercheck-py and tesser-py on
@@ -258,8 +258,12 @@ def py_check_codes(root: Path) -> set[str]:
             sys.path.insert(0, str(entry))
     try:
         rulebook = importlib.import_module("tessercheck.domain.rulebook")
-        tree = ast.parse(checks_path.read_text(encoding="utf-8"))
-        codes = {str(row.code()) for row in rulebook.rule_rows(tree)}
+        rendered = rulebook.render(checks_path.read_text(encoding="utf-8"))
+        codes = {
+            line.split("|")[1].strip()
+            for line in rendered.splitlines()
+            if line.startswith("| TB")
+        }
     except (OSError, SyntaxError, AttributeError, ImportError) as e:
         raise RoadmapError(f"cannot extract tessercheck-py check codes via {rules_path}: {e}") from e
     if not codes:

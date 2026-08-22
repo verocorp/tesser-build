@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import typing
+
 import pytest
 import tesser.testing as ts
 
@@ -9,12 +11,11 @@ import campaign.adapters.handlers.http as http
 import campaign.application.ports.campaign_repository as campaign_repository
 import campaign.application.ports.target_policy as target_policy
 import campaign.application.service as service
-import campaign.application.views as views
 import campaign.domain.campaign as campaign
 import campaign.domain.money as money
 import campaign.domain.short_link as short_link
 import campaign.domain.short_links as short_links
-from tesser.errors import DomainError
+from tesser.errors import DomainError, not_found
 from protocol.http import HttpRequest
 
 
@@ -60,7 +61,19 @@ def _find(  # tesser:debt TB071
 
 def test_row_golden_locks_the_storage_shape() -> None:
     repo = repo_memory.InMemoryCampaignRepository()
-    repo.save(views.save_request(campaign.Campaign(campaign_spec())))
+    saved = campaign.Campaign(campaign_spec())
+    repo.save(campaign_repository.SaveCampaignRequest(
+        id=str(saved.id),
+        budget=campaign_repository.MoneyRecord(
+            amount=str(saved.budget.amount), currency=str(saved.budget.currency)
+        ),
+        links=tuple(
+            campaign_repository.LinkRecord(
+                slug=str(link.slug), target_url=str(link.target_url), status=str(link.status)
+            )
+            for link in saved.links
+        ),
+    ))
     assert record_tuple(repo._rows["0123456789abcdef"]) == (
         "0123456789abcdef",
         "100.00",
@@ -71,7 +84,19 @@ def test_row_golden_locks_the_storage_shape() -> None:
 
 def test_wire_golden_locks_the_campaign_payload() -> None:
     repo = repo_memory.InMemoryCampaignRepository()
-    repo.save(views.save_request(campaign.Campaign(campaign_spec())))
+    saved = campaign.Campaign(campaign_spec())
+    repo.save(campaign_repository.SaveCampaignRequest(
+        id=str(saved.id),
+        budget=campaign_repository.MoneyRecord(
+            amount=str(saved.budget.amount), currency=str(saved.budget.currency)
+        ),
+        links=tuple(
+            campaign_repository.LinkRecord(
+                slug=str(link.slug), target_url=str(link.target_url), status=str(link.status)
+            )
+            for link in saved.links
+        ),
+    ))
     handler = http.Handler(service.CampaignService(repo, FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity(), repo))
     resp = handler.get_campaign(HttpRequest("GET", "/", {"campaign_id": "0123456789abcdef"}, {}, {}, b""))
     assert resp.status_code == 200
@@ -84,7 +109,19 @@ def test_wire_golden_locks_the_campaign_payload() -> None:
 
 def test_wire_golden_locks_resolve_as_a_real_redirect() -> None:
     repo = repo_memory.InMemoryCampaignRepository()
-    repo.save(views.save_request(campaign.Campaign(campaign_spec())))
+    saved = campaign.Campaign(campaign_spec())
+    repo.save(campaign_repository.SaveCampaignRequest(
+        id=str(saved.id),
+        budget=campaign_repository.MoneyRecord(
+            amount=str(saved.budget.amount), currency=str(saved.budget.currency)
+        ),
+        links=tuple(
+            campaign_repository.LinkRecord(
+                slug=str(link.slug), target_url=str(link.target_url), status=str(link.status)
+            )
+            for link in saved.links
+        ),
+    ))
     handler = http.Handler(service.CampaignService(repo, FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity(), repo))
     resp = handler.resolve(HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
     assert resp.status_code == 302
@@ -95,25 +132,154 @@ def test_wire_golden_locks_resolve_as_a_real_redirect() -> None:
 def test_load_reconstructs_value_equal_non_identical() -> None:
     repo = repo_memory.InMemoryCampaignRepository()
     original = campaign.Campaign(campaign_spec())
-    repo.save(views.save_request(original))
-    loaded = views.required_campaign(_find(repo, "0123456789abcdef"), "0123456789abcdef")
+    repo.save(campaign_repository.SaveCampaignRequest(
+        id=str(original.id),
+        budget=campaign_repository.MoneyRecord(
+            amount=str(original.budget.amount), currency=str(original.budget.currency)
+        ),
+        links=tuple(
+            campaign_repository.LinkRecord(
+                slug=str(link.slug), target_url=str(link.target_url), status=str(link.status)
+            )
+            for link in original.links
+        ),
+    ))
+    found = _find(repo, "0123456789abcdef")
+    match found.outcome:
+        case campaign_repository.CampaignLookup.FOUND:
+            record = found.campaigns[0]
+        case campaign_repository.CampaignLookup.MISSING:
+            raise not_found("campaign_missing", "no campaign with id '0123456789abcdef'")
+        case _ as unreachable:
+            typing.assert_never(unreachable)
+    loaded = campaign.Campaign(campaign.CampaignSpec(
+        id=record.id,
+        budget=money.MoneySpec(amount=record.budget.amount, currency=record.budget.currency),
+        links=short_links.ShortLinksSpec(links=tuple(
+            short_link.ShortLinkSpec(
+                slug=link.slug, target_url=link.target_url, active=link.status == "active"
+            )
+            for link in record.links
+        )),
+    ))
     assert loaded is not original
-    assert request_tuple(views.save_request(loaded)) == request_tuple(views.save_request(original))
+    assert request_tuple(campaign_repository.SaveCampaignRequest(
+        id=str(loaded.id),
+        budget=campaign_repository.MoneyRecord(
+            amount=str(loaded.budget.amount), currency=str(loaded.budget.currency)
+        ),
+        links=tuple(
+            campaign_repository.LinkRecord(
+                slug=str(link.slug), target_url=str(link.target_url), status=str(link.status)
+            )
+            for link in loaded.links
+        ),
+    )) == request_tuple(campaign_repository.SaveCampaignRequest(
+        id=str(original.id),
+        budget=campaign_repository.MoneyRecord(
+            amount=str(original.budget.amount), currency=str(original.budget.currency)
+        ),
+        links=tuple(
+            campaign_repository.LinkRecord(
+                slug=str(link.slug), target_url=str(link.target_url), status=str(link.status)
+            )
+            for link in original.links
+        ),
+    ))
 
 
 def test_store_holds_rows_not_live_objects() -> None:
     repo = repo_memory.InMemoryCampaignRepository()
     original = campaign.Campaign(campaign_spec())
-    repo.save(views.save_request(original))
-    loaded = views.required_campaign(_find(repo, "0123456789abcdef"), "0123456789abcdef")
+    repo.save(campaign_repository.SaveCampaignRequest(
+        id=str(original.id),
+        budget=campaign_repository.MoneyRecord(
+            amount=str(original.budget.amount), currency=str(original.budget.currency)
+        ),
+        links=tuple(
+            campaign_repository.LinkRecord(
+                slug=str(link.slug), target_url=str(link.target_url), status=str(link.status)
+            )
+            for link in original.links
+        ),
+    ))
+    found = _find(repo, "0123456789abcdef")
+    match found.outcome:
+        case campaign_repository.CampaignLookup.FOUND:
+            record = found.campaigns[0]
+        case campaign_repository.CampaignLookup.MISSING:
+            raise not_found("campaign_missing", "no campaign with id '0123456789abcdef'")
+        case _ as unreachable:
+            typing.assert_never(unreachable)
+    loaded = campaign.Campaign(campaign.CampaignSpec(
+        id=record.id,
+        budget=money.MoneySpec(amount=record.budget.amount, currency=record.budget.currency),
+        links=short_links.ShortLinksSpec(links=tuple(
+            short_link.ShortLinkSpec(
+                slug=link.slug, target_url=link.target_url, active=link.status == "active"
+            )
+            for link in record.links
+        )),
+    ))
     loaded.add_short_link(short_link.ShortLinkSpec(slug="extra", target_url="https://ok.example/e", active=True))
-    reloaded = views.required_campaign(_find(repo, "0123456789abcdef"), "0123456789abcdef")
-    assert request_tuple(views.save_request(reloaded)) == request_tuple(views.save_request(original))
+    found = _find(repo, "0123456789abcdef")
+    match found.outcome:
+        case campaign_repository.CampaignLookup.FOUND:
+            record = found.campaigns[0]
+        case campaign_repository.CampaignLookup.MISSING:
+            raise not_found("campaign_missing", "no campaign with id '0123456789abcdef'")
+        case _ as unreachable:
+            typing.assert_never(unreachable)
+    reloaded = campaign.Campaign(campaign.CampaignSpec(
+        id=record.id,
+        budget=money.MoneySpec(amount=record.budget.amount, currency=record.budget.currency),
+        links=short_links.ShortLinksSpec(links=tuple(
+            short_link.ShortLinkSpec(
+                slug=link.slug, target_url=link.target_url, active=link.status == "active"
+            )
+            for link in record.links
+        )),
+    ))
+    assert request_tuple(campaign_repository.SaveCampaignRequest(
+        id=str(reloaded.id),
+        budget=campaign_repository.MoneyRecord(
+            amount=str(reloaded.budget.amount), currency=str(reloaded.budget.currency)
+        ),
+        links=tuple(
+            campaign_repository.LinkRecord(
+                slug=str(link.slug), target_url=str(link.target_url), status=str(link.status)
+            )
+            for link in reloaded.links
+        ),
+    )) == request_tuple(campaign_repository.SaveCampaignRequest(
+        id=str(original.id),
+        budget=campaign_repository.MoneyRecord(
+            amount=str(original.budget.amount), currency=str(original.budget.currency)
+        ),
+        links=tuple(
+            campaign_repository.LinkRecord(
+                slug=str(link.slug), target_url=str(link.target_url), status=str(link.status)
+            )
+            for link in original.links
+        ),
+    ))
 
 
 def test_load_reruns_invariants_on_stale_rows() -> None:
     repo = repo_memory.InMemoryCampaignRepository()
-    repo.save(views.save_request(campaign.Campaign(campaign_spec())))
+    saved = campaign.Campaign(campaign_spec())
+    repo.save(campaign_repository.SaveCampaignRequest(
+        id=str(saved.id),
+        budget=campaign_repository.MoneyRecord(
+            amount=str(saved.budget.amount), currency=str(saved.budget.currency)
+        ),
+        links=tuple(
+            campaign_repository.LinkRecord(
+                slug=str(link.slug), target_url=str(link.target_url), status=str(link.status)
+            )
+            for link in saved.links
+        ),
+    ))
     row = repo._rows["0123456789abcdef"]
     stale = campaign_repository.CampaignRecord(
         id=row.id,
@@ -122,4 +288,21 @@ def test_load_reruns_invariants_on_stale_rows() -> None:
     )
     repo._rows["0123456789abcdef"] = stale
     with pytest.raises(DomainError):
-        views.required_campaign(_find(repo, "0123456789abcdef"), "0123456789abcdef")
+        found = _find(repo, "0123456789abcdef")
+        match found.outcome:
+            case campaign_repository.CampaignLookup.FOUND:
+                record = found.campaigns[0]
+            case campaign_repository.CampaignLookup.MISSING:
+                raise not_found("campaign_missing", "no campaign with id '0123456789abcdef'")
+            case _ as unreachable:
+                typing.assert_never(unreachable)
+        reloaded = campaign.Campaign(campaign.CampaignSpec(
+            id=record.id,
+            budget=money.MoneySpec(amount=record.budget.amount, currency=record.budget.currency),
+            links=short_links.ShortLinksSpec(links=tuple(
+                short_link.ShortLinkSpec(
+                    slug=link.slug, target_url=link.target_url, active=link.status == "active"
+                )
+                for link in record.links
+            )),
+        ))

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import parcel.adapters.gateways.wire as wire
-import parcel.application.mapping as mapping
 import parcel.application.ports.parcel_wire as parcel_wire
 import parcel.domain.parcel as parcel
 
@@ -17,7 +16,19 @@ def test_wire_golden_locks_the_payload_shape() -> None:
             scanned_at="2026-07-20T10:16:15.123456-05:00",
         )
     )
-    record = mapping.parcel_record(built)
+    record = parcel_wire.ParcelRecord(
+        code=str(built.code),
+        items=int(built.items),
+        weight_kg=float(built.weight),
+        label_digest=bytes(built.label_digest),
+        declared_value=str(built.declared_value),
+        scanned_at=str(built.scanned_at),
+        weight_class=(
+            parcel_wire.WeightClass.HEAVY
+            if str(built.weight_class()) == "heavy"
+            else parcel_wire.WeightClass.LIGHT
+        ),
+    )
     response = wire.ParcelWireGateway().to_payload(record)
     assert response.parcel_code == "PKG-2026-0042"
     assert response.item_count == 3

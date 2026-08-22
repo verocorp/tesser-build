@@ -41,7 +41,41 @@ class FilesystemSourceReader(ts.Repository):
         self, request: source_reader.ReadSourcesRequest
     ) -> source_reader.ReadSourcesResponse:
         base = Path(request.tree)
-        form, skips, exports, imports = self._declaration(base)
+        root = source_reader.RootForm.APP
+        skips: set[str] = set()
+        exports: list[str] = []
+        imports: list[str] = []
+        try:
+            declared = (base / DECLARATION).read_text(encoding="utf-8-sig")
+            lines = [line.strip() for line in declared.splitlines() if line.strip()]
+            if not lines or lines[0] != "app":
+                root = source_reader.RootForm.UNRECOGNIZED
+            else:
+                for line in lines[1:]:
+                    directive, _, value = line.partition(" ")
+                    value = value.strip()
+                    if not value:
+                        root = source_reader.RootForm.UNRECOGNIZED
+                        break
+                    if directive == SKIP_DIRECTIVE and "/" not in value:
+                        skips.add(value)
+                    elif directive == EXPORT_DIRECTIVE and value.isidentifier():
+                        exports.append(value)
+                    elif directive == IMPORT_DIRECTIVE and all(
+                        part.isidentifier() for part in value.split(".")
+                    ):
+                        imports.append(value)
+                    else:
+                        root = source_reader.RootForm.UNRECOGNIZED
+                        break
+        except FileNotFoundError:
+            root = source_reader.RootForm.MISSING
+        except (UnicodeDecodeError, OSError):
+            root = source_reader.RootForm.UNREADABLE
+        if root is not source_reader.RootForm.APP:
+            skips = set()
+            exports = []
+            imports = []
         found: list[source_reader.SourceFile] = []
         nested: list[str] = []
         symlinked: list[str] = []
@@ -60,71 +94,38 @@ class FilesystemSourceReader(ts.Repository):
                 if name == DECLARATION and here != base:
                     nested.append(str(relative))
                 if name.endswith(".py") or name.endswith(".pyi"):
-                    source = self._source(path, relative)
-                    if source.name:
-                        found.append(source)
+                    parts = list(relative.with_suffix("").parts)
+                    is_package = bool(parts) and parts[-1] == "__init__"
+                    form = (
+                        source_reader.ModuleForm.PACKAGE
+                        if is_package
+                        else source_reader.ModuleForm.MODULE
+                    )
+                    if is_package:
+                        parts = parts[:-1]
+                    try:
+                        text = path.read_text(encoding="utf-8-sig")
+                        state = source_reader.SourceState.READ
+                    except (UnicodeDecodeError, OSError):
+                        text = ""
+                        state = source_reader.SourceState.UNREADABLE
+                    module = ".".join(parts)
+                    if module:
+                        found.append(
+                            source_reader.SourceFile(
+                                path=str(relative),
+                                name=module,
+                                text=text,
+                                state=state,
+                                form=form,
+                            )
+                        )
         return source_reader.ReadSourcesResponse(
-            root=form,
+            root=root,
             nested=tuple(nested),
             symlinked=tuple(symlinked),
             sources=tuple(sorted(found, key=lambda source: source.path)),
-            exports=exports,
-            imports=imports,
+            exports=tuple(exports),
+            imports=tuple(imports),
             stdlib=tuple(sorted(sys.stdlib_module_names)),
         )
-
-    def _source(self, path: Path, relative: Path) -> source_reader.SourceFile:
-        parts = list(relative.with_suffix("").parts)
-        is_package = bool(parts) and parts[-1] == "__init__"
-        form = (
-            source_reader.ModuleForm.PACKAGE
-            if is_package
-            else source_reader.ModuleForm.MODULE
-        )
-        if is_package:
-            parts = parts[:-1]
-        try:
-            text = path.read_text(encoding="utf-8-sig")
-            state = source_reader.SourceState.READ
-        except (UnicodeDecodeError, OSError):
-            text = ""
-            state = source_reader.SourceState.UNREADABLE
-        return source_reader.SourceFile(
-            path=str(relative),
-            name=".".join(parts),
-            text=text,
-            state=state,
-            form=form,
-        )
-
-    def _declaration(
-        self, base: Path
-    ) -> tuple[source_reader.RootForm, frozenset[str], tuple[str, ...], tuple[str, ...]]:
-        try:
-            text = (base / DECLARATION).read_text(encoding="utf-8-sig")
-        except FileNotFoundError:
-            return source_reader.RootForm.MISSING, frozenset(), (), ()
-        except (UnicodeDecodeError, OSError):
-            return source_reader.RootForm.UNREADABLE, frozenset(), (), ()
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        if not lines or lines[0] != "app":
-            return source_reader.RootForm.UNRECOGNIZED, frozenset(), (), ()
-        skips: set[str] = set()
-        exports: list[str] = []
-        imports: list[str] = []
-        for line in lines[1:]:
-            directive, _, value = line.partition(" ")
-            value = value.strip()
-            if not value:
-                return source_reader.RootForm.UNRECOGNIZED, frozenset(), (), ()
-            if directive == SKIP_DIRECTIVE and "/" not in value:
-                skips.add(value)
-            elif directive == EXPORT_DIRECTIVE and value.isidentifier():
-                exports.append(value)
-            elif directive == IMPORT_DIRECTIVE and all(
-                part.isidentifier() for part in value.split(".")
-            ):
-                imports.append(value)
-            else:
-                return source_reader.RootForm.UNRECOGNIZED, frozenset(), (), ()
-        return source_reader.RootForm.APP, frozenset(skips), tuple(exports), tuple(imports)

@@ -8,94 +8,105 @@ import repo.application.ports.repo_reader as repo_reader
 import repo.domain.rules as domain
 
 
-@ts.do_not_use_function
-def repo(read: repo_reader.ReadRepoResponse) -> domain.Repo:
-    return domain.Repo(
-        domain.RepoSpec(
-            manifest=_manifest(read.manifest),
-            verify=_file(read.verify),
-            workflow=_file(read.workflow),
-            top=_entries(read.top),
-            examples=_entries(read.examples),
-            declarations=tuple(
-                (record.path, _state(record.state), record.text)
-                for record in read.declarations
-            ),
-            requirements=read.requirements,
-        )
-    )
+class MapToManifestState(ts.Mapper):
+
+    def __init__(self, manifest_record: repo_reader.ManifestRecord) -> None:
+        match manifest_record.state:
+            case repo_reader.ManifestState.READ:
+                self._state = domain.READ
+            case repo_reader.ManifestState.MISSING:
+                self._state = domain.MISSING
+            case repo_reader.ManifestState.UNREADABLE:
+                self._state = domain.UNREADABLE
+            case repo_reader.ManifestState.MALFORMED:
+                self._state = domain.MALFORMED
+            case repo_reader.ManifestState.MISSHAPEN:
+                self._state = domain.MISSHAPEN
+            case _ as unreachable:
+                typing.assert_never(unreachable)
+        self._rows = manifest_record.rows
+        self._note = manifest_record.note
+
+    @property
+    def state(self) -> str:
+        return self._state
+
+    @property
+    def rows(self) -> tuple[repo_reader.RowRecord, ...]:
+        return self._rows
+
+    @property
+    def note(self) -> str:
+        return self._note
 
 
-@ts.do_not_use_function
-def report(
-    read: repo_reader.ReadRepoResponse,
-) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    built = repo(read)
-    return (
-        tuple(str(problem.text()) for problem in built.problems()),
-        tuple(str(count) for count in built.counts()),
-    )
+class MapToFileState(ts.Mapper):
+
+    def __init__(self, file_record: repo_reader.FileRecord) -> None:
+        match file_record.state:
+            case repo_reader.FileState.READ:
+                self._state = domain.READ
+            case repo_reader.FileState.MISSING:
+                self._state = domain.MISSING
+            case repo_reader.FileState.UNREADABLE:
+                self._state = domain.UNREADABLE
+            case _ as unreachable:
+                typing.assert_never(unreachable)
+        self._text = file_record.text
+
+    @property
+    def state(self) -> str:
+        return self._state
+
+    @property
+    def text(self) -> str:
+        return self._text
 
 
-@ts.do_not_use_function
-def trees(read: repo_reader.ReadRepoResponse) -> tuple[str, ...]:
-    return tuple(str(tree) for tree in repo(read).trees())
+class MapToDeclarationState(ts.Mapper):
+
+    def __init__(self, declaration_record: repo_reader.DeclarationRecord) -> None:
+        match declaration_record.state:
+            case repo_reader.FileState.READ:
+                self._state = domain.READ
+            case repo_reader.FileState.MISSING:
+                self._state = domain.MISSING
+            case repo_reader.FileState.UNREADABLE:
+                self._state = domain.UNREADABLE
+            case _ as unreachable:
+                typing.assert_never(unreachable)
+        self._path = declaration_record.path
+        self._text = declaration_record.text
+
+    @property
+    def path(self) -> str:
+        return self._path
+
+    @property
+    def state(self) -> str:
+        return self._state
+
+    @property
+    def text(self) -> str:
+        return self._text
 
 
-@ts.do_not_use_function
-def _file(record: repo_reader.FileRecord) -> tuple[str, str]:
-    return (_state(record.state), record.text)
+class MapToEntryForm(ts.Mapper):
 
+    def __init__(self, entry_record: repo_reader.EntryRecord) -> None:
+        match entry_record.form:
+            case repo_reader.EntryForm.DIRECTORY:
+                self._form = domain.DIRECTORY
+            case repo_reader.EntryForm.SYMLINK:
+                self._form = domain.SYMLINK
+            case _ as unreachable:
+                typing.assert_never(unreachable)
+        self._name = entry_record.name
 
-@ts.do_not_use_function
-def _manifest(
-    record: repo_reader.ManifestRecord,
-) -> tuple[str, tuple[tuple[str, str], ...], str]:
-    rows = tuple((row.key, row.kind) for row in record.rows)
-    return (_manifest_state(record.state), rows, record.note)
+    @property
+    def name(self) -> str:
+        return self._name
 
-
-@ts.do_not_use_function
-def _manifest_state(state: repo_reader.ManifestState) -> str:
-    match state:
-        case repo_reader.ManifestState.READ:
-            return domain.READ
-        case repo_reader.ManifestState.MISSING:
-            return domain.MISSING
-        case repo_reader.ManifestState.UNREADABLE:
-            return domain.UNREADABLE
-        case repo_reader.ManifestState.MALFORMED:
-            return domain.MALFORMED
-        case repo_reader.ManifestState.MISSHAPEN:
-            return domain.MISSHAPEN
-        case _ as unreachable:
-            typing.assert_never(unreachable)
-
-
-@ts.do_not_use_function
-def _entries(records: tuple[repo_reader.EntryRecord, ...]) -> tuple[tuple[str, str], ...]:
-    return tuple((record.name, _form(record.form)) for record in records)
-
-
-@ts.do_not_use_function
-def _state(state: repo_reader.FileState) -> str:
-    match state:
-        case repo_reader.FileState.READ:
-            return domain.READ
-        case repo_reader.FileState.MISSING:
-            return domain.MISSING
-        case repo_reader.FileState.UNREADABLE:
-            return domain.UNREADABLE
-        case _ as unreachable:
-            typing.assert_never(unreachable)
-
-
-@ts.do_not_use_function
-def _form(form: repo_reader.EntryForm) -> str:
-    match form:
-        case repo_reader.EntryForm.DIRECTORY:
-            return domain.DIRECTORY
-        case repo_reader.EntryForm.SYMLINK:
-            return domain.SYMLINK
-        case _ as unreachable:
-            typing.assert_never(unreachable)
+    @property
+    def form(self) -> str:
+        return self._form

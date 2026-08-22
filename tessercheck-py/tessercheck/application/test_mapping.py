@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import tessercheck.application.mapping as mapping
-import tessercheck.application.ports.rulebook_sources as rulebook_sources
 import tessercheck.application.ports.source_reader as source_reader
 
 
@@ -197,19 +196,3 @@ def test_the_package_form_of_a_source_changes_the_judgement() -> None:
     assert mapping.findings(as_package) == ()
     assert mapping.findings(as_module) != ()
 
-
-def test_a_rulebook_read_renders_a_row_per_rule_and_per_contract() -> None:
-    read = rulebook_sources.ReadRulebookResponse(
-        checks_text=(
-            "TS_NAME_BY_BLOCK: dict = {}\n"
-            "PROTOCOL_PACKAGE: str = 'protocol'\n"
-            "class Codebase:\n"
-            "    def _comment_violations(self) -> None:\n"
-            "        Violation('p', 1, 'TB020', 'a shape; the mapped tail')\n"
-        ),
-        test_modules=(),
-        contracts_text="[importlinter:contract:pure]\nname = domain stays pure\n",
-    )
-    rendered = mapping.rendered_rulebook(read)
-    assert "| TB020 | the mapped tail | every module |" in rendered
-    assert "| pure | domain stays pure |" in rendered

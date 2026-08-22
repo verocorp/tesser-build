@@ -8,27 +8,7 @@ import scheduling.application.views as views
 import scheduling.domain.scheduling as domain
 
 
-def test_only_returns_the_one_row_the_repository_found() -> None:
-    view = booking_repository.BookingView(
-        step="confirm", name="Ada", chosen="mon-9am", offered=("mon-9am",)
-    )
-    found = booking_repository.FindBookingResponse(
-        presence=booking_repository.BookingPresence.PRESENT, bookings=(view,)
-    )
-
-    assert views.only(found) is view
-
-
-def test_only_refuses_a_booking_the_repository_does_not_hold() -> None:
-    found = booking_repository.FindBookingResponse(
-        presence=booking_repository.BookingPresence.ABSENT, bookings=()
-    )
-
-    with pytest.raises(KeyError):
-        views.only(found)
-
-
-def test_loaded_rebuilds_the_booking_the_row_recorded() -> None:
+def test_the_mapper_exposes_every_field_of_the_one_row_the_repository_found() -> None:
     found = booking_repository.FindBookingResponse(
         presence=booking_repository.BookingPresence.PRESENT,
         bookings=(
@@ -41,21 +21,21 @@ def test_loaded_rebuilds_the_booking_the_row_recorded() -> None:
         ),
     )
 
-    booking = views.loaded(found)
+    mapper = views.MapToBookingSpec(found_booking=found)
 
-    assert str(booking.step()) == "confirm"
-    assert str(booking.name()) == "Ada Lovelace"
-    assert str(booking.chosen()) == "mon-9am"
-    assert tuple(str(slot) for slot in booking.offered()) == ("mon-9am", "tue-2pm")
+    assert mapper.step == "confirm"
+    assert mapper.name == "Ada Lovelace"
+    assert mapper.chosen == "mon-9am"
+    assert mapper.offered == ("mon-9am", "tue-2pm")
 
 
-def test_loaded_refuses_a_booking_the_repository_does_not_hold() -> None:
+def test_the_mapper_refuses_a_booking_the_repository_does_not_hold() -> None:
     found = booking_repository.FindBookingResponse(
         presence=booking_repository.BookingPresence.ABSENT, bookings=()
     )
 
     with pytest.raises(KeyError):
-        views.loaded(found)
+        views.MapToBookingSpec(found_booking=found)
 
 
 def test_began_opens_a_fresh_booking_when_none_is_stored() -> None:
@@ -108,101 +88,57 @@ def test_beginning_a_new_booking_tells_the_model_to_ask_for_a_name() -> None:
     assert views.begin_reply(found) == "ask the caller for their name"
 
 
-def test_a_save_request_flattens_the_booking_to_the_row_it_stores() -> None:
-    booking = domain.Booking(
-        domain.BookingSpec(
-            step="confirm", name="Ada Lovelace", chosen="mon-9am", offered=("mon-9am", "tue-2pm")
-        )
-    )
-
-    request = views.save_request("b1", booking)
-
-    assert request.booking_id == "b1"
-    assert request.step == "confirm"
-    assert request.name == "Ada Lovelace"
-    assert request.chosen == "mon-9am"
-    assert request.offered == ("mon-9am", "tue-2pm")
-
-
-def test_a_save_request_writes_blanks_for_what_the_booking_has_not_yet() -> None:
-    booking = domain.Booking(
-        domain.BookingSpec(step="collect_name", name="", chosen="", offered=())
-    )
-
-    request = views.save_request("b1", booking)
-
-    assert request.name == ""
-    assert request.chosen == ""
-    assert request.offered == ()
-
-
-def test_the_state_renders_the_booking_for_the_client() -> None:
-    booking = domain.Booking(
-        domain.BookingSpec(
-            step="choose_slot", name="Ada", chosen="", offered=("mon-9am", "tue-2pm")
-        )
-    )
-
-    response = views.state(booking, "offer the caller the available slots")
-
-    assert response.step == "choose_slot"
-    assert response.offered_slots == ("mon-9am", "tue-2pm")
-    assert response.reply == "offer the caller the available slots"
-
-
-def test_reoffering_replaces_the_slots_and_returns_to_choosing() -> None:
-    view = booking_repository.BookingView(
-        step="confirm", name="Ada", chosen="mon-9am", offered=("mon-9am",)
-    )
-
-    booking = views.reoffered(view, ("tue-2pm", "wed-4pm"))
-
-    assert str(booking.step()) == "choose_slot"
-    assert booking.chosen() is None
-    assert tuple(str(slot) for slot in booking.offered()) == ("tue-2pm", "wed-4pm")
-
-
-def test_reoffering_nothing_is_rejected() -> None:
-    view = booking_repository.BookingView(
-        step="confirm", name="Ada", chosen="mon-9am", offered=("mon-9am",)
-    )
-
-    with pytest.raises(ValueError) as excinfo:
-        views.reoffered(view, ())
-
-    assert "no slots are available" in str(excinfo.value)
-
-
-def test_a_reserved_slot_settles_the_booking_that_was_confirmed() -> None:
-    booking = domain.Booking(
-        domain.BookingSpec(step="booked", name="Ada", chosen="mon-9am", offered=("mon-9am",))
-    )
-    view = booking_repository.BookingView(
-        step="confirm", name="Ada", chosen="mon-9am", offered=("mon-9am",)
-    )
+def test_a_reserved_slot_hands_the_booking_no_reoffer_at_all() -> None:
     reserved = slot_directory.ReserveSlotResponse(
         outcome=slot_directory.ReservationOutcome.RESERVED, available=()
     )
 
-    assert views.confirmed(reserved, booking, view) is booking
+    mapper = views.MapToSettledBooking(reserved_slot=reserved)
+
+    assert mapper.reoffered_slots_mappers == ()
 
 
-def test_a_taken_slot_settles_as_a_fresh_offer_from_the_stored_row() -> None:
-    booking = domain.Booking(
-        domain.BookingSpec(step="booked", name="Ada", chosen="mon-9am", offered=("mon-9am",))
-    )
-    view = booking_repository.BookingView(
-        step="confirm", name="Ada", chosen="mon-9am", offered=("mon-9am",)
-    )
+def test_a_taken_slot_hands_the_booking_one_reoffer_of_the_slots_still_open() -> None:
     reserved = slot_directory.ReserveSlotResponse(
         outcome=slot_directory.ReservationOutcome.SLOT_TAKEN, available=("tue-2pm",)
     )
 
-    settled = views.confirmed(reserved, booking, view)
+    mapper = views.MapToSettledBooking(reserved_slot=reserved)
 
-    assert str(settled.step()) == "choose_slot"
-    assert settled.chosen() is None
-    assert tuple(str(slot) for slot in settled.offered()) == ("tue-2pm",)
+    assert tuple(m.slots for m in mapper.reoffered_slots_mappers) == (("tue-2pm",),)
+
+
+def test_a_taken_slot_with_nothing_open_still_hands_the_booking_a_reoffer() -> None:
+    reserved = slot_directory.ReserveSlotResponse(
+        outcome=slot_directory.ReservationOutcome.SLOT_TAKEN, available=()
+    )
+
+    mapper = views.MapToSettledBooking(reserved_slot=reserved)
+
+    assert tuple(m.slots for m in mapper.reoffered_slots_mappers) == ((),)
+
+
+def test_a_reserved_slot_leaves_the_confirmed_booking_alone() -> None:
+    booking = domain.Booking(
+        domain.BookingSpec(step="booked", name="Ada", chosen="mon-9am", offered=("mon-9am",))
+    )
+
+    booking.settle(())
+
+    assert str(booking.step()) == "booked"
+    assert str(booking.chosen()) == "mon-9am"
+
+
+def test_a_taken_slot_sends_the_booking_back_to_choosing_from_the_new_offer() -> None:
+    booking = domain.Booking(
+        domain.BookingSpec(step="booked", name="Ada", chosen="mon-9am", offered=("mon-9am",))
+    )
+
+    booking.settle(((domain.Slot("tue-2pm"),),))
+
+    assert str(booking.step()) == "choose_slot"
+    assert booking.chosen() is None
+    assert tuple(str(slot) for slot in booking.offered()) == ("tue-2pm",)
 
 
 def test_a_reserved_slot_reads_back_as_a_booking_naming_the_caller() -> None:

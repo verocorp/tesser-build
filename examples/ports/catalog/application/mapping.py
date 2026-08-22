@@ -6,54 +6,75 @@ import tesser.application as ts
 
 import catalog.application.ports.item_repository as item_repository
 import catalog.application.ports.name_policy as name_policy
-import catalog.client.client as client
 import catalog.domain.item as item
 
 
-@ts.do_not_use_function
-def save_request(entity: item.Item) -> item_repository.SaveItemRequest:
-    return item_repository.SaveItemRequest(id=entity.id(), name=entity.name())
+class MapToItemView(ts.Mapper):
+
+    def __init__(self, view: item_repository.ItemView) -> None:
+        self._id = view.id
+        self._name = view.name
+
+    @property
+    def id(self) -> str:
+        return self._id
+
+    @property
+    def name(self) -> str:
+        return self._name
 
 
-@ts.do_not_use_function
-def item_spec(view: item_repository.ItemView) -> item.ItemSpec:
-    return item.ItemSpec(id=view.id, name=view.name)
+class MapToGetItemResponse(ts.Mapper):
+
+    def __init__(self, found: item_repository.FindItemResponse) -> None:
+        self._item_view_mappers: tuple[MapToItemView, ...] = ()
+        match found.outcome:
+            case item_repository.ItemLookup.FOUND:
+                self._item_view_mappers = tuple(MapToItemView(view=view) for view in found.items)
+            case item_repository.ItemLookup.ARCHIVED:
+                pass
+            case item_repository.ItemLookup.MISSING:
+                pass
+            case _ as unreachable:
+                typing.assert_never(unreachable)
+
+    @property
+    def item_view_mappers(self) -> tuple[MapToItemView, ...]:
+        return self._item_view_mappers
 
 
-@ts.do_not_use_function
-def rebuilt(view: item_repository.ItemView) -> item.Item:
-    return item.Item(item_spec(view))
+class MapToAddItemResponse(ts.Mapper):
+
+    def __init__(self, entity: item.Item, checked: name_policy.CheckNameResponse) -> None:
+        self._item_view_mappers: tuple[MapToAddedItemView, ...] = ()
+        match checked.verdict:
+            case name_policy.NameVerdict.ALLOWED:
+                self._item_view_mappers = (MapToAddedItemView(entity=entity),)
+            case name_policy.NameVerdict.RESERVED:
+                pass
+            case _ as unreachable:
+                typing.assert_never(unreachable)
+        self._reason = checked.reason
+
+    @property
+    def item_view_mappers(self) -> tuple[MapToAddedItemView, ...]:
+        return self._item_view_mappers
+
+    @property
+    def reason(self) -> str:
+        return self._reason
 
 
-@ts.do_not_use_function
-def get_response(found: item_repository.FindItemResponse) -> client.GetItemResponse:
-    match found.outcome:
-        case item_repository.ItemLookup.FOUND:
-            return client.GetItemResponse(items=_views(found.items))
-        case item_repository.ItemLookup.ARCHIVED:
-            return client.GetItemResponse(items=())
-        case item_repository.ItemLookup.MISSING:
-            return client.GetItemResponse(items=())
-        case _ as unreachable:
-            typing.assert_never(unreachable)
+class MapToAddedItemView(ts.Mapper):
 
+    def __init__(self, entity: item.Item) -> None:
+        self._id = entity.id()
+        self._name = entity.name()
 
-@ts.do_not_use_function
-def list_response(listed: item_repository.ListItemsResponse) -> client.ListItemsResponse:
-    return client.ListItemsResponse(items=_views(listed.items))
+    @property
+    def id(self) -> str:
+        return self._id
 
-
-@ts.do_not_use_function
-def add_response(entity: item.Item, checked: name_policy.CheckNameResponse) -> client.AddItemResponse:
-    match checked.verdict:
-        case name_policy.NameVerdict.ALLOWED:
-            return client.AddItemResponse(id=entity.id(), name=entity.name(), reason="")
-        case name_policy.NameVerdict.RESERVED:
-            return client.AddItemResponse(id="", name="", reason=checked.reason)
-        case _ as unreachable:
-            typing.assert_never(unreachable)
-
-
-@ts.do_not_use_function
-def _views(views: tuple[item_repository.ItemView, ...]) -> tuple[client.ItemView, ...]:
-    return tuple(client.ItemView(id=view.id, name=view.name) for view in views)
+    @property
+    def name(self) -> str:
+        return self._name

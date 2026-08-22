@@ -2,6 +2,7 @@ import tesser.application as ts
 
 import tessercheck.application.mapping as mapping
 import tessercheck.domain.checks as checks
+import tessercheck.domain.rulebook as rulebook
 import tessercheck.application.ports.rulebook_sources as rulebook_sources
 import tessercheck.application.ports.source_reader as source_reader
 import tessercheck.client.client as client
@@ -28,5 +29,6 @@ class TessercheckService(ts.ApplicationService):
         tree_root = checks.TreeRoot(request.tree)
         tree = str(tree_root)
         read = self._rulebook_reader.read(rulebook_sources.ReadRulebookRequest(tree=tree))
-        rendered = mapping.rendered_rulebook(read)
+        modules = tuple((module.name, module.text) for module in read.test_modules)
+        rendered = rulebook.render(read.checks_text, modules, read.contracts_text)
         return client.RulebookResponse(rendered=rendered)

@@ -14,18 +14,15 @@ from tesser.errors import invalid
 class Campaign(ts.Component):
 
     def __init__(self, cfg: config.Config, policy: target_policy.TargetPolicy) -> None:
-        self._repo = self._repo_for(cfg)
+        if not cfg.storage:
+            raise invalid("missing_coordinate", "campaign storage coordinate is required")
+        if cfg.storage != "memory":
+            raise invalid("unknown_backend", f"campaign storage {cfg.storage!r} not supported")
+        self._repo = repo_memory.InMemoryCampaignRepository()
         self._identity_gateway = campaign_identity.SecretsCampaignIdentity()
         self.client: client.Client = service.CampaignService(
             self._repo, policy, self._identity_gateway, self._repo
         )
-
-    def _repo_for(self, cfg: config.Config) -> repo_memory.InMemoryCampaignRepository:
-        if cfg.storage == "memory":
-            return repo_memory.InMemoryCampaignRepository()
-        if not cfg.storage:
-            raise invalid("missing_coordinate", "campaign storage coordinate is required")
-        raise invalid("unknown_backend", f"campaign storage {cfg.storage!r} not supported")
 
     def close(self) -> None:
         self._repo.close()

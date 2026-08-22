@@ -7,7 +7,6 @@ import scheduling.adapters.repositories.repo_memory as repo_memory
 import scheduling.application.service as application
 import scheduling.client.client as client
 import scheduling.domain.scheduling as domain
-import srv.voice.router as router  # tesser:debt TB070
 import protocol.voice as voice
 
 
@@ -17,24 +16,25 @@ class FakeSchedulingClientScripted(client.SchedulingClient):
         self.pending = list(states)
         self.requests: list[object] = []
 
-    def _next(self, request: object) -> client.BookingStateResponse:
+    def begin(self, request: client.BeginBookingRequest) -> client.BookingStateResponse:
         self.requests.append(request)
         return self.pending.pop(0)
 
-    def begin(self, request: client.BeginBookingRequest) -> client.BookingStateResponse:
-        return self._next(request)
-
     def provide_name(self, request: client.ProvideNameRequest) -> client.BookingStateResponse:
-        return self._next(request)
+        self.requests.append(request)
+        return self.pending.pop(0)
 
     def choose_slot(self, request: client.ChooseSlotRequest) -> client.BookingStateResponse:
-        return self._next(request)
+        self.requests.append(request)
+        return self.pending.pop(0)
 
     def confirm(self, request: client.ConfirmBookingRequest) -> client.BookingStateResponse:
-        return self._next(request)
+        self.requests.append(request)
+        return self.pending.pop(0)
 
     def status(self, request: client.StatusRequest) -> client.BookingStateResponse:
-        return self._next(request)
+        self.requests.append(request)
+        return self.pending.pop(0)
 
 
 def test_the_tool_map_covers_exactly_the_domain_steps() -> None:
@@ -46,7 +46,12 @@ def test_every_offered_tool_is_declarable_and_routable() -> None:
     offered = {name for names in handlers.TOOLS_FOR_STEP.values() for name in names}
 
     assert offered == set(handler._declarations)
-    assert offered == {route.name for route in router.tools_for(handler)}
+    routes = (
+        voice.Route(handlers.PROVIDE_NAME, handler.provide_name),
+        voice.Route(handlers.CHOOSE_SLOT, handler.choose_slot),
+        voice.Route(handlers.CONFIRM_BOOKING, handler.confirm),
+    )
+    assert offered == {route.name for route in routes}
 
 
 def test_a_tool_call_does_not_alias_the_arguments_it_was_handed() -> None:
@@ -80,13 +85,6 @@ def test_a_tool_declaration_does_not_alias_the_schema_it_was_handed_even_nested(
     assert tool.parameters == {"type": "object", "properties": {"slot": {"enum": ["mon-9am"]}}}
 
 
-def test_a_drifted_tool_map_keeps_the_recoverable_error_class() -> None:
-    handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(), "b1")
-
-    with pytest.raises(ValueError):
-        handler._tool("cancel_booking", client.BookingStateResponse(step="collect_name", offered_slots=(), reply="ask the caller for their name"))
-
-
 def test_a_tool_declaration_renders_its_wire_schema() -> None:
     tool = voice.Tool("provide_name", "Record the caller's full name.", {"type": "object"})
 
@@ -101,7 +99,16 @@ def test_a_route_carries_the_endpoint_the_host_calls() -> None:
     scripted = FakeSchedulingClientScripted(client.BookingStateResponse(step="choose_slot", offered_slots=("mon-9am", "tue-2pm"), reply="offer the caller the available slots"))
     handler = handlers.LlmToolHandler(scripted, "b1")
 
-    route = router.match(router.tools_for(handler), handlers.PROVIDE_NAME)
+    routes = (
+        voice.Route(handlers.PROVIDE_NAME, handler.provide_name),
+        voice.Route(handlers.CHOOSE_SLOT, handler.choose_slot),
+        voice.Route(handlers.CONFIRM_BOOKING, handler.confirm),
+    )
+    route: voice.Route | None = None
+    for candidate in routes:
+        if candidate.name == handlers.PROVIDE_NAME:
+            route = candidate
+            break
 
     assert route is not None
     endpoint: voice.ToolEndpoint = route.endpoint
@@ -198,7 +205,18 @@ def test_the_choose_slot_schema_offers_exactly_the_current_slots() -> None:
 def test_an_unroutable_tool_name_has_no_endpoint() -> None:
     handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(), "b1")
 
-    assert router.match(router.tools_for(handler), "cancel_booking") is None
+    routes = (
+        voice.Route(handlers.PROVIDE_NAME, handler.provide_name),
+        voice.Route(handlers.CHOOSE_SLOT, handler.choose_slot),
+        voice.Route(handlers.CONFIRM_BOOKING, handler.confirm),
+    )
+    matched: voice.Route | None = None
+    for candidate in routes:
+        if candidate.name == "cancel_booking":
+            matched = candidate
+            break
+
+    assert matched is None
 
 
 def test_a_non_string_argument_is_rejected_with_the_wire_word() -> None:

@@ -3,11 +3,7 @@ from __future__ import annotations
 from typing import Final
 
 import tesser.domain as ts
-
-
-@ts.do_not_use_function
-def canonical_str(value: str) -> str:
-    return value
+from tesser.serialization import canonical_str
 
 COLLECT_NAME: Final[str] = "collect_name"
 CHOOSE_SLOT: Final[str] = "choose_slot"
@@ -116,7 +112,8 @@ class Booking(ts.AggregateRoot):
         return self._offered
 
     def provide_name(self, name: CustomerName, offered: tuple[Slot, ...]) -> None:
-        self._require(COLLECT_NAME)
+        if str(self._step) != COLLECT_NAME:
+            raise ValueError(f"not available at step {self._step}")
         if not offered:
             raise ValueError("no slots are available")
         self._name = name
@@ -135,7 +132,8 @@ class Booking(ts.AggregateRoot):
         self._step = Step(CONFIRM)
 
     def reoffer(self, offered: tuple[Slot, ...]) -> None:
-        self._require(CONFIRM)
+        if str(self._step) != CONFIRM:
+            raise ValueError(f"not available at step {self._step}")
         if not offered:
             raise ValueError("no slots are available")
         self._offered = offered
@@ -143,9 +141,17 @@ class Booking(ts.AggregateRoot):
         self._step = Step(CHOOSE_SLOT)
 
     def confirm(self) -> None:
-        self._require(CONFIRM)
+        if str(self._step) != CONFIRM:
+            raise ValueError(f"not available at step {self._step}")
         self._step = Step(BOOKED)
 
-    def _require(self, label: str) -> None:
-        if str(self._step) != label:
+    def settle(self, reoffers: tuple[tuple[Slot, ...], ...]) -> None:
+        if str(self._step) != BOOKED:
             raise ValueError(f"not available at step {self._step}")
+        for offered in reoffers:
+            if not offered:
+                raise ValueError("no slots are available")
+            self._offered = offered
+            self._chosen = None
+            self._step = Step(CHOOSE_SLOT)
+            return

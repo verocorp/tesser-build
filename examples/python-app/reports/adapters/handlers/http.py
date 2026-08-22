@@ -12,15 +12,13 @@ class Handler(ts.Handler):
 
     def links_by_verdict(self, _req: HttpRequest) -> HttpResponse:
         resp = self._client.links_by_verdict(client.LinksByVerdictRequest())
-        rows = [_row(view) for view in resp.links]
+        rows: list[JSONObject] = [
+            {
+                "slug": view.slug,
+                "target_url": view.target_url,
+                "allowed": view.allowed,
+                "reason": view.reason,
+            }
+            for view in resp.links
+        ]
         return HttpResponse.json(200, {"links": rows})
-
-
-@ts.do_not_use_function
-def _row(view: client.LinkVerdictView) -> JSONObject:
-    return {
-        "slug": view.slug,
-        "target_url": view.target_url,
-        "allowed": view.allowed,
-        "reason": view.reason,
-    }

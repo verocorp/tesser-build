@@ -16,9 +16,14 @@ import campaign.domain.money as money
 import campaign.domain.short_link as short_link
 import campaign.domain.short_links as short_links
 import campaign.domain.values as values
-from tesser.errors import DomainError, Kind
-from protocol.http import HttpRequest
-from srv.http.host import respond  # tesser:debt TB070
+from tesser.errors import DomainError, InfraError, Kind, status_for
+from protocol.http import (
+    BadRequest,
+    HttpRequest,
+    HttpResponse,
+    PayloadTooLarge,
+    StreamingUnsupported,
+)
 
 
 
@@ -105,11 +110,22 @@ def test_deactivate_link_endpoint_maps_a_missing_link_to_404() -> None:
     id = svc.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
     svc.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     handler = http.Handler(svc)
-    resp = respond(
-        lambda: handler.deactivate_link(
+    try:
+        resp = handler.deactivate_link(
             HttpRequest("POST", "/", {}, {}, {}, json.dumps({"campaign_id": id, "slug": "nosuch"}).encode("utf-8"))
         )
-    )
+    except BadRequest as e:
+        resp = HttpResponse.problem(400, "malformed_request", str(e))
+    except PayloadTooLarge as e:
+        resp = HttpResponse.problem(413, "payload_too_large", str(e))
+    except StreamingUnsupported as e:
+        resp = HttpResponse.problem(411, "length_required", str(e))
+    except DomainError as e:
+        resp = HttpResponse.problem(status_for(e.kind), e.code, e.message)
+    except InfraError:
+        resp = HttpResponse.problem(503, "unavailable", "a dependency is unavailable; please retry")
+    except Exception:
+        resp = HttpResponse.problem(500, "internal", "unexpected error")
     assert resp.status_code == 404
 
 
@@ -120,7 +136,20 @@ def test_resolve_endpoint_maps_a_deactivated_link_to_404() -> None:
     svc.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     handler = http.Handler(svc)
     svc.deactivate_link(client.DeactivateLinkRequest(campaign_id=id, slug="promo"))
-    resp = respond(lambda: handler.resolve(HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b"")))
+    try:
+        resp = handler.resolve(HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
+    except BadRequest as e:
+        resp = HttpResponse.problem(400, "malformed_request", str(e))
+    except PayloadTooLarge as e:
+        resp = HttpResponse.problem(413, "payload_too_large", str(e))
+    except StreamingUnsupported as e:
+        resp = HttpResponse.problem(411, "length_required", str(e))
+    except DomainError as e:
+        resp = HttpResponse.problem(status_for(e.kind), e.code, e.message)
+    except InfraError:
+        resp = HttpResponse.problem(503, "unavailable", "a dependency is unavailable; please retry")
+    except Exception:
+        resp = HttpResponse.problem(500, "internal", "unexpected error")
     assert resp.status_code == 404
 
 
@@ -192,11 +221,22 @@ def test_campaign_wraps_an_invalid_link_with_its_index() -> None:
 def test_create_campaign_endpoint_rejects_a_non_object_budget() -> None:
     store = repo_memory.InMemoryCampaignRepository()
     handler = http.Handler(service.CampaignService(store, FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity(), store))
-    resp = respond(
-        lambda: handler.create_campaign(
+    try:
+        resp = handler.create_campaign(
             HttpRequest("POST", "/", {}, {}, {}, json.dumps({"budget": "100.00"}).encode("utf-8"))
         )
-    )
+    except BadRequest as e:
+        resp = HttpResponse.problem(400, "malformed_request", str(e))
+    except PayloadTooLarge as e:
+        resp = HttpResponse.problem(413, "payload_too_large", str(e))
+    except StreamingUnsupported as e:
+        resp = HttpResponse.problem(411, "length_required", str(e))
+    except DomainError as e:
+        resp = HttpResponse.problem(status_for(e.kind), e.code, e.message)
+    except InfraError:
+        resp = HttpResponse.problem(503, "unavailable", "a dependency is unavailable; please retry")
+    except Exception:
+        resp = HttpResponse.problem(500, "internal", "unexpected error")
     assert resp.status_code == 400
     assert resp.json_body()["type"] == "/problems/malformed_request"
 

@@ -57,117 +57,169 @@ class FilesystemRepoReader(ts.Repository):
                 declarations=(),
                 requirements=(),
             )
-        declarations, requirements = self._walk(base)
-        return repo_reader.ReadRepoResponse(
-            manifest=self._manifest(base / "manifest.json"),
-            verify=self._file(base / "scripts" / "verify"),
-            workflow=self._file(base / ".github" / "workflows" / "test.yml"),
-            top=self._entries(base),
-            examples=self._entries(base / "examples"),
-            declarations=declarations,
-            requirements=requirements,
-        )
-
-    def _manifest(self, path: Path) -> repo_reader.ManifestRecord:
-        record = self._file(path)
-        match record.state:
+        declarations: list[repo_reader.DeclarationRecord] = []
+        requirements: list[str] = []
+        pending = [base]
+        while pending:
+            walked = pending.pop()
+            try:
+                walked_listing = tuple(sorted(walked.iterdir()))
+            except OSError:
+                walked_listing = ()
+            for entry in walked_listing:
+                if entry.name in SKIP_DIRS:
+                    continue
+                if entry.is_dir() and not entry.is_symlink():
+                    pending.append(entry)
+                elif entry.name == DECLARATION and not entry.is_dir():
+                    try:
+                        declaration_text = entry.read_text(encoding="utf-8-sig")
+                    except FileNotFoundError:
+                        declaration_state = repo_reader.FileState.MISSING
+                        declaration_text = ""
+                    except (UnicodeDecodeError, OSError):
+                        declaration_state = repo_reader.FileState.UNREADABLE
+                        declaration_text = ""
+                    else:
+                        declaration_state = repo_reader.FileState.READ
+                    declarations.append(
+                        repo_reader.DeclarationRecord(
+                            path=str(entry.relative_to(base)),
+                            state=declaration_state,
+                            text=declaration_text,
+                        )
+                    )
+                elif entry.name == REQUIREMENTS and not entry.is_dir():
+                    requirements.append(str(entry.parent.relative_to(base)))
+        try:
+            manifest_text = (base / "manifest.json").read_text(encoding="utf-8-sig")
+        except FileNotFoundError:
+            manifest_state = repo_reader.FileState.MISSING
+            manifest_text = ""
+        except (UnicodeDecodeError, OSError):
+            manifest_state = repo_reader.FileState.UNREADABLE
+            manifest_text = ""
+        else:
+            manifest_state = repo_reader.FileState.READ
+        match manifest_state:
             case repo_reader.FileState.MISSING:
-                return repo_reader.ManifestRecord(
+                manifest = repo_reader.ManifestRecord(
                     state=repo_reader.ManifestState.MISSING, rows=(), note=""
                 )
             case repo_reader.FileState.UNREADABLE:
-                return repo_reader.ManifestRecord(
+                manifest = repo_reader.ManifestRecord(
                     state=repo_reader.ManifestState.UNREADABLE, rows=(), note=""
                 )
             case repo_reader.FileState.READ:
-                return self._rows(record.text)
+                try:
+                    parsed = json.loads(manifest_text)
+                except json.JSONDecodeError as error:
+                    manifest = repo_reader.ManifestRecord(
+                        state=repo_reader.ManifestState.MALFORMED,
+                        rows=(),
+                        note=str(error),
+                    )
+                else:
+                    if not isinstance(parsed, dict) or not all(
+                        isinstance(key, str) and isinstance(kind, str)
+                        for key, kind in parsed.items()
+                    ):
+                        manifest = repo_reader.ManifestRecord(
+                            state=repo_reader.ManifestState.MISSHAPEN, rows=(), note=""
+                        )
+                    else:
+                        manifest = repo_reader.ManifestRecord(
+                            state=repo_reader.ManifestState.READ,
+                            rows=tuple(
+                                repo_reader.RowRecord(key=key, kind=kind)
+                                for key, kind in parsed.items()
+                            ),
+                            note="",
+                        )
             case _ as unreachable:
                 raise AssertionError(unreachable)
-
-    def _rows(self, text: str) -> repo_reader.ManifestRecord:
         try:
-            parsed = json.loads(text)
-        except json.JSONDecodeError as error:
-            return repo_reader.ManifestRecord(
-                state=repo_reader.ManifestState.MALFORMED, rows=(), note=str(error)
-            )
-        if not isinstance(parsed, dict) or not all(
-            isinstance(key, str) and isinstance(kind, str)
-            for key, kind in parsed.items()
-        ):
-            return repo_reader.ManifestRecord(
-                state=repo_reader.ManifestState.MISSHAPEN, rows=(), note=""
-            )
-        return repo_reader.ManifestRecord(
-            state=repo_reader.ManifestState.READ,
-            rows=tuple(
-                repo_reader.RowRecord(key=key, kind=kind)
-                for key, kind in parsed.items()
-            ),
-            note="",
-        )
-
-    def _file(self, path: Path) -> repo_reader.FileRecord:
-        try:
-            text = path.read_text(encoding="utf-8-sig")
+            verify_text = (base / "scripts" / "verify").read_text(encoding="utf-8-sig")
         except FileNotFoundError:
-            return repo_reader.FileRecord(state=repo_reader.FileState.MISSING, text="")
+            verify = repo_reader.FileRecord(state=repo_reader.FileState.MISSING, text="")
         except (UnicodeDecodeError, OSError):
-            return repo_reader.FileRecord(state=repo_reader.FileState.UNREADABLE, text="")
-        return repo_reader.FileRecord(state=repo_reader.FileState.READ, text=text)
-
-    def _entries(self, base: Path) -> tuple[repo_reader.EntryRecord, ...]:
-        if not base.is_dir():
-            return ()
-        found: list[repo_reader.EntryRecord] = []
-        for entry in self._listing(base):
+            verify = repo_reader.FileRecord(
+                state=repo_reader.FileState.UNREADABLE, text=""
+            )
+        else:
+            verify = repo_reader.FileRecord(
+                state=repo_reader.FileState.READ, text=verify_text
+            )
+        try:
+            workflow_text = (base / ".github" / "workflows" / "test.yml").read_text(
+                encoding="utf-8-sig"
+            )
+        except FileNotFoundError:
+            workflow = repo_reader.FileRecord(
+                state=repo_reader.FileState.MISSING, text=""
+            )
+        except (UnicodeDecodeError, OSError):
+            workflow = repo_reader.FileRecord(
+                state=repo_reader.FileState.UNREADABLE, text=""
+            )
+        else:
+            workflow = repo_reader.FileRecord(
+                state=repo_reader.FileState.READ, text=workflow_text
+            )
+        top: list[repo_reader.EntryRecord] = []
+        try:
+            top_listing = tuple(sorted(base.iterdir()))
+        except OSError:
+            top_listing = ()
+        for entry in top_listing:
             if entry.name in SKIP_DIRS:
                 continue
             if entry.name.startswith(".") and entry.name not in HIDDEN_TRACKED:
                 continue
             if entry.is_symlink():
                 if entry.is_dir() or not entry.exists():
-                    found.append(
+                    top.append(
                         repo_reader.EntryRecord(
                             name=entry.name, form=repo_reader.EntryForm.SYMLINK
                         )
                     )
             elif entry.is_dir():
-                found.append(
+                top.append(
                     repo_reader.EntryRecord(
                         name=entry.name, form=repo_reader.EntryForm.DIRECTORY
                     )
                 )
-        return tuple(found)
-
-    def _walk(
-        self, root: Path
-    ) -> tuple[tuple[repo_reader.DeclarationRecord, ...], tuple[str, ...]]:
-        declarations: list[repo_reader.DeclarationRecord] = []
-        requirements: list[str] = []
-        pending = [root]
-        while pending:
-            base = pending.pop()
-            for entry in self._listing(base):
+        examples_base = base / "examples"
+        examples: list[repo_reader.EntryRecord] = []
+        if examples_base.is_dir():
+            try:
+                examples_listing = tuple(sorted(examples_base.iterdir()))
+            except OSError:
+                examples_listing = ()
+            for entry in examples_listing:
                 if entry.name in SKIP_DIRS:
                     continue
-                if entry.is_dir() and not entry.is_symlink():
-                    pending.append(entry)
-                elif entry.name == DECLARATION and not entry.is_dir():
-                    record = self._file(entry)
-                    declarations.append(
-                        repo_reader.DeclarationRecord(
-                            path=str(entry.relative_to(root)),
-                            state=record.state,
-                            text=record.text,
+                if entry.name.startswith(".") and entry.name not in HIDDEN_TRACKED:
+                    continue
+                if entry.is_symlink():
+                    if entry.is_dir() or not entry.exists():
+                        examples.append(
+                            repo_reader.EntryRecord(
+                                name=entry.name, form=repo_reader.EntryForm.SYMLINK
+                            )
+                        )
+                elif entry.is_dir():
+                    examples.append(
+                        repo_reader.EntryRecord(
+                            name=entry.name, form=repo_reader.EntryForm.DIRECTORY
                         )
                     )
-                elif entry.name == REQUIREMENTS and not entry.is_dir():
-                    requirements.append(str(entry.parent.relative_to(root)))
-        return tuple(declarations), tuple(requirements)
-
-    def _listing(self, base: Path) -> tuple[Path, ...]:
-        try:
-            return tuple(sorted(base.iterdir()))
-        except OSError:
-            return ()
+        return repo_reader.ReadRepoResponse(
+            manifest=manifest,
+            verify=verify,
+            workflow=workflow,
+            top=tuple(top),
+            examples=tuple(examples),
+            declarations=tuple(declarations),
+            requirements=tuple(requirements),
+        )
