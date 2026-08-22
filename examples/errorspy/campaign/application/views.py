@@ -5,34 +5,61 @@ import typing
 import tesser.application as ts
 
 import campaign.application.ports.campaign_repository as campaign_repository
-import campaign.domain.campaign as campaign
-import campaign.domain.short_link as short_link
-import campaign.domain.values as values
-from tesser.errors import DomainError, InfraError, not_found
+from tesser.errors import not_found
 
 
-@ts.do_not_use_function
-def required_campaign(  # tesser:debt TB051
-    found: campaign_repository.FindCampaignResponse, campaign_id: str
-) -> campaign.Campaign:
-    match found.outcome:
-        case campaign_repository.CampaignLookup.FOUND:
-            record = found.campaigns[0]
-            spec = campaign.CampaignSpec(
-                id=record.id,
-                window=values.DateWindowSpec(
-                    start=record.window.start, end=record.window.end
-                ),
-                links=tuple(
-                    short_link.ShortLinkSpec(slug=link.slug, target_url=link.target_url)
-                    for link in record.links
-                ),
-            )
-            try:
-                return campaign.Campaign(spec)
-            except DomainError as e:
-                raise InfraError(f"corrupted campaign record {record.id!r}: {e}") from e
-        case campaign_repository.CampaignLookup.MISSING:
-            raise not_found("campaign_missing", f"no campaign {campaign_id!r}")
-        case _ as unreachable:
-            typing.assert_never(unreachable)
+class MapToShortLinkSpec(ts.Mapper):
+
+    def __init__(self, link_record: campaign_repository.LinkRecord) -> None:
+        self._slug = link_record.slug
+        self._target_url = link_record.target_url
+
+    @property
+    def slug(self) -> str:
+        return self._slug
+
+    @property
+    def target_url(self) -> str:
+        return self._target_url
+
+
+class MapToCampaignSpec(ts.Mapper):
+
+    def __init__(
+        self,
+        find_campaign_request: campaign_repository.FindCampaignRequest,
+        found_campaign: campaign_repository.FindCampaignResponse,
+    ) -> None:
+        match found_campaign.outcome:
+            case campaign_repository.CampaignLookup.FOUND:
+                record = found_campaign.campaigns[0]
+            case campaign_repository.CampaignLookup.MISSING:
+                raise not_found(
+                    "campaign_missing",
+                    f"no campaign {find_campaign_request.campaign_id!r}",
+                )
+            case _ as unreachable:
+                typing.assert_never(unreachable)
+        self._campaign_id = record.id
+        self._window_start = record.window.start
+        self._window_end = record.window.end
+        self._short_link_spec_mappers = tuple(
+            MapToShortLinkSpec(link_record=link) for link in record.links
+        )
+
+    @property
+    def campaign_id(self) -> str:
+        return self._campaign_id
+
+    @property
+    def window_start(self) -> str:
+        return self._window_start
+
+    @property
+    def window_end(self) -> str:
+        return self._window_end
+
+    @property
+    def short_link_spec_mappers(self) -> tuple[MapToShortLinkSpec, ...]:
+        return self._short_link_spec_mappers
+

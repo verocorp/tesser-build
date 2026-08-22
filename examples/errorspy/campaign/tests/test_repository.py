@@ -4,7 +4,9 @@ import pytest
 
 import campaign.adapters.gateways.repo_storage as repo_storage
 import campaign.application.ports.campaign_repository as campaign_repository
+import campaign.application.service as service
 import campaign.application.views as views
+import campaign.client.client as client
 from tesser.errors import DomainError, Kind, InfraError
 from storage import FakeStorage, StorageError
 
@@ -20,17 +22,23 @@ def test_save_then_find_roundtrip() -> None:
             ),
         )
     )
-    found = repo.find(campaign_repository.FindCampaignRequest(campaign_id="c1"))
-    got = views.required_campaign(found, "c1")
-    assert got.id == "c1"
-    assert str(got.links[0].slug) == "spring-sale"
+    find_campaign_request = campaign_repository.FindCampaignRequest(campaign_id="c1")
+    found = repo.find(find_campaign_request)
+    mapper = views.MapToCampaignSpec(
+        find_campaign_request=find_campaign_request, found_campaign=found
+    )
+    assert mapper.campaign_id == "c1"
+    assert mapper.short_link_spec_mappers[0].slug == "spring-sale"
 
 
 def test_missing_is_domain_not_found() -> None:
     repo = repo_storage.StorageCampaignRepository(FakeStorage())
-    found = repo.find(campaign_repository.FindCampaignRequest(campaign_id="nope"))
+    find_campaign_request = campaign_repository.FindCampaignRequest(campaign_id="nope")
+    found = repo.find(find_campaign_request)
     with pytest.raises(DomainError) as ei:
-        views.required_campaign(found, "nope")
+        views.MapToCampaignSpec(
+            find_campaign_request=find_campaign_request, found_campaign=found
+        )
     assert ei.value.kind is Kind.NOT_FOUND
     assert ei.value.code == "campaign_missing"
 
@@ -53,9 +61,9 @@ def test_corrupted_record_is_infra_not_validation() -> None:
         },
     )
     repo = repo_storage.StorageCampaignRepository(storage)
-    found = repo.find(campaign_repository.FindCampaignRequest(campaign_id="c1"))
+    svc = service.CampaignService(repo)
     with pytest.raises(InfraError) as ei:
-        views.required_campaign(found, "c1")
+        svc.get_campaign(client.GetCampaignRequest(campaign_id="c1"))
     assert not isinstance(ei.value, DomainError)
     assert isinstance(ei.value.__cause__, DomainError)
     assert ei.value.__cause__.kind is Kind.VALIDATION

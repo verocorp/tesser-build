@@ -57,3 +57,24 @@ def test_its_accessor_hands_back_copies() -> None:
     links = short_links.ShortLinks(short_links.ShortLinksSpec(links=(_spec("promo"),)))
     links.links[0].deactivate()
     assert [str(link.status) for link in links.links] == ["active"]
+
+
+def test_it_hands_back_the_target_of_an_active_link() -> None:
+    links = short_links.ShortLinks(short_links.ShortLinksSpec(links=(_spec("promo"),)))
+    assert str(links.active_target(values.Slug("promo"))) == "https://ok.example/x"
+
+
+def test_it_refuses_the_target_of_a_deactivated_link() -> None:
+    links = short_links.ShortLinks(short_links.ShortLinksSpec(links=(_spec("promo"),)))
+    links.deactivate(values.Slug("promo"))
+    with pytest.raises(DomainError) as caught:
+        links.active_target(values.Slug("promo"))
+    assert caught.value.code == "link_missing"
+
+
+def test_it_refuses_the_target_of_a_slug_it_does_not_carry() -> None:
+    links = short_links.ShortLinks(short_links.ShortLinksSpec(links=(_spec("promo"),)))
+    with pytest.raises(DomainError) as caught:
+        links.active_target(values.Slug("nosuch"))
+    assert caught.value.code == "link_missing"
+    assert "nosuch" in caught.value.message

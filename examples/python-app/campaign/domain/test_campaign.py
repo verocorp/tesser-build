@@ -170,3 +170,20 @@ def test_deactivate_short_link_refuses_a_slug_the_campaign_does_not_carry() -> N
 
     assert caught.value.kind is Kind.NOT_FOUND
     assert caught.value.code == "link_missing"
+
+
+def test_active_target_hands_back_the_url_of_the_named_active_link() -> None:
+    c = campaign.Campaign(_campaign_spec(slug="promo"))
+
+    assert str(c.active_target(values.Slug("promo"))) == "https://ok.example/x"
+
+
+def test_active_target_refuses_a_link_that_was_deactivated() -> None:
+    c = campaign.Campaign(_campaign_spec(slug="promo"))
+    c.deactivate_short_link(values.Slug("promo"))
+
+    with pytest.raises(DomainError) as caught:
+        c.active_target(values.Slug("promo"))
+
+    assert caught.value.kind is Kind.NOT_FOUND
+    assert caught.value.code == "link_missing"

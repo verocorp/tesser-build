@@ -572,10 +572,36 @@ class CampaignService(ts.ApplicationService):
         )
 
     def resolve(self, req: client.ResolveRequest) -> client.ResolveResponse:
-        slug = str(values.Slug(req.slug))
-        found = self._repo.find_by_slug(campaign_repository.FindCampaignBySlugRequest(slug=slug))
-        target_url = campaign_views.resolved_target(found, slug)
-        return client.ResolveResponse(target_url=target_url)
+        slug = values.Slug(req.slug)
+        slug_text = str(slug)
+        find_campaign_by_slug_request = campaign_repository.FindCampaignBySlugRequest(
+            slug=slug_text
+        )
+        found = self._repo.find_by_slug(find_campaign_by_slug_request)
+        campaign_spec_mapper = campaign_views.MapToCampaignSpecFromSlugLookup(
+            find_campaign_by_slug_request=find_campaign_by_slug_request,
+            found_campaign=found,
+        )
+        link_specs = tuple(
+            short_link.ShortLinkSpec(
+                slug=link_record.slug,
+                target_url=link_record.target_url,
+                active=link_record.status == "active",
+            )
+            for link_record in campaign_spec_mapper.link_records
+        )
+        links_spec = short_links.ShortLinksSpec(links=link_specs)
+        c = campaign.Campaign(campaign.CampaignSpec(
+            id=campaign_spec_mapper.campaign_id,
+            budget=money.MoneySpec(
+                amount=campaign_spec_mapper.budget_amount,
+                currency=campaign_spec_mapper.budget_currency,
+            ),
+            links=links_spec,
+        ))
+        target_url = c.active_target(slug)
+        target_url_text = str(target_url)
+        return client.ResolveResponse(target_url=target_url_text)
 
     def list_links(self, req: client.ListLinksRequest) -> client.ListLinksResponse:
         listed = self._repo.all(campaign_repository.ListCampaignsRequest())

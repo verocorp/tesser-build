@@ -4,10 +4,10 @@ import pytest
 
 import campaign.application.ports.campaign_repository as campaign_repository
 import campaign.application.views as views
-from tesser.errors import DomainError, InfraError, Kind
+from tesser.errors import DomainError, Kind
 
 
-def test_a_found_record_is_rebuilt_into_the_campaign_it_came_from() -> None:
+def test_a_found_record_becomes_the_parts_a_campaign_is_rebuilt_from() -> None:
     found = campaign_repository.FindCampaignResponse(
         outcome=campaign_repository.CampaignLookup.FOUND,
         campaigns=(
@@ -22,10 +22,16 @@ def test_a_found_record_is_rebuilt_into_the_campaign_it_came_from() -> None:
             ),
         ),
     )
-    c = views.required_campaign(found, "c1")
-    assert c.id == "c1"
-    assert str(c.window.start) == "2026-01-01"
-    assert tuple(str(link.slug) for link in c.links) == ("spring-sale",)
+    mapper = views.MapToCampaignSpec(
+        find_campaign_request=campaign_repository.FindCampaignRequest(campaign_id="c1"),
+        found_campaign=found,
+    )
+    assert mapper.campaign_id == "c1"
+    assert (mapper.window_start, mapper.window_end) == ("2026-01-01", "2026-02-01")
+    assert tuple(
+        (link_mapper.slug, link_mapper.target_url)
+        for link_mapper in mapper.short_link_spec_mappers
+    ) == (("spring-sale", "https://x.com"),)
 
 
 def test_a_missing_outcome_is_a_not_found_naming_the_campaign() -> None:
@@ -33,13 +39,18 @@ def test_a_missing_outcome_is_a_not_found_naming_the_campaign() -> None:
         outcome=campaign_repository.CampaignLookup.MISSING, campaigns=()
     )
     with pytest.raises(DomainError) as ei:
-        views.required_campaign(found, "c9")
+        views.MapToCampaignSpec(
+            find_campaign_request=campaign_repository.FindCampaignRequest(
+                campaign_id="c9"
+            ),
+            found_campaign=found,
+        )
     assert ei.value.kind is Kind.NOT_FOUND
     assert ei.value.code == "campaign_missing"
     assert ei.value.message == "no campaign 'c9'"
 
 
-def test_a_record_with_a_corrupt_slug_is_an_infrastructure_failure_not_a_validation_one() -> None:
+def test_a_record_with_a_corrupt_slug_still_exposes_the_slug_the_repository_gave() -> None:
     found = campaign_repository.FindCampaignResponse(
         outcome=campaign_repository.CampaignLookup.FOUND,
         campaigns=(
@@ -54,52 +65,14 @@ def test_a_record_with_a_corrupt_slug_is_an_infrastructure_failure_not_a_validat
             ),
         ),
     )
-    with pytest.raises(InfraError) as ei:
-        views.required_campaign(found, "c1")
-    assert not isinstance(ei.value, DomainError)
-    assert str(ei.value).startswith("corrupted campaign record 'c1': ")
-
-
-def test_a_corrupt_record_keeps_the_domain_complaint_as_its_cause() -> None:
-    found = campaign_repository.FindCampaignResponse(
-        outcome=campaign_repository.CampaignLookup.FOUND,
-        campaigns=(
-            campaign_repository.CampaignRecord(
-                id="c1",
-                window=campaign_repository.WindowRecord(start="2026-01-01", end="2026-02-01"),
-                links=(
-                    campaign_repository.LinkRecord(
-                        slug="BAD SLUG", target_url="https://x.com"
-                    ),
-                ),
-            ),
-        ),
+    mapper = views.MapToCampaignSpec(
+        find_campaign_request=campaign_repository.FindCampaignRequest(campaign_id="c1"),
+        found_campaign=found,
     )
-    with pytest.raises(InfraError) as ei:
-        views.required_campaign(found, "c1")
-    cause = ei.value.__cause__
-    assert isinstance(cause, DomainError)
-    assert cause.kind is Kind.VALIDATION
-    assert cause.code == "bad_slug"
+    assert mapper.short_link_spec_mappers[0].slug == "BAD SLUG"
 
 
-def test_a_record_with_a_backwards_window_is_an_infrastructure_failure() -> None:
-    found = campaign_repository.FindCampaignResponse(
-        outcome=campaign_repository.CampaignLookup.FOUND,
-        campaigns=(
-            campaign_repository.CampaignRecord(
-                id="c1",
-                window=campaign_repository.WindowRecord(start="2026-02-01", end="2026-01-01"),
-                links=(),
-            ),
-        ),
-    )
-    with pytest.raises(InfraError) as ei:
-        views.required_campaign(found, "c1")
-    assert str(ei.value).startswith("corrupted campaign record 'c1': ")
-
-
-def test_a_sound_record_is_rebuilt_without_complaint() -> None:
+def test_a_sound_record_exposes_every_link_it_carried_in_order() -> None:
     found = campaign_repository.FindCampaignResponse(
         outcome=campaign_repository.CampaignLookup.FOUND,
         campaigns=(
@@ -113,5 +86,10 @@ def test_a_sound_record_is_rebuilt_without_complaint() -> None:
             ),
         ),
     )
-    c = views.required_campaign(found, "c1")
-    assert tuple(str(link.slug) for link in c.links) == ("alpha-one", "beta-two")
+    mapper = views.MapToCampaignSpec(
+        find_campaign_request=campaign_repository.FindCampaignRequest(campaign_id="c1"),
+        found_campaign=found,
+    )
+    assert tuple(
+        link_mapper.slug for link_mapper in mapper.short_link_spec_mappers
+    ) == ("alpha-one", "beta-two")

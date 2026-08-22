@@ -17,18 +17,32 @@ class LayoutService(ts.ApplicationService):
         repo_root = rules.RepoRoot(request.repo_root)
         root = str(repo_root)
         read = self._reader.read(repo_reader.ReadRepoRequest(repo_root=root))
-        manifest_state = mapping._manifest_state(read.manifest.state)
-        manifest_rows = tuple((row.key, row.kind) for row in read.manifest.rows)
-        manifest = (manifest_state, manifest_rows, read.manifest.note)
-        verify = (mapping._state(read.verify.state), read.verify.text)
-        workflow = (mapping._state(read.workflow.state), read.workflow.text)
-        top = tuple((entry.name, mapping._form(entry.form)) for entry in read.top)
+        manifest_mapper = mapping.MapToManifestState(manifest_record=read.manifest)
+        manifest_rows = tuple((row.key, row.kind) for row in manifest_mapper.rows)
+        manifest = (manifest_mapper.state, manifest_rows, manifest_mapper.note)
+        verify_mapper = mapping.MapToFileState(file_record=read.verify)
+        verify = (verify_mapper.state, verify_mapper.text)
+        workflow_mapper = mapping.MapToFileState(file_record=read.workflow)
+        workflow = (workflow_mapper.state, workflow_mapper.text)
+        top_mappers = tuple(
+            mapping.MapToEntryForm(entry_record=entry) for entry in read.top
+        )
+        top = tuple(
+            (entry_mapper.name, entry_mapper.form) for entry_mapper in top_mappers
+        )
+        example_mappers = tuple(
+            mapping.MapToEntryForm(entry_record=entry) for entry in read.examples
+        )
         examples = tuple(
-            (entry.name, mapping._form(entry.form)) for entry in read.examples
+            (entry_mapper.name, entry_mapper.form) for entry_mapper in example_mappers
+        )
+        declaration_mappers = tuple(
+            mapping.MapToDeclarationState(declaration_record=record)
+            for record in read.declarations
         )
         declarations = tuple(
-            (record.path, mapping._state(record.state), record.text)
-            for record in read.declarations
+            (declaration_mapper.path, declaration_mapper.state, declaration_mapper.text)
+            for declaration_mapper in declaration_mappers
         )
         spec = rules.RepoSpec(
             manifest=manifest,
@@ -59,18 +73,32 @@ class LayoutService(ts.ApplicationService):
         repo_root = rules.RepoRoot(request.repo_root)
         root = str(repo_root)
         read = self._reader.read(repo_reader.ReadRepoRequest(repo_root=root))
-        manifest_state = mapping._manifest_state(read.manifest.state)
-        manifest_rows = tuple((row.key, row.kind) for row in read.manifest.rows)
-        manifest = (manifest_state, manifest_rows, read.manifest.note)
-        verify = (mapping._state(read.verify.state), read.verify.text)
-        workflow = (mapping._state(read.workflow.state), read.workflow.text)
-        top = tuple((entry.name, mapping._form(entry.form)) for entry in read.top)
+        manifest_mapper = mapping.MapToManifestState(manifest_record=read.manifest)
+        manifest_rows = tuple((row.key, row.kind) for row in manifest_mapper.rows)
+        manifest = (manifest_mapper.state, manifest_rows, manifest_mapper.note)
+        verify_mapper = mapping.MapToFileState(file_record=read.verify)
+        verify = (verify_mapper.state, verify_mapper.text)
+        workflow_mapper = mapping.MapToFileState(file_record=read.workflow)
+        workflow = (workflow_mapper.state, workflow_mapper.text)
+        top_mappers = tuple(
+            mapping.MapToEntryForm(entry_record=entry) for entry in read.top
+        )
+        top = tuple(
+            (entry_mapper.name, entry_mapper.form) for entry_mapper in top_mappers
+        )
+        example_mappers = tuple(
+            mapping.MapToEntryForm(entry_record=entry) for entry in read.examples
+        )
         examples = tuple(
-            (entry.name, mapping._form(entry.form)) for entry in read.examples
+            (entry_mapper.name, entry_mapper.form) for entry_mapper in example_mappers
+        )
+        declaration_mappers = tuple(
+            mapping.MapToDeclarationState(declaration_record=record)
+            for record in read.declarations
         )
         declarations = tuple(
-            (record.path, mapping._state(record.state), record.text)
-            for record in read.declarations
+            (declaration_mapper.path, declaration_mapper.state, declaration_mapper.text)
+            for declaration_mapper in declaration_mappers
         )
         spec = rules.RepoSpec(
             manifest=manifest,

@@ -8,7 +8,7 @@ import campaign.client.client as client
 import campaign.domain.campaign as campaign
 import campaign.domain.short_link as short_link
 import campaign.domain.values as values
-from tesser.errors import collect
+from tesser.errors import DomainError, InfraError, collect
 
 
 class CampaignService(ts.ApplicationService):
@@ -44,8 +44,34 @@ class CampaignService(ts.ApplicationService):
     def get_campaign(self, req: client.GetCampaignRequest) -> client.CampaignView:
         campaign_id = values.CampaignID(req.campaign_id)
         campaign_id_text = str(campaign_id)
-        found = self._repo.find(campaign_repository.FindCampaignRequest(campaign_id=campaign_id_text))
-        c = views.required_campaign(found, campaign_id_text)
+        find_campaign_request = campaign_repository.FindCampaignRequest(
+            campaign_id=campaign_id_text
+        )
+        found = self._repo.find(find_campaign_request)
+        campaign_spec_mapper = views.MapToCampaignSpec(
+            find_campaign_request=find_campaign_request, found_campaign=found
+        )
+        found_link_specs = tuple(
+            short_link.ShortLinkSpec(
+                slug=short_link_spec_mapper.slug,
+                target_url=short_link_spec_mapper.target_url,
+            )
+            for short_link_spec_mapper in campaign_spec_mapper.short_link_spec_mappers
+        )
+        found_campaign_spec = campaign.CampaignSpec(
+            id=campaign_spec_mapper.campaign_id,
+            window=values.DateWindowSpec(
+                start=campaign_spec_mapper.window_start,
+                end=campaign_spec_mapper.window_end,
+            ),
+            links=found_link_specs,
+        )
+        try:
+            c = campaign.Campaign(found_campaign_spec)
+        except DomainError as e:
+            raise InfraError(
+                f"corrupted campaign record {found_campaign_spec.id!r}: {e}"
+            ) from e
         view_links = tuple(str(link.slug) for link in c.links)
         return client.CampaignView(campaign_id=c.id, links=view_links)
 
@@ -57,8 +83,34 @@ class CampaignService(ts.ApplicationService):
         )
         campaign_id = values.CampaignID(req.campaign_id)
         campaign_id_text = str(campaign_id)
-        found = self._repo.find(campaign_repository.FindCampaignRequest(campaign_id=campaign_id_text))
-        c = views.required_campaign(found, campaign_id_text)
+        find_campaign_request = campaign_repository.FindCampaignRequest(
+            campaign_id=campaign_id_text
+        )
+        found = self._repo.find(find_campaign_request)
+        campaign_spec_mapper = views.MapToCampaignSpec(
+            find_campaign_request=find_campaign_request, found_campaign=found
+        )
+        found_link_specs = tuple(
+            short_link.ShortLinkSpec(
+                slug=short_link_spec_mapper.slug,
+                target_url=short_link_spec_mapper.target_url,
+            )
+            for short_link_spec_mapper in campaign_spec_mapper.short_link_spec_mappers
+        )
+        found_campaign_spec = campaign.CampaignSpec(
+            id=campaign_spec_mapper.campaign_id,
+            window=values.DateWindowSpec(
+                start=campaign_spec_mapper.window_start,
+                end=campaign_spec_mapper.window_end,
+            ),
+            links=found_link_specs,
+        )
+        try:
+            c = campaign.Campaign(found_campaign_spec)
+        except DomainError as e:
+            raise InfraError(
+                f"corrupted campaign record {found_campaign_spec.id!r}: {e}"
+            ) from e
         c.add_link(short_link.ShortLinkSpec(slug=req.slug, target_url=req.target_url))
         window_start = str(c.window.start)
         window_end = str(c.window.end)
@@ -80,8 +132,34 @@ class CampaignService(ts.ApplicationService):
     def deactivate_link(self, req: client.DeactivateLinkRequest) -> client.CampaignView:
         campaign_id = values.CampaignID(req.campaign_id)
         campaign_id_text = str(campaign_id)
-        found = self._repo.find(campaign_repository.FindCampaignRequest(campaign_id=campaign_id_text))
-        c = views.required_campaign(found, campaign_id_text)
+        find_campaign_request = campaign_repository.FindCampaignRequest(
+            campaign_id=campaign_id_text
+        )
+        found = self._repo.find(find_campaign_request)
+        campaign_spec_mapper = views.MapToCampaignSpec(
+            find_campaign_request=find_campaign_request, found_campaign=found
+        )
+        found_link_specs = tuple(
+            short_link.ShortLinkSpec(
+                slug=short_link_spec_mapper.slug,
+                target_url=short_link_spec_mapper.target_url,
+            )
+            for short_link_spec_mapper in campaign_spec_mapper.short_link_spec_mappers
+        )
+        found_campaign_spec = campaign.CampaignSpec(
+            id=campaign_spec_mapper.campaign_id,
+            window=values.DateWindowSpec(
+                start=campaign_spec_mapper.window_start,
+                end=campaign_spec_mapper.window_end,
+            ),
+            links=found_link_specs,
+        )
+        try:
+            c = campaign.Campaign(found_campaign_spec)
+        except DomainError as e:
+            raise InfraError(
+                f"corrupted campaign record {found_campaign_spec.id!r}: {e}"
+            ) from e
         c.deactivate_link(values.Slug(req.slug))
         window_start = str(c.window.start)
         window_end = str(c.window.end)

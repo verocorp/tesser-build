@@ -47,3 +47,10 @@ class ShortLinks(ts.Entity):
                 link.deactivate()
                 return
         raise not_found("link_missing", f"no short link with slug {slug}")
+
+    def active_target(self, slug: values.Slug) -> values.TargetURL:
+        active = values.LinkStatus("active")
+        for link in self._links:
+            if link.slug == slug and link.status == active:
+                return link.target_url
+        raise not_found("link_missing", f"no active link for slug {slug}")

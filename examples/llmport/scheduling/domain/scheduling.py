@@ -144,3 +144,14 @@ class Booking(ts.AggregateRoot):
         if str(self._step) != CONFIRM:
             raise ValueError(f"not available at step {self._step}")
         self._step = Step(BOOKED)
+
+    def settle(self, reoffers: tuple[tuple[Slot, ...], ...]) -> None:
+        if str(self._step) != BOOKED:
+            raise ValueError(f"not available at step {self._step}")
+        for offered in reoffers:
+            if not offered:
+                raise ValueError("no slots are available")
+            self._offered = offered
+            self._chosen = None
+            self._step = Step(CHOOSE_SLOT)
+            return

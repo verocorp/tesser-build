@@ -45,7 +45,13 @@ class BookingService(ts.ApplicationService):
         booking_id = domain.BookingID(request.booking_id)
         booking_id_text = str(booking_id)
         found = self._repository.find(booking_repository.FindBookingRequest(booking_id=booking_id_text))
-        booking = views.loaded(found)
+        booking_spec_mapper = views.MapToBookingSpec(found_booking=found)
+        booking = domain.Booking(domain.BookingSpec(
+            step=booking_spec_mapper.step,
+            name=booking_spec_mapper.name,
+            chosen=booking_spec_mapper.chosen,
+            offered=booking_spec_mapper.offered,
+        ))
         available = self._directory.available(slot_directory.AvailableSlotsRequest())
         offered = tuple(domain.Slot(label) for label in available.slots)
         booking.provide_name(domain.CustomerName(request.name), offered)
@@ -73,7 +79,13 @@ class BookingService(ts.ApplicationService):
         booking_id = domain.BookingID(request.booking_id)
         booking_id_text = str(booking_id)
         found = self._repository.find(booking_repository.FindBookingRequest(booking_id=booking_id_text))
-        booking = views.loaded(found)
+        booking_spec_mapper = views.MapToBookingSpec(found_booking=found)
+        booking = domain.Booking(domain.BookingSpec(
+            step=booking_spec_mapper.step,
+            name=booking_spec_mapper.name,
+            chosen=booking_spec_mapper.chosen,
+            offered=booking_spec_mapper.offered,
+        ))
         booking.choose_slot(domain.Slot(request.slot))
         stored_name = booking.name()
         stored_chosen = booking.chosen()
@@ -99,19 +111,30 @@ class BookingService(ts.ApplicationService):
         booking_id = domain.BookingID(request.booking_id)
         booking_id_text = str(booking_id)
         found = self._repository.find(booking_repository.FindBookingRequest(booking_id=booking_id_text))
-        booking = views.loaded(found)
+        booking_spec_mapper = views.MapToBookingSpec(found_booking=found)
+        booking = domain.Booking(domain.BookingSpec(
+            step=booking_spec_mapper.step,
+            name=booking_spec_mapper.name,
+            chosen=booking_spec_mapper.chosen,
+            offered=booking_spec_mapper.offered,
+        ))
         booking.confirm()
         chosen_slot = booking.chosen()
         customer_name = booking.name()
         slot, name = str(chosen_slot), str(customer_name)
         reserved = self._directory.reserve(slot_directory.ReserveSlotRequest(slot=slot, name=name))
-        only = views.only(found)
-        settled = views.confirmed(reserved, booking, only)
-        stored_name = settled.name()
-        stored_chosen = settled.chosen()
-        stored_step = settled.step()
+        confirm_reply = views.confirm_reply(reserved, booking)
+        settled_booking_mapper = views.MapToSettledBooking(reserved_slot=reserved)
+        reoffers = tuple(
+            tuple(domain.Slot(label) for label in reoffered_slots_mapper.slots)
+            for reoffered_slots_mapper in settled_booking_mapper.reoffered_slots_mappers
+        )
+        booking.settle(reoffers)
+        stored_name = booking.name()
+        stored_chosen = booking.chosen()
+        stored_step = booking.step()
         stored_step_text = str(stored_step)
-        stored_offered = settled.offered()
+        stored_offered = booking.offered()
         offered_slots = tuple(str(slot) for slot in stored_offered)
         save_booking_request = booking_repository.SaveBookingRequest(
             booking_id=booking_id_text,
@@ -121,7 +144,6 @@ class BookingService(ts.ApplicationService):
             offered=offered_slots,
         )
         self._repository.save(save_booking_request)
-        confirm_reply = views.confirm_reply(reserved, booking)
         return client.BookingStateResponse(
             step=stored_step_text, offered_slots=offered_slots, reply=confirm_reply
         )
@@ -130,7 +152,13 @@ class BookingService(ts.ApplicationService):
         booking_id = domain.BookingID(request.booking_id)
         booking_id_text = str(booking_id)
         found = self._repository.find(booking_repository.FindBookingRequest(booking_id=booking_id_text))
-        loaded = views.loaded(found)
+        booking_spec_mapper = views.MapToBookingSpec(found_booking=found)
+        loaded = domain.Booking(domain.BookingSpec(
+            step=booking_spec_mapper.step,
+            name=booking_spec_mapper.name,
+            chosen=booking_spec_mapper.chosen,
+            offered=booking_spec_mapper.offered,
+        ))
         loaded_step = loaded.step()
         loaded_step_text = str(loaded_step)
         loaded_offered = loaded.offered()
