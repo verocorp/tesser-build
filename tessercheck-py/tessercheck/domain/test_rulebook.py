@@ -1,129 +1,143 @@
 from __future__ import annotations
 
-import ast
-
 import pytest
 
 import tessercheck.domain.rulebook as rulebook
 
 
 def test_a_violation_call_takes_four_positional_args() -> None:
-    tree = ast.parse(
+    checks_text = (
         "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _module_violations(self) -> None:\n"
         "        Violation('only-message; a clause')\n"
     )
     with pytest.raises(RuntimeError, match="exactly the four"):
-        rulebook.rule_rows(tree)
+        rulebook.render(checks_text, (), "")
 
 
 def test_a_violation_code_must_be_literal_or_bound() -> None:
-    tree = ast.parse(
+    checks_text = (
         "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _module_violations(self) -> None:\n"
         "        Violation(p, 1, computed, 'head; a clause')\n"
     )
     with pytest.raises(RuntimeError, match="neither a literal"):
-        rulebook.rule_rows(tree)
+        rulebook.render(checks_text, (), "")
 
 
 def test_one_clause_carries_one_code() -> None:
-    tree = ast.parse(
+    checks_text = (
         "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _module_violations(self) -> None:\n"
         "        Violation('p', 1, 'TB040', 'a head; one shared clause')\n"
         "        Violation('p', 1, 'TB041', 'b head; one shared clause')\n"
     )
     with pytest.raises(RuntimeError, match="one clause has one code"):
-        rulebook.rule_rows(tree)
+        rulebook.render(checks_text, (), "")
 
 
 def test_a_message_without_a_normative_clause_is_rejected() -> None:
-    tree = ast.parse(
+    checks_text = (
         "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _module_violations(self) -> None:\n"
         "        Violation('p', 1, 'TB040', 'a bare head with no tail')\n"
     )
     with pytest.raises(RuntimeError, match="normative clause"):
-        rulebook.rule_rows(tree)
+        rulebook.render(checks_text, (), "")
 
 
 def test_a_clause_carrying_a_hole_is_rejected() -> None:
-    tree = ast.parse(
+    checks_text = (
         "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _module_violations(self) -> None:\n"
         "        Violation('p', 1, 'TB040', f'head; a clause about {target}')\n"
     )
     with pytest.raises(RuntimeError, match="not a literal"):
-        rulebook.rule_rows(tree)
+        rulebook.render(checks_text, (), "")
 
 
 def test_a_message_hole_with_no_reader_name_is_rejected() -> None:
-    tree = ast.parse(
+    checks_text = (
         "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _module_violations(self) -> None:\n"
         "        Violation('p', 1, 'TB040', f'{mystery} head; a clause')\n"
     )
     with pytest.raises(RuntimeError, match="extend HOLE_NAMES"):
-        rulebook.rule_rows(tree)
+        rulebook.render(checks_text, (), "")
 
 
 def test_a_subject_with_no_applies_to_entry_is_rejected() -> None:
-    tree = ast.parse(
+    checks_text = (
         "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _unmapped_violations(self) -> None:\n"
         "        Violation('p', 1, 'TB040', 'head; a clause')\n"
     )
     with pytest.raises(RuntimeError, match="APPLIES_TO"):
-        rulebook.rule_rows(tree)
+        rulebook.render(checks_text, (), "")
 
 
 def test_a_checks_module_without_the_block_name_map_is_rejected() -> None:
-    tree = ast.parse(
+    checks_text = (
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _module_violations(self) -> None:\n"
         "        Violation('p', 1, 'TB040', 'head; a clause')\n"
     )
     with pytest.raises(RuntimeError, match="TS_NAME_BY_BLOCK"):
-        rulebook.rule_rows(tree)
+        rulebook.render(checks_text, (), "")
 
 
 def test_a_row_carries_the_code_the_reach_and_every_source_line() -> None:
-    tree = ast.parse(
+    checks_text = (
         "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _comment_violations(self) -> None:\n"
         "        Violation('p', 1, 'TB020', 'first shape; the shared tail')\n"
         "        Violation('p', 2, 'TB020', 'second shape; the shared tail')\n"
     )
-    rows = rulebook.rule_rows(tree)
-    assert len(rows) == 1
-    assert str(rows[0].code()) == "TB020"
-    assert str(rows[0].clause()) == "the shared tail"
-    assert str(rows[0].applies_to()) == "every module"
-    assert [str(shape) for shape in rows[0].shapes()] == ["first shape", "second shape"]
-    assert [int(line) for line in rows[0].linenos()] == [4, 5]
+    rendered = rulebook.render(checks_text, (), "")
+    rows = [line for line in rendered.splitlines() if line.startswith("| TB")]
+    assert rows == [
+        "| TB020 | the shared tail | every module | first shape · second shape "
+        "| domain/checks.py:5,6 | NONE |"
+    ]
 
 
 def test_a_hole_prefix_is_stripped_from_the_fires_when_shape() -> None:
-    tree = ast.parse(
+    checks_text = (
         "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _comment_violations(self) -> None:\n"
         "        Violation('p', 1, 'TB020', f'{where} says nothing; the tail')\n"
     )
-    rows = rulebook.rule_rows(tree)
-    assert [str(shape) for shape in rows[0].shapes()] == ["says nothing"]
+    rendered = rulebook.render(checks_text, (), "")
+    assert "| TB020 | the tail | every module | says nothing |" in rendered
 
 
 def test_an_assert_literal_containing_the_clause_is_the_fixture() -> None:
+    checks_text = (
+        "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
+        "class Codebase:\n"
+        "    def _comment_violations(self) -> None:\n"
+        "        Violation('p', 1, 'TB020', 'a shape; the shared tail')\n"
+    )
     modules = (
         (
             "a/test_thing.py",
@@ -133,14 +147,18 @@ def test_an_assert_literal_containing_the_clause_is_the_fixture() -> None:
             "    assert y, 'the shared tail'\n",
         ),
     )
-    assertions = rulebook.test_assertions(modules)
-    assert rulebook.covering_tests("the shared tail", assertions) == (
-        "test_the_tail_is_locked",
-    )
-    assert rulebook.covering_tests("an unwritten tail", assertions) == ()
+    rendered = rulebook.render(checks_text, modules, "")
+    assert "| domain/checks.py:5 | test_the_tail_is_locked |" in rendered
 
 
 def test_contracts_pair_each_section_id_with_its_name() -> None:
+    checks_text = (
+        "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
+        "class Codebase:\n"
+        "    def _comment_violations(self) -> None:\n"
+        "        Violation('p', 1, 'TB020', 'a shape; the rendered tail')\n"
+    )
     text = (
         "[importlinter]\n"
         "root_packages =\n"
@@ -153,10 +171,9 @@ def test_contracts_pair_each_section_id_with_its_name() -> None:
         "[importlinter:contract:client-is-thin]\n"
         "name = the client DTOs stay thin\n"
     )
-    assert rulebook.contracts(text) == (
-        ("domain-is-pure", "domain imports nothing"),
-        ("client-is-thin", "the client DTOs stay thin"),
-    )
+    rendered = rulebook.render(checks_text, (), text)
+    assert "| domain-is-pure | domain imports nothing |" in rendered
+    assert "| client-is-thin | the client DTOs stay thin |" in rendered
 
 
 def test_render_reports_an_uncovered_rule_as_none() -> None:

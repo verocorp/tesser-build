@@ -2,81 +2,146 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import tessercheck.adapters.handlers.cli as cli
-from app.loader import load
-from protocol.cli import CliResponse, UsageError
-from srv.cli.rules import dispatch, respond, settle
+import pytest
+
+from srv.cli.rules import run
 
 
-def test_a_usage_error_becomes_exit_code_two_with_the_usage_line() -> None:
-    def raising() -> CliResponse:
-        raise UsageError("unexpected extra arguments")
-
-    resp = respond(raising)
-    assert resp.exit_code == 2
-    assert resp.stdout == ""
-    assert "usage: python -m srv.cli.rules" in resp.stderr
-
-
-def test_the_host_never_leaks_internals_on_the_unexpected_path() -> None:
-    def raising() -> CliResponse:
-        raise RuntimeError("secret stack detail")
-
-    resp = respond(raising)
-    assert resp.exit_code == 1
-    assert "secret" not in resp.stderr
-    assert resp.stderr == "unexpected error"
-
-
-def test_an_extra_argument_dispatches_to_exit_code_two() -> None:
-    app = load()
-    try:
-        resp = dispatch(cli.Handler(app.tessercheck.client), [".", "surplus"])
-        assert resp.exit_code == 2
-        assert resp.stdout == ""
-    finally:
-        app.close()
+def test_a_usage_error_becomes_exit_code_two_with_the_usage_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "tessercheck" / "domain").mkdir(parents=True)
+    (tmp_path / "tessercheck" / "domain" / "checks.py").write_text(
+        "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
+        "class Codebase:\n"
+        "    def _comment_violations(self) -> None:\n"
+        "        Violation('p', 1, 'TB020', 'a shape; the rendered tail')\n"
+    )
+    (tmp_path / "tessercheck" / "tests").mkdir(parents=True)
+    (tmp_path / "tessercheck" / "tests" / "test_checks.py").write_text("")
+    (tmp_path / ".importlinter").write_text("")
+    assert run([str(tmp_path), "surplus"]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "unexpected extra arguments" in captured.err
+    assert "usage: python -m srv.cli.rules" in captured.err
+    assert not (tmp_path / "RULES.md").exists()
 
 
-def test_a_tree_dispatches_to_a_rendered_rulebook_on_stdout() -> None:
-    root = Path(__file__).resolve().parents[2]
-    app = load()
-    try:
-        resp = dispatch(cli.Handler(app.tessercheck.client), [str(root)])
-        assert resp.exit_code == 0
-        assert resp.stdout.startswith("# Rules implemented in the spike")
-        assert resp.stderr == ""
-    finally:
-        app.close()
+def test_the_host_never_leaks_internals_on_the_unexpected_path(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "tessercheck" / "domain").mkdir(parents=True)
+    (tmp_path / "tessercheck" / "domain" / "checks.py").write_text(
+        "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
+        "class Codebase:\n"
+        "    def _comment_violations(self) -> None:\n"
+        "        Violation('p', 1, 'TB020', 'a shape; the rendered tail')\n"
+    )
+    (tmp_path / "tessercheck" / "tests").mkdir(parents=True)
+    (tmp_path / "tessercheck" / "tests" / "test_checks.py").write_text("")
+    (tmp_path / ".importlinter").write_text("")
+    assert run([f"{tmp_path}/"]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "trailing separator" not in captured.err
+    assert captured.err == "unexpected error\n"
 
 
-def test_settling_without_check_writes_the_rendering(tmp_path: Path) -> None:
-    output = tmp_path / "RULES.md"
-    assert settle("| a row |\n", output, False) == 0
-    assert output.read_text() == "| a row |\n"
+def test_a_tree_renders_the_rulebook_into_the_output(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "tessercheck" / "domain").mkdir(parents=True)
+    (tmp_path / "tessercheck" / "domain" / "checks.py").write_text(
+        "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
+        "class Codebase:\n"
+        "    def _comment_violations(self) -> None:\n"
+        "        Violation('p', 1, 'TB020', 'a shape; the rendered tail')\n"
+    )
+    (tmp_path / "tessercheck" / "tests").mkdir(parents=True)
+    (tmp_path / "tessercheck" / "tests" / "test_checks.py").write_text("")
+    (tmp_path / ".importlinter").write_text("")
+    assert run([str(tmp_path)]) == 0
+    assert "wrote " in capsys.readouterr().out
+    rendered = (tmp_path / "RULES.md").read_text()
+    assert rendered.startswith("# Rules implemented in the spike")
+    assert "| TB020 | the rendered tail | every module | a shape |" in rendered
 
 
-def test_settling_without_check_replaces_a_stale_rendering(tmp_path: Path) -> None:
-    output = tmp_path / "RULES.md"
-    output.write_text("| an old row |\n")
-    assert settle("| a new row |\n", output, False) == 0
-    assert output.read_text() == "| a new row |\n"
+def test_rendering_replaces_a_stale_output(tmp_path: Path) -> None:
+    (tmp_path / "tessercheck" / "domain").mkdir(parents=True)
+    (tmp_path / "tessercheck" / "domain" / "checks.py").write_text(
+        "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
+        "class Codebase:\n"
+        "    def _comment_violations(self) -> None:\n"
+        "        Violation('p', 1, 'TB020', 'a shape; the rendered tail')\n"
+    )
+    (tmp_path / "tessercheck" / "tests").mkdir(parents=True)
+    (tmp_path / "tessercheck" / "tests" / "test_checks.py").write_text("")
+    (tmp_path / ".importlinter").write_text("")
+    (tmp_path / "RULES.md").write_text("| an old row |\n")
+    assert run([str(tmp_path)]) == 0
+    assert "| an old row |" not in (tmp_path / "RULES.md").read_text()
 
 
-def test_checking_a_matching_rendering_settles_at_zero(tmp_path: Path) -> None:
-    output = tmp_path / "RULES.md"
-    output.write_text("| a row |\n")
-    assert settle("| a row |\n", output, True) == 0
+def test_checking_a_matching_output_settles_at_zero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "tessercheck" / "domain").mkdir(parents=True)
+    (tmp_path / "tessercheck" / "domain" / "checks.py").write_text(
+        "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
+        "class Codebase:\n"
+        "    def _comment_violations(self) -> None:\n"
+        "        Violation('p', 1, 'TB020', 'a shape; the rendered tail')\n"
+    )
+    (tmp_path / "tessercheck" / "tests").mkdir(parents=True)
+    (tmp_path / "tessercheck" / "tests" / "test_checks.py").write_text("")
+    (tmp_path / ".importlinter").write_text("")
+    assert run([str(tmp_path)]) == 0
+    capsys.readouterr()
+    assert run([str(tmp_path), "--check"]) == 0
+    assert "RULES.md is current" in capsys.readouterr().out
 
 
-def test_checking_a_stale_rendering_settles_at_one(tmp_path: Path) -> None:
-    output = tmp_path / "RULES.md"
-    output.write_text("| an old row |\n")
-    assert settle("| a new row |\n", output, True) == 1
-    assert output.read_text() == "| an old row |\n"
+def test_checking_a_stale_output_settles_at_one(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "tessercheck" / "domain").mkdir(parents=True)
+    (tmp_path / "tessercheck" / "domain" / "checks.py").write_text(
+        "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
+        "class Codebase:\n"
+        "    def _comment_violations(self) -> None:\n"
+        "        Violation('p', 1, 'TB020', 'a shape; the rendered tail')\n"
+    )
+    (tmp_path / "tessercheck" / "tests").mkdir(parents=True)
+    (tmp_path / "tessercheck" / "tests" / "test_checks.py").write_text("")
+    (tmp_path / ".importlinter").write_text("")
+    (tmp_path / "RULES.md").write_text("| an old row |\n")
+    assert run([str(tmp_path), "--check"]) == 1
+    assert "RULES.md is stale" in capsys.readouterr().err
+    assert (tmp_path / "RULES.md").read_text() == "| an old row |\n"
 
 
-def test_checking_a_missing_rendering_settles_at_one(tmp_path: Path) -> None:
-    output = tmp_path / "RULES.md"
-    assert settle("| a row |\n", output, True) == 1
-    assert not output.exists()
+def test_checking_a_missing_output_settles_at_one(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "tessercheck" / "domain").mkdir(parents=True)
+    (tmp_path / "tessercheck" / "domain" / "checks.py").write_text(
+        "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
+        "class Codebase:\n"
+        "    def _comment_violations(self) -> None:\n"
+        "        Violation('p', 1, 'TB020', 'a shape; the rendered tail')\n"
+    )
+    (tmp_path / "tessercheck" / "tests").mkdir(parents=True)
+    (tmp_path / "tessercheck" / "tests" / "test_checks.py").write_text("")
+    (tmp_path / ".importlinter").write_text("")
+    assert run([str(tmp_path), "--check"]) == 1
+    assert "RULES.md is stale" in capsys.readouterr().err
+    assert not (tmp_path / "RULES.md").exists()

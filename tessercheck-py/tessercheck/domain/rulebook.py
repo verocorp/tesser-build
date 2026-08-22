@@ -187,153 +187,49 @@ class RuleRow(ts.ValueObject):
 
 
 @ts.do_not_use_function
-def _ts_name_map(tree: ast.Module) -> dict[str, str]:  # tesser:debt TB051
-    for node in tree.body:
+def render(  # tesser:debt TB051
+    checks_text: str,
+    test_modules: tuple[tuple[str, str], ...] = (),
+    contracts_text: str = "",
+) -> str:
+    tree = ast.parse(checks_text)
+    assertions: list[tuple[str, tuple[str, ...]]] = []
+    for _, module_text in test_modules:
+        module_tree = ast.parse(module_text)
+        for fn in module_tree.body:
+            if not isinstance(fn, ast.FunctionDef) or not fn.name.startswith("test_"):
+                continue
+            literals: list[str] = []
+            for assert_node in ast.walk(fn):
+                if isinstance(assert_node, ast.Assert):
+                    for sub in ast.walk(assert_node):
+                        if (
+                            isinstance(sub, ast.Constant)
+                            and isinstance(sub.value, str)
+                            and len(sub.value) >= 8
+                        ):
+                            literals.append(sub.value)
+            assertions.append((fn.name, tuple(literals)))
+    ts_map: dict[str, str] | None = None
+    for ts_node in tree.body:
         if (
-            isinstance(node, ast.AnnAssign)
-            and isinstance(node.target, ast.Name)
-            and node.target.id == "TS_NAME_BY_BLOCK"
-            and isinstance(node.value, ast.Dict)
+            isinstance(ts_node, ast.AnnAssign)
+            and isinstance(ts_node.target, ast.Name)
+            and ts_node.target.id == "TS_NAME_BY_BLOCK"
+            and isinstance(ts_node.value, ast.Dict)
         ):
-            out: dict[str, str] = {}
-            for key, value in zip(node.value.keys, node.value.values):
+            ts_map = {}
+            for ts_key, ts_value in zip(ts_node.value.keys, ts_node.value.values):
                 if (
-                    isinstance(key, ast.Constant)
-                    and isinstance(key.value, str)
-                    and isinstance(value, ast.Constant)
-                    and isinstance(value.value, str)
+                    isinstance(ts_key, ast.Constant)
+                    and isinstance(ts_key.value, str)
+                    and isinstance(ts_value, ast.Constant)
+                    and isinstance(ts_value.value, str)
                 ):
-                    out[key.value] = value.value
-            return out
-    raise RuntimeError("TS_NAME_BY_BLOCK not found in checks.py")
-
-
-@ts.do_not_use_function
-def _instantiations(  # tesser:debt TB051
-    tree: ast.Module, method: ast.FunctionDef
-) -> list[dict[str, str | None]]:
-    params = [arg.arg for arg in method.args.args if arg.arg != "self"]
-    found: list[dict[str, str | None]] = []
-    for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and node.func.attr == method.name
-            and isinstance(node.func.value, ast.Name)
-            and node.func.value.id == "self"
-        ):
-            binding: dict[str, str | None] = {}
-            for name, arg in zip(params, node.args):
-                if isinstance(arg, ast.Constant) and (
-                    arg.value is None or isinstance(arg.value, str)
-                ):
-                    binding[name] = arg.value
-            if binding not in found:
-                found.append(binding)
-    return found or [{}]
-
-
-@ts.do_not_use_function
-def _local_aliases(method: ast.FunctionDef) -> dict[str, str]:  # tesser:debt TB051
-    out: dict[str, str] = {}
-    for node in method.body:
-        if (
-            isinstance(node, ast.Assign)
-            and len(node.targets) == 1
-            and isinstance(node.targets[0], ast.Name)
-            and isinstance(node.value, ast.Subscript)
-            and isinstance(node.value.value, ast.Name)
-            and node.value.value.id == "TS_NAME_BY_BLOCK"
-            and isinstance(node.value.slice, ast.Name)
-        ):
-            out[node.targets[0].id] = node.value.slice.id
-    return out
-
-
-@ts.do_not_use_function
-def _fill_hole(  # tesser:debt TB051
-    expr: ast.expr,
-    binding: dict[str, str | None],
-    aliases: dict[str, str],
-    ts_map: dict[str, str],
-    lineno: int,
-) -> str | None:
-    text = ast.unparse(expr)
-    if isinstance(expr, ast.Name) and expr.id in binding:
-        bound = binding[expr.id]
-        if bound is None:
-            return None
-        return bound
-    if text in HOLE_NAMES:
-        return HOLE_NAMES[text]
-    param: str | None = None
-    if isinstance(expr, ast.Name) and expr.id in aliases:
-        param = aliases[expr.id]
-    elif (
-        isinstance(expr, ast.Subscript)
-        and isinstance(expr.value, ast.Name)
-        and expr.value.id == "TS_NAME_BY_BLOCK"
-        and isinstance(expr.slice, ast.Name)
-    ):
-        param = expr.slice.id
-    if param is not None:
-        if param not in binding:
-            raise RuntimeError(
-                f"checks.py:{lineno}: hole {{{text}}} depends on caller argument {param!r} that is not a literal"
-            )
-        block = binding[param]
-        if block is None:
-            return None
-        return ts_map[block]
-    raise RuntimeError(
-        f"checks.py:{lineno}: no reader name for message hole {{{text}}}; extend HOLE_NAMES"
-    )
-
-
-@ts.do_not_use_function
-def _render_message(  # tesser:debt TB051
-    node: ast.expr,
-    binding: dict[str, str | None],
-    aliases: dict[str, str],
-    ts_map: dict[str, str],
-    lineno: int,
-) -> str | None:
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return str(node.value)
-    if not isinstance(node, ast.JoinedStr):
-        raise RuntimeError(
-            f"checks.py:{lineno}: violation message is not a literal or f-string"
-        )
-    parts: list[str] = []
-    for value in node.values:
-        if isinstance(value, ast.Constant) and isinstance(value.value, str):
-            parts.append(value.value)
-            continue
-        assert isinstance(value, ast.FormattedValue)
-        filled = _fill_hole(value.value, binding, aliases, ts_map, lineno)
-        if filled is None:
-            return None
-        parts.append(filled)
-    return "".join(parts)
-
-
-@ts.do_not_use_function
-def _protocol_package(tree: ast.Module) -> str:  # tesser:debt TB051
-    for node in tree.body:
-        if (
-            isinstance(node, ast.AnnAssign)
-            and isinstance(node.target, ast.Name)
-            and node.target.id == "PROTOCOL_PACKAGE"
-            and isinstance(node.value, ast.Constant)
-            and isinstance(node.value.value, str)
-        ):
-            return str(node.value.value)
-    raise RuntimeError("PROTOCOL_PACKAGE not found in checks.py")
-
-
-@ts.do_not_use_function
-def rule_rows(tree: ast.Module) -> tuple[RuleRow, ...]:  # tesser:debt TB051
-    ts_map = _ts_name_map(tree)
+                    ts_map[ts_key.value] = ts_value.value
+            break
+    if ts_map is None:
+        raise RuntimeError("TS_NAME_BY_BLOCK not found in checks.py")
     order: list[str] = []
     codes: dict[str, str] = {}
     applies: dict[str, str] = {}
@@ -350,8 +246,37 @@ def rule_rows(tree: ast.Module) -> tuple[RuleRow, ...]:  # tesser:debt TB051
             ]
             if not calls:
                 continue
-            aliases = _local_aliases(method)
-            for binding in _instantiations(tree, method):
+            aliases: dict[str, str] = {}
+            for alias_node in method.body:
+                if (
+                    isinstance(alias_node, ast.Assign)
+                    and len(alias_node.targets) == 1
+                    and isinstance(alias_node.targets[0], ast.Name)
+                    and isinstance(alias_node.value, ast.Subscript)
+                    and isinstance(alias_node.value.value, ast.Name)
+                    and alias_node.value.value.id == "TS_NAME_BY_BLOCK"
+                    and isinstance(alias_node.value.slice, ast.Name)
+                ):
+                    aliases[alias_node.targets[0].id] = alias_node.value.slice.id
+            params = [arg.arg for arg in method.args.args if arg.arg != "self"]
+            bindings: list[dict[str, str | None]] = []
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == method.name
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "self"
+                ):
+                    bound_args: dict[str, str | None] = {}
+                    for name, arg in zip(params, node.args):
+                        if isinstance(arg, ast.Constant) and (
+                            arg.value is None or isinstance(arg.value, str)
+                        ):
+                            bound_args[name] = arg.value
+                    if bound_args not in bindings:
+                        bindings.append(bound_args)
+            for binding in bindings or [{}]:
                 for call in calls:
                     if call.keywords or len(call.args) != 4:
                         raise RuntimeError(
@@ -372,11 +297,63 @@ def rule_rows(tree: ast.Module) -> tuple[RuleRow, ...]:  # tesser:debt TB051
                         )
                     if code is None:
                         continue
-                    message = _render_message(
-                        call.args[3], binding, aliases, ts_map, call.lineno
-                    )
-                    if message is None:
-                        continue
+                    message_node = call.args[3]
+                    if isinstance(message_node, ast.Constant) and isinstance(
+                        message_node.value, str
+                    ):
+                        message = str(message_node.value)
+                    else:
+                        if not isinstance(message_node, ast.JoinedStr):
+                            raise RuntimeError(
+                                f"checks.py:{call.lineno}: violation message is not a literal or f-string"
+                            )
+                        parts: list[str] = []
+                        dropped = False
+                        for value in message_node.values:
+                            if isinstance(value, ast.Constant) and isinstance(
+                                value.value, str
+                            ):
+                                parts.append(value.value)
+                                continue
+                            assert isinstance(value, ast.FormattedValue)
+                            expr = value.value
+                            text = ast.unparse(expr)
+                            if isinstance(expr, ast.Name) and expr.id in binding:
+                                bound = binding[expr.id]
+                                if bound is None:
+                                    dropped = True
+                                    break
+                                parts.append(bound)
+                                continue
+                            if text in HOLE_NAMES:
+                                parts.append(HOLE_NAMES[text])
+                                continue
+                            param: str | None = None
+                            if isinstance(expr, ast.Name) and expr.id in aliases:
+                                param = aliases[expr.id]
+                            elif (
+                                isinstance(expr, ast.Subscript)
+                                and isinstance(expr.value, ast.Name)
+                                and expr.value.id == "TS_NAME_BY_BLOCK"
+                                and isinstance(expr.slice, ast.Name)
+                            ):
+                                param = expr.slice.id
+                            if param is None:
+                                raise RuntimeError(
+                                    f"checks.py:{call.lineno}: no reader name for message hole {{{text}}}; extend HOLE_NAMES"
+                                )
+                            if param not in binding:
+                                raise RuntimeError(
+                                    f"checks.py:{call.lineno}: hole {{{text}}} depends on caller argument {param!r} that is not a literal"
+                                )
+                            block = binding[param]
+                            if block is None:
+                                dropped = True
+                                break
+                            parts.append(ts_map[block])
+                        if dropped:
+                            continue
+                        message = "".join(parts)
                     if "; " not in message:
                         raise RuntimeError(
                             f"checks.py:{call.lineno}: violation message lacks a '; <normative clause>' tail"
@@ -412,77 +389,6 @@ def rule_rows(tree: ast.Module) -> tuple[RuleRow, ...]:  # tesser:debt TB051
                         shapes[clause].append(shape)
                     if call.lineno not in linenos[clause]:
                         linenos[clause].append(call.lineno)
-    return tuple(
-        RuleRow(
-            clause,
-            codes[clause],
-            applies[clause],
-            tuple(shapes[clause]),
-            tuple(linenos[clause]),
-        )
-        for clause in order
-    )
-
-
-@ts.do_not_use_function
-def test_assertions(  # tesser:debt TB051
-    modules: tuple[tuple[str, str], ...] = (),
-) -> tuple[tuple[str, tuple[str, ...]], ...]:
-    out: list[tuple[str, tuple[str, ...]]] = []
-    for _, text in modules:
-        tree = ast.parse(text)
-        for fn in tree.body:
-            if not isinstance(fn, ast.FunctionDef) or not fn.name.startswith("test_"):
-                continue
-            literals: list[str] = []
-            for node in ast.walk(fn):
-                if isinstance(node, ast.Assert):
-                    for sub in ast.walk(node):
-                        if (
-                            isinstance(sub, ast.Constant)
-                            and isinstance(sub.value, str)
-                            and len(sub.value) >= 8
-                        ):
-                            literals.append(sub.value)
-            out.append((fn.name, tuple(literals)))
-    return tuple(out)
-
-
-@ts.do_not_use_function
-def covering_tests(  # tesser:debt TB051
-    clause: str, assertions: tuple[tuple[str, tuple[str, ...]], ...] = ()
-) -> tuple[str, ...]:
-    return tuple(
-        name
-        for name, literals in assertions
-        if any(clause in literal for literal in literals)
-    )
-
-
-@ts.do_not_use_function
-def contracts(text: str) -> tuple[tuple[str, str], ...]:  # tesser:debt TB051
-    found: list[tuple[str, str]] = []
-    contract_id = None
-    for line in text.splitlines():
-        header = re.match(r"\[importlinter:contract:(.+)\]", line.strip())
-        if header:
-            contract_id = header.group(1)
-            continue
-        name = re.match(r"name\s*=\s*(.+)", line.strip())
-        if name and contract_id is not None:
-            found.append((contract_id, name.group(1)))
-            contract_id = None
-    return tuple(found)
-
-
-@ts.do_not_use_function
-def render(  # tesser:debt TB051
-    checks_text: str,
-    test_modules: tuple[tuple[str, str], ...] = (),
-    contracts_text: str = "",
-) -> str:
-    tree = ast.parse(checks_text)
-    assertions = test_assertions(test_modules)
     lines = [
         "# Rules implemented in the spike",
         "",
@@ -498,17 +404,42 @@ def render(  # tesser:debt TB051
         "| Code | The rule | Applies to | Fires when | Source | Fixtures |",
         "|---|---|---|---|---|---|",
     ]
-    for row in rule_rows(tree):
-        covered = covering_tests(str(row.clause()), assertions)
+    for row in (
+        RuleRow(
+            clause,
+            codes[clause],
+            applies[clause],
+            tuple(shapes[clause]),
+            tuple(linenos[clause]),
+        )
+        for clause in order
+    ):
+        covered = tuple(
+            name
+            for name, literals in assertions
+            if any(str(row.clause()) in literal for literal in literals)
+        )
         coverage = ", ".join(covered) if covered else "NONE"
-        shapes = " · ".join(str(shape) for shape in row.shapes()).replace("|", "\\|")
+        shape_text = " · ".join(str(shape) for shape in row.shapes()).replace("|", "\\|")
         source = "domain/checks.py:" + ",".join(
             str(int(line)) for line in sorted(row.linenos(), key=int)
         )
         lines.append(
-            f"| {row.code()} | {row.clause()} | {row.applies_to()} | {shapes} | {source} | {coverage} |"
+            f"| {row.code()} | {row.clause()} | {row.applies_to()} | {shape_text} | {source} | {coverage} |"
         )
-    package = _protocol_package(tree)
+    package: str | None = None
+    for node in tree.body:
+        if (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == "PROTOCOL_PACKAGE"
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+        ):
+            package = str(node.value.value)
+            break
+    if package is None:
+        raise RuntimeError("PROTOCOL_PACKAGE not found in checks.py")
     lines += [
         "",
         "## Named exemptions (carve-outs the code makes on purpose, not rules)",
@@ -527,8 +458,16 @@ def render(  # tesser:debt TB051
         "| Contract | Rule |",
         "|---|---|",
     ]
-    for contract_id, name in contracts(contracts_text):
-        lines.append(f"| {contract_id} | {name} |")
+    contract_id = None
+    for contract_line in contracts_text.splitlines():
+        header = re.match(r"\[importlinter:contract:(.+)\]", contract_line.strip())
+        if header:
+            contract_id = header.group(1)
+            continue
+        name_match = re.match(r"name\s*=\s*(.+)", contract_line.strip())
+        if name_match and contract_id is not None:
+            lines.append(f"| {contract_id} | {name_match.group(1)} |")
+            contract_id = None
     lines += [
         "",
         "Import contracts are verified by violation-injection runs during development;",

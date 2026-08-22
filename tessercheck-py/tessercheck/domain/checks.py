@@ -664,17 +664,6 @@ class Debt(ts.ValueObject):
         object.__setattr__(self, "_scope", DebtScope("file" if file_level else "line"))
         object.__setattr__(self, "_form", DebtForm(form))
 
-    def _suppresses(self, violation: Violation) -> bool:  # tesser:debt TB051
-        if str(self._form) == "malformed":
-            return False
-        file_wide = str(self._scope) == "file"
-        if file_wide and not self._codes:
-            return False
-        if self._codes and violation.code() not in self._codes:
-            return False
-        return file_wide or violation.line() == self._line
-
-
 class ImportEdge(ts.ValueObject):
 
     _target: Target
@@ -735,8 +724,43 @@ class Module(ts.Entity):
             raise ValueError("module path must be non-empty")
         tree = ast.parse(spec.source)
         self._path = spec.path
-        self._comments = self._scan_comments(spec.source)
-        self._debts = self._debts_from(self._comments)
+        try:
+            tokens = list(tokenize.generate_tokens(io.StringIO(spec.source).readline))
+        except (tokenize.TokenError, IndentationError):
+            tokens = []
+        self._comments = tuple(
+            Comment(line=token.start[0], text=token.string)
+            for token in tokens
+            if token.type == tokenize.COMMENT
+        )
+        debts: list[Debt] = []
+        for comment in self._comments:
+            text = str(comment._text).lstrip("#").strip()
+            if text.startswith(DEBT_FILE_MARKER):
+                rest = text[len(DEBT_FILE_MARKER) :]
+                file_level = True
+            elif text.startswith(DEBT_MARKER):
+                rest = text[len(DEBT_MARKER) :]
+                file_level = False
+            else:
+                continue
+            if rest and rest[0] not in " \t":
+                continue
+            codes = tuple(part for part in rest.replace(",", " ").split() if part)
+            if any(not CODE_SHAPE.match(code) for code in codes):
+                debts.append(
+                    Debt(
+                        line=int(comment._line),
+                        codes=(),
+                        file_level=file_level,
+                        form="malformed",
+                    )
+                )
+                continue
+            debts.append(
+                Debt(line=int(comment._line), codes=codes, file_level=file_level)
+            )
+        self._debts = tuple(debts)
         self._name = spec.name
         self._is_package = spec.is_package
         parts = spec.name.split(".")
@@ -781,7 +805,11 @@ class Module(ts.Entity):
                     dots = "." * node.level
                     broken_relatives.append((dots + (node.module or ""), node.lineno))
                     continue
-                base = self._relative_base(node.level)
+                base = (
+                    ()
+                    if node.level == 0
+                    else self._package[: max(0, len(self._package) - (node.level - 1))]
+                )
                 if node.module is None:
                     for alias in node.names:
                         target = ".".join(base + (alias.name,))
@@ -814,52 +842,6 @@ class Module(ts.Entity):
         self._bound_names: tuple[tuple[str, str, str], ...] = tuple(
             (local, target, original) for local, (target, original) in self._imported.items()
         )
-
-    @staticmethod
-    def _scan_comments(source: str) -> tuple[Comment, ...]:  # tesser:debt TB051
-        try:
-            tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
-        except (tokenize.TokenError, IndentationError):
-            return ()
-        return tuple(
-            Comment(line=token.start[0], text=token.string)
-            for token in tokens
-            if token.type == tokenize.COMMENT
-        )
-
-    @staticmethod
-    def _debts_from(comments: tuple[Comment, ...]) -> tuple[Debt, ...]:  # tesser:debt TB051
-        found: list[Debt] = []
-        for comment in comments:
-            text = str(comment._text).lstrip("#").strip()
-            if text.startswith(DEBT_FILE_MARKER):
-                rest = text[len(DEBT_FILE_MARKER) :]
-                file_level = True
-            elif text.startswith(DEBT_MARKER):
-                rest = text[len(DEBT_MARKER) :]
-                file_level = False
-            else:
-                continue
-            if rest and rest[0] not in " \t":
-                continue
-            codes = tuple(part for part in rest.replace(",", " ").split() if part)
-            if any(not CODE_SHAPE.match(code) for code in codes):
-                found.append(
-                    Debt(
-                        line=int(comment._line),
-                        codes=(),
-                        file_level=file_level,
-                        form="malformed",
-                    )
-                )
-                continue
-            found.append(Debt(line=int(comment._line), codes=codes, file_level=file_level))
-        return tuple(found)
-
-    def _relative_base(self, level: int) -> tuple[str, ...]:  # tesser:debt TB051
-        if level == 0:
-            return ()
-        return self._package[: max(0, len(self._package) - (level - 1))]
 
     def name(self) -> str:
         return self._name
@@ -1017,43 +999,43 @@ class Codebase(ts.AggregateRoot):
             return declaration
         self._used_imports = set()
         found = list(self._broken)
-        found.extend(self._rule_violations())
-        found.extend(self._unused_import_violations())
-        kept: list[Violation] = []
-        used: set[tuple[str, Line]] = set()
-        by_path = {module.path(): module for module in self._modules}
-        for violation in found:
-            module = by_path.get(str(violation.path()))
-            suppressed = False
-            if module is not None:
-                for debt in module.debts():
-                    if debt._suppresses(violation):
-                        used.add((module.path(), debt._line))
-                        suppressed = True
-                if suppressed:
-                    continue
-            kept.append(violation)
-        kept = list(dict.fromkeys(kept))
+        blocks = dict(TESSER_BASE_BLOCKS)
+        changed = True
+        while changed:
+            changed = False
+            for module in self._modules:
+                for cls in module.class_defs():
+                    key = (module.name(), cls.name)
+                    if key in blocks:
+                        continue
+                    for base in cls.bases:
+                        base_key = module._resolve(base)
+                        if base_key is not None and base_key in blocks:
+                            blocks[key] = blocks[base_key]
+                            changed = True
+                            break
+                for local, target, original in module.bound_names():
+                    key = (module.name(), local)
+                    if key in blocks:
+                        continue
+                    source = blocks.get((target, original))
+                    if source is not None:
+                        blocks[key] = source
+                        changed = True
+        named: set[str] = set()
         for module in self._modules:
-            for debt in module.debts():
-                if (module.path(), debt._line) not in used:
-                    kept.append(
-                        Violation(
-                            module.path(),
-                            int(debt._line),
-                            "TB090",
-                            f"{module.name()} carries a debt marker that suppresses nothing; "
-                            "a debt marker suppresses an actual finding",
-                        )
-                    )
-        return tuple(kept)
-
-    def _rule_violations(self) -> tuple[Violation, ...]:  # tesser:debt TB051
-        blocks = self._classify()
-        contexts = self._contexts()
-        found: list[Violation] = []
+            parts = module.name().split(".")
+            if parts[0] in self._kernel_tops():
+                continue
+            if len(parts) >= 2 and parts[1] in ROLES:
+                named.add(parts[0])
+        contexts = frozenset(named)
         for module in self._modules:
-            found.extend(self._universal_violations(module))
+            found.extend(self._comment_violations(module))
+            found.extend(self._double_violations(module))
+            found.extend(self._shadowing_violations(module))
+            found.extend(self._string_equality_violations(module))
+            found.extend(self._private_method_violations(module))
             found.extend(self._dynamic_import_violations(module))
             found.extend(self._module_violations(module, blocks, contexts))
             if self._export == TESSER and self._locate(
@@ -1076,13 +1058,55 @@ class Codebase(ts.AggregateRoot):
                     found.extend(self._valueobject_violations(module, cls, blocks))
                     found.extend(self._vo_field_violations(module, cls))
                 if block in DOMAIN_BLOCKS:
-                    found.extend(self._shape_norm_violations(module, cls, block, blocks))
+                    fields = [
+                        (stmt.target.id, stmt.annotation, stmt.lineno)
+                        for stmt in cls.body
+                        if isinstance(stmt, ast.AnnAssign)
+                        and isinstance(stmt.target, ast.Name)
+                        and Codebase._annotation_head(stmt.annotation) != "ClassVar"
+                    ]
+                    leaf: str | None = None
+                    if len(fields) == 1:
+                        head = self._annotation_head(fields[0][1])
+                        if head in WRAPPABLE_SCALARS or head in NON_WRAPPABLE_SCALARS:
+                            leaf = head
+                    if block == "valueobject":
+                        found.extend(self._exposure_violations(module, cls, fields))
+                        found.extend(
+                            self._composition_violations(module, cls, fields, leaf)
+                        )
+                        found.extend(self._door_violations(module, cls))
+                        found.extend(self._exit_violations(module, cls, leaf))
+                    else:
+                        found.extend(self._copy_violations(module, cls, fields))
+                        found.extend(
+                            self._held_root_violations(module, cls, fields, blocks)
+                        )
+                        found.extend(self._structured_exit_violations(module, cls))
+                    found.extend(self._domain_return_violations(module, cls, blocks))
                 elif block == "spec":
                     found.extend(self._spec_violations(module, cls, blocks))
                 elif block in ("request", "response", "port_request", "port_response"):
                     found.extend(self._dto_violations(module, cls, blocks))
                 elif block == "client":
-                    found.extend(self._client_violations(module, cls, blocks))
+                    for item in cls.body:
+                        if not isinstance(
+                            item, (ast.FunctionDef, ast.AsyncFunctionDef)
+                        ) or item.name.startswith("_"):
+                            continue
+                        found.extend(
+                            self._signature_violations(
+                                module,
+                                f"{module.name()}.{cls.name}.{item.name}",
+                                item.lineno,
+                                item,
+                                "request",
+                                "response",
+                                "a client method",
+                                "TB081",
+                                blocks,
+                            )
+                        )
                 elif block in ("repository", "gateway", "handler"):
                     found.extend(self._record_signature_violations(module, cls, blocks, "an adapter"))
                 elif block == "port":
@@ -1095,33 +1119,83 @@ class Codebase(ts.AggregateRoot):
                     ):
                         found.extend(self._port_violations(module, cls, blocks))
                 elif block == "service":
-                    found.extend(self._service_violations(module, cls, blocks))
+                    methods = [
+                        item
+                        for item in cls.body
+                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    ]
+                    method_names = frozenset(method.name for method in methods)
+                    for item in methods:
+                        where = f"{module.name()}.{cls.name}.{item.name}"
+                        found.extend(
+                            self._delegation_violations(
+                                module, method_names, where, item
+                            )
+                        )
+                        if item.name == "__init__":
+                            found.extend(
+                                self._dependency_violations(
+                                    module, where, item.lineno, item, blocks
+                                )
+                            )
+                            continue
+                        if item.name.startswith("_"):
+                            continue
+                        found.extend(
+                            self._signature_violations(
+                                module,
+                                where,
+                                item.lineno,
+                                item,
+                                "request",
+                                "response",
+                                "a service method",
+                                "TB081",
+                                blocks,
+                            )
+                        )
+                        found.extend(
+                            self._body_violations(module, where, item, blocks)
+                        )
                 elif block == "mapper":
                     found.extend(self._mapper_violations(module, cls, blocks))
         found.extend(self._pairing_violations(contexts, blocks))
-        return tuple(found)
-
-    def _declaration_only(self, module: Module, blocks: dict[tuple[str, str], str]) -> bool:  # tesser:debt TB051
-        saw_class = False
-        for stmt in module.body():
-            if isinstance(stmt, (ast.Import, ast.ImportFrom)):
-                continue
-            if not isinstance(stmt, ast.ClassDef):
-                return False
-            if blocks.get((module.name(), stmt.name)) not in DECLARATION_BLOCKS:
-                return False
-            for item in stmt.body:
-                if not isinstance(item, ast.FunctionDef):
+        found.extend(self._unused_import_violations())
+        kept: list[Violation] = []
+        used: set[tuple[str, Line]] = set()
+        by_path = {module.path(): module for module in self._modules}
+        for violation in found:
+            owner = by_path.get(str(violation.path()))
+            suppressed = False
+            if owner is not None:
+                for debt in owner.debts():
+                    if str(debt._form) == "malformed":
+                        continue
+                    file_wide = str(debt._scope) == "file"
+                    if file_wide and not debt._codes:
+                        continue
+                    if debt._codes and violation.code() not in debt._codes:
+                        continue
+                    if file_wide or violation.line() == debt._line:
+                        used.add((owner.path(), debt._line))
+                        suppressed = True
+                if suppressed:
                     continue
-                if item.name == "__init__":
-                    continue
-                if len(item.body) == 1 and isinstance(item.body[0], ast.Expr) and isinstance(
-                    item.body[0].value, ast.Constant
-                ):
-                    continue
-                return False
-            saw_class = True
-        return saw_class
+            kept.append(violation)
+        kept = list(dict.fromkeys(kept))
+        for module in self._modules:
+            for debt in module.debts():
+                if (module.path(), debt._line) not in used:
+                    kept.append(
+                        Violation(
+                            module.path(),
+                            int(debt._line),
+                            "TB090",
+                            f"{module.name()} carries a debt marker that suppresses nothing; "
+                            "a debt marker suppresses an actual finding",
+                        )
+                    )
+        return tuple(kept)
 
     def _pairing_violations(  # tesser:debt TB051
         self, contexts: frozenset[str], blocks: dict[tuple[str, str], str]
@@ -1134,7 +1208,33 @@ class Codebase(ts.AggregateRoot):
             place = self._locate(module.name(), module.is_package(), contexts, self._export)
             parent = ".".join(parts[:-1])
             if place in PAIRED_PLACES and not module.is_package() and base != "__main__":
-                if self._declaration_only(module, blocks):
+                saw_class = False
+                declaration_only = True
+                for stmt in module.body():
+                    if isinstance(stmt, (ast.Import, ast.ImportFrom)):
+                        continue
+                    if not isinstance(stmt, ast.ClassDef) or blocks.get(
+                        (module.name(), stmt.name)
+                    ) not in DECLARATION_BLOCKS:
+                        declaration_only = False
+                        break
+                    for item in stmt.body:
+                        if not isinstance(item, ast.FunctionDef):
+                            continue
+                        if item.name == "__init__":
+                            continue
+                        if (
+                            len(item.body) == 1
+                            and isinstance(item.body[0], ast.Expr)
+                            and isinstance(item.body[0].value, ast.Constant)
+                        ):
+                            continue
+                        declaration_only = False
+                        break
+                    if not declaration_only:
+                        break
+                    saw_class = True
+                if declaration_only and saw_class:
                     continue
                 sibling = (parent + "." if parent else "") + "test_" + base
                 if sibling not in names:
@@ -1172,16 +1272,6 @@ class Codebase(ts.AggregateRoot):
             module.name() == target or module.name().startswith(target + ".")
             for module in self._modules
         )
-
-    def _contexts(self) -> frozenset[str]:  # tesser:debt TB051
-        found: set[str] = set()
-        for module in self._modules:
-            parts = module.name().split(".")
-            if parts[0] in self._kernel_tops():
-                continue
-            if len(parts) >= 2 and parts[1] in ROLES:
-                found.add(parts[0])
-        return frozenset(found)
 
     @staticmethod
     def _locate(  # tesser:debt TB051
@@ -1411,9 +1501,28 @@ class Codebase(ts.AggregateRoot):
             for stmt in module.body()
         )
 
+    @staticmethod
+    def _names_module(module: Module, node: ast.expr, package: str) -> bool:  # tesser:debt TB051
+        return (
+            isinstance(node, ast.Name)
+            and module._package_aliases.get(node.id) == package
+        )
+
     def _dynamic_import_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
         found: list[Violation] = []
-        rebound = self._rebound_importers(module)
+        bound: set[str] = set()
+        for assignment in module.assignments():
+            if assignment.value is None:
+                continue
+            if not self._reaches_importlib(module, assignment.value):
+                continue
+            targets = (
+                assignment.targets
+                if isinstance(assignment, ast.Assign)
+                else [assignment.target]
+            )
+            bound.update(t.id for t in targets if isinstance(t, ast.Name))
+        rebound = frozenset(bound)
         for lookup in module.subscripts():
             if (
                 isinstance(lookup.value, ast.Attribute)
@@ -1431,7 +1540,12 @@ class Codebase(ts.AggregateRoot):
                 )
         for node in module.calls():
             callee = node.func
-            named = self._dynamic_import_name(module, callee, rebound)
+            if isinstance(callee, ast.Name) and callee.id in rebound:
+                named: str | None = f"{IMPORTLIB}.{callee.id}"
+            elif self._reaches_importlib(module, callee):
+                named = f"{IMPORTLIB}.{ast.unparse(callee).rsplit('.', 1)[-1]}"
+            else:
+                named = None
             if named is not None:
                 found.append(
                     Violation(
@@ -1460,46 +1574,13 @@ class Codebase(ts.AggregateRoot):
                 or (origin[0] == BUILTINS and origin[1] == BUILTIN_IMPORT)
             )
         if isinstance(node, ast.Call):
-            return cls._is_getattr_of_importlib(module, node)
+            return (
+                isinstance(node.func, ast.Name)
+                and node.func.id == "getattr"
+                and bool(node.args)
+                and cls._names_module(module, node.args[0], IMPORTLIB)
+            )
         return False
-
-    @classmethod
-    def _is_getattr_of_importlib(cls, module: Module, node: ast.Call) -> bool:  # tesser:debt TB051
-        return (
-            isinstance(node.func, ast.Name)
-            and node.func.id == "getattr"
-            and bool(node.args)
-            and cls._names_module(module, node.args[0], IMPORTLIB)
-        )
-
-    @staticmethod
-    def _names_module(module: Module, node: ast.expr, package: str) -> bool:  # tesser:debt TB051
-        return (
-            isinstance(node, ast.Name)
-            and module._package_aliases.get(node.id) == package
-        )
-
-    @classmethod
-    def _rebound_importers(cls, module: Module) -> frozenset[str]:  # tesser:debt TB051
-        found: set[str] = set()
-        for node in module.assignments():
-            if node.value is None:
-                continue
-            if not cls._reaches_importlib(module, node.value):
-                continue
-            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-            found.update(t.id for t in targets if isinstance(t, ast.Name))
-        return frozenset(found)
-
-    @classmethod
-    def _dynamic_import_name(  # tesser:debt TB051
-        cls, module: Module, callee: ast.expr, rebound: frozenset[str]
-    ) -> str | None:
-        if isinstance(callee, ast.Name) and callee.id in rebound:
-            return f"{IMPORTLIB}.{callee.id}"
-        if cls._reaches_importlib(module, callee):
-            return f"{IMPORTLIB}.{ast.unparse(callee).rsplit('.', 1)[-1]}"
-        return None
 
     def _declaration_violations(self) -> tuple[Violation, ...]:  # tesser:debt TB051
         found: list[Violation] = []
@@ -1686,17 +1767,10 @@ class Codebase(ts.AggregateRoot):
     def _tree_tops(self) -> frozenset[str]:  # tesser:debt TB051
         return frozenset(module.name().split(".")[0] for module in self._modules)
 
-    def _tree_edges(self, module: Module) -> tuple[tuple[str, int], ...]:  # tesser:debt TB051
+    def _conftest_leaf_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
         tops = self._tree_tops()
         if self._export != TESSER:
             tops = tops - {TESSER}
-        return tuple(
-            (str(edge._target), int(edge._lineno))
-            for edge in module.import_edges()
-            if str(edge._target).split(".")[0] in tops
-        )
-
-    def _conftest_leaf_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
         return tuple(
             Violation(
                 module.path(),
@@ -1705,7 +1779,11 @@ class Codebase(ts.AggregateRoot):
                 f"{module.name()} imports {target}; "
                 "a conftest is a leaf that imports nothing from its tree",
             )
-            for target, lineno in self._tree_edges(module)
+            for target, lineno in (
+                (str(edge._target), int(edge._lineno))
+                for edge in module.import_edges()
+                if str(edge._target).split(".")[0] in tops
+            )
         )
 
     def _tests_package_violations(  # tesser:debt TB051
@@ -2084,7 +2162,11 @@ class Codebase(ts.AggregateRoot):
             if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             if isinstance(stmt, ast.AnnAssign):
-                if not self._is_final(stmt.annotation):
+                annotation = ast.unparse(stmt.annotation)
+                if not (
+                    annotation in ("Final", "typing.Final")
+                    or annotation.startswith(("Final[", "typing.Final["))
+                ):
                     found.append(
                         Violation(
                             module.path(),
@@ -2113,15 +2195,6 @@ class Codebase(ts.AggregateRoot):
                         f"{module.name()} has a loose module-level statement; {loose_clause}",
                     )
                 )
-        return tuple(found)
-
-    def _universal_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
-        found: list[Violation] = []
-        found.extend(self._comment_violations(module))
-        found.extend(self._double_violations(module))
-        found.extend(self._shadowing_violations(module))
-        found.extend(self._string_equality_violations(module))
-        found.extend(self._private_method_violations(module))
         return tuple(found)
 
     def _private_method_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
@@ -2260,7 +2333,22 @@ class Codebase(ts.AggregateRoot):
                             )
                         )
                 elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    if not self._pytest_shaped(node):
+                    if not (
+                        node.name.startswith("test_")
+                        or any(
+                            (
+                                isinstance(target, ast.Attribute)
+                                and target.attr == "fixture"
+                            )
+                            or (isinstance(target, ast.Name) and target.id == "fixture")
+                            for target in (
+                                decorator.func
+                                if isinstance(decorator, ast.Call)
+                                else decorator
+                                for decorator in node.decorator_list
+                            )
+                        )
+                    ):
                         continue
                     args = node.args
                     for arg in (*args.posonlyargs, *args.args, *args.kwonlyargs):
@@ -2289,8 +2377,59 @@ class Codebase(ts.AggregateRoot):
                 elif isinstance(node, ast.Lambda):
                     scopes.append((node, [node.body]))
         for holder, roots in scopes:
-            items = self._scope_items(roots)
-            bound = self._shadow_bound(holder, items)
+            items: list[ast.AST] = []
+            stack: list[ast.AST] = list(roots)
+            while stack:
+                item = stack.pop()
+                if isinstance(
+                    item,
+                    (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda),
+                ):
+                    continue
+                items.append(item)
+                stack.extend(ast.iter_child_nodes(item))
+            shadowed: set[str] = set()
+            if isinstance(
+                holder, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+            ):
+                args = holder.args
+                for arg in (*args.posonlyargs, *args.args, *args.kwonlyargs):
+                    if arg.arg in BUILTIN_NAMES:
+                        shadowed.add(arg.arg)
+                for extra in (args.vararg, args.kwarg):
+                    if extra is not None and extra.arg in BUILTIN_NAMES:
+                        shadowed.add(extra.arg)
+            elsewhere: set[str] = set()
+            for child in items:
+                if isinstance(child, (ast.Global, ast.Nonlocal)):
+                    elsewhere.update(child.names)
+                if (
+                    isinstance(child, ast.ExceptHandler)
+                    and child.name is not None
+                    and child.name in BUILTIN_NAMES
+                ):
+                    shadowed.add(child.name)
+            for child in items:
+                targets: list[ast.expr] = []
+                if isinstance(child, ast.Assign):
+                    targets = list(child.targets)
+                elif isinstance(child, (ast.AnnAssign, ast.AugAssign)):
+                    targets = [child.target]
+                elif isinstance(child, (ast.For, ast.AsyncFor)):
+                    targets = [child.target]
+                elif isinstance(child, ast.NamedExpr):
+                    targets = [child.target]
+                elif isinstance(child, ast.withitem):
+                    targets = [child.optional_vars] if child.optional_vars else []
+                for target in targets:
+                    for name in ast.walk(target):
+                        if (
+                            isinstance(name, ast.Name)
+                            and isinstance(name.ctx, ast.Store)
+                            and name.id in BUILTIN_NAMES
+                        ):
+                            shadowed.add(name.id)
+            bound = frozenset(shadowed - elsewhere)
             if not bound:
                 continue
             for child in items:
@@ -2349,28 +2488,6 @@ class Codebase(ts.AggregateRoot):
                         "a mutable collection",
                     )
                 )
-        return tuple(found)
-
-    def _shape_norm_violations(  # tesser:debt TB051
-        self,
-        module: Module,
-        cls: ast.ClassDef,
-        block: str,
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        fields = self._declared_fields(cls)
-        leaf = self._leaf_scalar(fields)
-        if block == "valueobject":
-            found.extend(self._exposure_violations(module, cls, fields))
-            found.extend(self._composition_violations(module, cls, fields, leaf))
-            found.extend(self._door_violations(module, cls))
-            found.extend(self._exit_violations(module, cls, leaf))
-        else:
-            found.extend(self._copy_violations(module, cls, fields))
-            found.extend(self._held_root_violations(module, cls, fields, blocks))
-            found.extend(self._structured_exit_violations(module, cls))
-        found.extend(self._domain_return_violations(module, cls, blocks))
         return tuple(found)
 
     def _exposure_violations(  # tesser:debt TB051
@@ -2471,7 +2588,11 @@ class Codebase(ts.AggregateRoot):
                     name for name, _ in self._produced_names(module, item.returns)
                 )
             second_door = bool(produced & {cls.name, "Self"})
-            if not produced and self._constructs_own_type(item, cls.name):
+            if not produced and any(
+                isinstance(node.func, ast.Name) and node.func.id in ("cls", cls.name)
+                for node in ast.walk(item)
+                if isinstance(node, ast.Call)
+            ):
                 second_door = True
             if second_door:
                 found.append(
@@ -2484,16 +2605,6 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
         return tuple(found)
-
-    @staticmethod
-    def _constructs_own_type(fn: ast.FunctionDef | ast.AsyncFunctionDef, own: str) -> bool:  # tesser:debt TB051
-        for node in ast.walk(fn):
-            if not isinstance(node, ast.Call):
-                continue
-            callee = node.func
-            if isinstance(callee, ast.Name) and callee.id in ("cls", own):
-                return True
-        return False
 
     def _produced_names(  # tesser:debt TB051
         self, module: Module, root: ast.expr
@@ -2546,6 +2657,22 @@ class Codebase(ts.AggregateRoot):
             expected = CANONICAL_EXIT[leaf]
             helper = CANONICAL_HELPER.get(leaf)
             for item in conversions:
+                returned = item.body[0].value if len(item.body) == 1 and isinstance(item.body[0], ast.Return) else None
+                delegated = None
+                if isinstance(returned, ast.Call) and len(returned.args) == 1:
+                    delegated = (
+                        returned.func.id
+                        if isinstance(returned.func, ast.Name)
+                        else returned.func.attr
+                        if isinstance(returned.func, ast.Attribute)
+                        else None
+                    )
+                    if not (
+                        isinstance(returned.args[0], ast.Attribute)
+                        and isinstance(returned.args[0].value, ast.Name)
+                        and returned.args[0].value.id == "self"
+                    ):
+                        delegated = None
                 if item.name != expected:
                     found.append(
                         Violation(
@@ -2556,7 +2683,7 @@ class Codebase(ts.AggregateRoot):
                             "a leaf defines exactly its backing type's conversion dunder",
                         )
                     )
-                elif helper is not None and not self._delegates_to(item, helper):
+                elif helper is not None and delegated != helper:
                     found.append(
                         Violation(
                             module.path(),
@@ -2712,24 +2839,6 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    @staticmethod
-    def _declared_fields(cls: ast.ClassDef) -> list[tuple[str, ast.expr, int]]:  # tesser:debt TB051
-        return [
-            (stmt.target.id, stmt.annotation, stmt.lineno)
-            for stmt in cls.body
-            if isinstance(stmt, ast.AnnAssign)
-            and isinstance(stmt.target, ast.Name)
-            and Codebase._annotation_head(stmt.annotation) != "ClassVar"
-        ]
-
-    def _leaf_scalar(self, fields: list[tuple[str, ast.expr, int]]) -> str | None:  # tesser:debt TB051
-        if len(fields) != 1:
-            return None
-        head = self._annotation_head(fields[0][1])
-        if head in WRAPPABLE_SCALARS or head in NON_WRAPPABLE_SCALARS:
-            return head
-        return None
-
     def _annotation_scalar_names(  # tesser:debt TB051
         self, node: ast.expr, keep_all: bool = False
     ) -> frozenset[str]:
@@ -2764,26 +2873,6 @@ class Codebase(ts.AggregateRoot):
         return None
 
     @staticmethod
-    def _delegates_to(fn: ast.FunctionDef | ast.AsyncFunctionDef, helper: str) -> bool:  # tesser:debt TB051
-        if len(fn.body) != 1 or not isinstance(fn.body[0], ast.Return):
-            return False
-        value = fn.body[0].value
-        if not isinstance(value, ast.Call) or len(value.args) != 1:
-            return False
-        callee = value.func
-        named = (
-            callee.id
-            if isinstance(callee, ast.Name)
-            else callee.attr if isinstance(callee, ast.Attribute) else None
-        )
-        return (
-            named == helper
-            and isinstance(value.args[0], ast.Attribute)
-            and isinstance(value.args[0].value, ast.Name)
-            and value.args[0].value.id == "self"
-        )
-
-    @staticmethod
     def _is_bare_string(node: ast.AST) -> TypeGuard[ast.Expr]:  # tesser:debt TB051
         return (
             isinstance(node, ast.Expr)
@@ -2796,75 +2885,6 @@ class Codebase(ts.AggregateRoot):
         return any(
             target == banned or target.startswith(banned + ".") for banned in MOCK_MODULES
         )
-
-    @staticmethod
-    def _pytest_shaped(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:  # tesser:debt TB051
-        if node.name.startswith("test_"):
-            return True
-        for decorator in node.decorator_list:
-            target = decorator.func if isinstance(decorator, ast.Call) else decorator
-            if isinstance(target, ast.Attribute) and target.attr == "fixture":
-                return True
-            if isinstance(target, ast.Name) and target.id == "fixture":
-                return True
-        return False
-
-    @staticmethod
-    def _scope_items(roots: list[ast.AST]) -> list[ast.AST]:  # tesser:debt TB051
-        out: list[ast.AST] = []
-        stack: list[ast.AST] = list(roots)
-        while stack:
-            child = stack.pop()
-            if isinstance(
-                child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
-            ):
-                continue
-            out.append(child)
-            stack.extend(ast.iter_child_nodes(child))
-        return out
-
-    @staticmethod
-    def _shadow_bound(holder: ast.AST | None, items: list[ast.AST]) -> frozenset[str]:  # tesser:debt TB051
-        bound: set[str] = set()
-        if isinstance(holder, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
-            args = holder.args
-            for arg in (*args.posonlyargs, *args.args, *args.kwonlyargs):
-                if arg.arg in BUILTIN_NAMES:
-                    bound.add(arg.arg)
-            for extra in (args.vararg, args.kwarg):
-                if extra is not None and extra.arg in BUILTIN_NAMES:
-                    bound.add(extra.arg)
-        elsewhere: set[str] = set()
-        for child in items:
-            if isinstance(child, (ast.Global, ast.Nonlocal)):
-                elsewhere.update(child.names)
-            if (
-                isinstance(child, ast.ExceptHandler)
-                and child.name is not None
-                and child.name in BUILTIN_NAMES
-            ):
-                bound.add(child.name)
-        for child in items:
-            targets: list[ast.expr] = []
-            if isinstance(child, ast.Assign):
-                targets = list(child.targets)
-            elif isinstance(child, (ast.AnnAssign, ast.AugAssign)):
-                targets = [child.target]
-            elif isinstance(child, (ast.For, ast.AsyncFor)):
-                targets = [child.target]
-            elif isinstance(child, ast.NamedExpr):
-                targets = [child.target]
-            elif isinstance(child, ast.withitem):
-                targets = [child.optional_vars] if child.optional_vars else []
-            for target in targets:
-                for name in ast.walk(target):
-                    if (
-                        isinstance(name, ast.Name)
-                        and isinstance(name.ctx, ast.Store)
-                        and name.id in BUILTIN_NAMES
-                    ):
-                        bound.add(name.id)
-        return frozenset(bound - elsewhere)
 
     @staticmethod
     def _is_str_call(node: ast.expr) -> bool:  # tesser:debt TB051
@@ -3116,20 +3136,6 @@ class Codebase(ts.AggregateRoot):
                 if origin is not None and origin[0] == ENUM_MODULE:
                     return origin[1]
         return None
-
-    @staticmethod
-    def _is_enum_class(module: Module, stmt: ast.ClassDef) -> bool:  # tesser:debt TB051
-        return Codebase._enum_base(module, stmt) is not None
-
-    @staticmethod
-    def _enum_names(module: Module) -> frozenset[str]:  # tesser:debt TB051
-        return frozenset(
-            stmt.name for stmt in module.class_defs() if Codebase._is_enum_class(module, stmt)
-        )
-
-    @staticmethod
-    def _names_bool(node: ast.expr | None) -> bool:  # tesser:debt TB051
-        return isinstance(node, ast.Name) and node.id == "bool"
 
     @classmethod
     def _is_union(cls, node: ast.expr | None) -> bool:  # tesser:debt TB051
@@ -3415,7 +3421,46 @@ class Codebase(ts.AggregateRoot):
                     "a ports module holds only imports and classes",
                 )
             )
-        found.extend(self._ports_shape_violations(module))
+        for loose in module.body():
+            if isinstance(loose, (ast.Import, ast.ImportFrom, ast.ClassDef)):
+                continue
+            found.extend(self._unreadable(module, module.name(), loose))
+        for holder in module.class_defs():
+            enum_member = self._enum_base(module, holder) is not None
+            for base in holder.bases:
+                if not self._is_readable_annotation(base):
+                    found.extend(
+                        self._unreadable(module, f"{module.name()}.{holder.name}", base)
+                    )
+            for item in holder.body:
+                where = f"{module.name()}.{holder.name}"
+                if isinstance(item, ast.Pass):
+                    continue
+                if enum_member:
+                    if not self._is_enum_member(module, item):
+                        found.extend(self._unreadable(module, where, item))
+                    continue
+                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    found.extend(self._unreadable(module, where, item))
+                    continue
+                shape = f"{where}.{item.name}"
+                for node in [arg.annotation for arg in self._params(item)] + [
+                    item.returns
+                ]:
+                    if node is not None and not self._is_readable_annotation(node):
+                        found.extend(self._unreadable(module, shape, node))
+                for body_stmt in item.body:
+                    if isinstance(
+                        body_stmt, (ast.Pass, ast.Return, ast.Assign, ast.AnnAssign)
+                    ):
+                        continue
+                    if (
+                        isinstance(body_stmt, ast.Expr)
+                        and isinstance(body_stmt.value, ast.Constant)
+                        and body_stmt.value.value is Ellipsis
+                    ):
+                        continue
+                    found.extend(self._unreadable(module, shape, body_stmt))
         return tuple(found)
 
     def _port_violations(  # tesser:debt TB051
@@ -3429,7 +3474,15 @@ class Codebase(ts.AggregateRoot):
             if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             where = f"{module.name()}.{cls.name}.{item.name}"
-            if not self._is_declaration_body(item.body):
+            if not all(
+                isinstance(stmt, ast.Pass)
+                or (
+                    isinstance(stmt, ast.Expr)
+                    and isinstance(stmt.value, ast.Constant)
+                    and stmt.value.value is Ellipsis
+                )
+                for stmt in item.body
+            ):
                 found.append(
                     Violation(
                         module.path(),
@@ -3508,54 +3561,6 @@ class Codebase(ts.AggregateRoot):
         )
 
     @classmethod
-    def _ports_shape_violations(cls, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
-        found: list[Violation] = []
-        for stmt in module.body():
-            if isinstance(stmt, (ast.Import, ast.ImportFrom, ast.ClassDef)):
-                continue
-            found.extend(cls._unreadable(module, module.name(), stmt))
-        for holder in module.class_defs():
-            enum_member = cls._enum_base(module, holder) is not None
-            for base in holder.bases:
-                if not cls._is_readable_annotation(base):
-                    found.extend(
-                        cls._unreadable(module, f"{module.name()}.{holder.name}", base)
-                    )
-            for item in holder.body:
-                where = f"{module.name()}.{holder.name}"
-                if isinstance(item, ast.Pass):
-                    continue
-                if enum_member:
-                    if not cls._is_enum_member(module, item):
-                        found.extend(cls._unreadable(module, where, item))
-                    continue
-                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    found.extend(cls._unreadable(module, where, item))
-                    continue
-                found.extend(cls._ports_call_shape(module, f"{where}.{item.name}", item))
-        return tuple(found)
-
-    @classmethod
-    def _ports_call_shape(  # tesser:debt TB051
-        cls, module: Module, where: str, fn: ast.FunctionDef | ast.AsyncFunctionDef
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for node in [arg.annotation for arg in cls._params(fn)] + [fn.returns]:
-            if node is not None and not cls._is_readable_annotation(node):
-                found.extend(cls._unreadable(module, where, node))
-        for stmt in fn.body:
-            if isinstance(stmt, (ast.Pass, ast.Return, ast.Assign, ast.AnnAssign)):
-                continue
-            if (
-                isinstance(stmt, ast.Expr)
-                and isinstance(stmt.value, ast.Constant)
-                and stmt.value.value is Ellipsis
-            ):
-                continue
-            found.extend(cls._unreadable(module, where, stmt))
-        return tuple(found)
-
-    @classmethod
     def _is_readable_annotation(cls, node: ast.expr) -> bool:  # tesser:debt TB051
         if isinstance(node, ast.Constant):
             return node.value is None or node.value is Ellipsis
@@ -3627,43 +3632,6 @@ class Codebase(ts.AggregateRoot):
             and value.func.attr == "auto"
         )
 
-    @staticmethod
-    def _is_carrier_body(body: list[ast.stmt], names: frozenset[str]) -> bool:  # tesser:debt TB051
-        for stmt in body:
-            if isinstance(stmt, ast.Return) and (
-                stmt.value is None
-                or (isinstance(stmt.value, ast.Constant) and stmt.value.value is None)
-            ):
-                continue
-            target: ast.expr | None = None
-            value: ast.expr | None = None
-            if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
-                target, value = stmt.targets[0], stmt.value
-            elif isinstance(stmt, ast.AnnAssign):
-                target, value = stmt.target, stmt.value
-            if (
-                isinstance(target, ast.Attribute)
-                and isinstance(target.value, ast.Name)
-                and target.value.id == "self"
-                and isinstance(value, ast.Name)
-                and value.id in names
-            ):
-                continue
-            return False
-        return True
-
-    @staticmethod
-    def _is_declaration_body(body: list[ast.stmt]) -> bool:  # tesser:debt TB051
-        return all(
-            isinstance(stmt, ast.Pass)
-            or (
-                isinstance(stmt, ast.Expr)
-                and isinstance(stmt.value, ast.Constant)
-                and stmt.value.value is Ellipsis
-            )
-            for stmt in body
-        )
-
     def _role_module_violations(  # tesser:debt TB051
         self,
         module: Module,
@@ -3728,23 +3696,6 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
         return tuple(found)
-
-    @staticmethod
-    def _reaches(role: str, pieces: list[str]) -> bool:  # tesser:debt TB051
-        if len(pieces) < 2:
-            return False
-        if pieces[1] == role:
-            return True
-        inner = ".".join(pieces[1:])
-        return any(
-            inner == allowed or inner.startswith(f"{allowed}.")
-            for allowed in SAME_CONTEXT_IMPORTS[role]
-        )
-
-    @staticmethod
-    def _in_handlers(module: Module) -> bool:  # tesser:debt TB051
-        parts = module.name().split(".")
-        return len(parts) >= 3 and parts[2] == "handlers"
 
     def _import_violations(  # tesser:debt TB051
         self,
@@ -3842,7 +3793,17 @@ class Codebase(ts.AggregateRoot):
                                     "only a handler imports its own context's client",
                                 )
                             )
-                    elif not self._reaches(role, pieces):
+                    elif not (
+                        len(pieces) >= 2
+                        and (
+                            pieces[1] == role
+                            or any(
+                                ".".join(pieces[1:]) == allowed
+                                or ".".join(pieces[1:]).startswith(f"{allowed}.")
+                                for allowed in SAME_CONTEXT_IMPORTS[role]
+                            )
+                        )
+                    ):
                         denied.append(
                             Violation(
                                 module.path(),
@@ -3891,7 +3852,8 @@ class Codebase(ts.AggregateRoot):
                 and not (
                     role == "adapters"
                     and pieces[0] == PROTOCOL_PACKAGE
-                    and self._in_handlers(module)
+                    and len(module.name().split(".")) >= 3
+                    and module.name().split(".")[2] == "handlers"
                 )
             ):
                 found.append(
@@ -3921,7 +3883,15 @@ class Codebase(ts.AggregateRoot):
             if pieces[0] in contexts:
                 denied: list[Violation] = []
                 if package == "srv" and not (
-                    tail == "adapters" and self._holds_kind(self._module_named(target), blocks, "handler")
+                    tail == "adapters"
+                    and self._holds_kind(
+                        next(
+                            (named for named in self._modules if named.name() == target),
+                            None,
+                        ),
+                        blocks,
+                        "handler",
+                    )
                 ):
                     denied.append(
                         Violation(
@@ -4287,7 +4257,8 @@ class Codebase(ts.AggregateRoot):
                     )
                 elif not any(
                     blocks.get(key) in ("port", "client", "protocol_port", "config_repository")
-                    for key in self._base_keys(module, stmt)
+                    for key in (module._resolve(base) for base in stmt.bases)
+                    if key is not None
                 ):
                     found.append(
                         Violation(
@@ -4367,31 +4338,6 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _service_violations(  # tesser:debt TB051
-        self,
-        module: Module,
-        cls: ast.ClassDef,
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        methods = [item for item in cls.body if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))]
-        method_names = frozenset(method.name for method in methods)
-        for item in methods:
-            where = f"{module.name()}.{cls.name}.{item.name}"
-            found.extend(self._delegation_violations(module, method_names, where, item))
-            if item.name == "__init__":
-                found.extend(self._dependency_violations(module, where, item.lineno, item, blocks))
-                continue
-            if item.name.startswith("_"):
-                continue
-            found.extend(
-                self._signature_violations(
-                    module, where, item.lineno, item, "request", "response", "a service method", "TB081", blocks
-                )
-            )
-            found.extend(self._body_violations(module, where, item, blocks))
-        return tuple(found)
-
     def _dependency_violations(  # tesser:debt TB051
         self,
         module: Module,
@@ -4416,24 +4362,6 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _client_violations(  # tesser:debt TB051
-        self,
-        module: Module,
-        cls: ast.ClassDef,
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for item in cls.body:
-            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) or item.name.startswith("_"):
-                continue
-            where = f"{module.name()}.{cls.name}.{item.name}"
-            found.extend(
-                self._signature_violations(
-                    module, where, item.lineno, item, "request", "response", "a client method", "TB081", blocks
-                )
-            )
-        return tuple(found)
-
     def _record_signature_violations(  # tesser:debt TB051
         self,
         module: Module,
@@ -4451,7 +4379,13 @@ class Codebase(ts.AggregateRoot):
             ]
             annotations.append(item.returns)
             for annotation in annotations:
-                touched = self._domain_block_in(module, annotation, blocks)
+                touched: str | None = None
+                for sub in ast.walk(annotation) if annotation is not None else ():
+                    if isinstance(sub, (ast.Name, ast.Attribute)):
+                        key = module._resolve(sub)
+                        if key is not None and blocks.get(key) in DOMAIN_BLOCKS:
+                            touched = blocks[key]
+                            break
                 if touched is not None:
                     found.append(
                         Violation(
@@ -4536,7 +4470,15 @@ class Codebase(ts.AggregateRoot):
             if port_dto
             else frozenset({"request", "response"})
         )
-        enums = self._enum_names(module) if port_dto else frozenset()
+        enums = (
+            frozenset(
+                stmt.name
+                for stmt in module.class_defs()
+                if Codebase._enum_base(module, stmt) is not None
+            )
+            if port_dto
+            else frozenset()
+        )
         for item in cls.body:
             if port_dto and not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 found.append(
@@ -4575,9 +4517,35 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
                 continue
-            if port_dto and not self._is_carrier_body(
-                item.body, frozenset(arg.arg for arg in self._params(item))
-            ):
+            carrier = True
+            if port_dto:
+                assignable = frozenset(arg.arg for arg in self._params(item))
+                for stmt in item.body:
+                    if isinstance(stmt, ast.Return) and (
+                        stmt.value is None
+                        or (
+                            isinstance(stmt.value, ast.Constant)
+                            and stmt.value.value is None
+                        )
+                    ):
+                        continue
+                    target: ast.expr | None = None
+                    assigned: ast.expr | None = None
+                    if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
+                        target, assigned = stmt.targets[0], stmt.value
+                    elif isinstance(stmt, ast.AnnAssign):
+                        target, assigned = stmt.target, stmt.value
+                    if (
+                        isinstance(target, ast.Attribute)
+                        and isinstance(target.value, ast.Name)
+                        and target.value.id == "self"
+                        and isinstance(assigned, ast.Name)
+                        and assigned.id in assignable
+                    ):
+                        continue
+                    carrier = False
+                    break
+            if port_dto and not carrier:
                 found.append(
                     Violation(
                         module.path(),
@@ -4588,7 +4556,11 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
             for arg in self._params(item):
-                if port_dto and self._names_bool(arg.annotation):
+                if (
+                    port_dto
+                    and isinstance(arg.annotation, ast.Name)
+                    and arg.annotation.id == "bool"
+                ):
                     found.append(
                         Violation(
                             module.path(),
@@ -4664,7 +4636,10 @@ class Codebase(ts.AggregateRoot):
                 continue
             if item.name == "__init__":
                 continue
-            if not self._is_property(item):
+            if not any(
+                isinstance(decorator, ast.Name) and decorator.id == "property"
+                for decorator in item.decorator_list
+            ):
                 found.append(
                     Violation(
                         module.path(),
@@ -4732,12 +4707,26 @@ class Codebase(ts.AggregateRoot):
         request = positional[1].arg
         found: list[Violation] = []
         for node in ast.walk(fn):
-            if not isinstance(node, ast.Call) or not self._is_port_call(node):
+            if not isinstance(node, ast.Call):
+                continue
+            callee = node.func
+            if not isinstance(callee, ast.Attribute):
+                continue
+            holder = callee.value
+            if not (
+                isinstance(holder, ast.Attribute)
+                and isinstance(holder.value, ast.Name)
+                and holder.value.id == "self"
+                and holder.attr.startswith("_")
+            ):
                 continue
             for inner in ast.walk(node):
                 if not isinstance(inner, ast.Attribute):
                     continue
-                if not self._rooted_at(inner, request):
+                current: ast.expr = inner
+                while isinstance(current, ast.Attribute):
+                    current = current.value
+                if not (isinstance(current, ast.Name) and current.id == request):
                     continue
                 found.append(
                     Violation(
@@ -4749,46 +4738,6 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
         return tuple(found)
-
-    @staticmethod
-    def _rooted_at(node: ast.expr, name: str) -> bool:  # tesser:debt TB051
-        current: ast.expr = node
-        while isinstance(current, ast.Attribute):
-            current = current.value
-        return isinstance(current, ast.Name) and current.id == name
-
-    @staticmethod
-    def _is_port_call(node: ast.Call) -> bool:  # tesser:debt TB051
-        callee = node.func
-        if not isinstance(callee, ast.Attribute):
-            return False
-        holder = callee.value
-        if not isinstance(holder, ast.Attribute):
-            return False
-        return (
-            isinstance(holder.value, ast.Name)
-            and holder.value.id == "self"
-            and holder.attr.startswith("_")
-        )
-
-    @staticmethod
-    def _reader_base(node: ast.expr) -> str | None:  # tesser:debt TB051
-        parts: list[str] = []
-        current: ast.expr = node
-        while isinstance(current, ast.Attribute):
-            parts.append(current.attr)
-            current = current.value
-        if not isinstance(current, ast.Name):
-            return None
-        parts.append(current.id)
-        return ".".join(reversed(parts[1:]))
-
-    @staticmethod
-    def _is_property(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:  # tesser:debt TB051
-        for decorator in fn.decorator_list:
-            if isinstance(decorator, ast.Name) and decorator.id == "property":
-                return True
-        return False
 
     def _component_violations(self, module: Module, cls: ast.ClassDef) -> tuple[Violation, ...]:  # tesser:debt TB051
         for item in cls.body:
@@ -4872,32 +4821,6 @@ class Codebase(ts.AggregateRoot):
             "TB080",
             blocks,
         )
-
-    def _classify(self) -> dict[tuple[str, str], str]:  # tesser:debt TB051
-        blocks = dict(TESSER_BASE_BLOCKS)
-        changed = True
-        while changed:
-            changed = False
-            for module in self._modules:
-                for cls in module.class_defs():
-                    key = (module.name(), cls.name)
-                    if key in blocks:
-                        continue
-                    for base in cls.bases:
-                        base_key = module._resolve(base)
-                        if base_key is not None and base_key in blocks:
-                            blocks[key] = blocks[base_key]
-                            changed = True
-                            break
-                for local, target, original in module.bound_names():
-                    key = (module.name(), local)
-                    if key in blocks:
-                        continue
-                    source = blocks.get((target, original))
-                    if source is not None:
-                        blocks[key] = source
-                        changed = True
-        return blocks
 
     def _signature_violations(  # tesser:debt TB051
         self,
@@ -5038,11 +4961,20 @@ class Codebase(ts.AggregateRoot):
             built = self._annotation_block(module, node.func, blocks)
             if built not in DATA_BLOCKS:
                 continue
-            bases = {
-                self._reader_base(value)
-                for value in list(node.args) + [kw.value for kw in node.keywords]
-                if isinstance(value, ast.Attribute)
-            }
+            bases: set[str | None] = set()
+            for value in list(node.args) + [kw.value for kw in node.keywords]:
+                if not isinstance(value, ast.Attribute):
+                    continue
+                reader: list[str] = []
+                current: ast.expr = value
+                while isinstance(current, ast.Attribute):
+                    reader.append(current.attr)
+                    current = current.value
+                if not isinstance(current, ast.Name):
+                    bases.add(None)
+                    continue
+                reader.append(current.id)
+                bases.add(".".join(reversed(reader[1:])))
             bases.discard(None)
             if len(bases) > 1:
                 found.append(
@@ -5066,7 +4998,14 @@ class Codebase(ts.AggregateRoot):
                             "a service method satisfies a condition with one domain call",
                         )
                     )
-                if self._contains_conditional(self._governed_stmts(node)):
+                governed = list(node.body)
+                if not (
+                    len(node.orelse) == 1
+                    and isinstance(node.orelse[0], ast.If)
+                    and node.orelse[0].col_offset == node.col_offset
+                ):
+                    governed.extend(node.orelse)
+                if self._contains_conditional(governed):
                     found.append(
                         Violation(
                             module.path(),
@@ -5096,18 +5035,6 @@ class Codebase(ts.AggregateRoot):
                         )
                     )
         return tuple(found)
-
-    @staticmethod
-    def _governed_stmts(node: ast.If) -> list[ast.stmt]:  # tesser:debt TB051
-        stmts = list(node.body)
-        is_elif_chain = (
-            len(node.orelse) == 1
-            and isinstance(node.orelse[0], ast.If)
-            and node.orelse[0].col_offset == node.col_offset
-        )
-        if not is_elif_chain:
-            stmts.extend(node.orelse)
-        return stmts
 
     @staticmethod
     def _contains_conditional(stmts: list[ast.stmt]) -> bool:  # tesser:debt TB051
@@ -5187,9 +5114,6 @@ class Codebase(ts.AggregateRoot):
             )
         return ()
 
-    def _module_named(self, name: str) -> Module | None:  # tesser:debt TB051
-        return next((module for module in self._modules if module.name() == name), None)
-
     @staticmethod
     def _holds_kind(module: Module | None, blocks: dict[tuple[str, str], str], kind: str) -> bool:  # tesser:debt TB051
         if module is None:
@@ -5207,35 +5131,6 @@ class Codebase(ts.AggregateRoot):
             if key is not None and TESSER_DECORATORS.get(key) == kind:
                 return True
         return False
-
-    @staticmethod
-    def _is_final(annotation: ast.expr) -> bool:  # tesser:debt TB051
-        text = ast.unparse(annotation)
-        return text in ("Final", "typing.Final") or text.startswith(("Final[", "typing.Final["))
-
-    @staticmethod
-    def _base_keys(module: Module, cls: ast.ClassDef) -> tuple[tuple[str, str], ...]:  # tesser:debt TB051
-        found: list[tuple[str, str]] = []
-        for base in cls.bases:
-            key = module._resolve(base)
-            if key is not None:
-                found.append(key)
-        return tuple(found)
-
-    def _domain_block_in(  # tesser:debt TB051
-        self,
-        module: Module,
-        node: ast.expr | None,
-        blocks: dict[tuple[str, str], str],
-    ) -> str | None:
-        if node is None:
-            return None
-        for sub in ast.walk(node):
-            if isinstance(sub, (ast.Name, ast.Attribute)):
-                key = module._resolve(sub)
-                if key is not None and blocks.get(key) in DOMAIN_BLOCKS:
-                    return blocks[key]
-        return None
 
     def _allowed_annotation(  # tesser:debt TB051
         self,

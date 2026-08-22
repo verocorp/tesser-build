@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sys
-from collections.abc import Callable
 from typing import Final
 
 import tesser.srv as ts
@@ -14,25 +13,16 @@ _USAGE: Final[str] = "usage: python -m srv.cli.main [tree]"
 
 
 @ts.do_not_use_function
-def respond(run: Callable[[], CliResponse]) -> CliResponse:  # tesser:debt TB051
-    try:
-        return run()
-    except UsageError as e:
-        return CliResponse(2, stdout="", stderr=f"{e}\n{_USAGE}")
-    except Exception:
-        return CliResponse(1, stdout="", stderr="unexpected error")
-
-
-@ts.do_not_use_function
-def dispatch(handler: cli.Handler, argv: list[str]) -> CliResponse:  # tesser:debt TB051
-    return respond(lambda: handler.check(CliRequest(args=tuple(argv))))
-
-
-@ts.do_not_use_function
 def run(argv: list[str]) -> int:  # tesser:debt TB051
     app = load()
     try:
-        resp = dispatch(cli.Handler(app.tessercheck.client), argv)
+        handler = cli.Handler(app.tessercheck.client)
+        try:
+            resp = handler.check(CliRequest(args=tuple(argv)))
+        except UsageError as e:
+            resp = CliResponse(2, stdout="", stderr=f"{e}\n{_USAGE}")
+        except Exception:
+            resp = CliResponse(1, stdout="", stderr="unexpected error")
         if resp.stdout:
             print(resp.stdout)
         if resp.stderr:

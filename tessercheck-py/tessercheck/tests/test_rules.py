@@ -28,13 +28,15 @@ def test_every_rule_has_a_fixture() -> None:
     read = rulebook_repository.FilesystemRulebookSources().read(
         rulebook_sources.ReadRulebookRequest(tree=str(root))
     )
-    assertions = rulebook.test_assertions(
-        tuple((module.name, module.text) for module in read.test_modules)
+    rendered = rulebook.render(
+        read.checks_text,
+        tuple((module.name, module.text) for module in read.test_modules),
+        read.contracts_text,
     )
     uncovered = [
-        str(row.clause())
-        for row in rulebook.rule_rows(ast.parse(read.checks_text))
-        if not rulebook.covering_tests(str(row.clause()), assertions)
+        line.split(" | ")[1]
+        for line in rendered.splitlines()
+        if line.startswith("| TB") and line.endswith("| NONE |")
     ]
     assert uncovered == [], f"rules with no fixture (NONE rows): {uncovered}"
 
@@ -44,17 +46,21 @@ def test_every_violation_site_yields_a_rulebook_row() -> None:
     read = rulebook_repository.FilesystemRulebookSources().read(
         rulebook_sources.ReadRulebookRequest(tree=str(root))
     )
-    tree = ast.parse(read.checks_text)
     sites = [
         node
-        for node in ast.walk(tree)
+        for node in ast.walk(ast.parse(read.checks_text))
         if isinstance(node, ast.Call)
         and (
             (isinstance(node.func, ast.Name) and node.func.id == "Violation")
             or (isinstance(node.func, ast.Attribute) and node.func.attr == "Violation")
         )
     ]
-    rows = rulebook.rule_rows(tree)
+    rendered = rulebook.render(
+        read.checks_text,
+        tuple((module.name, module.text) for module in read.test_modules),
+        read.contracts_text,
+    )
+    rows = [line for line in rendered.splitlines() if line.startswith("| TB")]
     assert sites, "no Violation construction site was found; the scan itself is broken"
     assert len(rows) == len(sites), (
         f"{len(sites)} Violation sites produced {len(rows)} rulebook rows; "
