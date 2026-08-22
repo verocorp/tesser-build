@@ -9,9 +9,16 @@ import tesser.srv as ts
 from app.app import App
 import campaign.adapters.handlers.http as http
 from tesser.errors import DomainError, InfraError, status_for
-from protocol.http import BadRequest, HttpRequest, HttpResponse, PayloadTooLarge, StreamingUnsupported
+from protocol.http import (
+    BadRequest,
+    HttpRequest,
+    HttpResponse,
+    PayloadTooLarge,
+    Route,
+    Router,
+    StreamingUnsupported,
+)
 import reports.adapters.handlers.http as reports_http
-from srv.http.router import Route, match
 
 MAX_BUFFERED_BODY: Final[int] = 1_048_576
 
@@ -28,13 +35,14 @@ class HttpHost(ts.Host):
             Route("GET", "/r/{slug}", campaign.resolve),
             Route("GET", "/reports/links-by-verdict", reports.links_by_verdict),
         )
+        router = Router(routes)
 
         class _RequestHandler(BaseHTTPRequestHandler):
             timeout = 30
 
             def do_GET(self) -> None:
                 try:
-                    found = match(routes, "GET", self.path)
+                    found = router.match("GET", self.path)
                     if found is None:
                         resp = HttpResponse.problem(404, "not_found", "unknown route")
                     else:
@@ -102,7 +110,7 @@ class HttpHost(ts.Host):
 
             def do_POST(self) -> None:
                 try:
-                    found = match(routes, "POST", self.path)
+                    found = router.match("POST", self.path)
                     if found is None:
                         resp = HttpResponse.problem(404, "not_found", "unknown route")
                     else:

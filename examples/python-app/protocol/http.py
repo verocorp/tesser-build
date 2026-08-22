@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import urllib.parse
 from collections.abc import Mapping
 from typing import Protocol
 
@@ -115,3 +116,70 @@ class HttpResponse(ts.Response):
 class Endpoint(ts.Port, Protocol):
 
     def __call__(self, request: HttpRequest, /) -> HttpResponse: ...
+
+
+class Route(ts.Record):
+
+    def __init__(self, method: str, pattern: str, endpoint: Endpoint) -> None:
+        super().__init__(method=method, pattern=pattern, endpoint=endpoint)
+
+    method: str
+    pattern: str
+    endpoint: Endpoint
+
+
+class Match(ts.Record):
+
+    def __init__(
+        self,
+        endpoint: Endpoint,
+        path_params: Mapping[str, str],
+        query_params: Mapping[str, str],
+    ) -> None:
+        super().__init__(
+            endpoint=endpoint,
+            path_params=dict(path_params),
+            query_params=dict(query_params),
+        )
+
+    endpoint: Endpoint
+    path_params: Mapping[str, str]
+    query_params: Mapping[str, str]
+
+
+class Router(ts.Record):
+
+    def __init__(self, routes: tuple[Route, ...]) -> None:
+        super().__init__(routes=routes)
+
+    routes: tuple[Route, ...]
+
+    def match(self, method: str, raw_path: str) -> Match | None:
+        parts = urllib.parse.urlsplit(raw_path)
+        query_params = {
+            name: values[-1]
+            for name, values in urllib.parse.parse_qs(parts.query).items()
+        }
+        for route in self.routes:
+            if route.method != method:
+                continue
+            expected = route.pattern.strip("/").split("/")
+            actual = parts.path.strip("/").split("/")
+            if len(expected) != len(actual):
+                continue
+            params: dict[str, str] = {}
+            matched = True
+            for want, got in zip(expected, actual, strict=True):
+                if want.startswith("{") and want.endswith("}"):
+                    if not got:
+                        matched = False
+                        break
+                    params[want[1:-1]] = urllib.parse.unquote(got)
+                    continue
+                if want != got:
+                    matched = False
+                    break
+            if not matched:
+                continue
+            return Match(route.endpoint, params, query_params)
+        return None

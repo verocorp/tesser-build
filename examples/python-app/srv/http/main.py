@@ -11,23 +11,26 @@ from app.loader import load
 from srv.http.host import HttpHost
 
 
-@ts.do_not_use_function
-def main() -> None:  # tesser:debt TB051
-    app = load()
-    host = HttpHost((app.http.host, app.http.port), app)
-    print(f"campaign+linkpolicy app listening on {app.http.host or '0.0.0.0'}:{app.http.port}")  # noqa: T201
-    stop = threading.Event()
+class HttpEdge(ts.Host):
 
-    def _handle(signum: int, frame: Optional[FrameType]) -> None:
-        stop.set()
+    def __init__(self) -> None:
+        self._app = load()
+        self._host = HttpHost((self._app.http.host, self._app.http.port), self._app)
+        self._stop = threading.Event()
 
-    signal.signal(signal.SIGINT, _handle)
-    signal.signal(signal.SIGTERM, _handle)
-    try:
-        host.run(stop)
-    finally:
-        app.close()
+    def stop(self, signum: int, frame: Optional[FrameType]) -> None:
+        self._stop.set()
+
+    def run(self) -> None:
+        app = self._app
+        print(f"campaign+linkpolicy app listening on {app.http.host or '0.0.0.0'}:{app.http.port}")  # noqa: T201
+        signal.signal(signal.SIGINT, self.stop)
+        signal.signal(signal.SIGTERM, self.stop)
+        try:
+            self._host.run(self._stop)
+        finally:
+            app.close()
 
 
 if __name__ == "__main__":  # tesser:debt TB051
-    main()
+    HttpEdge().run()
