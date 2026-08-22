@@ -519,7 +519,6 @@ The reader matches, exhaustively:
 
 ```python
 # campaign/application/views.py (verified impl: examples/errorspy/)
-@ts.do_not_use_function
 def required_campaign(
     found: campaign_repository.FindCampaignResponse, campaign_id: str
 ) -> campaign.Campaign:
@@ -652,7 +651,6 @@ never its members** (TB053).
         raise invalid("unknown_backend", f"campaign storage {cfg.storage!r} not supported")
 
 
-@ts.do_not_use_function
 class Campaign(ts.Component):
     def __init__(self, cfg: config.Config, policy: target_policy.TargetPolicy) -> None:
         self._repo = self._repo_for(cfg)            # the concrete it chose, held by its own type
@@ -841,7 +839,6 @@ def routes_for(app: App) -> tuple[Route, ...]:
 
 
 # srv/http/main.py (verified impl) — the host: env edge, build once, hand to the runner
-@ts.do_not_use_function
 def main() -> None:
     cfg = from_env(os.getenv)            # the ONE config loader (bootstrap/config)
     app = new(cfg)                       # ONCE per process; validates fail-fast

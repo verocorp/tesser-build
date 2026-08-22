@@ -186,7 +186,6 @@ class RuleRow(ts.ValueObject):
         return self._linenos
 
 
-@ts.do_not_use_function
 def render(  # tesser:debt TB051
     checks_text: str,
     test_modules: tuple[tuple[str, str], ...] = (),

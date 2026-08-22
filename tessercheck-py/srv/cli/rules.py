@@ -17,7 +17,6 @@ _OUTPUT: Final[str] = "RULES.md"
 _HERE: Final[str] = "."
 
 
-@ts.do_not_use_function
 def run(argv: list[str]) -> int:  # tesser:debt TB051
     check = "--check" in argv
     args = [arg for arg in argv if arg != "--check"]

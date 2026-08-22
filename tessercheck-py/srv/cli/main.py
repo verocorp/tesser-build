@@ -12,7 +12,6 @@ from protocol.cli import CliRequest, CliResponse, UsageError
 _USAGE: Final[str] = "usage: python -m srv.cli.main [tree]"
 
 
-@ts.do_not_use_function
 def run(argv: list[str]) -> int:  # tesser:debt TB051
     app = load()
     try:

@@ -308,7 +308,6 @@ def test_a_final_constant_passes_and_a_declared_function_is_still_a_module_funct
                 "from typing import Final\n"
                 "import tesser.domain as ts\n"
                 "LIMIT: Final[int] = 3\n"
-                "@ts.do_not_use_function\n"
                 "def declared() -> None:\n"
                 "    return None\n",
                 False,
@@ -599,10 +598,8 @@ def test_protocol_module_totality_is_flagged() -> None:
                 "    pass\n"
                 "class Server(ts.Host):\n"
                 "    pass\n"
-                "@ts.do_not_use_function\n"
                 "def fine() -> None:\n"
                 "    return None\n"
-                "@ts.do_not_use_function\n"
                 "def lazy() -> None:\n"
                 "    import tesser.domain\n"
                 "def stray() -> None:\n"
@@ -1986,7 +1983,6 @@ def test_srv_and_app_statement_totality() -> None:
                 "srv.box",
                 "import tesser.srv as ts\n"
                 "import tesser.domain as td\n"
-                "@ts.do_not_use_function\n"
                 "def fine() -> None:\n"
                 "    return None\n"
                 "def stray() -> None:\n"
@@ -2305,7 +2301,6 @@ def test_srv_and_app_tesser_form_modes() -> None:
                 "srv.dup",
                 "import tesser.srv as ts\n"
                 "import tesser.srv as ts\n"
-                "@ts.do_not_use_function\n"
                 "def go() -> None:\n"
                 "    return None\n",
                 False,
@@ -3555,7 +3550,6 @@ def test_an_app_test_reaches_a_context_like_a_production_app() -> None:
                 "app/boot.py",
                 "app.boot",
                 "import tesser.context as ts\n"
-                "@ts.do_not_use_function\n"
                 "def boot() -> int:\n"
                 "    return 1\n",
                 False,
@@ -4615,7 +4609,6 @@ def test_exit_norms_leaf_and_structured() -> None:
                 "shop/domain/exits.py",
                 "shop.domain.exits",
                 "import tesser.domain as ts\n"
-                "@ts.do_not_use_function\n"
                 "def canonical_str(value: str) -> str:\n"
                 "    return value\n"
                 "class GoodLeaf(ts.ValueObject):\n"
@@ -4710,7 +4703,6 @@ def test_a_value_object_has_one_construction_door() -> None:
                 "shop/domain/doors.py",
                 "shop.domain.doors",
                 "import tesser.domain as ts\n"
-                "@ts.do_not_use_function\n"
                 "def canonical_str(value: str) -> str:\n"
                 "    return value\n"
                 "class Slug(ts.ValueObject):\n"
@@ -4780,7 +4772,6 @@ def test_review_pins_for_the_shape_norms() -> None:
                 "shop.domain.pins",
                 "import tesser.domain as ts\n"
                 "from typing import ClassVar, Self\n"
-                "@ts.do_not_use_function\n"
                 "def canonical_str(value: str) -> str:\n"
                 "    return value\n"
                 "class SelfDoor(ts.ValueObject):\n"
@@ -4834,7 +4825,6 @@ def test_module_qualified_canonical_delegation_passes() -> None:
                 "shop/domain/policy.py",
                 "shop.domain.policy",
                 "import tesser.domain as ts\n"
-                "@ts.do_not_use_function\n"
                 "def canonical_str(value: str) -> str:\n"
                 "    return value\n",
                 False,
