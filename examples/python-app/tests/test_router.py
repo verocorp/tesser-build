@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from srv.http.router import match, split
+from srv.http.router import match
 from tests.support import ROUTES, route_other
 
 
@@ -39,7 +39,3 @@ def test_a_percent_encoded_parameter_is_decoded() -> None:
     assert found is not None
     assert found.path_params == {"slug": "summer sale"}
 
-
-def test_split_separates_path_from_query() -> None:
-    assert split("/r/promo?a=1") == ("/r/promo", {"a": "1"})
-    assert split("/r/promo") == ("/r/promo", {})

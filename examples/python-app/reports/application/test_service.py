@@ -7,7 +7,7 @@ import reports.application.ports.link_source as link_source
 import reports.application.ports.verdict_source as verdict_source
 import reports.application.service as service
 import reports.client.client as client
-from tesser.errors import InfraError
+from tesser.errors import DomainError, InfraError
 
 
 @ts.fake
@@ -72,6 +72,7 @@ def test_a_link_with_no_recorded_verdict_is_still_reported() -> None:
 
     assert [view.slug for view in resp.links] == ["spring-sale"]
     assert resp.links[0].allowed is True
+    assert resp.links[0].reason == "no verdict recorded"
 
 
 def test_a_verdict_for_a_target_nobody_links_to_is_left_out() -> None:
@@ -128,6 +129,55 @@ def test_a_source_that_is_down_fails_the_report_rather_than_halving_it() -> None
     verdicts = FakeVerdictSource()
 
     with pytest.raises(InfraError):
+        service.ReportsService(links, verdicts).links_by_verdict(
+            client.LinksByVerdictRequest()
+        )
+
+
+def test_a_link_record_the_domain_would_not_accept_fails_the_report() -> None:
+    links = FakeLinkSource(
+        link_source.LinkRecord(slug="spring-sale", target_url="not-a-url")
+    )
+    verdicts = FakeVerdictSource()
+
+    with pytest.raises(DomainError):
+        service.ReportsService(links, verdicts).links_by_verdict(
+            client.LinksByVerdictRequest()
+        )
+
+
+def test_an_allowed_verdict_member_is_reported_as_an_allowed_link() -> None:
+    links = FakeLinkSource(
+        link_source.LinkRecord(slug="spring-sale", target_url="https://a.example/s")
+    )
+    verdicts = FakeVerdictSource(
+        verdict_source.VerdictRecord(
+            target_url="https://a.example/s",
+            decision=verdict_source.VerdictDecision.ALLOWED,
+            reason="on the allowlist",
+        )
+    )
+
+    resp = service.ReportsService(links, verdicts).links_by_verdict(
+        client.LinksByVerdictRequest()
+    )
+
+    assert [(view.slug, view.allowed, view.reason) for view in resp.links] == [
+        ("spring-sale", True, "on the allowlist")
+    ]
+
+
+def test_a_verdict_record_carrying_no_reason_fails_the_report() -> None:
+    links = FakeLinkSource()
+    verdicts = FakeVerdictSource(
+        verdict_source.VerdictRecord(
+            target_url="https://a.example/s",
+            decision=verdict_source.VerdictDecision.ALLOWED,
+            reason="",
+        )
+    )
+
+    with pytest.raises(DomainError):
         service.ReportsService(links, verdicts).links_by_verdict(
             client.LinksByVerdictRequest()
         )

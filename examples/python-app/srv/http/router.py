@@ -23,38 +23,29 @@ class Match:  # tesser:debt TB052
 
 
 @ts.do_not_use_function
-def split(raw_path: str) -> tuple[str, dict[str, str]]:  # tesser:debt TB051
-    parts = urllib.parse.urlsplit(raw_path)
-    query = {name: values[-1] for name, values in urllib.parse.parse_qs(parts.query).items()}
-    return parts.path, query
-
-
-@ts.do_not_use_function
 def match(routes: tuple[Route, ...], method: str, raw_path: str) -> Match | None:  # tesser:debt TB051
-    path, query_params = split(raw_path)
+    parts = urllib.parse.urlsplit(raw_path)
+    query_params = {name: values[-1] for name, values in urllib.parse.parse_qs(parts.query).items()}
     for route in routes:
         if route.method != method:
             continue
-        path_params = _path_params(route.pattern, path)
-        if path_params is None:
+        expected = route.pattern.strip("/").split("/")
+        actual = parts.path.strip("/").split("/")
+        if len(expected) != len(actual):
             continue
-        return Match(route.endpoint, path_params, query_params)
+        params: dict[str, str] = {}
+        matched = True
+        for want, got in zip(expected, actual, strict=True):
+            if want.startswith("{") and want.endswith("}"):
+                if not got:
+                    matched = False
+                    break
+                params[want[1:-1]] = urllib.parse.unquote(got)
+                continue
+            if want != got:
+                matched = False
+                break
+        if not matched:
+            continue
+        return Match(route.endpoint, params, query_params)
     return None
-
-
-@ts.do_not_use_function
-def _path_params(pattern: str, path: str) -> dict[str, str] | None:  # tesser:debt TB051
-    expected = pattern.strip("/").split("/")
-    actual = path.strip("/").split("/")
-    if len(expected) != len(actual):
-        return None
-    params: dict[str, str] = {}
-    for want, got in zip(expected, actual, strict=True):
-        if want.startswith("{") and want.endswith("}"):
-            if not got:
-                return None
-            params[want[1:-1]] = urllib.parse.unquote(got)
-            continue
-        if want != got:
-            return None
-    return params

@@ -22,32 +22,33 @@ class ConfigRepository(ts.ConfigRepository, Protocol):
 class EnvConfigRepository(ConfigRepository):
 
     def get(self) -> config.Config:
+        campaign_storage = os.environ.get("CAMPAIGN_STORAGE")
+        if campaign_storage is None:
+            raise invalid("missing_env", "CAMPAIGN_STORAGE is required")
+        linkpolicy_storage = os.environ.get("LINKPOLICY_STORAGE")
+        if linkpolicy_storage is None:
+            raise invalid("missing_env", "LINKPOLICY_STORAGE is required")
+        http_host = os.environ.get("HTTP_HOST")
+        if http_host is None:
+            raise invalid("missing_env", "HTTP_HOST is required")
+        raw_port = os.environ.get("HTTP_PORT")
+        if raw_port is None:
+            raise invalid("missing_env", "HTTP_PORT is required")
+        try:
+            http_port = int(raw_port)
+        except ValueError:
+            raise invalid("bad_http_port", f"HTTP_PORT must be an integer, got {raw_port!r}") from None
         return config.Config(
             config.Spec(
                 campaign=campaign_config.Config(
-                    campaign_config.Spec(storage=self._required("CAMPAIGN_STORAGE"))
+                    campaign_config.Spec(storage=campaign_storage)
                 ),
                 linkpolicy=linkpolicy_config.Config(
-                    linkpolicy_config.Spec(storage=self._required("LINKPOLICY_STORAGE"))
+                    linkpolicy_config.Spec(storage=linkpolicy_storage)
                 ),
                 reports=reports_config.Config(reports_config.Spec()),
                 http=config.HttpConfig(
-                    config.HttpSpec(
-                        host=self._required("HTTP_HOST"),
-                        port=self._port(self._required("HTTP_PORT")),
-                    )
+                    config.HttpSpec(host=http_host, port=http_port)
                 ),
             )
         )
-
-    def _required(self, name: str) -> str:  # tesser:debt TB051
-        value = os.environ.get(name)
-        if value is None:
-            raise invalid("missing_env", f"{name} is required")
-        return value
-
-    def _port(self, raw: str) -> int:  # tesser:debt TB051
-        try:
-            return int(raw)
-        except ValueError:
-            raise invalid("bad_http_port", f"HTTP_PORT must be an integer, got {raw!r}") from None

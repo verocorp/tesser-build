@@ -485,12 +485,69 @@ class CampaignService(ts.ApplicationService):
     def deactivate_link(self, req: client.DeactivateLinkRequest) -> client.CampaignView:
         campaign_id = values.CampaignID(req.campaign_id)
         campaign_id_text = str(campaign_id)
-        found = self._repo.find(campaign_repository.FindCampaignRequest(campaign_id=campaign_id_text))
-        c = campaign_views.required_campaign(found, campaign_id_text)
+        find_campaign_request = campaign_repository.FindCampaignRequest(
+            campaign_id=campaign_id_text
+        )
+        found_campaign = self._repo.find(find_campaign_request)
+        campaign_spec_mapper = MapToCampaignSpecFromRecord(
+            find_campaign_request=find_campaign_request,
+            found_campaign=found_campaign,
+        )
+        link_specs = tuple(
+            short_link.ShortLinkSpec(
+                slug=link_record.slug,
+                target_url=link_record.target_url,
+                active=link_record.status == "active",
+            )
+            for link_record in campaign_spec_mapper.link_records
+        )
+        links_spec = short_links.ShortLinksSpec(links=link_specs)
+        c = campaign.Campaign(campaign.CampaignSpec(
+            id=campaign_spec_mapper.campaign_id,
+            budget=money.MoneySpec(
+                amount=campaign_spec_mapper.budget_amount,
+                currency=campaign_spec_mapper.budget_currency,
+            ),
+            links=links_spec,
+        ))
         c.deactivate_short_link(values.Slug(req.slug))
-        save_campaign_request = campaign_views.save_request(c)
-        self._repo.save(save_campaign_request)
-        return campaign_views.campaign_view(c)
+
+        save_request_mapper = MapToSaveCampaignRequest(campaign_aggregate=c)
+        link_records = tuple(
+            campaign_repository.LinkRecord(
+                slug=link_record_mapper.slug,
+                target_url=link_record_mapper.target_url,
+                status=link_record_mapper.status,
+            )
+            for link_record_mapper in save_request_mapper.link_record_mappers
+        )
+        self._repo.save(campaign_repository.SaveCampaignRequest(
+            id=save_request_mapper.record_id,
+            budget=campaign_repository.MoneyRecord(
+                amount=save_request_mapper.money_record_mapper.amount,
+                currency=save_request_mapper.money_record_mapper.currency,
+            ),
+            links=link_records,
+        ))
+
+        find_campaign_view_request = campaign_queries.FindCampaignViewRequest(
+            campaign_id=campaign_id_text,
+        )
+        found_campaign_view = self._queries.find_view(find_campaign_view_request)
+        campaign_view_mapper = MapToCampaignView(
+            find_campaign_view_request=find_campaign_view_request,
+            found_campaign_view=found_campaign_view,
+        )
+        link_views = tuple(
+            client.LinkView(slug=link.slug, target_url=link.target_url, status=link.status)
+            for link in campaign_view_mapper.link_rows
+        )
+        return client.CampaignView(
+            campaign_id=campaign_view_mapper.campaign_id,
+            budget_amount=campaign_view_mapper.budget_amount,
+            budget_currency=campaign_view_mapper.budget_currency,
+            links=link_views,
+        )
 
     def get_campaign(self, req: client.GetCampaignRequest) -> client.CampaignView:
         campaign_id = values.CampaignID(req.campaign_id)
@@ -522,7 +579,12 @@ class CampaignService(ts.ApplicationService):
 
     def list_links(self, req: client.ListLinksRequest) -> client.ListLinksResponse:
         listed = self._repo.all(campaign_repository.ListCampaignsRequest())
-        views = tuple(
-            campaign_views.link_view(link) for c in listed.campaigns for link in c.links
-        )
-        return client.ListLinksResponse(links=views)
+        views: list[client.LinkView] = []
+        for listed_campaign in listed.campaigns:
+            for link in listed_campaign.links:
+                view = client.LinkView(
+                    slug=link.slug, target_url=link.target_url, status=link.status
+                )
+                views.append(view)
+        listed_views = tuple(views)
+        return client.ListLinksResponse(links=listed_views)

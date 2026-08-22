@@ -1,113 +1,77 @@
 from __future__ import annotations
 
-from app.app import App
-import app.loader as loader
-from protocol.cli import CliRequest, CliResponse, UsageError
-from tesser.errors import InfraError, conflict, invalid, not_found
-from srv.cli.main import commands_for, dispatch, respond
+import pytest
+
+from srv.cli.main import run
 
 
-def _app() -> App:  # tesser:debt TB071
-    return loader.load()
+def test_a_domain_rejection_becomes_an_exit_code_not_a_traceback(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    code = run(["create-campaign", "-5", "USD"])
+    captured = capsys.readouterr()
+    assert code == 2
+    assert captured.out == ""
+    assert captured.err.startswith("[")
 
 
-def test_a_domain_rejection_becomes_an_exit_code_not_a_traceback() -> None:
-    app = _app()
-    try:
-        resp = dispatch(commands_for(app), ["create-campaign", "-5", "USD"])
-        assert resp.exit_code == 2
-        assert resp.stdout == ""
-        assert resp.stderr.startswith("[")
-    finally:
-        app.close()
+def test_a_missing_argument_is_a_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
+    code = run(["create-campaign", "100.00"])
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "usage: create-campaign" in captured.err
 
 
-def test_a_missing_argument_is_a_usage_error() -> None:
-    app = _app()
-    try:
-        resp = dispatch(commands_for(app), ["create-campaign", "100.00"])
-        assert resp.exit_code == 2
-        assert "usage: create-campaign" in resp.stderr
-    finally:
-        app.close()
+def test_an_empty_argument_is_a_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
+    code = run(["create-campaign", "", "USD"])
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "missing argument <budget_amount>" in captured.err
 
 
-def test_an_empty_argument_is_a_usage_error() -> None:
-    app = _app()
-    try:
-        resp = dispatch(commands_for(app), ["create-campaign", "", "USD"])
-        assert resp.exit_code == 2
-        assert "missing argument <budget_amount>" in resp.stderr
-    finally:
-        app.close()
+def test_extra_arguments_are_a_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
+    code = run(["create-campaign", "100.00", "USD", "surplus"])
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "usage: create-campaign" in captured.err
 
 
-def test_extra_arguments_are_a_usage_error() -> None:
-    app = _app()
-    try:
-        resp = dispatch(commands_for(app), ["create-campaign", "100.00", "USD", "surplus"])
-        assert resp.exit_code == 2
-        assert "usage: create-campaign" in resp.stderr
-    finally:
-        app.close()
+def test_a_lookup_that_finds_nothing_exits_one(capsys: pytest.CaptureFixture[str]) -> None:
+    code = run(["add-link", "0123456789abcdef", "promo", "https://a.example/p"])
+    captured = capsys.readouterr()
+    assert code == 1
+    assert captured.err.startswith("[")
 
 
-def test_the_host_maps_each_failure_class_to_an_exit_code() -> None:
-    def raising(exc: Exception) -> CliResponse:
-        def run() -> CliResponse:
-            raise exc
-
-        return respond(run)
-
-    assert raising(UsageError("bad")).exit_code == 2
-    assert raising(invalid("bad_amount", "must be positive")).exit_code == 2
-    assert raising(not_found("no_campaign", "not found")).exit_code == 1
-    assert raising(conflict("dup_slug", "already exists")).exit_code == 1
-    assert raising(InfraError("down")).exit_code == 1
-    assert raising(RuntimeError("boom")).exit_code == 1
+def test_an_unknown_command_is_answered_with_the_banner(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    code = run(["nope"])
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "usage: python -m srv.cli.main" in captured.err
 
 
-def test_the_host_never_leaks_internals_on_the_unexpected_path() -> None:
-    def run() -> CliResponse:
-        raise RuntimeError("secret stack detail")
-
-    resp = respond(run)
-    assert resp.exit_code == 1
-    assert "secret" not in resp.stderr
-    assert resp.stderr == "unexpected error"
+def test_no_command_is_answered_with_the_banner(capsys: pytest.CaptureFixture[str]) -> None:
+    code = run([])
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "usage: python -m srv.cli.main" in captured.err
 
 
-def test_dispatch_routes_a_known_command() -> None:
-    called: list[CliRequest] = []
-
-    def _endpoint(req: CliRequest) -> CliResponse:
-        called.append(req)
-        return CliResponse(0, stdout="ok", stderr="")
-
-    resp = dispatch({"do-thing": _endpoint}, ["do-thing", "a", "b"])
-    assert resp.exit_code == 0
-    assert [req.args for req in called] == [("a", "b")]
+def test_each_campaign_command_is_wired_to_its_own_handler(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    for name in ("create-campaign", "add-link", "deactivate-link"):
+        assert run([name]) == 2
+        assert f"usage: {name}" in capsys.readouterr().err
 
 
-def test_dispatch_rejects_an_unknown_command_with_usage() -> None:
-    resp = dispatch({"do-thing": lambda req: CliResponse(0, "", "")}, ["nope"])
-    assert resp.exit_code == 2
-    assert "usage:" in resp.stderr
-
-
-def test_dispatch_rejects_no_command_with_usage() -> None:
-    resp = dispatch({"do-thing": lambda req: CliResponse(0, "", "")}, [])
-    assert resp.exit_code == 2
-    assert "usage:" in resp.stderr
-
-
-def test_commands_for_wires_the_campaign_commands_end_to_end() -> None:
-    app = _app()
-    try:
-        commands = commands_for(app)
-        assert set(commands) == {"create-campaign", "add-link", "deactivate-link"}
-        resp = commands["create-campaign"](CliRequest(("100.00", "USD")))
-        assert resp.exit_code == 0
-        assert resp.stdout.startswith("created campaign ")
-    finally:
-        app.close()
+def test_create_campaign_reaches_the_campaign_context(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    code = run(["create-campaign", "100.00", "USD"])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert captured.out.startswith("created campaign ")
+    assert captured.err == ""

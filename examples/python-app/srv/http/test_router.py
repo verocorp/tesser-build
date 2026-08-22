@@ -3,7 +3,7 @@ from __future__ import annotations
 import tesser.testing as ts
 
 from protocol.http import Endpoint, HttpRequest, HttpResponse
-from srv.http.router import Route, match, split
+from srv.http.router import Route, match
 
 
 @ts.fake
@@ -100,10 +100,3 @@ def test_the_matched_endpoint_is_the_one_that_answers() -> None:
     assert endpoint.calls == 1
     assert resp.json_body() == {"endpoint": "create"}
 
-
-def test_split_separates_the_path_from_its_query() -> None:
-    assert split("/r/summer?utm=news") == ("/r/summer", {"utm": "news"})
-
-
-def test_split_of_a_bare_path_carries_an_empty_query() -> None:
-    assert split("/campaigns") == ("/campaigns", {})

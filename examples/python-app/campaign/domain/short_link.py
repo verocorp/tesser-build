@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import copy  # tesser:debt TB062
-
 import tesser.domain as ts
 
 import campaign.domain.values as values
@@ -36,9 +34,6 @@ class ShortLink(ts.Entity):
 
     def deactivate(self) -> None:
         self._status = values.LinkStatus("inactive")
-
-    def _clone(self) -> "ShortLink":  # tesser:debt TB051
-        return copy.copy(self)
 
     @property
     def identity(self) -> values.Slug:

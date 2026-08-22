@@ -23,29 +23,35 @@ class FakeCampaignClientScripted(campaign_client.Client):
         self.error = error
         self.requests: list[object] = []
 
-    def _next(self, request: object) -> campaign_client.CampaignView:  # tesser:debt TB051
-        self.requests.append(request)
+    def create_campaign(
+        self, req: campaign_client.CreateCampaignRequest
+    ) -> campaign_client.CampaignView:
+        self.requests.append(req)
         if self.error is not None:
             raise self.error
         return self.pending.pop(0)
 
-    def create_campaign(
-        self, req: campaign_client.CreateCampaignRequest
-    ) -> campaign_client.CampaignView:
-        return self._next(req)
-
     def add_link(self, req: campaign_client.AddLinkRequest) -> campaign_client.CampaignView:
-        return self._next(req)
+        self.requests.append(req)
+        if self.error is not None:
+            raise self.error
+        return self.pending.pop(0)
 
     def deactivate_link(
         self, req: campaign_client.DeactivateLinkRequest
     ) -> campaign_client.CampaignView:
-        return self._next(req)
+        self.requests.append(req)
+        if self.error is not None:
+            raise self.error
+        return self.pending.pop(0)
 
     def get_campaign(
         self, req: campaign_client.GetCampaignRequest
     ) -> campaign_client.CampaignView:
-        return self._next(req)
+        self.requests.append(req)
+        if self.error is not None:
+            raise self.error
+        return self.pending.pop(0)
 
     def resolve(self, req: campaign_client.ResolveRequest) -> campaign_client.ResolveResponse:
         self.requests.append(req)

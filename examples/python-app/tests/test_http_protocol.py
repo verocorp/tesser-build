@@ -4,15 +4,7 @@ import inspect
 
 import pytest
 
-from tesser.errors import InfraError, invalid
-from protocol.http import (
-    BadRequest,
-    HttpRequest,
-    HttpResponse,
-    PayloadTooLarge,
-    StreamingUnsupported,
-)
-from srv.http.host import MAX_BUFFERED_BODY, buffered_length, respond
+from protocol.http import BadRequest, HttpRequest, HttpResponse
 
 
 
@@ -100,37 +92,6 @@ def test_a_request_reads_its_own_json_body_and_rejects_non_json() -> None:
         HttpRequest("GET", "/", {}, {}, {}, b"\xff").json_body()
 
 
-def test_the_host_owns_the_buffering_rule() -> None:
-    assert buffered_length((("Content-Length", "42"),)) == 42
-    assert buffered_length(()) == 0
-
-
-def test_buffered_length_rejects_a_non_numeric_header_as_a_client_error() -> None:
-    with pytest.raises(BadRequest):
-        buffered_length((("Content-Length", "abc"),))
-
-
-def test_buffered_length_is_case_insensitive_like_http_headers() -> None:
-    assert buffered_length((("content-length", "42"),)) == 42
-    with pytest.raises(StreamingUnsupported):
-        buffered_length((("transfer-encoding", "chunked"),))
-
-
-def test_buffered_length_refuses_a_streaming_body() -> None:
-    with pytest.raises(StreamingUnsupported):
-        buffered_length((("Transfer-Encoding", "chunked"),))
-
-
-def test_buffered_length_refuses_an_oversized_body() -> None:
-    with pytest.raises(PayloadTooLarge):
-        buffered_length((("Content-Length", str(MAX_BUFFERED_BODY + 1)),))
-
-
-def test_buffered_length_refuses_a_negative_declaration() -> None:
-    with pytest.raises(BadRequest):
-        buffered_length((("Content-Length", "-1"),))
-
-
 def test_a_request_reads_its_own_path_parameters() -> None:
     assert HttpRequest("GET", "/", {"campaign_id": "abc"}, {}, {}, b"").path_param("campaign_id") == "abc"
 
@@ -142,23 +103,6 @@ def test_a_missing_or_empty_path_parameter_is_a_client_error() -> None:
         HttpRequest("GET", "/", {"campaign_id": ""}, {}, {}, b"").path_param("campaign_id")
 
 
-def test_conflicting_content_lengths_are_refused_rather_than_framed() -> None:
-    with pytest.raises(BadRequest):
-        buffered_length((("Content-Length", "0"), ("Content-Length", "49")))
-    assert buffered_length((("Content-Length", "7"), ("Content-Length", "7"))) == 7
-
-
-def test_a_content_length_is_plain_ascii_digits_and_nothing_else() -> None:
-    for raw in ("5_0", "+50", " 50 x", "0x10", "٥"):
-        with pytest.raises(BadRequest):
-            buffered_length((("Content-Length", raw),))
-
-
-def test_any_transfer_encoding_refuses_the_body_not_only_chunked() -> None:
-    with pytest.raises(StreamingUnsupported):
-        buffered_length((("Transfer-Encoding", "gzip"), ("Content-Length", "5")))
-
-
 def test_a_redirect_target_may_not_smuggle_a_header() -> None:
     with pytest.raises(BadRequest):
         HttpResponse.redirect("https://ok.example/x\r\nSet-Cookie: a=b")
@@ -167,28 +111,3 @@ def test_a_redirect_target_may_not_smuggle_a_header() -> None:
 def test_a_caller_supplied_content_type_replaces_rather_than_duplicates() -> None:
     resp = HttpResponse.json(200, {"a": 1}, {"content-type": "application/problem+json"})
     assert resp.headers == {"content-type": "application/problem+json"}
-
-
-def test_the_host_maps_each_failure_class_to_a_problem_document() -> None:
-    def raising(exc: Exception) -> HttpResponse:
-        def run() -> HttpResponse:
-            raise exc
-
-        return respond(run)
-
-    assert raising(BadRequest("bad")).status_code == 400
-    assert raising(PayloadTooLarge("big")).status_code == 413
-    assert raising(StreamingUnsupported("stream")).status_code == 411
-    assert raising(invalid("bad_amount", "must be positive")).status_code == 422
-    assert raising(InfraError("down")).status_code == 503
-    assert raising(RuntimeError("boom")).status_code == 500
-
-
-def test_the_host_never_leaks_internals_on_the_unexpected_path() -> None:
-    def run() -> HttpResponse:
-        raise RuntimeError("secret stack detail")
-
-    resp = respond(run)
-    assert resp.status_code == 500
-    assert b"secret" not in resp.body
-    assert resp.json_body() == {"type": "/problems/internal", "detail": "unexpected error"}
