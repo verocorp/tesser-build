@@ -17,7 +17,7 @@ class Handler(ts.Handler):
 
 
 @ts.do_not_use_function
-def _row(view: client.LinkVerdictView) -> JSONObject:
+def _row(view: client.LinkVerdictView) -> JSONObject:  # tesser:debt TB051
     return {
         "slug": view.slug,
         "target_url": view.target_url,

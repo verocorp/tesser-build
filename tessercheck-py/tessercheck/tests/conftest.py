@@ -70,9 +70,7 @@ def conforming_tree(root: Path) -> None:
         "import shop.client.client as client\n"
         "class AskService(ts.ApplicationService):\n"
         "    def ask(self, request: client.AskRequest) -> client.AskResponse:\n"
-        "        return client.AskResponse(text=request.text)\n"
-        "    def _helper(self, anything: int) -> int:\n"
-        "        return anything\n",
+        "        return client.AskResponse(text=request.text)\n",
     )
 
 

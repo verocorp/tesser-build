@@ -15,7 +15,7 @@ class LinkPolicy(ts.Component):
         self._repo = self._repo_for(cfg)
         self.client: client.Client = service.LinkPolicyService(self._repo)
 
-    def _repo_for(self, cfg: config.Config) -> repo_memory.InMemoryVerdictRepository:
+    def _repo_for(self, cfg: config.Config) -> repo_memory.InMemoryVerdictRepository:  # tesser:debt TB051
         if cfg.storage == "memory":
             return repo_memory.InMemoryVerdictRepository()
         if not cfg.storage:

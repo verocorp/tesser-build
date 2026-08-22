@@ -37,7 +37,7 @@ class ShortLink(ts.Entity):
     def deactivate(self) -> None:
         self._status = values.LinkStatus("inactive")
 
-    def _clone(self) -> "ShortLink":
+    def _clone(self) -> "ShortLink":  # tesser:debt TB051
         return copy.copy(self)
 
     @property

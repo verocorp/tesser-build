@@ -73,7 +73,7 @@ class FilesystemSourceReader(ts.Repository):
             stdlib=tuple(sorted(sys.stdlib_module_names)),
         )
 
-    def _source(self, path: Path, relative: Path) -> source_reader.SourceFile:
+    def _source(self, path: Path, relative: Path) -> source_reader.SourceFile:  # tesser:debt TB051
         parts = list(relative.with_suffix("").parts)
         is_package = bool(parts) and parts[-1] == "__init__"
         form = (
@@ -97,7 +97,7 @@ class FilesystemSourceReader(ts.Repository):
             form=form,
         )
 
-    def _declaration(
+    def _declaration(  # tesser:debt TB051
         self, base: Path
     ) -> tuple[source_reader.RootForm, frozenset[str], tuple[str, ...], tuple[str, ...]]:
         try:

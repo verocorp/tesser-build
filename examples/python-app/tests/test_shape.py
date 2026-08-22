@@ -58,7 +58,7 @@ class FakeCampaignClientScripted(campaign_client.Client):
         self.pending = list(views)
         self.requests: list[object] = []
 
-    def _next(self, request: object) -> campaign_client.CampaignView:
+    def _next(self, request: object) -> campaign_client.CampaignView:  # tesser:debt TB051
         self.requests.append(request)
         return self.pending.pop(0)
 

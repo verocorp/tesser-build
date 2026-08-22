@@ -20,7 +20,7 @@ class Campaign(ts.Component):
             self._repo, policy, self._identity_gateway, self._repo
         )
 
-    def _repo_for(self, cfg: config.Config) -> repo_memory.InMemoryCampaignRepository:
+    def _repo_for(self, cfg: config.Config) -> repo_memory.InMemoryCampaignRepository:  # tesser:debt TB051
         if cfg.storage == "memory":
             return repo_memory.InMemoryCampaignRepository()
         if not cfg.storage:

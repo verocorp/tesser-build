@@ -23,14 +23,14 @@ class Match:  # tesser:debt TB052
 
 
 @ts.do_not_use_function
-def split(raw_path: str) -> tuple[str, dict[str, str]]:
+def split(raw_path: str) -> tuple[str, dict[str, str]]:  # tesser:debt TB051
     parts = urllib.parse.urlsplit(raw_path)
     query = {name: values[-1] for name, values in urllib.parse.parse_qs(parts.query).items()}
     return parts.path, query
 
 
 @ts.do_not_use_function
-def match(routes: tuple[Route, ...], method: str, raw_path: str) -> Match | None:
+def match(routes: tuple[Route, ...], method: str, raw_path: str) -> Match | None:  # tesser:debt TB051
     path, query_params = split(raw_path)
     for route in routes:
         if route.method != method:
@@ -43,7 +43,7 @@ def match(routes: tuple[Route, ...], method: str, raw_path: str) -> Match | None
 
 
 @ts.do_not_use_function
-def _path_params(pattern: str, path: str) -> dict[str, str] | None:
+def _path_params(pattern: str, path: str) -> dict[str, str] | None:  # tesser:debt TB051
     expected = pattern.strip("/").split("/")
     actual = path.strip("/").split("/")
     if len(expected) != len(actual):

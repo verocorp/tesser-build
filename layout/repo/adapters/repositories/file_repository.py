@@ -68,7 +68,7 @@ class FilesystemRepoReader(ts.Repository):
             requirements=requirements,
         )
 
-    def _manifest(self, path: Path) -> repo_reader.ManifestRecord:
+    def _manifest(self, path: Path) -> repo_reader.ManifestRecord:  # tesser:debt TB051
         record = self._file(path)
         match record.state:
             case repo_reader.FileState.MISSING:
@@ -84,7 +84,7 @@ class FilesystemRepoReader(ts.Repository):
             case _ as unreachable:
                 raise AssertionError(unreachable)
 
-    def _rows(self, text: str) -> repo_reader.ManifestRecord:
+    def _rows(self, text: str) -> repo_reader.ManifestRecord:  # tesser:debt TB051
         try:
             parsed = json.loads(text)
         except json.JSONDecodeError as error:
@@ -107,7 +107,7 @@ class FilesystemRepoReader(ts.Repository):
             note="",
         )
 
-    def _file(self, path: Path) -> repo_reader.FileRecord:
+    def _file(self, path: Path) -> repo_reader.FileRecord:  # tesser:debt TB051
         try:
             text = path.read_text(encoding="utf-8-sig")
         except FileNotFoundError:
@@ -116,7 +116,7 @@ class FilesystemRepoReader(ts.Repository):
             return repo_reader.FileRecord(state=repo_reader.FileState.UNREADABLE, text="")
         return repo_reader.FileRecord(state=repo_reader.FileState.READ, text=text)
 
-    def _entries(self, base: Path) -> tuple[repo_reader.EntryRecord, ...]:
+    def _entries(self, base: Path) -> tuple[repo_reader.EntryRecord, ...]:  # tesser:debt TB051
         if not base.is_dir():
             return ()
         found: list[repo_reader.EntryRecord] = []
@@ -140,7 +140,7 @@ class FilesystemRepoReader(ts.Repository):
                 )
         return tuple(found)
 
-    def _walk(
+    def _walk(  # tesser:debt TB051
         self, root: Path
     ) -> tuple[tuple[repo_reader.DeclarationRecord, ...], tuple[str, ...]]:
         declarations: list[repo_reader.DeclarationRecord] = []
@@ -166,7 +166,7 @@ class FilesystemRepoReader(ts.Repository):
                     requirements.append(str(entry.parent.relative_to(root)))
         return tuple(declarations), tuple(requirements)
 
-    def _listing(self, base: Path) -> tuple[Path, ...]:
+    def _listing(self, base: Path) -> tuple[Path, ...]:  # tesser:debt TB051
         try:
             return tuple(sorted(base.iterdir()))
         except OSError:

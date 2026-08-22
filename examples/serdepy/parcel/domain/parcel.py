@@ -71,7 +71,7 @@ class WeightKg(ts.ValueObject):
     def __float__(self) -> float:
         return canonical_float(self._value)
 
-    def _exceeds(self, threshold: "WeightKg") -> bool:
+    def _exceeds(self, threshold: "WeightKg") -> bool:  # tesser:debt TB051
         return self._value > threshold._value
 
     _value: float

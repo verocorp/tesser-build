@@ -14,7 +14,7 @@ _USAGE: Final[str] = "usage: python -m srv.cli.main [tree]"
 
 
 @ts.do_not_use_function
-def respond(run: Callable[[], CliResponse]) -> CliResponse:
+def respond(run: Callable[[], CliResponse]) -> CliResponse:  # tesser:debt TB051
     try:
         return run()
     except UsageError as e:
@@ -24,12 +24,12 @@ def respond(run: Callable[[], CliResponse]) -> CliResponse:
 
 
 @ts.do_not_use_function
-def dispatch(handler: cli.Handler, argv: list[str]) -> CliResponse:
+def dispatch(handler: cli.Handler, argv: list[str]) -> CliResponse:  # tesser:debt TB051
     return respond(lambda: handler.check(CliRequest(args=tuple(argv))))
 
 
 @ts.do_not_use_function
-def run(argv: list[str]) -> int:
+def run(argv: list[str]) -> int:  # tesser:debt TB051
     app = load()
     try:
         resp = dispatch(cli.Handler(app.tessercheck.client), argv)

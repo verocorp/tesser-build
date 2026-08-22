@@ -64,9 +64,7 @@ def _spec(
             "import shop.client.client as client\n"
             "class AskService(ts.ApplicationService):\n"
             "    def ask(self, request: client.AskRequest) -> client.AskResponse:\n"
-            "        return client.AskResponse(text=request.text)\n"
-            "    def _helper(self, anything: int) -> int:\n"
-            "        return anything\n",
+            "        return client.AskResponse(text=request.text)\n",
             False,
         ),
     ),
@@ -283,13 +281,12 @@ def test_placement_totality_is_flagged() -> None:
     )
     assert any(
         "plain.domain.thing.stray" in f
-        and "a module function declares itself with @ts.do_not_use_function" in f
+        and "a context role module holds classes, never functions" in f
         for f in findings
     )
     assert any("module constants are Final" in f for f in findings)
     assert any(
-        "a context module holds only imports, classes, declared functions, and "
-        "Final constants" in f
+        "a context module holds only imports, classes, and Final constants" in f
         for f in findings
     )
     assert any(
@@ -300,7 +297,7 @@ def test_placement_totality_is_flagged() -> None:
     )
 
 
-def test_declared_function_and_final_constant_pass() -> None:
+def test_a_final_constant_passes_and_a_declared_function_is_still_a_module_function() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
@@ -325,7 +322,12 @@ def test_declared_function_and_final_constant_pass() -> None:
             ),
         ))).violations()
                )
-    assert not any("plain.domain.thing" in f for f in findings)
+    assert any(
+        "plain.domain.thing.declared" in f
+        and "a context role module holds classes, never functions" in f
+        for f in findings
+    )
+    assert not any("LIMIT" in f for f in findings)
 
 
 def test_homeless_modules_are_flagged() -> None:
@@ -618,7 +620,11 @@ def test_protocol_module_totality_is_flagged() -> None:
     assert not any("protocol.box.BoxResponse" in f for f in findings)
     assert not any("protocol.box.BoxLabel" in f for f in findings)
     assert not any("protocol.box.Endpoint" in f for f in findings)
-    assert not any("protocol.box.fine" in f for f in findings)
+    assert any(
+        "protocol.box.fine" in f
+        and "a protocol module holds classes, never functions" in f
+        for f in findings
+    )
     assert not any("protocol.box belongs to no governed package" in f for f in findings)
     assert any(
         "protocol.box imports shop.client.client; a protocol module is context-generic and imports no context" in f
@@ -641,7 +647,7 @@ def test_protocol_module_totality_is_flagged() -> None:
     )
     assert any(
         "protocol.box.stray" in f
-        and "a protocol function declares itself with @ts.do_not_use_function" in f
+        and "a protocol module holds classes, never functions" in f
         for f in findings
     )
     assert (
@@ -663,7 +669,7 @@ def test_protocol_module_totality_is_flagged() -> None:
     assert any(
         "protocol.box" in f
         and "has a loose module-level statement; a protocol module holds only imports, "
-        "declared classes and functions, and Final constants" in f
+        "declared classes, and Final constants" in f
         for f in findings
     )
 
@@ -2013,10 +2019,13 @@ def test_srv_and_app_statement_totality() -> None:
     )
     assert any(
         "srv.box.stray" in f
-        and "a srv function declares itself with @ts.do_not_use_function" in f
+        and "a srv module holds classes, never functions" in f
         for f in findings
     )
-    assert not any("srv.box.fine" in f for f in findings)
+    assert any(
+        "srv.box.fine" in f and "a srv module holds classes, never functions" in f
+        for f in findings
+    )
     assert any(
         "srv.box.Box" in f and "declares no ts.* base; a srv class declares its block" in f
         for f in findings
@@ -2028,7 +2037,7 @@ def test_srv_and_app_statement_totality() -> None:
     )
     assert any(
         "srv.box" in f and "has a loose module-level statement; a srv module holds only imports, "
-        "declared classes and functions, and Final constants" in f
+        "declared classes, and Final constants" in f
         for f in findings
     )
     assert any(
@@ -6844,11 +6853,10 @@ def test_kernel_statement_totality() -> None:
     )
     assert any("kernel constants are Final" in f for f in findings), findings
     assert any(
-        "a kernel function declares itself with @ts.do_not_use_function" in f for f in findings
+        "a kernel module holds classes, never functions" in f for f in findings
     ), findings
     assert any(
-        "a kernel module holds only imports, classes, declared functions, "
-        "and Final constants" in f
+        "a kernel module holds only imports, classes, and Final constants" in f
         for f in findings
     ), findings
 
@@ -7687,3 +7695,47 @@ def test_a_do_not_use_tesser_module_is_not_a_consumer_namespace() -> None:
     )
     assert not any("tesser.do_not_use_declared is not a consumer namespace" in f for f in findings)
     assert any("tesser.stray is not a consumer namespace" in f for f in findings)
+
+
+def test_a_private_method_is_flagged_in_every_module_kind() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            ("shop/domain2.py", "shop.domain2", "", False),
+            (
+                "plain/domain/thing.py",
+                "plain.domain.thing",
+                "import tesser.domain as ts\n"
+                "class Thing(ts.ValueObject):\n"
+                "    _text: str\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, \"_text\", text)\n"
+                "    def _hidden(self) -> str:\n"
+                "        return self._text\n",
+                False,
+            ),
+            (
+                "plain/domain/test_thing.py",
+                "plain.domain.test_thing",
+                "import tesser.testing as ts\n"
+                "@ts.fake\n"
+                "class FakeThing:\n"
+                "    def _also_hidden(self) -> None:\n"
+                "        return None\n"
+                "def test_thing_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "plain.domain.thing.Thing._hidden" in f
+        and "is a private method; a class holds only public methods" in f
+        for f in findings
+    )
+    assert any(
+        "plain.domain.test_thing.FakeThing._also_hidden" in f
+        and "is a private method; a class holds only public methods" in f
+        for f in findings
+    )
+    assert not any("Thing.__init__" in f and "private method" in f for f in findings)

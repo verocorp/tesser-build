@@ -6,7 +6,7 @@ import tesser.domain as ts
 
 
 @ts.do_not_use_function
-def canonical_str(value: str) -> str:
+def canonical_str(value: str) -> str:  # tesser:debt TB051
     return value
 
 COLLECT_NAME: Final[str] = "collect_name"
@@ -146,6 +146,6 @@ class Booking(ts.AggregateRoot):
         self._require(CONFIRM)
         self._step = Step(BOOKED)
 
-    def _require(self, label: str) -> None:
+    def _require(self, label: str) -> None:  # tesser:debt TB051
         if str(self._step) != label:
             raise ValueError(f"not available at step {self._step}")

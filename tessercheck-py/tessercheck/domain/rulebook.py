@@ -21,6 +21,8 @@ HOLE_NAMES: Final[dict[str, str]] = {
     "inner.attr": "⟨field⟩",
     "node.value": "⟨literal⟩",
     "stmt.name": "⟨name⟩",
+    "node.name": "⟨class⟩",
+    "member.name": "⟨method⟩",
     "inner.name": "⟨class⟩",
     "type(node).__name__": "⟨node⟩",
     "target": "⟨import⟩",
@@ -65,6 +67,7 @@ APPLIES_TO: Final[dict[str, str]] = {
     "Codebase._double_violations": "every module",
     "Codebase._shadowing_violations": "every module",
     "Codebase._string_equality_violations": "every module",
+    "Codebase._private_method_violations": "every class, in every module",
     "Codebase._vo_field_violations": "value object class",
     "Codebase._exposure_violations": "value object class",
     "Codebase._composition_violations": "value object class",
@@ -120,6 +123,7 @@ APPLIES_TO: Final[dict[str, str]] = {
     "protocol": "protocol module",
     "role": "context role module",
     "module": "context role module",
+    "context role": "context role module",
     "kernel": "kernel module",
     "test": "test module",
     "Codebase._form_violations": "direction-legal context import (role modules and their __init__, srv/app, test modules)",
@@ -183,7 +187,7 @@ class RuleRow(ts.ValueObject):
 
 
 @ts.do_not_use_function
-def _ts_name_map(tree: ast.Module) -> dict[str, str]:
+def _ts_name_map(tree: ast.Module) -> dict[str, str]:  # tesser:debt TB051
     for node in tree.body:
         if (
             isinstance(node, ast.AnnAssign)
@@ -205,7 +209,7 @@ def _ts_name_map(tree: ast.Module) -> dict[str, str]:
 
 
 @ts.do_not_use_function
-def _instantiations(
+def _instantiations(  # tesser:debt TB051
     tree: ast.Module, method: ast.FunctionDef
 ) -> list[dict[str, str | None]]:
     params = [arg.arg for arg in method.args.args if arg.arg != "self"]
@@ -230,7 +234,7 @@ def _instantiations(
 
 
 @ts.do_not_use_function
-def _local_aliases(method: ast.FunctionDef) -> dict[str, str]:
+def _local_aliases(method: ast.FunctionDef) -> dict[str, str]:  # tesser:debt TB051
     out: dict[str, str] = {}
     for node in method.body:
         if (
@@ -247,7 +251,7 @@ def _local_aliases(method: ast.FunctionDef) -> dict[str, str]:
 
 
 @ts.do_not_use_function
-def _fill_hole(
+def _fill_hole(  # tesser:debt TB051
     expr: ast.expr,
     binding: dict[str, str | None],
     aliases: dict[str, str],
@@ -287,7 +291,7 @@ def _fill_hole(
 
 
 @ts.do_not_use_function
-def _render_message(
+def _render_message(  # tesser:debt TB051
     node: ast.expr,
     binding: dict[str, str | None],
     aliases: dict[str, str],
@@ -314,7 +318,7 @@ def _render_message(
 
 
 @ts.do_not_use_function
-def _protocol_package(tree: ast.Module) -> str:
+def _protocol_package(tree: ast.Module) -> str:  # tesser:debt TB051
     for node in tree.body:
         if (
             isinstance(node, ast.AnnAssign)
@@ -328,7 +332,7 @@ def _protocol_package(tree: ast.Module) -> str:
 
 
 @ts.do_not_use_function
-def rule_rows(tree: ast.Module) -> tuple[RuleRow, ...]:
+def rule_rows(tree: ast.Module) -> tuple[RuleRow, ...]:  # tesser:debt TB051
     ts_map = _ts_name_map(tree)
     order: list[str] = []
     codes: dict[str, str] = {}
@@ -421,7 +425,7 @@ def rule_rows(tree: ast.Module) -> tuple[RuleRow, ...]:
 
 
 @ts.do_not_use_function
-def test_assertions(
+def test_assertions(  # tesser:debt TB051
     modules: tuple[tuple[str, str], ...] = (),
 ) -> tuple[tuple[str, tuple[str, ...]], ...]:
     out: list[tuple[str, tuple[str, ...]]] = []
@@ -445,7 +449,7 @@ def test_assertions(
 
 
 @ts.do_not_use_function
-def covering_tests(
+def covering_tests(  # tesser:debt TB051
     clause: str, assertions: tuple[tuple[str, tuple[str, ...]], ...] = ()
 ) -> tuple[str, ...]:
     return tuple(
@@ -456,7 +460,7 @@ def covering_tests(
 
 
 @ts.do_not_use_function
-def contracts(text: str) -> tuple[tuple[str, str], ...]:
+def contracts(text: str) -> tuple[tuple[str, str], ...]:  # tesser:debt TB051
     found: list[tuple[str, str]] = []
     contract_id = None
     for line in text.splitlines():
@@ -472,7 +476,7 @@ def contracts(text: str) -> tuple[tuple[str, str], ...]:
 
 
 @ts.do_not_use_function
-def render(
+def render(  # tesser:debt TB051
     checks_text: str,
     test_modules: tuple[tuple[str, str], ...] = (),
     contracts_text: str = "",

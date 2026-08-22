@@ -35,7 +35,7 @@ ARM_SHAPE: Final[re.Pattern[str]] = re.compile(
 
 
 @ts.do_not_use_function
-def canonical_str(value: str) -> str:
+def canonical_str(value: str) -> str:  # tesser:debt TB051
     return value
 
 
@@ -138,13 +138,13 @@ class Repo(ts.AggregateRoot):
         apps = sum(1 for kind in rows.values() if kind == KIND_APP)
         return (Text(str(len(rows))), Text(str(apps)))
 
-    def _rows(self) -> dict[str, str] | None:
+    def _rows(self) -> dict[str, str] | None:  # tesser:debt TB051
         state, rows, _ = self._manifest
         if state != READ:
             return None
         return dict(rows)
 
-    def _rows_error(self) -> str:
+    def _rows_error(self) -> str:  # tesser:debt TB051
         state, _, note = self._manifest
         if state == MALFORMED:
             return f"manifest.json is unreadable: {note}"
@@ -152,7 +152,7 @@ class Repo(ts.AggregateRoot):
             return "manifest.json is not a flat object of directory-path to kind strings"
         return f"manifest.json is {state}"
 
-    def _kind_problems(self, rows: dict[str, str]) -> list[Problem]:
+    def _kind_problems(self, rows: dict[str, str]) -> list[Problem]:  # tesser:debt TB051
         return [
             Problem(
                 f"manifest.json row '{key}' declares unknown kind '{kind}'; "
@@ -162,7 +162,7 @@ class Repo(ts.AggregateRoot):
             if kind not in KINDS
         ]
 
-    def _level_problems(self, rows: dict[str, str]) -> list[Problem]:
+    def _level_problems(self, rows: dict[str, str]) -> list[Problem]:  # tesser:debt TB051
         found: list[Problem] = []
         top_rows = {key for key in rows if "/" not in key}
         top_disk = {name for name, _ in self._top}
@@ -195,7 +195,7 @@ class Repo(ts.AggregateRoot):
                 )
         return found
 
-    def _gate_problems(self, rows: dict[str, str]) -> list[Problem]:
+    def _gate_problems(self, rows: dict[str, str]) -> list[Problem]:  # tesser:debt TB051
         found: list[Problem] = []
         verify_state, verify_text = self._verify
         workflow_state, workflow_text = self._workflow
@@ -230,7 +230,7 @@ class Repo(ts.AggregateRoot):
         found.extend(self._declaration_problems(checked))
         return found
 
-    def _declaration_problems(self, checked: set[str]) -> list[Problem]:
+    def _declaration_problems(self, checked: set[str]) -> list[Problem]:  # tesser:debt TB051
         found: list[Problem] = []
         on_disk = {path for path, _, _ in self._declarations}
         for path in sorted(on_disk - checked):
@@ -258,7 +258,7 @@ class Repo(ts.AggregateRoot):
                 found.append(Problem(f"{path} does not declare 'app': first line is not 'app'"))
         return found
 
-    def _requirement_problems(self, rows: dict[str, str]) -> list[Problem]:
+    def _requirement_problems(self, rows: dict[str, str]) -> list[Problem]:  # tesser:debt TB051
         return [
             Problem(
                 f"{key} holds a {REQUIREMENTS} but is not an app row; "
@@ -269,7 +269,7 @@ class Repo(ts.AggregateRoot):
         ]
 
     @staticmethod
-    def _arm_body(verify_text: str, function: str) -> str:
+    def _arm_body(verify_text: str, function: str) -> str:  # tesser:debt TB051
         match = re.search(
             rf"^{function}\(\) {{\n(.*?)^}}", verify_text, re.MULTILINE | re.DOTALL
         )

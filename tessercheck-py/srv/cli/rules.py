@@ -19,7 +19,7 @@ _HERE: Final[str] = "."
 
 
 @ts.do_not_use_function
-def respond(run: Callable[[], CliResponse]) -> CliResponse:
+def respond(run: Callable[[], CliResponse]) -> CliResponse:  # tesser:debt TB051
     try:
         return run()
     except UsageError as e:
@@ -29,12 +29,12 @@ def respond(run: Callable[[], CliResponse]) -> CliResponse:
 
 
 @ts.do_not_use_function
-def dispatch(handler: cli.Handler, args: list[str]) -> CliResponse:
+def dispatch(handler: cli.Handler, args: list[str]) -> CliResponse:  # tesser:debt TB051
     return respond(lambda: handler.rulebook(CliRequest(args=tuple(args))))
 
 
 @ts.do_not_use_function
-def settle(rendered: str, output: Path, check: bool) -> int:
+def settle(rendered: str, output: Path, check: bool) -> int:  # tesser:debt TB051
     if check:
         if not output.exists() or output.read_text() != rendered:
             print(
@@ -50,7 +50,7 @@ def settle(rendered: str, output: Path, check: bool) -> int:
 
 
 @ts.do_not_use_function
-def run(argv: list[str]) -> int:
+def run(argv: list[str]) -> int:  # tesser:debt TB051
     check = "--check" in argv
     args = [arg for arg in argv if arg != "--check"]
     app = load()

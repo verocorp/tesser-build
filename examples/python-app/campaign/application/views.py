@@ -15,7 +15,7 @@ from tesser.errors import conflict, not_found
 
 
 @ts.do_not_use_function
-def campaign_view(c: campaign.Campaign) -> client.CampaignView:
+def campaign_view(c: campaign.Campaign) -> client.CampaignView:  # tesser:debt TB051
     return client.CampaignView(
         campaign_id=str(c.id),
         budget_amount=str(c.budget.amount),
@@ -25,14 +25,14 @@ def campaign_view(c: campaign.Campaign) -> client.CampaignView:
 
 
 @ts.do_not_use_function
-def _domain_link_view(link: short_link.ShortLink) -> client.LinkView:
+def _domain_link_view(link: short_link.ShortLink) -> client.LinkView:  # tesser:debt TB051
     return client.LinkView(
         slug=str(link.slug), target_url=str(link.target_url), status=str(link.status)
     )
 
 
 @ts.do_not_use_function
-def link_view(record: campaign_repository.LinkRecord) -> client.LinkView:
+def link_view(record: campaign_repository.LinkRecord) -> client.LinkView:  # tesser:debt TB051
     return client.LinkView(
         slug=record.slug,
         target_url=record.target_url,
@@ -41,7 +41,7 @@ def link_view(record: campaign_repository.LinkRecord) -> client.LinkView:
 
 
 @ts.do_not_use_function
-def save_request(c: campaign.Campaign) -> campaign_repository.SaveCampaignRequest:
+def save_request(c: campaign.Campaign) -> campaign_repository.SaveCampaignRequest:  # tesser:debt TB051
     return campaign_repository.SaveCampaignRequest(
         id=str(c.id),
         budget=_money_record(c),
@@ -50,19 +50,19 @@ def save_request(c: campaign.Campaign) -> campaign_repository.SaveCampaignReques
 
 
 @ts.do_not_use_function
-def _money_record(c: campaign.Campaign) -> campaign_repository.MoneyRecord:
+def _money_record(c: campaign.Campaign) -> campaign_repository.MoneyRecord:  # tesser:debt TB051
     return campaign_repository.MoneyRecord(amount=str(c.budget.amount), currency=str(c.budget.currency))
 
 
 @ts.do_not_use_function
-def _link_record(link: short_link.ShortLink) -> campaign_repository.LinkRecord:
+def _link_record(link: short_link.ShortLink) -> campaign_repository.LinkRecord:  # tesser:debt TB051
     return campaign_repository.LinkRecord(
         slug=str(link.slug), target_url=str(link.target_url), status=str(link.status)
     )
 
 
 @ts.do_not_use_function
-def campaign_spec(record: campaign_repository.CampaignRecord) -> campaign.CampaignSpec:
+def campaign_spec(record: campaign_repository.CampaignRecord) -> campaign.CampaignSpec:  # tesser:debt TB051
     return campaign.CampaignSpec(
         id=record.id,
         budget=money.MoneySpec(amount=record.budget.amount, currency=record.budget.currency),
@@ -80,7 +80,7 @@ def campaign_spec(record: campaign_repository.CampaignRecord) -> campaign.Campai
 
 
 @ts.do_not_use_function
-def required_campaign(
+def required_campaign(  # tesser:debt TB051
     found: campaign_repository.FindCampaignResponse, campaign_id: str
 ) -> campaign.Campaign:
     match found.outcome:
@@ -93,7 +93,7 @@ def required_campaign(
 
 
 @ts.do_not_use_function
-def resolved_target(found: campaign_repository.FindCampaignResponse, slug: str) -> str:
+def resolved_target(found: campaign_repository.FindCampaignResponse, slug: str) -> str:  # tesser:debt TB051
     match found.outcome:
         case campaign_repository.CampaignLookup.FOUND:
             return active_target(found.campaigns[0], slug)
@@ -104,7 +104,7 @@ def resolved_target(found: campaign_repository.FindCampaignResponse, slug: str) 
 
 
 @ts.do_not_use_function
-def active_target(record: campaign_repository.CampaignRecord, slug: str) -> str:
+def active_target(record: campaign_repository.CampaignRecord, slug: str) -> str:  # tesser:debt TB051
     for link in record.links:
         if link.slug == slug and link.status == "active":
             return link.target_url
@@ -112,7 +112,7 @@ def active_target(record: campaign_repository.CampaignRecord, slug: str) -> str:
 
 
 @ts.do_not_use_function
-def ensure_target_allowed(checked: target_policy.CheckTargetResponse) -> None:
+def ensure_target_allowed(checked: target_policy.CheckTargetResponse) -> None:  # tesser:debt TB051
     match checked.verdict:
         case target_policy.PolicyVerdict.ALLOWED:
             return None
@@ -123,7 +123,7 @@ def ensure_target_allowed(checked: target_policy.CheckTargetResponse) -> None:
 
 
 @ts.do_not_use_function
-def ensure_slug_available(checked: campaign_repository.SlugTakenResponse, slug: str) -> None:
+def ensure_slug_available(checked: campaign_repository.SlugTakenResponse, slug: str) -> None:  # tesser:debt TB051
     match checked.availability:
         case campaign_repository.SlugAvailability.FREE:
             return None

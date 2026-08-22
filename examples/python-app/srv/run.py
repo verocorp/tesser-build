@@ -12,7 +12,7 @@ from protocol.lifecycle import Host
 
 
 @ts.do_not_use_function
-def run_until_signal(host: Host, close: Callable[[], None]) -> None:
+def run_until_signal(host: Host, close: Callable[[], None]) -> None:  # tesser:debt TB051
     stop = threading.Event()
 
     def _handle(signum: int, frame: Optional[FrameType]) -> None:

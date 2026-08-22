@@ -42,7 +42,7 @@ class ShortLinks(ts.Entity):
                 return
         raise not_found("link_missing", f"no short link with slug {slug}")
 
-    def _admit(
+    def _admit(  # tesser:debt TB051
         self, links: list[short_link.ShortLink], link: short_link.ShortLink
     ) -> None:
         for existing in links:

@@ -91,7 +91,7 @@ class Day(ts.ValueObject):
     def __str__(self) -> str:
         return self._value.isoformat()
 
-    def _before(self, other: "Day") -> bool:
+    def _before(self, other: "Day") -> bool:  # tesser:debt TB051
         return self._value < other._value
 
     _value: date
@@ -131,7 +131,7 @@ class DateWindow(ts.ValueObject):
 
 
 @ts.do_not_use_function
-def _day(value: str, *, field: str) -> Day:
+def _day(value: str, *, field: str) -> Day:  # tesser:debt TB051
     try:
         return Day(value)
     except DomainError as e:

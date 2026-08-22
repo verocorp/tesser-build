@@ -9,12 +9,12 @@ import reports.domain.report as report
 
 
 @ts.do_not_use_function
-def domain_links(listed: link_source.ListLinksResponse) -> tuple[report.Link, ...]:
+def domain_links(listed: link_source.ListLinksResponse) -> tuple[report.Link, ...]:  # tesser:debt TB051
     return tuple(report.Link(slug=f.slug, target_url=f.target_url) for f in listed.links)
 
 
 @ts.do_not_use_function
-def domain_verdicts(listed: verdict_source.ListVerdictsResponse) -> tuple[report.RecordedVerdict, ...]:
+def domain_verdicts(listed: verdict_source.ListVerdictsResponse) -> tuple[report.RecordedVerdict, ...]:  # tesser:debt TB051
     return tuple(
         report.RecordedVerdict(f.target_url, f.decision == verdict_source.VerdictDecision.ALLOWED, f.reason)
         for f in listed.verdicts
@@ -22,7 +22,7 @@ def domain_verdicts(listed: verdict_source.ListVerdictsResponse) -> tuple[report
 
 
 @ts.do_not_use_function
-def links_by_verdict_response(rows: tuple[report.LinkVerdict, ...]) -> client.LinksByVerdictResponse:
+def links_by_verdict_response(rows: tuple[report.LinkVerdict, ...]) -> client.LinksByVerdictResponse:  # tesser:debt TB051
     views = tuple(
         client.LinkVerdictView(str(r.slug), str(r.target_url), str(r.allowed) == "allowed", str(r.reason))
         for r in rows

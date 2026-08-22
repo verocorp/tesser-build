@@ -18,7 +18,7 @@ class FakeSchedulingClientScripted(client.SchedulingClient):
         self.error = error
         self.requests: list[object] = []
 
-    def _next(self, request: object) -> client.BookingStateResponse:
+    def _next(self, request: object) -> client.BookingStateResponse:  # tesser:debt TB051
         self.requests.append(request)
         if self.error is not None:
             raise self.error

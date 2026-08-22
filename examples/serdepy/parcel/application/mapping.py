@@ -7,7 +7,7 @@ import parcel.domain.parcel as parcel
 
 
 @ts.do_not_use_function
-def parcel_record(p: parcel.Parcel) -> parcel_wire.ParcelRecord:
+def parcel_record(p: parcel.Parcel) -> parcel_wire.ParcelRecord:  # tesser:debt TB051
     return parcel_wire.ParcelRecord(
         code=str(p.code),
         items=int(p.items),

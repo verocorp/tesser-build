@@ -10,7 +10,7 @@ from protocol.cli import CliRequest, CliResponse, UsageError
 
 
 @ts.do_not_use_function
-def respond(handler: cli.Handler, argv: list[str]) -> CliResponse:
+def respond(handler: cli.Handler, argv: list[str]) -> CliResponse:  # tesser:debt TB051
     try:
         return handler.trees(CliRequest(args=tuple(argv)))
     except UsageError as error:
@@ -18,7 +18,7 @@ def respond(handler: cli.Handler, argv: list[str]) -> CliResponse:
 
 
 @ts.do_not_use_function
-def run(argv: list[str]) -> int:
+def run(argv: list[str]) -> int:  # tesser:debt TB051
     response = respond(cli.Handler(load().repo.client), argv)
     if response.stdout:
         print(response.stdout)

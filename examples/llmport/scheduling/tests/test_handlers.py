@@ -17,7 +17,7 @@ class FakeSchedulingClientScripted(client.SchedulingClient):
         self.pending = list(states)
         self.requests: list[object] = []
 
-    def _next(self, request: object) -> client.BookingStateResponse:
+    def _next(self, request: object) -> client.BookingStateResponse:  # tesser:debt TB051
         self.requests.append(request)
         return self.pending.pop(0)
 

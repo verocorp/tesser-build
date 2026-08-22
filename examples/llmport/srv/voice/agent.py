@@ -31,12 +31,12 @@ class ToolAgent(Agent, ts.Host):
             await self._halt()
             raise
 
-    async def _rebind(self, turn: voice.ToolTurn) -> None:
+    async def _rebind(self, turn: voice.ToolTurn) -> None:  # tesser:debt TB051
         await self.update_tools(
             [function_tool(self._shim(tool.name), raw_schema=tool.schema()) for tool in turn.tools]
         )
 
-    def _shim(self, name: str) -> Callable[..., Awaitable[str]]:
+    def _shim(self, name: str) -> Callable[..., Awaitable[str]]:  # tesser:debt TB051
         async def call(raw_arguments: dict[str, object]) -> str:
             async with self._lock:
                 route = router.match(self._routes, name)

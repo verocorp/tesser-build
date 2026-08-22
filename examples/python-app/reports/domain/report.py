@@ -78,7 +78,7 @@ class LinkVerdict(ts.ValueObject):
 
 
 @ts.do_not_use_function
-def join_links_with_verdicts(
+def join_links_with_verdicts(  # tesser:debt TB051
     links: tuple[Link, ...], verdicts: tuple[RecordedVerdict, ...]
 ) -> tuple[LinkVerdict, ...]:
     by_url = {str(v.target_url): v for v in verdicts}

@@ -79,13 +79,13 @@ class LlmToolHandler(ts.Handler):
             self._client.confirm(client.ConfirmBookingRequest(booking_id=self._booking_id))
         )
 
-    def _turn(self, state: client.BookingStateResponse) -> voice.ToolTurn:
+    def _turn(self, state: client.BookingStateResponse) -> voice.ToolTurn:  # tesser:debt TB051
         return voice.ToolTurn(
             reply=state.reply,
             tools=tuple(self._tool(name, state) for name in TOOLS_FOR_STEP[state.step]),
         )
 
-    def _tool(self, name: str, state: client.BookingStateResponse) -> voice.Tool:
+    def _tool(self, name: str, state: client.BookingStateResponse) -> voice.Tool:  # tesser:debt TB051
         if name not in self._declarations:
             raise ValueError(f"unknown tool {name!r}")
         description, parameters = self._declarations[name]
@@ -93,7 +93,7 @@ class LlmToolHandler(ts.Handler):
 
 
 @ts.do_not_use_function
-def _params(properties: dict[str, object], required: tuple[str, ...]) -> dict[str, object]:
+def _params(properties: dict[str, object], required: tuple[str, ...]) -> dict[str, object]:  # tesser:debt TB051
     schema: dict[str, object] = {"type": "object", "properties": properties}
     if required:
         schema["required"] = list(required)

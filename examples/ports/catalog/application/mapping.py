@@ -11,22 +11,22 @@ import catalog.domain.item as item
 
 
 @ts.do_not_use_function
-def save_request(entity: item.Item) -> item_repository.SaveItemRequest:
+def save_request(entity: item.Item) -> item_repository.SaveItemRequest:  # tesser:debt TB051
     return item_repository.SaveItemRequest(id=entity.id(), name=entity.name())
 
 
 @ts.do_not_use_function
-def item_spec(view: item_repository.ItemView) -> item.ItemSpec:
+def item_spec(view: item_repository.ItemView) -> item.ItemSpec:  # tesser:debt TB051
     return item.ItemSpec(id=view.id, name=view.name)
 
 
 @ts.do_not_use_function
-def rebuilt(view: item_repository.ItemView) -> item.Item:
+def rebuilt(view: item_repository.ItemView) -> item.Item:  # tesser:debt TB051
     return item.Item(item_spec(view))
 
 
 @ts.do_not_use_function
-def get_response(found: item_repository.FindItemResponse) -> client.GetItemResponse:
+def get_response(found: item_repository.FindItemResponse) -> client.GetItemResponse:  # tesser:debt TB051
     match found.outcome:
         case item_repository.ItemLookup.FOUND:
             return client.GetItemResponse(items=_views(found.items))
@@ -39,12 +39,12 @@ def get_response(found: item_repository.FindItemResponse) -> client.GetItemRespo
 
 
 @ts.do_not_use_function
-def list_response(listed: item_repository.ListItemsResponse) -> client.ListItemsResponse:
+def list_response(listed: item_repository.ListItemsResponse) -> client.ListItemsResponse:  # tesser:debt TB051
     return client.ListItemsResponse(items=_views(listed.items))
 
 
 @ts.do_not_use_function
-def add_response(entity: item.Item, checked: name_policy.CheckNameResponse) -> client.AddItemResponse:
+def add_response(entity: item.Item, checked: name_policy.CheckNameResponse) -> client.AddItemResponse:  # tesser:debt TB051
     match checked.verdict:
         case name_policy.NameVerdict.ALLOWED:
             return client.AddItemResponse(id=entity.id(), name=entity.name(), reason="")
@@ -55,5 +55,5 @@ def add_response(entity: item.Item, checked: name_policy.CheckNameResponse) -> c
 
 
 @ts.do_not_use_function
-def _views(views: tuple[item_repository.ItemView, ...]) -> tuple[client.ItemView, ...]:
+def _views(views: tuple[item_repository.ItemView, ...]) -> tuple[client.ItemView, ...]:  # tesser:debt TB051
     return tuple(client.ItemView(id=view.id, name=view.name) for view in views)

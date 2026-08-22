@@ -40,13 +40,13 @@ class EnvConfigRepository(ConfigRepository):
             )
         )
 
-    def _required(self, name: str) -> str:
+    def _required(self, name: str) -> str:  # tesser:debt TB051
         value = os.environ.get(name)
         if value is None:
             raise invalid("missing_env", f"{name} is required")
         return value
 
-    def _port(self, raw: str) -> int:
+    def _port(self, raw: str) -> int:  # tesser:debt TB051
         try:
             return int(raw)
         except ValueError:

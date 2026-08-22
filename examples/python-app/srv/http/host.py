@@ -18,7 +18,7 @@ MAX_BUFFERED_BODY: Final[int] = 1_048_576
 
 
 @ts.do_not_use_function
-def buffered_length(headers: Iterable[tuple[str, str]]) -> int:
+def buffered_length(headers: Iterable[tuple[str, str]]) -> int:  # tesser:debt TB051
     lengths: list[str] = []
     streaming = False
     for name, value in headers:
@@ -45,7 +45,7 @@ def buffered_length(headers: Iterable[tuple[str, str]]) -> int:
 
 
 @ts.do_not_use_function
-def respond(run: Callable[[], HttpResponse]) -> HttpResponse:
+def respond(run: Callable[[], HttpResponse]) -> HttpResponse:  # tesser:debt TB051
     try:
         return run()
     except BadRequest as e:
@@ -63,7 +63,7 @@ def respond(run: Callable[[], HttpResponse]) -> HttpResponse:
 
 
 @ts.do_not_use_function
-def routes_for(app: App) -> tuple[Route, ...]:
+def routes_for(app: App) -> tuple[Route, ...]:  # tesser:debt TB051
     campaign = http.Handler(app.campaign.client)
     reports = reports_http.Handler(app.reports.client)
     return (
@@ -77,7 +77,7 @@ def routes_for(app: App) -> tuple[Route, ...]:
 
 
 @ts.do_not_use_function
-def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
+def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:  # tesser:debt TB051
     routes = routes_for(app)
 
     class _RequestHandler(BaseHTTPRequestHandler):
@@ -89,7 +89,7 @@ def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
         def do_POST(self) -> None:
             self._send(self._dispatch("POST"))
 
-        def _dispatch(self, method: str) -> HttpResponse:
+        def _dispatch(self, method: str) -> HttpResponse:  # tesser:debt TB051
             def run() -> HttpResponse:
                 found = match(routes, method, self.path)
                 if found is None:
@@ -113,7 +113,7 @@ def make_server(addr: tuple[str, int], app: App) -> ThreadingHTTPServer:
         def log_message(self, format: str, *args: Any) -> None:
             return
 
-        def _send(self, resp: HttpResponse) -> None:
+        def _send(self, resp: HttpResponse) -> None:  # tesser:debt TB051
             self.send_response(resp.status_code)
             self.send_header("Content-Length", str(len(resp.body)))
             for name, value in resp.headers.items():

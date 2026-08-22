@@ -9,7 +9,7 @@ import tessercheck.domain.rulebook as rulebook
 
 
 @ts.do_not_use_function
-def findings(read: source_reader.ReadSourcesResponse) -> tuple[str, ...]:
+def findings(read: source_reader.ReadSourcesResponse) -> tuple[str, ...]:  # tesser:debt TB051
     codebase = domain.Codebase(
         domain.CodebaseSpec(
             sources=_sources(read),
@@ -29,7 +29,7 @@ def findings(read: source_reader.ReadSourcesResponse) -> tuple[str, ...]:
 
 
 @ts.do_not_use_function
-def _declared(read: source_reader.ReadSourcesResponse) -> str:
+def _declared(read: source_reader.ReadSourcesResponse) -> str:  # tesser:debt TB051
     match read.root:
         case source_reader.RootForm.APP:
             return domain.DECLARED_APP
@@ -44,7 +44,7 @@ def _declared(read: source_reader.ReadSourcesResponse) -> str:
 
 
 @ts.do_not_use_function
-def _sources(
+def _sources(  # tesser:debt TB051
     read: source_reader.ReadSourcesResponse,
 ) -> tuple[tuple[str, str, str | None, bool], ...]:
     return tuple(
@@ -54,7 +54,7 @@ def _sources(
 
 
 @ts.do_not_use_function
-def _is_package(source: source_reader.SourceFile) -> bool:
+def _is_package(source: source_reader.SourceFile) -> bool:  # tesser:debt TB051
     match source.form:
         case source_reader.ModuleForm.PACKAGE:
             return True
@@ -65,7 +65,7 @@ def _is_package(source: source_reader.SourceFile) -> bool:
 
 
 @ts.do_not_use_function
-def _text(source: source_reader.SourceFile) -> str | None:
+def _text(source: source_reader.SourceFile) -> str | None:  # tesser:debt TB051
     match source.state:
         case source_reader.SourceState.READ:
             return source.text
@@ -76,7 +76,7 @@ def _text(source: source_reader.SourceFile) -> str | None:
 
 
 @ts.do_not_use_function
-def rendered_rulebook(read: rulebook_sources.ReadRulebookResponse) -> str:
+def rendered_rulebook(read: rulebook_sources.ReadRulebookResponse) -> str:  # tesser:debt TB051
     return rulebook.render(
         read.checks_text,
         tuple((module.name, module.text) for module in read.test_modules),

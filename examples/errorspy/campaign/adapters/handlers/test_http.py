@@ -21,7 +21,7 @@ class FakeCampaignClient(client.Client):
         self.error = error
         self.requests: list[object] = []
 
-    def _answer(self, req: object) -> client.CampaignView:
+    def _answer(self, req: object) -> client.CampaignView:  # tesser:debt TB051
         self.requests.append(req)
         if self.error is not None:
             raise self.error

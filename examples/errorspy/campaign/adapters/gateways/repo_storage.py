@@ -38,7 +38,7 @@ class StorageCampaignRepository(ts.Repository):
 
 
 @ts.do_not_use_function
-def _to_record(request: campaign_repository.SaveCampaignRequest) -> Record:
+def _to_record(request: campaign_repository.SaveCampaignRequest) -> Record:  # tesser:debt TB051
     return {
         "window": {"start": request.window.start, "end": request.window.end},
         "links": [
@@ -49,7 +49,7 @@ def _to_record(request: campaign_repository.SaveCampaignRequest) -> Record:
 
 
 @ts.do_not_use_function
-def _from_record(campaign_id: str, row: Record) -> campaign_repository.CampaignRecord:
+def _from_record(campaign_id: str, row: Record) -> campaign_repository.CampaignRecord:  # tesser:debt TB051
     return campaign_repository.CampaignRecord(
         id=campaign_id,
         window=campaign_repository.WindowRecord(

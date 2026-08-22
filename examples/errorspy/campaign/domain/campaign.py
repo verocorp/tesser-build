@@ -59,7 +59,7 @@ class Campaign(ts.AggregateRoot):
     def links(self) -> tuple[short_link.ShortLink, ...]:
         return tuple(self._links)
 
-    def _insert(self, link: short_link.ShortLink) -> None:
+    def _insert(self, link: short_link.ShortLink) -> None:  # tesser:debt TB051
         if any(existing.slug == link.slug for existing in self._links):
             raise conflict(
                 "duplicate_slug", f"slug {link.slug} already in campaign {self._id}"

@@ -63,7 +63,7 @@ class Handler(ts.Handler):
 
         return self._respond(run)
 
-    def _respond(self, run: Callable[[], http.Response]) -> http.Response:
+    def _respond(self, run: Callable[[], http.Response]) -> http.Response:  # tesser:debt TB051
         try:
             return run()
         except http.BadRequest as e:
@@ -82,7 +82,7 @@ class Handler(ts.Handler):
 
 
 @ts.do_not_use_function
-def _link_body(value: object) -> client.LinkBody:
+def _link_body(value: object) -> client.LinkBody:  # tesser:debt TB051
     link = http.object_field(value, "link")
     return client.LinkBody(
         slug=http.string_field(link.get("slug")),
@@ -91,7 +91,7 @@ def _link_body(value: object) -> client.LinkBody:
 
 
 @ts.do_not_use_function
-def _problem(code: str, title: str, status: int, detail: str) -> http.JSONObject:
+def _problem(code: str, title: str, status: int, detail: str) -> http.JSONObject:  # tesser:debt TB051
     return {
         "type": f"/problems/{code}",
         "title": title,
@@ -101,7 +101,7 @@ def _problem(code: str, title: str, status: int, detail: str) -> http.JSONObject
 
 
 @ts.do_not_use_function
-def _problem_for(err: DomainError, status: int) -> http.JSONObject:
+def _problem_for(err: DomainError, status: int) -> http.JSONObject:  # tesser:debt TB051
     body = _problem(err.code, err.code.replace("_", " "), status, err.message)
     if err.field is not None:
         body["field"] = err.field

@@ -8,7 +8,7 @@ from srv.run import run_until_signal
 
 
 @ts.do_not_use_function
-def main() -> None:
+def main() -> None:  # tesser:debt TB051
     app = load()
     host = HttpHost((app.http.host, app.http.port), app)
     print(f"campaign+linkpolicy app listening on {app.http.host or '0.0.0.0'}:{app.http.port}")  # noqa: T201

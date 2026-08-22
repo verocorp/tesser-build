@@ -9,7 +9,7 @@ import repo.domain.rules as domain
 
 
 @ts.do_not_use_function
-def repo(read: repo_reader.ReadRepoResponse) -> domain.Repo:
+def repo(read: repo_reader.ReadRepoResponse) -> domain.Repo:  # tesser:debt TB051
     return domain.Repo(
         domain.RepoSpec(
             manifest=_manifest(read.manifest),
@@ -27,7 +27,7 @@ def repo(read: repo_reader.ReadRepoResponse) -> domain.Repo:
 
 
 @ts.do_not_use_function
-def report(
+def report(  # tesser:debt TB051
     read: repo_reader.ReadRepoResponse,
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
     built = repo(read)
@@ -38,17 +38,17 @@ def report(
 
 
 @ts.do_not_use_function
-def trees(read: repo_reader.ReadRepoResponse) -> tuple[str, ...]:
+def trees(read: repo_reader.ReadRepoResponse) -> tuple[str, ...]:  # tesser:debt TB051
     return tuple(str(tree) for tree in repo(read).trees())
 
 
 @ts.do_not_use_function
-def _file(record: repo_reader.FileRecord) -> tuple[str, str]:
+def _file(record: repo_reader.FileRecord) -> tuple[str, str]:  # tesser:debt TB051
     return (_state(record.state), record.text)
 
 
 @ts.do_not_use_function
-def _manifest(
+def _manifest(  # tesser:debt TB051
     record: repo_reader.ManifestRecord,
 ) -> tuple[str, tuple[tuple[str, str], ...], str]:
     rows = tuple((row.key, row.kind) for row in record.rows)
@@ -56,7 +56,7 @@ def _manifest(
 
 
 @ts.do_not_use_function
-def _manifest_state(state: repo_reader.ManifestState) -> str:
+def _manifest_state(state: repo_reader.ManifestState) -> str:  # tesser:debt TB051
     match state:
         case repo_reader.ManifestState.READ:
             return domain.READ
@@ -73,12 +73,12 @@ def _manifest_state(state: repo_reader.ManifestState) -> str:
 
 
 @ts.do_not_use_function
-def _entries(records: tuple[repo_reader.EntryRecord, ...]) -> tuple[tuple[str, str], ...]:
+def _entries(records: tuple[repo_reader.EntryRecord, ...]) -> tuple[tuple[str, str], ...]:  # tesser:debt TB051
     return tuple((record.name, _form(record.form)) for record in records)
 
 
 @ts.do_not_use_function
-def _state(state: repo_reader.FileState) -> str:
+def _state(state: repo_reader.FileState) -> str:  # tesser:debt TB051
     match state:
         case repo_reader.FileState.READ:
             return domain.READ
@@ -91,7 +91,7 @@ def _state(state: repo_reader.FileState) -> str:
 
 
 @ts.do_not_use_function
-def _form(form: repo_reader.EntryForm) -> str:
+def _form(form: repo_reader.EntryForm) -> str:  # tesser:debt TB051
     match form:
         case repo_reader.EntryForm.DIRECTORY:
             return domain.DIRECTORY

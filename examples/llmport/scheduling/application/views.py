@@ -11,14 +11,14 @@ import scheduling.domain.scheduling as domain
 
 
 @ts.do_not_use_function
-def _booking(view: booking_repository.BookingView) -> domain.Booking:
+def _booking(view: booking_repository.BookingView) -> domain.Booking:  # tesser:debt TB051
     return domain.Booking(
         domain.BookingSpec(step=view.step, name=view.name, chosen=view.chosen, offered=view.offered)
     )
 
 
 @ts.do_not_use_function
-def only(found: booking_repository.FindBookingResponse) -> booking_repository.BookingView:
+def only(found: booking_repository.FindBookingResponse) -> booking_repository.BookingView:  # tesser:debt TB051
     match found.presence:
         case booking_repository.BookingPresence.PRESENT:
             return found.bookings[0]
@@ -29,7 +29,7 @@ def only(found: booking_repository.FindBookingResponse) -> booking_repository.Bo
 
 
 @ts.do_not_use_function
-def loaded(found: booking_repository.FindBookingResponse) -> domain.Booking:
+def loaded(found: booking_repository.FindBookingResponse) -> domain.Booking:  # tesser:debt TB051
     match found.presence:
         case booking_repository.BookingPresence.PRESENT:
             return _booking(found.bookings[0])
@@ -40,7 +40,7 @@ def loaded(found: booking_repository.FindBookingResponse) -> domain.Booking:
 
 
 @ts.do_not_use_function
-def began(found: booking_repository.FindBookingResponse) -> domain.Booking:
+def began(found: booking_repository.FindBookingResponse) -> domain.Booking:  # tesser:debt TB051
     match found.presence:
         case booking_repository.BookingPresence.PRESENT:
             return _booking(found.bookings[0])
@@ -53,7 +53,7 @@ def began(found: booking_repository.FindBookingResponse) -> domain.Booking:
 
 
 @ts.do_not_use_function
-def begin_reply(found: booking_repository.FindBookingResponse) -> str:
+def begin_reply(found: booking_repository.FindBookingResponse) -> str:  # tesser:debt TB051
     match found.presence:
         case booking_repository.BookingPresence.PRESENT:
             return "continue the booking"
@@ -64,7 +64,7 @@ def begin_reply(found: booking_repository.FindBookingResponse) -> str:
 
 
 @ts.do_not_use_function
-def save_request(booking_id: str, booking: domain.Booking) -> booking_repository.SaveBookingRequest:
+def save_request(booking_id: str, booking: domain.Booking) -> booking_repository.SaveBookingRequest:  # tesser:debt TB051
     name = booking.name()
     chosen = booking.chosen()
     return booking_repository.SaveBookingRequest(
@@ -77,7 +77,7 @@ def save_request(booking_id: str, booking: domain.Booking) -> booking_repository
 
 
 @ts.do_not_use_function
-def state(booking: domain.Booking, reply: str) -> client.BookingStateResponse:
+def state(booking: domain.Booking, reply: str) -> client.BookingStateResponse:  # tesser:debt TB051
     return client.BookingStateResponse(
         step=str(booking.step()),
         offered_slots=tuple(str(slot) for slot in booking.offered()),
@@ -86,14 +86,14 @@ def state(booking: domain.Booking, reply: str) -> client.BookingStateResponse:
 
 
 @ts.do_not_use_function
-def reoffered(view: booking_repository.BookingView, available: tuple[str, ...]) -> domain.Booking:
+def reoffered(view: booking_repository.BookingView, available: tuple[str, ...]) -> domain.Booking:  # tesser:debt TB051
     booking = _booking(view)
     booking.reoffer(tuple(domain.Slot(label) for label in available))
     return booking
 
 
 @ts.do_not_use_function
-def confirmed(
+def confirmed(  # tesser:debt TB051
     reserved: slot_directory.ReserveSlotResponse,
     booking: domain.Booking,
     view: booking_repository.BookingView,
@@ -108,7 +108,7 @@ def confirmed(
 
 
 @ts.do_not_use_function
-def confirm_reply(reserved: slot_directory.ReserveSlotResponse, booking: domain.Booking) -> str:
+def confirm_reply(reserved: slot_directory.ReserveSlotResponse, booking: domain.Booking) -> str:  # tesser:debt TB051
     match reserved.outcome:
         case slot_directory.ReservationOutcome.RESERVED:
             return f"booked {booking.chosen()} for {booking.name()}"

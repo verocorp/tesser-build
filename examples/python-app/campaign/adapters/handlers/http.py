@@ -54,7 +54,7 @@ class Handler(ts.Handler):
 
 
 @ts.do_not_use_function
-def _campaign_body(view: client.CampaignView) -> JSONObject:
+def _campaign_body(view: client.CampaignView) -> JSONObject:  # tesser:debt TB051
     return {
         "campaign_id": view.campaign_id,
         "budget": {"amount": view.budget_amount, "currency": view.budget_currency},

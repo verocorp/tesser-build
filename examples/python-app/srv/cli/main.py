@@ -22,7 +22,7 @@ _USAGE: Final[str] = (
 
 
 @ts.do_not_use_function
-def commands_for(app: App) -> dict[str, Command]:
+def commands_for(app: App) -> dict[str, Command]:  # tesser:debt TB051
     campaign = cli.Handler(app.campaign.client)
     return {
         "create-campaign": campaign.create_campaign,
@@ -32,7 +32,7 @@ def commands_for(app: App) -> dict[str, Command]:
 
 
 @ts.do_not_use_function
-def respond(run: Callable[[], CliResponse]) -> CliResponse:
+def respond(run: Callable[[], CliResponse]) -> CliResponse:  # tesser:debt TB051
     try:
         return run()
     except UsageError as e:
@@ -46,14 +46,14 @@ def respond(run: Callable[[], CliResponse]) -> CliResponse:
 
 
 @ts.do_not_use_function
-def dispatch(commands: dict[str, Command], argv: list[str]) -> CliResponse:
+def dispatch(commands: dict[str, Command], argv: list[str]) -> CliResponse:  # tesser:debt TB051
     if not argv or argv[0] not in commands:
         return CliResponse(2, stdout="", stderr=_USAGE)
     return respond(lambda: commands[argv[0]](CliRequest(args=tuple(argv[1:]))))
 
 
 @ts.do_not_use_function
-def run(argv: list[str]) -> int:
+def run(argv: list[str]) -> int:  # tesser:debt TB051
     app = load()
     try:
         resp = dispatch(commands_for(app), argv)
