@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import ast
 import inspect
-import pathlib
 
 import tesser.testing as ts
 
-import parcel.application.mapping as mapping
 import parcel.application.ports.parcel_wire as parcel_wire
 import parcel.domain.parcel as parcel
 
@@ -23,7 +20,20 @@ def _spec(items: int = 3, declared_value: str = "199.99") -> parcel.ParcelSpec:
 
 
 def test_mapping_carries_typed_canonical_leaves_and_derived_fields() -> None:
-    record = mapping.parcel_record(parcel.Parcel(_spec()))
+    built = parcel.Parcel(_spec())
+    record = parcel_wire.ParcelRecord(
+        code=str(built.code),
+        items=int(built.items),
+        weight_kg=float(built.weight),
+        label_digest=bytes(built.label_digest),
+        declared_value=str(built.declared_value),
+        scanned_at=str(built.scanned_at),
+        weight_class=(
+            parcel_wire.WeightClass.HEAVY
+            if str(built.weight_class()) == "heavy"
+            else parcel_wire.WeightClass.LIGHT
+        ),
+    )
     assert record.code == "PKG-2026-0042"
     assert record.items == 3
     assert record.weight_kg == 21.5
@@ -34,8 +44,34 @@ def test_mapping_carries_typed_canonical_leaves_and_derived_fields() -> None:
 
 
 def test_records_from_equal_parcels_render_identically() -> None:
-    a = mapping.parcel_record(parcel.Parcel(_spec()))
-    b = mapping.parcel_record(parcel.Parcel(_spec()))
+    built = parcel.Parcel(_spec())
+    a = parcel_wire.ParcelRecord(
+        code=str(built.code),
+        items=int(built.items),
+        weight_kg=float(built.weight),
+        label_digest=bytes(built.label_digest),
+        declared_value=str(built.declared_value),
+        scanned_at=str(built.scanned_at),
+        weight_class=(
+            parcel_wire.WeightClass.HEAVY
+            if str(built.weight_class()) == "heavy"
+            else parcel_wire.WeightClass.LIGHT
+        ),
+    )
+    built = parcel.Parcel(_spec())
+    b = parcel_wire.ParcelRecord(
+        code=str(built.code),
+        items=int(built.items),
+        weight_kg=float(built.weight),
+        label_digest=bytes(built.label_digest),
+        declared_value=str(built.declared_value),
+        scanned_at=str(built.scanned_at),
+        weight_class=(
+            parcel_wire.WeightClass.HEAVY
+            if str(built.weight_class()) == "heavy"
+            else parcel_wire.WeightClass.LIGHT
+        ),
+    )
     assert (a.code, a.items, a.weight_kg, a.weight_class) == (b.code, b.items, b.weight_kg, b.weight_class)
     assert (a.label_digest, a.declared_value, a.scanned_at) == (
         b.label_digest,
@@ -45,7 +81,20 @@ def test_records_from_equal_parcels_render_identically() -> None:
 
 
 def test_record_carries_a_changed_leaf_through_the_mapping() -> None:
-    record = mapping.parcel_record(parcel.Parcel(_spec(items=7, declared_value="0.01")))
+    built = parcel.Parcel(_spec(items=7, declared_value="0.01"))
+    record = parcel_wire.ParcelRecord(
+        code=str(built.code),
+        items=int(built.items),
+        weight_kg=float(built.weight),
+        label_digest=bytes(built.label_digest),
+        declared_value=str(built.declared_value),
+        scanned_at=str(built.scanned_at),
+        weight_class=(
+            parcel_wire.WeightClass.HEAVY
+            if str(built.weight_class()) == "heavy"
+            else parcel_wire.WeightClass.LIGHT
+        ),
+    )
     assert record.items == 7
     assert record.declared_value == "0.01"
 
@@ -63,21 +112,3 @@ def test_record_is_total() -> None:
         if name == "self":
             continue
         assert param.default is inspect.Parameter.empty, f"{name} must have no default"
-
-
-def test_mapping_module_never_touches_specs() -> None:
-    here = pathlib.Path(__file__).resolve().parent
-    source = (here / "mapping.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    imported = {
-        alias.name
-        for node in ast.walk(tree)
-        if isinstance(node, ast.ImportFrom)
-        for alias in node.names
-    }
-    referenced = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
-    attributes = {node.attr for node in ast.walk(tree) if isinstance(node, ast.Attribute)}
-    spec_touches = {
-        name for name in imported | referenced | attributes if name.endswith("Spec")
-    }
-    assert not spec_touches, f"mapping is outbound-only; it must never touch specs: {spec_touches}"

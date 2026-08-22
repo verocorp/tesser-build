@@ -71,9 +71,6 @@ class WeightKg(ts.ValueObject):
     def __float__(self) -> float:
         return canonical_float(self._value)
 
-    def _exceeds(self, threshold: "WeightKg") -> bool:  # tesser:debt TB051
-        return self._value > threshold._value
-
     _value: float
 
 
@@ -178,7 +175,7 @@ class Parcel(ts.Entity):
         return self._scanned_at
 
     def weight_class(self) -> WeightClass:
-        heavy = self._weight._exceeds(WeightKg(_HEAVY_KG))
+        heavy = float(self._weight) > float(WeightKg(_HEAVY_KG))
         return WeightClass("heavy" if heavy else "standard")
 
     @property
