@@ -41,11 +41,6 @@ TESSER_BASE_BLOCKS: Final[dict[tuple[str, str], str]] = {
 }
 
 TESSER_DECORATORS: Final[dict[tuple[str, str], str]] = {
-    ("tesser.domain", "do_not_use_function"): "function",
-    ("tesser.application", "do_not_use_function"): "function",
-    ("tesser.adapters", "do_not_use_function"): "function",
-    ("tesser.context", "do_not_use_function"): "function",
-    ("tesser.srv", "do_not_use_function"): "function",
     ("tesser.app", "load"): "load",
     ("tesser.testing", "helper"): "helper",
     ("tesser.testing", "fake"): "fake",

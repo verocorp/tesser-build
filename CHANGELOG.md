@@ -5,6 +5,54 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.74.0] - 2026-08-22
+
+`@ts.do_not_use_function` is deleted. The decorator existed to make a module
+function declare itself; v0.0.73.0 made the declaration irrelevant by banning
+module functions outright, and a decorator that excuses nothing is a name
+occupying space in five namespaces.
+
+**This supersedes a promise in the v0.0.73.0 entry**, which said the decorator
+"is deleted from `tesser-py` in the commit that retires the last marker." It is
+deleted here instead, with 95 `# tesser:debt TB051` markers still outstanding.
+Tying the deletion to the burn-down's completion coupled a two-line removal to
+an unfinished refactor that is itself blocked on an open ruling, and kept a
+callable name alive that no rule would ever accept again.
+
+### Removed
+- **`tesser.do_not_use_declared.do_not_use_function`**, and its re-export from
+  `tesser.domain`, `tesser.application`, `tesser.adapters`, `tesser.context`,
+  and `tesser.srv`. `@ts.load` stays — it governs composition-root wiring, not
+  logic hiding — so `do_not_use_declared.py` keeps its name and its remaining
+  export.
+- **Seven decorator sites**: `tessercheck/application/mapping.py`,
+  `tessercheck/domain/rulebook.py`, `srv/cli/main.py`, `srv/cli/rules.py`, and
+  three in `examples/llmport/scheduling/application/views.py`. Every one already
+  carried its own `# tesser:debt TB051`; the decorator was sitting above the
+  marker that had replaced it.
+- **Five dead `TESSER_DECORATORS` rows** in `domain/checks.py`. The checker read
+  that table for `load`, `helper`, and `fake` only — the five `"function"` rows
+  had no reader, so a consumer writing `@ts.do_not_use_function` would have been
+  blessed by the checker while failing to import.
+- **Ten fixture uses** in `domain/test_checks.py`, three code blocks in
+  `skills/tesser-build/python.md`, and the decorator's own tests in `tesser-py`.
+
+### Notes
+- **`import tesser.<ns> as ts` stays in the three modules that now have no other
+  use for it.** TB050 requires it unconditionally — "a srv module imports
+  tesser.srv exactly once, as ts", where *not* importing is itself the finding.
+- **Nothing needed marking.** The ask that produced this change was to mark
+  whatever module functions and private methods the removal left exposed. It
+  left none: all 80 private methods in the gated trees already carry a marker,
+  and so do the 7 module functions TB051 reaches. The tree is green with TB090
+  ("a debt marker suppresses an actual finding") live, which pins the marker set
+  to the finding set from both directions — no finding unmarked, no marker
+  redundant. The remaining 1,370 module functions are ones the rule permits:
+  1,306 `test_*` functions, 22 `tesser-py` library functions, 17 `@ts.helper`,
+  6 conftest, 3 `@ts.load`, 12 test-support, 4 in `testdata/` fixture trees.
+- **RULES.md is regenerated, and only its line numbers moved.** All 190 rows are
+  byte-identical once `domain/checks.py:N` is masked out.
+
 ## [0.0.73.0] - 2026-08-22
 
 TB051 stops asking module functions to declare themselves and bans them, and the

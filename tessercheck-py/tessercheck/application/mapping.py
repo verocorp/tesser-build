@@ -6,7 +6,6 @@ import tessercheck.application.ports.source_reader as source_reader
 import tessercheck.domain.checks as domain
 
 
-@ts.do_not_use_function
 def findings(read: source_reader.ReadSourcesResponse) -> tuple[str, ...]:  # tesser:debt TB051
     rows: list[tuple[str, str, str | None, bool]] = []
     for source in read.sources:

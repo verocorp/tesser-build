@@ -70,7 +70,6 @@ class MapToSettledBooking(ts.Mapper):
         return self._reoffered_slots_mappers
 
 
-@ts.do_not_use_function
 def began(found: booking_repository.FindBookingResponse) -> domain.Booking:  # tesser:debt TB051
     match found.presence:
         case booking_repository.BookingPresence.PRESENT:
@@ -88,7 +87,6 @@ def began(found: booking_repository.FindBookingResponse) -> domain.Booking:  # t
             typing.assert_never(unreachable)
 
 
-@ts.do_not_use_function
 def begin_reply(found: booking_repository.FindBookingResponse) -> str:  # tesser:debt TB051
     match found.presence:
         case booking_repository.BookingPresence.PRESENT:
@@ -99,7 +97,6 @@ def begin_reply(found: booking_repository.FindBookingResponse) -> str:  # tesser
             typing.assert_never(unreachable)
 
 
-@ts.do_not_use_function
 def confirm_reply(reserved: slot_directory.ReserveSlotResponse, booking: domain.Booking) -> str:  # tesser:debt TB051
     match reserved.outcome:
         case slot_directory.ReservationOutcome.RESERVED:

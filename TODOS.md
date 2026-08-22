@@ -2,6 +2,32 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## The skill still teaches the module-function idiom (2026-08-22, v0.0.74.0)
+
+Removing `@ts.do_not_use_function` stripped three decorator lines from
+`skills/tesser-build/python.md`, but the examples underneath them are stale in a
+way the decorator was hiding: they teach module functions, which TB051 now bans.
+
+- [ ] **`python.md:522` shows `required_campaign` as a module function**, cited
+  as "verified impl: examples/errorspy/". The verified impl no longer has it —
+  `examples/errorspy/campaign/application/views.py` holds
+  `MapToShortLinkSpec(ts.Mapper)` and `MapToCampaignSpec(ts.Mapper)` and no
+  module function at all. So the skill teaches a shape the rule bans and the
+  cited example abandoned. Rewriting the section to the `ts.Mapper` idiom was
+  left out of the decorator-removal change deliberately — it is a content
+  rewrite of shipped guidance, not a deletion, and it wants its own review.
+- [ ] **`python.md:842` shows `def main()` as a module function** in
+  `srv/http/main.py`. That one is real and still fires: the live
+  `examples/python-app/srv/http/main.py` carries a `# tesser:debt TB051` on its
+  `if __name__ == "__main__":`. Whether an entry point is a genuine carve-out or
+  a debt is one of the open TB051 questions, so the example should not be
+  rewritten until that is ruled.
+- [ ] **`python.md:654` had the decorator on a `class`**, which was never valid
+  — it decorated functions. Removed with the others; noted only because it means
+  nothing in CI reads the skill's code blocks. A checker that parses fenced
+  python in `skills/` and runs tessercheck over it would have caught this, and
+  would catch the two above.
+
 ## scripts/verify portability (2026-08-22, v0.0.72.1)
 
 `scripts/verify` and `scripts/install-dev` could not run on macOS until
@@ -197,7 +223,7 @@ against `main` at v0.0.71.0 rather than transcribed.
   `views.campaign_spec` / `required_campaign`, and project it — the over-fetch
   Vernon's use-case optimal query is aimed at, and the reason `list_links` loads
   every campaign to project links. Moving them is what makes the read port earn
-  its second consumer, retires three more `@ts.do_not_use_function` module
+  its second consumer, retires three more module
   functions, and drops `Campaign.links` to its last caller (the persistence
   mapper).
 - [ ] **`ShortLinks` is declared `ts.Entity` and has no identity.** It is the
