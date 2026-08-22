@@ -53,6 +53,19 @@ def test_creating_a_campaign_answers_the_view_of_what_was_built() -> None:
     assert (view.campaign_id, view.links) == ("c1", ("spring-sale",))
 
 
+def test_creating_a_campaign_with_no_links_answers_a_view_that_lists_nothing() -> None:
+    svc = service.CampaignService(FakeCampaignRepository())
+    view = svc.create_campaign(
+        client.CreateCampaignRequest(
+            campaign_id="c1",
+            window_start="2026-01-01",
+            window_end="2026-02-01",
+            links=(),
+        )
+    )
+    assert view.links == ()
+
+
 def test_creating_a_campaign_stores_its_window_and_links() -> None:
     repo = FakeCampaignRepository()
     service.CampaignService(repo).create_campaign(
@@ -256,6 +269,7 @@ def test_deactivating_a_link_answers_the_campaign_and_stores_it() -> None:
         client.DeactivateLinkRequest(campaign_id="c1", slug="spring-sale")
     )
     assert view.campaign_id == "c1"
+    assert view.links == ("spring-sale",)
     assert repo.saves == ["c1", "c1"]
 
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+import json
 
 import tesser.adapters as ts
 
@@ -15,99 +15,268 @@ class Handler(ts.Handler):
         self._client = client
 
     def create_campaign(self, campaign_id: str, raw: str) -> http.Response:
-        def run() -> http.Response:
-            body = http.json_object(raw)
-            window = http.object_field(body.get("window"), "window")
-            links = http.array_field(body.get("links"), "links")
+        try:
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError as e:
+                raise http.BadRequest(f"malformed JSON: {e}") from e
+            if not isinstance(data, dict):
+                raise http.BadRequest("expected a JSON object")
+            body: http.JSONObject = data
+            window_value = body.get("window")
+            if not isinstance(window_value, dict):
+                raise http.BadRequest("'window' must be an object")
+            window: http.JSONObject = window_value
+            links_value = body.get("links")
+            if not isinstance(links_value, list):
+                raise http.BadRequest("'links' must be an array")
+            links: list[object] = links_value
+            window_start = window.get("start")
+            if not isinstance(window_start, str):
+                raise http.BadRequest("expected a string field")
+            window_end = window.get("end")
+            if not isinstance(window_end, str):
+                raise http.BadRequest("expected a string field")
+            link_bodies: list[client.LinkBody] = []
+            for link in links:
+                if not isinstance(link, dict):
+                    raise http.BadRequest("'link' must be an object")
+                entry: http.JSONObject = link
+                slug = entry.get("slug")
+                if not isinstance(slug, str):
+                    raise http.BadRequest("expected a string field")
+                target_url = entry.get("target_url")
+                if not isinstance(target_url, str):
+                    raise http.BadRequest("expected a string field")
+                link_bodies.append(client.LinkBody(slug=slug, target_url=target_url))
             self._client.create_campaign(
                 client.CreateCampaignRequest(
                     campaign_id=campaign_id,
-                    window_start=http.string_field(window.get("start")),
-                    window_end=http.string_field(window.get("end")),
-                    links=tuple(_link_body(link) for link in links),
+                    window_start=window_start,
+                    window_end=window_end,
+                    links=tuple(link_bodies),
                 )
             )
             return http.Response(201, {"id": campaign_id})
-
-        return self._respond(run)
+        except http.BadRequest as e:
+            return http.Response(
+                400,
+                {
+                    "type": "/problems/malformed_request",
+                    "title": "Bad Request",
+                    "status": 400,
+                    "detail": str(e),
+                },
+            )
+        except DomainError as e:
+            status = status_for(e.kind)
+            problem: http.JSONObject = {
+                "type": f"/problems/{e.code}",
+                "title": e.code.replace("_", " "),
+                "status": status,
+                "detail": e.message,
+            }
+            if e.field is not None:
+                problem["field"] = e.field
+            if e.problems:
+                problem["invalid-params"] = [
+                    {"name": p.field, "code": p.code, "reason": p.message}
+                    for p in e.problems
+                ]
+            return http.Response(status, problem)
+        except InfraError:
+            return http.Response(
+                503,
+                {
+                    "type": "/problems/unavailable",
+                    "title": "Service Unavailable",
+                    "status": 503,
+                    "detail": "please retry",
+                },
+            )
+        except Exception:
+            return http.Response(
+                500,
+                {
+                    "type": "/problems/internal",
+                    "title": "Internal Server Error",
+                    "status": 500,
+                    "detail": "unexpected error",
+                },
+            )
 
     def get_campaign(self, campaign_id: str) -> http.Response:
-        def run() -> http.Response:
+        try:
             view = self._client.get_campaign(
                 client.GetCampaignRequest(campaign_id=campaign_id)
             )
             return http.Response(200, {"id": view.campaign_id, "links": list(view.links)})
-
-        return self._respond(run)
+        except http.BadRequest as e:
+            return http.Response(
+                400,
+                {
+                    "type": "/problems/malformed_request",
+                    "title": "Bad Request",
+                    "status": 400,
+                    "detail": str(e),
+                },
+            )
+        except DomainError as e:
+            status = status_for(e.kind)
+            problem: http.JSONObject = {
+                "type": f"/problems/{e.code}",
+                "title": e.code.replace("_", " "),
+                "status": status,
+                "detail": e.message,
+            }
+            if e.field is not None:
+                problem["field"] = e.field
+            if e.problems:
+                problem["invalid-params"] = [
+                    {"name": p.field, "code": p.code, "reason": p.message}
+                    for p in e.problems
+                ]
+            return http.Response(status, problem)
+        except InfraError:
+            return http.Response(
+                503,
+                {
+                    "type": "/problems/unavailable",
+                    "title": "Service Unavailable",
+                    "status": 503,
+                    "detail": "please retry",
+                },
+            )
+        except Exception:
+            return http.Response(
+                500,
+                {
+                    "type": "/problems/internal",
+                    "title": "Internal Server Error",
+                    "status": 500,
+                    "detail": "unexpected error",
+                },
+            )
 
     def add_link(self, campaign_id: str, raw: str) -> http.Response:
-        def run() -> http.Response:
-            body = http.json_object(raw)
+        try:
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError as e:
+                raise http.BadRequest(f"malformed JSON: {e}") from e
+            if not isinstance(data, dict):
+                raise http.BadRequest("expected a JSON object")
+            body: http.JSONObject = data
+            slug = body.get("slug")
+            if not isinstance(slug, str):
+                raise http.BadRequest("expected a string field")
+            target_url = body.get("target_url")
+            if not isinstance(target_url, str):
+                raise http.BadRequest("expected a string field")
             self._client.add_link(
                 client.AddLinkRequest(
                     campaign_id=campaign_id,
-                    slug=http.string_field(body.get("slug")),
-                    target_url=http.string_field(body.get("target_url")),
+                    slug=slug,
+                    target_url=target_url,
                 )
             )
             return http.Response(200, {"status": "added"})
-
-        return self._respond(run)
+        except http.BadRequest as e:
+            return http.Response(
+                400,
+                {
+                    "type": "/problems/malformed_request",
+                    "title": "Bad Request",
+                    "status": 400,
+                    "detail": str(e),
+                },
+            )
+        except DomainError as e:
+            status = status_for(e.kind)
+            problem: http.JSONObject = {
+                "type": f"/problems/{e.code}",
+                "title": e.code.replace("_", " "),
+                "status": status,
+                "detail": e.message,
+            }
+            if e.field is not None:
+                problem["field"] = e.field
+            if e.problems:
+                problem["invalid-params"] = [
+                    {"name": p.field, "code": p.code, "reason": p.message}
+                    for p in e.problems
+                ]
+            return http.Response(status, problem)
+        except InfraError:
+            return http.Response(
+                503,
+                {
+                    "type": "/problems/unavailable",
+                    "title": "Service Unavailable",
+                    "status": 503,
+                    "detail": "please retry",
+                },
+            )
+        except Exception:
+            return http.Response(
+                500,
+                {
+                    "type": "/problems/internal",
+                    "title": "Internal Server Error",
+                    "status": 500,
+                    "detail": "unexpected error",
+                },
+            )
 
     def deactivate_link(self, campaign_id: str, slug: str) -> http.Response:
-        def run() -> http.Response:
+        try:
             self._client.deactivate_link(
                 client.DeactivateLinkRequest(campaign_id=campaign_id, slug=slug)
             )
             return http.Response(200, {"status": "deactivated"})
-
-        return self._respond(run)
-
-    def _respond(self, run: Callable[[], http.Response]) -> http.Response:  # tesser:debt TB051
-        try:
-            return run()
         except http.BadRequest as e:
-            return http.Response(400, _problem("malformed_request", "Bad Request", 400, str(e)))
+            return http.Response(
+                400,
+                {
+                    "type": "/problems/malformed_request",
+                    "title": "Bad Request",
+                    "status": 400,
+                    "detail": str(e),
+                },
+            )
         except DomainError as e:
             status = status_for(e.kind)
-            return http.Response(status, _problem_for(e, status))
+            problem: http.JSONObject = {
+                "type": f"/problems/{e.code}",
+                "title": e.code.replace("_", " "),
+                "status": status,
+                "detail": e.message,
+            }
+            if e.field is not None:
+                problem["field"] = e.field
+            if e.problems:
+                problem["invalid-params"] = [
+                    {"name": p.field, "code": p.code, "reason": p.message}
+                    for p in e.problems
+                ]
+            return http.Response(status, problem)
         except InfraError:
             return http.Response(
-                503, _problem("unavailable", "Service Unavailable", 503, "please retry")
+                503,
+                {
+                    "type": "/problems/unavailable",
+                    "title": "Service Unavailable",
+                    "status": 503,
+                    "detail": "please retry",
+                },
             )
-        except Exception:  # noqa: BLE001 — the unexpected-500 backstop
+        except Exception:
             return http.Response(
-                500, _problem("internal", "Internal Server Error", 500, "unexpected error")
+                500,
+                {
+                    "type": "/problems/internal",
+                    "title": "Internal Server Error",
+                    "status": 500,
+                    "detail": "unexpected error",
+                },
             )
-
-
-@ts.do_not_use_function
-def _link_body(value: object) -> client.LinkBody:  # tesser:debt TB051
-    link = http.object_field(value, "link")
-    return client.LinkBody(
-        slug=http.string_field(link.get("slug")),
-        target_url=http.string_field(link.get("target_url")),
-    )
-
-
-@ts.do_not_use_function
-def _problem(code: str, title: str, status: int, detail: str) -> http.JSONObject:  # tesser:debt TB051
-    return {
-        "type": f"/problems/{code}",
-        "title": title,
-        "status": status,
-        "detail": detail,
-    }
-
-
-@ts.do_not_use_function
-def _problem_for(err: DomainError, status: int) -> http.JSONObject:  # tesser:debt TB051
-    body = _problem(err.code, err.code.replace("_", " "), status, err.message)
-    if err.field is not None:
-        body["field"] = err.field
-    if err.problems:
-        body["invalid-params"] = [
-            {"name": p.field, "code": p.code, "reason": p.message}
-            for p in err.problems
-        ]
-    return body

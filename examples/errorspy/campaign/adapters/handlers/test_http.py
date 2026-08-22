@@ -21,7 +21,7 @@ class FakeCampaignClient(client.Client):
         self.error = error
         self.requests: list[object] = []
 
-    def _answer(self, req: object) -> client.CampaignView:  # tesser:debt TB051
+    def create_campaign(self, req: client.CreateCampaignRequest) -> client.CampaignView:
         self.requests.append(req)
         if self.error is not None:
             raise self.error
@@ -29,17 +29,29 @@ class FakeCampaignClient(client.Client):
             return client.CampaignView(campaign_id="c1", links=())
         return self.view
 
-    def create_campaign(self, req: client.CreateCampaignRequest) -> client.CampaignView:
-        return self._answer(req)
-
     def get_campaign(self, req: client.GetCampaignRequest) -> client.CampaignView:
-        return self._answer(req)
+        self.requests.append(req)
+        if self.error is not None:
+            raise self.error
+        if self.view is None:
+            return client.CampaignView(campaign_id="c1", links=())
+        return self.view
 
     def add_link(self, req: client.AddLinkRequest) -> client.CampaignView:
-        return self._answer(req)
+        self.requests.append(req)
+        if self.error is not None:
+            raise self.error
+        if self.view is None:
+            return client.CampaignView(campaign_id="c1", links=())
+        return self.view
 
     def deactivate_link(self, req: client.DeactivateLinkRequest) -> client.CampaignView:
-        return self._answer(req)
+        self.requests.append(req)
+        if self.error is not None:
+            raise self.error
+        if self.view is None:
+            return client.CampaignView(campaign_id="c1", links=())
+        return self.view
 
 
 def test_creating_a_campaign_answers_201_with_the_id() -> None:
@@ -86,6 +98,23 @@ def test_a_body_that_is_not_json_is_400_and_the_client_is_never_called() -> None
     assert resp.body["type"] == "/problems/malformed_request"
     assert resp.body["title"] == "Bad Request"
     assert resp.body["status"] == 400
+    assert str(resp.body["detail"]).startswith("malformed JSON: ")
+    assert fake.requests == []
+
+
+def test_a_json_array_body_is_400_because_the_top_level_must_be_an_object() -> None:
+    fake = FakeCampaignClient()
+    resp = handlers.Handler(fake).create_campaign("c1", "[1, 2]")
+    assert resp.status == 400
+    assert resp.body["detail"] == "expected a JSON object"
+    assert fake.requests == []
+
+
+def test_a_json_scalar_body_is_400_because_the_top_level_must_be_an_object() -> None:
+    fake = FakeCampaignClient()
+    resp = handlers.Handler(fake).create_campaign("c1", "7")
+    assert resp.status == 400
+    assert resp.body["detail"] == "expected a JSON object"
     assert fake.requests == []
 
 

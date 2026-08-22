@@ -15,7 +15,14 @@ class StorageCampaignRepository(ts.Repository):
     def save(
         self, request: campaign_repository.SaveCampaignRequest
     ) -> campaign_repository.SaveCampaignResponse:
-        self._storage.put(request.id, _to_record(request))
+        record: Record = {
+            "window": {"start": request.window.start, "end": request.window.end},
+            "links": [
+                {"slug": link.slug, "target_url": link.target_url}
+                for link in request.links
+            ],
+        }
+        self._storage.put(request.id, record)
         return campaign_repository.SaveCampaignResponse()
 
     def find(
@@ -31,32 +38,18 @@ class StorageCampaignRepository(ts.Repository):
             raise InfraError(
                 f"storage unavailable loading campaign {request.campaign_id!r}"
             ) from e
+        record = campaign_repository.CampaignRecord(
+            id=request.campaign_id,
+            window=campaign_repository.WindowRecord(
+                start=row["window"]["start"], end=row["window"]["end"]
+            ),
+            links=tuple(
+                campaign_repository.LinkRecord(slug=link["slug"], target_url=link["target_url"])
+                for link in row["links"]
+            ),
+        )
         return campaign_repository.FindCampaignResponse(
             outcome=campaign_repository.CampaignLookup.FOUND,
-            campaigns=(_from_record(request.campaign_id, row),),
+            campaigns=(record,),
         )
 
-
-@ts.do_not_use_function
-def _to_record(request: campaign_repository.SaveCampaignRequest) -> Record:  # tesser:debt TB051
-    return {
-        "window": {"start": request.window.start, "end": request.window.end},
-        "links": [
-            {"slug": link.slug, "target_url": link.target_url}
-            for link in request.links
-        ],
-    }
-
-
-@ts.do_not_use_function
-def _from_record(campaign_id: str, row: Record) -> campaign_repository.CampaignRecord:  # tesser:debt TB051
-    return campaign_repository.CampaignRecord(
-        id=campaign_id,
-        window=campaign_repository.WindowRecord(
-            start=row["window"]["start"], end=row["window"]["end"]
-        ),
-        links=tuple(
-            campaign_repository.LinkRecord(slug=link["slug"], target_url=link["target_url"])
-            for link in row["links"]
-        ),
-    )

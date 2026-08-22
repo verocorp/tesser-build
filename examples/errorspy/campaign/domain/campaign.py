@@ -35,10 +35,29 @@ class Campaign(ts.AggregateRoot):
                 link = short_link.ShortLink(link_spec)
             except DomainError as e:
                 raise wrap(e, f"link {i}: {e}", field=f"links[{i}].{e.field}") from e
-            self._insert(link)
+            if any(existing.slug == link.slug for existing in self._links):
+                raise conflict(
+                    "duplicate_slug", f"slug {link.slug} already in campaign {self._id}"
+                )
+            if len(self._links) >= _MAX_LINKS:
+                raise conflict(
+                    "too_many_links",
+                    f"campaign {self._id} is at the {_MAX_LINKS}-link cap",
+                )
+            self._links.append(link)
 
     def add_link(self, spec: short_link.ShortLinkSpec) -> None:
-        self._insert(short_link.ShortLink(spec))
+        link = short_link.ShortLink(spec)
+        if any(existing.slug == link.slug for existing in self._links):
+            raise conflict(
+                "duplicate_slug", f"slug {link.slug} already in campaign {self._id}"
+            )
+        if len(self._links) >= _MAX_LINKS:
+            raise conflict(
+                "too_many_links",
+                f"campaign {self._id} is at the {_MAX_LINKS}-link cap",
+            )
+        self._links.append(link)
 
     def deactivate_link(self, slug: values.Slug) -> None:
         for link in self._links:
@@ -58,18 +77,6 @@ class Campaign(ts.AggregateRoot):
     @property
     def links(self) -> tuple[short_link.ShortLink, ...]:
         return tuple(self._links)
-
-    def _insert(self, link: short_link.ShortLink) -> None:  # tesser:debt TB051
-        if any(existing.slug == link.slug for existing in self._links):
-            raise conflict(
-                "duplicate_slug", f"slug {link.slug} already in campaign {self._id}"
-            )
-        if len(self._links) >= _MAX_LINKS:
-            raise conflict(
-                "too_many_links",
-                f"campaign {self._id} is at the {_MAX_LINKS}-link cap",
-            )
-        self._links.append(link)
 
     __eq__ = None  # type: ignore[assignment]
     __hash__ = None  # type: ignore[assignment]
