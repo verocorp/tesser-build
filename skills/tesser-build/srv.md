@@ -48,7 +48,10 @@ Yes → a host.
    from drifting.
 2. **Only the edge exits.** Exit/fatal calls live in `srv/*/main`, nothing
    below (same enforcement test) — a library that exits takes the process
-   away from the one place entitled to decide that.
+   away from the one place entitled to decide that. The exit itself is
+   `ts.main`: `if __name__ == "__main__": ts.main(Host().run)` is the one
+   loose statement a srv module may hold (TB051), and it is what reads `argv`
+   and raises `SystemExit` with the host's return — no host touches either.
 3. **One graph per process; the host owns the lifecycle.** The host calls
    `bootstrap.new` once at startup (build-once locked by
    `examples/python-app/tests/test_bootstrap_once.py`) and runs its `Host`

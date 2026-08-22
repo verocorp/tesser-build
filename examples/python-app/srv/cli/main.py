@@ -56,5 +56,5 @@ class CliHost(ts.Host):
             app.close()
 
 
-if __name__ == "__main__":  # tesser:debt TB051
-    raise SystemExit(CliHost().run(sys.argv[1:]))
+if __name__ == "__main__":
+    ts.main(CliHost().run)

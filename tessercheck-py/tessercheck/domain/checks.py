@@ -40,6 +40,8 @@ TESSER_BASE_BLOCKS: Final[dict[tuple[str, str], str]] = {
     ("tesser.srv", "Response"): "protocol_response",
 }
 
+TESSER_ENTRY: Final[tuple[str, str]] = ("tesser.srv", "main")
+
 TESSER_DECORATORS: Final[dict[tuple[str, str], str]] = {
     ("tesser.app", "load"): "load",
     ("tesser.testing", "helper"): "helper",
@@ -183,6 +185,7 @@ TESSER_STDLIB: Final[frozenset[str]] = frozenset(
         "enum",
         "datetime",
         "decimal",
+        "sys",
     }
 )
 
@@ -2016,6 +2019,7 @@ class Codebase(ts.AggregateRoot):
                 module,
                 "kernel",
                 "a kernel module holds only imports, classes, and Final constants",
+                None,
             )
         )
         return tuple(found)
@@ -2184,12 +2188,43 @@ class Codebase(ts.AggregateRoot):
         module: Module,
         subject: str,
         loose_clause: str,
+        entry: str | None,
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for stmt in module.body():
             if isinstance(stmt, (ast.Import, ast.ImportFrom, ast.ClassDef)):
                 continue
             if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if (
+                entry is not None
+                and isinstance(stmt, ast.If)
+                and isinstance(stmt.test, ast.Compare)
+                and isinstance(stmt.test.left, ast.Name)
+                and stmt.test.left.id == "__name__"
+                and len(stmt.test.ops) == 1
+                and isinstance(stmt.test.ops[0], ast.Eq)
+                and len(stmt.test.comparators) == 1
+                and isinstance(stmt.test.comparators[0], ast.Constant)
+                and stmt.test.comparators[0].value == "__main__"
+            ):
+                if not (
+                    not stmt.orelse
+                    and len(stmt.body) == 1
+                    and isinstance(stmt.body[0], ast.Expr)
+                    and isinstance(stmt.body[0].value, ast.Call)
+                    and module._resolve(stmt.body[0].value.func) == TESSER_ENTRY
+                ):
+                    found.append(
+                        Violation(
+                            module.path(),
+                            stmt.lineno,
+                            "TB051",
+                            f"{module.name()} has a __main__ guard holding more than "
+                            f"{entry}(run); a srv module's entry point is {entry}(run) "
+                            "and nothing else",
+                        )
+                    )
                 continue
             if isinstance(stmt, ast.AnnAssign):
                 annotation = ast.unparse(stmt.annotation)
@@ -3036,6 +3071,7 @@ class Codebase(ts.AggregateRoot):
                 module,
                 "app",
                 "an app module holds only imports, classes, declared functions, and Final constants",
+                None,
             )
         )
         return tuple(found)
@@ -3089,6 +3125,7 @@ class Codebase(ts.AggregateRoot):
                 module,
                 "srv",
                 "a srv module holds only imports, declared classes, and Final constants",
+                "ts.main",
             )
         )
         return tuple(found)
@@ -3176,6 +3213,7 @@ class Codebase(ts.AggregateRoot):
                 module,
                 "protocol",
                 "a protocol module holds only imports, declared classes, and Final constants",
+                None,
             )
         )
         return tuple(found)
@@ -3804,6 +3842,7 @@ class Codebase(ts.AggregateRoot):
                 module,
                 "module",
                 "a context module holds only imports, classes, and Final constants",
+                None,
             )
         )
         if role == "adapters":

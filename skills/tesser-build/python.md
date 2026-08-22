@@ -839,11 +839,28 @@ def routes_for(app: App) -> tuple[Route, ...]:
 
 
 # srv/http/main.py (verified impl) — the host: env edge, build once, hand to the runner
-def main() -> None:
-    cfg = from_env(os.getenv)            # the ONE config loader (bootstrap/config)
-    app = new(cfg)                       # ONCE per process; validates fail-fast
-    host = HttpHost((cfg.http.host, cfg.http.port), app)  # implements Host: serve + drain
-    run_until_signal(host, app)          # installs SIGTERM, guarantees app.close()
+class HttpEdge(ts.Host):
+
+    def __init__(self) -> None:
+        self._app = load()                   # ONCE per process; validates fail-fast
+        self._host = HttpHost((self._app.http.host, self._app.http.port), self._app)
+        self._stop = threading.Event()
+
+    def stop(self, signum: int, frame: Optional[FrameType]) -> None:
+        self._stop.set()
+
+    def run(self, argv: list[str]) -> int:
+        signal.signal(signal.SIGINT, self.stop)
+        signal.signal(signal.SIGTERM, self.stop)
+        try:
+            self._host.run(self._stop)             # serves until stopped
+        finally:
+            self._app.close()                      # guaranteed, signal or not
+        return 0
+
+
+if __name__ == "__main__":
+    ts.main(HttpEdge().run)                  # the ONE statement a srv module holds outside a class
 ```
 
 - **Route, read bytes, call, write bytes — nothing between the steps.** No
@@ -871,9 +888,14 @@ def main() -> None:
   single place the app reads the environment, loading app config **and** the
   host's launch config into one `Config`; it stays a pure function (`getenv`
   injected), so it's testable with a dict.
-- **`run_until_signal` owns the process lifecycle**: it installs
+- **The host's `run(argv) -> int` owns the process lifecycle**: it installs
   SIGINT/SIGTERM and calls `app.close()` in a `finally` — a bare
   `finally: app.close()` does **not** survive Python's default SIGTERM.
+- **`ts.main(run)` is the process edge, and the only loose statement a srv
+  module may hold.** `if __name__ == "__main__": ts.main(Host().run)` — one
+  guard, one call, nothing else (TB051). `ts.main` reads `sys.argv` and raises
+  `SystemExit` with what `run` returns, so no host touches `argv` or the exit
+  code itself; the same line starts a CLI host and an HTTP host.
 - **A CLI host** is the same split for a different mechanism. The shared
   vocabulary is `protocol/cli.py`: `CliRequest` carries its arg readers
   (`arg`, `no_extra_args` — `UsageError`, a `ts.Rejection`, on violation),
