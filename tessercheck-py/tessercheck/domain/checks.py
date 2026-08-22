@@ -3,9 +3,10 @@ import builtins
 import io
 import re
 import tokenize
-from typing import Final, Literal, TypeGuard
+from typing import Final, Literal
 
 import tesser.domain as ts
+from tesser.serialization import canonical_int, canonical_str
 
 TESSER_BASE_BLOCKS: Final[dict[tuple[str, str], str]] = {
     ("tesser.application", "ApplicationService"): "service",
@@ -479,16 +480,6 @@ RETURN_WRAPPERS: Final[frozenset[str]] = frozenset(
 )
 
 SELF_NAMES: Final[frozenset[str]] = frozenset({"Self", "Never", "NoReturn", "None"})
-
-
-@ts.do_not_use_function
-def canonical_str(value: str) -> str:  # tesser:debt TB051
-    return value
-
-
-@ts.do_not_use_function
-def canonical_int(value: int) -> int:  # tesser:debt TB051
-    return value
 
 
 class TreeRoot(ts.ValueObject):
@@ -1025,7 +1016,10 @@ class Codebase(ts.AggregateRoot):
         named: set[str] = set()
         for module in self._modules:
             parts = module.name().split(".")
-            if parts[0] in self._kernel_tops():
+            if parts[0] in ((
+                        frozenset({KERNEL_PACKAGE})
+                        | (frozenset({self._export}) if self._export is not None else frozenset())
+                    ) & frozenset(each.name().split(".")[0] for each in self._modules)):
                 continue
             if len(parts) >= 2 and parts[1] in ROLES:
                 named.add(parts[0])
@@ -1261,18 +1255,6 @@ class Codebase(ts.AggregateRoot):
                     )
         return tuple(found)
 
-    def _kernel_tops(self) -> frozenset[str]:  # tesser:debt TB051
-        names = {KERNEL_PACKAGE}
-        if self._export is not None:
-            names.add(self._export)
-        return frozenset(names) & self._tree_tops()
-
-    def _walked(self, target: str) -> bool:  # tesser:debt TB051
-        return any(
-            module.name() == target or module.name().startswith(target + ".")
-            for module in self._modules
-        )
-
     @staticmethod
     def _locate(  # tesser:debt TB051
         name: str,
@@ -1369,7 +1351,35 @@ class Codebase(ts.AggregateRoot):
         if place == "conftest-root":
             return self._conftest_leaf_violations(module)
         if place == "conftest":
-            placement = self._test_tier(module, contexts)
+            tier_parts = module.name().split(".")
+            tier_tops = (
+                frozenset({KERNEL_PACKAGE})
+                | (frozenset({self._export}) if self._export is not None else frozenset())
+            ) & frozenset(each.name().split(".")[0] for each in self._modules)
+            if tier_parts[0] in tier_tops and len(tier_parts) >= 2:
+                placement: tuple[str, str] | None = ("", KERNEL_TIER)
+            elif tier_parts[0] == "srv" and len(tier_parts) >= 2:
+                placement = ("", SRV_TIER)
+            elif tier_parts[0] == "app" and len(tier_parts) >= 2:
+                placement = ("", APP_TIER)
+            elif tier_parts[0] == PROTOCOL_PACKAGE and len(tier_parts) >= 2:
+                placement = ("", PROTOCOL_TIER)
+            elif tier_parts[0] == TESTS_ROLE and len(tier_parts) >= 2:
+                placement = ("", ROOT_TESTS_TIER)
+            elif len(tier_parts) < 3 or tier_parts[0] not in contexts:
+                placement = None
+            elif tier_parts[1] == TESTS_ROLE:
+                placement = (tier_parts[0], TESTS_ROLE)
+            elif tier_parts[1] not in ROLES:
+                placement = (tier_parts[0], STRAY_TIER)
+            elif tier_parts[1] == "adapters":
+                placement = (
+                    (tier_parts[0], tier_parts[2])
+                    if len(tier_parts) >= 4 and tier_parts[2] in ADAPTER_TEST_TIERS
+                    else (tier_parts[0], STRAY_TIER)
+                )
+            else:
+                placement = (tier_parts[0], tier_parts[1])
             if placement is None or placement[1] == STRAY_TIER:
                 return self._conftest_leaf_violations(module)
             return self._test_placement_violations(module, placement[0], placement[1], contexts)
@@ -1501,20 +1511,40 @@ class Codebase(ts.AggregateRoot):
             for stmt in module.body()
         )
 
-    @staticmethod
-    def _names_module(module: Module, node: ast.expr, package: str) -> bool:  # tesser:debt TB051
-        return (
-            isinstance(node, ast.Name)
-            and module._package_aliases.get(node.id) == package
-        )
-
     def _dynamic_import_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
         found: list[Violation] = []
         bound: set[str] = set()
         for assignment in module.assignments():
-            if assignment.value is None:
+            assigned = assignment.value
+            if assigned is None:
                 continue
-            if not self._reaches_importlib(module, assignment.value):
+            assigned_reaches = False
+            if isinstance(assigned, ast.Attribute) and isinstance(assigned.value, ast.Name):
+                package = module._package_aliases.get(assigned.value.id)
+                assigned_reaches = package == IMPORTLIB or (
+                    package == BUILTINS and assigned.attr == BUILTIN_IMPORT
+                )
+            elif isinstance(assigned, ast.Name):
+                origin = module._imported.get(assigned.id)
+                assigned_reaches = (
+                    assigned.id == BUILTIN_IMPORT
+                    and assigned.id not in module.function_names()
+                ) or (
+                    origin is not None
+                    and (
+                        origin[0] == IMPORTLIB
+                        or (origin[0] == BUILTINS and origin[1] == BUILTIN_IMPORT)
+                    )
+                )
+            elif isinstance(assigned, ast.Call):
+                assigned_reaches = (
+                    isinstance(assigned.func, ast.Name)
+                    and assigned.func.id == "getattr"
+                    and bool(assigned.args)
+                    and isinstance(assigned.args[0], ast.Name)
+                    and module._package_aliases.get(assigned.args[0].id) == IMPORTLIB
+                )
+            if not assigned_reaches:
                 continue
             targets = (
                 assignment.targets
@@ -1527,7 +1557,8 @@ class Codebase(ts.AggregateRoot):
             if (
                 isinstance(lookup.value, ast.Attribute)
                 and lookup.value.attr == "modules"
-                and self._names_module(module, lookup.value.value, SYS_MODULE)
+                and (isinstance(lookup.value.value, ast.Name)
+                            and module._package_aliases.get(lookup.value.value.id) == SYS_MODULE)
             ):
                 found.append(
                     Violation(
@@ -1540,9 +1571,35 @@ class Codebase(ts.AggregateRoot):
                 )
         for node in module.calls():
             callee = node.func
+            callee_reaches = False
+            if isinstance(callee, ast.Attribute) and isinstance(callee.value, ast.Name):
+                package = module._package_aliases.get(callee.value.id)
+                callee_reaches = package == IMPORTLIB or (
+                    package == BUILTINS and callee.attr == BUILTIN_IMPORT
+                )
+            elif isinstance(callee, ast.Name):
+                origin = module._imported.get(callee.id)
+                callee_reaches = (
+                    callee.id == BUILTIN_IMPORT
+                    and callee.id not in module.function_names()
+                ) or (
+                    origin is not None
+                    and (
+                        origin[0] == IMPORTLIB
+                        or (origin[0] == BUILTINS and origin[1] == BUILTIN_IMPORT)
+                    )
+                )
+            elif isinstance(callee, ast.Call):
+                callee_reaches = (
+                    isinstance(callee.func, ast.Name)
+                    and callee.func.id == "getattr"
+                    and bool(callee.args)
+                    and isinstance(callee.args[0], ast.Name)
+                    and module._package_aliases.get(callee.args[0].id) == IMPORTLIB
+                )
             if isinstance(callee, ast.Name) and callee.id in rebound:
                 named: str | None = f"{IMPORTLIB}.{callee.id}"
-            elif self._reaches_importlib(module, callee):
+            elif callee_reaches:
                 named = f"{IMPORTLIB}.{ast.unparse(callee).rsplit('.', 1)[-1]}"
             else:
                 named = None
@@ -1557,30 +1614,6 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
         return tuple(found)
-
-    @classmethod
-    def _reaches_importlib(cls, module: Module, node: ast.expr) -> bool:  # tesser:debt TB051
-        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
-            package = module._package_aliases.get(node.value.id)
-            if package == IMPORTLIB:
-                return True
-            return package == BUILTINS and node.attr == BUILTIN_IMPORT
-        if isinstance(node, ast.Name):
-            if node.id == BUILTIN_IMPORT and node.id not in module.function_names():
-                return True
-            origin = module._imported.get(node.id)
-            return origin is not None and (
-                origin[0] == IMPORTLIB
-                or (origin[0] == BUILTINS and origin[1] == BUILTIN_IMPORT)
-            )
-        if isinstance(node, ast.Call):
-            return (
-                isinstance(node.func, ast.Name)
-                and node.func.id == "getattr"
-                and bool(node.args)
-                and cls._names_module(module, node.args[0], IMPORTLIB)
-            )
-        return False
 
     def _declaration_violations(self) -> tuple[Violation, ...]:  # tesser:debt TB051
         found: list[Violation] = []
@@ -1712,7 +1745,7 @@ class Codebase(ts.AggregateRoot):
 
     def _import_declaration_violations(self) -> tuple[Violation, ...]:  # tesser:debt TB051
         found: list[Violation] = []
-        tops = self._tree_tops()
+        tops = (frozenset(each.name().split(".")[0] for each in self._modules))
         for declared in self._imports:
             head = declared.split(".")[0]
             if head == KERNEL_PACKAGE or head in SHELL_PACKAGES or head in tops:
@@ -1764,11 +1797,8 @@ class Codebase(ts.AggregateRoot):
             ),
         )
 
-    def _tree_tops(self) -> frozenset[str]:  # tesser:debt TB051
-        return frozenset(module.name().split(".")[0] for module in self._modules)
-
     def _conftest_leaf_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
-        tops = self._tree_tops()
+        tops = (frozenset(each.name().split(".")[0] for each in self._modules))
         if self._export != TESSER:
             tops = tops - {TESSER}
         return tuple(
@@ -2012,7 +2042,10 @@ class Codebase(ts.AggregateRoot):
         own = (
             frozenset({self._export})
             if module.name().split(".")[0] == self._export
-            else self._kernel_tops()
+            else ((
+                        frozenset({KERNEL_PACKAGE})
+                        | (frozenset({self._export}) if self._export is not None else frozenset())
+                    ) & frozenset(each.name().split(".")[0] for each in self._modules))
         )
         for edge in module.import_edges():
             target = str(edge._target)
@@ -2020,9 +2053,18 @@ class Codebase(ts.AggregateRoot):
             pieces = target.split(".")
             if pieces[0] == TESSER:
                 continue
-            if pieces[0] in own and self._walked(target):
+            if pieces[0] in own and (any(
+                        module.name() == target or module.name().startswith(target + ".")
+                        for module in self._modules
+                    )):
                 continue
-            if self._declared_kernel_import(target):
+            covered = False
+            for declared in self._imports:
+                if target == declared or target.startswith(declared + "."):
+                    self._used_imports.add(declared)
+                    covered = True
+                    break
+            if covered:
                 continue
             if target in CORE_STDLIB["domain"] or pieces[0] in CORE_STDLIB["domain"]:
                 continue
@@ -2036,13 +2078,6 @@ class Codebase(ts.AggregateRoot):
                 )
             )
         return tuple(found)
-
-    def _declared_kernel_import(self, target: str) -> bool:  # tesser:debt TB051
-        for declared in self._imports:
-            if target == declared or target.startswith(declared + "."):
-                self._used_imports.add(declared)
-                return True
-        return False
 
     def _app_init_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
         return tuple(
@@ -2239,16 +2274,22 @@ class Codebase(ts.AggregateRoot):
             )
         doc_ids: set[int] = set()
         body = module.body()
-        if body and self._is_bare_string(body[0]):
+        if body and (isinstance((body[0]), ast.Expr)
+                    and isinstance((body[0]).value, ast.Constant)
+                    and isinstance((body[0]).value.value, str)):
             doc_ids.add(id(body[0]))
         for stmt in body:
             for node in ast.walk(stmt):
                 if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
-                    if node.body and self._is_bare_string(node.body[0]):
+                    if node.body and (isinstance((node.body[0]), ast.Expr)
+                                and isinstance((node.body[0]).value, ast.Constant)
+                                and isinstance((node.body[0]).value.value, str)):
                         doc_ids.add(id(node.body[0]))
         for stmt in body:
             for node in ast.walk(stmt):
-                if not self._is_bare_string(node):
+                if not (isinstance(node, ast.Expr)
+                            and isinstance(node.value, ast.Constant)
+                            and isinstance(node.value.value, str)):
                     continue
                 kind = "a docstring" if id(node) in doc_ids else "a bare string statement"
                 found.append(
@@ -2268,7 +2309,9 @@ class Codebase(ts.AggregateRoot):
             for node in ast.walk(stmt):
                 if isinstance(node, ast.ImportFrom):
                     target = node.module or ""
-                    if self._is_mock_module(target) or (
+                    if (any(
+                                target == banned or target.startswith(banned + ".") for banned in MOCK_MODULES
+                            )) or (
                         target == "unittest" and any(alias.name == "mock" for alias in node.names)
                     ):
                         found.append(
@@ -2293,7 +2336,9 @@ class Codebase(ts.AggregateRoot):
                             )
                         )
                 elif isinstance(node, ast.Import):
-                    if any(self._is_mock_module(alias.name) for alias in node.names):
+                    if any((any(
+                                alias.name == banned or alias.name.startswith(banned + ".") for banned in MOCK_MODULES
+                            )) for alias in node.names):
                         found.append(
                             Violation(
                                 module.path(),
@@ -2453,12 +2498,27 @@ class Codebase(ts.AggregateRoot):
         found: list[Violation] = []
         for stmt in module.body():
             for node in ast.walk(stmt):
+                if not isinstance(node, ast.Compare) or len(node.ops) != 1:
+                    continue
+                right = node.comparators[0]
                 if (
-                    isinstance(node, ast.Compare)
-                    and len(node.ops) == 1
-                    and isinstance(node.ops[0], ast.Eq)
-                    and self._is_str_call(node.left)
-                    and self._is_str_call(node.comparators[0])
+                    isinstance(node.ops[0], ast.Eq)
+                    and (isinstance(node.left, ast.Call) and (
+                                (
+                                    isinstance(node.left.func, ast.Name)
+                                    and node.left.func.id == "str"
+                                    and len(node.left.args) == 1
+                                )
+                                or (isinstance(node.left.func, ast.Attribute) and node.left.func.attr == "__str__")
+                            ))
+                    and (isinstance(right, ast.Call) and (
+                                (
+                                    isinstance(right.func, ast.Name)
+                                    and right.func.id == "str"
+                                    and len(right.args) == 1
+                                )
+                                or (isinstance(right.func, ast.Attribute) and right.func.attr == "__str__")
+                            ))
                 ):
                     found.append(
                         Violation(
@@ -2514,9 +2574,14 @@ class Codebase(ts.AggregateRoot):
         for item in cls.body:
             if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) or item.name.startswith("_"):
                 continue
-            attr = self._bare_field_return(item)
-            if attr is None:
+            bare = item.body[0].value if len(item.body) == 1 and isinstance(item.body[0], ast.Return) else None
+            if not (
+                isinstance(bare, ast.Attribute)
+                and isinstance(bare.value, ast.Name)
+                and bare.value.id == "self"
+            ):
                 continue
+            attr = bare.attr
             returned_ann = item.returns if item.returns is not None else by_name.get(attr)
             if returned_ann is None:
                 continue
@@ -2584,9 +2649,39 @@ class Codebase(ts.AggregateRoot):
                 continue
             produced: frozenset[str] = frozenset()
             if item.returns is not None:
-                produced = frozenset(
-                    name for name, _ in self._produced_names(module, item.returns)
-                )
+                produced_pairs: list[tuple[str, ast.expr]] = []
+                walk_stack: list[ast.expr] = [item.returns]
+                while walk_stack:
+                    walked = walk_stack.pop()
+                    if isinstance(walked, ast.Subscript):
+                        if self._annotation_head(walked.value) not in (
+                            "type",
+                            "Type",
+                            "Callable",
+                        ):
+                            walk_stack.append(walked.slice)
+                        continue
+                    if isinstance(walked, ast.Constant):
+                        if isinstance(walked.value, str):
+                            try:
+                                parsed = ast.parse(walked.value, mode="eval")
+                            except SyntaxError:
+                                continue
+                            if not isinstance(parsed.body, ast.Constant):
+                                walk_stack.append(parsed.body)
+                        continue
+                    if isinstance(walked, ast.Attribute):
+                        produced_pairs.append((walked.attr, walked))
+                        continue
+                    if isinstance(walked, ast.Name):
+                        produced_pairs.append((walked.id, walked))
+                        continue
+                    walk_stack.extend(
+                        child
+                        for child in ast.iter_child_nodes(walked)
+                        if isinstance(child, ast.expr)
+                    )
+                produced = frozenset(name for name, _ in produced_pairs)
             second_door = bool(produced & {cls.name, "Self"})
             if not produced and any(
                 isinstance(node.func, ast.Name) and node.func.id in ("cls", cls.name)
@@ -2605,41 +2700,6 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
         return tuple(found)
-
-    def _produced_names(  # tesser:debt TB051
-        self, module: Module, root: ast.expr
-    ) -> list[tuple[str, ast.expr]]:
-        produced: list[tuple[str, ast.expr]] = []
-        stack: list[ast.expr] = [root]
-        while stack:
-            node = stack.pop()
-            if isinstance(node, ast.Subscript):
-                head = self._annotation_head(node.value)
-                if head in ("type", "Type", "Callable"):
-                    continue
-                stack.append(node.slice)
-                continue
-            if isinstance(node, ast.Constant):
-                if isinstance(node.value, str):
-                    try:
-                        parsed = ast.parse(node.value, mode="eval")
-                    except SyntaxError:
-                        continue
-                    if not isinstance(parsed.body, ast.Constant):
-                        stack.append(parsed.body)
-                continue
-            if isinstance(node, ast.Attribute):
-                produced.append((node.attr, node))
-                continue
-            if isinstance(node, ast.Name):
-                produced.append((node.id, node))
-                continue
-            stack.extend(
-                child
-                for child in ast.iter_child_nodes(node)
-                if isinstance(child, ast.expr)
-            )
-        return produced
 
     def _exit_violations(  # tesser:debt TB051
         self,
@@ -2734,9 +2794,14 @@ class Codebase(ts.AggregateRoot):
         for item in cls.body:
             if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) or item.name.startswith("_"):
                 continue
-            attr = self._bare_field_return(item)
-            if attr is None:
+            bare = item.body[0].value if len(item.body) == 1 and isinstance(item.body[0], ast.Return) else None
+            if not (
+                isinstance(bare, ast.Attribute)
+                and isinstance(bare.value, ast.Name)
+                and bare.value.id == "self"
+            ):
                 continue
+            attr = bare.attr
             returned = (
                 self._annotation_head(item.returns) if item.returns is not None else None
             )
@@ -2799,11 +2864,48 @@ class Codebase(ts.AggregateRoot):
                 continue
             if isinstance(item.returns, ast.Constant) and item.returns.value is None:
                 continue
-            if self._bare_field_return(item) is not None:
+            bare = item.body[0].value if len(item.body) == 1 and isinstance(item.body[0], ast.Return) else None
+            if (
+                isinstance(bare, ast.Attribute)
+                and isinstance(bare.value, ast.Name)
+                and bare.value.id == "self"
+            ):
                 continue
             spec_return = False
             offenders: list[str] = []
-            for name, node in self._produced_names(module, item.returns):
+            return_pairs: list[tuple[str, ast.expr]] = []
+            walk_stack: list[ast.expr] = [item.returns]
+            while walk_stack:
+                walked = walk_stack.pop()
+                if isinstance(walked, ast.Subscript):
+                    if self._annotation_head(walked.value) not in (
+                        "type",
+                        "Type",
+                        "Callable",
+                    ):
+                        walk_stack.append(walked.slice)
+                    continue
+                if isinstance(walked, ast.Constant):
+                    if isinstance(walked.value, str):
+                        try:
+                            parsed = ast.parse(walked.value, mode="eval")
+                        except SyntaxError:
+                            continue
+                        if not isinstance(parsed.body, ast.Constant):
+                            walk_stack.append(parsed.body)
+                    continue
+                if isinstance(walked, ast.Attribute):
+                    return_pairs.append((walked.attr, walked))
+                    continue
+                if isinstance(walked, ast.Name):
+                    return_pairs.append((walked.id, walked))
+                    continue
+                walk_stack.extend(
+                    child
+                    for child in ast.iter_child_nodes(walked)
+                    if isinstance(child, ast.expr)
+                )
+            for name, node in return_pairs:
                 if name in RETURN_WRAPPERS or name in SELF_NAMES or name == cls.name:
                     continue
                 key = module._resolve(node)
@@ -2860,42 +2962,6 @@ class Codebase(ts.AggregateRoot):
         return frozenset(names - RETURN_WRAPPERS - SELF_NAMES)
 
     @staticmethod
-    def _bare_field_return(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:  # tesser:debt TB051
-        if len(fn.body) != 1 or not isinstance(fn.body[0], ast.Return):
-            return None
-        value = fn.body[0].value
-        if (
-            isinstance(value, ast.Attribute)
-            and isinstance(value.value, ast.Name)
-            and value.value.id == "self"
-        ):
-            return value.attr
-        return None
-
-    @staticmethod
-    def _is_bare_string(node: ast.AST) -> TypeGuard[ast.Expr]:  # tesser:debt TB051
-        return (
-            isinstance(node, ast.Expr)
-            and isinstance(node.value, ast.Constant)
-            and isinstance(node.value.value, str)
-        )
-
-    @staticmethod
-    def _is_mock_module(target: str) -> bool:  # tesser:debt TB051
-        return any(
-            target == banned or target.startswith(banned + ".") for banned in MOCK_MODULES
-        )
-
-    @staticmethod
-    def _is_str_call(node: ast.expr) -> bool:  # tesser:debt TB051
-        if not isinstance(node, ast.Call):
-            return False
-        func = node.func
-        if isinstance(func, ast.Name) and func.id == "str" and len(node.args) == 1:
-            return True
-        return isinstance(func, ast.Attribute) and func.attr == "__str__"
-
-    @staticmethod
     def _annotation_head(node: ast.expr) -> str | None:  # tesser:debt TB051
         if isinstance(node, ast.Name):
             return node.id
@@ -2933,7 +2999,10 @@ class Codebase(ts.AggregateRoot):
             )
         )
         for stmt in module.body():
-            if isinstance(stmt, ast.FunctionDef) and not self._declared(module, stmt, "load"):
+            if isinstance(stmt, ast.FunctionDef) and not (any(
+                        key is not None and TESSER_DECORATORS.get(key) == ("load")
+                        for key in (module._resolve(decorator) for decorator in stmt.decorator_list)
+                    )):
                 found.append(
                     Violation(
                         module.path(),
@@ -3071,7 +3140,7 @@ class Codebase(ts.AggregateRoot):
                         "a protocol module never imports srv or app",
                     )
                 )
-            elif head != PROTOCOL_PACKAGE and head in self._tree_tops():
+            elif head != PROTOCOL_PACKAGE and head in (frozenset(each.name().split(".")[0] for each in self._modules)):
                 found.append(
                     Violation(
                         module.path(),
@@ -3125,18 +3194,6 @@ class Codebase(ts.AggregateRoot):
                 found.extend(cls._nested_class_defs(stmt.body))
         return found
 
-    @staticmethod
-    def _enum_base(module: Module, stmt: ast.ClassDef) -> str | None:  # tesser:debt TB051
-        for base in stmt.bases:
-            if isinstance(base, ast.Attribute) and isinstance(base.value, ast.Name):
-                if module._package_aliases.get(base.value.id) == ENUM_MODULE:
-                    return base.attr
-            elif isinstance(base, ast.Name):
-                origin = module._imported.get(base.id)
-                if origin is not None and origin[0] == ENUM_MODULE:
-                    return origin[1]
-        return None
-
     @classmethod
     def _is_union(cls, node: ast.expr | None) -> bool:  # tesser:debt TB051
         if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
@@ -3184,7 +3241,7 @@ class Codebase(ts.AggregateRoot):
             head = target.split(".")[0]
             if head == TESSER:
                 continue
-            if head in self._tree_tops():
+            if head in (frozenset(each.name().split(".")[0] for each in self._modules)):
                 found.append(
                     Violation(
                         module.path(),
@@ -3245,8 +3302,16 @@ class Codebase(ts.AggregateRoot):
                             "slot the shape rules cannot read and a bound is an expression",
                         )
                     )
-                annotations = [arg.annotation for arg in self._params(item)] + [item.returns]
-                if any(self._is_computed(node) for node in annotations):
+                annotations = [arg.annotation for arg in ([
+                            arg
+                            for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
+                            if arg.arg != "self"
+                        ])] + [item.returns]
+                if any((node is not None and any(
+                            isinstance(inner, (ast.Call, ast.Lambda, ast.Await, ast.NamedExpr))
+                            or isinstance(inner, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp))
+                            for inner in ast.walk(node)
+                        )) for node in annotations):
                     found.append(
                         Violation(
                             module.path(),
@@ -3270,7 +3335,11 @@ class Codebase(ts.AggregateRoot):
                 )
             for base in stmt.bases:
                 if isinstance(base, (ast.Name, ast.Attribute, ast.Subscript)) and not (
-                    self._is_computed(base)
+                    (base is not None and any(
+                                isinstance(inner, (ast.Call, ast.Lambda, ast.Await, ast.NamedExpr))
+                                or isinstance(inner, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp))
+                                for inner in ast.walk(base)
+                            ))
                 ):
                     continue
                 found.append(
@@ -3304,9 +3373,50 @@ class Codebase(ts.AggregateRoot):
                             "import, because every adapter imports it",
                         )
                     )
-            if self._enum_base(module, stmt) is not None:
+            stmt_enum: str | None = None
+            for base in stmt.bases:
+                if isinstance(base, ast.Attribute) and isinstance(base.value, ast.Name):
+                    if module._package_aliases.get(base.value.id) == ENUM_MODULE:
+                        stmt_enum = base.attr
+                        break
+                elif isinstance(base, ast.Name):
+                    origin = module._imported.get(base.id)
+                    if origin is not None and origin[0] == ENUM_MODULE:
+                        stmt_enum = origin[1]
+                        break
+            if stmt_enum is not None:
                 for item in stmt.body:
-                    if self._is_enum_member(module, item):
+                    member_target: ast.expr | None = None
+                    member_value: ast.expr | None = None
+                    if isinstance(item, ast.AnnAssign):
+                        member_target, member_value = item.target, item.value
+                    elif isinstance(item, ast.Assign) and len(item.targets) == 1:
+                        member_target, member_value = item.targets[0], item.value
+                    is_member = (
+                        isinstance(member_target, ast.Name)
+                        and not member_target.id.startswith("_")
+                        and not (
+                            isinstance(item, ast.AnnAssign)
+                            and not isinstance(item.annotation, ast.Name)
+                        )
+                        and (
+                            isinstance(member_value, ast.Constant)
+                            or (
+                                isinstance(member_value, ast.UnaryOp)
+                                and isinstance(member_value.operand, ast.Constant)
+                                and isinstance(member_value.operand.value, (int, float))
+                            )
+                            or (
+                                isinstance(member_value, ast.Call)
+                                and isinstance(member_value.func, ast.Attribute)
+                                and isinstance(member_value.func.value, ast.Name)
+                                and module._package_aliases.get(member_value.func.value.id)
+                                == ENUM_MODULE
+                                and member_value.func.attr == "auto"
+                            )
+                        )
+                    )
+                    if is_member:
                         continue
                     found.append(
                         Violation(
@@ -3340,7 +3450,17 @@ class Codebase(ts.AggregateRoot):
         for stmt in self._nested_class_defs(list(module.body())):
             block = blocks.get((module.name(), stmt.name))
             where = f"{module.name()}.{stmt.name}"
-            enum_base = self._enum_base(module, stmt)
+            enum_base: str | None = None
+            for base in stmt.bases:
+                if isinstance(base, ast.Attribute) and isinstance(base.value, ast.Name):
+                    if module._package_aliases.get(base.value.id) == ENUM_MODULE:
+                        enum_base = base.attr
+                        break
+                elif isinstance(base, ast.Name):
+                    origin = module._imported.get(base.id)
+                    if origin is not None and origin[0] == ENUM_MODULE:
+                        enum_base = origin[1]
+                        break
             if enum_base is not None and block is None:
                 if enum_base not in ENUM_BASES:
                     found.append(
@@ -3426,7 +3546,18 @@ class Codebase(ts.AggregateRoot):
                 continue
             found.extend(self._unreadable(module, module.name(), loose))
         for holder in module.class_defs():
-            enum_member = self._enum_base(module, holder) is not None
+            holder_enum: str | None = None
+            for base in holder.bases:
+                if isinstance(base, ast.Attribute) and isinstance(base.value, ast.Name):
+                    if module._package_aliases.get(base.value.id) == ENUM_MODULE:
+                        holder_enum = base.attr
+                        break
+                elif isinstance(base, ast.Name):
+                    origin = module._imported.get(base.id)
+                    if origin is not None and origin[0] == ENUM_MODULE:
+                        holder_enum = origin[1]
+                        break
+            enum_member = holder_enum is not None
             for base in holder.bases:
                 if not self._is_readable_annotation(base):
                     found.extend(
@@ -3437,14 +3568,48 @@ class Codebase(ts.AggregateRoot):
                 if isinstance(item, ast.Pass):
                     continue
                 if enum_member:
-                    if not self._is_enum_member(module, item):
+                    item_target: ast.expr | None = None
+                    item_value: ast.expr | None = None
+                    if isinstance(item, ast.AnnAssign):
+                        item_target, item_value = item.target, item.value
+                    elif isinstance(item, ast.Assign) and len(item.targets) == 1:
+                        item_target, item_value = item.targets[0], item.value
+                    item_is_member = (
+                        isinstance(item_target, ast.Name)
+                        and not item_target.id.startswith("_")
+                        and not (
+                            isinstance(item, ast.AnnAssign)
+                            and not isinstance(item.annotation, ast.Name)
+                        )
+                        and (
+                            isinstance(item_value, ast.Constant)
+                            or (
+                                isinstance(item_value, ast.UnaryOp)
+                                and isinstance(item_value.operand, ast.Constant)
+                                and isinstance(item_value.operand.value, (int, float))
+                            )
+                            or (
+                                isinstance(item_value, ast.Call)
+                                and isinstance(item_value.func, ast.Attribute)
+                                and isinstance(item_value.func.value, ast.Name)
+                                and module._package_aliases.get(item_value.func.value.id)
+                                == ENUM_MODULE
+                                and item_value.func.attr == "auto"
+                            )
+                        )
+                    )
+                    if not item_is_member:
                         found.extend(self._unreadable(module, where, item))
                     continue
                 if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     found.extend(self._unreadable(module, where, item))
                     continue
                 shape = f"{where}.{item.name}"
-                for node in [arg.annotation for arg in self._params(item)] + [
+                for node in [arg.annotation for arg in ([
+                            arg
+                            for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
+                            if arg.arg != "self"
+                        ])] + [
                     item.returns
                 ]:
                     if node is not None and not self._is_readable_annotation(node):
@@ -3529,7 +3694,11 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         declared = {stmt.name for stmt in module.class_defs()}
-        for node in [arg.annotation for arg in self._params(fn)] + [fn.returns]:
+        for node in [arg.annotation for arg in ([
+                    arg
+                    for arg in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs
+                    if arg.arg != "self"
+                ])] + [fn.returns]:
             if isinstance(node, ast.Name) and node.id in declared:
                 continue
             found.append(
@@ -3590,46 +3759,6 @@ class Codebase(ts.AggregateRoot):
                 "shapes its rules can read, so anything else is a finding by default "
                 "rather than a gap nobody enumerated",
             ),
-        )
-
-    @staticmethod
-    def _is_computed(node: ast.expr | None) -> bool:  # tesser:debt TB051
-        if node is None:
-            return False
-        return any(
-            isinstance(inner, (ast.Call, ast.Lambda, ast.Await, ast.NamedExpr))
-            or isinstance(inner, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp))
-            for inner in ast.walk(node)
-        )
-
-    @staticmethod
-    def _is_enum_member(module: Module, node: ast.stmt) -> bool:  # tesser:debt TB051
-        target: ast.expr | None = None
-        value: ast.expr | None = None
-        if isinstance(node, ast.AnnAssign):
-            target, value = node.target, node.value
-        elif isinstance(node, ast.Assign) and len(node.targets) == 1:
-            target, value = node.targets[0], node.value
-        if target is None:
-            return False
-        if not isinstance(target, ast.Name) or target.id.startswith("_"):
-            return False
-        if isinstance(node, ast.AnnAssign) and not isinstance(node.annotation, ast.Name):
-            return False
-        if isinstance(value, ast.Constant):
-            return True
-        if (
-            isinstance(value, ast.UnaryOp)
-            and isinstance(value.operand, ast.Constant)
-            and isinstance(value.operand.value, (int, float))
-        ):
-            return True
-        return (
-            isinstance(value, ast.Call)
-            and isinstance(value.func, ast.Attribute)
-            and isinstance(value.func.value, ast.Name)
-            and module._package_aliases.get(value.func.value.id) == ENUM_MODULE
-            and value.func.attr == "auto"
         )
 
     def _role_module_violations(  # tesser:debt TB051
@@ -3707,8 +3836,12 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         found.extend(self._stray_import_violations(module))
-        holds_handler = self._holds_kind(module, blocks, "handler")
-        holds_gateway = self._holds_kind(module, blocks, "gateway")
+        holds_handler = (module is not None and any(
+                    blocks.get((module.name(), cls.name)) == ("handler") for cls in module.class_defs()
+                ))
+        holds_gateway = (module is not None and any(
+                    blocks.get((module.name(), cls.name)) == ("gateway") for cls in module.class_defs()
+                ))
         if role == "domain":
             found.extend(
                 self._tesser_import_violations(
@@ -3827,44 +3960,57 @@ class Codebase(ts.AggregateRoot):
                 found.extend(denied)
                 if not denied:
                     found.extend(self._form_violations(module, edge))
-            elif pieces[0] in self._kernel_tops() and self._walked(target):
+            elif pieces[0] in ((
+                        frozenset({KERNEL_PACKAGE})
+                        | (frozenset({self._export}) if self._export is not None else frozenset())
+                    ) & frozenset(each.name().split(".")[0] for each in self._modules)) and (any(
+                        module.name() == target or module.name().startswith(target + ".")
+                        for module in self._modules
+                    )):
                 continue
-            elif self._declared_kernel_import(target):
-                continue
-            elif (
-                role in CORE_STDLIB
-                and target not in CORE_STDLIB[role]
-                and pieces[0] not in CORE_STDLIB[role]
-            ):
-                found.append(
-                    Violation(
-                        module.path(),
-                        lineno,
-                        "TB062",
-                        f"{module.name()} imports {target}; domain, client, and application "
-                        "import only their context, their kernels, their tesser package, "
-                        "and the pure stdlib",
+            else:
+                covered = False
+                for declared in self._imports:
+                    if target == declared or target.startswith(declared + "."):
+                        self._used_imports.add(declared)
+                        covered = True
+                        break
+                if covered:
+                    continue
+                if (
+                    role in CORE_STDLIB
+                    and target not in CORE_STDLIB[role]
+                    and pieces[0] not in CORE_STDLIB[role]
+                ):
+                    found.append(
+                        Violation(
+                            module.path(),
+                            lineno,
+                            "TB062",
+                            f"{module.name()} imports {target}; domain, client, and application "
+                            "import only their context, their kernels, their tesser package, "
+                            "and the pure stdlib",
+                        )
                     )
-                )
-            elif (
-                pieces[0] in SHELL_PACKAGES
-                and pieces[0] in self._tree_tops()
-                and not (
-                    role == "adapters"
-                    and pieces[0] == PROTOCOL_PACKAGE
-                    and len(module.name().split(".")) >= 3
-                    and module.name().split(".")[2] == "handlers"
-                )
-            ):
-                found.append(
-                    Violation(
-                        module.path(),
-                        lineno,
-                        "TB066",
-                        f"{module.name()} imports {target}; of the app shell a context "
-                        "imports only protocol, and only from its handlers",
+                elif (
+                    pieces[0] in SHELL_PACKAGES
+                    and pieces[0] in (frozenset(each.name().split(".")[0] for each in self._modules))
+                    and not (
+                        role == "adapters"
+                        and pieces[0] == PROTOCOL_PACKAGE
+                        and len(module.name().split(".")) >= 3
+                        and module.name().split(".")[2] == "handlers"
                     )
-                )
+                ):
+                    found.append(
+                        Violation(
+                            module.path(),
+                            lineno,
+                            "TB066",
+                            f"{module.name()} imports {target}; of the app shell a context "
+                            "imports only protocol, and only from its handlers",
+                        )
+                    )
         return tuple(found)
 
     def _app_import_violations(  # tesser:debt TB051
@@ -3882,16 +4028,14 @@ class Codebase(ts.AggregateRoot):
             tail = pieces[1] if len(pieces) > 1 else ""
             if pieces[0] in contexts:
                 denied: list[Violation] = []
+                imported = next(
+                    (named for named in self._modules if named.name() == target), None
+                )
                 if package == "srv" and not (
                     tail == "adapters"
-                    and self._holds_kind(
-                        next(
-                            (named for named in self._modules if named.name() == target),
-                            None,
-                        ),
-                        blocks,
-                        "handler",
-                    )
+                    and (imported is not None and any(
+                                blocks.get((imported.name(), cls.name)) == ("handler") for cls in imported.class_defs()
+                            ))
                 ):
                     denied.append(
                         Violation(
@@ -3924,7 +4068,7 @@ class Codebase(ts.AggregateRoot):
                         f"{module.name()} imports {target}; the composition root never imports a host",
                     )
                 )
-            elif pieces[0] == TESTS_ROLE and pieces[0] in self._tree_tops():
+            elif pieces[0] == TESTS_ROLE and pieces[0] in (frozenset(each.name().split(".")[0] for each in self._modules)):
                 found.append(
                     Violation(
                         module.path(),
@@ -3946,33 +4090,9 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _test_tier(self, module: Module, contexts: frozenset[str]) -> tuple[str, str] | None:  # tesser:debt TB051
-        parts = module.name().split(".")
-        if parts[0] in self._kernel_tops() and len(parts) >= 2:
-            return ("", KERNEL_TIER)
-        if parts[0] == "srv" and len(parts) >= 2:
-            return ("", SRV_TIER)
-        if parts[0] == "app" and len(parts) >= 2:
-            return ("", APP_TIER)
-        if parts[0] == PROTOCOL_PACKAGE and len(parts) >= 2:
-            return ("", PROTOCOL_TIER)
-        if parts[0] == TESTS_ROLE and len(parts) >= 2:
-            return ("", ROOT_TESTS_TIER)
-        if len(parts) < 3 or parts[0] not in contexts:
-            return None
-        if parts[1] == TESTS_ROLE:
-            return (parts[0], TESTS_ROLE)
-        if parts[1] not in ROLES:
-            return (parts[0], STRAY_TIER)
-        if parts[1] == "adapters":
-            if len(parts) >= 4 and parts[2] in ADAPTER_TEST_TIERS:
-                return (parts[0], parts[2])
-            return (parts[0], STRAY_TIER)
-        return (parts[0], parts[1])
-
     def _shell_reach_violations(self, module: Module, tier: str) -> tuple[Violation, ...]:  # tesser:debt TB051
         allowed = TEST_TIER_SHELL[tier]
-        tops = self._tree_tops()
+        tops = (frozenset(each.name().split(".")[0] for each in self._modules))
         found: list[Violation] = []
         for edge in module.import_edges():
             target = str(edge._target)
@@ -4203,7 +4323,35 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         found.extend(self._stray_import_violations(module))
-        placement = self._test_tier(module, contexts)
+        tier_parts = module.name().split(".")
+        tier_tops = (
+            frozenset({KERNEL_PACKAGE})
+            | (frozenset({self._export}) if self._export is not None else frozenset())
+        ) & frozenset(each.name().split(".")[0] for each in self._modules)
+        if tier_parts[0] in tier_tops and len(tier_parts) >= 2:
+            placement: tuple[str, str] | None = ("", KERNEL_TIER)
+        elif tier_parts[0] == "srv" and len(tier_parts) >= 2:
+            placement = ("", SRV_TIER)
+        elif tier_parts[0] == "app" and len(tier_parts) >= 2:
+            placement = ("", APP_TIER)
+        elif tier_parts[0] == PROTOCOL_PACKAGE and len(tier_parts) >= 2:
+            placement = ("", PROTOCOL_TIER)
+        elif tier_parts[0] == TESTS_ROLE and len(tier_parts) >= 2:
+            placement = ("", ROOT_TESTS_TIER)
+        elif len(tier_parts) < 3 or tier_parts[0] not in contexts:
+            placement = None
+        elif tier_parts[1] == TESTS_ROLE:
+            placement = (tier_parts[0], TESTS_ROLE)
+        elif tier_parts[1] not in ROLES:
+            placement = (tier_parts[0], STRAY_TIER)
+        elif tier_parts[1] == "adapters":
+            placement = (
+                (tier_parts[0], tier_parts[2])
+                if len(tier_parts) >= 4 and tier_parts[2] in ADAPTER_TEST_TIERS
+                else (tier_parts[0], STRAY_TIER)
+            )
+        else:
+            placement = (tier_parts[0], tier_parts[1])
         if placement is None:
             placement = ("", STRAY_TIER)
         found.extend(self._test_placement_violations(module, placement[0], placement[1], contexts))
@@ -4230,7 +4378,10 @@ class Codebase(ts.AggregateRoot):
                 where = f"{module.name()}.{stmt.name}"
                 if stmt.name.startswith("test_"):
                     continue
-                if self._declared(module, stmt, "helper"):
+                if (any(
+                            key is not None and TESSER_DECORATORS.get(key) == ("helper")
+                            for key in (module._resolve(decorator) for decorator in stmt.decorator_list)
+                        )):
                     found.extend(self._helper_violations(module, where, stmt.lineno, stmt, blocks))
                     continue
                 found.append(
@@ -4246,7 +4397,10 @@ class Codebase(ts.AggregateRoot):
                 if self._export == TESSER:
                     continue
                 where = f"{module.name()}.{stmt.name}"
-                if not self._declared(module, stmt, "fake"):
+                if not (any(
+                            key is not None and TESSER_DECORATORS.get(key) == ("fake")
+                            for key in (module._resolve(decorator) for decorator in stmt.decorator_list)
+                        )):
                     found.append(
                         Violation(
                             module.path(),
@@ -4317,7 +4471,8 @@ class Codebase(ts.AggregateRoot):
                     "a helper takes only defaulted primitives",
                 )
             )
-        if self._annotation_block(module, fn.returns, blocks) not in DATA_BLOCKS:
+        helper_key = module._resolve(fn.returns) if fn.returns is not None else None
+        if (blocks.get(helper_key) if helper_key is not None else None) not in DATA_BLOCKS:
             found.append(
                 Violation(
                     module.path(),
@@ -4350,7 +4505,8 @@ class Codebase(ts.AggregateRoot):
         for arg in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs:
             if arg.arg == "self":
                 continue
-            if self._annotation_block(module, arg.annotation, blocks) != "port":
+            port_key = module._resolve(arg.annotation) if arg.annotation is not None else None
+            if (blocks.get(port_key) if port_key is not None else None) != "port":
                 found.append(
                     Violation(
                         module.path(),
@@ -4405,11 +4561,22 @@ class Codebase(ts.AggregateRoot):
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        init = self._init_of(cls)
+        init = (next(
+                    (
+                        item
+                        for item in cls.body
+                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "__init__"
+                    ),
+                    None,
+                ))
         if init is None:
             return ()
         where = f"{module.name()}.{cls.name}.__init__"
-        for arg in self._params(init):
+        for arg in ([
+                    arg
+                    for arg in init.args.posonlyargs + init.args.args + init.args.kwonlyargs
+                    if arg.arg != "self"
+                ]):
             if not self._allowed_annotation(module, arg.annotation, blocks, frozenset({"valueobject"})):
                 found.append(
                     Violation(
@@ -4443,7 +4610,11 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
                 continue
-            for arg in self._params(item):
+            for arg in ([
+                        arg
+                        for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
+                        if arg.arg != "self"
+                    ]):
                 if not self._allowed_annotation(module, arg.annotation, blocks, frozenset({"valueobject", "spec"})):
                     found.append(
                         Violation(
@@ -4470,15 +4641,22 @@ class Codebase(ts.AggregateRoot):
             if port_dto
             else frozenset({"request", "response"})
         )
-        enums = (
-            frozenset(
-                stmt.name
-                for stmt in module.class_defs()
-                if Codebase._enum_base(module, stmt) is not None
-            )
-            if port_dto
-            else frozenset()
-        )
+        named_enums: set[str] = set()
+        if port_dto:
+            for enum_stmt in module.class_defs():
+                for base in enum_stmt.bases:
+                    if isinstance(base, ast.Attribute) and isinstance(
+                        base.value, ast.Name
+                    ):
+                        if module._package_aliases.get(base.value.id) == ENUM_MODULE:
+                            named_enums.add(enum_stmt.name)
+                            break
+                    elif isinstance(base, ast.Name):
+                        origin = module._imported.get(base.id)
+                        if origin is not None and origin[0] == ENUM_MODULE:
+                            named_enums.add(enum_stmt.name)
+                            break
+        enums = frozenset(named_enums)
         for item in cls.body:
             if port_dto and not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 found.append(
@@ -4519,7 +4697,11 @@ class Codebase(ts.AggregateRoot):
                 continue
             carrier = True
             if port_dto:
-                assignable = frozenset(arg.arg for arg in self._params(item))
+                assignable = frozenset(arg.arg for arg in ([
+                            arg
+                            for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
+                            if arg.arg != "self"
+                        ]))
                 for stmt in item.body:
                     if isinstance(stmt, ast.Return) and (
                         stmt.value is None
@@ -4555,7 +4737,11 @@ class Codebase(ts.AggregateRoot):
                         "parameters, because a ports module holds no logic to import",
                     )
                 )
-            for arg in self._params(item):
+            for arg in ([
+                        arg
+                        for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
+                        if arg.arg != "self"
+                    ]):
                 if (
                     port_dto
                     and isinstance(arg.annotation, ast.Name)
@@ -4616,7 +4802,14 @@ class Codebase(ts.AggregateRoot):
                     "what it maps to, because its parameters already say what it maps from",
                 )
             )
-        init = self._init_of(cls)
+        init = (next(
+                    (
+                        item
+                        for item in cls.body
+                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "__init__"
+                    ),
+                    None,
+                ))
         if init is not None:
             for arg in list(init.args.args)[1:] + list(init.args.kwonlyargs):
                 if arg.annotation is None:
@@ -4650,8 +4843,9 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
                 continue
-            if self._annotation_block(
-                module, item.returns, blocks
+            mapper_key = module._resolve(item.returns) if item.returns is not None else None
+            if (
+                blocks.get(mapper_key) if mapper_key is not None else None
             ) == "mapper" and not item.name.endswith(MAPPER_SUFFIX):
                 found.append(
                     Violation(
@@ -4670,7 +4864,8 @@ class Codebase(ts.AggregateRoot):
                 exempt.update(id(inner) for inner in ast.walk(node.slice))
         for node in ast.walk(cls):
             if isinstance(node, ast.Call):
-                built = self._annotation_block(module, node.func, blocks)
+                built_key = module._resolve(node.func)
+                built = blocks.get(built_key) if built_key is not None else None
                 if built in DATA_BLOCKS:
                     found.append(
                         Violation(
@@ -4760,7 +4955,14 @@ class Codebase(ts.AggregateRoot):
         blocks: dict[tuple[str, str], str],
         subject: str,
     ) -> tuple[Violation, ...]:
-        init = self._init_of(cls)
+        init = (next(
+                    (
+                        item
+                        for item in cls.body
+                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "__init__"
+                    ),
+                    None,
+                ))
         if init is None:
             return (
                 Violation(
@@ -4779,7 +4981,14 @@ class Codebase(ts.AggregateRoot):
     def _app_config_violations(  # tesser:debt TB051
         self, module: Module, cls: ast.ClassDef, blocks: dict[tuple[str, str], str]
     ) -> tuple[Violation, ...]:
-        init = self._init_of(cls)
+        init = (next(
+                    (
+                        item
+                        for item in cls.body
+                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "__init__"
+                    ),
+                    None,
+                ))
         if init is None:
             return (
                 Violation(
@@ -4798,7 +5007,14 @@ class Codebase(ts.AggregateRoot):
     def _component_config_violations(  # tesser:debt TB051
         self, module: Module, cls: ast.ClassDef, blocks: dict[tuple[str, str], str]
     ) -> tuple[Violation, ...]:
-        init = self._init_of(cls)
+        init = (next(
+                    (
+                        item
+                        for item in cls.body
+                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "__init__"
+                    ),
+                    None,
+                ))
         if init is None:
             return (
                 Violation(
@@ -4836,7 +5052,11 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         expected = TS_NAME_BY_BLOCK[param_block]
         found: list[Violation] = []
-        params = self._params(fn)
+        params = ([
+                    arg
+                    for arg in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs
+                    if arg.arg != "self"
+                ])
         if fn.args.vararg is not None or fn.args.kwarg is not None:
             found.append(
                 Violation(
@@ -4856,7 +5076,8 @@ class Codebase(ts.AggregateRoot):
                 )
             )
         for arg in params:
-            if self._annotation_block(module, arg.annotation, blocks) != param_block:
+            param_key = module._resolve(arg.annotation) if arg.annotation is not None else None
+            if (blocks.get(param_key) if param_key is not None else None) != param_block:
                 found.append(
                     Violation(
                         module.path(),
@@ -4866,7 +5087,10 @@ class Codebase(ts.AggregateRoot):
                         f"{subject} takes exactly one {expected}",
                     )
                 )
-        if return_block is not None and self._annotation_block(module, fn.returns, blocks) != return_block:
+        returns_key = module._resolve(fn.returns) if fn.returns is not None else None
+        if return_block is not None and (
+            blocks.get(returns_key) if returns_key is not None else None
+        ) != return_block:
             found.append(
                 Violation(
                     module.path(),
@@ -4947,7 +5171,8 @@ class Codebase(ts.AggregateRoot):
             for value in list(node.args) + [kw.value for kw in node.keywords]:
                 if not isinstance(value, ast.Call):
                     continue
-                if self._annotation_block(module, value.func, blocks) is not None:
+                value_key = module._resolve(value.func)
+                if (blocks.get(value_key) if value_key is not None else None) is not None:
                     continue
                 found.append(
                     Violation(
@@ -4958,7 +5183,8 @@ class Codebase(ts.AggregateRoot):
                         "computes in a local, and passes a name, a reader, or a declared kind",
                     )
                 )
-            built = self._annotation_block(module, node.func, blocks)
+            call_key = module._resolve(node.func)
+            built = blocks.get(call_key) if call_key is not None else None
             if built not in DATA_BLOCKS:
                 continue
             bases: set[str | None] = set()
@@ -5005,7 +5231,11 @@ class Codebase(ts.AggregateRoot):
                     and node.orelse[0].col_offset == node.col_offset
                 ):
                     governed.extend(node.orelse)
-                if self._contains_conditional(governed):
+                if (any(
+                            isinstance(sub, (ast.If, ast.Match))
+                            for stmt in governed
+                            for sub in ast.walk(stmt)
+                        )):
                     found.append(
                         Violation(
                             module.path(),
@@ -5025,7 +5255,11 @@ class Codebase(ts.AggregateRoot):
                             "a service method satisfies a condition with one domain call",
                         )
                     )
-                if self._contains_conditional([stmt for case in node.cases for stmt in case.body]):
+                if (any(
+                            isinstance(sub, (ast.If, ast.Match))
+                            for stmt in ([stmt for case in node.cases for stmt in case.body])
+                            for sub in ast.walk(stmt)
+                        )):
                     found.append(
                         Violation(
                             module.path(),
@@ -5035,33 +5269,6 @@ class Codebase(ts.AggregateRoot):
                         )
                     )
         return tuple(found)
-
-    @staticmethod
-    def _contains_conditional(stmts: list[ast.stmt]) -> bool:  # tesser:debt TB051
-        return any(
-            isinstance(sub, (ast.If, ast.Match))
-            for stmt in stmts
-            for sub in ast.walk(stmt)
-        )
-
-    @staticmethod
-    def _params(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.arg]:  # tesser:debt TB051
-        return [
-            arg
-            for arg in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs
-            if arg.arg != "self"
-        ]
-
-    @staticmethod
-    def _init_of(cls: ast.ClassDef) -> ast.FunctionDef | ast.AsyncFunctionDef | None:  # tesser:debt TB051
-        return next(
-            (
-                item
-                for item in cls.body
-                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "__init__"
-            ),
-            None,
-        )
 
     @staticmethod
     def _stray_import_violations(module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
@@ -5114,24 +5321,6 @@ class Codebase(ts.AggregateRoot):
             )
         return ()
 
-    @staticmethod
-    def _holds_kind(module: Module | None, blocks: dict[tuple[str, str], str], kind: str) -> bool:  # tesser:debt TB051
-        if module is None:
-            return False
-        return any(blocks.get((module.name(), cls.name)) == kind for cls in module.class_defs())
-
-    @staticmethod
-    def _declared(  # tesser:debt TB051
-        module: Module,
-        node: ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef,
-        kind: str,
-    ) -> bool:
-        for decorator in node.decorator_list:
-            key = module._resolve(decorator)
-            if key is not None and TESSER_DECORATORS.get(key) == kind:
-                return True
-        return False
-
     def _allowed_annotation(  # tesser:debt TB051
         self,
         module: Module,
@@ -5167,15 +5356,3 @@ class Codebase(ts.AggregateRoot):
         key = module._resolve(node)
         return key is not None and blocks.get(key) in allowed_blocks
 
-    def _annotation_block(  # tesser:debt TB051
-        self,
-        module: Module,
-        node: ast.expr | None,
-        blocks: dict[tuple[str, str], str],
-    ) -> str | None:
-        if node is None:
-            return None
-        key = module._resolve(node)
-        if key is None:
-            return None
-        return blocks.get(key)
