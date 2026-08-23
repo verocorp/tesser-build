@@ -4576,12 +4576,24 @@ class Codebase(ts.AggregateRoot):
                             key is not None and TESSER_DECORATORS.get(key) == ("fake")
                             for key in (module._resolve(decorator) for decorator in stmt.decorator_list)
                         )):
+                    if stmt.name.startswith("Test"):
+                        for item in stmt.body:
+                            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and not item.name.startswith("test_"):
+                                found.append(
+                                    Violation(
+                                        module.path(),
+                                        item.lineno,
+                                        "TB071",
+                                        f"{where}.{item.name} is not a test method; a test class holds only test methods",
+                                    )
+                                )
+                        continue
                     found.append(
                         Violation(
                             module.path(),
                             stmt.lineno,
                             "TB072",
-                            f"{where} is an undeclared class; a test double declares itself with @ts.fake",
+                            f"{where} is an undeclared class; a class in a test module is a Test-prefixed test class or declares itself with @ts.fake",
                         )
                     )
                 elif not any(

@@ -63,7 +63,8 @@ test lives fixes what it may import; `TB074` — every implementation module
 carries exactly one sibling test file named for it, and every sibling test
 file names the module beside it; `TB071`/`TB073` — the totality check over
 test modules: every module-level function is a test, a declared `@ts.helper`,
-or a declared `@ts.fake`, and what does not classify is a finding;
+or a declared `@ts.fake`, a class is a `Test`-prefixed test class holding only
+test methods or a declared `@ts.fake`, and what does not classify is a finding;
 `skills/tesser-build/testing.md`).
 The full check list with per-code rules is `tessercheck-py/RULES.md`; which
 convention has a doc, an example, and a checker is `roadmap/ROADMAP.md`.

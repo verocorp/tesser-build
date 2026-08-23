@@ -4337,6 +4337,11 @@ def test_test_module_totality_is_flagged() -> None:
                 "@th.fake\n"
                 "class FakeNothing:\n"
                 "    pass\n"
+                "class TestGrouped:\n"
+                "    def test_inside(self) -> None:\n"
+                "        assert True\n"
+                "    def build_thing(self) -> None:\n"
+                "        return None\n"
                 "COUNT = 2\n",
                 False,
             ),
@@ -4346,7 +4351,17 @@ def test_test_module_totality_is_flagged() -> None:
         "test_junk.build" in f and "a test module holds tests, @ts.helper builders, and @ts.fake doubles" in f
         for f in findings
     )
-    assert any("test_junk.Junk" in f and "a test double declares itself with @ts.fake" in f for f in findings)
+    assert any(
+        "test_junk.Junk" in f
+        and "a class in a test module is a Test-prefixed test class or declares itself with @ts.fake" in f
+        for f in findings
+    )
+    assert any(
+        "test_junk.TestGrouped.build_thing" in f and "a test class holds only test methods" in f
+        for f in findings
+    )
+    assert not any("test_junk.TestGrouped is" in f for f in findings)
+    assert not any("test_inside" in f for f in findings)
     assert any("test_junk.FakeNothing" in f and "a fake implements the contract it doubles" in f for f in findings)
     assert any(
         "test_junk" in f and "a test module holds only imports, tests, helpers, and fakes" in f
