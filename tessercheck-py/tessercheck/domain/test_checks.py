@@ -2064,6 +2064,91 @@ def test_srv_and_app_statement_totality() -> None:
     )
 
 
+def test_a_srv_entry_point_is_ts_main_and_nothing_else() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "srv/good.py",
+                "srv.good",
+                "import tesser.srv as ts\n"
+                "class Run(ts.Host):\n"
+                "    def run(self, argv: list[str]) -> int:\n"
+                "        return 0\n"
+                "if __name__ == '__main__':\n"
+                "    ts.main(Run().run)\n",
+                False,
+            ),
+            (
+                "srv/test_good.py",
+                "srv.test_good",
+                "import srv.good as good\n"
+                "def test_run() -> None:\n"
+                "    assert good.Run().run([]) == 0\n",
+                False,
+            ),
+            (
+                "srv/busy.py",
+                "srv.busy",
+                "import sys\n"
+                "import tesser.srv as ts\n"
+                "class Run(ts.Host):\n"
+                "    def run(self, argv: list[str]) -> int:\n"
+                "        return 0\n"
+                "if __name__ == '__main__':\n"
+                "    print('starting')\n"
+                "    ts.main(Run().run)\n",
+                False,
+            ),
+            (
+                "srv/legacy.py",
+                "srv.legacy",
+                "import sys\n"
+                "import tesser.srv as ts\n"
+                "class Run(ts.Host):\n"
+                "    def run(self, argv: list[str]) -> int:\n"
+                "        return 0\n"
+                "if __name__ == '__main__':\n"
+                "    raise SystemExit(Run().run(sys.argv[1:]))\n",
+                False,
+            ),
+            (
+                "srv/branching.py",
+                "srv.branching",
+                "import tesser.srv as ts\n"
+                "class Run(ts.Host):\n"
+                "    def run(self, argv: list[str]) -> int:\n"
+                "        return 0\n"
+                "if __name__ == '__main__':\n"
+                "    ts.main(Run().run)\n"
+                "else:\n"
+                "    ts.main(Run().run)\n",
+                False,
+            ),
+            (
+                "app/boot.py",
+                "app.boot",
+                "import tesser.app as ts\n"
+                "if __name__ == '__main__':\n"
+                "    ts.main(print)\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any("srv.good" in f for f in findings)
+    for module in ("srv.busy", "srv.legacy", "srv.branching"):
+        assert any(
+            f"{module} has a __main__ guard holding more than ts.main(run); "
+            "a srv module's entry point is ts.main(run) and nothing else" in f
+            for f in findings
+        ), module
+    assert any(
+        "app.boot has a loose module-level statement; an app module holds only imports, "
+        "classes, declared functions, and Final constants" in f
+        for f in findings
+    )
+
+
 def test_pure_core_stdlib_allowlist() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"

@@ -51,5 +51,5 @@ def run(argv: list[str]) -> int:  # tesser:debt TB051
         app.close()
 
 
-if __name__ == "__main__":  # tesser:debt TB051
-    raise SystemExit(run(sys.argv[1:]))
+if __name__ == "__main__":
+    ts.main(run)

@@ -1,4 +1,5 @@
 from tesser.srv.host import Host as Host
+from tesser.srv.main import main as main
 from tesser.srv.port import Port as Port
 from tesser.srv.record import Record as Record
 from tesser.srv.rejection import Rejection as Rejection

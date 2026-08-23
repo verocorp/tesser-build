@@ -7,6 +7,8 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 Removing `@ts.do_not_use_function` stripped three decorator lines from
 `skills/tesser-build/python.md`, but the examples underneath them are stale in a
 way the decorator was hiding: they teach module functions, which TB051 now bans.
+(The `srv/http/main.py` example was one of the three; v0.0.75.0 rewrote it to
+`ts.main` and the ruling that allowed it, so only the two below remain.)
 
 - [ ] **`python.md:522` shows `required_campaign` as a module function**, cited
   as "verified impl: examples/errorspy/". The verified impl no longer has it —
@@ -16,12 +18,6 @@ way the decorator was hiding: they teach module functions, which TB051 now bans.
   cited example abandoned. Rewriting the section to the `ts.Mapper` idiom was
   left out of the decorator-removal change deliberately — it is a content
   rewrite of shipped guidance, not a deletion, and it wants its own review.
-- [ ] **`python.md:842` shows `def main()` as a module function** in
-  `srv/http/main.py`. That one is real and still fires: the live
-  `examples/python-app/srv/http/main.py` carries a `# tesser:debt TB051` on its
-  `if __name__ == "__main__":`. Whether an entry point is a genuine carve-out or
-  a debt is one of the open TB051 questions, so the example should not be
-  rewritten until that is ruled.
 - [ ] **`python.md:654` had the decorator on a `class`**, which was never valid
   — it decorated functions. Removed with the others; noted only because it means
   nothing in CI reads the skill's code blocks. A checker that parses fenced

@@ -21,7 +21,7 @@ class HttpEdge(ts.Host):
     def stop(self, signum: int, frame: Optional[FrameType]) -> None:
         self._stop.set()
 
-    def run(self) -> None:
+    def run(self, argv: list[str]) -> int:
         app = self._app
         print(f"campaign+linkpolicy app listening on {app.http.host or '0.0.0.0'}:{app.http.port}")  # noqa: T201
         signal.signal(signal.SIGINT, self.stop)
@@ -30,7 +30,8 @@ class HttpEdge(ts.Host):
             self._host.run(self._stop)
         finally:
             app.close()
+        return 0
 
 
-if __name__ == "__main__":  # tesser:debt TB051
-    HttpEdge().run()
+if __name__ == "__main__":
+    ts.main(HttpEdge().run)

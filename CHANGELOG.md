@@ -5,6 +5,58 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.75.0] - 2026-08-22
+
+`ts.main` is the process edge. A srv module may now hold exactly one statement
+outside a class — `if __name__ == "__main__": ts.main(Host().run)` — and that
+is the ruling on the one TB051 survivor that had a language-level reason to
+exist: Python's `-m` needs a module-level statement, and a class cannot be a
+process entry. Nothing else joins `ts.load`. The audit of the other module
+functions found every one already has a class-form home (a `ts.Mapper`, a VO
+exit, an aggregate method, a `ts.Request` reader, a `@ts.helper`), and the
+guard bucket both regeneration runs converged on — `confirm_*`/`refuse_*`, 50
+sites — is a port outcome becoming a domain error, the line after the port
+call, which only left the service because TB082's cap and delegation ban
+pushed it out. It inlines.
+
+### Added
+- **`tesser.srv.main(run)`** — reads `sys.argv[1:]`, calls `run`, raises
+  `SystemExit` with what it returns. `run` is `Callable[[list[str]], int]`, so a
+  host's `run(argv) -> int` is the whole contract and the same line starts a
+  CLI host and an HTTP host. Sibling test `tesser/srv/test_main.py`.
+- **`a srv module's entry point is ts.main(run) and nothing else`** (`TB051`,
+  `domain/checks.py` `_statement_violations`). The `__main__` guard is admitted
+  in a srv module when its body is one call resolving to `tesser.srv.main` and
+  it has no `else`; a guard holding anything more, the legacy
+  `raise SystemExit(run(sys.argv[1:]))` form, or an `else` arm is a finding.
+  In every other module kind the guard stays a loose statement. Fixture:
+  `test_a_srv_entry_point_is_ts_main_and_nothing_else`.
+
+### Changed
+- **`_statement_violations` takes `entry: str | None`** — `"ts.main"` from the
+  srv caller, `None` from kernel, app, protocol, and context. The rulebook binds
+  the row's subject off that literal, so the new row reads "srv module" and the
+  other four bindings drop it rather than mislabelling it.
+- **`sys` joins `TESSER_STDLIB`.** The distribution's shell modules could not
+  import it; `ts.main` is the one place the distribution touches the process,
+  and that is the whole point of it.
+- **Six entry points converted**, six `# tesser:debt TB051` markers retired
+  (95 → 89): `tessercheck-py/srv/cli/{main,rules}.py`,
+  `examples/python-app/srv/{cli,http}/main.py`, `layout/srv/cli/{check,trees}.py`.
+  `HttpEdge.run` gains the `argv` it ignores and returns `0`; the two layout
+  guards that held the whole CLI inline become `CheckHost`/`TreesHost`
+  (`ts.Host`) with `run(argv) -> int`, the shape python-app already had.
+- **`skills/tesser-build/python.md`'s `srv/http/main.py` block** now shows the
+  verified impl — `HttpEdge(ts.Host)` plus the guard — instead of a `def main()`
+  that TB051 bans; `srv.md` names `ts.main` as the exit. skill-version 50.
+
+### Notes
+- RULES.md: one row added, one covering-test reference added, every other row
+  byte-identical once `domain/checks.py:N` is masked.
+- The `run` module functions in `tessercheck-py/srv/cli/*.py` keep their
+  markers — `ts.main(run)` takes them as-is, and folding them into `ts.Host`
+  classes is the burn-down's work, not this ruling's.
+
 ## [0.0.74.0] - 2026-08-22
 
 `@ts.do_not_use_function` is deleted. The decorator existed to make a module
