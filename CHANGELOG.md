@@ -5,6 +5,45 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.76.0] - 2026-08-23
+
+An enum is a primitive, and the checker now agrees. A plain `enum.Enum`
+declared in a domain module is recognized the same way a ports enum always
+was — by its base, with no `ts.*` superclass — and a spec field or a value
+object constructor parameter may be typed with it, exactly like `str`. The
+exclusion this lifts was never ruled: TB052 rejected the class by omission
+while the domain import allowlist admitted `enum`.
+
+### Added
+- **A domain enum passes TB052** when it subclasses `enum.Enum` alone, in a
+  domain role module of a context. A `StrEnum`/`IntEnum` is a finding, and so
+  is a str/int mixin (`class State(str, enum.Enum)`) — both reopen the
+  raw-literal equality the plain form closes; the mixin rule lands in ports
+  modules too, closing a pre-existing gap. TB051 keeps a domain enum
+  members-only: an enum is a primitive with a name, not a home for behavior.
+- **Spec fields and value-object constructors accept domain enums** — bare,
+  optional, and inside tuples. Client DTOs and port DTOs are untouched: a
+  ports module still declares its own outcome enums, and the application
+  stays the only place the two vocabularies meet. The registry that feeds
+  the annotation rules admits only enums declared in a context's domain role
+  (a kernel's `domain/` subpackage does not register) and skips any class
+  that also declares a `ts.*` block.
+
+### Changed
+- **`examples/python-app`'s `LinkStatus` constructs from `LinkState`.** The
+  `_LINK_STATES` frozenset and the three `"active"`/`"inactive"` construction
+  literals become enum members, so an invalid state is unrepresentable rather
+  than rejected at runtime. The wire strings are unchanged; the value object
+  stays string-backed behind its canonical `__str__` exit.
+- **The enum-base detection that existed as three pasted copies** (ports
+  members, ports form check, DTO named enums) plus a fourth in the TB069
+  walk is now one pair of helpers, and a `from enum import auto` member no
+  longer false-positives as "carries more than its members".
+- **Skill docs walked in the same change:** `value-objects.md` names the
+  enum's home, `domain-return.md` rule 5 builds the closed-set value object
+  from the enum, `python.md` mirrors the migrated entity and teaches the
+  home; skill-version 51.
+
 ## [0.0.75.0] - 2026-08-22
 
 `ts.main` is the process edge. A srv module may now hold exactly one statement
