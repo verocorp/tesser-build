@@ -150,6 +150,21 @@ accessor at all, only `__str__`.
 > logging is its own future norm) — they decompose via the per-context
 > parts module (application layer); the spec stays inbound-only.
 
+> **Amended 2026-08-23 (construction-data ruling).** Construction data is
+> **primitives and specs, never value objects** (a domain enum counts as a
+> primitive — same-day enum ruling, see `rationale/coverage.md`). TB080
+> tightens on both
+> shapes: a value object's constructor takes primitives and child specs (the
+> shells revision's "and value objects" allowance is closed — it had no
+> recorded rationale and no use in any shipped tree), and a spec field is a
+> primitive or a child spec (the "or a value object" allowance closed the
+> same way). A structured domain object still takes exactly one `ts.Spec`,
+> converts to value objects in its `__init__`, and thereafter its methods
+> hold, take, and return only value objects. Doctrine in
+> `skills/tesser-build/python.md` (construction section and the Spec
+> pattern). The same ruling retires the "door" vocabulary from the living
+> docs: say "constructor" / "construction path".
+
 > **Amended 2026-08-13 (application-ports ruling).** `ts.Parts` is retired.
 > The outbound shape a compound/entity/aggregate decomposes into is a **port
 > DTO** — a `ts.Request`/`ts.Response` declared in the context's

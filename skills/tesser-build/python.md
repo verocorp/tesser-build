@@ -56,14 +56,14 @@ raises `TypeError` **at class-definition time** — the identity contract
 cannot drift. `ts.Entity` owns identity equality the same way: the subclass
 declares an `identity` property, the base compares and hashes by it, and an
 attempted override raises at import. What the runtime cannot see — placement,
-imports, representation leaks, construction doors, serialization exits — the
+imports, representation leaks, construction paths, serialization exits — the
 analyzer enforces (`tessercheck-py/RULES.md`, one row per rule with its
 family code).
 
 ## Value objects
 
 **Simple (wraps a single value) — a leaf: declare the base, hide the field,
-validate at the one door:**
+validate in the one constructor:**
 
 ```python
 # campaign/domain/values.py (verified impl)
@@ -128,7 +128,7 @@ class MoneySpec(ts.Spec):
 
 class MoneyAmount(ts.ValueObject):
 
-    def __init__(self, value: str) -> None:       # ONE door: the canonical form in
+    def __init__(self, value: str) -> None:       # ONE constructor: the canonical form in
         try:
             parsed = Decimal(value)
         except InvalidOperation as e:
@@ -158,7 +158,7 @@ class MoneyCurrency(ts.ValueObject):
 
 class Money(ts.ValueObject):
 
-    def __init__(self, amount: str, currency: str) -> None:   # the one door: primitives in, child VOs built
+    def __init__(self, amount: str, currency: str) -> None:   # the one constructor: primitives in, child VOs built
         object.__setattr__(self, "_amount", MoneyAmount(amount))
         object.__setattr__(self, "_currency", MoneyCurrency(currency))
 
@@ -184,24 +184,28 @@ the child; the compound's methods guard only cross-field relations — so no
 construction path can skip a rule, and no rule has two homes. Verified impl:
 `examples/python-app/campaign/domain/money.py`.
 
-**The construction doors, revised for the shells (supersedes the 2026-07-20
-(b)-uniform spec-door-for-compound-VOs ruling):** a **value object's** one
-door is its own `__init__` taking **primitives and child value objects**
-(the analyzer's construction rule) — `Money("9.99", "USD")`, no spec. A
-**structured domain object** — entity or aggregate — constructs from
-**exactly one `ts.Spec`** (the same shape as Go's `NewCampaign(spec)`).
-There is **no `from_spec`** and no factory of any spelling: on a value
-object, **any** classmethod or staticmethod returning its own type
+**Construction (ruled 2026-08-23, superseding both the 2026-07-20
+(b)-uniform ruling and the shells revision's value-object allowance):**
+construction data is **primitives and specs, never value objects**. A
+**value object's** single constructor takes **primitives and child specs**
+— `Money("9.99", "USD")` — and builds its child value objects inside; a
+value object is never a constructor parameter (a spec field or constructor
+parameter typed as a VO is TB080). A **structured domain object** — entity
+or aggregate — constructs from **exactly one `ts.Spec`** (the same shape as
+Go's `NewCampaign(spec)`), converts the spec's data to value objects in its
+`__init__`, and from then on its methods hold, take, and return only value
+objects. There is **no `from_spec`** and no factory of any spelling: on a
+value object, **any** classmethod or staticmethod returning its own type
 (`Self`, quoted, or inferred from a body that constructs `cls`) is a second
-door (TB017) — `from_spec`, `parse`, `new`, `require`, `of` alike. A leaf
-whose construction involves conversion (str → Decimal) takes the
-**canonical form** at its one door and converts inside — no `parse`
-classmethod, no union-typed door (ruled 2026-07-20: a union adds special
-cases for what is only a performance benefit; the one union the analyzer
-admits in construction data is `X | None`, optionality). Behavior methods
-that produce new instances re-enter **through the door** via canonical
-forms, lossless by the round-trip law, so every instance that exists passed
-the one validating door.
+construction path (TB017) — `from_spec`, `parse`, `new`, `require`, `of`
+alike. A leaf whose construction involves conversion (str → Decimal) takes
+the **canonical form** at its constructor and converts inside — no `parse`
+classmethod, no union-typed parameter (ruled 2026-07-20: a union adds
+special cases for what is only a performance benefit; the one union the
+analyzer admits in construction data is `X | None`, optionality). Behavior
+methods that produce new instances re-enter **through the constructor** via
+canonical forms, lossless by the round-trip law, so every instance that
+exists passed the one validating constructor.
 
 **Collection (wraps a mapping/sequence):**
 
@@ -219,7 +223,7 @@ class Labels(ts.ValueObject):
             if key in seen:
                 raise invalid("invalid_label", f"label {key!r} appears twice")
             seen.add(key)
-        object.__setattr__(self, "_values", tuple(sorted(values)))   # canonicalize at the one door
+        object.__setattr__(self, "_values", tuple(sorted(values)))   # canonicalize in the constructor
 
     def get(self, key: str) -> LabelValue | None:   # entries come back as VOs
         raw = dict(self._values).get(key)
@@ -235,16 +239,16 @@ Go wraps a `map` and must add `Equal` (a map-backed struct is
 non-comparable); the shell stores an immutable, **sorted** tuple instead, so
 the base's content equality is canonical *and* the value is hashable
 (TB002: a `list`/`dict`/`set` field would make `__hash__` raise — back a
-collection with a tuple). The one door takes the plain tuple-of-pairs, not a
-`Mapping` — construction data is primitives and value objects, and the sort
-at the door is what makes the canonical form unskippable: there is exactly
+collection with a tuple). The constructor takes the plain tuple-of-pairs, not a
+`Mapping` — construction data is primitives and specs, and the sort
+in the constructor is what makes the canonical form unskippable: there is exactly
 ONE way in, so no caller can hold a non-canonical value. Reads come back as
 value objects (`LabelValue`), never raw entries. Verified impl:
 `examples/python-app/campaign/domain/labels.py`.
 
-**No `new`/`require` factory pair** (TB017). A second door is a second set of
+**No `new`/`require` factory pair** (TB017). A second constructor is a second set of
 invariants: if `new` is permissive and `require` demands non-empty, what the
-type guarantees depends on which door the caller picked — so it guarantees
+type guarantees depends on which construction path the caller picked — so it guarantees
 nothing. When you genuinely need a stricter set, that is a *different type*
 with its own invariant, not a second factory on this one.
 
@@ -252,7 +256,7 @@ with its own invariant, not a second factory on this one.
 
 - Subclass `ts.ValueObject`; the base owns immutability and equality and
   refuses overrides at class-definition time. No setters, no mutation —
-  behavior methods return new instances through the one door.
+  behavior methods return new instances through the one constructor.
 - Declare every field at class level (`_value: str`); assign only via
   `object.__setattr__` inside `__init__`.
 - **The primitive never escapes** (TB010): no public primitive field, and no
@@ -279,8 +283,8 @@ with its own invariant, not a second factory on this one.
 **Equality — the base decides:**
 
 - `ts.ValueObject` compares by type and content; each logical value should
-  have one representation, and the way to guarantee that is **normalizing at
-  the one door** (the collection VO above sorts on the way in; a
+  have one representation, and the way to guarantee that is **normalizing in
+  the one constructor** (the collection VO above sorts on the way in; a
   case-insensitive code lowercases in `__init__`). There is no hand-written
   `__eq__` on a shell value object — the base raises if you try; if the
   default is wrong, fix the representation, not the comparison.
@@ -934,15 +938,16 @@ construction data; a method on one is a finding). A structured domain
 object's **constructor takes its spec** — that is the single construction
 path; it converts each primitive to a value object and validates.
 
-- A spec field is a primitive, a value object, or a child spec — never a
-  domain object the caller must construct, and the one admissible union is
-  `X | None` (optionality).
+- A spec field is a primitive or a child spec — **never a value object** or
+  any domain object the caller must construct — and the one admissible union
+  is `X | None` (optionality).
 - **Nesting mirrors composition:** `CampaignSpec` holds `MoneySpec` and
   `ShortLinkSpec`s, never flattened prefixed fields; a change to the child's
   construction touches the child's spec only.
-- **Value objects take primitives/child VOs at their own door — no spec**
-  (`Slug(value)`, `Money(amount, currency)`). **Entities and aggregates take
-  exactly one spec** (`ShortLink(spec)`, `Campaign(spec)`).
+- **Value objects take primitives and child specs at their own constructor —
+  never value objects** (`Slug(value)`, `Money(amount, currency)`).
+  **Entities and aggregates take exactly one spec** (`ShortLink(spec)`,
+  `Campaign(spec)`).
 
 **Return types:** domain functions return domain types. If callers must
 sum/filter/group a returned list before it's useful, introduce the type that
@@ -971,8 +976,8 @@ def test_campaign_links_are_defensive() -> None:
 ```
 
 - One equality test per VO locking `__eq__` AND `__hash__` semantics (the
-  base owns them; the test locks the *representation* — normalization at the
-  door).
+  base owns them; the test locks the *representation* — normalization in the
+  constructor).
 - One rejection test per validation rule (`pytest.raises`).
 - One invariant-violation test per aggregate — its reason to exist.
 - Defensive-copy assertions on every collection accessor.

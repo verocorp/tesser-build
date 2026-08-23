@@ -135,7 +135,7 @@ candidates for human judgment* — never the definition. A DTO can carry an
   objects — the invariant gets one home, transposition becomes a type
   error, and serialization has a conformant path (`serialization.md`).
 - **Validation drift:** a second construction path (a mapper, a test helper)
-  that skips the constructor. One door.
+  that skips the constructor. One constructor.
 
 ## Now build it
 

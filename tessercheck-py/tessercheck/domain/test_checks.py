@@ -1419,19 +1419,34 @@ def test_domain_field_rules_are_flagged() -> None:
                 "    def __init__(self, items: list) -> None:\n"
                 "        self.items = items\n"
                 "    def validate(self) -> None:\n"
-                "        return None\n",
+                "        return None\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, value: str) -> None:\n"
+                "        object.__setattr__(self, '_value', value)\n"
+                "class TagSpec(ts.Spec):\n"
+                "    def __init__(self, value: str) -> None:\n"
+                "        self.value = value\n"
+                "class Wrap(ts.ValueObject):\n"
+                "    def __init__(self, tag: Tag) -> None:\n"
+                "        object.__setattr__(self, '_tag', tag)\n"
+                "class FromSpec(ts.ValueObject):\n"
+                "    def __init__(self, spec: TagSpec) -> None:\n"
+                "        object.__setattr__(self, '_value', spec.value)\n"
+                "class CarrySpec(ts.Spec):\n"
+                "    def __init__(self, tag: Tag) -> None:\n"
+                "        self.tag = tag\n",
                 False,
             ),
         ))).violations()
                )
     assert any(
         "Money.__init__" in f
-        and "a value object constructs from primitives and value objects" in f
+        and "a value object constructs from primitives and specs, never value objects" in f
         for f in findings
     )
     assert any(
         "BagSpec.__init__" in f
-        and "a spec field is a primitive, a value object, or a child spec" in f
+        and "a spec field is a primitive or a child spec, never a value object" in f
         for f in findings
     )
     assert any(
@@ -1448,6 +1463,17 @@ def test_domain_field_rules_are_flagged() -> None:
     )
     assert any(
         "WireRequest.validate" in f and "a DTO carries data and nothing else" in f
+        for f in findings
+    )
+    assert any(
+        "Wrap.__init__" in f and "parameter 'tag' is not allowed" in f
+        and "a value object constructs from primitives and specs, never value objects" in f
+        for f in findings
+    )
+    assert not any("FromSpec.__init__ parameter" in f for f in findings)
+    assert any(
+        "CarrySpec.__init__" in f and "parameter 'tag' is not allowed" in f
+        and "a spec field is a primitive or a child spec, never a value object" in f
         for f in findings
     )
 
@@ -1479,7 +1505,7 @@ def test_optional_construction_data_is_the_only_union() -> None:
     assert not any("parameter 'text'" in f for f in findings)
     assert any(
         "parameter 'items' is not allowed; "
-        "a spec field is a primitive, a value object, or a child spec" in f
+        "a spec field is a primitive or a child spec, never a value object" in f
         for f in findings
     )
     assert any("parameter 'mix' is not allowed" in f for f in findings)
@@ -7098,7 +7124,7 @@ def test_pure_roles_may_import_kernels() -> None:
                 "def test_money_exists() -> None:\n"
                 "    assert True\n",
                 False,
-            ), ('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nfrom kernel.money import Money\nimport money_kernel\nclass PriceSpec(ts.Spec):\n    def __init__(self, money: Money) -> None:\n        self.money = money\n', False),
+            ), ('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nfrom kernel.money import Money\nimport money_kernel\nclass Price(ts.ValueObject):\n    _money: Money\n    def __init__(self, amount: int) -> None:\n        object.__setattr__(self, "_money", Money(amount))\n', False),
             (
                 "shop/domain/test_price.py",
                 "shop.domain.test_price",
@@ -7243,7 +7269,7 @@ def test_kernel_siblings_import_each_other_in_both_kernel_shapes() -> None:
                 "def test_rich_exists() -> None:\n"
                 "    assert True\n",
                 False,
-            ), ('kernel/rates.py', 'kernel.rates', 'import tesser.domain as ts\nfrom kernel.money import Money\nclass RateSpec(ts.Spec):\n    def __init__(self, money: Money) -> None:\n        self.money = money\n', False),
+            ), ('kernel/rates.py', 'kernel.rates', 'import tesser.domain as ts\nfrom kernel.money import Money\nclass Rate(ts.ValueObject):\n    _money: Money\n    def __init__(self, amount: int) -> None:\n        object.__setattr__(self, "_money", Money(amount))\n', False),
             (
                 "kernel/test_rates.py",
                 "kernel.test_rates",
@@ -8143,7 +8169,7 @@ def test_a_kernel_domain_enum_is_not_a_context_enum() -> None:
                )
     assert any(
         "parameter 'status' is not allowed; "
-        "a spec field is a primitive, a value object, or a child spec" in f
+        "a spec field is a primitive or a child spec, never a value object" in f
         for f in findings
     )
 
@@ -8167,7 +8193,11 @@ def test_an_enum_with_a_ts_base_is_its_declared_kind() -> None:
         ))).violations()
                )
     assert not any("Bad declares no ts.* base" in f for f in findings)
-    assert not any("parameter 'bad' is not allowed" in f for f in findings)
+    assert any(
+        "parameter 'bad' is not allowed; "
+        "a spec field is a primitive or a child spec, never a value object" in f
+        for f in findings
+    )
 
 
 def test_an_enum_auto_member_is_a_member() -> None:
@@ -8252,7 +8282,7 @@ def test_an_enum_wearing_a_dto_block_is_not_a_spec_field() -> None:
                )
     assert any(
         "parameter 'w' is not allowed; "
-        "a spec field is a primitive, a value object, or a child spec" in f
+        "a spec field is a primitive or a child spec, never a value object" in f
         for f in findings
     )
 

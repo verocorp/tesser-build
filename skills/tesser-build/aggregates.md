@@ -37,7 +37,7 @@ aggregate tax.
 
 ## Rules
 
-1. **The root is the only door.** Nothing outside the aggregate holds or
+1. **The root is the only way in.** Nothing outside the aggregate holds or
    mutates its children directly; external references are to the root only.
 2. **Cross-object invariants are enforced in the root's constructor** — and,
    for mutable aggregates, re-established after every transition. Callers
@@ -117,8 +117,8 @@ judgment.
 - **Caller-enforced invariants:** "everyone who builds one should check that
   it balances." Nobody will. The constructor does.
 - **Cross-aggregate reach:** one aggregate directly mutating another's
-  children. Coordination happens above the aggregates, never through a side
-  door.
+  children. Coordination happens above the aggregates, never by reaching
+  around the root.
 
 ## Now build it
 

@@ -58,7 +58,7 @@ write that sentence, keep the primitive.
 
 ## 5. Why does validation live in the constructor and not the service layer (or the parent)?
 
-One door. If the constructor is the only way to make the type, then holding
+One constructor. If the constructor is the only way to make the type, then holding
 an instance *proves* it's valid — every function that receives it drops its
 defensive checks. Scatter validation across services and parents, and every
 new call site is a chance to forget one rule; the check count grows with the
@@ -67,7 +67,7 @@ the same reason: the child's constructor already proved it.
 
 **Rule:** invalid states are unrepresentable after construction. If you find
 an `if !valid(x)` outside a constructor, either the type is missing or its
-door has a hole.
+guarantee has a hole.
 
 ## 6. What is a Spec, and why are its leaves primitives instead of domain objects?
 

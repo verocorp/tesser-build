@@ -4764,14 +4764,14 @@ class Codebase(ts.AggregateRoot):
                     for arg in init.args.posonlyargs + init.args.args + init.args.kwonlyargs
                     if arg.arg != "self"
                 ]):
-            if not self._allowed_annotation(module, arg.annotation, blocks, frozenset({"valueobject"}), domain_enums=True):
+            if not self._allowed_annotation(module, arg.annotation, blocks, frozenset({"spec"}), domain_enums=True):
                 found.append(
                     Violation(
                         module.path(),
                         init.lineno,
                         "TB080",
                         f"{where} parameter {arg.arg!r} is not allowed; "
-                        "a value object constructs from primitives and value objects",
+                        "a value object constructs from primitives and specs, never value objects",
                     )
                 )
         return tuple(found)
@@ -4802,14 +4802,14 @@ class Codebase(ts.AggregateRoot):
                         for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
                         if arg.arg != "self"
                     ]):
-                if not self._allowed_annotation(module, arg.annotation, blocks, frozenset({"valueobject", "spec"}), domain_enums=True):
+                if not self._allowed_annotation(module, arg.annotation, blocks, frozenset({"spec"}), domain_enums=True):
                     found.append(
                         Violation(
                             module.path(),
                             item.lineno,
                             "TB080",
                             f"{where} parameter {arg.arg!r} is not allowed; "
-                            "a spec field is a primitive, a value object, or a child spec",
+                            "a spec field is a primitive or a child spec, never a value object",
                         )
                     )
         return tuple(found)
