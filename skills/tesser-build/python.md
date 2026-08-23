@@ -519,9 +519,10 @@ class CampaignRepository(ts.Port, Protocol):
   response hierarchy is a union mypy cannot check for exhaustiveness.
 - **A multi-outcome answer is an enum outcome plus payload; a collection is a
   tuple.** Where cardinality *is* the answer (list-all), the tuple alone says
-  it — no outcome enum. The enum is a plain `enum.Enum`, never `StrEnum` or
-  `IntEnum` (TB052): a str- or int-backed member compares equal to a raw
-  literal and reopens the typo the enum closes.
+  it — no outcome enum. The enum is a plain `enum.Enum`, never `StrEnum`/
+  `IntEnum` or a hand-mixed base (`class Outcome(str, enum.Enum)`) (TB052):
+  a str- or int-backed member compares equal to a raw literal and reopens
+  the typo the enum closes.
 - **Mapping stays in the application role, never in ports.** A sibling
   `mapping.py` / `views.py` owns domain ↔ port-DTO translation — it may import
   the domain and the ports package; ports import neither.

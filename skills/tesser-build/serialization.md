@@ -222,9 +222,10 @@ belongs to the edge, recorded where its golden test lives.
   never a union (optional included) and never a bare `bool` — model the
   outcome as an enum. **TB052** flags the rest of the ports module's contents:
   a subclassed DTO (a response hierarchy is a union mypy cannot check for
-  exhaustiveness), a `StrEnum`/`IntEnum` outcome (a member that compares equal
-  to a raw literal reopens the typo the enum closes), a second port in the
-  module, and any class that is neither the port nor a DTO it speaks.
+  exhaustiveness), a `StrEnum`/`IntEnum` outcome or a hand-mixed base
+  (`class Outcome(str, enum.Enum)`) (a member that compares equal to a raw
+  literal reopens the typo the enum closes), a second port in the module, and
+  any class that is neither the port nor a DTO it speaks.
 
 ## Tests you must write
 
