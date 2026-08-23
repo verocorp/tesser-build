@@ -2,6 +2,41 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Sibling-reference rule: three open sub-rulings (2026-08-23, v0.0.76.0)
+
+TB051's structural clause (a method may not reference a sibling method; direct
+recursion and references to a directly recursive sibling exempt) bites three
+shapes that were marked `# tesser:debt TB051` rather than restructured, each a
+ruling Chris has not made yet:
+
+- [ ] **`tesser-py/tesser/domain/entity.py:22,25`** — `Entity.__eq__`/`__hash__`
+  read `self.identity`, the abstract property subclasses declare. This is the
+  shipped runtime's template method: the identity contract *is* a sibling
+  reference by design, and no field read can replace it because the subclass
+  owns the property. Candidate carve-out: a dunder may read the contract its
+  base defines. Or: the design is right and the debt marker is its honest cost.
+- [ ] **`examples/python-app/protocol/http.py:95`** — `HttpResponse.problem`
+  composes `cls.json`, the one door that sets Content-Type. Inlining duplicates
+  the door; the marker preserves it. Candidate carve-out: classmethod builders
+  composing builders. Or: inline and accept three duplicated lines.
+- [ ] **`examples/python-app/srv/http/main.py:27,28`** — `run` passes
+  `self.stop` to `signal.signal`. The outsider (the signal machinery) is the
+  caller; `run` only hands the method over. The reference test cannot
+  distinguish registration from invocation — that indistinguishability is why
+  the rule fires on references at all (else `f = self._x; f()` dodges it).
+  Candidate carve-out: none obvious that is mechanical; may just stay debt.
+
+Also recorded, all accepted as residue for now (the rule is an experiment;
+any of these appearing in a real tree is the evidence that would justify
+tightening): the fake-recursion dodge (`if False: self._x(...)`), receiver
+aliasing (`me = self; me.x()`, `type(self).x(self)`, `self.__class__.x(self)`,
+`getattr(self, "x")()`), helpers relocated to a base/mixin class (member sets
+are per-class, no MRO analysis), and assignment-defined members
+(`x = staticmethod(...)`, `x = lambda self: ...`). Separately: debt markers sit
+on the reported reference line, which for a wrapped call is a continuation
+line — a reflow detaches the marker. The failure is loud (TB090 + the
+resurfaced finding), not silent, so it is recorded rather than re-engineered.
+
 ## The skill still teaches the module-function idiom (2026-08-22, v0.0.74.0)
 
 Removing `@ts.do_not_use_function` stripped three decorator lines from
@@ -10,7 +45,7 @@ way the decorator was hiding: they teach module functions, which TB051 now bans.
 (The `srv/http/main.py` example was one of the three; v0.0.75.0 rewrote it to
 `ts.main` and the ruling that allowed it, so only the two below remain.)
 
-- [ ] **`python.md:522` shows `required_campaign` as a module function**, cited
+- [ ] **`python.md:529` shows `required_campaign` as a module function**, cited
   as "verified impl: examples/errorspy/". The verified impl no longer has it —
   `examples/errorspy/campaign/application/views.py` holds
   `MapToShortLinkSpec(ts.Mapper)` and `MapToCampaignSpec(ts.Mapper)` and no
@@ -164,7 +199,7 @@ against `main` at v0.0.71.0 rather than transcribed.
   When the format question gets its ruling, decide where the format truth
   lives (domain vs gateway) at the same time.
 
-- [ ] **`skills/tesser-build/python.md:396-412` teaches the shape TB082 now
+- [ ] **`skills/tesser-build/python.md:403-419` teaches the shape TB082 now
   rejects.** The block tagged `verified impl: examples/errorspy/` shows the
   pre-v0.0.71.0 service bodies, including
   `self._repo.find(...FindCampaignRequest(campaign_id=req.campaign_id))` — a
@@ -233,7 +268,7 @@ against `main` at v0.0.71.0 rather than transcribed.
   Candidate: a `ts.Collection` kind in `tesser.domain`, with its own row in
   `KIND_NAME`/`KIND_ROLE` and its own shape rules (constructs from one spec,
   accessor returns a defensive copy, holds one backing sequence). Needs a ruling
-  before more collections are written this way. `python.md:22` already speaks of
+  before more collections are written this way. `python.md:29` already speaks of
   a "collection value object `Labels`", so the vocabulary predates the kind.
 - [x] **TB082 counts source lines, not statements — RESOLVED v0.0.62.0.** The
   counter is now `sum(1 for node in ast.walk(fn) if isinstance(node, ast.stmt)) - 1`
@@ -450,8 +485,8 @@ against `main` at v0.0.71.0 rather than transcribed.
   the `len(parts) == 1` ⇒ package-init assumption predates wire modules
   and is no longer safe (adversarial 2026-08-07).
 - [ ] **Graduate the srv/wire vocabulary into the skill docs** (opened
-  2026-08-07, v0.0.18.0 doc sweep). `skills/tesser-build/python.md:593-612`
-  and `:769-799` still teach `httpwire`/`cliwire` as frozen dataclasses with
+  2026-08-07, v0.0.18.0 doc sweep). `skills/tesser-build/python.md:600-619`
+  and `:773-803` still teach `httpwire`/`cliwire` as frozen dataclasses with
   `Endpoint = Callable[...]` aliases — the pre-shell idiom — while
   `examples/python-app` now uses `ts.Request`/`ts.Response`/`ts.Port` +
   `@ts.function`. Deliberately not updated in-wave: skill docs encode only
@@ -466,7 +501,7 @@ against `main` at v0.0.71.0 rather than transcribed.
   pointer in the skill docs, not just the code samples —
   `skills/tesser-build/srv.md:200` already dangles (`test_httpwire.py:
   content_length` was renamed to `buffered_length` in the srv-matrix wave).
-  Scope re-measured 2026-08-08 (doc-release sweep): `python.md:591-790`,
+  Scope re-measured 2026-08-08 (doc-release sweep): `python.md:598-794`,
   `handlers.md:47-98`, and `srv.md:138-219` present `json_response`/
   `problem`/`respond`/`decode_body`/`content_length`/`path_param` as free
   functions — roughly 30 lines of sample code the wave deleted, in a skill

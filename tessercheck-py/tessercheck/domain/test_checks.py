@@ -2149,6 +2149,93 @@ def test_a_srv_entry_point_is_ts_main_and_nothing_else() -> None:
     )
 
 
+def test_sibling_reference_scoping_and_spoof_resistance() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "plain/domain/y.py",
+                "plain.domain.y",
+                "import tesser.domain as ts\n"
+                "class Scoped(ts.ValueObject):\n"
+                "    def outer(self) -> int:\n"
+                "        class Inner:\n"
+                "            def go(self) -> int:\n"
+                "                return self.pick()\n"
+                "            def pick(self) -> int:\n"
+                "                return 1\n"
+                "        return Inner().go()\n"
+                "    def pick(self) -> int:\n"
+                "        return 2\n"
+                "    def taken(self) -> object:\n"
+                "        return [self.pick() for self in []]\n"
+                "    @staticmethod\n"
+                "    def convert(collaborator: object) -> object:\n"
+                "        cls = collaborator\n"
+                "        return cls.pick()\n"
+                "    def stash(self) -> None:\n"
+                "        self.note = 5\n"
+                "    def note(self) -> int:\n"
+                "        return 3\n"
+                "class Renamed(ts.ValueObject):\n"
+                "    def run(this) -> int:\n"
+                "        return this.helper()\n"
+                "    def helper(this) -> int:\n"
+                "        return 1\n"
+                "class Spoof(ts.ValueObject):\n"
+                "    def caller(self) -> int:\n"
+                "        return self.marked()\n"
+                "    def marked(self) -> int:\n"
+                "        _ = self.marked\n"
+                "        return 0\n"
+                "class Closure(ts.ValueObject):\n"
+                "    def build(self) -> object:\n"
+                "        def call() -> int:\n"
+                "            return self.helper()\n"
+                "        return call\n"
+                "    def helper(self) -> int:\n"
+                "        return 1\n"
+                "class Guarded(ts.ValueObject):\n"
+                "    if True:\n"
+                "        def helper(self) -> int:\n"
+                "            return 1\n"
+                "    def run(self) -> int:\n"
+                "        return self.helper()\n"
+                "class Dunder(ts.ValueObject):\n"
+                "    def __len__(self) -> int:\n"
+                "        return 1\n"
+                "    def size(self) -> int:\n"
+                "        return self.__len__()\n"
+                "class Classy(ts.ValueObject):\n"
+                "    @classmethod\n"
+                "    def build(cls) -> int:\n"
+                "        return cls.seeded()\n"
+                "    @classmethod\n"
+                "    def seeded(cls) -> int:\n"
+                "        return 1\n",
+                False,
+            ),
+        ))).violations()
+               )
+    sibling = [f for f in findings if "reaches sibling" in f]
+    assert not any("Scoped.outer" in f for f in sibling)
+    assert any(
+        "plain.domain.y.Inner.go reaches sibling pick; a method is for outsiders "
+        "— a class reaches into itself only for direct recursion" in f
+        for f in sibling
+    )
+    assert not any("Scoped.taken" in f for f in sibling)
+    assert not any("Scoped.convert" in f for f in sibling)
+    assert not any("Scoped.stash" in f for f in sibling)
+    assert any("Renamed.run reaches sibling helper" in f for f in sibling)
+    assert any("Spoof.caller reaches sibling marked" in f for f in sibling)
+    assert not any("Spoof.marked reaches" in f for f in sibling)
+    assert any("Closure.build reaches sibling helper" in f for f in sibling)
+    assert any("Guarded.run reaches sibling helper" in f for f in sibling)
+    assert not any("Dunder.size" in f for f in sibling)
+    assert any("Classy.build reaches sibling seeded" in f for f in sibling)
+
+
 def test_pure_core_stdlib_allowlist() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
@@ -7772,7 +7859,7 @@ def test_a_do_not_use_tesser_module_is_not_a_consumer_namespace() -> None:
     assert any("tesser.stray is not a consumer namespace" in f for f in findings)
 
 
-def test_a_private_method_is_flagged_in_every_module_kind() -> None:
+def test_a_sibling_method_reference_is_flagged_in_every_module_kind() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
@@ -7785,8 +7872,16 @@ def test_a_private_method_is_flagged_in_every_module_kind() -> None:
                 "    _text: str\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        object.__setattr__(self, \"_text\", text)\n"
-                "    def _hidden(self) -> str:\n"
-                "        return self._text\n",
+                "    def shout(self) -> str:\n"
+                "        return self.spoken().upper()\n"
+                "    def spoken(self) -> str:\n"
+                "        return self._text\n"
+                "    def walk(self, value: object) -> int:\n"
+                "        if isinstance(value, tuple):\n"
+                "            return sum(self.walk(item) for item in value)\n"
+                "        return 1\n"
+                "    def width(self, value: object) -> int:\n"
+                "        return self.walk(value)\n",
                 False,
             ),
             (
@@ -7795,7 +7890,9 @@ def test_a_private_method_is_flagged_in_every_module_kind() -> None:
                 "import tesser.testing as ts\n"
                 "@ts.fake\n"
                 "class FakeThing:\n"
-                "    def _also_hidden(self) -> None:\n"
+                "    def poke(self) -> None:\n"
+                "        return self.prod()\n"
+                "    def prod(self) -> None:\n"
                 "        return None\n"
                 "def test_thing_exists() -> None:\n"
                 "    assert True\n",
@@ -7804,13 +7901,16 @@ def test_a_private_method_is_flagged_in_every_module_kind() -> None:
         ))).violations()
                )
     assert any(
-        "plain.domain.thing.Thing._hidden" in f
-        and "is a private method; a class holds only public methods" in f
+        "plain.domain.thing.Thing.shout reaches sibling spoken; a method is for "
+        "outsiders — a class reaches into itself only for direct recursion" in f
         for f in findings
     )
     assert any(
-        "plain.domain.test_thing.FakeThing._also_hidden" in f
-        and "is a private method; a class holds only public methods" in f
+        "plain.domain.test_thing.FakeThing.poke reaches sibling prod; a method is for "
+        "outsiders — a class reaches into itself only for direct recursion" in f
         for f in findings
     )
-    assert not any("Thing.__init__" in f and "private method" in f for f in findings)
+    assert not any("Thing.walk" in f and "reaches sibling" in f for f in findings)
+    assert not any("Thing.width" in f and "reaches sibling" in f for f in findings)
+    assert not any("Thing.__init__" in f and "reaches sibling" in f for f in findings)
+    assert not any("Thing.spoken" in f and "reaches sibling" in f for f in findings)
