@@ -26,10 +26,16 @@ ruling Chris has not made yet:
   the rule fires on references at all (else `f = self._x; f()` dodges it).
   Candidate carve-out: none obvious that is mechanical; may just stay debt.
 
-Also recorded: the fake-recursion dodge (`if False: self._x(...)` makes `_x`
-recursive and therefore reachable) is known and accepted for now — the rule is
-an experiment, and the dodge appearing in a real tree is the evidence that
-would justify tightening it.
+Also recorded, all accepted as residue for now (the rule is an experiment;
+any of these appearing in a real tree is the evidence that would justify
+tightening): the fake-recursion dodge (`if False: self._x(...)`), receiver
+aliasing (`me = self; me.x()`, `type(self).x(self)`, `self.__class__.x(self)`,
+`getattr(self, "x")()`), helpers relocated to a base/mixin class (member sets
+are per-class, no MRO analysis), and assignment-defined members
+(`x = staticmethod(...)`, `x = lambda self: ...`). Separately: debt markers sit
+on the reported reference line, which for a wrapped call is a continuation
+line — a reflow detaches the marker. The failure is loud (TB090 + the
+resurfaced finding), not silent, so it is recorded rather than re-engineered.
 
 ## The skill still teaches the module-function idiom (2026-08-22, v0.0.74.0)
 

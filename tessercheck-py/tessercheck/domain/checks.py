@@ -2263,40 +2263,104 @@ class Codebase(ts.AggregateRoot):
         return tuple(found)
 
     def _sibling_reference_violations(self, module: Module) -> tuple[Violation, ...]:
+        def declared(body: list[ast.stmt]) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
+            out: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+            stack: list[ast.AST] = list(body)
+            while stack:
+                cur = stack.pop()
+                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    out.append(cur)
+                    continue
+                if isinstance(cur, (ast.ClassDef, ast.Lambda)):
+                    continue
+                stack.extend(ast.iter_child_nodes(cur))
+            return out
+
+        def receiver(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
+            names = {d.id for d in fn.decorator_list if isinstance(d, ast.Name)}
+            if "staticmethod" in names:
+                return None
+            args = fn.args.posonlyargs + fn.args.args
+            if not args:
+                return None
+            return args[0].arg
+
+        def rebinds(fn: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda, name: str) -> bool:
+            args = fn.args
+            bound = {a.arg for a in args.posonlyargs + args.args + args.kwonlyargs}
+            if args.vararg is not None:
+                bound.add(args.vararg.arg)
+            if args.kwarg is not None:
+                bound.add(args.kwarg.arg)
+            return name in bound
+
+        def reads(fn: ast.FunctionDef | ast.AsyncFunctionDef, name: str) -> list[ast.Attribute]:
+            hits: list[ast.Attribute] = []
+            stack: list[ast.AST] = list(ast.iter_child_nodes(fn))
+            while stack:
+                cur = stack.pop()
+                if isinstance(cur, ast.ClassDef):
+                    continue
+                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                    if rebinds(cur, name):
+                        continue
+                    stack.extend(ast.iter_child_nodes(cur))
+                    continue
+                if isinstance(cur, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
+                    targets = {
+                        t.id
+                        for comp in cur.generators
+                        for t in ast.walk(comp.target)
+                        if isinstance(t, ast.Name)
+                    }
+                    if name in targets:
+                        continue
+                    stack.extend(ast.iter_child_nodes(cur))
+                    continue
+                if (
+                    isinstance(cur, ast.Attribute)
+                    and isinstance(cur.ctx, ast.Load)
+                    and isinstance(cur.value, ast.Name)
+                    and cur.value.id == name
+                ):
+                    hits.append(cur)
+                stack.extend(ast.iter_child_nodes(cur))
+            return hits
+
+        def recurs(fn: ast.FunctionDef | ast.AsyncFunctionDef, name: str | None) -> bool:
+            if name is None:
+                return False
+            stack: list[ast.AST] = list(ast.iter_child_nodes(fn))
+            while stack:
+                cur = stack.pop()
+                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+                    continue
+                if (
+                    isinstance(cur, ast.Call)
+                    and isinstance(cur.func, ast.Attribute)
+                    and isinstance(cur.func.value, ast.Name)
+                    and cur.func.value.id == name
+                    and cur.func.attr == fn.name
+                ):
+                    return True
+                stack.extend(ast.iter_child_nodes(cur))
+            return False
+
         found: list[Violation] = []
         for stmt in module.body():
             for node in ast.walk(stmt):
                 if not isinstance(node, ast.ClassDef):
                     continue
-                members = {
-                    item.name
-                    for item in node.body
-                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
-                }
-                recursive = {
-                    item.name
-                    for item in node.body
-                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
-                    and any(
-                        isinstance(inner, ast.Attribute)
-                        and isinstance(inner.value, ast.Name)
-                        and inner.value.id in ("self", "cls")
-                        and inner.attr == item.name
-                        for inner in ast.walk(item)
-                    )
-                }
-                for member in node.body:
-                    if not isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                methods = declared(node.body)
+                names = {method.name for method in methods}
+                recursive = {method.name for method in methods if recurs(method, receiver(method))}
+                for member in methods:
+                    own = receiver(member)
+                    if own is None:
                         continue
-                    for inner in ast.walk(member):
-                        if not (
-                            isinstance(inner, ast.Attribute)
-                            and isinstance(inner.value, ast.Name)
-                            and inner.value.id in ("self", "cls")
-                        ):
-                            continue
+                    for inner in reads(member, own):
                         sibling = inner.attr
-                        if sibling not in members:
+                        if sibling not in names:
                             continue
                         if sibling == member.name or sibling in recursive:
                             continue

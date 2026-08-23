@@ -23,12 +23,23 @@ other is exactly the hiding the rule exists to see.
 
 ### Changed
 - **`_private_method_violations` is replaced by `_sibling_reference_violations`**
-  (`domain/checks.py`). It fires on the attribute *reference* (`self.x` /
-  `cls.x` where `x` is a non-dunder sibling method), not the call — so passing
-  a bound method and `f = self._x; f()` are the same finding, and renaming
-  `_x` to `x` clears nothing. Clause: `a method is for outsiders — a class
-  reaches into itself only for direct recursion`. Underscore names are legal
-  again; the spelling was never the problem.
+  (`domain/checks.py`). It fires on the attribute *reference in Load context*,
+  not the call — so passing a bound method and `f = self._x; f()` are the same
+  finding, and renaming `_x` to `x` clears nothing. Clause: `a method is for
+  outsiders — a class reaches into itself only for direct recursion`.
+  Underscore names are legal again; the spelling was never the problem.
+- **The traversal is scope-aware and receiver-keyed** (hardened during this
+  release's pre-landing review — three independent reviewers converged on the
+  same two holes, verified by running the checker on probe trees). The
+  receiver is the member's own first parameter, whatever it is named, so
+  `def run(this): this.helper()` is the same finding as `self.helper()`;
+  staticmethods have no receiver. A nested class is its own scope — its
+  references are checked against its own members, never the enclosing
+  method's. Scopes that rebind the receiver (a nested function's parameter, a
+  comprehension target) are skipped; closures that capture it are not, so the
+  llmport `ToolAgent` shape still fires. An attribute *write* is not a reach.
+  Recursion detection requires an actual call in the method's direct body —
+  a nested closure or a bare `_ = self.helper` no longer exempts anything.
 - **The marker set turned over**: 80 def-line markers retired (the lexical
   finding they suppressed no longer exists), 134 reference-line markers added
   for 138 findings (four share a line) — 125 lines in `checks.py` (the ruled
@@ -45,10 +56,18 @@ other is exactly the hiding the rule exists to see.
   Content-Type door); `HttpEdge.run` passing `self.stop` to `signal.signal`
   (handing a method to an outsider, which the reference test cannot tell from
   calling it).
-- **Known dodge, accepted**: a sibling becomes reachable by making it
-  recursive, and `if False: self._x(...)` makes anything recursive. A rule
-  that is an experiment does not pre-litigate adversaries; if that dodge shows
-  up in a tree, that is evidence for the next revision.
+- **Known dodges, accepted**: `if False: self._x(...)` still makes `_x`
+  recursive and therefore reachable; receiver aliasing (`me = self`,
+  `type(self).x(self)`, `getattr(self, "x")`), helpers moved to a base class,
+  and assignment-defined members (`x = staticmethod(...)`) all sit outside a
+  single-module AST test. A rule that is an experiment does not pre-litigate
+  adversaries; any of these showing up in a real tree is the evidence that
+  would justify tightening.
+- **One enforcement property was lost, deliberately**: the lexical clause
+  fired on a private method's *definition*, so a method nobody referenced was
+  still a finding. Under the structural clause a method with no internal
+  references is legal — it is outsider-facing by definition, and whether it is
+  *dead* is a different rule's job.
 - RULES.md regenerated; the lexical row is replaced by the structural row,
   all else line-number churn.
 
