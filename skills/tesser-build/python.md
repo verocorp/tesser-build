@@ -330,7 +330,10 @@ class ShortLink(ts.Entity):
   name: legal as a spec field and as a value-object constructor parameter,
   exactly like `str`. The `LinkStatus` value object wraps it (storing the
   member's string value, so the canonical `__str__` exit stands) and never
-  hands the enum back out.
+  hands the enum back out — TB010 flags an accessor returning one. The enum
+  lives beside the value objects it feeds, because a role module imports its
+  tesser package exactly once (TB050) and ruff bans an unused import, so an
+  enum-only module has no legal form.
 - Equality is **identity**, and the base owns it: declare the `identity`
   property (the ID value object) and `ts.Entity` compares and hashes by it —
   a hand-written `__eq__`/`__hash__` raises at class definition.

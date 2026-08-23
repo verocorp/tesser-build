@@ -1026,8 +1026,8 @@ class Codebase(ts.AggregateRoot):
         self._domain_enums = frozenset(
             (module.name(), stmt.name)
             for module in self._modules
-            if module.name().split(".")[0] in contexts
-            and module.name().split(".")[1:2] == ["domain"]
+            if module.name().split(".")[1:2] == ["domain"]
+            and self._locate(module.name(), module.is_package(), contexts, self._export) == "role"
             for stmt in module.class_defs()
             if (module.name(), stmt.name) not in blocks
             and self._enum_base(module, stmt) is not None
@@ -2601,7 +2601,9 @@ class Codebase(ts.AggregateRoot):
         for field, ann, lineno in fields:
             if field.startswith("_"):
                 continue
-            if self._annotation_scalar_names(ann) & (WRAPPABLE_SCALARS | NON_WRAPPABLE_SCALARS):
+            if self._annotation_scalar_names(ann) & (
+                WRAPPABLE_SCALARS | NON_WRAPPABLE_SCALARS
+            ) or self._names_a_domain_enum(module, ann):
                 found.append(
                     Violation(
                         module.path(),
@@ -2627,7 +2629,7 @@ class Codebase(ts.AggregateRoot):
                 continue
             if self._annotation_scalar_names(returned_ann) & (
                 WRAPPABLE_SCALARS | NON_WRAPPABLE_SCALARS
-            ):
+            ) or self._names_a_domain_enum(module, returned_ann):
                 found.append(
                     Violation(
                         module.path(),
@@ -3273,10 +3275,22 @@ class Codebase(ts.AggregateRoot):
                     return origin[1]
         return None
 
+    def _names_a_domain_enum(self, module: Module, node: ast.expr | None) -> bool:  # tesser:debt TB051
+        if node is None:
+            return False
+        for sub in ast.walk(node):
+            if isinstance(sub, (ast.Name, ast.Attribute)):
+                key = module._resolve(sub)
+                if key is not None and key in self._domain_enums:
+                    return True
+        return False
+
     @staticmethod
     def _enum_extras(module: Module, stmt: ast.ClassDef) -> tuple[ast.stmt, ...]:  # tesser:debt TB051
         extras: list[ast.stmt] = []
         for item in stmt.body:
+            if isinstance(item, ast.Pass):
+                continue
             member_target: ast.expr | None = None
             member_value: ast.expr | None = None
             if isinstance(item, ast.AnnAssign):
@@ -3815,6 +3829,18 @@ class Codebase(ts.AggregateRoot):
                             )
                         )
                     else:
+                        if stmt.decorator_list or stmt.keywords:
+                            found.append(
+                                Violation(
+                                    module.path(),
+                                    stmt.lineno,
+                                    "TB051",
+                                    f"{where} is decorated or keyworded; "
+                                    "a domain enum is a bare class statement, "
+                                    "because a decorator or a metaclass rewrites "
+                                    "the primitive into a home for behavior",
+                                )
+                            )
                         for item in self._enum_extras(module, stmt):
                             found.append(
                                 Violation(

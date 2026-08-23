@@ -7854,6 +7854,7 @@ def test_a_domain_enum_is_a_primitive() -> None:
             ),
         ))).violations()
                )
+    assert any("TB074" in f for f in findings)
     assert not any("LinkState declares no ts.* base" in f for f in findings)
     assert not any("parameter 'state' is not allowed" in f for f in findings)
     assert not any("parameter 'note' is not allowed" in f for f in findings)
@@ -7900,7 +7901,10 @@ def test_a_domain_enum_carries_nothing_but_its_members() -> None:
                 "class LinkState(enum.Enum):\n"
                 "    ACTIVE = 'active'\n"
                 "    def label(self) -> str:\n"
-                "        return 'x'\n",
+                "        return 'x'\n"
+                "@enum.unique\n"
+                "class Tagged(enum.Enum):\n"
+                "    A = 'a'\n",
                 False,
             ),
         ))).violations()
@@ -7910,6 +7914,13 @@ def test_a_domain_enum_carries_nothing_but_its_members() -> None:
         "a domain enum is a closed set of names and nothing else, "
         "because an enum is a primitive with a name, "
         "not a home for behavior" in f
+        for f in findings
+    )
+    assert any(
+        "shop.domain.state.Tagged is decorated or keyworded; "
+        "a domain enum is a bare class statement, "
+        "because a decorator or a metaclass rewrites "
+        "the primitive into a home for behavior" in f
         for f in findings
     )
 
@@ -8074,3 +8085,89 @@ def test_an_enum_auto_member_is_a_member() -> None:
         ))).violations()
                )
     assert not any("carries more than its members" in f for f in findings)
+
+
+def test_a_client_dto_still_rejects_a_domain_enum() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/state.py",
+                "shop.domain.state",
+                "import enum\n"
+                "import tesser.domain as ts\n"
+                "class LinkState(enum.Enum):\n"
+                "    ACTIVE = 'active'\n",
+                False,
+            ),
+            (
+                "shop/client/view.py",
+                "shop.client.view",
+                "import tesser.context as ts\n"
+                "import shop.domain.state as state\n"
+                "class LinkView(ts.Response):\n"
+                "    def __init__(self, status: state.LinkState) -> None:\n"
+                "        self.status = status\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "parameter 'status' is not allowed; "
+        "a DTO field is a primitive or another DTO" in f
+        for f in findings
+    )
+
+
+def test_an_enum_wearing_a_dto_block_is_not_a_spec_field() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/state.py",
+                "shop.domain.state",
+                "import enum\n"
+                "import tesser.context as tc\n"
+                "import tesser.domain as ts\n"
+                "class Weird(enum.Enum, tc.Request):\n"
+                "    A = 'a'\n"
+                "class WeirdSpec(ts.Spec):\n"
+                "    def __init__(self, w: Weird) -> None:\n"
+                "        self.w = w\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "parameter 'w' is not allowed; "
+        "a spec field is a primitive, a value object, or a child spec" in f
+        for f in findings
+    )
+
+
+def test_a_value_object_does_not_hand_back_a_domain_enum() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/state.py",
+                "shop.domain.state",
+                "import enum\n"
+                "import tesser.domain as ts\n"
+                "class LinkState(enum.Enum):\n"
+                "    ACTIVE = 'active'\n"
+                "class Status(ts.ValueObject):\n"
+                "    _state: LinkState\n"
+                "    def __init__(self, state: LinkState) -> None:\n"
+                "        object.__setattr__(self, '_state', state)\n"
+                "    def state(self) -> LinkState:\n"
+                "        return self._state\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "shop.domain.state.Status.state passes the raw primitive through; "
+        "a value object's accessor returns a value object" in f
+        for f in findings
+    )
