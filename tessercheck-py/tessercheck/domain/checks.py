@@ -1012,13 +1012,6 @@ class Codebase(ts.AggregateRoot):
                     if source is not None:
                         blocks[key] = source
                         changed = True
-        self._domain_enums = frozenset(
-            (module.name(), stmt.name)
-            for module in self._modules
-            if module.name().split(".")[1:2] == ["domain"]
-            for stmt in module.class_defs()
-            if self._enum_base(module, stmt) in ENUM_BASES
-        )
         named: set[str] = set()
         for module in self._modules:
             parts = module.name().split(".")
@@ -1030,6 +1023,15 @@ class Codebase(ts.AggregateRoot):
             if len(parts) >= 2 and parts[1] in ROLES:
                 named.add(parts[0])
         contexts = frozenset(named)
+        self._domain_enums = frozenset(
+            (module.name(), stmt.name)
+            for module in self._modules
+            if module.name().split(".")[0] in contexts
+            and module.name().split(".")[1:2] == ["domain"]
+            for stmt in module.class_defs()
+            if (module.name(), stmt.name) not in blocks
+            and self._enum_base(module, stmt) is not None
+        )
         for module in self._modules:
             found.extend(self._comment_violations(module))
             found.extend(self._double_violations(module))
@@ -3303,6 +3305,13 @@ class Codebase(ts.AggregateRoot):
                         == ENUM_MODULE
                         and member_value.func.attr == "auto"
                     )
+                    or (
+                        isinstance(member_value, ast.Call)
+                        and isinstance(member_value.func, ast.Name)
+                        and (origin := module._imported.get(member_value.func.id)) is not None
+                        and origin[0] == ENUM_MODULE
+                        and origin[1] == "auto"
+                    )
                 )
             )
             if not is_member:
@@ -3511,6 +3520,17 @@ class Codebase(ts.AggregateRoot):
                             "and reopens the typo the enum closes",
                         )
                     )
+                elif len(stmt.bases) > 1:
+                    found.append(
+                        Violation(
+                            module.path(),
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} mixes another base into its enum; a ports enum "
+                            "subclasses enum.Enum alone, because a str- or int-backed member "
+                            "compares equal to a raw literal and reopens the typo the enum closes",
+                        )
+                    )
                 continue
             if block is None:
                 found.append(
@@ -3584,18 +3604,8 @@ class Codebase(ts.AggregateRoot):
                 continue
             found.extend(self._unreadable(module, module.name(), loose))
         for holder in module.class_defs():
-            holder_enum: str | None = None
-            for base in holder.bases:
-                if isinstance(base, ast.Attribute) and isinstance(base.value, ast.Name):
-                    if module._package_aliases.get(base.value.id) == ENUM_MODULE:
-                        holder_enum = base.attr
-                        break
-                elif isinstance(base, ast.Name):
-                    origin = module._imported.get(base.id)
-                    if origin is not None and origin[0] == ENUM_MODULE:
-                        holder_enum = origin[1]
-                        break
-            enum_member = holder_enum is not None
+            enum_member = self._enum_base(module, holder) is not None
+            enum_extras = frozenset(map(id, self._enum_extras(module, holder)))
             for base in holder.bases:
                 if not self._is_readable_annotation(base):
                     found.extend(
@@ -3606,37 +3616,7 @@ class Codebase(ts.AggregateRoot):
                 if isinstance(item, ast.Pass):
                     continue
                 if enum_member:
-                    item_target: ast.expr | None = None
-                    item_value: ast.expr | None = None
-                    if isinstance(item, ast.AnnAssign):
-                        item_target, item_value = item.target, item.value
-                    elif isinstance(item, ast.Assign) and len(item.targets) == 1:
-                        item_target, item_value = item.targets[0], item.value
-                    item_is_member = (
-                        isinstance(item_target, ast.Name)
-                        and not item_target.id.startswith("_")
-                        and not (
-                            isinstance(item, ast.AnnAssign)
-                            and not isinstance(item.annotation, ast.Name)
-                        )
-                        and (
-                            isinstance(item_value, ast.Constant)
-                            or (
-                                isinstance(item_value, ast.UnaryOp)
-                                and isinstance(item_value.operand, ast.Constant)
-                                and isinstance(item_value.operand.value, (int, float))
-                            )
-                            or (
-                                isinstance(item_value, ast.Call)
-                                and isinstance(item_value.func, ast.Attribute)
-                                and isinstance(item_value.func.value, ast.Name)
-                                and module._package_aliases.get(item_value.func.value.id)
-                                == ENUM_MODULE
-                                and item_value.func.attr == "auto"
-                            )
-                        )
-                    )
-                    if not item_is_member:
+                    if id(item) in enum_extras:
                         found.extend(self._unreadable(module, where, item))
                     continue
                 if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -3821,6 +3801,17 @@ class Codebase(ts.AggregateRoot):
                                 f"{where} is an enum.{enum_base}; a domain enum is an enum.Enum, "
                                 "because a str- or int-backed member compares equal to a raw literal "
                                 "and reopens the typo the enum closes",
+                            )
+                        )
+                    elif len(stmt.bases) > 1:
+                        found.append(
+                            Violation(
+                                module.path(),
+                                stmt.lineno,
+                                "TB052",
+                                f"{where} mixes another base into its enum; a domain enum "
+                                "subclasses enum.Enum alone, because a str- or int-backed member "
+                                "compares equal to a raw literal and reopens the typo the enum closes",
                             )
                         )
                     else:

@@ -7830,9 +7830,10 @@ def test_a_domain_enum_is_a_primitive() -> None:
                 "    ACTIVE = 'active'\n"
                 "    INACTIVE = 'inactive'\n"
                 "class StatusSpec(ts.Spec):\n"
-                "    def __init__(self, state: LinkState, note: LinkState | None) -> None:\n"
+                "    def __init__(self, state: LinkState, note: LinkState | None, past: tuple[LinkState, ...]) -> None:\n"
                 "        self.state = state\n"
                 "        self.note = note\n"
+                "        self.past = past\n"
                 "class Status(ts.ValueObject):\n"
                 "    _value: str\n"
                 "    def __init__(self, value: LinkState) -> None:\n"
@@ -7856,6 +7857,7 @@ def test_a_domain_enum_is_a_primitive() -> None:
     assert not any("LinkState declares no ts.* base" in f for f in findings)
     assert not any("parameter 'state' is not allowed" in f for f in findings)
     assert not any("parameter 'note' is not allowed" in f for f in findings)
+    assert not any("parameter 'past' is not allowed" in f for f in findings)
     assert not any("parameter 'value' is not allowed" in f for f in findings)
     assert not any("parameter 'status' is not allowed" in f for f in findings)
 
@@ -7884,11 +7886,7 @@ def test_a_domain_enum_is_a_plain_enum() -> None:
         "and reopens the typo the enum closes" in f
         for f in findings
     )
-    assert any(
-        "parameter 'x' is not allowed; "
-        "a spec field is a primitive, a value object, or a child spec" in f
-        for f in findings
-    )
+    assert not any("parameter 'x' is not allowed" in f for f in findings)
 
 
 def test_a_domain_enum_carries_nothing_but_its_members() -> None:
@@ -7935,3 +7933,144 @@ def test_an_application_enum_still_declares_no_block() -> None:
         "every context class declares its block" in f
         for f in findings
     )
+
+
+def test_a_domain_enum_subclasses_enum_alone() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/state.py",
+                "shop.domain.state",
+                "import enum\n"
+                "import tesser.domain as ts\n"
+                "class Loose(str, enum.Enum):\n"
+                "    YES = 'yes'\n"
+                "class LooseSpec(ts.Spec):\n"
+                "    def __init__(self, x: Loose) -> None:\n"
+                "        self.x = x\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "shop.domain.state.Loose mixes another base into its enum; a domain enum "
+        "subclasses enum.Enum alone, because a str- or int-backed member "
+        "compares equal to a raw literal and reopens the typo the enum closes" in f
+        for f in findings
+    )
+    assert not any("parameter 'x' is not allowed" in f for f in findings)
+
+
+def test_a_ports_enum_subclasses_enum_alone() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
+                "",
+                True,
+            ),
+            (
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
+                "from __future__ import annotations\n"
+                "import enum\n"
+                "import tesser.application as ts\n"
+                "class Loose(str, enum.Enum):\n"
+                "    YES = 'yes'\n"
+                "class Sink(ts.Port):\n"
+                "    pass\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "shop.application.ports.sink.Loose mixes another base into its enum; a ports enum "
+        "subclasses enum.Enum alone, because a str- or int-backed member "
+        "compares equal to a raw literal and reopens the typo the enum closes" in f
+        for f in findings
+    )
+
+
+def test_a_kernel_domain_enum_is_not_a_context_enum() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "kernel/domain/state.py",
+                "kernel.domain.state",
+                "import enum\n"
+                "class LinkState(enum.Enum):\n"
+                "    ACTIVE = 'active'\n",
+                False,
+            ),
+            (
+                "shop/domain/link.py",
+                "shop.domain.link",
+                "import tesser.domain as ts\n"
+                "import kernel.domain.state as state\n"
+                "class LinkSpec(ts.Spec):\n"
+                "    def __init__(self, status: state.LinkState) -> None:\n"
+                "        self.status = status\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "parameter 'status' is not allowed; "
+        "a spec field is a primitive, a value object, or a child spec" in f
+        for f in findings
+    )
+
+
+def test_an_enum_with_a_ts_base_is_its_declared_kind() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/state.py",
+                "shop.domain.state",
+                "import enum\n"
+                "import tesser.domain as ts\n"
+                "class Bad(enum.Enum, ts.ValueObject):\n"
+                "    A = 'a'\n"
+                "class BadSpec(ts.Spec):\n"
+                "    def __init__(self, bad: Bad) -> None:\n"
+                "        self.bad = bad\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any("Bad declares no ts.* base" in f for f in findings)
+    assert not any("parameter 'bad' is not allowed" in f for f in findings)
+
+
+def test_an_enum_auto_member_is_a_member() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
+                "",
+                True,
+            ),
+            (
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
+                "from __future__ import annotations\n"
+                "import enum\n"
+                "from enum import auto\n"
+                "import tesser.application as ts\n"
+                "class Outcome(enum.Enum):\n"
+                "    FOUND = auto()\n"
+                "    MISSING = enum.auto()\n"
+                "class Sink(ts.Port):\n"
+                "    pass\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any("carries more than its members" in f for f in findings)
