@@ -637,7 +637,8 @@ service and delegates.
 `component.md`; verified impl `examples/python-app/`). Each context owns a
 `wiring/` package (its spec-shaped `Config` + a `build` contract); the
 app-level `bootstrap` nests the configs and constructs each component in
-dependency order. A component's impl selection is a private method; module
+dependency order. A component selects its impl inline where it constructs
+(coordinate `if`s in `__init__` — the verified impl has no helper method); module
 constants are `Final`; a context module is imported **as an aliased module,
 never its members** (TB053).
 

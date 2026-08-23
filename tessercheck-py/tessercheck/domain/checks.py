@@ -880,7 +880,7 @@ class Module(ts.Entity):
     def bound_names(self) -> tuple[tuple[str, str, str], ...]:
         return self._bound_names
 
-    def _resolve(self, node: ast.expr) -> tuple[str, str] | None:  # tesser:debt TB051
+    def _resolve(self, node: ast.expr) -> tuple[str, str] | None:
         if isinstance(node, ast.Subscript):
             return self._resolve(node.value)
         if isinstance(node, ast.Attribute) and isinstance(node.value, (ast.Name, ast.Attribute)):
@@ -983,7 +983,7 @@ class Codebase(ts.AggregateRoot):
         self._used_imports: set[str] = set()
 
     def violations(self) -> tuple[Violation, ...]:
-        declaration = self._declaration_violations()
+        declaration = self._declaration_violations()  # tesser:debt TB051
         if declaration:
             return declaration
         self._used_imports = set()
@@ -1023,32 +1023,32 @@ class Codebase(ts.AggregateRoot):
                 named.add(parts[0])
         contexts = frozenset(named)
         for module in self._modules:
-            found.extend(self._comment_violations(module))
-            found.extend(self._double_violations(module))
-            found.extend(self._shadowing_violations(module))
-            found.extend(self._string_equality_violations(module))
-            found.extend(self._private_method_violations(module))
-            found.extend(self._dynamic_import_violations(module))
-            found.extend(self._module_violations(module, blocks, contexts))
-            if self._export == TESSER and self._locate(
+            found.extend(self._comment_violations(module))  # tesser:debt TB051
+            found.extend(self._double_violations(module))  # tesser:debt TB051
+            found.extend(self._shadowing_violations(module))  # tesser:debt TB051
+            found.extend(self._string_equality_violations(module))  # tesser:debt TB051
+            found.extend(self._sibling_reference_violations(module))  # tesser:debt TB051
+            found.extend(self._dynamic_import_violations(module))  # tesser:debt TB051
+            found.extend(self._module_violations(module, blocks, contexts))  # tesser:debt TB051
+            if self._export == TESSER and self._locate(  # tesser:debt TB051
                 module.name(), module.is_package(), contexts, self._export
             ) == "test":
                 continue
             for cls in module.class_defs():
                 block = blocks.get((module.name(), cls.name))
                 if block == "aggregate":
-                    found.extend(self._constructor_violations(module, cls, blocks, "an aggregate"))
+                    found.extend(self._constructor_violations(module, cls, blocks, "an aggregate"))  # tesser:debt TB051
                 elif block == "entity":
-                    found.extend(self._constructor_violations(module, cls, blocks, "an entity"))
+                    found.extend(self._constructor_violations(module, cls, blocks, "an entity"))  # tesser:debt TB051
                 elif block == "component":
-                    found.extend(self._component_violations(module, cls))
+                    found.extend(self._component_violations(module, cls))  # tesser:debt TB051
                 elif block == "component_config":
-                    found.extend(self._component_config_violations(module, cls, blocks))
+                    found.extend(self._component_config_violations(module, cls, blocks))  # tesser:debt TB051
                 elif block == "app_config":
-                    found.extend(self._app_config_violations(module, cls, blocks))
+                    found.extend(self._app_config_violations(module, cls, blocks))  # tesser:debt TB051
                 elif block == "valueobject":
-                    found.extend(self._valueobject_violations(module, cls, blocks))
-                    found.extend(self._vo_field_violations(module, cls))
+                    found.extend(self._valueobject_violations(module, cls, blocks))  # tesser:debt TB051
+                    found.extend(self._vo_field_violations(module, cls))  # tesser:debt TB051
                 if block in DOMAIN_BLOCKS:
                     fields = [
                         (stmt.target.id, stmt.annotation, stmt.lineno)
@@ -1059,27 +1059,27 @@ class Codebase(ts.AggregateRoot):
                     ]
                     leaf: str | None = None
                     if len(fields) == 1:
-                        head = self._annotation_head(fields[0][1])
+                        head = self._annotation_head(fields[0][1])  # tesser:debt TB051
                         if head in WRAPPABLE_SCALARS or head in NON_WRAPPABLE_SCALARS:
                             leaf = head
                     if block == "valueobject":
-                        found.extend(self._exposure_violations(module, cls, fields))
+                        found.extend(self._exposure_violations(module, cls, fields))  # tesser:debt TB051
                         found.extend(
-                            self._composition_violations(module, cls, fields, leaf)
+                            self._composition_violations(module, cls, fields, leaf)  # tesser:debt TB051
                         )
-                        found.extend(self._door_violations(module, cls))
-                        found.extend(self._exit_violations(module, cls, leaf))
+                        found.extend(self._door_violations(module, cls))  # tesser:debt TB051
+                        found.extend(self._exit_violations(module, cls, leaf))  # tesser:debt TB051
                     else:
-                        found.extend(self._copy_violations(module, cls, fields))
+                        found.extend(self._copy_violations(module, cls, fields))  # tesser:debt TB051
                         found.extend(
-                            self._held_root_violations(module, cls, fields, blocks)
+                            self._held_root_violations(module, cls, fields, blocks)  # tesser:debt TB051
                         )
-                        found.extend(self._structured_exit_violations(module, cls))
-                    found.extend(self._domain_return_violations(module, cls, blocks))
+                        found.extend(self._structured_exit_violations(module, cls))  # tesser:debt TB051
+                    found.extend(self._domain_return_violations(module, cls, blocks))  # tesser:debt TB051
                 elif block == "spec":
-                    found.extend(self._spec_violations(module, cls, blocks))
+                    found.extend(self._spec_violations(module, cls, blocks))  # tesser:debt TB051
                 elif block in ("request", "response", "port_request", "port_response"):
-                    found.extend(self._dto_violations(module, cls, blocks))
+                    found.extend(self._dto_violations(module, cls, blocks))  # tesser:debt TB051
                 elif block == "client":
                     for item in cls.body:
                         if not isinstance(
@@ -1087,7 +1087,7 @@ class Codebase(ts.AggregateRoot):
                         ) or item.name.startswith("_"):
                             continue
                         found.extend(
-                            self._signature_violations(
+                            self._signature_violations(  # tesser:debt TB051
                                 module,
                                 f"{module.name()}.{cls.name}.{item.name}",
                                 item.lineno,
@@ -1100,16 +1100,16 @@ class Codebase(ts.AggregateRoot):
                             )
                         )
                 elif block in ("repository", "gateway", "handler"):
-                    found.extend(self._record_signature_violations(module, cls, blocks, "an adapter"))
+                    found.extend(self._record_signature_violations(module, cls, blocks, "an adapter"))  # tesser:debt TB051
                 elif block == "port":
-                    found.extend(self._record_signature_violations(module, cls, blocks, "a port"))
-                    if self._locate(
+                    found.extend(self._record_signature_violations(module, cls, blocks, "a port"))  # tesser:debt TB051
+                    if self._locate(  # tesser:debt TB051
                         module.name(), module.is_package(), contexts, self._export
                     ) in (
                         "ports",
                         "ports-file",
                     ):
-                        found.extend(self._port_violations(module, cls, blocks))
+                        found.extend(self._port_violations(module, cls, blocks))  # tesser:debt TB051
                 elif block == "service":
                     methods = [
                         item
@@ -1120,13 +1120,13 @@ class Codebase(ts.AggregateRoot):
                     for item in methods:
                         where = f"{module.name()}.{cls.name}.{item.name}"
                         found.extend(
-                            self._delegation_violations(
+                            self._delegation_violations(  # tesser:debt TB051
                                 module, method_names, where, item
                             )
                         )
                         if item.name == "__init__":
                             found.extend(
-                                self._dependency_violations(
+                                self._dependency_violations(  # tesser:debt TB051
                                     module, where, item.lineno, item, blocks
                                 )
                             )
@@ -1134,7 +1134,7 @@ class Codebase(ts.AggregateRoot):
                         if item.name.startswith("_"):
                             continue
                         found.extend(
-                            self._signature_violations(
+                            self._signature_violations(  # tesser:debt TB051
                                 module,
                                 where,
                                 item.lineno,
@@ -1147,12 +1147,12 @@ class Codebase(ts.AggregateRoot):
                             )
                         )
                         found.extend(
-                            self._body_violations(module, where, item, blocks)
+                            self._body_violations(module, where, item, blocks)  # tesser:debt TB051
                         )
                 elif block == "mapper":
-                    found.extend(self._mapper_violations(module, cls, blocks))
-        found.extend(self._pairing_violations(contexts, blocks))
-        found.extend(self._unused_import_violations())
+                    found.extend(self._mapper_violations(module, cls, blocks))  # tesser:debt TB051
+        found.extend(self._pairing_violations(contexts, blocks))  # tesser:debt TB051
+        found.extend(self._unused_import_violations())  # tesser:debt TB051
         kept: list[Violation] = []
         used: set[tuple[str, Line]] = set()
         by_path = {module.path(): module for module in self._modules}
@@ -1189,7 +1189,7 @@ class Codebase(ts.AggregateRoot):
                     )
         return tuple(kept)
 
-    def _pairing_violations(  # tesser:debt TB051
+    def _pairing_violations(
         self, contexts: frozenset[str], blocks: dict[tuple[str, str], str]
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
@@ -1197,7 +1197,7 @@ class Codebase(ts.AggregateRoot):
         for module in self._modules:
             parts = module.name().split(".")
             base = parts[-1]
-            place = self._locate(module.name(), module.is_package(), contexts, self._export)
+            place = self._locate(module.name(), module.is_package(), contexts, self._export)  # tesser:debt TB051
             parent = ".".join(parts[:-1])
             if place in PAIRED_PLACES and not module.is_package() and base != "__main__":
                 saw_class = False
@@ -1254,7 +1254,7 @@ class Codebase(ts.AggregateRoot):
         return tuple(found)
 
     @staticmethod
-    def _locate(  # tesser:debt TB051
+    def _locate(
         name: str,
         is_package: bool,
         contexts: frozenset[str],
@@ -1338,16 +1338,16 @@ class Codebase(ts.AggregateRoot):
             return "role-file" if len(parts) == 2 else "role"
         return "context-stray"
 
-    def _module_violations(  # tesser:debt TB051
+    def _module_violations(
         self,
         module: Module,
         blocks: dict[tuple[str, str], str],
         contexts: frozenset[str],
     ) -> tuple[Violation, ...]:
         parts = module.name().split(".")
-        place = self._locate(module.name(), module.is_package(), contexts, self._export)
+        place = self._locate(module.name(), module.is_package(), contexts, self._export)  # tesser:debt TB051
         if place == "conftest-root":
-            return self._conftest_leaf_violations(module)
+            return self._conftest_leaf_violations(module)  # tesser:debt TB051
         if place == "conftest":
             tier_parts = module.name().split(".")
             tier_tops = (
@@ -1379,34 +1379,34 @@ class Codebase(ts.AggregateRoot):
             else:
                 placement = (tier_parts[0], tier_parts[1])
             if placement is None or placement[1] == STRAY_TIER:
-                return self._conftest_leaf_violations(module)
-            return self._test_placement_violations(module, placement[0], placement[1], contexts)
+                return self._conftest_leaf_violations(module)  # tesser:debt TB051
+            return self._test_placement_violations(module, placement[0], placement[1], contexts)  # tesser:debt TB051
         if place == "test":
-            return self._test_module_violations(module, blocks, contexts)
+            return self._test_module_violations(module, blocks, contexts)  # tesser:debt TB051
         if place == "eval":
-            return self._eval_module_violations(module, blocks, contexts)
+            return self._eval_module_violations(module, blocks, contexts)  # tesser:debt TB051
         if place == "shell-init":
-            return self._app_init_violations(module)
+            return self._app_init_violations(module)  # tesser:debt TB051
         if place == "shell-srv":
-            return self._srv_module_violations(module, blocks) + self._app_import_violations(
+            return self._srv_module_violations(module, blocks) + self._app_import_violations(  # tesser:debt TB051
                 module, parts[0], contexts, blocks
             )
         if place == "shell-app":
-            return self._app_module_violations(module, blocks) + self._app_import_violations(
+            return self._app_module_violations(module, blocks) + self._app_import_violations(  # tesser:debt TB051
                 module, parts[0], contexts, blocks
             )
         if place == "root-tests":
-            return self._tests_package_violations(module, contexts)
+            return self._tests_package_violations(module, contexts)  # tesser:debt TB051
         if place == "protocol-init":
-            return self._protocol_init_violations(module)
+            return self._protocol_init_violations(module)  # tesser:debt TB051
         if place == "protocol":
-            return self._protocol_module_violations(module, blocks, contexts)
+            return self._protocol_module_violations(module, blocks, contexts)  # tesser:debt TB051
         if place == "root":
-            return self._homeless_violations(module)
+            return self._homeless_violations(module)  # tesser:debt TB051
         if place == "kernel-init":
             if self._export == TESSER and parts[0] == TESSER:
-                return self._tesser_init_violations(module)
-            return self._kernel_init_violations(module)
+                return self._tesser_init_violations(module)  # tesser:debt TB051
+            return self._kernel_init_violations(module)  # tesser:debt TB051
         if place == "kernel-file":
             return (
                 Violation(
@@ -1419,14 +1419,14 @@ class Codebase(ts.AggregateRoot):
             )
         if place == "kernel":
             if self._export == TESSER and parts[0] == TESSER:
-                return self._tesser_shell_violations(module)
-            return self._kernel_module_violations(module, blocks) + self._kernel_import_violations(
+                return self._tesser_shell_violations(module)  # tesser:debt TB051
+            return self._kernel_module_violations(module, blocks) + self._kernel_import_violations(  # tesser:debt TB051
                 module
             )
         if place == "context-init":
-            return self._context_init_violations(module)
+            return self._context_init_violations(module)  # tesser:debt TB051
         if place == "context-tests-init":
-            return self._context_tests_init_violations(module)
+            return self._context_tests_init_violations(module)  # tesser:debt TB051
         if place == "context-tests-stray":
             return (
                 Violation(
@@ -1436,7 +1436,7 @@ class Codebase(ts.AggregateRoot):
                     f"{module.name()} is neither a test module nor conftest; "
                     "a context tests package holds only test modules and conftest",
                 ),
-            ) + self._test_placement_violations(module, parts[0], TESTS_ROLE, contexts)
+            ) + self._test_placement_violations(module, parts[0], TESTS_ROLE, contexts)  # tesser:debt TB051
         if place == "ports-stray":
             return (
                 Violation(
@@ -1449,7 +1449,7 @@ class Codebase(ts.AggregateRoot):
                 ),
             )
         if place == "ports-init":
-            return self._ports_init_violations(module)
+            return self._ports_init_violations(module)  # tesser:debt TB051
         if place == "ports-file":
             return (
                 Violation(
@@ -1459,11 +1459,11 @@ class Codebase(ts.AggregateRoot):
                     f"{module.name()} is a ports module; "
                     "ports is a package, never a module",
                 ),
-            ) + self._ports_module_violations(module, blocks)
+            ) + self._ports_module_violations(module, blocks)  # tesser:debt TB051
         if place == "ports":
-            return self._ports_module_violations(module, blocks)
+            return self._ports_module_violations(module, blocks)  # tesser:debt TB051
         if place == "role-init":
-            return self._role_init_violations(module)
+            return self._role_init_violations(module)  # tesser:debt TB051
         if place == "role-file":
             return (
                 Violation(
@@ -1474,7 +1474,7 @@ class Codebase(ts.AggregateRoot):
                 ),
             )
         if place == "role":
-            return self._role_module_violations(module, parts[1], blocks) + self._import_violations(
+            return self._role_module_violations(module, parts[1], blocks) + self._import_violations(  # tesser:debt TB051
                 module, parts[0], parts[1], contexts, blocks
             )
         return (
@@ -1487,7 +1487,7 @@ class Codebase(ts.AggregateRoot):
             ),
         )
 
-    def _context_init_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _context_init_violations(self, module: Module) -> tuple[Violation, ...]:
         return tuple(
             Violation(
                 module.path(),
@@ -1498,7 +1498,7 @@ class Codebase(ts.AggregateRoot):
             for stmt in module.body()
         )
 
-    def _protocol_init_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _protocol_init_violations(self, module: Module) -> tuple[Violation, ...]:
         return tuple(
             Violation(
                 module.path(),
@@ -1509,7 +1509,7 @@ class Codebase(ts.AggregateRoot):
             for stmt in module.body()
         )
 
-    def _dynamic_import_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _dynamic_import_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
         bound: set[str] = set()
         for assignment in module.assignments():
@@ -1613,7 +1613,7 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _declaration_violations(self) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _declaration_violations(self) -> tuple[Violation, ...]:
         found: list[Violation] = []
         if self._declaration == DECLARED_MISSING:
             found.append(
@@ -1658,8 +1658,8 @@ class Codebase(ts.AggregateRoot):
                 )
             )
         if len(self._exports) <= 1:
-            found.extend(self._export_declaration_violations())
-            found.extend(self._import_declaration_violations())
+            found.extend(self._export_declaration_violations())  # tesser:debt TB051
+            found.extend(self._import_declaration_violations())  # tesser:debt TB051
         for relative in self._nested:
             found.append(
                 Violation(
@@ -1682,7 +1682,7 @@ class Codebase(ts.AggregateRoot):
             )
         return tuple(found)
 
-    def _export_declaration_violations(self) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _export_declaration_violations(self) -> tuple[Violation, ...]:
         if self._export is None:
             return ()
         if self._export == KERNEL_PACKAGE or self._export in SHELL_PACKAGES:
@@ -1741,7 +1741,7 @@ class Codebase(ts.AggregateRoot):
             )
         return ()
 
-    def _import_declaration_violations(self) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _import_declaration_violations(self) -> tuple[Violation, ...]:
         found: list[Violation] = []
         tops = (frozenset(each.name().split(".")[0] for each in self._modules))
         for declared in self._imports:
@@ -1770,7 +1770,7 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _unused_import_violations(self) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _unused_import_violations(self) -> tuple[Violation, ...]:
         return tuple(
             Violation(
                 TREE_DECLARATION,
@@ -1783,7 +1783,7 @@ class Codebase(ts.AggregateRoot):
             if declared not in self._used_imports
         )
 
-    def _homeless_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _homeless_violations(self, module: Module) -> tuple[Violation, ...]:
         return (
             Violation(
                 module.path(),
@@ -1795,7 +1795,7 @@ class Codebase(ts.AggregateRoot):
             ),
         )
 
-    def _conftest_leaf_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _conftest_leaf_violations(self, module: Module) -> tuple[Violation, ...]:
         tops = (frozenset(each.name().split(".")[0] for each in self._modules))
         if self._export != TESSER:
             tops = tops - {TESSER}
@@ -1814,7 +1814,7 @@ class Codebase(ts.AggregateRoot):
             )
         )
 
-    def _tests_package_violations(  # tesser:debt TB051
+    def _tests_package_violations(
         self,
         module: Module,
         contexts: frozenset[str],
@@ -1838,9 +1838,9 @@ class Codebase(ts.AggregateRoot):
                 f"{module.name()} is neither a test module nor conftest; "
                 "a tests package holds only test modules and conftest",
             ),
-        ) + self._test_placement_violations(module, "", ROOT_TESTS_TIER, contexts)
+        ) + self._test_placement_violations(module, "", ROOT_TESTS_TIER, contexts)  # tesser:debt TB051
 
-    def _context_tests_init_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _context_tests_init_violations(self, module: Module) -> tuple[Violation, ...]:
         return tuple(
             Violation(
                 module.path(),
@@ -1851,7 +1851,7 @@ class Codebase(ts.AggregateRoot):
             for stmt in module.body()
         )
 
-    def _role_init_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _role_init_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for stmt in module.body():
             if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
@@ -1877,10 +1877,10 @@ class Codebase(ts.AggregateRoot):
                         "a role __init__ only re-exports from its own role",
                     )
                 )
-            found.extend(self._form_violations(module, edge))
+            found.extend(self._form_violations(module, edge))  # tesser:debt TB051
         return tuple(found)
 
-    def _tesser_init_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _tesser_init_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
         parts = module.name().split(".")
         if (
@@ -1923,9 +1923,9 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _tesser_shell_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _tesser_shell_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        found.extend(self._stray_import_violations(module))
+        found.extend(self._stray_import_violations(module))  # tesser:debt TB051
         parts = module.name().split(".")
         if not parts[1].startswith(DO_NOT_USE_PREFIX) and parts[1] not in TESSER_NAMESPACES:
             found.append(
@@ -1954,7 +1954,7 @@ class Codebase(ts.AggregateRoot):
             )
         return tuple(found)
 
-    def _kernel_init_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _kernel_init_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for stmt in module.body():
             if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
@@ -1982,7 +1982,7 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _kernel_module_violations(  # tesser:debt TB051
+    def _kernel_module_violations(
         self,
         module: Module,
         blocks: dict[tuple[str, str], str],
@@ -2012,10 +2012,10 @@ class Codebase(ts.AggregateRoot):
                         )
                     )
         found.extend(
-            self._module_function_violations(module, "kernel")
+            self._module_function_violations(module, "kernel")  # tesser:debt TB051
         )
         found.extend(
-            self._statement_violations(
+            self._statement_violations(  # tesser:debt TB051
                 module,
                 "kernel",
                 "a kernel module holds only imports, classes, and Final constants",
@@ -2024,11 +2024,11 @@ class Codebase(ts.AggregateRoot):
         )
         return tuple(found)
 
-    def _kernel_import_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _kernel_import_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        found.extend(self._stray_import_violations(module))
+        found.extend(self._stray_import_violations(module))  # tesser:debt TB051
         found.extend(
-            self._tesser_import_violations(
+            self._tesser_import_violations(  # tesser:debt TB051
                 module,
                 "kernel",
                 ROLE_TESSER_PACKAGE["domain"],
@@ -2078,7 +2078,7 @@ class Codebase(ts.AggregateRoot):
             )
         return tuple(found)
 
-    def _app_init_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _app_init_violations(self, module: Module) -> tuple[Violation, ...]:
         return tuple(
             Violation(
                 module.path(),
@@ -2090,7 +2090,7 @@ class Codebase(ts.AggregateRoot):
         )
 
     @staticmethod
-    def _tesser_import_violations(  # tesser:debt TB051
+    def _tesser_import_violations(
         module: Module,
         subject: str,
         package: str,
@@ -2168,7 +2168,7 @@ class Codebase(ts.AggregateRoot):
             )
         return tuple(found)
 
-    def _module_function_violations(self, module: Module, subject: str) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _module_function_violations(self, module: Module, subject: str) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for stmt in module.body():
             if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -2183,7 +2183,7 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _statement_violations(  # tesser:debt TB051
+    def _statement_violations(
         self,
         module: Module,
         subject: str,
@@ -2262,31 +2262,59 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _private_method_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _sibling_reference_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for stmt in module.body():
             for node in ast.walk(stmt):
                 if not isinstance(node, ast.ClassDef):
                     continue
+                members = {
+                    item.name
+                    for item in node.body
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                }
+                recursive = {
+                    item.name
+                    for item in node.body
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and any(
+                        isinstance(inner, ast.Attribute)
+                        and isinstance(inner.value, ast.Name)
+                        and inner.value.id in ("self", "cls")
+                        and inner.attr == item.name
+                        for inner in ast.walk(item)
+                    )
+                }
                 for member in node.body:
                     if not isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)):
                         continue
-                    if not member.name.startswith("_"):
-                        continue
-                    if member.name.startswith("__") and member.name.endswith("__"):
-                        continue
-                    found.append(
-                        Violation(
-                            module.path(),
-                            member.lineno,
-                            "TB051",
-                            f"{module.name()}.{node.name}.{member.name} is a private method; "
-                            "a class holds only public methods",
+                    for inner in ast.walk(member):
+                        if not (
+                            isinstance(inner, ast.Attribute)
+                            and isinstance(inner.value, ast.Name)
+                            and inner.value.id in ("self", "cls")
+                        ):
+                            continue
+                        sibling = inner.attr
+                        if sibling not in members:
+                            continue
+                        if sibling == member.name or sibling in recursive:
+                            continue
+                        if sibling.startswith("__") and sibling.endswith("__"):
+                            continue
+                        found.append(
+                            Violation(
+                                module.path(),
+                                inner.lineno,
+                                "TB051",
+                                f"{module.name()}.{node.name}.{member.name} reaches sibling "
+                                f"{sibling}; a method is for outsiders — a class reaches "
+                                "into itself only for direct recursion",
+                            )
                         )
-                    )
         return tuple(found)
 
-    def _comment_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _comment_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for comment in module.comments():
             if DIRECTIVE.match(str(comment._text)):
@@ -2333,7 +2361,7 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _double_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _double_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for stmt in module.body():
             for node in ast.walk(stmt):
@@ -2440,7 +2468,7 @@ class Codebase(ts.AggregateRoot):
                             )
         return tuple(found)
 
-    def _shadowing_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _shadowing_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
         scopes: list[tuple[ast.AST | None, list[ast.AST]]] = [
             (None, [stmt for stmt in module.body()])
@@ -2524,7 +2552,7 @@ class Codebase(ts.AggregateRoot):
                     )
         return tuple(found)
 
-    def _string_equality_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _string_equality_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for stmt in module.body():
             for node in ast.walk(stmt):
@@ -2561,12 +2589,12 @@ class Codebase(ts.AggregateRoot):
                     )
         return tuple(found)
 
-    def _vo_field_violations(self, module: Module, cls: ast.ClassDef) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _vo_field_violations(self, module: Module, cls: ast.ClassDef) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for stmt in cls.body:
             if not isinstance(stmt, ast.AnnAssign) or not isinstance(stmt.target, ast.Name):
                 continue
-            if self._annotation_head(stmt.annotation) in MUTABLE_COLLECTIONS:
+            if self._annotation_head(stmt.annotation) in MUTABLE_COLLECTIONS:  # tesser:debt TB051
                 field = stmt.target.id
                 found.append(
                     Violation(
@@ -2580,7 +2608,7 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _exposure_violations(  # tesser:debt TB051
+    def _exposure_violations(
         self,
         module: Module,
         cls: ast.ClassDef,
@@ -2630,7 +2658,7 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _composition_violations(  # tesser:debt TB051
+    def _composition_violations(
         self,
         module: Module,
         cls: ast.ClassDef,
@@ -2639,7 +2667,7 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for field, ann, lineno in fields:
-            head = self._annotation_head(ann)
+            head = self._annotation_head(ann)  # tesser:debt TB051
             if head in NON_WRAPPABLE_SCALARS:
                 found.append(
                     Violation(
@@ -2665,7 +2693,7 @@ class Codebase(ts.AggregateRoot):
                     )
         return tuple(found)
 
-    def _door_violations(self, module: Module, cls: ast.ClassDef) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _door_violations(self, module: Module, cls: ast.ClassDef) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for item in cls.body:
             if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -2684,7 +2712,7 @@ class Codebase(ts.AggregateRoot):
                 while walk_stack:
                     walked = walk_stack.pop()
                     if isinstance(walked, ast.Subscript):
-                        if self._annotation_head(walked.value) not in (
+                        if self._annotation_head(walked.value) not in (  # tesser:debt TB051
                             "type",
                             "Type",
                             "Callable",
@@ -2731,7 +2759,7 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _exit_violations(  # tesser:debt TB051
+    def _exit_violations(
         self,
         module: Module,
         cls: ast.ClassDef,
@@ -2797,7 +2825,7 @@ class Codebase(ts.AggregateRoot):
             )
         return tuple(found)
 
-    def _structured_exit_violations(  # tesser:debt TB051
+    def _structured_exit_violations(
         self, module: Module, cls: ast.ClassDef
     ) -> tuple[Violation, ...]:
         return tuple(
@@ -2813,7 +2841,7 @@ class Codebase(ts.AggregateRoot):
             if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name in CONVERSION_DUNDERS
         )
 
-    def _copy_violations(  # tesser:debt TB051
+    def _copy_violations(
         self,
         module: Module,
         cls: ast.ClassDef,
@@ -2833,10 +2861,10 @@ class Codebase(ts.AggregateRoot):
                 continue
             attr = bare.attr
             returned = (
-                self._annotation_head(item.returns) if item.returns is not None else None
+                self._annotation_head(item.returns) if item.returns is not None else None  # tesser:debt TB051
             )
             if returned is None and attr in by_name:
-                returned = self._annotation_head(by_name[attr])
+                returned = self._annotation_head(by_name[attr])  # tesser:debt TB051
             if returned in MUTABLE_COLLECTIONS:
                 found.append(
                     Violation(
@@ -2849,7 +2877,7 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _held_root_violations(  # tesser:debt TB051
+    def _held_root_violations(
         self,
         module: Module,
         cls: ast.ClassDef,
@@ -2876,7 +2904,7 @@ class Codebase(ts.AggregateRoot):
                     )
         return tuple(found)
 
-    def _domain_return_violations(  # tesser:debt TB051
+    def _domain_return_violations(
         self,
         module: Module,
         cls: ast.ClassDef,
@@ -2908,7 +2936,7 @@ class Codebase(ts.AggregateRoot):
             while walk_stack:
                 walked = walk_stack.pop()
                 if isinstance(walked, ast.Subscript):
-                    if self._annotation_head(walked.value) not in (
+                    if self._annotation_head(walked.value) not in (  # tesser:debt TB051
                         "type",
                         "Type",
                         "Callable",
@@ -2971,7 +2999,7 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _annotation_scalar_names(  # tesser:debt TB051
+    def _annotation_scalar_names(
         self, node: ast.expr, keep_all: bool = False
     ) -> frozenset[str]:
         names: set[str] = set()
@@ -2992,7 +3020,7 @@ class Codebase(ts.AggregateRoot):
         return frozenset(names - RETURN_WRAPPERS - SELF_NAMES)
 
     @staticmethod
-    def _annotation_head(node: ast.expr) -> str | None:  # tesser:debt TB051
+    def _annotation_head(node: ast.expr) -> str | None:
         if isinstance(node, ast.Name):
             return node.id
         if isinstance(node, ast.Attribute):
@@ -3009,15 +3037,15 @@ class Codebase(ts.AggregateRoot):
             return Codebase._annotation_head(parsed.body)
         return None
 
-    def _app_module_violations(  # tesser:debt TB051
+    def _app_module_violations(
         self,
         module: Module,
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        found.extend(self._stray_import_violations(module))
+        found.extend(self._stray_import_violations(module))  # tesser:debt TB051
         found.extend(
-            self._tesser_import_violations(
+            self._tesser_import_violations(  # tesser:debt TB051
                 module,
                 "app",
                 "tesser.app",
@@ -3067,7 +3095,7 @@ class Codebase(ts.AggregateRoot):
                         )
                     )
         found.extend(
-            self._statement_violations(
+            self._statement_violations(  # tesser:debt TB051
                 module,
                 "app",
                 "an app module holds only imports, classes, declared functions, and Final constants",
@@ -3076,15 +3104,15 @@ class Codebase(ts.AggregateRoot):
         )
         return tuple(found)
 
-    def _srv_module_violations(  # tesser:debt TB051
+    def _srv_module_violations(
         self,
         module: Module,
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        found.extend(self._stray_import_violations(module))
+        found.extend(self._stray_import_violations(module))  # tesser:debt TB051
         found.extend(
-            self._tesser_import_violations(
+            self._tesser_import_violations(  # tesser:debt TB051
                 module,
                 "srv",
                 "tesser.srv",
@@ -3118,10 +3146,10 @@ class Codebase(ts.AggregateRoot):
                         )
                     )
         found.extend(
-            self._module_function_violations(module, "srv")
+            self._module_function_violations(module, "srv")  # tesser:debt TB051
         )
         found.extend(
-            self._statement_violations(
+            self._statement_violations(  # tesser:debt TB051
                 module,
                 "srv",
                 "a srv module holds only imports, declared classes, and Final constants",
@@ -3130,16 +3158,16 @@ class Codebase(ts.AggregateRoot):
         )
         return tuple(found)
 
-    def _protocol_module_violations(  # tesser:debt TB051
+    def _protocol_module_violations(
         self,
         module: Module,
         blocks: dict[tuple[str, str], str],
         contexts: frozenset[str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        found.extend(self._stray_import_violations(module))
+        found.extend(self._stray_import_violations(module))  # tesser:debt TB051
         found.extend(
-            self._tesser_import_violations(
+            self._tesser_import_violations(  # tesser:debt TB051
                 module,
                 "protocol",
                 "tesser.srv",
@@ -3206,10 +3234,10 @@ class Codebase(ts.AggregateRoot):
                         )
                     )
         found.extend(
-            self._module_function_violations(module, "protocol")
+            self._module_function_violations(module, "protocol")  # tesser:debt TB051
         )
         found.extend(
-            self._statement_violations(
+            self._statement_violations(  # tesser:debt TB051
                 module,
                 "protocol",
                 "a protocol module holds only imports, declared classes, and Final constants",
@@ -3219,7 +3247,7 @@ class Codebase(ts.AggregateRoot):
         return tuple(found)
 
     @classmethod
-    def _nested_class_defs(cls, body: list[ast.stmt]) -> list[ast.ClassDef]:  # tesser:debt TB051
+    def _nested_class_defs(cls, body: list[ast.stmt]) -> list[ast.ClassDef]:
         found: list[ast.ClassDef] = []
         for stmt in body:
             if isinstance(stmt, ast.ClassDef):
@@ -3228,7 +3256,7 @@ class Codebase(ts.AggregateRoot):
         return found
 
     @classmethod
-    def _is_union(cls, node: ast.expr | None) -> bool:  # tesser:debt TB051
+    def _is_union(cls, node: ast.expr | None) -> bool:
         if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
             return True
         if isinstance(node, ast.Subscript):
@@ -3240,7 +3268,7 @@ class Codebase(ts.AggregateRoot):
             return node.attr in ("Optional", "Union")
         return False
 
-    def _ports_init_violations(self, module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _ports_init_violations(self, module: Module) -> tuple[Violation, ...]:
         return tuple(
             Violation(
                 module.path(),
@@ -3251,15 +3279,15 @@ class Codebase(ts.AggregateRoot):
             for stmt in module.body()
         )
 
-    def _ports_module_violations(  # tesser:debt TB051
+    def _ports_module_violations(
         self,
         module: Module,
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        found.extend(self._stray_import_violations(module))
+        found.extend(self._stray_import_violations(module))  # tesser:debt TB051
         found.extend(
-            self._tesser_import_violations(
+            self._tesser_import_violations(  # tesser:debt TB051
                 module,
                 "ports",
                 ROLE_TESSER_PACKAGE[PORTS_PARENT_ROLE],
@@ -3309,7 +3337,7 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
         for stmt in self._nested_class_defs(list(module.body())):
-            found.extend(self._decoration_violations(module, stmt.name, stmt))
+            found.extend(self._decoration_violations(module, stmt.name, stmt))  # tesser:debt TB051
             for keyword in stmt.keywords:
                 found.append(
                     Violation(
@@ -3388,7 +3416,7 @@ class Codebase(ts.AggregateRoot):
             for item in stmt.body:
                 if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     found.extend(
-                        self._decoration_violations(module, f"{stmt.name}.{item.name}", item)
+                        self._decoration_violations(module, f"{stmt.name}.{item.name}", item)  # tesser:debt TB051
                     )
                 if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and any(
                     not isinstance(default, ast.Constant)
@@ -3577,7 +3605,7 @@ class Codebase(ts.AggregateRoot):
         for loose in module.body():
             if isinstance(loose, (ast.Import, ast.ImportFrom, ast.ClassDef)):
                 continue
-            found.extend(self._unreadable(module, module.name(), loose))
+            found.extend(self._unreadable(module, module.name(), loose))  # tesser:debt TB051
         for holder in module.class_defs():
             holder_enum: str | None = None
             for base in holder.bases:
@@ -3594,7 +3622,7 @@ class Codebase(ts.AggregateRoot):
             for base in holder.bases:
                 if not self._is_readable_annotation(base):
                     found.extend(
-                        self._unreadable(module, f"{module.name()}.{holder.name}", base)
+                        self._unreadable(module, f"{module.name()}.{holder.name}", base)  # tesser:debt TB051
                     )
             for item in holder.body:
                 where = f"{module.name()}.{holder.name}"
@@ -3632,10 +3660,10 @@ class Codebase(ts.AggregateRoot):
                         )
                     )
                     if not item_is_member:
-                        found.extend(self._unreadable(module, where, item))
+                        found.extend(self._unreadable(module, where, item))  # tesser:debt TB051
                     continue
                 if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    found.extend(self._unreadable(module, where, item))
+                    found.extend(self._unreadable(module, where, item))  # tesser:debt TB051
                     continue
                 shape = f"{where}.{item.name}"
                 for node in [arg.annotation for arg in ([
@@ -3646,7 +3674,7 @@ class Codebase(ts.AggregateRoot):
                     item.returns
                 ]:
                     if node is not None and not self._is_readable_annotation(node):
-                        found.extend(self._unreadable(module, shape, node))
+                        found.extend(self._unreadable(module, shape, node))  # tesser:debt TB051
                 for body_stmt in item.body:
                     if isinstance(
                         body_stmt, (ast.Pass, ast.Return, ast.Assign, ast.AnnAssign)
@@ -3658,10 +3686,10 @@ class Codebase(ts.AggregateRoot):
                         and body_stmt.value.value is Ellipsis
                     ):
                         continue
-                    found.extend(self._unreadable(module, shape, body_stmt))
+                    found.extend(self._unreadable(module, shape, body_stmt))  # tesser:debt TB051
         return tuple(found)
 
-    def _port_violations(  # tesser:debt TB051
+    def _port_violations(
         self,
         module: Module,
         cls: ast.ClassDef,
@@ -3703,7 +3731,7 @@ class Codebase(ts.AggregateRoot):
                 )
                 continue
             found.extend(
-                self._signature_violations(
+                self._signature_violations(  # tesser:debt TB051
                     module,
                     where,
                     item.lineno,
@@ -3715,10 +3743,10 @@ class Codebase(ts.AggregateRoot):
                     blocks,
                 )
             )
-            found.extend(self._port_annotation_violations(module, where, item, blocks))
+            found.extend(self._port_annotation_violations(module, where, item, blocks))  # tesser:debt TB051
         return tuple(found)
 
-    def _port_annotation_violations(  # tesser:debt TB051
+    def _port_annotation_violations(
         self,
         module: Module,
         where: str,
@@ -3747,7 +3775,7 @@ class Codebase(ts.AggregateRoot):
         return tuple(found)
 
     @staticmethod
-    def _decoration_violations(  # tesser:debt TB051
+    def _decoration_violations(
         module: Module, where: str, node: ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef
     ) -> tuple[Violation, ...]:
         return tuple(
@@ -3763,7 +3791,7 @@ class Codebase(ts.AggregateRoot):
         )
 
     @classmethod
-    def _is_readable_annotation(cls, node: ast.expr) -> bool:  # tesser:debt TB051
+    def _is_readable_annotation(cls, node: ast.expr) -> bool:
         if isinstance(node, ast.Constant):
             return node.value is None or node.value is Ellipsis
         if isinstance(node, ast.Name):
@@ -3782,7 +3810,7 @@ class Codebase(ts.AggregateRoot):
         return False
 
     @staticmethod
-    def _unreadable(module: Module, where: str, node: ast.AST) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _unreadable(module: Module, where: str, node: ast.AST) -> tuple[Violation, ...]:
         return (
             Violation(
                 module.path(),
@@ -3794,7 +3822,7 @@ class Codebase(ts.AggregateRoot):
             ),
         )
 
-    def _role_module_violations(  # tesser:debt TB051
+    def _role_module_violations(
         self,
         module: Module,
         role: str,
@@ -3835,10 +3863,10 @@ class Codebase(ts.AggregateRoot):
                         )
                     )
         found.extend(
-            self._module_function_violations(module, "context role")
+            self._module_function_violations(module, "context role")  # tesser:debt TB051
         )
         found.extend(
-            self._statement_violations(
+            self._statement_violations(  # tesser:debt TB051
                 module,
                 "module",
                 "a context module holds only imports, classes, and Final constants",
@@ -3860,7 +3888,7 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _import_violations(  # tesser:debt TB051
+    def _import_violations(
         self,
         module: Module,
         context: str,
@@ -3869,7 +3897,7 @@ class Codebase(ts.AggregateRoot):
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        found.extend(self._stray_import_violations(module))
+        found.extend(self._stray_import_violations(module))  # tesser:debt TB051
         holds_handler = (module is not None and any(
                     blocks.get((module.name(), cls.name)) == ("handler") for cls in module.class_defs()
                 ))
@@ -3878,7 +3906,7 @@ class Codebase(ts.AggregateRoot):
                 ))
         if role == "domain":
             found.extend(
-                self._tesser_import_violations(
+                self._tesser_import_violations(  # tesser:debt TB051
                     module,
                     "role",
                     ROLE_TESSER_PACKAGE[role],
@@ -3891,7 +3919,7 @@ class Codebase(ts.AggregateRoot):
             )
         elif role == "application":
             found.extend(
-                self._tesser_import_violations(
+                self._tesser_import_violations(  # tesser:debt TB051
                     module,
                     "role",
                     ROLE_TESSER_PACKAGE[role],
@@ -3904,7 +3932,7 @@ class Codebase(ts.AggregateRoot):
             )
         elif role == "adapters":
             found.extend(
-                self._tesser_import_violations(
+                self._tesser_import_violations(  # tesser:debt TB051
                     module,
                     "role",
                     ROLE_TESSER_PACKAGE[role],
@@ -3917,7 +3945,7 @@ class Codebase(ts.AggregateRoot):
             )
         elif role == "component":
             found.extend(
-                self._tesser_import_violations(
+                self._tesser_import_violations(  # tesser:debt TB051
                     module,
                     "role",
                     ROLE_TESSER_PACKAGE[role],
@@ -3930,7 +3958,7 @@ class Codebase(ts.AggregateRoot):
             )
         else:
             found.extend(
-                self._tesser_import_violations(
+                self._tesser_import_violations(  # tesser:debt TB051
                     module,
                     "role",
                     ROLE_TESSER_PACKAGE[role],
@@ -3993,7 +4021,7 @@ class Codebase(ts.AggregateRoot):
                     )
                 found.extend(denied)
                 if not denied:
-                    found.extend(self._form_violations(module, edge))
+                    found.extend(self._form_violations(module, edge))  # tesser:debt TB051
             elif pieces[0] in ((
                         frozenset({KERNEL_PACKAGE})
                         | (frozenset({self._export}) if self._export is not None else frozenset())
@@ -4047,7 +4075,7 @@ class Codebase(ts.AggregateRoot):
                     )
         return tuple(found)
 
-    def _app_import_violations(  # tesser:debt TB051
+    def _app_import_violations(
         self,
         module: Module,
         package: str,
@@ -4092,7 +4120,7 @@ class Codebase(ts.AggregateRoot):
                     )
                 found.extend(denied)
                 if not denied:
-                    found.extend(self._form_violations(module, edge))
+                    found.extend(self._form_violations(module, edge))  # tesser:debt TB051
             elif package == "app" and pieces[0] == "srv":
                 found.append(
                     Violation(
@@ -4124,7 +4152,7 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _shell_reach_violations(self, module: Module, tier: str) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _shell_reach_violations(self, module: Module, tier: str) -> tuple[Violation, ...]:
         allowed = TEST_TIER_SHELL[tier]
         tops = (frozenset(each.name().split(".")[0] for each in self._modules))
         found: list[Violation] = []
@@ -4146,7 +4174,7 @@ class Codebase(ts.AggregateRoot):
             )
         return tuple(found)
 
-    def _test_placement_violations(  # tesser:debt TB051
+    def _test_placement_violations(
         self,
         module: Module,
         context: str,
@@ -4165,7 +4193,7 @@ class Codebase(ts.AggregateRoot):
                     "(handlers, gateways, repositories)",
                 ),
             )
-        found.extend(self._shell_reach_violations(module, tier))
+        found.extend(self._shell_reach_violations(module, tier))  # tesser:debt TB051
         if tier == ROOT_TESTS_TIER:
             for edge in module.import_edges():
                 target = str(edge._target)
@@ -4323,7 +4351,7 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _eval_module_violations(  # tesser:debt TB051
+    def _eval_module_violations(
         self,
         module: Module,
         blocks: dict[tuple[str, str], str],
@@ -4347,16 +4375,16 @@ class Codebase(ts.AggregateRoot):
                     "call is honest",
                 ),
             )
-        return self._test_module_violations(module, blocks, contexts)
+        return self._test_module_violations(module, blocks, contexts)  # tesser:debt TB051
 
-    def _test_module_violations(  # tesser:debt TB051
+    def _test_module_violations(
         self,
         module: Module,
         blocks: dict[tuple[str, str], str],
         contexts: frozenset[str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        found.extend(self._stray_import_violations(module))
+        found.extend(self._stray_import_violations(module))  # tesser:debt TB051
         tier_parts = module.name().split(".")
         tier_tops = (
             frozenset({KERNEL_PACKAGE})
@@ -4388,13 +4416,13 @@ class Codebase(ts.AggregateRoot):
             placement = (tier_parts[0], tier_parts[1])
         if placement is None:
             placement = ("", STRAY_TIER)
-        found.extend(self._test_placement_violations(module, placement[0], placement[1], contexts))
+        found.extend(self._test_placement_violations(module, placement[0], placement[1], contexts))  # tesser:debt TB051
         for edge in module.import_edges():
             if str(edge._target).split(".")[0] in contexts:
-                found.extend(self._form_violations(module, edge))
+                found.extend(self._form_violations(module, edge))  # tesser:debt TB051
         if self._export != TESSER:
             found.extend(
-                self._tesser_import_violations(
+                self._tesser_import_violations(  # tesser:debt TB051
                     module,
                     "test",
                     "tesser.testing",
@@ -4416,7 +4444,7 @@ class Codebase(ts.AggregateRoot):
                             key is not None and TESSER_DECORATORS.get(key) == ("helper")
                             for key in (module._resolve(decorator) for decorator in stmt.decorator_list)
                         )):
-                    found.extend(self._helper_violations(module, where, stmt.lineno, stmt, blocks))
+                    found.extend(self._helper_violations(module, where, stmt.lineno, stmt, blocks))  # tesser:debt TB051
                     continue
                 found.append(
                     Violation(
@@ -4469,7 +4497,7 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _helper_violations(  # tesser:debt TB051
+    def _helper_violations(
         self,
         module: Module,
         where: str,
@@ -4527,7 +4555,7 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _dependency_violations(  # tesser:debt TB051
+    def _dependency_violations(
         self,
         module: Module,
         where: str,
@@ -4552,7 +4580,7 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _record_signature_violations(  # tesser:debt TB051
+    def _record_signature_violations(
         self,
         module: Module,
         cls: ast.ClassDef,
@@ -4588,7 +4616,7 @@ class Codebase(ts.AggregateRoot):
                     )
         return tuple(found)
 
-    def _valueobject_violations(  # tesser:debt TB051
+    def _valueobject_violations(
         self,
         module: Module,
         cls: ast.ClassDef,
@@ -4623,7 +4651,7 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _spec_violations(  # tesser:debt TB051
+    def _spec_violations(
         self,
         module: Module,
         cls: ast.ClassDef,
@@ -4661,7 +4689,7 @@ class Codebase(ts.AggregateRoot):
                     )
         return tuple(found)
 
-    def _dto_violations(  # tesser:debt TB051
+    def _dto_violations(
         self,
         module: Module,
         cls: ast.ClassDef,
@@ -4821,7 +4849,7 @@ class Codebase(ts.AggregateRoot):
                     )
         return tuple(found)
 
-    def _mapper_violations(  # tesser:debt TB051
+    def _mapper_violations(
         self, module: Module, cls: ast.ClassDef, blocks: dict[tuple[str, str], str]
     ) -> tuple[Violation, ...]:
         where = f"{module.name()}.{cls.name}"
@@ -4848,7 +4876,7 @@ class Codebase(ts.AggregateRoot):
             for arg in list(init.args.args)[1:] + list(init.args.kwonlyargs):
                 if arg.annotation is None:
                     continue
-                if self._annotation_head(arg.annotation) in PRIMITIVES:
+                if self._annotation_head(arg.annotation) in PRIMITIVES:  # tesser:debt TB051
                     found.append(
                         Violation(
                             module.path(),
@@ -4927,7 +4955,7 @@ class Codebase(ts.AggregateRoot):
             )
         return tuple(found)
 
-    def _provenance_violations(  # tesser:debt TB051
+    def _provenance_violations(
         self, module: Module, where: str, fn: ast.FunctionDef | ast.AsyncFunctionDef
     ) -> tuple[Violation, ...]:
         positional = list(fn.args.args)
@@ -4968,7 +4996,7 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _component_violations(self, module: Module, cls: ast.ClassDef) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _component_violations(self, module: Module, cls: ast.ClassDef) -> tuple[Violation, ...]:
         for item in cls.body:
             if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "close":
                 return ()
@@ -4982,7 +5010,7 @@ class Codebase(ts.AggregateRoot):
             ),
         )
 
-    def _constructor_violations(  # tesser:debt TB051
+    def _constructor_violations(
         self,
         module: Module,
         cls: ast.ClassDef,
@@ -5008,11 +5036,11 @@ class Codebase(ts.AggregateRoot):
                 ),
             )
         where = f"{module.name()}.{cls.name}.__init__"
-        return self._signature_violations(
+        return self._signature_violations(  # tesser:debt TB051
             module, where, init.lineno, init, "spec", None, "a domain constructor", "TB080", blocks
         )
 
-    def _app_config_violations(  # tesser:debt TB051
+    def _app_config_violations(
         self, module: Module, cls: ast.ClassDef, blocks: dict[tuple[str, str], str]
     ) -> tuple[Violation, ...]:
         init = (next(
@@ -5034,11 +5062,11 @@ class Codebase(ts.AggregateRoot):
                 ),
             )
         where = f"{module.name()}.{cls.name}.__init__"
-        return self._signature_violations(
+        return self._signature_violations(  # tesser:debt TB051
             module, where, init.lineno, init, "app_spec", None, "a config constructor", "TB080", blocks
         )
 
-    def _component_config_violations(  # tesser:debt TB051
+    def _component_config_violations(
         self, module: Module, cls: ast.ClassDef, blocks: dict[tuple[str, str], str]
     ) -> tuple[Violation, ...]:
         init = (next(
@@ -5060,7 +5088,7 @@ class Codebase(ts.AggregateRoot):
                 ),
             )
         where = f"{module.name()}.{cls.name}.__init__"
-        return self._signature_violations(
+        return self._signature_violations(  # tesser:debt TB051
             module,
             where,
             init.lineno,
@@ -5072,7 +5100,7 @@ class Codebase(ts.AggregateRoot):
             blocks,
         )
 
-    def _signature_violations(  # tesser:debt TB051
+    def _signature_violations(
         self,
         module: Module,
         where: str,
@@ -5136,7 +5164,7 @@ class Codebase(ts.AggregateRoot):
             )
         return tuple(found)
 
-    def _delegation_violations(  # tesser:debt TB051
+    def _delegation_violations(
         self,
         module: Module,
         method_names: frozenset[str],
@@ -5174,7 +5202,7 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _body_violations(  # tesser:debt TB051
+    def _body_violations(
         self,
         module: Module,
         where: str,
@@ -5182,7 +5210,7 @@ class Codebase(ts.AggregateRoot):
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        found.extend(self._provenance_violations(module, where, fn))
+        found.extend(self._provenance_violations(module, where, fn))  # tesser:debt TB051
         for stmt in fn.body:
             if not isinstance(stmt, ast.Assign):
                 continue
@@ -5305,7 +5333,7 @@ class Codebase(ts.AggregateRoot):
         return tuple(found)
 
     @staticmethod
-    def _stray_import_violations(module: Module) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _stray_import_violations(module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for target, lineno in module.nested_tesser_imports():
             found.append(
@@ -5330,7 +5358,7 @@ class Codebase(ts.AggregateRoot):
         return tuple(found)
 
     @staticmethod
-    def _form_violations(module: Module, edge: ImportEdge) -> tuple[Violation, ...]:  # tesser:debt TB051
+    def _form_violations(module: Module, edge: ImportEdge) -> tuple[Violation, ...]:
         target = str(edge._target)
         lineno = int(edge._lineno)
         if str(edge._form) == "member":
@@ -5355,7 +5383,7 @@ class Codebase(ts.AggregateRoot):
             )
         return ()
 
-    def _allowed_annotation(  # tesser:debt TB051
+    def _allowed_annotation(
         self,
         module: Module,
         node: ast.expr | None,

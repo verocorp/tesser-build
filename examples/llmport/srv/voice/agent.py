@@ -25,17 +25,17 @@ class ToolAgent(Agent, ts.Host):
 
     async def on_enter(self) -> None:
         try:
-            await self._rebind(self._surface.begin())
+            await self._rebind(self._surface.begin())  # tesser:debt TB051
         except Exception:
             await self._halt()
             raise
 
-    async def _rebind(self, turn: voice.ToolTurn) -> None:  # tesser:debt TB051
+    async def _rebind(self, turn: voice.ToolTurn) -> None:
         await self.update_tools(
-            [function_tool(self._shim(tool.name), raw_schema=tool.schema()) for tool in turn.tools]
+            [function_tool(self._shim(tool.name), raw_schema=tool.schema()) for tool in turn.tools]  # tesser:debt TB051
         )
 
-    def _shim(self, name: str) -> Callable[..., Awaitable[str]]:  # tesser:debt TB051
+    def _shim(self, name: str) -> Callable[..., Awaitable[str]]:
         async def call(raw_arguments: dict[str, object]) -> str:
             async with self._lock:
                 route: voice.Route | None = None
@@ -49,7 +49,7 @@ class ToolAgent(Agent, ts.Host):
                     turn = route.endpoint(voice.ToolCall(name, raw_arguments))
                 except (voice.BadToolCall, ValueError) as err:
                     try:
-                        await self._rebind(self._surface.status())
+                        await self._rebind(self._surface.status())  # tesser:debt TB051
                     except Exception:
                         await self._halt()
                         raise
@@ -58,7 +58,7 @@ class ToolAgent(Agent, ts.Host):
                     await self._halt()
                     raise
                 try:
-                    await self._rebind(turn)
+                    await self._rebind(turn)  # tesser:debt TB051
                 except Exception:
                     await self._halt()
                     raise

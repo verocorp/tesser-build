@@ -7772,7 +7772,7 @@ def test_a_do_not_use_tesser_module_is_not_a_consumer_namespace() -> None:
     assert any("tesser.stray is not a consumer namespace" in f for f in findings)
 
 
-def test_a_private_method_is_flagged_in_every_module_kind() -> None:
+def test_a_sibling_method_reference_is_flagged_in_every_module_kind() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
@@ -7785,8 +7785,16 @@ def test_a_private_method_is_flagged_in_every_module_kind() -> None:
                 "    _text: str\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        object.__setattr__(self, \"_text\", text)\n"
-                "    def _hidden(self) -> str:\n"
-                "        return self._text\n",
+                "    def shout(self) -> str:\n"
+                "        return self.spoken().upper()\n"
+                "    def spoken(self) -> str:\n"
+                "        return self._text\n"
+                "    def walk(self, value: object) -> int:\n"
+                "        if isinstance(value, tuple):\n"
+                "            return sum(self.walk(item) for item in value)\n"
+                "        return 1\n"
+                "    def width(self, value: object) -> int:\n"
+                "        return self.walk(value)\n",
                 False,
             ),
             (
@@ -7795,7 +7803,9 @@ def test_a_private_method_is_flagged_in_every_module_kind() -> None:
                 "import tesser.testing as ts\n"
                 "@ts.fake\n"
                 "class FakeThing:\n"
-                "    def _also_hidden(self) -> None:\n"
+                "    def poke(self) -> None:\n"
+                "        return self.prod()\n"
+                "    def prod(self) -> None:\n"
                 "        return None\n"
                 "def test_thing_exists() -> None:\n"
                 "    assert True\n",
@@ -7804,13 +7814,15 @@ def test_a_private_method_is_flagged_in_every_module_kind() -> None:
         ))).violations()
                )
     assert any(
-        "plain.domain.thing.Thing._hidden" in f
-        and "is a private method; a class holds only public methods" in f
+        "plain.domain.thing.Thing.shout reaches sibling spoken; a method is for "
+        "outsiders — a class reaches into itself only for direct recursion" in f
         for f in findings
     )
     assert any(
-        "plain.domain.test_thing.FakeThing._also_hidden" in f
-        and "is a private method; a class holds only public methods" in f
+        "plain.domain.test_thing.FakeThing.poke reaches sibling prod; a method is for "
+        "outsiders — a class reaches into itself only for direct recursion" in f
         for f in findings
     )
-    assert not any("Thing.__init__" in f and "private method" in f for f in findings)
+    assert not any("Thing.walk" in f and "reaches sibling" in f for f in findings)
+    assert not any("Thing.width" in f and "reaches sibling" in f for f in findings)
+    assert not any("Thing.__init__" in f and "reaches sibling" in f for f in findings)

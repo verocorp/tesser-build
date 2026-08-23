@@ -2,6 +2,35 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Sibling-reference rule: three open sub-rulings (2026-08-23, v0.0.76.0)
+
+TB051's structural clause (a method may not reference a sibling method; direct
+recursion and references to a directly recursive sibling exempt) bites three
+shapes that were marked `# tesser:debt TB051` rather than restructured, each a
+ruling Chris has not made yet:
+
+- [ ] **`tesser-py/tesser/domain/entity.py:22,25`** — `Entity.__eq__`/`__hash__`
+  read `self.identity`, the abstract property subclasses declare. This is the
+  shipped runtime's template method: the identity contract *is* a sibling
+  reference by design, and no field read can replace it because the subclass
+  owns the property. Candidate carve-out: a dunder may read the contract its
+  base defines. Or: the design is right and the debt marker is its honest cost.
+- [ ] **`examples/python-app/protocol/http.py:95`** — `HttpResponse.problem`
+  composes `cls.json`, the one door that sets Content-Type. Inlining duplicates
+  the door; the marker preserves it. Candidate carve-out: classmethod builders
+  composing builders. Or: inline and accept three duplicated lines.
+- [ ] **`examples/python-app/srv/http/main.py:27,28`** — `run` passes
+  `self.stop` to `signal.signal`. The outsider (the signal machinery) is the
+  caller; `run` only hands the method over. The reference test cannot
+  distinguish registration from invocation — that indistinguishability is why
+  the rule fires on references at all (else `f = self._x; f()` dodges it).
+  Candidate carve-out: none obvious that is mechanical; may just stay debt.
+
+Also recorded: the fake-recursion dodge (`if False: self._x(...)` makes `_x`
+recursive and therefore reachable) is known and accepted for now — the rule is
+an experiment, and the dodge appearing in a real tree is the evidence that
+would justify tightening it.
+
 ## The skill still teaches the module-function idiom (2026-08-22, v0.0.74.0)
 
 Removing `@ts.do_not_use_function` stripped three decorator lines from

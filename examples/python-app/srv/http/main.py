@@ -24,8 +24,8 @@ class HttpEdge(ts.Host):
     def run(self, argv: list[str]) -> int:
         app = self._app
         print(f"campaign+linkpolicy app listening on {app.http.host or '0.0.0.0'}:{app.http.port}")  # noqa: T201
-        signal.signal(signal.SIGINT, self.stop)
-        signal.signal(signal.SIGTERM, self.stop)
+        signal.signal(signal.SIGINT, self.stop)  # tesser:debt TB051
+        signal.signal(signal.SIGTERM, self.stop)  # tesser:debt TB051
         try:
             self._host.run(self._stop)
         finally:

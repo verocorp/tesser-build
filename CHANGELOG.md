@@ -5,6 +5,53 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.76.0] - 2026-08-23
+
+The private-method clause stops reading names and starts reading structure.
+v0.0.73.0's "a class holds only public methods" tested the spelling of a method
+name, so `sed 's/def _/def /'` satisfied it while changing nothing — the same
+failure the wave began from, a disapproving name doing no work. The replacement
+tests what the rule is about: **a method may not reference a sibling method
+through `self` or `cls`. Methods are for outsiders.**
+
+Two rulings shape it. Direct recursion is exempt — a method calling itself
+introduces no second name, so nothing is hidden. And a reference to a directly
+recursive sibling is exempt — a recursive method cannot be inlined (it has no
+finite expansion), so a rule that banned calling one would create findings
+nobody can fix. Mutual recursion stays banned: two names covering for each
+other is exactly the hiding the rule exists to see.
+
+### Changed
+- **`_private_method_violations` is replaced by `_sibling_reference_violations`**
+  (`domain/checks.py`). It fires on the attribute *reference* (`self.x` /
+  `cls.x` where `x` is a non-dunder sibling method), not the call — so passing
+  a bound method and `f = self._x; f()` are the same finding, and renaming
+  `_x` to `x` clears nothing. Clause: `a method is for outsiders — a class
+  reaches into itself only for direct recursion`. Underscore names are legal
+  again; the spelling was never the problem.
+- **The marker set turned over**: 80 def-line markers retired (the lexical
+  finding they suppressed no longer exists), 134 reference-line markers added
+  for 138 findings (four share a line) — 125 lines in `checks.py` (the ruled
+  deferral: the decomposition waits on the rulebook-subject ruling, recorded
+  as debt rather than blocking this rule), 4 in llmport's `ToolAgent` (the
+  `_rebind`/`_shim` mutual recursion, the standing probe), and 5 sites
+  carrying open sub-rulings listed in TODOS.md. Tree total 89 → 143.
+
+### Notes
+- **Three shapes the rule bites are flagged for rulings, not silently fixed**
+  (TODOS.md): `Entity.__eq__/__hash__ → self.identity` (the shipped runtime's
+  template method — the identity contract is *designed* as a sibling
+  reference); `HttpResponse.problem → cls.json` (a builder composing the one
+  Content-Type door); `HttpEdge.run` passing `self.stop` to `signal.signal`
+  (handing a method to an outsider, which the reference test cannot tell from
+  calling it).
+- **Known dodge, accepted**: a sibling becomes reachable by making it
+  recursive, and `if False: self._x(...)` makes anything recursive. A rule
+  that is an experiment does not pre-litigate adversaries; if that dodge shows
+  up in a tree, that is evidence for the next revision.
+- RULES.md regenerated; the lexical row is replaced by the structural row,
+  all else line-number churn.
+
 ## [0.0.75.0] - 2026-08-22
 
 `ts.main` is the process edge. A srv module may now hold exactly one statement
