@@ -1,5 +1,12 @@
 # Building domain code in Python
 
+Two shape rules hold for every class in every module kind (TB051). A module
+holds classes, never functions. And **a method is for outsiders** — no method
+references a sibling method through its receiver, so what a method does is
+visible at its call site; direct recursion is exempt, and so is calling a
+directly recursive sibling (it has no inline expansion). A class that wants
+shared logic composes a collaborating class instead of reaching into itself.
+
 Construction mechanics only — the concepts and the rules' whys live in the
 concept files (`value-objects.md`, `entities.md`, `aggregates.md`,
 `application-services.md`, `repositories.md`, `domain-services.md`). This file
@@ -649,23 +656,20 @@ service and delegates.
 `component.md`; verified impl `examples/python-app/`). Each context owns a
 `wiring/` package (its spec-shaped `Config` + a `build` contract); the
 app-level `bootstrap` nests the configs and constructs each component in
-dependency order. A component's impl selection is a private method; module
+dependency order. A component selects its impl inline where it constructs
+(coordinate `if`s in `__init__` — the verified impl has no helper method); module
 constants are `Final`; a context module is imported **as an aliased module,
 never its members** (TB053).
 
 ```python
 # campaign/component/component.py (verified impl) — coordinate-driven, fail-fast, uniform
-    def _repo_for(self, cfg: config.Config) -> repo_memory.InMemoryCampaignRepository:
-        if cfg.storage == "memory":
-            return repo_memory.InMemoryCampaignRepository()
-        if not cfg.storage:
-            raise invalid("missing_coordinate", "campaign storage coordinate is required")
-        raise invalid("unknown_backend", f"campaign storage {cfg.storage!r} not supported")
-
-
 class Campaign(ts.Component):
     def __init__(self, cfg: config.Config, policy: target_policy.TargetPolicy) -> None:
-        self._repo = self._repo_for(cfg)            # the concrete it chose, held by its own type
+        if not cfg.storage:
+            raise invalid("missing_coordinate", "campaign storage coordinate is required")
+        if cfg.storage != "memory":
+            raise invalid("unknown_backend", f"campaign storage {cfg.storage!r} not supported")
+        self._repo = repo_memory.InMemoryCampaignRepository()  # the concrete it chose, held by its own type
         self.client: client.Client = service.CampaignService(self._repo, policy)
 
     def close(self) -> None:
