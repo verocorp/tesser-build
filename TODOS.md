@@ -45,7 +45,7 @@ way the decorator was hiding: they teach module functions, which TB051 now bans.
 (The `srv/http/main.py` example was one of the three; v0.0.75.0 rewrote it to
 `ts.main` and the ruling that allowed it, so only the two below remain.)
 
-- [ ] **`python.md:522` shows `required_campaign` as a module function**, cited
+- [ ] **`python.md:529` shows `required_campaign` as a module function**, cited
   as "verified impl: examples/errorspy/". The verified impl no longer has it —
   `examples/errorspy/campaign/application/views.py` holds
   `MapToShortLinkSpec(ts.Mapper)` and `MapToCampaignSpec(ts.Mapper)` and no
@@ -199,7 +199,7 @@ against `main` at v0.0.71.0 rather than transcribed.
   When the format question gets its ruling, decide where the format truth
   lives (domain vs gateway) at the same time.
 
-- [ ] **`skills/tesser-build/python.md:396-412` teaches the shape TB082 now
+- [ ] **`skills/tesser-build/python.md:403-419` teaches the shape TB082 now
   rejects.** The block tagged `verified impl: examples/errorspy/` shows the
   pre-v0.0.71.0 service bodies, including
   `self._repo.find(...FindCampaignRequest(campaign_id=req.campaign_id))` — a
@@ -268,7 +268,7 @@ against `main` at v0.0.71.0 rather than transcribed.
   Candidate: a `ts.Collection` kind in `tesser.domain`, with its own row in
   `KIND_NAME`/`KIND_ROLE` and its own shape rules (constructs from one spec,
   accessor returns a defensive copy, holds one backing sequence). Needs a ruling
-  before more collections are written this way. `python.md:22` already speaks of
+  before more collections are written this way. `python.md:29` already speaks of
   a "collection value object `Labels`", so the vocabulary predates the kind.
 - [x] **TB082 counts source lines, not statements — RESOLVED v0.0.62.0.** The
   counter is now `sum(1 for node in ast.walk(fn) if isinstance(node, ast.stmt)) - 1`
@@ -485,8 +485,8 @@ against `main` at v0.0.71.0 rather than transcribed.
   the `len(parts) == 1` ⇒ package-init assumption predates wire modules
   and is no longer safe (adversarial 2026-08-07).
 - [ ] **Graduate the srv/wire vocabulary into the skill docs** (opened
-  2026-08-07, v0.0.18.0 doc sweep). `skills/tesser-build/python.md:593-612`
-  and `:769-799` still teach `httpwire`/`cliwire` as frozen dataclasses with
+  2026-08-07, v0.0.18.0 doc sweep). `skills/tesser-build/python.md:600-619`
+  and `:773-803` still teach `httpwire`/`cliwire` as frozen dataclasses with
   `Endpoint = Callable[...]` aliases — the pre-shell idiom — while
   `examples/python-app` now uses `ts.Request`/`ts.Response`/`ts.Port` +
   `@ts.function`. Deliberately not updated in-wave: skill docs encode only
@@ -501,7 +501,7 @@ against `main` at v0.0.71.0 rather than transcribed.
   pointer in the skill docs, not just the code samples —
   `skills/tesser-build/srv.md:200` already dangles (`test_httpwire.py:
   content_length` was renamed to `buffered_length` in the srv-matrix wave).
-  Scope re-measured 2026-08-08 (doc-release sweep): `python.md:591-790`,
+  Scope re-measured 2026-08-08 (doc-release sweep): `python.md:598-794`,
   `handlers.md:47-98`, and `srv.md:138-219` present `json_response`/
   `problem`/`respond`/`decode_body`/`content_length`/`path_param` as free
   functions — roughly 30 lines of sample code the wave deleted, in a skill
