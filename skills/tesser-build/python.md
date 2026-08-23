@@ -299,7 +299,9 @@ class ShortLink(ts.Entity):
     def __init__(self, spec: ShortLinkSpec) -> None:       # the single construction path
         self._slug = values.Slug(spec.slug)
         self._target_url = values.TargetURL(spec.target_url)
-        self._status = values.LinkStatus("active" if spec.active else "inactive")
+        self._status = values.LinkStatus(
+            values.LinkState.ACTIVE if spec.active else values.LinkState.INACTIVE
+        )
 
     @property
     def slug(self) -> values.Slug:
@@ -310,7 +312,7 @@ class ShortLink(ts.Entity):
         return self._status
 
     def deactivate(self) -> None:                          # lifecycle transition
-        self._status = values.LinkStatus("inactive")
+        self._status = values.LinkStatus(values.LinkState.INACTIVE)
 
     @property
     def identity(self) -> values.Slug:                     # the base compares and hashes by this
@@ -323,6 +325,12 @@ class ShortLink(ts.Entity):
   read-only `@property` accessors returning value objects, no setters. An
   accessor must never hand back a backing mutable collection — return a
   defensive copy (TB011).
+- A closed set of states is a **domain enum** — a plain `enum.Enum` in
+  `values.py` (`LinkState`), no `ts.*` base. An enum is a primitive with a
+  name: legal as a spec field and as a value-object constructor parameter,
+  exactly like `str`. The `LinkStatus` value object wraps it (storing the
+  member's string value, so the canonical `__str__` exit stands) and never
+  hands the enum back out.
 - Equality is **identity**, and the base owns it: declare the `identity`
   property (the ID value object) and `ts.Entity` compares and hashes by it —
   a hand-written `__eq__`/`__hash__` raises at class definition.

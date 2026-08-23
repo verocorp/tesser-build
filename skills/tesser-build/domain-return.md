@@ -49,9 +49,11 @@ behavior may return. (Maintainer ruling 2026-08-08.)
    validation, no behavior and no domain meaning — `value-objects.md`'s
    primitive-obsession check calls that theater, and TB016 bans a bool inside a
    value object. When state really is richer than binary, model the *concept*:
-   a closed-set value object over the domain's own words (`LinkStatus` over
-   active/inactive, `Decision` over allowed/denied), string-backed so it has a
-   canonical exit.
+   a closed-set value object constructed from the domain's enum (`LinkStatus`
+   over `LinkState.ACTIVE`/`INACTIVE`, `Decision` over allowed/denied),
+   string-backed so it has a canonical exit. The enum is a primitive with a
+   name, declared plain in the domain (no `ts.*` base); the value object
+   wraps it the way a `Slug` wraps a `str`, and never hands it back out.
 
 ## Decisions you must make
 

@@ -24,13 +24,13 @@ def test_a_short_link_carries_every_field_of_its_spec() -> None:
 
     assert link.slug == values.Slug(spec.slug)
     assert link.target_url == values.TargetURL(spec.target_url)
-    assert link.status == values.LinkStatus("active")
+    assert link.status == values.LinkStatus(values.LinkState.ACTIVE)
 
 
 def test_a_short_link_built_inactive_starts_inactive() -> None:
     link = short_link.ShortLink(_spec(active=False))
 
-    assert link.status == values.LinkStatus("inactive")
+    assert link.status == values.LinkStatus(values.LinkState.INACTIVE)
 
 
 def test_deactivate_turns_an_active_link_inactive() -> None:
@@ -38,7 +38,7 @@ def test_deactivate_turns_an_active_link_inactive() -> None:
 
     link.deactivate()
 
-    assert link.status == values.LinkStatus("inactive")
+    assert link.status == values.LinkStatus(values.LinkState.INACTIVE)
 
 
 def test_deactivate_leaves_an_already_inactive_link_inactive() -> None:
@@ -46,7 +46,7 @@ def test_deactivate_leaves_an_already_inactive_link_inactive() -> None:
 
     link.deactivate()
 
-    assert link.status == values.LinkStatus("inactive")
+    assert link.status == values.LinkStatus(values.LinkState.INACTIVE)
 
 
 def test_deactivate_leaves_the_slug_and_target_untouched() -> None:

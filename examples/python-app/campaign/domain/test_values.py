@@ -38,24 +38,24 @@ def test_a_campaign_id_that_is_not_sixteen_lowercase_hex_is_rejected(value: str)
     assert caught.value.code == "invalid_campaign_id"
 
 
-@pytest.mark.parametrize("value", ["active", "inactive"])
-def test_a_link_status_admits_the_two_declared_states(value: str) -> None:
-    status = values.LinkStatus(value)
+@pytest.mark.parametrize("state", [values.LinkState.ACTIVE, values.LinkState.INACTIVE])
+def test_a_link_status_round_trips_through_its_canonical_exit(state: values.LinkState) -> None:
+    status = values.LinkStatus(state)
 
-    assert values.LinkStatus(str(status)) == status
+    assert values.LinkStatus(values.LinkState(str(status))) == status
 
 
 def test_the_two_link_states_are_different_values() -> None:
-    assert values.LinkStatus("active") != values.LinkStatus("inactive")
+    active = values.LinkStatus(values.LinkState.ACTIVE)
+    inactive = values.LinkStatus(values.LinkState.INACTIVE)
+
+    assert active != inactive
 
 
 @pytest.mark.parametrize("value", ["", "ACTIVE", "paused", "Active", " active"])
-def test_a_link_status_outside_the_declared_states_is_rejected(value: str) -> None:
-    with pytest.raises(DomainError) as caught:
-        values.LinkStatus(value)
-
-    assert caught.value.code == "invalid_link_status"
-    assert "active, inactive" in caught.value.message
+def test_a_string_outside_the_declared_states_is_not_a_link_state(value: str) -> None:
+    with pytest.raises(ValueError):
+        values.LinkState(value)
 
 
 def test_a_target_url_round_trips_through_its_canonical_exit() -> None:

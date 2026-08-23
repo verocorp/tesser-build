@@ -981,6 +981,7 @@ class Codebase(ts.AggregateRoot):
         self._imports = spec.imports
         self._stdlib = frozenset(spec.stdlib)
         self._used_imports: set[str] = set()
+        self._domain_enums: frozenset[tuple[str, str]] = frozenset()
 
     def violations(self) -> tuple[Violation, ...]:
         declaration = self._declaration_violations()
@@ -1011,6 +1012,13 @@ class Codebase(ts.AggregateRoot):
                     if source is not None:
                         blocks[key] = source
                         changed = True
+        self._domain_enums = frozenset(
+            (module.name(), stmt.name)
+            for module in self._modules
+            if module.name().split(".")[1:2] == ["domain"]
+            for stmt in module.class_defs()
+            if self._enum_base(module, stmt) in ENUM_BASES
+        )
         named: set[str] = set()
         for module in self._modules:
             parts = module.name().split(".")
@@ -3251,6 +3259,56 @@ class Codebase(ts.AggregateRoot):
             for stmt in module.body()
         )
 
+    @staticmethod
+    def _enum_base(module: Module, stmt: ast.ClassDef) -> str | None:  # tesser:debt TB051
+        for base in stmt.bases:
+            if isinstance(base, ast.Attribute) and isinstance(base.value, ast.Name):
+                if module._package_aliases.get(base.value.id) == ENUM_MODULE:
+                    return base.attr
+            elif isinstance(base, ast.Name):
+                origin = module._imported.get(base.id)
+                if origin is not None and origin[0] == ENUM_MODULE:
+                    return origin[1]
+        return None
+
+    @staticmethod
+    def _enum_extras(module: Module, stmt: ast.ClassDef) -> tuple[ast.stmt, ...]:  # tesser:debt TB051
+        extras: list[ast.stmt] = []
+        for item in stmt.body:
+            member_target: ast.expr | None = None
+            member_value: ast.expr | None = None
+            if isinstance(item, ast.AnnAssign):
+                member_target, member_value = item.target, item.value
+            elif isinstance(item, ast.Assign) and len(item.targets) == 1:
+                member_target, member_value = item.targets[0], item.value
+            is_member = (
+                isinstance(member_target, ast.Name)
+                and not member_target.id.startswith("_")
+                and not (
+                    isinstance(item, ast.AnnAssign)
+                    and not isinstance(item.annotation, ast.Name)
+                )
+                and (
+                    isinstance(member_value, ast.Constant)
+                    or (
+                        isinstance(member_value, ast.UnaryOp)
+                        and isinstance(member_value.operand, ast.Constant)
+                        and isinstance(member_value.operand.value, (int, float))
+                    )
+                    or (
+                        isinstance(member_value, ast.Call)
+                        and isinstance(member_value.func, ast.Attribute)
+                        and isinstance(member_value.func.value, ast.Name)
+                        and module._package_aliases.get(member_value.func.value.id)
+                        == ENUM_MODULE
+                        and member_value.func.attr == "auto"
+                    )
+                )
+            )
+            if not is_member:
+                extras.append(item)
+        return tuple(extras)
+
     def _ports_module_violations(  # tesser:debt TB051
         self,
         module: Module,
@@ -3406,51 +3464,8 @@ class Codebase(ts.AggregateRoot):
                             "import, because every adapter imports it",
                         )
                     )
-            stmt_enum: str | None = None
-            for base in stmt.bases:
-                if isinstance(base, ast.Attribute) and isinstance(base.value, ast.Name):
-                    if module._package_aliases.get(base.value.id) == ENUM_MODULE:
-                        stmt_enum = base.attr
-                        break
-                elif isinstance(base, ast.Name):
-                    origin = module._imported.get(base.id)
-                    if origin is not None and origin[0] == ENUM_MODULE:
-                        stmt_enum = origin[1]
-                        break
-            if stmt_enum is not None:
-                for item in stmt.body:
-                    member_target: ast.expr | None = None
-                    member_value: ast.expr | None = None
-                    if isinstance(item, ast.AnnAssign):
-                        member_target, member_value = item.target, item.value
-                    elif isinstance(item, ast.Assign) and len(item.targets) == 1:
-                        member_target, member_value = item.targets[0], item.value
-                    is_member = (
-                        isinstance(member_target, ast.Name)
-                        and not member_target.id.startswith("_")
-                        and not (
-                            isinstance(item, ast.AnnAssign)
-                            and not isinstance(item.annotation, ast.Name)
-                        )
-                        and (
-                            isinstance(member_value, ast.Constant)
-                            or (
-                                isinstance(member_value, ast.UnaryOp)
-                                and isinstance(member_value.operand, ast.Constant)
-                                and isinstance(member_value.operand.value, (int, float))
-                            )
-                            or (
-                                isinstance(member_value, ast.Call)
-                                and isinstance(member_value.func, ast.Attribute)
-                                and isinstance(member_value.func.value, ast.Name)
-                                and module._package_aliases.get(member_value.func.value.id)
-                                == ENUM_MODULE
-                                and member_value.func.attr == "auto"
-                            )
-                        )
-                    )
-                    if is_member:
-                        continue
+            if self._enum_base(module, stmt) is not None:
+                for item in self._enum_extras(module, stmt):
                     found.append(
                         Violation(
                             module.path(),
@@ -3483,17 +3498,7 @@ class Codebase(ts.AggregateRoot):
         for stmt in self._nested_class_defs(list(module.body())):
             block = blocks.get((module.name(), stmt.name))
             where = f"{module.name()}.{stmt.name}"
-            enum_base: str | None = None
-            for base in stmt.bases:
-                if isinstance(base, ast.Attribute) and isinstance(base.value, ast.Name):
-                    if module._package_aliases.get(base.value.id) == ENUM_MODULE:
-                        enum_base = base.attr
-                        break
-                elif isinstance(base, ast.Name):
-                    origin = module._imported.get(base.id)
-                    if origin is not None and origin[0] == ENUM_MODULE:
-                        enum_base = origin[1]
-                        break
+            enum_base = self._enum_base(module, stmt)
             if enum_base is not None and block is None:
                 if enum_base not in ENUM_BASES:
                     found.append(
@@ -3805,6 +3810,33 @@ class Codebase(ts.AggregateRoot):
             if isinstance(stmt, ast.ClassDef):
                 block = blocks.get((module.name(), stmt.name))
                 where = f"{module.name()}.{stmt.name}"
+                enum_base = self._enum_base(module, stmt)
+                if enum_base is not None and block is None and role == "domain":
+                    if enum_base not in ENUM_BASES:
+                        found.append(
+                            Violation(
+                                module.path(),
+                                stmt.lineno,
+                                "TB052",
+                                f"{where} is an enum.{enum_base}; a domain enum is an enum.Enum, "
+                                "because a str- or int-backed member compares equal to a raw literal "
+                                "and reopens the typo the enum closes",
+                            )
+                        )
+                    else:
+                        for item in self._enum_extras(module, stmt):
+                            found.append(
+                                Violation(
+                                    module.path(),
+                                    item.lineno,
+                                    "TB051",
+                                    f"{where} carries more than its members; "
+                                    "a domain enum is a closed set of names and nothing else, "
+                                    "because an enum is a primitive with a name, "
+                                    "not a home for behavior",
+                                )
+                            )
+                    continue
                 if block is None:
                     found.append(
                         Violation(
@@ -4611,7 +4643,7 @@ class Codebase(ts.AggregateRoot):
                     for arg in init.args.posonlyargs + init.args.args + init.args.kwonlyargs
                     if arg.arg != "self"
                 ]):
-            if not self._allowed_annotation(module, arg.annotation, blocks, frozenset({"valueobject"})):
+            if not self._allowed_annotation(module, arg.annotation, blocks, frozenset({"valueobject"}), domain_enums=True):
                 found.append(
                     Violation(
                         module.path(),
@@ -4649,7 +4681,7 @@ class Codebase(ts.AggregateRoot):
                         for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
                         if arg.arg != "self"
                     ]):
-                if not self._allowed_annotation(module, arg.annotation, blocks, frozenset({"valueobject", "spec"})):
+                if not self._allowed_annotation(module, arg.annotation, blocks, frozenset({"valueobject", "spec"}), domain_enums=True):
                     found.append(
                         Violation(
                             module.path(),
@@ -4678,18 +4710,8 @@ class Codebase(ts.AggregateRoot):
         named_enums: set[str] = set()
         if port_dto:
             for enum_stmt in module.class_defs():
-                for base in enum_stmt.bases:
-                    if isinstance(base, ast.Attribute) and isinstance(
-                        base.value, ast.Name
-                    ):
-                        if module._package_aliases.get(base.value.id) == ENUM_MODULE:
-                            named_enums.add(enum_stmt.name)
-                            break
-                    elif isinstance(base, ast.Name):
-                        origin = module._imported.get(base.id)
-                        if origin is not None and origin[0] == ENUM_MODULE:
-                            named_enums.add(enum_stmt.name)
-                            break
+                if self._enum_base(module, enum_stmt) is not None:
+                    named_enums.add(enum_stmt.name)
         enums = frozenset(named_enums)
         for item in cls.body:
             if port_dto and not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -5363,6 +5385,7 @@ class Codebase(ts.AggregateRoot):
         allowed_blocks: frozenset[str],
         enums: frozenset[str] = frozenset(),
         primitives: frozenset[str] = PRIMITIVES,
+        domain_enums: bool = False,
     ) -> bool:
         if node is None:
             return False
@@ -5378,15 +5401,17 @@ class Codebase(ts.AggregateRoot):
             if left_none == right_none:
                 return False
             wrapped = node.right if left_none else node.left
-            return self._allowed_annotation(module, wrapped, blocks, allowed_blocks, enums, primitives)
+            return self._allowed_annotation(module, wrapped, blocks, allowed_blocks, enums, primitives, domain_enums)
         if isinstance(node, ast.Subscript):
             if isinstance(node.value, ast.Name) and node.value.id == "tuple":
                 elements = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
                 return all(
-                    self._allowed_annotation(module, element, blocks, allowed_blocks, enums, primitives)
+                    self._allowed_annotation(module, element, blocks, allowed_blocks, enums, primitives, domain_enums)
                     for element in elements
                 )
             return False
         key = module._resolve(node)
+        if domain_enums and key is not None and key in self._domain_enums:
+            return True
         return key is not None and blocks.get(key) in allowed_blocks
 

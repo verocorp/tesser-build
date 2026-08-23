@@ -7814,3 +7814,124 @@ def test_a_private_method_is_flagged_in_every_module_kind() -> None:
         for f in findings
     )
     assert not any("Thing.__init__" in f and "private method" in f for f in findings)
+
+
+def test_a_domain_enum_is_a_primitive() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/state.py",
+                "shop.domain.state",
+                "import enum\n"
+                "import tesser.domain as ts\n"
+                "from tesser.serialization import canonical_str\n"
+                "class LinkState(enum.Enum):\n"
+                "    ACTIVE = 'active'\n"
+                "    INACTIVE = 'inactive'\n"
+                "class StatusSpec(ts.Spec):\n"
+                "    def __init__(self, state: LinkState, note: LinkState | None) -> None:\n"
+                "        self.state = state\n"
+                "        self.note = note\n"
+                "class Status(ts.ValueObject):\n"
+                "    _value: str\n"
+                "    def __init__(self, value: LinkState) -> None:\n"
+                "        object.__setattr__(self, '_value', value.value)\n"
+                "    def __str__(self) -> str:\n"
+                "        return canonical_str(self._value)\n",
+                False,
+            ),
+            (
+                "shop/domain/link.py",
+                "shop.domain.link",
+                "import tesser.domain as ts\n"
+                "import shop.domain.state as state\n"
+                "class LinkSpec(ts.Spec):\n"
+                "    def __init__(self, status: state.LinkState) -> None:\n"
+                "        self.status = status\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any("LinkState declares no ts.* base" in f for f in findings)
+    assert not any("parameter 'state' is not allowed" in f for f in findings)
+    assert not any("parameter 'note' is not allowed" in f for f in findings)
+    assert not any("parameter 'value' is not allowed" in f for f in findings)
+    assert not any("parameter 'status' is not allowed" in f for f in findings)
+
+
+def test_a_domain_enum_is_a_plain_enum() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/state.py",
+                "shop.domain.state",
+                "import enum\n"
+                "import tesser.domain as ts\n"
+                "class Loose(enum.StrEnum):\n"
+                "    YES = 'yes'\n"
+                "class LooseSpec(ts.Spec):\n"
+                "    def __init__(self, x: Loose) -> None:\n"
+                "        self.x = x\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "shop.domain.state.Loose is an enum.StrEnum; a domain enum is an enum.Enum, "
+        "because a str- or int-backed member compares equal to a raw literal "
+        "and reopens the typo the enum closes" in f
+        for f in findings
+    )
+    assert any(
+        "parameter 'x' is not allowed; "
+        "a spec field is a primitive, a value object, or a child spec" in f
+        for f in findings
+    )
+
+
+def test_a_domain_enum_carries_nothing_but_its_members() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/state.py",
+                "shop.domain.state",
+                "import enum\n"
+                "class LinkState(enum.Enum):\n"
+                "    ACTIVE = 'active'\n"
+                "    def label(self) -> str:\n"
+                "        return 'x'\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "shop.domain.state.LinkState carries more than its members; "
+        "a domain enum is a closed set of names and nothing else, "
+        "because an enum is a primitive with a name, "
+        "not a home for behavior" in f
+        for f in findings
+    )
+
+
+def test_an_application_enum_still_declares_no_block() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/application/kinds.py",
+                "shop.application.kinds",
+                "import enum\n"
+                "class Kind(enum.Enum):\n"
+                "    A = 'a'\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "shop.application.kinds.Kind declares no ts.* base; "
+        "every context class declares its block" in f
+        for f in findings
+    )
