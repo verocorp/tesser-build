@@ -83,9 +83,13 @@ Construction mechanics, spec structure, and language idioms: see
    canonical form — even when it has meaningful sub-parts, which are exposed
    as *derived* VO-returning accessors computed from parsing, not stored
    components. No standardized single-primitive form (Money, a person's
-   name) → compound: child value objects, constructed via a spec (compound
-   concepts accrete attributes; a spec prevents a definition cascade through
-   every parent that embeds the type). See `go.md#the-spec-pattern` /
+   name) → compound: child value objects, constructed from primitives and
+   child specs at its single constructor — never from value objects (ruled
+   2026-08-23). Which shape a compound's constructor takes is per-language:
+   Go uses a spec at 2+ fields (a spec prevents a definition cascade through
+   every parent that embeds the type); Python's canonical compound takes the
+   primitives directly (`Money("9.99", "USD")`), with a child spec where the
+   construction data nests. See `go.md#the-spec-pattern` /
    `python.md#the-spec-pattern`.
 2. **Equality path.** If every logical value has exactly one representation,
    native equality works. If the same logical value has multiple
@@ -135,7 +139,7 @@ candidates for human judgment* — never the definition. A DTO can carry an
   objects — the invariant gets one home, transposition becomes a type
   error, and serialization has a conformant path (`serialization.md`).
 - **Validation drift:** a second construction path (a mapper, a test helper)
-  that skips the constructor. One constructor.
+  that skips the constructor. There is exactly one.
 
 ## Now build it
 

@@ -1434,7 +1434,21 @@ def test_domain_field_rules_are_flagged() -> None:
                 "        object.__setattr__(self, '_value', spec.value)\n"
                 "class CarrySpec(ts.Spec):\n"
                 "    def __init__(self, tag: Tag) -> None:\n"
-                "        self.tag = tag\n",
+                "        self.tag = tag\n"
+                "class NoInitVO(ts.ValueObject):\n"
+                "    _value: str\n"
+                "class VarargVO(ts.ValueObject):\n"
+                "    def __init__(self, *args: str, **kwargs: str) -> None:\n"
+                "        object.__setattr__(self, '_values', args)\n"
+                "class NoInitSpec(ts.Spec):\n"
+                "    name: str\n"
+                "class VarargSpec(ts.Spec):\n"
+                "    def __init__(self, **fields: str) -> None:\n"
+                "        self.fields = fields\n"
+                "class SmuggleSpec(ts.Spec):\n"
+                "    amount: Tag\n"
+                "    def __init__(self, name: str) -> None:\n"
+                "        self.name = name\n",
                 False,
             ),
         ))).violations()
@@ -1474,6 +1488,101 @@ def test_domain_field_rules_are_flagged() -> None:
     assert any(
         "CarrySpec.__init__" in f and "parameter 'tag' is not allowed" in f
         and "a spec field is a primitive or a child spec, never a value object" in f
+        for f in findings
+    )
+    assert any(
+        "NoInitVO defines no __init__" in f
+        and "a value object constructs in its own __init__" in f
+        for f in findings
+    )
+    assert any(
+        "VarargVO.__init__ uses *args/**kwargs" in f
+        and "a value object declares its construction data as named parameters" in f
+        for f in findings
+    )
+    assert any(
+        "NoInitSpec defines no __init__" in f
+        and "a spec defines the __init__ that carries its fields" in f
+        for f in findings
+    )
+    assert any(
+        "VarargSpec.__init__ uses *args/**kwargs" in f
+        and "a spec declares its fields as named __init__ parameters, where the field rules can read them" in f
+        for f in findings
+    )
+    assert any(
+        "SmuggleSpec carries a class-level statement" in f
+        and "a spec declares its fields as __init__ parameters, where the field rules can read them" in f
+        for f in findings
+    )
+
+
+def test_construction_containers_discriminate_specs_from_value_objects() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/carton.py",
+                "shop.domain.carton",
+                "import tesser.domain as ts\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, value: str) -> None:\n"
+                "        object.__setattr__(self, '_value', value)\n"
+                "class TagSpec(ts.Spec):\n"
+                "    def __init__(self, value: str) -> None:\n"
+                "        self.value = value\n"
+                "class WrapsMany(ts.ValueObject):\n"
+                "    def __init__(self, tags: tuple[Tag, ...]) -> None:\n"
+                "        object.__setattr__(self, '_tags', tags)\n"
+                "class WrapsMaybe(ts.ValueObject):\n"
+                "    def __init__(self, tag: Tag | None) -> None:\n"
+                "        object.__setattr__(self, '_tag', tag)\n"
+                "class FromSpecs(ts.ValueObject):\n"
+                "    def __init__(self, specs: tuple[TagSpec, ...]) -> None:\n"
+                "        object.__setattr__(self, '_values', tuple(s.value for s in specs))\n"
+                "class FromMaybeSpec(ts.ValueObject):\n"
+                "    def __init__(self, spec: TagSpec | None) -> None:\n"
+                "        object.__setattr__(self, '_value', spec.value if spec is not None else '')\n"
+                "class CartonSpec(ts.Spec):\n"
+                "    def __init__(self, tags: tuple[Tag, ...], tag: Tag | None, children: tuple[TagSpec, ...], child: TagSpec | None) -> None:\n"
+                "        self.tags = tags\n"
+                "        self.tag = tag\n"
+                "        self.children = children\n"
+                "        self.child = child\n"
+                "class ForwardSpec(ts.Spec):\n"
+                "    def __init__(self, child: 'TagSpec | None', kids: tuple['ForwardSpec', ...], bad: 'Tag') -> None:\n"
+                "        self.child = child\n"
+                "        self.kids = kids\n"
+                "        self.bad = bad\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "WrapsMany.__init__" in f and "parameter 'tags' is not allowed" in f
+        and "a value object constructs from primitives and specs, never value objects" in f
+        for f in findings
+    )
+    assert any(
+        "WrapsMaybe.__init__" in f and "parameter 'tag' is not allowed" in f
+        for f in findings
+    )
+    assert not any("FromSpecs.__init__ parameter" in f for f in findings)
+    assert not any("FromMaybeSpec.__init__ parameter" in f for f in findings)
+    assert any(
+        "CartonSpec.__init__" in f and "parameter 'tags' is not allowed" in f
+        and "a spec field is a primitive or a child spec, never a value object" in f
+        for f in findings
+    )
+    assert any(
+        "CartonSpec.__init__" in f and "parameter 'tag' is not allowed" in f
+        for f in findings
+    )
+    assert not any("parameter 'children'" in f for f in findings)
+    assert not any("parameter 'child'" in f for f in findings)
+    assert not any("parameter 'kids'" in f for f in findings)
+    assert any(
+        "ForwardSpec.__init__" in f and "parameter 'bad' is not allowed" in f
         for f in findings
     )
 
@@ -4368,6 +4477,21 @@ def test_test_module_totality_is_flagged() -> None:
                 "        assert True\n"
                 "    def build_thing(self) -> None:\n"
                 "        return None\n"
+                "    async def drain_thing(self) -> None:\n"
+                "        return None\n"
+                "    async def test_async_inside(self) -> None:\n"
+                "        assert True\n"
+                "    def setup_method(self) -> None:\n"
+                "        return None\n"
+                "    class Nested:\n"
+                "        pass\n"
+                "    LABEL = 'x'\n"
+                "class Tester:\n"
+                "    def test_prefix_is_pytests(self) -> None:\n"
+                "        assert True\n"
+                "@th.fake\n"
+                "class TestShapedFake:\n"
+                "    pass\n"
                 "COUNT = 2\n",
                 False,
             ),
@@ -4386,8 +4510,32 @@ def test_test_module_totality_is_flagged() -> None:
         "test_junk.TestGrouped.build_thing" in f and "a test class holds only test methods" in f
         for f in findings
     )
-    assert not any("test_junk.TestGrouped is" in f for f in findings)
+    assert any(
+        "test_junk.TestGrouped.drain_thing" in f and "a test class holds only test methods" in f
+        for f in findings
+    )
+    assert any(
+        "test_junk.TestGrouped.setup_method" in f and "a test class holds only test methods" in f
+        for f in findings
+    )
+    assert any(
+        "test_junk.TestGrouped.Nested is a nested class" in f
+        and "a test class holds test methods, never nested classes" in f
+        for f in findings
+    )
+    assert any(
+        "test_junk.TestGrouped carries a loose statement in its body" in f
+        and "a test class holds test methods, never loose statements" in f
+        for f in findings
+    )
+    assert not any("TB072" in f and "TestGrouped" in f for f in findings)
     assert not any("test_inside" in f for f in findings)
+    assert not any("test_async_inside" in f for f in findings)
+    assert not any("test_junk.Tester" in f for f in findings)
+    assert any(
+        "test_junk.TestShapedFake" in f and "a fake implements the contract it doubles" in f
+        for f in findings
+    )
     assert any("test_junk.FakeNothing" in f and "a fake implements the contract it doubles" in f for f in findings)
     assert any(
         "test_junk" in f and "a test module holds only imports, tests, helpers, and fakes" in f
@@ -4754,7 +4902,7 @@ def test_a_value_object_hides_its_representation() -> None:
     assert any(
         "TB010" in f and "Leaky.kept passes the raw primitive through; "
         "a value object's accessor returns a value object — "
-        "the canonical exit is the only primitive door" in f
+        "the canonical exit is the only primitive exit" in f
         for f in findings
     )
 
@@ -4932,8 +5080,8 @@ def test_a_value_object_has_one_construction_door() -> None:
         ))).violations()
                )
     assert any(
-        "TB017" in f and "Slug.parse is a second construction door; a value object has "
-        "one door — its own __init__" in f
+        "TB017" in f and "Slug.parse is a second construction path; a value object has "
+        "one construction path — its own __init__" in f
         for f in findings
     )
 
@@ -5021,8 +5169,8 @@ def test_review_pins_for_the_shape_norms() -> None:
             ),
         ))).violations()
                )
-    assert any("SelfDoor.parse is a second construction door" in f for f in findings)
-    assert any("SelfDoor.bare_door is a second construction door" in f for f in findings)
+    assert any("SelfDoor.parse is a second construction path" in f for f in findings)
+    assert any("SelfDoor.bare_door is a second construction path" in f for f in findings)
     assert not any("SelfDoor.kind" in f for f in findings)
     assert any(
         "Quoted.label returns str" in f and "TB019" in f for f in findings

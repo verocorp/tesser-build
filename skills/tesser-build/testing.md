@@ -198,7 +198,7 @@ file says *how*, and it is the cross-cutting layer they assume.
   temporary exemptions: a module that genuinely cannot be tested (one exists —
   an srv module bound to an uninstallable vendor SDK) carries a site-level
   `# tesser:debt TB074` where the finding lands, as visible debt.
-- **`TB071` + `TB073` (test-module totality)** — rule 9, and the analyzer's
+- **`TB071` + `TB072` + `TB073` (test-module totality)** — rule 9, and the analyzer's
   first **totality** check (they superseded the frozen-dataclass era's
   `TB032`). Every other check hunts a known-bad shape and stays quiet
   otherwise. That is the wrong instrument here, because the failure mode is
@@ -213,7 +213,16 @@ file says *how*, and it is the cross-cutting layer they assume.
   shapes: a module-level `test_*` function, or a `test_*` method on a
   **`Test`-prefixed test class** — grouping a subject's scenarios under a
   test class is allowed, and a test class holds *only* test methods (any
-  other method on it is a `TB071` finding). A class that is neither
+  other method on it is a `TB071` finding — including pytest's xunit hooks:
+  `setup_method`, `teardown_method`, and `@pytest.fixture` methods are
+  findings too; shared arrangement goes through module-level `@ts.helper`
+  builders, and per-test setup is written in the test where the reader can
+  see it). The totality reaches the whole class body: a nested class or a
+  loose statement inside a test class is a finding, exactly as it would be
+  at module level — nesting is not an escape hatch. The `Test` prefix
+  matches pytest's default collection glob (`python_classes = Test*`); the
+  analyzer assumes that default, so a tree that overrides `python_classes`
+  is out of contract. A class that is neither
   `Test`-prefixed nor a declared `@ts.fake` is a `TB072` finding. The
   `Test` prefix is load-bearing: it is what pytest collects, so a test
   class named anything else would hold tests that silently never run. `TB073` is the shape

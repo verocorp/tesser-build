@@ -72,7 +72,7 @@ APPLIES_TO: Final[dict[str, str]] = {
     "Codebase._vo_field_violations": "value object class",
     "Codebase._exposure_violations": "value object class",
     "Codebase._composition_violations": "value object class",
-    "Codebase._door_violations": "value object class",
+    "Codebase._construction_path_violations": "value object class",
     "Codebase._exit_violations": "value object conversion dunder",
     "Codebase._structured_exit_violations": "entity or aggregate conversion dunder",
     "Codebase._copy_violations": "entity or aggregate accessor",

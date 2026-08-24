@@ -58,12 +58,15 @@ write that sentence, keep the primitive.
 
 ## 5. Why does validation live in the constructor and not the service layer (or the parent)?
 
-One constructor. If the constructor is the only way to make the type, then holding
+Exactly one way in. If the constructor is the only way to make the type, then holding
 an instance *proves* it's valid — every function that receives it drops its
 defensive checks. Scatter validation across services and parents, and every
 new call site is a chance to forget one rule; the check count grows with the
-codebase instead of staying at one. Parents never re-validate children for
-the same reason: the child's constructor already proved it.
+codebase instead of staying at one. A parent never re-states a child's rule
+for the same reason: the parent's constructor takes raw construction data
+(primitives and specs, never built value objects — ruled 2026-08-23) and
+builds each child through the child's own constructor, so every child rule
+runs exactly once, at the one place it lives.
 
 **Rule:** invalid states are unrepresentable after construction. If you find
 an `if !valid(x)` outside a constructor, either the type is missing or its
