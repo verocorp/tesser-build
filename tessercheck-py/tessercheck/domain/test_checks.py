@@ -8465,3 +8465,78 @@ def test_a_value_object_does_not_hand_back_a_domain_enum() -> None:
     assert not any("Thing.width" in f and "reaches sibling" in f for f in findings)
     assert not any("Thing.__init__" in f and "reaches sibling" in f for f in findings)
     assert not any("Thing.spoken" in f and "reaches sibling" in f for f in findings)
+
+
+def test_a_spec_initializes_its_domain_object_and_does_nothing_else() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/tag.py",
+                "shop.domain.tag",
+                "import tesser.domain as ts\n"
+                "class TagSpec(ts.Spec):\n"
+                "    def __init__(self, value: str) -> None:\n"
+                "        self.value = value\n"
+                "class BagSpec(ts.Spec):\n"
+                "    def __init__(self, tag: TagSpec) -> None:\n"
+                "        self.tag = tag\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, spec: TagSpec) -> None:\n"
+                "        object.__setattr__(self, '_value', spec.value)\n"
+                "class Bag(ts.Entity):\n"
+                "    def __init__(self, spec: BagSpec) -> None:\n"
+                "        self._tag = Tag(spec.tag)\n"
+                "        self._spec = spec\n"
+                "    def retag(self, spec: TagSpec) -> None:\n"
+                "        self._tag = Tag(spec)\n"
+                "    def label(self, spec: TagSpec) -> str:\n"
+                "        return spec.value\n",
+                False,
+            ),
+            (
+                "shop/adapters/handlers.py",
+                "shop.adapters.handlers",
+                "import tesser.adapters as ts\n"
+                "import shop.domain.tag as tag\n"
+                "class Keeper(ts.Handler):\n"
+                "    def __init__(self, spec: tag.TagSpec) -> None:\n"
+                "        object.__setattr__(self, '_spec', spec)\n"
+                "    def peek(self) -> str:\n"
+                "        built = tag.TagSpec(value='x')\n"
+                "        return built.value\n"
+                "    def forward(self) -> tag.Tag:\n"
+                "        return tag.Tag(tag.TagSpec(value='y'))\n"
+                "    def shadow(self, spec: tag.TagSpec) -> list:\n"
+                "        return [spec.value for spec in ('a', 'b')]\n",
+                False,
+            ),
+            (
+                "shop/domain/test_tag.py",
+                "shop.domain.test_tag",
+                "import tesser.testing as ts\n"
+                "import shop.domain.tag as tag\n"
+                "@ts.helper\n"
+                "def _spec() -> tag.TagSpec:\n"
+                "    return tag.TagSpec(value='x')\n"
+                "def test_reads_its_helper_spec() -> None:\n"
+                "    spec = _spec()\n"
+                "    assert tag.Tag(spec) is not None\n"
+                "    assert spec.value == 'x'\n",
+                False,
+            ),
+        ))).violations()
+    )
+    tb083 = tuple(f for f in findings if " TB083 " in f)
+    assert tb083 == (
+        "shop/domain/tag.py:14: TB083 shop.domain.tag.Bag.__init__ keeps the spec 'spec'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "shop/domain/tag.py:18: TB083 shop.domain.tag.Bag.label reads 'value' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+        "shop/adapters/handlers.py:5: TB083 shop.adapters.handlers.Keeper.__init__ keeps the spec 'spec'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "shop/adapters/handlers.py:8: TB083 shop.adapters.handlers.Keeper.peek reads 'value' of the spec 'built'; "
+        "a spec is only read where it initializes its domain object",
+        "shop/domain/test_tag.py:9: TB083 shop.domain.test_tag.test_reads_its_helper_spec reads 'value' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+    )

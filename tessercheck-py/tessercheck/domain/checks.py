@@ -403,6 +403,12 @@ PORTS_STDLIB: Final[frozenset[str]] = frozenset({"__future__", "typing", "enum"}
 
 DOMAIN_BLOCKS: Final[frozenset[str]] = frozenset({"aggregate", "entity", "valueobject"})
 
+SPEC_BLOCKS: Final[frozenset[str]] = frozenset({"spec", "component_spec", "app_spec"})
+
+SPEC_READER_BLOCKS: Final[frozenset[str]] = DOMAIN_BLOCKS | frozenset(
+    {"component_config", "app_config"}
+)
+
 WRAPPABLE_SCALARS: Final[frozenset[str]] = frozenset(
     {"str", "int", "float", "bytes", "Decimal", "date", "datetime", "time"}
 )
@@ -1032,6 +1038,14 @@ class Codebase(ts.AggregateRoot):
             if (module.name(), stmt.name) not in blocks
             and self._enum_base(module, stmt) is not None  # tesser:debt TB051
         )
+        self._spec_makers = frozenset(
+            (module.name(), fn.name)
+            for module in self._modules
+            for fn in module.body()
+            if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and fn.returns is not None
+            and blocks.get(module._resolve(fn.returns) or ("", "")) in SPEC_BLOCKS
+        )
         for module in self._modules:
             found.extend(self._comment_violations(module))  # tesser:debt TB051
             found.extend(self._double_violations(module))  # tesser:debt TB051
@@ -1040,6 +1054,7 @@ class Codebase(ts.AggregateRoot):
             found.extend(self._sibling_reference_violations(module))  # tesser:debt TB051
             found.extend(self._dynamic_import_violations(module))  # tesser:debt TB051
             found.extend(self._module_violations(module, blocks, contexts))  # tesser:debt TB051
+            found.extend(self._spec_use_violations(module, blocks))  # tesser:debt TB051
             if self._export == TESSER and self._locate(  # tesser:debt TB051
                 module.name(), module.is_package(), contexts, self._export
             ) == "test":
@@ -2624,6 +2639,156 @@ class Codebase(ts.AggregateRoot):
                             "scope; a shadowed builtin is never called — rename the binding",
                         )
                     )
+        return tuple(found)
+
+    def _spec_use_violations(
+        self, module: Module, blocks: dict[tuple[str, str], str]
+    ) -> tuple[Violation, ...]:
+        def is_spec(node: ast.expr | None) -> bool:
+            if node is None:
+                return False
+            key = module._resolve(node)
+            return key is not None and blocks.get(key) in SPEC_BLOCKS
+
+        def makes_spec(node: ast.expr) -> bool:
+            if is_spec(node):
+                return True
+            if isinstance(node, ast.Name):
+                return (module.name(), node.id) in self._spec_makers
+            key = module._resolve(node)
+            return key is not None and key in self._spec_makers
+
+        def rebinds(fn: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda, names: set[str]) -> bool:
+            args = fn.args
+            bound = {a.arg for a in args.posonlyargs + args.args + args.kwonlyargs}
+            if args.vararg is not None:
+                bound.add(args.vararg.arg)
+            if args.kwarg is not None:
+                bound.add(args.kwarg.arg)
+            return bool(bound & names)
+
+        def held(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+            names = {
+                a.arg
+                for a in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs
+                if is_spec(a.annotation)
+            }
+            for node in ast.walk(fn):
+                if (
+                    isinstance(node, ast.Assign)
+                    and len(node.targets) == 1
+                    and isinstance(node.targets[0], ast.Name)
+                    and isinstance(node.value, ast.Call)
+                    and makes_spec(node.value.func)
+                ):
+                    names.add(node.targets[0].id)
+                elif (
+                    isinstance(node, ast.AnnAssign)
+                    and isinstance(node.target, ast.Name)
+                    and is_spec(node.annotation)
+                ):
+                    names.add(node.target.id)
+            return names
+
+        def kept(node: ast.AST, names: set[str]) -> str | None:
+            if (
+                isinstance(node, ast.Assign)
+                and isinstance(node.value, ast.Name)
+                and node.value.id in names
+                and any(isinstance(t, ast.Attribute) for t in node.targets)
+            ):
+                return node.value.id
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "__setattr__"
+                and len(node.args) == 3
+                and isinstance(node.args[2], ast.Name)
+                and node.args[2].id in names
+            ):
+                return node.args[2].id
+            return None
+
+        parent: dict[int, ast.ClassDef] = {}
+        for stmt in module.body():
+            for node in ast.walk(stmt):
+                if isinstance(node, ast.ClassDef):
+                    for item in node.body:
+                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                            parent[id(item)] = node
+        found: list[Violation] = []
+        seen: set[tuple[int, str, str]] = set()
+        for stmt in module.body():
+            for fn in ast.walk(stmt):
+                if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                names = held(fn)
+                if not names:
+                    continue
+                cls = parent.get(id(fn))
+                block = blocks.get((module.name(), cls.name)) if cls is not None else None
+                constructing = fn.name == "__init__" and block in SPEC_READER_BLOCKS
+                assembling = fn.name == "__init__" and (block in SPEC_BLOCKS or block == "mapper")
+                where = (
+                    f"{module.name()}.{cls.name}.{fn.name}"
+                    if cls is not None
+                    else f"{module.name()}.{fn.name}"
+                )
+                stack: list[ast.AST] = list(ast.iter_child_nodes(fn))
+                while stack:
+                    cur = stack.pop()
+                    if isinstance(cur, ast.ClassDef):
+                        continue
+                    if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                        if rebinds(cur, names):
+                            continue
+                        stack.extend(ast.iter_child_nodes(cur))
+                        continue
+                    if isinstance(cur, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
+                        targets = {
+                            t.id
+                            for comp in cur.generators
+                            for t in ast.walk(comp.target)
+                            if isinstance(t, ast.Name)
+                        }
+                        if targets & names:
+                            continue
+                    if not isinstance(cur, (ast.stmt, ast.expr)):
+                        stack.extend(ast.iter_child_nodes(cur))
+                        continue
+                    spec_name = kept(cur, names)
+                    if spec_name is not None and not assembling and (cur.lineno, "keeps", spec_name) not in seen:
+                        seen.add((cur.lineno, "keeps", spec_name))
+                        found.append(
+                            Violation(
+                                module.path(),
+                                cur.lineno,
+                                "TB083",
+                                f"{where} keeps the spec {spec_name!r}; "
+                                "a spec is never kept, it initializes its domain object and is done",
+                            )
+                        )
+                    if (
+                        not constructing
+                        and isinstance(cur, ast.Attribute)
+                        and isinstance(cur.ctx, ast.Load)
+                        and isinstance(cur.value, ast.Name)
+                        and cur.value.id in names
+                    ):
+                        spec_name = cur.value.id
+                        field = cur.attr
+                        if (cur.lineno, field, spec_name) not in seen:
+                            seen.add((cur.lineno, field, spec_name))
+                            found.append(
+                                Violation(
+                                    module.path(),
+                                    cur.lineno,
+                                    "TB083",
+                                    f"{where} reads {field!r} of the spec {spec_name!r}; "
+                                    "a spec is only read where it initializes its domain object",
+                                )
+                            )
+                    stack.extend(ast.iter_child_nodes(cur))
         return tuple(found)
 
     def _string_equality_violations(self, module: Module) -> tuple[Violation, ...]:

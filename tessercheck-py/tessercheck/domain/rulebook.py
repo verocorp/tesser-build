@@ -50,6 +50,7 @@ HOLE_NAMES: Final[dict[str, str]] = {
     "leaf": "⟨scalar⟩",
     "head": "⟨scalar⟩",
     "named": "⟨types⟩",
+    "spec_name": "⟨name⟩",
 }
 
 APPLIES_TO: Final[dict[str, str]] = {
@@ -69,6 +70,7 @@ APPLIES_TO: Final[dict[str, str]] = {
     "Codebase._shadowing_violations": "every module",
     "Codebase._string_equality_violations": "every module",
     "Codebase._sibling_reference_violations": "every class, in every module",
+    "Codebase._spec_use_violations": "every function that holds a spec, in every module",
     "Codebase._vo_field_violations": "value object class",
     "Codebase._exposure_violations": "value object class",
     "Codebase._composition_violations": "value object class",

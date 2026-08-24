@@ -70,7 +70,7 @@ class CampaignService(ts.ApplicationService):
             c = campaign.Campaign(found_campaign_spec)
         except DomainError as e:
             raise InfraError(
-                f"corrupted campaign record {found_campaign_spec.id!r}: {e}"
+                f"corrupted campaign record {campaign_spec_mapper.campaign_id!r}: {e}"
             ) from e
         view_links = tuple(str(link.slug) for link in c.links)
         return client.CampaignView(campaign_id=c.id, links=view_links)
@@ -109,7 +109,7 @@ class CampaignService(ts.ApplicationService):
             c = campaign.Campaign(found_campaign_spec)
         except DomainError as e:
             raise InfraError(
-                f"corrupted campaign record {found_campaign_spec.id!r}: {e}"
+                f"corrupted campaign record {campaign_spec_mapper.campaign_id!r}: {e}"
             ) from e
         c.add_link(short_link.ShortLinkSpec(slug=req.slug, target_url=req.target_url))
         window_start = str(c.window.start)
@@ -158,7 +158,7 @@ class CampaignService(ts.ApplicationService):
             c = campaign.Campaign(found_campaign_spec)
         except DomainError as e:
             raise InfraError(
-                f"corrupted campaign record {found_campaign_spec.id!r}: {e}"
+                f"corrupted campaign record {campaign_spec_mapper.campaign_id!r}: {e}"
             ) from e
         c.deactivate_link(values.Slug(req.slug))
         window_start = str(c.window.start)

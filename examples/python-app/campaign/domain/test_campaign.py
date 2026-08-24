@@ -32,9 +32,9 @@ def test_a_campaign_carries_every_field_of_its_spec() -> None:
 
     c = campaign.Campaign(spec)
 
-    assert c.id == values.CampaignID(spec.id)
-    assert c.budget == money.Money(spec.budget.amount, spec.budget.currency)
-    assert [link.slug for link in c.links] == [values.Slug(spec.links.links[0].slug)]
+    assert c.id == values.CampaignID("0123456789abcdef")
+    assert c.budget == money.Money("100.00", "USD")
+    assert [link.slug for link in c.links] == [values.Slug("spring-sale")]
 
 
 def test_a_campaign_may_start_with_no_links() -> None:
