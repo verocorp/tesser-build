@@ -66,7 +66,10 @@ test modules: every module-level function is a test, a declared `@ts.helper`,
 or a declared `@ts.fake` (`TB071`), a class is a `Test`-prefixed test class
 holding only test methods or a declared `@ts.fake` (`TB072`), and what does
 not classify is a finding;
-`skills/tesser-build/testing.md`).
+`skills/tesser-build/testing.md`), and the construction norm (`TB083` — a
+spec initializes its domain object and does nothing else — read anywhere but
+the `__init__` that consumes it, or kept on an object, is a finding;
+`skills/tesser-build/value-objects.md`).
 The full check list with per-code rules is `tessercheck-py/RULES.md`; which
 convention has a doc, an example, and a checker is `roadmap/ROADMAP.md`.
 
