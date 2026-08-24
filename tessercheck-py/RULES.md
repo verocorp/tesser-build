@@ -97,7 +97,7 @@ exact: a test covers a rule when an assert literal contains the clause.
 | TB010 | a value object's accessor returns a value object — the canonical exit is the only primitive exit | value object class | passes the raw primitive through | domain/checks.py:2726 | test_a_value_object_hides_its_representation |
 | TB016 | bool and complex are not value-object material — model the raw value or reach for an enum | value object class | field ⟨field⟩ is a ⟨scalar⟩ | domain/checks.py:2749 | test_composition_norms |
 | TB016 | a compound backs itself with child value objects | value object class | field ⟨field⟩ is a bare primitive | domain/checks.py:2762 | test_composition_norms |
-| TB017 | a value object has one construction path — its own __init__ | value object class | is a second construction path | domain/checks.py:2828 | test_a_value_object_has_one_construction_door |
+| TB017 | a value object has one construction path — its own __init__ | value object class | is a second construction path | domain/checks.py:2828 | test_a_value_object_has_one_construction_path |
 | TB015 | a structured domain object has no primitive exit — decompose through leaf components | value object conversion dunder | is a primitive exit | domain/checks.py:2893,2908 | test_exit_norms_leaf_and_structured |
 | TB015 | a leaf defines exactly its backing type's conversion dunder | value object conversion dunder | is a mismatched exit | domain/checks.py:2872 | test_exit_norms_leaf_and_structured |
 | TB018 | a canonical exit is a one-line delegation to its canonical_* policy | value object conversion dunder | hand-rolls its exit | domain/checks.py:2882 | test_exit_norms_leaf_and_structured |

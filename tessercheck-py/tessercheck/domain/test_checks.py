@@ -5056,7 +5056,7 @@ def test_composition_norms() -> None:
     assert any("TB016" in f and "Mixed field _on is a bool" in f for f in findings)
 
 
-def test_a_value_object_has_one_construction_door() -> None:
+def test_a_value_object_has_one_construction_path() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(

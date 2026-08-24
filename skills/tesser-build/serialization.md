@@ -174,8 +174,9 @@ belongs to the edge, recorded where its golden test lives.
   reads as a leaf shape (not misreported as structured), but the leaf itself
   is a TB016 violation — those scalars are not value-object material.
 - **TB016** (the value-object-primitives check) flags rule 5's internal
-  half: what a VO may be built from. A compound holds child VOs, not bare
-  primitives. The wrappable set is "primitive" in the DDD sense — the
+  half: what a VO **holds**, not what it constructs from (that is TB080 —
+  primitives and child specs, never value objects). A compound holds child
+  VOs, not bare primitives. The wrappable set is "primitive" in the DDD sense — the
   language scalars plus the stdlib temporals (`date`/`datetime`/`time`),
   which a compound wraps in child VOs just like a `Decimal`, and a
   `date`-backed leaf exits as canonical text via `__str__` (maintainer ruling
