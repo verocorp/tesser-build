@@ -5,6 +5,40 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.80.0] - 2026-08-24
+
+A spec initializes its domain object and does nothing else. The new
+`TB083` rule reads every function that holds a spec — a parameter typed as
+a `ts.Spec`, a name bound by a spec constructor or by a tree function that
+returns one, and any alias of those — and reports two uses: reading a
+spec's fields anywhere but the `__init__` that consumes it (a value object,
+entity, aggregate, or config constructor), and keeping a spec on an object.
+Outside that constructor, code builds a spec and hands it on whole. The two
+holders are a spec `__init__` carrying its child spec and a mapper `__init__`
+assembling a parent spec. Test modules are exempt: `testing.md` rule 2 has a
+completeness test read the spec it fed the constructor, and that is
+initialization being verified.
+
+### Added
+- **`TB083`** — a spec is only read where it initializes its domain object;
+  a spec is never kept, it initializes its domain object and is done. The
+  walk tracks a spec through aliases, `a = b = XSpec()`, annotated locals,
+  walrus, `await maker()`, quoted annotations, and `Optional[XSpec]` /
+  `XSpec | None`; a keep is any store of a held name or a direct spec
+  construction into an attribute or subscript target, a container literal on
+  `self`, an `AugAssign`, `setattr`, or `__setattr__`; a read includes
+  `getattr(spec, ...)` and `vars(spec)`. Nested functions, lambdas, nested
+  classes, and comprehensions inherit the outer names minus what they
+  rebind, and a name rebound by `for`/`with`/`except`/a non-spec assignment
+  is dropped rather than reported. Claimed by the value-objects roadmap row;
+  materialized in `python.md`, `value-objects.md`, and `coverage.md`;
+  skill-version 54.
+
+### Changed
+- `examples/errorspy` reads the record id off the mapper for its
+  corrupted-record error instead of off the spec it just consumed — the one
+  site the new rule caught in the example trees.
+
 ## [0.0.79.0] - 2026-08-24
 
 Every import is a module import. The module-only rule was scoped to
