@@ -86,40 +86,43 @@ def test_a_currency_that_is_not_three_uppercase_letters_is_rejected(value: str) 
 
 
 def test_money_hands_back_its_parts_as_value_objects() -> None:
-    amount = money.Money("100.00", "USD")
+    amount = money.Money(money.MoneySpec("100.00", "USD"))
 
     assert amount.amount == money.MoneyAmount("100.00")
     assert amount.currency == money.MoneyCurrency("USD")
 
 
 def test_money_with_the_same_parts_is_the_same_value() -> None:
-    a = money.Money("100.00", "USD")
-    b = money.Money("100.00", "USD")
+    a = money.Money(money.MoneySpec("100.00", "USD"))
+    b = money.Money(money.MoneySpec("100.00", "USD"))
 
     assert a == b
     assert hash(a) == hash(b)
 
 
 def test_money_in_a_different_currency_is_a_different_value() -> None:
-    assert money.Money("100.00", "USD") != money.Money("100.00", "EUR")
+    usd = money.Money(money.MoneySpec("100.00", "USD"))
+    eur = money.Money(money.MoneySpec("100.00", "EUR"))
+
+    assert usd != eur
 
 
 def test_money_propagates_an_amount_rejection() -> None:
     with pytest.raises(errors.DomainError) as caught:
-        money.Money("nope", "USD")
+        money.Money(money.MoneySpec("nope", "USD"))
 
     assert caught.value.code == "invalid_budget_amount"
 
 
 def test_money_propagates_a_currency_rejection() -> None:
     with pytest.raises(errors.DomainError) as caught:
-        money.Money("100.00", "nope")
+        money.Money(money.MoneySpec("100.00", "nope"))
 
     assert caught.value.code == "invalid_budget_currency"
 
 
 def test_money_is_immutable_once_constructed() -> None:
-    budget = money.Money("100.00", "USD")
+    budget = money.Money(money.MoneySpec("100.00", "USD"))
 
     with pytest.raises(AttributeError):
         setattr(budget, "amount", money.MoneyAmount("1.00"))

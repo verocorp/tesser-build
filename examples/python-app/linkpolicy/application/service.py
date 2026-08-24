@@ -11,7 +11,7 @@ class LinkPolicyService(ts.ApplicationService):
 
     def __init__(self, repo: verdict_repository.VerdictRepository) -> None:
         self._repo = repo
-        self._policy = policy.Policy()
+        self._policy = policy.Policy(policy.PolicySpec())
 
     def check(self, req: client.CheckRequest) -> client.CheckResponse:
         target_url = policy.TargetURL(req.target_url)

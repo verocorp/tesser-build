@@ -175,7 +175,7 @@ def test_money_currency_rejects_a_non_iso_code(value: str) -> None:
 
 def test_money_propagates_a_child_rejection() -> None:
     with pytest.raises(errors.DomainError) as e:
-        money.Money("1.00", "nope")
+        money.Money(money.MoneySpec("1.00", "nope"))
     assert e.value.code == "invalid_budget_currency"
 
 

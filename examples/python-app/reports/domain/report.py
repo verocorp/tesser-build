@@ -6,11 +6,18 @@ import reports.domain.values as values
 import kernel.slug as kernel_slug
 
 
-class Link(ts.ValueObject):
+class LinkSpec(ts.Spec):
 
     def __init__(self, slug: str, target_url: str) -> None:
-        object.__setattr__(self, "_slug", kernel_slug.Slug(slug))
-        object.__setattr__(self, "_target_url", values.TargetURL(target_url))
+        self.slug = slug
+        self.target_url = target_url
+
+
+class Link(ts.ValueObject):
+
+    def __init__(self, spec: LinkSpec) -> None:
+        object.__setattr__(self, "_slug", kernel_slug.Slug(spec.slug))
+        object.__setattr__(self, "_target_url", values.TargetURL(spec.target_url))
 
     @property
     def slug(self) -> kernel_slug.Slug:
@@ -24,12 +31,20 @@ class Link(ts.ValueObject):
     _target_url: values.TargetURL
 
 
-class RecordedVerdict(ts.ValueObject):
+class RecordedVerdictSpec(ts.Spec):
 
     def __init__(self, target_url: str, allowed: bool, reason: str) -> None:
-        object.__setattr__(self, "_target_url", values.TargetURL(target_url))
-        object.__setattr__(self, "_allowed", values.Decision("allowed" if allowed else "denied"))
-        object.__setattr__(self, "_reason", values.Reason(reason))
+        self.target_url = target_url
+        self.allowed = allowed
+        self.reason = reason
+
+
+class RecordedVerdict(ts.ValueObject):
+
+    def __init__(self, spec: RecordedVerdictSpec) -> None:
+        object.__setattr__(self, "_target_url", values.TargetURL(spec.target_url))
+        object.__setattr__(self, "_allowed", values.Decision("allowed" if spec.allowed else "denied"))
+        object.__setattr__(self, "_reason", values.Reason(spec.reason))
 
     @property
     def target_url(self) -> values.TargetURL:
@@ -48,13 +63,22 @@ class RecordedVerdict(ts.ValueObject):
     _reason: values.Reason
 
 
-class LinkVerdict(ts.ValueObject):
+class LinkVerdictSpec(ts.Spec):
 
     def __init__(self, slug: str, target_url: str, allowed: bool, reason: str) -> None:
-        object.__setattr__(self, "_slug", kernel_slug.Slug(slug))
-        object.__setattr__(self, "_target_url", values.TargetURL(target_url))
-        object.__setattr__(self, "_allowed", values.Decision("allowed" if allowed else "denied"))
-        object.__setattr__(self, "_reason", values.Reason(reason))
+        self.slug = slug
+        self.target_url = target_url
+        self.allowed = allowed
+        self.reason = reason
+
+
+class LinkVerdict(ts.ValueObject):
+
+    def __init__(self, spec: LinkVerdictSpec) -> None:
+        object.__setattr__(self, "_slug", kernel_slug.Slug(spec.slug))
+        object.__setattr__(self, "_target_url", values.TargetURL(spec.target_url))
+        object.__setattr__(self, "_allowed", values.Decision("allowed" if spec.allowed else "denied"))
+        object.__setattr__(self, "_reason", values.Reason(spec.reason))
 
     @property
     def slug(self) -> kernel_slug.Slug:

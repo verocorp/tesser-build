@@ -392,10 +392,12 @@ against `main` at v0.0.71.0 rather than transcribed.
 
 ## TB083 spec-use follow-ups (2026-08-24, v0.0.80.0 ship red team)
 
-- [ ] **Container-typed spec parameters never enter the tracked set.**
-  `_spec_annotation` unwraps `Optional`/`Union`/`X | None` only, so
-  `specs: list[XSpec]`, `Sequence[XSpec]`, `tuple[XSpec, ...]`, `*args: XSpec`
-  are untracked and `specs[0].value` / `for s in specs: s.value` are silent.
+- [x] **Container-typed spec parameters never enter the tracked set — RESOLVED
+  v0.0.81.0.** `_spec_key` types `tuple`/`list`/`Sequence`/`Iterable` of a
+  spec as a many-typed name; a `for` loop (plain or `enumerate`), a
+  comprehension target, or a subscript over it binds the element, so
+  `specs[0].value` and `for s in specs: s.value` are findings. Still open:
+  `*args: XSpec` / `**kw: XSpec`, and `dict[str, XSpec]` values.
 - [ ] **Tracking is flow-insensitive.** One rebinding anywhere in a function
   (`if flag: spec = 'plain'`) drops the name for the whole function, so a
   later genuine `spec.value` is missed — the deliberate price of the
