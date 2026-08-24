@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 import reports.domain.values as values
-from tesser.errors import DomainError
+import tesser.errors as errors
 
 
 def test_a_target_url_accepts_an_http_and_an_https_target() -> None:
@@ -12,17 +12,17 @@ def test_a_target_url_accepts_an_http_and_an_https_target() -> None:
 
 
 def test_a_target_url_rejects_a_scheme_the_reader_cannot_follow() -> None:
-    with pytest.raises(DomainError):
+    with pytest.raises(errors.DomainError):
         values.TargetURL("ftp://a.example/x")
 
 
 def test_a_target_url_rejects_an_embedded_space() -> None:
-    with pytest.raises(DomainError):
+    with pytest.raises(errors.DomainError):
         values.TargetURL("https://a.example/a b")
 
 
 def test_a_target_url_rejects_the_empty_string() -> None:
-    with pytest.raises(DomainError):
+    with pytest.raises(errors.DomainError):
         values.TargetURL("")
 
 
@@ -49,7 +49,7 @@ def test_a_decision_admits_exactly_two_words() -> None:
 
 
 def test_a_decision_rejects_a_word_outside_its_closed_set() -> None:
-    with pytest.raises(DomainError):
+    with pytest.raises(errors.DomainError):
         values.Decision("maybe")
 
 
@@ -64,7 +64,7 @@ def test_a_decision_round_trips_through_its_canonical_exit() -> None:
 
 
 def test_a_reason_rejects_the_empty_string() -> None:
-    with pytest.raises(DomainError):
+    with pytest.raises(errors.DomainError):
         values.Reason("")
 
 

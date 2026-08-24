@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol
+import typing
 
 import tesser.application as ts
 
@@ -17,6 +17,6 @@ class IssueCampaignIdentityResponse(ts.Response):
         self.campaign_id = campaign_id
 
 
-class CampaignIdentity(ts.Port, Protocol):
+class CampaignIdentity(ts.Port, typing.Protocol):
 
     def issue(self, request: IssueCampaignIdentityRequest) -> IssueCampaignIdentityResponse: ...

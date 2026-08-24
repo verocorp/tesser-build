@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol
+import typing
 
 import tesser.application as ts
 
@@ -24,6 +24,6 @@ class ListLinksResponse(ts.Response):
         self.links = links
 
 
-class LinkSource(ts.Port, Protocol):
+class LinkSource(ts.Port, typing.Protocol):
 
     def links(self, request: ListLinksRequest) -> ListLinksResponse: ...

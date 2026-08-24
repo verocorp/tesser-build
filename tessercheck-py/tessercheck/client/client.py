@@ -1,4 +1,4 @@
-from typing import Protocol
+import typing
 
 import tesser.context as ts
 
@@ -27,7 +27,7 @@ class RulebookResponse(ts.Response):
         self.rendered = rendered
 
 
-class Client(ts.Client, Protocol):
+class Client(ts.Client, typing.Protocol):
 
     def check(self, request: CheckRequest) -> CheckResponse: ...
 

@@ -1,5 +1,5 @@
-from tesser.domain.entity import Entity
+import tesser.domain.entity as entity
 
 
-class AggregateRoot(Entity):
+class AggregateRoot(entity.Entity):
     pass

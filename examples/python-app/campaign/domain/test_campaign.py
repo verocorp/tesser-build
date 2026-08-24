@@ -8,7 +8,8 @@ import campaign.domain.money as money
 import campaign.domain.short_link as short_link
 import campaign.domain.short_links as short_links
 import campaign.domain.values as values
-from tesser.errors import DomainError, Kind
+import kernel.slug as kernel_slug
+import tesser.errors as errors
 
 
 @ts.helper
@@ -34,7 +35,7 @@ def test_a_campaign_carries_every_field_of_its_spec() -> None:
 
     assert c.id == values.CampaignID("0123456789abcdef")
     assert c.budget == money.Money("100.00", "USD")
-    assert [link.slug for link in c.links] == [values.Slug("spring-sale")]
+    assert [link.slug for link in c.links] == [kernel_slug.Slug("spring-sale")]
 
 
 def test_a_campaign_may_start_with_no_links() -> None:
@@ -64,18 +65,18 @@ def test_add_short_link_admits_a_new_slug() -> None:
         short_link.ShortLinkSpec(slug="sale", target_url="https://ok.example/y", active=True)
     )
 
-    assert [link.slug for link in c.links] == [values.Slug("promo"), values.Slug("sale")]
+    assert [link.slug for link in c.links] == [kernel_slug.Slug("promo"), kernel_slug.Slug("sale")]
 
 
 def test_add_short_link_refuses_a_slug_the_campaign_already_carries() -> None:
     c = campaign.Campaign(_campaign_spec(slug="promo"))
 
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         c.add_short_link(
             short_link.ShortLinkSpec(slug="promo", target_url="https://ok.example/y", active=True)
         )
 
-    assert caught.value.kind is Kind.CONFLICT
+    assert caught.value.kind is errors.Kind.CONFLICT
     assert caught.value.code == "duplicate_slug"
     assert len(c.links) == 1
 
@@ -83,7 +84,7 @@ def test_add_short_link_refuses_a_slug_the_campaign_already_carries() -> None:
 def test_add_short_link_refuses_a_malformed_link_and_keeps_the_campaign_intact() -> None:
     c = campaign.Campaign(_campaign_spec(slug="promo"))
 
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         c.add_short_link(
             short_link.ShortLinkSpec(slug="BAD SLUG", target_url="https://ok.example/y", active=True)
         )
@@ -93,7 +94,7 @@ def test_add_short_link_refuses_a_malformed_link_and_keeps_the_campaign_intact()
 
 
 def test_construction_refuses_a_duplicate_slug_in_the_spec() -> None:
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         campaign.Campaign(
             campaign.CampaignSpec(
                 id="0123456789abcdef",
@@ -109,12 +110,12 @@ def test_construction_refuses_a_duplicate_slug_in_the_spec() -> None:
             )
         )
 
-    assert caught.value.kind is Kind.CONFLICT
+    assert caught.value.kind is errors.Kind.CONFLICT
     assert caught.value.code == "duplicate_slug"
 
 
 def test_construction_names_the_index_of_the_link_it_refused() -> None:
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         campaign.Campaign(
             campaign.CampaignSpec(
                 id="0123456789abcdef",
@@ -135,14 +136,14 @@ def test_construction_names_the_index_of_the_link_it_refused() -> None:
 
 
 def test_construction_propagates_a_budget_rejection() -> None:
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         campaign.Campaign(_campaign_spec(currency="dollars"))
 
     assert caught.value.code == "invalid_budget_currency"
 
 
 def test_construction_propagates_an_id_rejection() -> None:
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         campaign.Campaign(_campaign_spec(id="not-an-id"))
 
     assert caught.value.code == "invalid_campaign_id"
@@ -154,7 +155,7 @@ def test_deactivate_short_link_flips_only_the_named_link() -> None:
         short_link.ShortLinkSpec(slug="sale", target_url="https://ok.example/y", active=True)
     )
 
-    c.deactivate_short_link(values.Slug("promo"))
+    c.deactivate_short_link(kernel_slug.Slug("promo"))
 
     assert [link.status for link in c.links] == [
         values.LinkStatus(values.LinkState.INACTIVE),
@@ -165,25 +166,25 @@ def test_deactivate_short_link_flips_only_the_named_link() -> None:
 def test_deactivate_short_link_refuses_a_slug_the_campaign_does_not_carry() -> None:
     c = campaign.Campaign(_campaign_spec(slug="promo"))
 
-    with pytest.raises(DomainError) as caught:
-        c.deactivate_short_link(values.Slug("nosuch"))
+    with pytest.raises(errors.DomainError) as caught:
+        c.deactivate_short_link(kernel_slug.Slug("nosuch"))
 
-    assert caught.value.kind is Kind.NOT_FOUND
+    assert caught.value.kind is errors.Kind.NOT_FOUND
     assert caught.value.code == "link_missing"
 
 
 def test_active_target_hands_back_the_url_of_the_named_active_link() -> None:
     c = campaign.Campaign(_campaign_spec(slug="promo"))
 
-    assert str(c.active_target(values.Slug("promo"))) == "https://ok.example/x"
+    assert str(c.active_target(kernel_slug.Slug("promo"))) == "https://ok.example/x"
 
 
 def test_active_target_refuses_a_link_that_was_deactivated() -> None:
     c = campaign.Campaign(_campaign_spec(slug="promo"))
-    c.deactivate_short_link(values.Slug("promo"))
+    c.deactivate_short_link(kernel_slug.Slug("promo"))
 
-    with pytest.raises(DomainError) as caught:
-        c.active_target(values.Slug("promo"))
+    with pytest.raises(errors.DomainError) as caught:
+        c.active_target(kernel_slug.Slug("promo"))
 
-    assert caught.value.kind is Kind.NOT_FOUND
+    assert caught.value.kind is errors.Kind.NOT_FOUND
     assert caught.value.code == "link_missing"

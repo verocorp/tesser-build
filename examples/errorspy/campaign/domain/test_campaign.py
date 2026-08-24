@@ -6,7 +6,7 @@ import tesser.testing as ts
 import campaign.domain.campaign as campaign
 import campaign.domain.short_link as short_link
 import campaign.domain.values as values
-from tesser.errors import DomainError, Kind
+import tesser.errors as errors
 
 
 @ts.helper
@@ -31,43 +31,43 @@ def test_campaign_valid() -> None:
 
 
 def test_duplicate_slug_is_conflict() -> None:
-    with pytest.raises(DomainError) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         campaign.Campaign(
             campaign.CampaignSpec(
                 id="c1", window=_window(), links=(_link("dup-slug"), _link("dup-slug"))
             )
         )
-    assert ei.value.kind is Kind.CONFLICT
+    assert ei.value.kind is errors.Kind.CONFLICT
     assert ei.value.code == "duplicate_slug"
 
 
 def test_too_many_links_is_conflict() -> None:
     links = tuple(_link(f"link-{i}") for i in range(6))
-    with pytest.raises(DomainError) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         campaign.Campaign(campaign.CampaignSpec(id="c1", window=_window(), links=links))
-    assert ei.value.kind is Kind.CONFLICT
+    assert ei.value.kind is errors.Kind.CONFLICT
     assert ei.value.code == "too_many_links"
 
 
 def test_bad_child_wrapped_with_index_keeps_kind_and_code() -> None:
-    with pytest.raises(DomainError) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         campaign.Campaign(
             campaign.CampaignSpec(
                 id="c1", window=_window(), links=(_link("ok-slug"), _link("BAD"))
             )
         )
     e = ei.value
-    assert e.kind is Kind.VALIDATION
+    assert e.kind is errors.Kind.VALIDATION
     assert e.code == "bad_slug"
     assert e.field == "links[1].slug"
-    assert isinstance(e.__cause__, DomainError)
+    assert isinstance(e.__cause__, errors.DomainError)
 
 
 def test_deactivate_missing_link_is_not_found() -> None:
     c = campaign.Campaign(_spec())
-    with pytest.raises(DomainError) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         c.deactivate_link(values.Slug("no-such-link"))
-    assert ei.value.kind is Kind.NOT_FOUND
+    assert ei.value.kind is errors.Kind.NOT_FOUND
     assert ei.value.code == "link_missing"
 
 

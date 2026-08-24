@@ -1,7 +1,7 @@
-from collections.abc import Callable
-from typing import TypeVar
+import collections.abc as abc
+import typing
 
-F = TypeVar("F", bound=Callable[..., object])
+F = typing.TypeVar("F", bound=abc.Callable[..., object])
 
 
 def helper(fn: F) -> F:

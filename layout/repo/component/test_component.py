@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pathlib import Path
+import pathlib
 
 import tesser.testing as ts
 
@@ -10,7 +10,7 @@ import repo.component.component as wire
 
 
 @ts.helper
-def _repo(root: Path) -> Path:  # tesser:debt TB073
+def _repo(root: pathlib.Path) -> pathlib.Path:  # tesser:debt TB073
     (root / "scripts").mkdir()
     (root / "scripts" / "verify").write_text(
         "run_appone() {\n"
@@ -39,25 +39,25 @@ def _repo(root: Path) -> Path:  # tesser:debt TB073
     return root
 
 
-def test_the_built_client_checks_a_clean_repo_off_disk(tmp_path: Path) -> None:
+def test_the_built_client_checks_a_clean_repo_off_disk(tmp_path: pathlib.Path) -> None:
     response = wire.Repo(config.Config(config.Spec())).client.check(client.CheckRequest(repo_root=str(_repo(tmp_path))))
     assert response.problems == ()
     assert response.counts == ("3", "1")
 
 
-def test_the_built_client_reads_the_filesystem_it_is_pointed_at(tmp_path: Path) -> None:
+def test_the_built_client_reads_the_filesystem_it_is_pointed_at(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "utils").mkdir()
     response = wire.Repo(config.Config(config.Spec())).client.check(client.CheckRequest(repo_root=str(tmp_path)))
     assert any("'utils' has no manifest.json row" in p for p in response.problems)
 
 
-def test_the_built_client_lists_the_app_trees(tmp_path: Path) -> None:
+def test_the_built_client_lists_the_app_trees(tmp_path: pathlib.Path) -> None:
     response = wire.Repo(config.Config(config.Spec())).client.trees(client.TreesRequest(repo_root=str(_repo(tmp_path))))
     assert response.trees == ("appone",)
 
 
-def test_the_built_client_turns_a_missing_root_into_a_problem(tmp_path: Path) -> None:
+def test_the_built_client_turns_a_missing_root_into_a_problem(tmp_path: pathlib.Path) -> None:
     response = wire.Repo(config.Config(config.Spec())).client.check(
         client.CheckRequest(repo_root=str(tmp_path / "no-such-dir"))
     )
@@ -66,7 +66,7 @@ def test_the_built_client_turns_a_missing_root_into_a_problem(tmp_path: Path) ->
 
 
 def test_the_built_client_turns_a_broken_manifest_into_one_problem(
-    tmp_path: Path,
+    tmp_path: pathlib.Path,
 ) -> None:
     _repo(tmp_path)
     (tmp_path / "manifest.json").write_text("{ truncated")
@@ -75,7 +75,7 @@ def test_the_built_client_turns_a_broken_manifest_into_one_problem(
     assert "manifest.json is unreadable" in response.problems[0]
 
 
-def test_every_build_hands_back_a_separate_client(tmp_path: Path) -> None:
+def test_every_build_hands_back_a_separate_client(tmp_path: pathlib.Path) -> None:
     first = wire.Repo(config.Config(config.Spec())).client
     second = wire.Repo(config.Config(config.Spec())).client
     assert first is not second

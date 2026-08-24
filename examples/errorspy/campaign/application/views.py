@@ -5,7 +5,7 @@ import typing
 import tesser.application as ts
 
 import campaign.application.ports.campaign_repository as campaign_repository
-from tesser.errors import not_found
+import tesser.errors as errors
 
 
 class MapToShortLinkSpec(ts.Mapper):
@@ -34,7 +34,7 @@ class MapToCampaignSpec(ts.Mapper):
             case campaign_repository.CampaignLookup.FOUND:
                 record = found_campaign.campaigns[0]
             case campaign_repository.CampaignLookup.MISSING:
-                raise not_found(
+                raise errors.not_found(
                     "campaign_missing",
                     f"no campaign {find_campaign_request.campaign_id!r}",
                 )

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol
+import typing
 
 import tesser.context as ts
 
@@ -45,7 +45,7 @@ class BookingStateResponse(ts.Response):
         self.reply = reply
 
 
-class SchedulingClient(ts.Client, Protocol):
+class SchedulingClient(ts.Client, typing.Protocol):
 
     def begin(self, request: BeginBookingRequest) -> BookingStateResponse: ...
 

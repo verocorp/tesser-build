@@ -102,13 +102,14 @@ legal edge and subtracts no app capability.
 
 ## The declarations
 
-`.tesser-root` grammar grows from two line forms to four. First line `app`,
+`.tesser-root` grammar grows from two line forms to five. First line `app`,
 then any of:
 
 ```
 skip <dir>          # unchanged
 export <dir>        # this tree's exported kernel (at most one line)
 import <package>    # an external kernel this tree's pure roles may import
+stdlib <module>     # a stdlib module added to the domain's pure stdlib
 ```
 
 TB044 findings, all reported before any module finding (the analyzer says
@@ -140,6 +141,32 @@ An `import` declaration is a purity waiver, so it is validated like one
 - it must be *used* — a declaration that legalizes no edge is itself a
   finding, mirroring TB090's rule that a debt marker suppressing nothing
   rots the ledger.
+
+`stdlib` is the stdlib-side counterpart (maintainer ruling 2026-08-24: the
+pure allowlist is a recommended default, not a fixed constant — a consumer
+whose domain needs `collections` or `itertools` widens it in its own
+declaration, never in the analyzer). A `stdlib <module>` line widens
+`CORE_STDLIB["domain"]` — the set the domain role and every kernel module
+share — with that module and its submodules (`stdlib urllib` admits
+`urllib.parse` and `urllib.request` alike; `stdlib urllib.parse` admits
+only the parser). It does not widen client, application, or ports: those
+are DTO shapes with nothing to compute. It is validated like `import` (all
+three are TB044 findings, reported before any module finding):
+
+- it names the stdlib — `stdlib requests` is a finding; an external package
+  is declared with `import`.
+- it never repeats the default — `stdlib typing` legalizes nothing.
+- it must be *used*, for the same reason an `import` line must.
+
+Like `import`, a `stdlib` line is a purity waiver, and the analyzer checks
+its shape, not its purity: `stdlib os` is accepted. Enumerating the IO
+modules is the trap the allowlist inverted away from, and the line sits in
+a one-line diff of a file every reviewer reads — the tree decides what its
+domain may reach for, in review, not the analyzer.
+
+The shipped default is evidence-driven and stays so: `collections.abc`,
+`urllib.parse`, and `copy` were admitted 2026-08-24 (the latter two burned
+the last `# tesser:debt TB062` markers in `examples/python-app`).
 
 Kernel-target imports are trusted per **walked module**, not per top-level
 name: an import of `kernel.vendored.x` where `vendored/` is skipped from

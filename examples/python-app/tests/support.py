@@ -3,27 +3,24 @@ from __future__ import annotations  # tesser:debt-file TB041
 import ast
 import pathlib
 
-from app.config import Config, HttpConfig, HttpSpec, Spec
-from campaign.component.config import Config as CampaignConfig
-from campaign.component.config import Spec as CampaignSpec
-from protocol.http import HttpRequest, HttpResponse, Route
-from linkpolicy.component.config import Config as LinkPolicyConfig
-from linkpolicy.component.config import Spec as LinkPolicySpec
-from reports.component.config import Config as ReportsConfig
-from reports.component.config import Spec as ReportsSpec
+import app.config as config
+import campaign.component.config as campaign_config
+import linkpolicy.component.config as linkpolicy_config
+import protocol.http as http
+import reports.component.config as reports_config
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 CONFIG_OWNERS = frozenset({"cfg", "config"})
 
 
-def app_config() -> Config:
-    return Config(
-        Spec(
-            campaign=CampaignConfig(CampaignSpec("memory")),
-            linkpolicy=LinkPolicyConfig(LinkPolicySpec("memory")),
-            reports=ReportsConfig(ReportsSpec()),
-            http=HttpConfig(HttpSpec("", 8080)),
+def app_config() -> config.Config:
+    return config.Config(
+        config.Spec(
+            campaign=campaign_config.Config(campaign_config.Spec("memory")),
+            linkpolicy=linkpolicy_config.Config(linkpolicy_config.Spec("memory")),
+            reports=reports_config.Config(reports_config.Spec()),
+            http=config.HttpConfig(config.HttpSpec("", 8080)),
         )
     )
 
@@ -81,17 +78,17 @@ class SpyApp:
         self.closed += 1
 
 
-def route_ok(req: HttpRequest) -> HttpResponse:
-    return HttpResponse.json(200, {"seen": dict(req.path_params)})
+def route_ok(req: http.HttpRequest) -> http.HttpResponse:
+    return http.HttpResponse.json(200, {"seen": dict(req.path_params)})
 
 
-def route_other(req: HttpRequest) -> HttpResponse:
-    return HttpResponse.json(200, {})
+def route_other(req: http.HttpRequest) -> http.HttpResponse:
+    return http.HttpResponse.json(200, {})
 
 
 ROUTES = (
-    Route("POST", "/campaigns", route_other),
-    Route("GET", "/campaigns/{campaign_id}", route_ok),
-    Route("GET", "/r/{slug}", route_ok),
-    Route("GET", "/reports/links-by-verdict", route_other),
+    http.Route("POST", "/campaigns", route_other),
+    http.Route("GET", "/campaigns/{campaign_id}", route_ok),
+    http.Route("GET", "/r/{slug}", route_ok),
+    http.Route("GET", "/reports/links-by-verdict", route_other),
 )

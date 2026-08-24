@@ -1,6 +1,6 @@
-from typing import TypeVar
+import typing
 
-C = TypeVar("C", bound=type)
+C = typing.TypeVar("C", bound=type)
 
 
 def fake(cls: C) -> C:

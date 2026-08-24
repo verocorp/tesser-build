@@ -6,7 +6,7 @@ import tesser.testing as ts
 import campaign.client.client as campaign_client
 import reports.adapters.gateways.campaign_links as campaign_links
 import reports.application.ports.link_source as link_source
-from tesser.errors import InfraError
+import tesser.errors as errors
 
 
 @ts.fake
@@ -91,7 +91,7 @@ def test_a_campaign_context_with_no_links_yields_no_records() -> None:
 
 
 def test_a_failure_inside_the_campaign_context_reaches_the_caller() -> None:
-    links = FakeCampaignClient(error=InfraError("campaign store unreachable"))
+    links = FakeCampaignClient(error=errors.InfraError("campaign store unreachable"))
 
-    with pytest.raises(InfraError):
+    with pytest.raises(errors.InfraError):
         campaign_links.CampaignLinkGateway(links).links(link_source.ListLinksRequest())

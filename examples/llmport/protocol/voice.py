@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import copy
-from collections.abc import Mapping
-from typing import Protocol
+import collections.abc as abc
+import typing
 
 import tesser.srv as ts
 
@@ -13,12 +13,12 @@ class BadToolCall(ts.Rejection):
 
 class Tool(ts.Record):
 
-    def __init__(self, name: str, description: str, parameters: Mapping[str, object]) -> None:
+    def __init__(self, name: str, description: str, parameters: abc.Mapping[str, object]) -> None:
         super().__init__(name=name, description=description, parameters=copy.deepcopy(dict(parameters)))
 
     name: str
     description: str
-    parameters: Mapping[str, object]
+    parameters: abc.Mapping[str, object]
 
     def schema(self) -> dict[str, object]:
         return {
@@ -30,11 +30,11 @@ class Tool(ts.Record):
 
 class ToolCall(ts.Request):
 
-    def __init__(self, name: str, arguments: Mapping[str, object]) -> None:
+    def __init__(self, name: str, arguments: abc.Mapping[str, object]) -> None:
         super().__init__(name=name, arguments=copy.deepcopy(dict(arguments)))
 
     name: str
-    arguments: Mapping[str, object]
+    arguments: abc.Mapping[str, object]
 
     def text(self, key: str) -> str:
         value = self.arguments.get(key)
@@ -52,7 +52,7 @@ class ToolTurn(ts.Response):
     tools: tuple[Tool, ...]
 
 
-class ToolEndpoint(ts.Port, Protocol):
+class ToolEndpoint(ts.Port, typing.Protocol):
 
     def __call__(self, call: ToolCall, /) -> ToolTurn: ...
 
@@ -66,7 +66,7 @@ class Route(ts.Record):
     endpoint: ToolEndpoint
 
 
-class ToolSurface(ts.Port, Protocol):
+class ToolSurface(ts.Port, typing.Protocol):
 
     def instructions(self) -> str: ...
 

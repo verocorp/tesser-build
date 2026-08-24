@@ -13,7 +13,7 @@ import campaign.domain.campaign as campaign
 import campaign.domain.money as money
 import campaign.domain.short_link as short_link
 import campaign.domain.short_links as short_links
-from tesser.errors import DomainError, InfraError, Kind
+import tesser.errors as errors
 
 
 @ts.fake
@@ -143,7 +143,7 @@ class FakeTargetPolicyDown(target_policy.TargetPolicy):
     def check(
         self, request: target_policy.CheckTargetRequest
     ) -> target_policy.CheckTargetResponse:
-        raise InfraError("linkpolicy unavailable")
+        raise errors.InfraError("linkpolicy unavailable")
 
 
 def test_create_campaign_returns_the_budget_it_was_asked_for() -> None:
@@ -188,7 +188,7 @@ def test_create_campaign_refuses_a_malformed_currency_and_saves_nothing() -> Non
     repo = FakeCampaignStore()
     svc = service.CampaignService(repo, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), repo)
 
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         svc.create_campaign(
             client.CreateCampaignRequest(budget_amount="100.00", budget_currency="dollars")
         )
@@ -241,14 +241,14 @@ def test_add_link_refuses_a_blocked_destination_and_saves_nothing() -> None:
     svc = service.CampaignService(repo, FakeTargetPolicyBlocking(), FakeCampaignIdentity(), repo)
     before = len(repo.saved)
 
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         svc.add_link(
             client.AddLinkRequest(
                 campaign_id=created.campaign_id, slug="promo", target_url="https://bad.example/x"
             )
         )
 
-    assert caught.value.kind is Kind.CONFLICT
+    assert caught.value.kind is errors.Kind.CONFLICT
     assert caught.value.code == "destination_blocked"
     assert "on the deny-list" in caught.value.message
     assert len(repo.saved) == before
@@ -263,7 +263,7 @@ def test_add_link_lets_a_policy_outage_surface_and_saves_nothing() -> None:
     svc = service.CampaignService(repo, FakeTargetPolicyDown(), FakeCampaignIdentity(), repo)
     before = len(repo.saved)
 
-    with pytest.raises(InfraError):
+    with pytest.raises(errors.InfraError):
         svc.add_link(
             client.AddLinkRequest(
                 campaign_id=created.campaign_id, slug="promo", target_url="https://ok.example/x"
@@ -288,14 +288,14 @@ def test_add_link_refuses_a_slug_another_campaign_already_uses() -> None:
         )
     )
 
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         svc.add_link(
             client.AddLinkRequest(
                 campaign_id=second.campaign_id, slug="promo", target_url="https://ok.example/y"
             )
         )
 
-    assert caught.value.kind is Kind.CONFLICT
+    assert caught.value.kind is errors.Kind.CONFLICT
     assert caught.value.code == "duplicate_slug"
 
 
@@ -304,7 +304,7 @@ def test_add_link_refuses_a_malformed_slug_without_touching_the_policy() -> None
     store = FakeCampaignStore()
     svc = service.CampaignService(store, policy, FakeCampaignIdentity(), store)
 
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         svc.add_link(
             client.AddLinkRequest(
                 campaign_id="0123456789abcdef", slug="BAD SLUG", target_url="https://ok.example/x"
@@ -319,14 +319,14 @@ def test_add_link_refuses_a_campaign_that_does_not_exist() -> None:
     store = FakeCampaignStore()
     svc = service.CampaignService(store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), store)
 
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         svc.add_link(
             client.AddLinkRequest(
                 campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x"
             )
         )
 
-    assert caught.value.kind is Kind.NOT_FOUND
+    assert caught.value.kind is errors.Kind.NOT_FOUND
     assert caught.value.code == "campaign_missing"
 
 
@@ -357,12 +357,12 @@ def test_deactivate_link_refuses_a_slug_the_campaign_does_not_carry() -> None:
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
 
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         svc.deactivate_link(
             client.DeactivateLinkRequest(campaign_id=created.campaign_id, slug="nosuch")
         )
 
-    assert caught.value.kind is Kind.NOT_FOUND
+    assert caught.value.kind is errors.Kind.NOT_FOUND
     assert caught.value.code == "link_missing"
 
 
@@ -384,10 +384,10 @@ def test_get_campaign_refuses_a_campaign_that_does_not_exist() -> None:
     store = FakeCampaignStore()
     svc = service.CampaignService(store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), store)
 
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         svc.get_campaign(client.GetCampaignRequest(campaign_id="0123456789abcdef"))
 
-    assert caught.value.kind is Kind.NOT_FOUND
+    assert caught.value.kind is errors.Kind.NOT_FOUND
     assert caught.value.code == "campaign_missing"
 
 
@@ -412,10 +412,10 @@ def test_resolve_refuses_a_slug_nobody_registered() -> None:
     store = FakeCampaignStore()
     svc = service.CampaignService(store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), store)
 
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         svc.resolve(client.ResolveRequest(slug="nosuch"))
 
-    assert caught.value.kind is Kind.NOT_FOUND
+    assert caught.value.kind is errors.Kind.NOT_FOUND
     assert caught.value.code == "link_missing"
 
 
@@ -423,7 +423,7 @@ def test_resolve_refuses_a_malformed_slug() -> None:
     store = FakeCampaignStore()
     svc = service.CampaignService(store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), store)
 
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         svc.resolve(client.ResolveRequest(slug="BAD SLUG"))
 
     assert caught.value.code == "invalid_slug"
@@ -535,7 +535,7 @@ def test_the_campaign_view_mapper_exposes_the_row_it_was_given() -> None:
 
 
 def test_the_campaign_view_mapper_refuses_a_missing_campaign() -> None:
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         service.MapToCampaignView(
             find_campaign_view_request=campaign_queries.FindCampaignViewRequest(
                 campaign_id="0123456789abcdef"
@@ -661,8 +661,8 @@ def test_the_campaign_spec_mapper_from_a_record_exposes_the_link_records_it_was_
 def test_deactivate_link_refuses_a_malformed_campaign_id_before_the_repository_is_touched() -> None:
     store = FakeCampaignStore()
     svc = service.CampaignService(store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), store)
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         svc.deactivate_link(client.DeactivateLinkRequest(campaign_id="not-hex", slug="promo"))
-    assert caught.value.kind is Kind.VALIDATION
+    assert caught.value.kind is errors.Kind.VALIDATION
     assert caught.value.code == "invalid_campaign_id"
     assert store.saved == []

@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Final
+import pathlib
+import typing
 
 import tesser.adapters as ts
 
 import repo.application.ports.repo_reader as repo_reader
 
-SKIP_DIRS: Final[frozenset[str]] = frozenset(
+SKIP_DIRS: typing.Final[frozenset[str]] = frozenset(
     {
         ".git",
         ".claude",
@@ -28,17 +28,17 @@ SKIP_DIRS: Final[frozenset[str]] = frozenset(
     }
 )
 
-HIDDEN_TRACKED: Final[frozenset[str]] = frozenset({".github"})
+HIDDEN_TRACKED: typing.Final[frozenset[str]] = frozenset({".github"})
 
-DECLARATION: Final[str] = ".tesser-root"
+DECLARATION: typing.Final[str] = ".tesser-root"
 
-REQUIREMENTS: Final[str] = "requirements-dev.txt"
+REQUIREMENTS: typing.Final[str] = "requirements-dev.txt"
 
 
 class FilesystemRepoReader(ts.Repository):
 
     def read(self, request: repo_reader.ReadRepoRequest) -> repo_reader.ReadRepoResponse:
-        base = Path(request.repo_root)
+        base = pathlib.Path(request.repo_root)
         if not base.is_dir():
             return repo_reader.ReadRepoResponse(
                 manifest=repo_reader.ManifestRecord(

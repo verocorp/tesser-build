@@ -1,5 +1,5 @@
 import json
-from pathlib import Path
+import pathlib
 
 import tessercheck.adapters.repositories.source_reader as source_repository
 import tessercheck.application.ports.source_reader as source_reader
@@ -7,7 +7,7 @@ import tessercheck.domain.checks as checks
 
 
 def test_every_tesser_allowlist_entry_is_earned_by_the_shipped_distribution() -> None:
-    repo = Path(__file__).resolve().parents[3]
+    repo = pathlib.Path(__file__).resolve().parents[3]
     manifest = json.loads((repo / "manifest.json").read_text(encoding="utf-8"))
     reader = source_repository.FilesystemSourceReader()
     for key, kind in sorted(manifest.items()):

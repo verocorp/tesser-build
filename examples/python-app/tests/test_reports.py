@@ -3,12 +3,12 @@ from __future__ import annotations
 import app.app as app
 import campaign.client.client as client
 import reports.client.client as reports_client
-from tesser.errors import DomainError
-from tests.support import app_config
+import tesser.errors as errors
+import tests.support as support
 
 
 def test_report_reads_both_components_in_process() -> None:
-    built = app.App(app_config())
+    built = app.App(support.app_config())
     try:
         view = built.campaign.client.create_campaign(client.CreateCampaignRequest("100.00", "USD"))
         built.campaign.client.add_link(
@@ -25,14 +25,14 @@ def test_report_reads_both_components_in_process() -> None:
 
 
 def test_blocked_destination_never_becomes_a_link() -> None:
-    built = app.App(app_config())
+    built = app.App(support.app_config())
     try:
         view = built.campaign.client.create_campaign(client.CreateCampaignRequest("100.00", "USD"))
         try:
             built.campaign.client.add_link(
                 client.AddLinkRequest(view.campaign_id, "bad", "http://ok.example/a")
             )
-        except DomainError:
+        except errors.DomainError:
             pass
         assert (
             built.reports.client.links_by_verdict(reports_client.LinksByVerdictRequest()).links

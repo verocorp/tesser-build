@@ -34,12 +34,13 @@ that isn't a copy.
    representation hiding, serialization norms) applies unchanged.
 2. **The purity bar is the domain's, transitively.** A kernel module imports
    only: its own kernel, `tesser.domain` (exactly once, as `ts`), kernels
-   declared with `import <package>` lines, and the domain's pure stdlib.
-   Never a context, never the app shell, never IO.
+   declared with `import <package>` lines, and the domain's pure stdlib —
+   the shipped default plus any `stdlib <module>` lines the tree's
+   `.tesser-root` declares. Never a context, never the app shell, never IO.
 3. **Nothing imports leftward.** A kernel never knows a context exists.
    Contexts' pure roles (domain, client, application) may import the app's
-   kernels directly — member form is fine, like the stdlib — and adapters,
-   wiring, and tests may too.
+   kernels directly — as modules, like everything else (`import kernel.slug
+   as kernel_slug`, TB053) — and adapters, wiring, and tests may too.
 4. **No client, no service, no adapters.** Consumption *is* the import. If
    the tree also wants runtime behavior (a CLI over the kernel), that is
    ordinary app anatomy grown beside it — contexts, `srv/` — not part of

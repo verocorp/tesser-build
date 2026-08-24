@@ -390,6 +390,23 @@ against `main` at v0.0.71.0 rather than transcribed.
   rather than global classification; or require kind-table rows to carry a
   ruling reference the same way `.tesser-root` carries tree facts.
 
+## Module-only imports wave followups (2026-08-24, branch `worktree-imports-module-only`)
+
+- [ ] **A parameter or local that shadows a module alias has no rule.** Six
+  live handler sites bind a parameter `client` over `import <ctx>.client.client
+  as client` (safe today: annotations are strings and bodies use the alias
+  only in unshadowed methods); `service.py` dodges the same collision by hand
+  with `import kernel.slug as kernel_slug`. TB033 covers builtins only, and
+  `Module._resolve` maps `name.Attr` to the alias with no scope analysis. A
+  shadowing rule over module aliases would make the convention enforced.
+- [ ] **A package `__init__` re-export that shares a submodule's name shadows
+  the submodule at `import a.b.c as c`** (`tesser.srv.main`,
+  `tesser.testing.fake`/`helper` — the function is bound, not the module;
+  `mypy --strict` accepts it). Zero live instances after the migration; the
+  sibling tests import the package instead, which TB074 pairs by filename
+  only. A rule that a re-exported name never equals a submodule name would
+  close it.
+
 ## Import-totality wave followups (2026-08-06, branch `worktree-io-import-restrictions`)
 
 - [x] **python-app conformance + remove the sigcheck CI ratchet** — RESOLVED
@@ -432,11 +449,11 @@ against `main` at v0.0.71.0 rather than transcribed.
   left this list in the srv-wire-vocabulary wave: a top-level `*wire.py` is a
   governed wire module — imports `tesser.srv` exactly once as ts, holds wire
   kinds, is context-generic, and never imports srv or bootstrap.)
-- [ ] **Pure-core allowlist candidates (from dogfood evidence only):**
-  `urllib.parse` in `campaign.domain.values` / `linkpolicy.domain.policy`
-  (pure parsing — likely admit; the matcher accepts exact dotted entries, so
-  `urllib.parse` can be admitted without opening `urllib.request`), `copy` in
-  `campaign.domain.short_link` (pure — likely admit). The `secrets` half is
+- [x] **Pure-core allowlist candidates (from dogfood evidence only):**
+  RESOLVED 2026-08-24 (module-only imports wave): `urllib.parse` and `copy`
+  admitted to the default; their three `# tesser:debt TB062` markers are
+  burned. The default is now a recommended default, widened per tree by
+  `stdlib <module>` lines in `.tesser-root`. The `secrets` half is
   RESOLVED v0.0.61.0: it was injected through the `CampaignIdentity` port
   rather than admitted, and the service's `# tesser:debt TB062` is
   deleted — the outcome the entry predicted.
@@ -475,10 +492,11 @@ against `main` at v0.0.71.0 rather than transcribed.
   (10) srv/bootstrap have no external-import allowlist, and a constants-only
   module can do import-time IO (`OUT: Final[bytes] = subprocess.check_output`)
   with zero findings — fold into the host-vocabulary ruling.
-  (11) PARTIALLY RESOLVED v0.0.29.0: `TOOLING_MODULES` is deleted — no
-  consumer inherits a name-keyed bypass anymore. Still open: CORE_STDLIB's
-  `ast` entry is global, and the allowlist has no per-consumer config
-  surface yet.
+  (11) RESOLVED 2026-08-24: `TOOLING_MODULES` was deleted in v0.0.29.0, and
+  the allowlist now has its per-consumer surface — `stdlib <module>` lines in
+  `.tesser-root` widen `CORE_STDLIB["domain"]` for that tree (validated as a
+  real stdlib module, not a repeat of the default, and used). The `ast`
+  entry stays in the shipped default on the original evidence.
   (12) a top-level FILE sharing a context's name (context package without
   `__init__.py` + `<context>.py` beside it) falls through to
   `_context_init_violations` and is mislabeled "__init__ declares code" —

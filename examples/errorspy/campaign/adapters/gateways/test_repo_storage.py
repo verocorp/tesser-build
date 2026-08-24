@@ -6,12 +6,12 @@ import pytest
 
 import campaign.adapters.gateways.repo_storage as repo_storage
 import campaign.application.ports.campaign_repository as campaign_repository
-from tesser.errors import InfraError
-from storage import FakeStorage, StorageUnavailable
+import tesser.errors as errors
+import storage
 
 
 def test_a_saved_campaign_is_found_by_its_id() -> None:
-    repo = repo_storage.StorageCampaignRepository(FakeStorage())
+    repo = repo_storage.StorageCampaignRepository(storage.FakeStorage())
     repo.save(
         campaign_repository.SaveCampaignRequest(
             id="c1",
@@ -39,7 +39,7 @@ def test_a_saved_campaign_is_found_by_its_id() -> None:
 
 
 def test_an_id_that_was_never_saved_is_missing_and_carries_nothing() -> None:
-    repo = repo_storage.StorageCampaignRepository(FakeStorage())
+    repo = repo_storage.StorageCampaignRepository(storage.FakeStorage())
     found = repo.find(campaign_repository.FindCampaignRequest(campaign_id="ghost"))
     assert (found.outcome, found.campaigns) == (
         campaign_repository.CampaignLookup.MISSING,
@@ -48,7 +48,7 @@ def test_an_id_that_was_never_saved_is_missing_and_carries_nothing() -> None:
 
 
 def test_every_link_survives_the_round_trip_in_the_order_it_was_saved() -> None:
-    repo = repo_storage.StorageCampaignRepository(FakeStorage())
+    repo = repo_storage.StorageCampaignRepository(storage.FakeStorage())
     repo.save(
         campaign_repository.SaveCampaignRequest(
             id="c1",
@@ -69,7 +69,7 @@ def test_every_link_survives_the_round_trip_in_the_order_it_was_saved() -> None:
 
 
 def test_a_campaign_with_no_links_round_trips_as_a_campaign_with_no_links() -> None:
-    repo = repo_storage.StorageCampaignRepository(FakeStorage())
+    repo = repo_storage.StorageCampaignRepository(storage.FakeStorage())
     repo.save(
         campaign_repository.SaveCampaignRequest(
             id="c1",
@@ -83,7 +83,7 @@ def test_a_campaign_with_no_links_round_trips_as_a_campaign_with_no_links() -> N
 
 
 def test_saving_an_id_again_replaces_what_is_served() -> None:
-    repo = repo_storage.StorageCampaignRepository(FakeStorage())
+    repo = repo_storage.StorageCampaignRepository(storage.FakeStorage())
     repo.save(
         campaign_repository.SaveCampaignRequest(
             id="c1",
@@ -109,8 +109,8 @@ def test_saving_an_id_again_replaces_what_is_served() -> None:
 
 
 def test_two_repositories_over_separate_storage_do_not_share_their_rows() -> None:
-    first = repo_storage.StorageCampaignRepository(FakeStorage())
-    second = repo_storage.StorageCampaignRepository(FakeStorage())
+    first = repo_storage.StorageCampaignRepository(storage.FakeStorage())
+    second = repo_storage.StorageCampaignRepository(storage.FakeStorage())
     first.save(
         campaign_repository.SaveCampaignRequest(
             id="c1",
@@ -123,22 +123,22 @@ def test_two_repositories_over_separate_storage_do_not_share_their_rows() -> Non
 
 
 def test_an_outage_is_translated_into_infra_and_names_the_campaign() -> None:
-    repo = repo_storage.StorageCampaignRepository(FakeStorage(down=True))
-    with pytest.raises(InfraError) as ei:
+    repo = repo_storage.StorageCampaignRepository(storage.FakeStorage(down=True))
+    with pytest.raises(errors.InfraError) as ei:
         repo.find(campaign_repository.FindCampaignRequest(campaign_id="c1"))
     assert str(ei.value) == "storage unavailable loading campaign 'c1'"
 
 
 def test_an_outage_keeps_the_storage_failure_as_the_cause() -> None:
-    repo = repo_storage.StorageCampaignRepository(FakeStorage(down=True))
-    with pytest.raises(InfraError) as ei:
+    repo = repo_storage.StorageCampaignRepository(storage.FakeStorage(down=True))
+    with pytest.raises(errors.InfraError) as ei:
         repo.find(campaign_repository.FindCampaignRequest(campaign_id="c1"))
-    assert isinstance(ei.value.__cause__, StorageUnavailable)
+    assert isinstance(ei.value.__cause__, storage.StorageUnavailable)
 
 
 def test_an_outage_does_not_masquerade_as_a_missing_campaign() -> None:
-    storage = FakeStorage()
-    repo = repo_storage.StorageCampaignRepository(storage)
+    backend = storage.FakeStorage()
+    repo = repo_storage.StorageCampaignRepository(backend)
     repo.save(
         campaign_repository.SaveCampaignRequest(
             id="c1",
@@ -146,13 +146,13 @@ def test_an_outage_does_not_masquerade_as_a_missing_campaign() -> None:
             links=(),
         )
     )
-    storage.down = True
-    with pytest.raises(InfraError):
+    backend.down = True
+    with pytest.raises(errors.InfraError):
         repo.find(campaign_repository.FindCampaignRequest(campaign_id="c1"))
 
 
 def test_saving_answers_a_save_response() -> None:
-    repo = repo_storage.StorageCampaignRepository(FakeStorage())
+    repo = repo_storage.StorageCampaignRepository(storage.FakeStorage())
     answered = repo.save(
         campaign_repository.SaveCampaignRequest(
             id="c1",

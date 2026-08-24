@@ -8,7 +8,7 @@ import linkpolicy.client.client as linkpolicy_client
 import reports.client.client as client
 import reports.component.config as config
 import reports.component.component as wire
-from tesser.errors import InfraError
+import tesser.errors as errors
 
 
 @ts.fake
@@ -132,11 +132,11 @@ def test_two_builds_hand_back_two_independent_clients() -> None:
 
 
 def test_a_failure_in_a_wired_neighbour_reaches_the_caller() -> None:
-    links = FakeCampaignClient(error=InfraError("campaign store unreachable"))
+    links = FakeCampaignClient(error=errors.InfraError("campaign store unreachable"))
 
     component = wire.Reports(config.Config(config.Spec()), links, FakeLinkPolicyClient())
     try:
-        with pytest.raises(InfraError):
+        with pytest.raises(errors.InfraError):
             component.client.links_by_verdict(client.LinksByVerdictRequest())
     finally:
         component.close()

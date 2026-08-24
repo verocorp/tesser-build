@@ -1,46 +1,46 @@
 from __future__ import annotations
 
 import ast
-from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+import datetime
+import decimal
 
 import pytest
 
 import campaign.domain.campaign as campaign
 import campaign.domain.money as money
 import campaign.domain.short_link as short_link
-from tesser.serialization import canonical_datetime, canonical_decimal, canonical_str
+import tesser.serialization as serialization
 import pathlib
 
 
 def test_canonical_str_is_the_identity_policy() -> None:
-    assert canonical_str("promo") == "promo"
+    assert serialization.canonical_str("promo") == "promo"
 
 
 def test_canonical_decimal_is_the_text_policy() -> None:
-    assert canonical_decimal(Decimal("19.99")) == "19.99"
-    assert canonical_decimal(Decimal("1.50")) == "1.50"
+    assert serialization.canonical_decimal(decimal.Decimal("19.99")) == "19.99"
+    assert serialization.canonical_decimal(decimal.Decimal("1.50")) == "1.50"
 
 
 def test_equal_decimals_may_have_distinct_canonical_forms() -> None:
-    a, b = Decimal("1.5"), Decimal("1.50")
+    a, b = decimal.Decimal("1.5"), decimal.Decimal("1.50")
     assert a == b
-    assert canonical_decimal(a) != canonical_decimal(b)
-    assert Decimal(canonical_decimal(a)) == Decimal(canonical_decimal(b))
+    assert serialization.canonical_decimal(a) != serialization.canonical_decimal(b)
+    assert decimal.Decimal(serialization.canonical_decimal(a)) == decimal.Decimal(serialization.canonical_decimal(b))
 
 
 def test_canonical_datetime_is_pinned_to_utc_microseconds() -> None:
-    eastern = timezone(timedelta(hours=-5))
-    value = datetime(2026, 7, 20, 10, 16, 15, 123456, tzinfo=eastern)
-    assert canonical_datetime(value) == "2026-07-20T15:16:15.123456+00:00"
-    assert canonical_datetime(datetime(2026, 7, 20, 15, 0, 0, tzinfo=timezone.utc)) == (
+    eastern = datetime.timezone(datetime.timedelta(hours=-5))
+    value = datetime.datetime(2026, 7, 20, 10, 16, 15, 123456, tzinfo=eastern)
+    assert serialization.canonical_datetime(value) == "2026-07-20T15:16:15.123456+00:00"
+    assert serialization.canonical_datetime(datetime.datetime(2026, 7, 20, 15, 0, 0, tzinfo=datetime.timezone.utc)) == (
         "2026-07-20T15:00:00.000000+00:00"
     )
 
 
 def test_canonical_datetime_rejects_naive() -> None:
     with pytest.raises(ValueError, match="naive"):
-        canonical_datetime(datetime(2026, 7, 20, 15, 0, 0))
+        serialization.canonical_datetime(datetime.datetime(2026, 7, 20, 15, 0, 0))
 
 
 def test_structured_types_define_no_conversion_dunders() -> None:
@@ -60,9 +60,9 @@ def test_every_domain_conversion_dunder_routes_through_a_canonical_helper() -> N
             if not (isinstance(node, ast.FunctionDef) and node.name in dunders):
                 continue
             calls = {
-                call.func.id
+                call.func.attr
                 for call in ast.walk(node)
-                if isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
+                if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)
             }
             assert any(name.startswith("canonical_") for name in calls), (
                 f"{path.name}: {node.name} at line {node.lineno} does not route "

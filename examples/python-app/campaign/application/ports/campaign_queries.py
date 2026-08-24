@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import enum
-from typing import Protocol
+import typing
 
 import tesser.application as ts
 
@@ -49,6 +49,6 @@ class FindCampaignViewResponse(ts.Response):
         self.campaigns = campaigns
 
 
-class CampaignQueries(ts.Port, Protocol):
+class CampaignQueries(ts.Port, typing.Protocol):
 
     def find_view(self, request: FindCampaignViewRequest) -> FindCampaignViewResponse: ...

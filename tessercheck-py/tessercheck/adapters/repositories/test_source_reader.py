@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from pathlib import Path
+import pathlib
 
 import tessercheck.adapters.repositories.source_reader as source_repository
 import tessercheck.application.ports.source_reader as source_reader
 
 
-def test_a_declared_tree_reads_as_an_app(tmp_path: Path) -> None:
+def test_a_declared_tree_reads_as_an_app(tmp_path: pathlib.Path) -> None:
     (tmp_path / ".tesser-root").write_text("app\n", encoding="utf-8")
     read = source_repository.FilesystemSourceReader().sources(
         source_reader.ReadSourcesRequest(tree=str(tmp_path))
@@ -18,7 +18,7 @@ def test_a_declared_tree_reads_as_an_app(tmp_path: Path) -> None:
     assert "os" in read.stdlib
 
 
-def test_a_tree_with_no_declaration_reads_as_missing(tmp_path: Path) -> None:
+def test_a_tree_with_no_declaration_reads_as_missing(tmp_path: pathlib.Path) -> None:
     read = source_repository.FilesystemSourceReader().sources(
         source_reader.ReadSourcesRequest(tree=str(tmp_path))
     )
@@ -26,7 +26,7 @@ def test_a_tree_with_no_declaration_reads_as_missing(tmp_path: Path) -> None:
 
 
 def test_a_declaration_that_does_not_open_with_app_reads_as_unrecognized(
-    tmp_path: Path,
+    tmp_path: pathlib.Path,
 ) -> None:
     (tmp_path / ".tesser-root").write_text("library\n", encoding="utf-8")
     read = source_repository.FilesystemSourceReader().sources(
@@ -35,7 +35,7 @@ def test_a_declaration_that_does_not_open_with_app_reads_as_unrecognized(
     assert read.root is source_reader.RootForm.UNRECOGNIZED
 
 
-def test_an_undecodable_declaration_reads_as_unreadable(tmp_path: Path) -> None:
+def test_an_undecodable_declaration_reads_as_unreadable(tmp_path: pathlib.Path) -> None:
     (tmp_path / ".tesser-root").write_bytes(b"\xff\xfe\x00app")
     read = source_repository.FilesystemSourceReader().sources(
         source_reader.ReadSourcesRequest(tree=str(tmp_path))
@@ -43,7 +43,7 @@ def test_an_undecodable_declaration_reads_as_unreadable(tmp_path: Path) -> None:
     assert read.root is source_reader.RootForm.UNREADABLE
 
 
-def test_a_bom_prefixed_declaration_still_reads_as_an_app(tmp_path: Path) -> None:
+def test_a_bom_prefixed_declaration_still_reads_as_an_app(tmp_path: pathlib.Path) -> None:
     (tmp_path / ".tesser-root").write_bytes(b"\xef\xbb\xbfapp\n")
     read = source_repository.FilesystemSourceReader().sources(
         source_reader.ReadSourcesRequest(tree=str(tmp_path))
@@ -51,7 +51,7 @@ def test_a_bom_prefixed_declaration_still_reads_as_an_app(tmp_path: Path) -> Non
     assert read.root is source_reader.RootForm.APP
 
 
-def test_export_and_import_directives_are_carried_through(tmp_path: Path) -> None:
+def test_export_and_import_directives_are_carried_through(tmp_path: pathlib.Path) -> None:
     (tmp_path / ".tesser-root").write_text(
         "app\nexport tesser\nimport other.client.client\n", encoding="utf-8"
     )
@@ -62,8 +62,30 @@ def test_export_and_import_directives_are_carried_through(tmp_path: Path) -> Non
     assert read.imports == ("other.client.client",)
 
 
+def test_a_stdlib_directive_is_carried_through(tmp_path: pathlib.Path) -> None:
+    (tmp_path / ".tesser-root").write_text(
+        "app\nstdlib collections.abc\nstdlib copy\n", encoding="utf-8"
+    )
+    read = source_repository.FilesystemSourceReader().sources(
+        source_reader.ReadSourcesRequest(tree=str(tmp_path))
+    )
+    assert read.root is source_reader.RootForm.APP
+    assert read.pure_stdlib == ("collections.abc", "copy")
+
+
+def test_a_stdlib_naming_a_path_makes_the_declaration_unrecognized(
+    tmp_path: pathlib.Path,
+) -> None:
+    (tmp_path / ".tesser-root").write_text("app\nstdlib not/a/module\n", encoding="utf-8")
+    read = source_repository.FilesystemSourceReader().sources(
+        source_reader.ReadSourcesRequest(tree=str(tmp_path))
+    )
+    assert read.root is source_reader.RootForm.UNRECOGNIZED
+    assert read.pure_stdlib == ()
+
+
 def test_a_directive_with_no_value_makes_the_declaration_unrecognized(
-    tmp_path: Path,
+    tmp_path: pathlib.Path,
 ) -> None:
     (tmp_path / ".tesser-root").write_text("app\nskip\n", encoding="utf-8")
     read = source_repository.FilesystemSourceReader().sources(
@@ -73,7 +95,7 @@ def test_a_directive_with_no_value_makes_the_declaration_unrecognized(
 
 
 def test_a_skip_naming_a_path_makes_the_declaration_unrecognized(
-    tmp_path: Path,
+    tmp_path: pathlib.Path,
 ) -> None:
     (tmp_path / ".tesser-root").write_text("app\nskip a/b\n", encoding="utf-8")
     read = source_repository.FilesystemSourceReader().sources(
@@ -82,7 +104,7 @@ def test_a_skip_naming_a_path_makes_the_declaration_unrecognized(
     assert read.root is source_reader.RootForm.UNRECOGNIZED
 
 
-def test_a_skipped_directory_is_not_walked(tmp_path: Path) -> None:
+def test_a_skipped_directory_is_not_walked(tmp_path: pathlib.Path) -> None:
     (tmp_path / ".tesser-root").write_text("app\nskip testdata\n", encoding="utf-8")
     (tmp_path / "testdata").mkdir()
     (tmp_path / "testdata" / "broken.py").write_text("def f(:\n", encoding="utf-8")
@@ -93,7 +115,7 @@ def test_a_skipped_directory_is_not_walked(tmp_path: Path) -> None:
     assert [source.path for source in read.sources] == ["kept.py"]
 
 
-def test_the_standard_noise_directories_are_not_walked(tmp_path: Path) -> None:
+def test_the_standard_noise_directories_are_not_walked(tmp_path: pathlib.Path) -> None:
     (tmp_path / ".tesser-root").write_text("app\n", encoding="utf-8")
     (tmp_path / "__pycache__").mkdir()
     (tmp_path / "__pycache__" / "junk.py").write_text("x = 1\n", encoding="utf-8")
@@ -107,7 +129,7 @@ def test_the_standard_noise_directories_are_not_walked(tmp_path: Path) -> None:
 
 
 def test_sources_come_back_sorted_by_path_with_their_module_names(
-    tmp_path: Path,
+    tmp_path: pathlib.Path,
 ) -> None:
     (tmp_path / ".tesser-root").write_text("app\n", encoding="utf-8")
     (tmp_path / "app").mkdir()
@@ -125,7 +147,7 @@ def test_sources_come_back_sorted_by_path_with_their_module_names(
 
 
 def test_an_init_reads_as_a_package_and_a_module_reads_as_a_module(
-    tmp_path: Path,
+    tmp_path: pathlib.Path,
 ) -> None:
     (tmp_path / ".tesser-root").write_text("app\n", encoding="utf-8")
     (tmp_path / "app").mkdir()
@@ -140,7 +162,7 @@ def test_an_init_reads_as_a_package_and_a_module_reads_as_a_module(
 
 
 def test_a_root_level_init_carries_no_module_name_and_is_dropped(
-    tmp_path: Path,
+    tmp_path: pathlib.Path,
 ) -> None:
     (tmp_path / ".tesser-root").write_text("app\n", encoding="utf-8")
     (tmp_path / "__init__.py").write_text("", encoding="utf-8")
@@ -151,7 +173,7 @@ def test_a_root_level_init_carries_no_module_name_and_is_dropped(
     assert [source.path for source in read.sources] == ["kept.py"]
 
 
-def test_a_readable_source_carries_its_text_and_a_read_state(tmp_path: Path) -> None:
+def test_a_readable_source_carries_its_text_and_a_read_state(tmp_path: pathlib.Path) -> None:
     (tmp_path / ".tesser-root").write_text("app\n", encoding="utf-8")
     (tmp_path / "thing.py").write_bytes(b"\xef\xbb\xbfx = 1\n")
     read = source_repository.FilesystemSourceReader().sources(
@@ -162,7 +184,7 @@ def test_a_readable_source_carries_its_text_and_a_read_state(tmp_path: Path) -> 
 
 
 def test_an_undecodable_source_carries_no_text_and_an_unreadable_state(
-    tmp_path: Path,
+    tmp_path: pathlib.Path,
 ) -> None:
     (tmp_path / ".tesser-root").write_text("app\n", encoding="utf-8")
     (tmp_path / "thing.py").write_bytes(b"\xff\xfe\x00x")
@@ -173,7 +195,7 @@ def test_an_undecodable_source_carries_no_text_and_an_unreadable_state(
     assert read.sources[0].text == ""
 
 
-def test_a_declaration_below_the_root_is_reported_as_nested(tmp_path: Path) -> None:
+def test_a_declaration_below_the_root_is_reported_as_nested(tmp_path: pathlib.Path) -> None:
     (tmp_path / ".tesser-root").write_text("app\n", encoding="utf-8")
     (tmp_path / "inner").mkdir()
     (tmp_path / "inner" / ".tesser-root").write_text("app\n", encoding="utf-8")
@@ -183,7 +205,7 @@ def test_a_declaration_below_the_root_is_reported_as_nested(tmp_path: Path) -> N
     assert read.nested == ("inner/.tesser-root",)
 
 
-def test_a_symlinked_directory_is_reported_and_never_walked(tmp_path: Path) -> None:
+def test_a_symlinked_directory_is_reported_and_never_walked(tmp_path: pathlib.Path) -> None:
     (tmp_path / ".tesser-root").write_text("app\n", encoding="utf-8")
     outside = tmp_path.parent / f"{tmp_path.name}-outside"
     outside.mkdir()

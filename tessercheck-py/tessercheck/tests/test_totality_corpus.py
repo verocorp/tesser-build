@@ -1,10 +1,10 @@
-from pathlib import Path
+import pathlib
 
 import tessercheck.domain.checks as checks
 import tessercheck.tests.conftest as conftest
 
 
-def test_no_module_shape_is_silent(tmp_path: Path) -> None:
+def test_no_module_shape_is_silent(tmp_path: pathlib.Path) -> None:
     bait = "import shop.domain.thing\nimport tesser.domain\nX = 1\n"
     test_bait = "import shop.domain.thing\ndef test_ok() -> None:\n    assert True\n"
     corpus = (

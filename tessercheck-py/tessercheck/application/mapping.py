@@ -44,6 +44,7 @@ def findings(read: source_reader.ReadSourcesResponse) -> tuple[str, ...]:  # tes
             exports=read.exports,
             imports=read.imports,
             stdlib=read.stdlib,
+            pure_stdlib=read.pure_stdlib,
         )
     )
     return tuple(

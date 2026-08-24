@@ -1,12 +1,12 @@
-from tesser.srv.request import Request
-from tesser.srv.record import Record
+import tesser.srv.request as request
+import tesser.srv.record as record
 
 
 def test_request_extends_record() -> None:
-    assert issubclass(Request, Record)
-    assert Record in Request.__mro__
+    assert issubclass(request.Request, record.Record)
+    assert record.Record in request.Request.__mro__
 
 
 def test_request_adds_no_behavior_of_its_own() -> None:
-    own = {name for name in vars(Request) if not name.startswith("__")}
+    own = {name for name in vars(request.Request) if not name.startswith("__")}
     assert own == set(), own

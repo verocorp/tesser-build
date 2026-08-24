@@ -5,6 +5,60 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.79.0] - 2026-08-24
+
+Every import is a module import. The module-only rule was scoped to
+tree-internal context imports when it landed in 0.0.16.0; the maintainer's
+intent was always every import, and this release makes the rule say so.
+Alongside it, the domain's pure stdlib stops being a constant baked into the
+analyzer: a tree declares what its domain may reach for.
+
+### Added
+- **`stdlib <module>` in `.tesser-root`.** A tree widens the pure stdlib its
+  domain role and kernels may import with one line per module, submodules
+  included (`stdlib urllib.parse` admits the parser and nothing else;
+  `stdlib urllib` admits the package). The line is validated like `import`:
+  it must name the stdlib (an external package is declared with `import`),
+  it must not repeat the shipped default, and it must legalize something —
+  each a `TB044` finding, reported before any module finding. Client,
+  application, and ports stay narrow; they are DTO shapes.
+- **Three shapes join the default pure stdlib** — `collections.abc`,
+  `urllib.parse`, and `copy` — admitted on dogfood evidence; the last two
+  burn the three `# tesser:debt TB062` markers `examples/python-app` carried.
+
+### Changed
+- **TB053 covers every import.** `from X import name` is a finding in every
+  governed module — the stdlib, the tesser norm modules, kernels, and the
+  tree's own modules alike. `from __future__ import annotations`, the one
+  form with no module spelling, is the one exemption; a package `__init__`
+  that re-exports stays `TB042`'s business. The bare-alias half keeps its
+  context-module scope. `TB050` loses its "a norm module is from-imported by
+  name, never whole" clause: `import tesser.errors as errors` is the form,
+  and the only-once-as-`ts` rule for the placement's own package is
+  unchanged. Two clauses the ship review put back or added: a norm module
+  imported bare (`import tesser.errors`, binding the whole `tesser` name)
+  is a `TB050` finding, and `from tesser.domain import X` still reports
+  `TB050` beside `TB053`, so a debt marker on one cannot excuse the other.
+  `conftest` modules — root and placed — are governed like every other
+  module kind.
+- **Every gated tree is migrated** — about 470 from-import lines across the
+  examples, `layout`, `tesser-py`, and `tessercheck-py` now read
+  `import x` / `import x as name`, with `mypy --strict` and every tree's
+  suite as the net. Two shapes the migration exposed are worth knowing: a
+  module that re-exported a kernel name (`values.py: from kernel.slug import
+  Slug as Slug`) no longer can, so consumers import the kernel module
+  directly; and a package `__init__` re-export that shares a submodule's
+  name (`tesser.srv.main`, `tesser.testing.fake`) shadows the submodule at
+  `import a.b.c as c`, so those tests import the package.
+- **The rulebook's site-to-row guard asserts what it meant.** The test that
+  required rendered rows to equal `Violation` construction sites held by a
+  coincidence of row merging against per-placement expansion; it now checks
+  that every construction site's line appears in a rendered row.
+- Docs: the skill's `python.md` and `kernels.md` (skill-version 53),
+  `docs/design-kernels.md` (the five-line `.tesser-root` grammar and the
+  `stdlib` validation rules), `docs/design-repo-layout.md`, `CLAUDE.md`, and
+  `RULES.md` regenerated.
+
 ## [0.0.78.0] - 2026-08-24
 
 Two rulings land. Tests may group under classes: a `Test`-prefixed class

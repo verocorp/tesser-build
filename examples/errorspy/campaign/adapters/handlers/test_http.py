@@ -6,7 +6,7 @@ import tesser.testing as ts
 
 import campaign.adapters.handlers.http as handlers
 import campaign.client.client as client
-from tesser.errors import DomainError, NeedsDesignFieldProblem, InfraError, Kind, conflict, invalid, not_found
+import tesser.errors as errors
 
 
 @ts.fake
@@ -157,7 +157,7 @@ def test_a_window_start_that_is_not_a_string_is_400() -> None:
 
 def test_a_validation_failure_is_422_carrying_the_code_title_and_field() -> None:
     fake = FakeCampaignClient(
-        error=invalid("bad_slug", "invalid slug 'BAD'", field="links[0].slug")
+        error=errors.invalid("bad_slug", "invalid slug 'BAD'", field="links[0].slug")
     )
     resp = handlers.Handler(fake).create_campaign(
         "c1", json.dumps({"window": {"start": "2026-01-01", "end": "2026-02-01"}, "links": []})
@@ -174,13 +174,13 @@ def test_a_validation_failure_is_422_carrying_the_code_title_and_field() -> None
 
 def test_an_aggregated_validation_failure_lists_every_invalid_param() -> None:
     fake = FakeCampaignClient(
-        error=DomainError(
-            Kind.VALIDATION,
+        error=errors.DomainError(
+            errors.Kind.VALIDATION,
             "validation_failed",
             "one or more fields are invalid",
             problems=(
-                NeedsDesignFieldProblem("bad_slug", "slug", "invalid slug 'BAD'"),
-                NeedsDesignFieldProblem("bad_target_url", "target_url", "invalid target url 'ftp://x'"),
+                errors.NeedsDesignFieldProblem("bad_slug", "slug", "invalid slug 'BAD'"),
+                errors.NeedsDesignFieldProblem("bad_target_url", "target_url", "invalid target url 'ftp://x'"),
             ),
         )
     )
@@ -196,7 +196,7 @@ def test_an_aggregated_validation_failure_lists_every_invalid_param() -> None:
 
 
 def test_a_missing_campaign_is_404() -> None:
-    fake = FakeCampaignClient(error=not_found("campaign_missing", "no campaign 'nope'"))
+    fake = FakeCampaignClient(error=errors.not_found("campaign_missing", "no campaign 'nope'"))
     resp = handlers.Handler(fake).get_campaign("nope")
     assert resp.status == 404
     assert resp.body == {
@@ -208,7 +208,7 @@ def test_a_missing_campaign_is_404() -> None:
 
 
 def test_a_conflict_is_409() -> None:
-    fake = FakeCampaignClient(error=conflict("duplicate_slug", "slug spring-sale already in c1"))
+    fake = FakeCampaignClient(error=errors.conflict("duplicate_slug", "slug spring-sale already in c1"))
     resp = handlers.Handler(fake).add_link(
         "c1", json.dumps({"slug": "spring-sale", "target_url": "https://x.com"})
     )
@@ -218,7 +218,7 @@ def test_a_conflict_is_409() -> None:
 
 
 def test_an_infrastructure_failure_is_503_and_leaks_nothing() -> None:
-    fake = FakeCampaignClient(error=InfraError("storage unavailable loading 'c1'"))
+    fake = FakeCampaignClient(error=errors.InfraError("storage unavailable loading 'c1'"))
     resp = handlers.Handler(fake).get_campaign("c1")
     assert resp.body == {
         "type": "/problems/unavailable",

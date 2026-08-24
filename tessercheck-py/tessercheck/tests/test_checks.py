@@ -1,17 +1,14 @@
-from pathlib import Path
+import pathlib
 
-import pytest
-
-import tessercheck.domain.checks as domain
 import tessercheck.tests.conftest as conftest
 
-def test_skip_dirs_are_not_walked(tmp_path: Path) -> None:
+def test_skip_dirs_are_not_walked(tmp_path: pathlib.Path) -> None:
     conftest.conforming_tree(tmp_path)
     conftest.write_module(tmp_path, ".venv/lib/junk.py", "def f(:\n")
     conftest.write_module(tmp_path, "node_modules/pkg/mod.py", "x = 1\n")
     assert conftest.check_tree(tmp_path) == ()
 
-def test_a_utf8_bom_file_is_checked_normally(tmp_path: Path) -> None:
+def test_a_utf8_bom_file_is_checked_normally(tmp_path: pathlib.Path) -> None:
     conftest.conforming_tree(tmp_path)
     (tmp_path / "shop" / "domain" / "bom.py").write_bytes(
         b"\xef\xbb\xbfimport tesser.domain as ts\n"
@@ -26,7 +23,7 @@ def test_a_utf8_bom_file_is_checked_normally(tmp_path: Path) -> None:
     assert not any("bom" in f for f in findings)
 
 
-def test_an_undeclared_tree_is_a_finding_and_nothing_else_is(tmp_path: Path) -> None:
+def test_an_undeclared_tree_is_a_finding_and_nothing_else_is(tmp_path: pathlib.Path) -> None:
     conftest.write_module(tmp_path, "stray.py", "import os\n")
     findings = conftest.check_raw(tmp_path)
     assert len(findings) == 1, findings
@@ -37,26 +34,26 @@ def test_an_undeclared_tree_is_a_finding_and_nothing_else_is(tmp_path: Path) -> 
     ), f"an undeclared tree was walked as if declared: {findings}"
 
 
-def test_an_unrecognized_declaration_is_a_finding(tmp_path: Path) -> None:
+def test_an_unrecognized_declaration_is_a_finding(tmp_path: pathlib.Path) -> None:
     conftest.write_module(tmp_path, "stray.py", "import os\n")
     (tmp_path / ".tesser-root").write_text("domain\n")
     findings = conftest.check_raw(tmp_path)
     assert len(findings) == 1, findings
     assert any(
         "this tree declares an unrecognized kind; a declaration is "
-        "'app', then only 'skip <dir>', 'export <dir>', and 'import <package>' lines" in f
+        "'app', then only 'skip <dir>', 'export <dir>', 'import <package>', and 'stdlib <module>' lines" in f
         for f in findings
     ), f"an unrecognized declaration passed: {findings}"
 
 
-def test_an_unknown_directive_is_an_unrecognized_kind(tmp_path: Path) -> None:
+def test_an_unknown_directive_is_an_unrecognized_kind(tmp_path: pathlib.Path) -> None:
     (tmp_path / ".tesser-root").write_text("app\nignore stuff\n")
     findings = conftest.check_raw(tmp_path)
     assert len(findings) == 1, findings
     assert "unrecognized kind" in findings[0], findings
 
 
-def test_a_malformed_export_value_is_an_unrecognized_kind(tmp_path: Path) -> None:
+def test_a_malformed_export_value_is_an_unrecognized_kind(tmp_path: pathlib.Path) -> None:
     for declaration in ("app\nexport a/b\n", "app\nexport 2bad\n"):
         (tmp_path / ".tesser-root").write_text(declaration)
         findings = conftest.check_raw(tmp_path)
@@ -64,7 +61,7 @@ def test_a_malformed_export_value_is_an_unrecognized_kind(tmp_path: Path) -> Non
         assert "unrecognized kind" in findings[0], (declaration, findings)
 
 
-def test_a_malformed_import_value_is_an_unrecognized_kind(tmp_path: Path) -> None:
+def test_a_malformed_import_value_is_an_unrecognized_kind(tmp_path: pathlib.Path) -> None:
     for declaration in ("app\nimport a-b\n", "app\nimport a..b\n"):
         (tmp_path / ".tesser-root").write_text(declaration)
         findings = conftest.check_raw(tmp_path)
@@ -72,7 +69,7 @@ def test_a_malformed_import_value_is_an_unrecognized_kind(tmp_path: Path) -> Non
         assert "unrecognized kind" in findings[0], (declaration, findings)
 
 
-def test_a_dotted_import_declaration_parses_and_reaches_a_domain(tmp_path: Path) -> None:
+def test_a_dotted_import_declaration_parses_and_reaches_a_domain(tmp_path: pathlib.Path) -> None:
     conftest.conforming_tree(tmp_path)
     (tmp_path / ".tesser-root").write_text("app\nimport money.kernel\n")
     conftest.write_module(
@@ -94,7 +91,7 @@ def test_a_dotted_import_declaration_parses_and_reaches_a_domain(tmp_path: Path)
     assert findings == (), findings
 
 
-def test_a_declared_export_is_read_and_governed_end_to_end(tmp_path: Path) -> None:
+def test_a_declared_export_is_read_and_governed_end_to_end(tmp_path: pathlib.Path) -> None:
     conftest.conforming_tree(tmp_path)
     (tmp_path / ".tesser-root").write_text("app\nexport shells\n")
     conftest.write_module(tmp_path, "shells/__init__.py", "")
@@ -110,7 +107,7 @@ def test_a_declared_export_is_read_and_governed_end_to_end(tmp_path: Path) -> No
     assert any("a kernel holds only domain kinds" in f for f in findings), findings
 
 
-def test_a_second_export_line_is_a_finding_end_to_end(tmp_path: Path) -> None:
+def test_a_second_export_line_is_a_finding_end_to_end(tmp_path: pathlib.Path) -> None:
     conftest.conforming_tree(tmp_path)
     (tmp_path / ".tesser-root").write_text("app\nexport one\nexport two\n")
     findings = conftest.check_raw(tmp_path)
@@ -122,7 +119,7 @@ def test_a_second_export_line_is_a_finding_end_to_end(tmp_path: Path) -> None:
     ), findings
 
 
-def test_an_import_declaration_reaches_the_pure_roles_end_to_end(tmp_path: Path) -> None:
+def test_an_import_declaration_reaches_the_pure_roles_end_to_end(tmp_path: pathlib.Path) -> None:
     conftest.conforming_tree(tmp_path)
     (tmp_path / ".tesser-root").write_text("app\nimport money_kernel\n")
     conftest.write_module(
@@ -138,7 +135,32 @@ def test_an_import_declaration_reaches_the_pure_roles_end_to_end(tmp_path: Path)
     assert not any("imports money_kernel" in f for f in findings), findings
 
 
-def test_an_unreadable_declaration_is_a_finding(tmp_path: Path) -> None:
+def test_a_stdlib_declaration_reaches_the_domain_end_to_end(tmp_path: pathlib.Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "shop/domain/price.py",
+        "import tesser.domain as ts\n"
+        "import sqlite3\n"
+        "class PriceSpec(ts.Spec):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "shop/domain/test_price.py",
+        "def test_price_exists() -> None:\n"
+        "    assert True\n",
+    )
+    (tmp_path / ".tesser-root").write_text("app\n")
+    undeclared = conftest.check_raw(tmp_path)
+    assert any("imports sqlite3" in f for f in undeclared), undeclared
+    (tmp_path / ".tesser-root").write_text("app\nstdlib sqlite3\n")
+    declared = conftest.check_raw(tmp_path)
+    assert declared == (), declared
+
+
+def test_an_unreadable_declaration_is_a_finding(tmp_path: pathlib.Path) -> None:
     (tmp_path / ".tesser-root").write_bytes(b"\xff\xfe\x00app")
     findings = conftest.check_raw(tmp_path)
     assert len(findings) == 1, findings
@@ -149,20 +171,20 @@ def test_an_unreadable_declaration_is_a_finding(tmp_path: Path) -> None:
     ), f"an undecodable declaration passed: {findings}"
 
 
-def test_a_declaration_that_is_a_directory_is_unreadable(tmp_path: Path) -> None:
+def test_a_declaration_that_is_a_directory_is_unreadable(tmp_path: pathlib.Path) -> None:
     (tmp_path / ".tesser-root").mkdir()
     findings = conftest.check_raw(tmp_path)
     assert len(findings) == 1, findings
     assert "not readable" in findings[0], findings
 
 
-def test_a_bom_prefixed_declaration_still_reads(tmp_path: Path) -> None:
+def test_a_bom_prefixed_declaration_still_reads(tmp_path: pathlib.Path) -> None:
     conftest.conforming_tree(tmp_path)
     (tmp_path / ".tesser-root").write_bytes(b"\xef\xbb\xbfapp\n")
     assert conftest.check_raw(tmp_path) == ()
 
 
-def test_a_nested_declaration_is_a_finding_and_masks_the_walk(tmp_path: Path) -> None:
+def test_a_nested_declaration_is_a_finding_and_masks_the_walk(tmp_path: pathlib.Path) -> None:
     conftest.conforming_tree(tmp_path)
     conftest.write_module(tmp_path, "stray.py", "import os\n")
     (tmp_path / "shop" / ".tesser-root").write_text("app\n")
@@ -175,21 +197,21 @@ def test_a_nested_declaration_is_a_finding_and_masks_the_walk(tmp_path: Path) ->
     ), f"a nested declaration passed: {findings}"
 
 
-def test_a_skipped_dir_hides_no_nested_declaration(tmp_path: Path) -> None:
+def test_a_skipped_dir_hides_no_nested_declaration(tmp_path: pathlib.Path) -> None:
     conftest.conforming_tree(tmp_path)
     (tmp_path / ".venv").mkdir()
     (tmp_path / ".venv" / ".tesser-root").write_text("app\n")
     assert conftest.check_tree(tmp_path) == ()
 
 
-def test_a_declared_skip_dir_is_not_walked(tmp_path: Path) -> None:
+def test_a_declared_skip_dir_is_not_walked(tmp_path: pathlib.Path) -> None:
     conftest.conforming_tree(tmp_path)
     (tmp_path / ".tesser-root").write_text("app\nskip fixtures\n")
     conftest.write_module(tmp_path, "fixtures/bad.py", "def f(:\n")
     assert conftest.check_raw(tmp_path) == ()
 
 
-def test_a_symlinked_directory_is_a_finding(tmp_path: Path) -> None:
+def test_a_symlinked_directory_is_a_finding(tmp_path: pathlib.Path) -> None:
     conftest.conforming_tree(tmp_path)
     outside = tmp_path.parent / f"{tmp_path.name}-outside"
     outside.mkdir(exist_ok=True)
@@ -204,7 +226,7 @@ def test_a_symlinked_directory_is_a_finding(tmp_path: Path) -> None:
     ), f"a symlinked directory escaped the walk silently: {findings}"
 
 
-def test_a_declaration_finding_is_never_inline_suppressible(tmp_path: Path) -> None:
+def test_a_declaration_finding_is_never_inline_suppressible(tmp_path: pathlib.Path) -> None:
     conftest.write_module(
         tmp_path, "stray.py", "import os  # tesser:debt TB044\n"
     )
@@ -213,28 +235,28 @@ def test_a_declaration_finding_is_never_inline_suppressible(tmp_path: Path) -> N
     assert "TB044" in findings[0], findings
 
 
-def test_a_bare_skip_directive_is_an_unrecognized_kind(tmp_path: Path) -> None:
+def test_a_bare_skip_directive_is_an_unrecognized_kind(tmp_path: pathlib.Path) -> None:
     (tmp_path / ".tesser-root").write_text("app\nskip\n")
     findings = conftest.check_raw(tmp_path)
     assert len(findings) == 1, findings
     assert "unrecognized kind" in findings[0], findings
 
 
-def test_a_skip_directive_with_a_path_is_an_unrecognized_kind(tmp_path: Path) -> None:
+def test_a_skip_directive_with_a_path_is_an_unrecognized_kind(tmp_path: pathlib.Path) -> None:
     (tmp_path / ".tesser-root").write_text("app\nskip a/b\n")
     findings = conftest.check_raw(tmp_path)
     assert len(findings) == 1, findings
     assert "unrecognized kind" in findings[0], findings
 
 
-def test_an_undeclared_testdata_dir_is_walked(tmp_path: Path) -> None:
+def test_an_undeclared_testdata_dir_is_walked(tmp_path: pathlib.Path) -> None:
     conftest.conforming_tree(tmp_path)
     conftest.write_module(tmp_path, "testdata/stray.py", "import os\n")
     findings = conftest.check_tree(tmp_path)
     assert any("TB040" in f and "testdata.stray" in f for f in findings), findings
 
 
-def test_a_declared_skip_applies_at_any_depth(tmp_path: Path) -> None:
+def test_a_declared_skip_applies_at_any_depth(tmp_path: pathlib.Path) -> None:
     conftest.conforming_tree(tmp_path)
     (tmp_path / ".tesser-root").write_text("app\nskip fixtures\n")
     conftest.write_module(tmp_path, "shop/domain/fixtures/bad.py", "def f(:\n")

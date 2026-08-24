@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import enum
-from typing import Protocol
+import typing
 
 import tesser.application as ts
 
@@ -24,6 +24,6 @@ class CheckNameResponse(ts.Response):
         self.reason = reason
 
 
-class NamePolicy(ts.Port, Protocol):
+class NamePolicy(ts.Port, typing.Protocol):
 
     def check(self, request: CheckNameRequest) -> CheckNameResponse: ...

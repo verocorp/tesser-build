@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol
+import typing
 
 import tesser.context as ts
 
@@ -30,7 +30,7 @@ class TreesResponse(ts.Response):
         self.trees = trees
 
 
-class Client(ts.Client, Protocol):
+class Client(ts.Client, typing.Protocol):
 
     def check(self, request: CheckRequest) -> CheckResponse: ...
 

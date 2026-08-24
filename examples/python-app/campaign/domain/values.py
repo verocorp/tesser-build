@@ -2,27 +2,26 @@ from __future__ import annotations
 
 import enum
 import re
-from typing import Final
-from urllib.parse import urlparse  # tesser:debt TB062
+import typing
+import urllib.parse
 
 import tesser.domain as ts
 
-from kernel.slug import Slug as Slug
-from tesser.errors import invalid
-from tesser.serialization import canonical_str
+import tesser.errors as errors
+import tesser.serialization as serialization
 
-_CAMPAIGN_ID_RE: Final[re.Pattern[str]] = re.compile(r"[a-f0-9]{16}")
+_CAMPAIGN_ID_RE: typing.Final[re.Pattern[str]] = re.compile(r"[a-f0-9]{16}")
 
 
 class CampaignID(ts.ValueObject):
 
     def __init__(self, value: str) -> None:
         if not _CAMPAIGN_ID_RE.fullmatch(value):
-            raise invalid("invalid_campaign_id", f"campaign id {value!r} must be 16 lowercase hex chars")
+            raise errors.invalid("invalid_campaign_id", f"campaign id {value!r} must be 16 lowercase hex chars")
         object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
-        return canonical_str(self._value)
+        return serialization.canonical_str(self._value)
 
     _value: str
 
@@ -38,7 +37,7 @@ class LinkStatus(ts.ValueObject):
         object.__setattr__(self, "_value", value.value)
 
     def __str__(self) -> str:
-        return canonical_str(self._value)
+        return serialization.canonical_str(self._value)
 
     _value: str
 
@@ -47,13 +46,13 @@ class TargetURL(ts.ValueObject):
 
     def __init__(self, value: str) -> None:
         if any(ord(ch) < 0x20 for ch in value):
-            raise invalid("invalid_target_url", "target url must not contain control characters")
-        parsed = urlparse(value)
+            raise errors.invalid("invalid_target_url", "target url must not contain control characters")
+        parsed = urllib.parse.urlparse(value)
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
-            raise invalid("invalid_target_url", f"target url {value!r} must be http(s) with a host")
+            raise errors.invalid("invalid_target_url", f"target url {value!r} must be http(s) with a host")
         object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
-        return canonical_str(self._value)
+        return serialization.canonical_str(self._value)
 
     _value: str

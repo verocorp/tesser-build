@@ -8,16 +8,16 @@ import campaign.application.ports.target_policy as target_policy
 import campaign.application.service as service
 import campaign.client.client as client
 import campaign.component.config as config
-from tesser.errors import invalid
+import tesser.errors as errors
 
 
 class Campaign(ts.Component):
 
     def __init__(self, cfg: config.Config, policy: target_policy.TargetPolicy) -> None:
         if not cfg.storage:
-            raise invalid("missing_coordinate", "campaign storage coordinate is required")
+            raise errors.invalid("missing_coordinate", "campaign storage coordinate is required")
         if cfg.storage != "memory":
-            raise invalid("unknown_backend", f"campaign storage {cfg.storage!r} not supported")
+            raise errors.invalid("unknown_backend", f"campaign storage {cfg.storage!r} not supported")
         self._repo = repo_memory.InMemoryCampaignRepository()
         self._identity_gateway = campaign_identity.SecretsCampaignIdentity()
         self.client: client.Client = service.CampaignService(

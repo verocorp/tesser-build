@@ -1,34 +1,34 @@
 import ast
 import inspect
 import textwrap
-from collections.abc import Callable
-from pathlib import Path
+import collections.abc as abc
+import pathlib
 
-from tessercheck.adapters.repositories.rulebook_sources import FilesystemRulebookSources
-from tessercheck.adapters.repositories.source_reader import FilesystemSourceReader
-from tessercheck.application.service import TessercheckService
-from tessercheck.client.client import CheckRequest
+import tessercheck.adapters.repositories.rulebook_sources as rulebook_sources
+import tessercheck.adapters.repositories.source_reader as source_reader
+import tessercheck.application.service as application_service
+import tessercheck.client.client as client
 
 
-def check_tree(root: Path) -> tuple[str, ...]:
+def check_tree(root: pathlib.Path) -> tuple[str, ...]:
     declaration = root / ".tesser-root"
     if not declaration.exists():
         declaration.write_text("app\n")
     return check_raw(root)
 
 
-def check_raw(root: Path) -> tuple[str, ...]:
-    service = TessercheckService(FilesystemSourceReader(), FilesystemRulebookSources())
-    return service.check(CheckRequest(tree=str(root))).findings
+def check_raw(root: pathlib.Path) -> tuple[str, ...]:
+    service = application_service.TessercheckService(source_reader.FilesystemSourceReader(), rulebook_sources.FilesystemRulebookSources())
+    return service.check(client.CheckRequest(tree=str(root))).findings
 
 
-def write_module(root: Path, rel: str, source: str) -> None:
+def write_module(root: pathlib.Path, rel: str, source: str) -> None:
     path = root / rel
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(source)
 
 
-def conforming_tree(root: Path) -> None:
+def conforming_tree(root: pathlib.Path) -> None:
     write_module(
         root,
         "shop/domain/thing.py",
@@ -74,7 +74,7 @@ def conforming_tree(root: Path) -> None:
     )
 
 
-def function_tree(func: Callable[..., object]) -> ast.FunctionDef:
+def function_tree(func: abc.Callable[..., object]) -> ast.FunctionDef:
     tree = ast.parse(textwrap.dedent(inspect.getsource(func)))
     node = next(n for n in tree.body if isinstance(n, ast.FunctionDef))
     return node

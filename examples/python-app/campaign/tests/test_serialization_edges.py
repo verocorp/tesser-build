@@ -15,8 +15,8 @@ import campaign.domain.campaign as campaign
 import campaign.domain.money as money
 import campaign.domain.short_link as short_link
 import campaign.domain.short_links as short_links
-from tesser.errors import DomainError, not_found
-from protocol.http import HttpRequest
+import tesser.errors as errors
+import protocol.http as protocol_http
 
 
 def _shape(  # tesser:debt TB071
@@ -98,7 +98,7 @@ def test_wire_golden_locks_the_campaign_payload() -> None:
         ),
     ))
     handler = http.Handler(service.CampaignService(repo, FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity(), repo))
-    resp = handler.get_campaign(HttpRequest("GET", "/", {"campaign_id": "0123456789abcdef"}, {}, {}, b""))
+    resp = handler.get_campaign(protocol_http.HttpRequest("GET", "/", {"campaign_id": "0123456789abcdef"}, {}, {}, b""))
     assert resp.status_code == 200
     assert resp.json_body() == {
         "campaign_id": "0123456789abcdef",
@@ -123,7 +123,7 @@ def test_wire_golden_locks_resolve_as_a_real_redirect() -> None:
         ),
     ))
     handler = http.Handler(service.CampaignService(repo, FakeTargetPolicyAllowAll(), campaign_identity.SecretsCampaignIdentity(), repo))
-    resp = handler.resolve(HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
+    resp = handler.resolve(protocol_http.HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
     assert resp.status_code == 302
     assert resp.body == b""
     assert resp.headers == {"Location": "https://ok.example/x"}
@@ -149,7 +149,7 @@ def test_load_reconstructs_value_equal_non_identical() -> None:
         case campaign_repository.CampaignLookup.FOUND:
             record = found.campaigns[0]
         case campaign_repository.CampaignLookup.MISSING:
-            raise not_found("campaign_missing", "no campaign with id '0123456789abcdef'")
+            raise errors.not_found("campaign_missing", "no campaign with id '0123456789abcdef'")
         case _ as unreachable:
             typing.assert_never(unreachable)
     loaded = campaign.Campaign(campaign.CampaignSpec(
@@ -208,7 +208,7 @@ def test_store_holds_rows_not_live_objects() -> None:
         case campaign_repository.CampaignLookup.FOUND:
             record = found.campaigns[0]
         case campaign_repository.CampaignLookup.MISSING:
-            raise not_found("campaign_missing", "no campaign with id '0123456789abcdef'")
+            raise errors.not_found("campaign_missing", "no campaign with id '0123456789abcdef'")
         case _ as unreachable:
             typing.assert_never(unreachable)
     loaded = campaign.Campaign(campaign.CampaignSpec(
@@ -227,7 +227,7 @@ def test_store_holds_rows_not_live_objects() -> None:
         case campaign_repository.CampaignLookup.FOUND:
             record = found.campaigns[0]
         case campaign_repository.CampaignLookup.MISSING:
-            raise not_found("campaign_missing", "no campaign with id '0123456789abcdef'")
+            raise errors.not_found("campaign_missing", "no campaign with id '0123456789abcdef'")
         case _ as unreachable:
             typing.assert_never(unreachable)
     reloaded = campaign.Campaign(campaign.CampaignSpec(
@@ -287,13 +287,13 @@ def test_load_reruns_invariants_on_stale_rows() -> None:
         links=row.links,
     )
     repo._rows["0123456789abcdef"] = stale
-    with pytest.raises(DomainError):
+    with pytest.raises(errors.DomainError):
         found = _find(repo, "0123456789abcdef")
         match found.outcome:
             case campaign_repository.CampaignLookup.FOUND:
                 record = found.campaigns[0]
             case campaign_repository.CampaignLookup.MISSING:
-                raise not_found("campaign_missing", "no campaign with id '0123456789abcdef'")
+                raise errors.not_found("campaign_missing", "no campaign with id '0123456789abcdef'")
             case _ as unreachable:
                 typing.assert_never(unreachable)
         reloaded = campaign.Campaign(campaign.CampaignSpec(

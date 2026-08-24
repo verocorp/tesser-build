@@ -1,7 +1,7 @@
 import sys
-from collections.abc import Callable
-from typing import NoReturn
+import collections.abc as abc
+import typing
 
 
-def main(run: Callable[[list[str]], int]) -> NoReturn:
+def main(run: abc.Callable[[list[str]], int]) -> typing.NoReturn:
     raise SystemExit(run(sys.argv[1:]))

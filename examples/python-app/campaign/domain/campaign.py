@@ -6,6 +6,7 @@ import campaign.domain.money as money
 import campaign.domain.short_link as short_link
 import campaign.domain.short_links as short_links
 import campaign.domain.values as values
+import kernel.slug as kernel_slug
 
 
 class CampaignSpec(ts.Spec):
@@ -40,10 +41,10 @@ class Campaign(ts.AggregateRoot):
     def add_short_link(self, spec: short_link.ShortLinkSpec) -> None:
         self._links.add(spec)
 
-    def deactivate_short_link(self, slug: values.Slug) -> None:
+    def deactivate_short_link(self, slug: kernel_slug.Slug) -> None:
         self._links.deactivate(slug)
 
-    def active_target(self, slug: values.Slug) -> values.TargetURL:
+    def active_target(self, slug: kernel_slug.Slug) -> values.TargetURL:
         return self._links.active_target(slug)
 
     __eq__ = None  # type: ignore[assignment]

@@ -3,23 +3,24 @@ from __future__ import annotations
 import tesser.domain as ts
 
 import reports.domain.values as values
+import kernel.slug as kernel_slug
 
 
 class Link(ts.ValueObject):
 
     def __init__(self, slug: str, target_url: str) -> None:
-        object.__setattr__(self, "_slug", values.Slug(slug))
+        object.__setattr__(self, "_slug", kernel_slug.Slug(slug))
         object.__setattr__(self, "_target_url", values.TargetURL(target_url))
 
     @property
-    def slug(self) -> values.Slug:
+    def slug(self) -> kernel_slug.Slug:
         return self._slug
 
     @property
     def target_url(self) -> values.TargetURL:
         return self._target_url
 
-    _slug: values.Slug
+    _slug: kernel_slug.Slug
     _target_url: values.TargetURL
 
 
@@ -50,13 +51,13 @@ class RecordedVerdict(ts.ValueObject):
 class LinkVerdict(ts.ValueObject):
 
     def __init__(self, slug: str, target_url: str, allowed: bool, reason: str) -> None:
-        object.__setattr__(self, "_slug", values.Slug(slug))
+        object.__setattr__(self, "_slug", kernel_slug.Slug(slug))
         object.__setattr__(self, "_target_url", values.TargetURL(target_url))
         object.__setattr__(self, "_allowed", values.Decision("allowed" if allowed else "denied"))
         object.__setattr__(self, "_reason", values.Reason(reason))
 
     @property
-    def slug(self) -> values.Slug:
+    def slug(self) -> kernel_slug.Slug:
         return self._slug
 
     @property
@@ -71,7 +72,7 @@ class LinkVerdict(ts.ValueObject):
     def reason(self) -> values.Reason:
         return self._reason
 
-    _slug: values.Slug
+    _slug: kernel_slug.Slug
     _target_url: values.TargetURL
     _allowed: values.Decision
     _reason: values.Reason

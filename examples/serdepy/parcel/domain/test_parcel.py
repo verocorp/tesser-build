@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import ast
 import pathlib
-from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+import datetime
+import decimal
 
 import pytest
 import tesser.testing as ts
 
 import parcel.domain.parcel as parcel
-from tesser.serialization import canonical_datetime, canonical_decimal
+import tesser.serialization as serialization
 
 
 @ts.helper
@@ -117,7 +117,7 @@ def test_scanned_at_equal_instants_across_zones() -> None:
 
 
 def test_decimal_policy_is_the_string_form() -> None:
-    assert canonical_decimal(Decimal("199.99")) == "199.99"
+    assert serialization.canonical_decimal(decimal.Decimal("199.99")) == "199.99"
     assert str(parcel.DeclaredValue("1.50")) == "1.50"
 
 
@@ -129,17 +129,17 @@ def test_equal_decimals_may_have_distinct_canonical_forms() -> None:
 
 
 def test_datetime_policy_is_aware_utc_iso8601_microseconds() -> None:
-    eastern = timezone(timedelta(hours=-5))
-    value = datetime(2026, 7, 20, 10, 16, 15, 123456, tzinfo=eastern)
-    assert canonical_datetime(value) == "2026-07-20T15:16:15.123456+00:00"
-    assert canonical_datetime(datetime(2026, 7, 20, 15, 0, 0, tzinfo=timezone.utc)) == (
+    eastern = datetime.timezone(datetime.timedelta(hours=-5))
+    value = datetime.datetime(2026, 7, 20, 10, 16, 15, 123456, tzinfo=eastern)
+    assert serialization.canonical_datetime(value) == "2026-07-20T15:16:15.123456+00:00"
+    assert serialization.canonical_datetime(datetime.datetime(2026, 7, 20, 15, 0, 0, tzinfo=datetime.timezone.utc)) == (
         "2026-07-20T15:00:00.000000+00:00"
     )
 
 
 def test_datetime_policy_rejects_naive() -> None:
     with pytest.raises(ValueError, match="naive"):
-        canonical_datetime(datetime(2026, 7, 20, 15, 0, 0))
+        serialization.canonical_datetime(datetime.datetime(2026, 7, 20, 15, 0, 0))
     with pytest.raises(ValueError, match="timezone-aware"):
         parcel.ScannedAt("2026-07-20T15:00:00")
 
@@ -218,9 +218,9 @@ def test_every_conversion_dunder_routes_through_a_canonical_helper() -> None:
         if not (isinstance(node, ast.FunctionDef) and node.name in ("__str__", "__int__", "__float__", "__bytes__")):
             continue
         calls = {
-            call.func.id
+            call.func.attr
             for call in ast.walk(node)
-            if isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
+            if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)
         }
         assert any(name.startswith("canonical_") for name in calls), (
             f"{node.name} at parcel/domain/parcel.py line {node.lineno} does not route "
