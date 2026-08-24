@@ -24,15 +24,20 @@ initialization being verified.
   a spec is never kept, it initializes its domain object and is done. The
   walk tracks a spec through aliases, `a = b = XSpec()`, annotated locals,
   walrus, `await maker()`, quoted annotations, and `Optional[XSpec]` /
-  `XSpec | None`; a keep is any store of a held name or a direct spec
-  construction into an attribute or subscript target, a container literal on
-  `self`, an `AugAssign`, `setattr`, or `__setattr__`; a read includes
-  `getattr(spec, ...)` and `vars(spec)`. Nested functions, lambdas, nested
-  classes, and comprehensions inherit the outer names minus what they
-  rebind, and a name rebound by `for`/`with`/`except`/a non-spec assignment
-  is dropped rather than reported. Claimed by the value-objects roadmap row;
-  materialized in `python.md`, `value-objects.md`, and `coverage.md`;
-  skill-version 54.
+  `XSpec | None`, and a method whose name returns a spec everywhere it is
+  defined (`mapper.spec()`); a keep is any store of a held name or a direct
+  spec construction into an attribute or subscript target, a container
+  literal or builtin container call on `self`, an `AugAssign`, `setattr`,
+  `__setattr__`, `.append`/`.extend`/`.insert`/`.setdefault`, or a
+  module-level or class-level binding; a read includes `getattr(spec, ...)`,
+  `vars(spec)`, `dataclasses.asdict`, and `copy.copy`. Nested functions,
+  lambdas, nested classes, and comprehensions inherit the outer names minus
+  what they rebind, and a name rebound by `for`/`with`/`except`/`match`/a
+  non-spec assignment is dropped rather than reported. The test tier
+  (`test_*`, `conftest`, `eval_*`) is exempt. Claimed by the value-objects
+  roadmap row; materialized in `python.md`, `value-objects.md`, and
+  `coverage.md`; skill-version 54. The shapes the walk still misses are
+  listed in `TODOS.md`.
 
 ### Changed
 - `examples/errorspy` reads the record id off the mapper for its

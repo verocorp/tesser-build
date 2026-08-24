@@ -390,6 +390,38 @@ against `main` at v0.0.71.0 rather than transcribed.
   rather than global classification; or require kind-table rows to carry a
   ruling reference the same way `.tesser-root` carries tree facts.
 
+## TB083 spec-use follow-ups (2026-08-24, v0.0.80.0 ship red team)
+
+- [ ] **Container-typed spec parameters never enter the tracked set.**
+  `_spec_annotation` unwraps `Optional`/`Union`/`X | None` only, so
+  `specs: list[XSpec]`, `Sequence[XSpec]`, `tuple[XSpec, ...]`, `*args: XSpec`
+  are untracked and `specs[0].value` / `for s in specs: s.value` are silent.
+- [ ] **Tracking is flow-insensitive.** One rebinding anywhere in a function
+  (`if flag: spec = 'plain'`) drops the name for the whole function, so a
+  later genuine `spec.value` is missed — the deliberate price of the
+  `for`/`with`/`except` false-positive fix; a per-branch model would close it.
+- [ ] **A closure or lambda defined inside a domain `__init__` inherits the
+  constructor's licence.** `def later(): return spec.value` stored on `self`
+  keeps the spec alive past construction and is not reported; so does
+  `lambda s=spec: s.value`.
+- [ ] **A local name that collides with a module-level maker is read as the
+  maker.** `build = lambda: 3; self._n = build()` fires a keep; `makes_spec`
+  has no scope check against the function's own bindings.
+- [ ] **Returning or yielding a spec from a method is neither a keep nor a
+  read.** TB015 covers a spec returned by a domain object's public method
+  only through its annotation; a bare `return spec` from an adapter method is
+  covered by nothing — settle which rule owns the exit.
+- [ ] **A non-maker call that takes the spec whole is silent by design**
+  (`functools.partial(f, spec)`, `helper(spec)`) — that is what keeps
+  `Tag(spec)` legal. `dataclasses.asdict`/`copy.copy` are read as `__dict__`
+  by name; `.append`/`.extend`/`.insert`/`.setdefault` are keeps by name,
+  while `.add`/`.update` are not, because `self._links.add(spec)` is how a
+  domain collection consumes a spec (python-app `Campaign.add_short_link`) —
+  a `set.add`/`dict.update` store is therefore silent; a wrapper allowlist is
+  the open question.
+- [ ] **Within one line, findings come out in reverse source order.** The
+  sort key is the line only; `Violation` carries no column.
+
 ## Module-only imports wave followups (2026-08-24, branch `worktree-imports-module-only`)
 
 - [ ] **A parameter or local that shadows a module alias has no rule.** Six

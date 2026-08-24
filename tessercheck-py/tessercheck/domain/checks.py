@@ -1006,6 +1006,7 @@ class Codebase(ts.AggregateRoot):
         self._used_pure_stdlib: set[str] = set()
         self._domain_enums: frozenset[tuple[str, str]] = frozenset()
         self._spec_makers: frozenset[tuple[str, str]] = frozenset()
+        self._spec_methods: frozenset[str] = frozenset()
 
     def violations(self) -> tuple[Violation, ...]:
         declaration = self._declaration_violations()  # tesser:debt TB051
@@ -1065,6 +1066,14 @@ class Codebase(ts.AggregateRoot):
             and fn.returns is not None
             and self._spec_annotation(module, fn.returns, blocks)
         )
+        returning: dict[str, bool] = {}
+        for module in self._modules:
+            for cls in module.class_defs():
+                for item in cls.body:
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name != "__init__":
+                        makes = item.returns is not None and self._spec_annotation(module, item.returns, blocks)
+                        returning[item.name] = returning.get(item.name, True) and makes
+        self._spec_methods = frozenset(name for name, makes in returning.items() if makes)
         for module in self._modules:
             found.extend(self._comment_violations(module))  # tesser:debt TB051
             found.extend(self._double_violations(module))  # tesser:debt TB051
@@ -1073,7 +1082,9 @@ class Codebase(ts.AggregateRoot):
             found.extend(self._sibling_reference_violations(module))  # tesser:debt TB051
             found.extend(self._dynamic_import_violations(module))  # tesser:debt TB051
             found.extend(self._module_violations(module, blocks, contexts))  # tesser:debt TB051
-            if self._locate(module.name(), module.is_package(), contexts, self._export) != "test":  # tesser:debt TB051
+            if self._locate(module.name(), module.is_package(), contexts, self._export) not in (  # tesser:debt TB051
+                "test", "conftest", "conftest-root", "eval"
+            ):
                 found.extend(self._spec_use_violations(module, blocks))  # tesser:debt TB051
             if self._export == TESSER and self._locate(  # tesser:debt TB051
                 module.name(), module.is_package(), contexts, self._export
@@ -2761,7 +2772,9 @@ class Codebase(ts.AggregateRoot):
             if isinstance(node, ast.Name):
                 return (module.name(), node.id) in self._spec_makers
             key = module._resolve(node)
-            return key is not None and key in self._spec_makers
+            if key is not None and key in self._spec_makers:
+                return True
+            return isinstance(node, ast.Attribute) and node.attr in self._spec_methods
 
         def spec_value(node: ast.expr, names: set[str]) -> str | None:
             if isinstance(node, ast.Await):
@@ -2772,6 +2785,22 @@ class Codebase(ts.AggregateRoot):
                 return node.id
             if isinstance(node, ast.Call) and makes_spec(node.func):
                 return ast.unparse(node.func)
+            if isinstance(node, ast.IfExp):
+                return spec_value(node.body, names) or spec_value(node.orelse, names)
+            if isinstance(node, ast.BoolOp):
+                for each in node.values:
+                    hit = spec_value(each, names)
+                    if hit is not None:
+                        return hit
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in ("list", "tuple", "set", "frozenset", "dict")
+            ):
+                for each in [*node.args, *(k.value for k in node.keywords)]:
+                    hit = spec_value(each, names)
+                    if hit is not None:
+                        return hit
             if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
                 for elt in node.elts:
                     hit = spec_value(elt, names)
@@ -2819,13 +2848,16 @@ class Codebase(ts.AggregateRoot):
         def stored(node: ast.AST) -> list[str]:
             return [t.id for t in ast.walk(node) if isinstance(t, ast.Name) and isinstance(t.ctx, ast.Store)]
 
-        def held(fn: ast.FunctionDef | ast.AsyncFunctionDef, names: set[str]) -> set[str]:
-            names = set(names) | {
-                a.arg
-                for a in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs
-                if is_spec(a.annotation)
-            }
-            local = scope(list(fn.body))
+        def held_in(body: list[ast.stmt], names: set[str]) -> set[str]:
+            names = set(names)
+            local = scope(list(body))
+            local.extend(
+                inner
+                for node in local
+                if isinstance(node, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp))
+                for inner in ast.walk(node)
+                if isinstance(inner, ast.NamedExpr)
+            )
             changed = True
             while changed:
                 changed = False
@@ -2877,9 +2909,33 @@ class Codebase(ts.AggregateRoot):
                     shadowed.update(stored(node.target))
                 elif isinstance(node, (ast.Import, ast.ImportFrom)):
                     shadowed.update(alias.asname or alias.name.split(".")[0] for alias in node.names)
+                elif isinstance(node, ast.Match):
+                    for case in node.cases:
+                        for pattern in ast.walk(case.pattern):
+                            if isinstance(pattern, (ast.MatchAs, ast.MatchStar)) and pattern.name is not None:
+                                shadowed.add(pattern.name)
+                            elif isinstance(pattern, ast.MatchMapping) and pattern.rest is not None:
+                                shadowed.add(pattern.rest)
             return names - shadowed
 
-        def kept(node: ast.AST, names: set[str]) -> str | None:
+        def held(fn: ast.FunctionDef | ast.AsyncFunctionDef, names: set[str]) -> set[str]:
+            return held_in(
+                list(fn.body),
+                set(names)
+                | {
+                    a.arg
+                    for a in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs
+                    if is_spec(a.annotation)
+                },
+            )
+
+        def kept(node: ast.AST, names: set[str], top: bool) -> str | None:
+            if top and isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) for t in node.targets):
+                return spec_value(node.value, names)
+            if top and isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                if node.value is not None:
+                    return spec_value(node.value, names)
+                return ast.unparse(node.annotation) if is_spec(node.annotation) else None
             if isinstance(node, ast.Assign) and any(
                 isinstance(t, (ast.Attribute, ast.Subscript)) for t in node.targets
             ):
@@ -2891,6 +2947,13 @@ class Codebase(ts.AggregateRoot):
                     return spec_value(node.value, names)
                 return ast.unparse(node.annotation) if is_spec(node.annotation) else None
             if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Attribute) and node.func.attr in (
+                    "append", "appendleft", "extend", "insert", "setdefault"
+                ):
+                    for each in [*node.args, *(k.value for k in node.keywords)]:
+                        hit = spec_value(each, names)
+                        if hit is not None:
+                            return hit
                 if isinstance(node.func, ast.Attribute) and node.func.attr == "__setattr__":
                     if len(node.args) == 3:
                         return spec_value(node.args[2], names)
@@ -2924,6 +2987,14 @@ class Codebase(ts.AggregateRoot):
                     else "__dict__"
                 )
                 return node.args[0].id, field
+            if (
+                isinstance(node, ast.Call)
+                and node.args
+                and isinstance(node.args[0], ast.Name)
+                and node.args[0].id in names
+                and ast.unparse(node.func).split(".")[-1] in ("asdict", "astuple", "copy", "deepcopy")
+            ):
+                return node.args[0].id, "__dict__"
             return None
 
         found: list[Violation] = []
@@ -2935,8 +3006,14 @@ class Codebase(ts.AggregateRoot):
             where: str,
             constructing: bool,
             assembling: bool,
+            top: bool = False,
         ) -> None:
             for cur in scope(nodes):
+                if top and isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                if top and isinstance(cur, ast.ClassDef):
+                    scan(list(cur.body), names, f"{where}.{cur.name}", False, False, True)
+                    continue
                 if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     scan(
                         list(cur.body),
@@ -2969,9 +3046,9 @@ class Codebase(ts.AggregateRoot):
                     continue
                 if not isinstance(cur, (ast.stmt, ast.expr)):
                     continue
-                spec_name = kept(cur, names)
-                if spec_name is not None and not assembling and (cur.lineno, "keeps", spec_name) not in seen:
-                    seen.add((cur.lineno, "keeps", spec_name))
+                spec_name = kept(cur, names, top)
+                if spec_name is not None and not assembling and (cur.lineno, "\x00keeps", spec_name) not in seen:
+                    seen.add((cur.lineno, "\x00keeps", spec_name))
                     found.append(
                         Violation(
                             module.path(),
@@ -3012,6 +3089,8 @@ class Codebase(ts.AggregateRoot):
                 stack.extend((child, cls) for child in ast.iter_child_nodes(cur))
             return out
 
+        module_names = held_in(list(module.body()), set())
+        scan(list(module.body()), module_names, module.name(), False, False, True)
         for fn, cls in roots():
             block = blocks.get((module.name(), cls.name)) if cls is not None else None
             where = (
@@ -3019,7 +3098,7 @@ class Codebase(ts.AggregateRoot):
             )
             scan(
                 list(fn.body),
-                held(fn, set()),
+                held(fn, module_names),
                 where,
                 fn.name == "__init__" and block in SPEC_READER_BLOCKS,
                 fn.name == "__init__" and (block in SPEC_BLOCKS or block == "mapper"),

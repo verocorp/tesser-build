@@ -9564,3 +9564,88 @@ def test_a_spec_is_tracked_through_aliases_stores_and_shadows() -> None:
         "shop/adapters/keeper.py:24: TB083 shop.adapters.keeper.Keeper.iterated reads 'items' of the spec 'spec'; "
         "a spec is only read where it initializes its domain object",
     )
+
+
+def test_a_spec_is_tracked_at_module_level_through_makers_mutators_and_match() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/tag.py",
+                "shop.domain.tag",
+                "import tesser.domain as ts\n"
+                "class TagSpec(ts.Spec):\n"
+                "    def __init__(self, value: str) -> None:\n"
+                "        self.value = value\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, spec: TagSpec) -> None:\n"
+                "        object.__setattr__(self, '_value', spec.value)\n",
+                False,
+            ),
+            (
+                "shop/application/mapper.py",
+                "shop.application.mapper",
+                "import tesser.application as ts\n"
+                "import shop.domain.tag as tag\n"
+                "class MapToTagSpec(ts.Mapper):\n"
+                "    def __init__(self, value: str) -> None:\n"
+                "        self._value = value\n"
+                "    def spec(self) -> tag.TagSpec:\n"
+                "        return tag.TagSpec(value=self._value)\n",
+                False,
+            ),
+            (
+                "shop/adapters/top.py",
+                "shop.adapters.top",
+                "import tesser.adapters as ts\n"
+                "import shop.domain.tag as tag\n"
+                "import shop.application.mapper as mapper\n"
+                "TOP = tag.TagSpec(value='x')\n"
+                "SHOUT = TOP.value\n"
+                "class Keeper(ts.Handler):\n"
+                "    HELD = tag.TagSpec(value='y')\n"
+                "    def __init__(self, m: mapper.MapToTagSpec, spec: tag.TagSpec, flag: bool) -> None:\n"
+                "        self._made = m.spec()\n"
+                "        self._either = spec if flag else TOP\n"
+                "        self._items: list = []\n"
+                "        self._items.append(spec)\n"
+                "        self._links = set()\n"
+                "        self._links.add(spec)\n"
+                "        out = [(held := spec) for _ in range(1)]\n"
+                "        self._held = held\n"
+                "        self._value = TOP.value\n"
+                "    def matched(self, spec: tag.TagSpec) -> str:\n"
+                "        match [1]:\n"
+                "            case [spec]:\n"
+                "                return spec.upper()\n"
+                "            case str() as spec:\n"
+                "                return spec.upper()\n"
+                "        return ''\n"
+                "    def copied(self, spec: tag.TagSpec) -> object:\n"
+                "        import copy\n"
+                "        return copy.copy(spec)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    tb083 = tuple(f for f in findings if " TB083 " in f)
+    assert tb083 == (
+        "shop/adapters/top.py:4: TB083 shop.adapters.top keeps the spec 'tag.TagSpec'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "shop/adapters/top.py:5: TB083 shop.adapters.top reads 'value' of the spec 'TOP'; "
+        "a spec is only read where it initializes its domain object",
+        "shop/adapters/top.py:7: TB083 shop.adapters.top.Keeper keeps the spec 'tag.TagSpec'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "shop/adapters/top.py:9: TB083 shop.adapters.top.Keeper.__init__ keeps the spec 'm.spec'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "shop/adapters/top.py:10: TB083 shop.adapters.top.Keeper.__init__ keeps the spec 'spec'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "shop/adapters/top.py:12: TB083 shop.adapters.top.Keeper.__init__ keeps the spec 'spec'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "shop/adapters/top.py:16: TB083 shop.adapters.top.Keeper.__init__ keeps the spec 'held'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "shop/adapters/top.py:17: TB083 shop.adapters.top.Keeper.__init__ reads 'value' of the spec 'TOP'; "
+        "a spec is only read where it initializes its domain object",
+        "shop/adapters/top.py:27: TB083 shop.adapters.top.Keeper.copied reads '__dict__' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+    )
