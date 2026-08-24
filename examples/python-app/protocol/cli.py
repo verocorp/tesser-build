@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol
+import typing
 
 import tesser.srv as ts
 
@@ -40,6 +40,6 @@ class CliResponse(ts.Response):
         return cls(0, stdout=line, stderr="")
 
 
-class Command(ts.Port, Protocol):
+class Command(ts.Port, typing.Protocol):
 
     def __call__(self, request: CliRequest, /) -> CliResponse: ...

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import enum
-from typing import Protocol
+import typing
 
 import tesser.application as ts
 
@@ -31,6 +31,6 @@ class ListVerdictsResponse(ts.Response):
         self.verdicts = verdicts
 
 
-class VerdictSource(ts.Port, Protocol):
+class VerdictSource(ts.Port, typing.Protocol):
 
     def verdicts(self, request: ListVerdictsRequest) -> ListVerdictsResponse: ...

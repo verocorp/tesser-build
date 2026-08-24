@@ -3,12 +3,12 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from pathlib import Path
+import pathlib
 
 import tesser.testing as ts
 
 @ts.helper
-def _repo(root: Path) -> Path:  # tesser:debt TB073
+def _repo(root: pathlib.Path) -> pathlib.Path:  # tesser:debt TB073
     (root / "scripts").mkdir()
     (root / "scripts" / "verify").write_text(
         "run_appone() {\n"
@@ -37,8 +37,8 @@ def _repo(root: Path) -> Path:  # tesser:debt TB073
     return root
 
 
-def test_a_clean_repo_exits_zero_with_the_app_rows(tmp_path: Path) -> None:
-    tree = Path(__file__).resolve().parents[2]
+def test_a_clean_repo_exits_zero_with_the_app_rows(tmp_path: pathlib.Path) -> None:
+    tree = pathlib.Path(__file__).resolve().parents[2]
     result = subprocess.run(
         [sys.executable, "-m", "srv.cli.trees", str(_repo(tmp_path))],
         cwd=tree,
@@ -57,7 +57,7 @@ def test_a_clean_repo_exits_zero_with_the_app_rows(tmp_path: Path) -> None:
 
 
 def test_a_missing_root_argument_exits_two_with_the_usage() -> None:
-    tree = Path(__file__).resolve().parents[2]
+    tree = pathlib.Path(__file__).resolve().parents[2]
     result = subprocess.run(
         [sys.executable, "-m", "srv.cli.trees"],
         cwd=tree,
@@ -75,8 +75,8 @@ def test_a_missing_root_argument_exits_two_with_the_usage() -> None:
     assert "usage: python -m srv.cli.trees" in result.stderr
 
 
-def test_an_extra_argument_exits_two_with_the_usage(tmp_path: Path) -> None:
-    tree = Path(__file__).resolve().parents[2]
+def test_an_extra_argument_exits_two_with_the_usage(tmp_path: pathlib.Path) -> None:
+    tree = pathlib.Path(__file__).resolve().parents[2]
     result = subprocess.run(
         [sys.executable, "-m", "srv.cli.trees", str(_repo(tmp_path)), "extra"],
         cwd=tree,
@@ -93,10 +93,10 @@ def test_an_extra_argument_exits_two_with_the_usage(tmp_path: Path) -> None:
     assert "usage: python -m srv.cli.trees" in result.stderr
 
 
-def test_a_broken_manifest_exits_one_on_stderr(tmp_path: Path) -> None:
+def test_a_broken_manifest_exits_one_on_stderr(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "manifest.json").write_text("{ truncated")
-    tree = Path(__file__).resolve().parents[2]
+    tree = pathlib.Path(__file__).resolve().parents[2]
     result = subprocess.run(
         [sys.executable, "-m", "srv.cli.trees", str(tmp_path)],
         cwd=tree,
@@ -114,10 +114,10 @@ def test_a_broken_manifest_exits_one_on_stderr(tmp_path: Path) -> None:
     assert "manifest.json is unreadable" in result.stderr
 
 
-def test_an_unregistered_directory_exits_one_before_listing(tmp_path: Path) -> None:
+def test_an_unregistered_directory_exits_one_before_listing(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "utils").mkdir()
-    tree = Path(__file__).resolve().parents[2]
+    tree = pathlib.Path(__file__).resolve().parents[2]
     result = subprocess.run(
         [sys.executable, "-m", "srv.cli.trees", str(tmp_path)],
         cwd=tree,

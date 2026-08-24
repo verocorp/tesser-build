@@ -1,13 +1,13 @@
 import os
 import sys
-from pathlib import Path
-from typing import Final
+import pathlib
+import typing
 
 import tesser.adapters as ts
 
 import tessercheck.application.ports.source_reader as source_reader
 
-SKIP_DIRS: Final[frozenset[str]] = frozenset(
+SKIP_DIRS: typing.Final[frozenset[str]] = frozenset(
     {
         ".git",
         "__pycache__",
@@ -26,13 +26,15 @@ SKIP_DIRS: Final[frozenset[str]] = frozenset(
     }
 )
 
-DECLARATION: Final[str] = ".tesser-root"
+DECLARATION: typing.Final[str] = ".tesser-root"
 
-SKIP_DIRECTIVE: Final[str] = "skip"
+SKIP_DIRECTIVE: typing.Final[str] = "skip"
 
-EXPORT_DIRECTIVE: Final[str] = "export"
+EXPORT_DIRECTIVE: typing.Final[str] = "export"
 
-IMPORT_DIRECTIVE: Final[str] = "import"
+IMPORT_DIRECTIVE: typing.Final[str] = "import"
+
+STDLIB_DIRECTIVE: typing.Final[str] = "stdlib"
 
 
 class FilesystemSourceReader(ts.Repository):
@@ -40,11 +42,12 @@ class FilesystemSourceReader(ts.Repository):
     def sources(
         self, request: source_reader.ReadSourcesRequest
     ) -> source_reader.ReadSourcesResponse:
-        base = Path(request.tree)
+        base = pathlib.Path(request.tree)
         root = source_reader.RootForm.APP
         skips: set[str] = set()
         exports: list[str] = []
         imports: list[str] = []
+        pure_stdlib: list[str] = []
         try:
             declared = (base / DECLARATION).read_text(encoding="utf-8-sig")
             lines = [line.strip() for line in declared.splitlines() if line.strip()]
@@ -65,6 +68,10 @@ class FilesystemSourceReader(ts.Repository):
                         part.isidentifier() for part in value.split(".")
                     ):
                         imports.append(value)
+                    elif directive == STDLIB_DIRECTIVE and all(
+                        part.isidentifier() for part in value.split(".")
+                    ):
+                        pure_stdlib.append(value)
                     else:
                         root = source_reader.RootForm.UNRECOGNIZED
                         break
@@ -76,11 +83,12 @@ class FilesystemSourceReader(ts.Repository):
             skips = set()
             exports = []
             imports = []
+            pure_stdlib = []
         found: list[source_reader.SourceFile] = []
         nested: list[str] = []
         symlinked: list[str] = []
         for dirpath, dirnames, filenames in os.walk(base, followlinks=False):
-            here = Path(dirpath)
+            here = pathlib.Path(dirpath)
             dirnames.sort()
             for name in list(dirnames):
                 if name in SKIP_DIRS or name in skips:
@@ -128,4 +136,5 @@ class FilesystemSourceReader(ts.Repository):
             exports=tuple(exports),
             imports=tuple(imports),
             stdlib=tuple(sorted(sys.stdlib_module_names)),
+            pure_stdlib=tuple(pure_stdlib),
         )

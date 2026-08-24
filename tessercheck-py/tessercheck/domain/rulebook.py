@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import ast
 import re
-from typing import Final
+import typing
 
 import tesser.domain as ts
 
 import tessercheck.domain.checks as checks
 
-HOLE_NAMES: Final[dict[str, str]] = {
+HOLE_NAMES: typing.Final[dict[str, str]] = {
     "where": "⟨module.Class.method⟩",
     "module.name()": "⟨module⟩",
     "cls.name": "⟨class⟩",
@@ -52,13 +52,14 @@ HOLE_NAMES: Final[dict[str, str]] = {
     "named": "⟨types⟩",
 }
 
-APPLIES_TO: Final[dict[str, str]] = {
+APPLIES_TO: typing.Final[dict[str, str]] = {
     "Codebase.__init__": "checked source file",
     "Codebase.violations": "debt marker",
     "Codebase._declaration_violations": "the checked tree itself",
     "Codebase._export_declaration_violations": "the checked tree itself",
     "Codebase._import_declaration_violations": "the checked tree itself",
     "Codebase._unused_import_violations": "the checked tree itself",
+    "Codebase._stdlib_declaration_violations": "the checked tree itself",
     "Codebase._kernel_init_violations": "kernel `__init__`",
     "Codebase._kernel_module_violations": "kernel module",
     "Codebase._tesser_init_violations": "tesser distribution `__init__`",
@@ -128,6 +129,7 @@ APPLIES_TO: Final[dict[str, str]] = {
     "kernel": "kernel module",
     "test": "test module",
     "Codebase._form_violations": "direction-legal context import (role modules and their __init__, srv/app, test modules)",
+    "Codebase._member_form_violations": "every import in every governed module",
     "Codebase._stray_import_violations": "role, srv/app, or test module",
     "Codebase._helper_violations": "@ts.helper function",
     "Codebase._pairing_violations": "implementation module and its sibling test file",
@@ -142,7 +144,7 @@ APPLIES_TO: Final[dict[str, str]] = {
     "Codebase._dto_violations": "request/response DTO",
 }
 
-WHERE_PREFIX: Final[re.Pattern[str]] = re.compile(r"^(?:⟨[^⟩]+⟩[.:]*)+\s*")
+WHERE_PREFIX: typing.Final[re.Pattern[str]] = re.compile(r"^(?:⟨[^⟩]+⟩[.:]*)+\s*")
 
 
 class RuleRow(ts.ValueObject):

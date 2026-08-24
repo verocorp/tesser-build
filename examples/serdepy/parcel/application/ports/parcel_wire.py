@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import enum
-from typing import Protocol
+import typing
 
 import tesser.application as ts
 
@@ -53,6 +53,6 @@ class PayloadResponse(ts.Response):
         self.weight_class = weight_class
 
 
-class ParcelWire(ts.Port, Protocol):
+class ParcelWire(ts.Port, typing.Protocol):
 
     def to_payload(self, request: ParcelRecord) -> PayloadResponse: ...

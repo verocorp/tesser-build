@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol
+import typing
 
 import tesser.application as ts
 
@@ -31,6 +31,6 @@ class ReadRulebookResponse(ts.Response):
         self.contracts_text = contracts_text
 
 
-class RulebookSources(ts.Port, Protocol):
+class RulebookSources(ts.Port, typing.Protocol):
 
     def read(self, request: ReadRulebookRequest) -> ReadRulebookResponse: ...

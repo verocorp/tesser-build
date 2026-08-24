@@ -26,6 +26,7 @@ class FakeSourceReader(source_reader.SourceReader):
             exports=(),
             imports=(),
             stdlib=(),
+            pure_stdlib=(),
         )
 
 

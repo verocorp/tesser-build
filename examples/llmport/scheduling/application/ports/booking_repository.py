@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import enum
-from typing import Protocol
+import typing
 
 import tesser.application as ts
 
@@ -51,7 +51,7 @@ class SaveBookingResponse(ts.Response):
         return None
 
 
-class BookingRepository(ts.Port, Protocol):
+class BookingRepository(ts.Port, typing.Protocol):
 
     def find(self, request: FindBookingRequest) -> FindBookingResponse: ...
 

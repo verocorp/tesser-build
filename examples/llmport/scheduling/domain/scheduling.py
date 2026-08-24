@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from typing import Final
+import typing
 
 import tesser.domain as ts
-from tesser.serialization import canonical_str
+import tesser.serialization as serialization
 
-COLLECT_NAME: Final[str] = "collect_name"
-CHOOSE_SLOT: Final[str] = "choose_slot"
-CONFIRM: Final[str] = "confirm"
-BOOKED: Final[str] = "booked"
-STEPS: Final[tuple[str, ...]] = (COLLECT_NAME, CHOOSE_SLOT, CONFIRM, BOOKED)
+COLLECT_NAME: typing.Final[str] = "collect_name"
+CHOOSE_SLOT: typing.Final[str] = "choose_slot"
+CONFIRM: typing.Final[str] = "confirm"
+BOOKED: typing.Final[str] = "booked"
+STEPS: typing.Final[tuple[str, ...]] = (COLLECT_NAME, CHOOSE_SLOT, CONFIRM, BOOKED)
 
 
 class Step(ts.ValueObject):
@@ -22,7 +22,7 @@ class Step(ts.ValueObject):
         object.__setattr__(self, "_label", label)
 
     def __str__(self) -> str:
-        return canonical_str(self._label)
+        return serialization.canonical_str(self._label)
 
 
 class CustomerName(ts.ValueObject):
@@ -37,7 +37,7 @@ class CustomerName(ts.ValueObject):
         object.__setattr__(self, "_value", value.strip())
 
     def __str__(self) -> str:
-        return canonical_str(self._value)
+        return serialization.canonical_str(self._value)
 
 
 class Slot(ts.ValueObject):
@@ -52,7 +52,7 @@ class Slot(ts.ValueObject):
         object.__setattr__(self, "_label", label.strip())
 
     def __str__(self) -> str:
-        return canonical_str(self._label)
+        return serialization.canonical_str(self._label)
 
 
 class BookingID(ts.ValueObject):
@@ -65,7 +65,7 @@ class BookingID(ts.ValueObject):
         object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
-        return canonical_str(self._value)
+        return serialization.canonical_str(self._value)
 
 
 class BookingSpec(ts.Spec):

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import enum
-from typing import Protocol
+import typing
 
 import tesser.application as ts
 
@@ -91,6 +91,6 @@ class ReadRepoResponse(ts.Response):
         self.requirements = requirements
 
 
-class RepoReader(ts.Port, Protocol):
+class RepoReader(ts.Port, typing.Protocol):
 
     def read(self, request: ReadRepoRequest) -> ReadRepoResponse: ...

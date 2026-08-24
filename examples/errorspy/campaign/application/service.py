@@ -8,7 +8,7 @@ import campaign.client.client as client
 import campaign.domain.campaign as campaign
 import campaign.domain.short_link as short_link
 import campaign.domain.values as values
-from tesser.errors import DomainError, InfraError, collect
+import tesser.errors as errors
 
 
 class CampaignService(ts.ApplicationService):
@@ -68,15 +68,15 @@ class CampaignService(ts.ApplicationService):
         )
         try:
             c = campaign.Campaign(found_campaign_spec)
-        except DomainError as e:
-            raise InfraError(
+        except errors.DomainError as e:
+            raise errors.InfraError(
                 f"corrupted campaign record {found_campaign_spec.id!r}: {e}"
             ) from e
         view_links = tuple(str(link.slug) for link in c.links)
         return client.CampaignView(campaign_id=c.id, links=view_links)
 
     def add_link(self, req: client.AddLinkRequest) -> client.CampaignView:
-        collect(
+        errors.collect(
             campaign_id=lambda: values.CampaignID(req.campaign_id),
             slug=lambda: values.Slug(req.slug),
             target_url=lambda: values.TargetURL(req.target_url),
@@ -107,8 +107,8 @@ class CampaignService(ts.ApplicationService):
         )
         try:
             c = campaign.Campaign(found_campaign_spec)
-        except DomainError as e:
-            raise InfraError(
+        except errors.DomainError as e:
+            raise errors.InfraError(
                 f"corrupted campaign record {found_campaign_spec.id!r}: {e}"
             ) from e
         c.add_link(short_link.ShortLinkSpec(slug=req.slug, target_url=req.target_url))
@@ -156,8 +156,8 @@ class CampaignService(ts.ApplicationService):
         )
         try:
             c = campaign.Campaign(found_campaign_spec)
-        except DomainError as e:
-            raise InfraError(
+        except errors.DomainError as e:
+            raise errors.InfraError(
                 f"corrupted campaign record {found_campaign_spec.id!r}: {e}"
             ) from e
         c.deactivate_link(values.Slug(req.slug))

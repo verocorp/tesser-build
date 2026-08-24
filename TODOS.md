@@ -432,11 +432,11 @@ against `main` at v0.0.71.0 rather than transcribed.
   left this list in the srv-wire-vocabulary wave: a top-level `*wire.py` is a
   governed wire module — imports `tesser.srv` exactly once as ts, holds wire
   kinds, is context-generic, and never imports srv or bootstrap.)
-- [ ] **Pure-core allowlist candidates (from dogfood evidence only):**
-  `urllib.parse` in `campaign.domain.values` / `linkpolicy.domain.policy`
-  (pure parsing — likely admit; the matcher accepts exact dotted entries, so
-  `urllib.parse` can be admitted without opening `urllib.request`), `copy` in
-  `campaign.domain.short_link` (pure — likely admit). The `secrets` half is
+- [x] **Pure-core allowlist candidates (from dogfood evidence only):**
+  RESOLVED 2026-08-24 (module-only imports wave): `urllib.parse` and `copy`
+  admitted to the default; their three `# tesser:debt TB062` markers are
+  burned. The default is now a recommended default, widened per tree by
+  `stdlib <module>` lines in `.tesser-root`. The `secrets` half is
   RESOLVED v0.0.61.0: it was injected through the `CampaignIdentity` port
   rather than admitted, and the service's `# tesser:debt TB062` is
   deleted — the outcome the entry predicted.
@@ -475,10 +475,11 @@ against `main` at v0.0.71.0 rather than transcribed.
   (10) srv/bootstrap have no external-import allowlist, and a constants-only
   module can do import-time IO (`OUT: Final[bytes] = subprocess.check_output`)
   with zero findings — fold into the host-vocabulary ruling.
-  (11) PARTIALLY RESOLVED v0.0.29.0: `TOOLING_MODULES` is deleted — no
-  consumer inherits a name-keyed bypass anymore. Still open: CORE_STDLIB's
-  `ast` entry is global, and the allowlist has no per-consumer config
-  surface yet.
+  (11) RESOLVED 2026-08-24: `TOOLING_MODULES` was deleted in v0.0.29.0, and
+  the allowlist now has its per-consumer surface — `stdlib <module>` lines in
+  `.tesser-root` widen `CORE_STDLIB["domain"]` for that tree (validated as a
+  real stdlib module, not a repeat of the default, and used). The `ast`
+  entry stays in the shipped default on the original evidence.
   (12) a top-level FILE sharing a context's name (context package without
   `__init__.py` + `<context>.py` beside it) falls through to
   `_context_init_violations` and is mislabeled "__init__ declares code" —

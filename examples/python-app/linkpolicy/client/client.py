@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol
+import typing
 
 import tesser.context as ts
 
@@ -38,7 +38,7 @@ class ListVerdictsResponse(ts.Response):
         self.verdicts = verdicts
 
 
-class Client(ts.Client, Protocol):
+class Client(ts.Client, typing.Protocol):
 
     def check(self, req: CheckRequest) -> CheckResponse: ...
 

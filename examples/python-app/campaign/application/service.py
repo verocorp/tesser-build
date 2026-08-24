@@ -15,7 +15,8 @@ import campaign.domain.money as money
 import campaign.domain.short_link as short_link
 import campaign.domain.short_links as short_links
 import campaign.domain.values as values
-from tesser.errors import conflict, not_found
+import kernel.slug as kernel_slug
+import tesser.errors as errors
 
 
 class MapToMoneySpec(ts.Mapper):
@@ -157,7 +158,7 @@ class MapToCampaignView(ts.Mapper):
             case campaign_queries.CampaignViewLookup.FOUND:
                 row = found_campaign_view.campaigns[0]
             case campaign_queries.CampaignViewLookup.MISSING:
-                raise not_found(
+                raise errors.not_found(
                     "campaign_missing",
                     f"no campaign with id {find_campaign_view_request.campaign_id!r}",
                 )
@@ -212,12 +213,12 @@ class MapToCheckTargetRequest(ts.Mapper):
 
 class MapToSlugTakenRequest(ts.Mapper):
 
-    def __init__(self, slug: values.Slug) -> None:
+    def __init__(self, slug: kernel_slug.Slug) -> None:
         self._slug_value = slug
         self._slug = str(slug)
 
     @property
-    def slug_value(self) -> values.Slug:
+    def slug_value(self) -> kernel_slug.Slug:
         return self._slug_value
 
     @property
@@ -237,7 +238,7 @@ class MapToShortLinkSpec(ts.Mapper):
             case target_policy.PolicyVerdict.ALLOWED:
                 pass
             case target_policy.PolicyVerdict.BLOCKED:
-                raise conflict(
+                raise errors.conflict(
                     "destination_blocked", f"destination not allowed: {checked_target.reason}"
                 )
             case _ as unreachable:
@@ -246,7 +247,7 @@ class MapToShortLinkSpec(ts.Mapper):
             case campaign_repository.SlugAvailability.FREE:
                 pass
             case campaign_repository.SlugAvailability.TAKEN:
-                raise conflict(
+                raise errors.conflict(
                     "duplicate_slug", f"slug {add_link_request.slug!r} already exists"
                 )
             case _ as unreachable_availability:
@@ -289,7 +290,7 @@ class MapToCampaignSpecFromRecord(ts.Mapper):
             case campaign_repository.CampaignLookup.FOUND:
                 record = found_campaign.campaigns[0]
             case campaign_repository.CampaignLookup.MISSING:
-                raise not_found(
+                raise errors.not_found(
                     "campaign_missing",
                     f"no campaign with id {find_campaign_request.campaign_id!r}",
                 )
@@ -397,7 +398,7 @@ class CampaignService(ts.ApplicationService):
         )
 
     def add_link(self, req: client.AddLinkRequest) -> client.CampaignView:
-        slug = values.Slug(req.slug)
+        slug = kernel_slug.Slug(req.slug)
         target_url = values.TargetURL(req.target_url)
         campaign_id = values.CampaignID(req.campaign_id)
         campaign_id_text = str(campaign_id)
@@ -510,7 +511,7 @@ class CampaignService(ts.ApplicationService):
             ),
             links=links_spec,
         ))
-        c.deactivate_short_link(values.Slug(req.slug))
+        c.deactivate_short_link(kernel_slug.Slug(req.slug))
 
         save_request_mapper = MapToSaveCampaignRequest(campaign_aggregate=c)
         link_records = tuple(
@@ -572,7 +573,7 @@ class CampaignService(ts.ApplicationService):
         )
 
     def resolve(self, req: client.ResolveRequest) -> client.ResolveResponse:
-        slug = values.Slug(req.slug)
+        slug = kernel_slug.Slug(req.slug)
         slug_text = str(slug)
         find_campaign_by_slug_request = campaign_repository.FindCampaignBySlugRequest(
             slug=slug_text

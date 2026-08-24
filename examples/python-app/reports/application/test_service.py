@@ -7,7 +7,7 @@ import reports.application.ports.link_source as link_source
 import reports.application.ports.verdict_source as verdict_source
 import reports.application.service as service
 import reports.client.client as client
-from tesser.errors import DomainError, InfraError
+import tesser.errors as errors
 
 
 @ts.fake
@@ -125,10 +125,10 @@ def test_a_denied_link_is_reported_ahead_of_an_allowed_one() -> None:
 
 
 def test_a_source_that_is_down_fails_the_report_rather_than_halving_it() -> None:
-    links = FakeLinkSource(error=InfraError("link store unreachable"))
+    links = FakeLinkSource(error=errors.InfraError("link store unreachable"))
     verdicts = FakeVerdictSource()
 
-    with pytest.raises(InfraError):
+    with pytest.raises(errors.InfraError):
         service.ReportsService(links, verdicts).links_by_verdict(
             client.LinksByVerdictRequest()
         )
@@ -140,7 +140,7 @@ def test_a_link_record_the_domain_would_not_accept_fails_the_report() -> None:
     )
     verdicts = FakeVerdictSource()
 
-    with pytest.raises(DomainError):
+    with pytest.raises(errors.DomainError):
         service.ReportsService(links, verdicts).links_by_verdict(
             client.LinksByVerdictRequest()
         )
@@ -177,7 +177,7 @@ def test_a_verdict_record_carrying_no_reason_fails_the_report() -> None:
         )
     )
 
-    with pytest.raises(DomainError):
+    with pytest.raises(errors.DomainError):
         service.ReportsService(links, verdicts).links_by_verdict(
             client.LinksByVerdictRequest()
         )

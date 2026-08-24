@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import copy  # tesser:debt TB062
+import copy
 
 import tesser.domain as ts
 
 import campaign.domain.short_link as short_link
 import campaign.domain.values as values
-from tesser.errors import DomainError, conflict, invalid, not_found
+import kernel.slug as kernel_slug
+import tesser.errors as errors
 
 
 class ShortLinksSpec(ts.Spec):
@@ -22,11 +23,11 @@ class ShortLinks(ts.Entity):
         for index, link_spec in enumerate(spec.links):
             try:
                 link = short_link.ShortLink(link_spec)
-            except DomainError as e:
-                raise invalid("invalid_short_link", f"invalid short link at index {index}: {e}") from e
+            except errors.DomainError as e:
+                raise errors.invalid("invalid_short_link", f"invalid short link at index {index}: {e}") from e
             for existing in admitted:
                 if existing.slug == link.slug:
-                    raise conflict("duplicate_slug", f"duplicate slug {link.slug} in campaign")
+                    raise errors.conflict("duplicate_slug", f"duplicate slug {link.slug} in campaign")
             admitted.append(link)
         self._links = admitted
 
@@ -38,19 +39,19 @@ class ShortLinks(ts.Entity):
         link = short_link.ShortLink(spec)
         for existing in self._links:
             if existing.slug == link.slug:
-                raise conflict("duplicate_slug", f"duplicate slug {link.slug} in campaign")
+                raise errors.conflict("duplicate_slug", f"duplicate slug {link.slug} in campaign")
         self._links = [*self._links, link]
 
-    def deactivate(self, slug: values.Slug) -> None:
+    def deactivate(self, slug: kernel_slug.Slug) -> None:
         for link in self._links:
             if link.slug == slug:
                 link.deactivate()
                 return
-        raise not_found("link_missing", f"no short link with slug {slug}")
+        raise errors.not_found("link_missing", f"no short link with slug {slug}")
 
-    def active_target(self, slug: values.Slug) -> values.TargetURL:
+    def active_target(self, slug: kernel_slug.Slug) -> values.TargetURL:
         active = values.LinkStatus(values.LinkState.ACTIVE)
         for link in self._links:
             if link.slug == slug and link.status == active:
                 return link.target_url
-        raise not_found("link_missing", f"no active link for slug {slug}")
+        raise errors.not_found("link_missing", f"no active link for slug {slug}")

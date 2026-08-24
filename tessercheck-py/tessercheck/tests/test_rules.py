@@ -1,5 +1,6 @@
 import ast
-from pathlib import Path
+import pathlib
+import re
 
 import tessercheck.adapters.repositories.rulebook_sources as rulebook_repository
 import tessercheck.application.ports.rulebook_sources as rulebook_sources
@@ -7,7 +8,7 @@ import tessercheck.domain.rulebook as rulebook
 
 
 def test_rules_md_is_current() -> None:
-    root = Path(__file__).resolve().parents[2]
+    root = pathlib.Path(__file__).resolve().parents[2]
     read = rulebook_repository.FilesystemRulebookSources().read(
         rulebook_sources.ReadRulebookRequest(tree=str(root))
     )
@@ -24,7 +25,7 @@ def test_rules_md_is_current() -> None:
 
 
 def test_every_rule_has_a_fixture() -> None:
-    root = Path(__file__).resolve().parents[2]
+    root = pathlib.Path(__file__).resolve().parents[2]
     read = rulebook_repository.FilesystemRulebookSources().read(
         rulebook_sources.ReadRulebookRequest(tree=str(root))
     )
@@ -42,7 +43,7 @@ def test_every_rule_has_a_fixture() -> None:
 
 
 def test_every_violation_site_yields_a_rulebook_row() -> None:
-    root = Path(__file__).resolve().parents[2]
+    root = pathlib.Path(__file__).resolve().parents[2]
     read = rulebook_repository.FilesystemRulebookSources().read(
         rulebook_sources.ReadRulebookRequest(tree=str(root))
     )
@@ -61,9 +62,16 @@ def test_every_violation_site_yields_a_rulebook_row() -> None:
         read.contracts_text,
     )
     rows = [line for line in rendered.splitlines() if line.startswith("| TB")]
+    rendered_lines = {
+        int(number)
+        for row in rows
+        for number in re.findall(r"domain/checks\.py:([0-9,]+)", row)
+        for number in number.split(",")
+    }
     assert sites, "no Violation construction site was found; the scan itself is broken"
-    assert len(rows) == len(sites), (
-        f"{len(sites)} Violation sites produced {len(rows)} rulebook rows; "
+    dropped = sorted(site.lineno for site in sites if site.lineno not in rendered_lines)
+    assert dropped == [], (
+        f"Violation sites at checks.py lines {dropped} yield no rulebook row; "
         "a construction shape the generator cannot read drops rules silently, "
         "and test_every_rule_has_a_fixture then passes vacuously"
     )

@@ -1,15 +1,15 @@
-from tesser.testing.fake import fake
+import tesser.testing as testing
 
 
 def test_fake_returns_the_same_class_it_decorates() -> None:
     class Double:
         pass
 
-    assert fake(Double) is Double
+    assert testing.fake(Double) is Double
 
 
 def test_fake_leaves_the_class_it_decorates_usable() -> None:
-    @fake
+    @testing.fake
     class Double:
         def answer(self) -> int:
             return 7

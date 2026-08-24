@@ -1,37 +1,37 @@
 from __future__ import annotations
 
 import re
-from typing import Final
+import typing
 
 import tesser.domain as ts
 
-from tesser.serialization import canonical_str
+import tesser.serialization as serialization
 
-READ: Final[str] = "read"
+READ: typing.Final[str] = "read"
 
-MISSING: Final[str] = "missing"
+MISSING: typing.Final[str] = "missing"
 
-UNREADABLE: Final[str] = "unreadable"
+UNREADABLE: typing.Final[str] = "unreadable"
 
-MALFORMED: Final[str] = "malformed"
+MALFORMED: typing.Final[str] = "malformed"
 
-MISSHAPEN: Final[str] = "misshapen"
+MISSHAPEN: typing.Final[str] = "misshapen"
 
-DIRECTORY: Final[str] = "directory"
+DIRECTORY: typing.Final[str] = "directory"
 
-SYMLINK: Final[str] = "symlink"
+SYMLINK: typing.Final[str] = "symlink"
 
-KIND_APP: Final[str] = "app"
+KIND_APP: typing.Final[str] = "app"
 
-KIND_UNGATED: Final[str] = "ungated"
+KIND_UNGATED: typing.Final[str] = "ungated"
 
-KINDS: Final[frozenset[str]] = frozenset({KIND_APP, KIND_UNGATED})
+KINDS: typing.Final[frozenset[str]] = frozenset({KIND_APP, KIND_UNGATED})
 
-DECLARATION: Final[str] = ".tesser-root"
+DECLARATION: typing.Final[str] = ".tesser-root"
 
-REQUIREMENTS: Final[str] = "requirements-dev.txt"
+REQUIREMENTS: typing.Final[str] = "requirements-dev.txt"
 
-ARM_SHAPE: Final[re.Pattern[str]] = re.compile(
+ARM_SHAPE: typing.Final[re.Pattern[str]] = re.compile(
     r"^\s*([a-z0-9-]+)\)\s+(run_[a-z0-9_]+)\s", re.MULTILINE
 )
 
@@ -46,7 +46,7 @@ class Text(ts.ValueObject):
         object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
-        return canonical_str(self._value)
+        return serialization.canonical_str(self._value)
 
 
 class Problem(ts.ValueObject):
@@ -72,7 +72,7 @@ class RepoRoot(ts.ValueObject):
         object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
-        return canonical_str(self._value)
+        return serialization.canonical_str(self._value)
 
 
 class RepoSpec(ts.Spec):

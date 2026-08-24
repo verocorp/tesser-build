@@ -36,6 +36,7 @@ def test_a_declared_tree_of_conforming_modules_yields_no_findings() -> None:
         exports=(),
         imports=(),
         stdlib=(),
+        pure_stdlib=(),
     )
     assert mapping.findings(read) == ()
 
@@ -57,6 +58,7 @@ def test_an_undeclared_tree_is_the_only_thing_reported() -> None:
         exports=(),
         imports=(),
         stdlib=("os",),
+        pure_stdlib=(),
     )
     found = mapping.findings(read)
     assert len(found) == 1
@@ -77,6 +79,7 @@ def test_every_root_form_other_than_app_is_reported() -> None:
             exports=(),
             imports=(),
             stdlib=(),
+            pure_stdlib=(),
         )
         found = mapping.findings(read)
         assert len(found) == 1
@@ -92,6 +95,7 @@ def test_a_symlinked_directory_from_the_read_is_reported() -> None:
         exports=(),
         imports=(),
         stdlib=(),
+        pure_stdlib=(),
     )
     found = mapping.findings(read)
     assert any("TB045" in finding and "app/vendored" in finding for finding in found)
@@ -106,6 +110,7 @@ def test_a_nested_declaration_from_the_read_is_reported() -> None:
         exports=(),
         imports=(),
         stdlib=(),
+        pure_stdlib=(),
     )
     found = mapping.findings(read)
     assert any("app/.tesser-root" in finding for finding in found)
@@ -128,6 +133,7 @@ def test_a_finding_reads_path_line_code_then_message() -> None:
         exports=(),
         imports=(),
         stdlib=("os",),
+        pure_stdlib=(),
     )
     found = mapping.findings(read)
     assert found != ()
@@ -153,6 +159,7 @@ def test_an_unreadable_source_is_reported_rather_than_read_as_empty() -> None:
         exports=(),
         imports=(),
         stdlib=(),
+        pure_stdlib=(),
     )
     found = mapping.findings(read)
     assert any("shop/domain/thing.py" in finding for finding in found)
@@ -175,6 +182,7 @@ def test_the_package_form_of_a_source_changes_the_judgement() -> None:
         exports=(),
         imports=(),
         stdlib=(),
+        pure_stdlib=(),
     )
     as_module = source_reader.ReadSourcesResponse(
         root=source_reader.RootForm.APP,
@@ -192,6 +200,7 @@ def test_the_package_form_of_a_source_changes_the_judgement() -> None:
         exports=(),
         imports=(),
         stdlib=(),
+        pure_stdlib=(),
     )
     assert mapping.findings(as_package) == ()
     assert mapping.findings(as_module) != ()

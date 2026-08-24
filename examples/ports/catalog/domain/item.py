@@ -1,6 +1,6 @@
 import tesser.domain as ts
 
-from tesser.serialization import canonical_str
+import tesser.serialization as serialization
 
 
 class ItemID(ts.ValueObject):
@@ -13,7 +13,7 @@ class ItemID(ts.ValueObject):
         object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
-        return canonical_str(self._value)
+        return serialization.canonical_str(self._value)
 
 
 class ItemSpec(ts.Spec):

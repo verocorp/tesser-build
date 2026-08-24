@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol
+import typing
 
 import tesser.context as ts
 
@@ -26,6 +26,6 @@ class LinksByVerdictResponse(ts.Response):
         self.links = links
 
 
-class Client(ts.Client, Protocol):
+class Client(ts.Client, typing.Protocol):
 
     def links_by_verdict(self, req: LinksByVerdictRequest) -> LinksByVerdictResponse: ...

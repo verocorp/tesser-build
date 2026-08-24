@@ -43,10 +43,20 @@ them.
 > `context.Context` — it is called out inline.
 
 (`tesser.errors` and `tesser.serialization` need no debt markers: they are
-tesser norm modules the placement may from-import. The
+tesser norm modules every placement may import — as modules, like everything
+else: `import tesser.errors as errors`, then `errors.invalid(...)`. The
 `# tesser:debt TB062` markers earlier revisions of these excerpts
 carried are gone — the app-level `errors`/`serialization` root modules they
 excused moved into the tesser runtime.)
+
+**Every import is a module import** (TB053, maintainer ruling 2026-08-24):
+`import x` or `import x as name`, never `from x import name` — the stdlib,
+the tesser norm modules, kernels, and the tree's own modules alike. The one
+form with no module spelling, `from __future__ import annotations`, is the
+one exemption; a package `__init__` that re-exports (`from kernel.slug import
+Slug as Slug`) is TB042's business, not an import. A context module further
+carries an alias (`import campaign.domain.money as money`), because the
+analyzer resolves names as attribute-over-alias.
 
 **What the shell buys, once.** `ts.ValueObject` owns immutability and value
 equality at runtime: assignment and deletion raise, `__eq__`/`__hash__`
@@ -69,19 +79,19 @@ validate in the one constructor:**
 # campaign/domain/values.py (verified impl)
 import tesser.domain as ts
 
-from tesser.errors import invalid
-from tesser.serialization import canonical_str
+import tesser.errors as errors
+import tesser.serialization as serialization
 
 
 class CampaignID(ts.ValueObject):
 
     def __init__(self, value: str) -> None:
         if not _CAMPAIGN_ID_RE.fullmatch(value):
-            raise invalid("invalid_campaign_id", f"campaign id {value!r} must be 16 lowercase hex chars")
+            raise errors.invalid("invalid_campaign_id", f"campaign id {value!r} must be 16 lowercase hex chars")
         object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
-        return canonical_str(self._value)   # canonical exit: one-line delegation to the policy
+        return serialization.canonical_str(self._value)   # canonical exit: one-line delegation to the policy
 
     _value: str
 ```
@@ -464,7 +474,7 @@ package's `__init__.py` is empty (TB042). **One module, one port**, plus the
 from __future__ import annotations
 
 import enum
-from typing import Protocol
+import typing
 
 import tesser.application as ts
 
@@ -662,8 +672,8 @@ service and delegates.
 app-level `bootstrap` nests the configs and constructs each component in
 dependency order. A component selects its impl inline where it constructs
 (coordinate `if`s in `__init__` — the verified impl has no helper method); module
-constants are `Final`; a context module is imported **as an aliased module,
-never its members** (TB053).
+constants are `Final`; every import is a module import, and a context module
+is imported **as an aliased module, never its members** (TB053).
 
 ```python
 # campaign/component/component.py (verified impl) — coordinate-driven, fail-fast, uniform

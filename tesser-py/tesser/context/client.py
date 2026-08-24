@@ -1,5 +1,5 @@
-from typing import Protocol
+import typing
 
 
-class Client(Protocol):
+class Client(typing.Protocol):
     pass

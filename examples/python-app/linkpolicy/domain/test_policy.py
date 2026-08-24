@@ -3,11 +3,11 @@ from __future__ import annotations
 import pytest
 
 import linkpolicy.domain.policy as policy
-from tesser.errors import DomainError
+import tesser.errors as errors
 
 
 def test_scheme_rejects_a_non_alphabetic_value() -> None:
-    with pytest.raises(DomainError) as excinfo:
+    with pytest.raises(errors.DomainError) as excinfo:
         policy.Scheme("ht2p")
 
     assert excinfo.value.code == "invalid_scheme"
@@ -21,7 +21,7 @@ def test_scheme_round_trips_through_its_canonical_exit() -> None:
 
 
 def test_host_rejects_an_empty_value() -> None:
-    with pytest.raises(DomainError) as excinfo:
+    with pytest.raises(errors.DomainError) as excinfo:
         policy.Host("")
 
     assert excinfo.value.code == "invalid_host"
@@ -29,7 +29,7 @@ def test_host_rejects_an_empty_value() -> None:
 
 
 def test_target_url_rejects_an_empty_value() -> None:
-    with pytest.raises(DomainError) as excinfo:
+    with pytest.raises(errors.DomainError) as excinfo:
         policy.TargetURL("")
 
     assert excinfo.value.code == "invalid_target_url"
@@ -37,7 +37,7 @@ def test_target_url_rejects_an_empty_value() -> None:
 
 
 def test_reason_rejects_an_empty_value() -> None:
-    with pytest.raises(DomainError) as excinfo:
+    with pytest.raises(errors.DomainError) as excinfo:
         policy.Reason("")
 
     assert excinfo.value.code == "invalid_reason"
@@ -45,7 +45,7 @@ def test_reason_rejects_an_empty_value() -> None:
 
 
 def test_decision_rejects_a_value_outside_its_taxonomy() -> None:
-    with pytest.raises(DomainError) as excinfo:
+    with pytest.raises(errors.DomainError) as excinfo:
         policy.Decision("maybe")
 
     assert excinfo.value.code == "invalid_decision"
@@ -82,14 +82,14 @@ def test_verdicts_that_differ_in_decision_are_not_equal() -> None:
 
 
 def test_verdict_rejects_an_empty_reason() -> None:
-    with pytest.raises(DomainError) as excinfo:
+    with pytest.raises(errors.DomainError) as excinfo:
         policy.Verdict("https://ok.example/x", True, "")
 
     assert excinfo.value.code == "invalid_reason"
 
 
 def test_verdict_rejects_an_empty_target_url() -> None:
-    with pytest.raises(DomainError) as excinfo:
+    with pytest.raises(errors.DomainError) as excinfo:
         policy.Verdict("", True, "ok")
 
     assert excinfo.value.code == "invalid_target_url"
@@ -103,14 +103,14 @@ def test_policy_exposes_the_schemes_and_hosts_it_was_given() -> None:
 
 
 def test_policy_rejects_a_non_alphabetic_scheme_at_construction() -> None:
-    with pytest.raises(DomainError) as excinfo:
+    with pytest.raises(errors.DomainError) as excinfo:
         policy.Policy(("ht2p",), ())
 
     assert excinfo.value.code == "invalid_scheme"
 
 
 def test_policy_rejects_an_empty_blocked_host_at_construction() -> None:
-    with pytest.raises(DomainError) as excinfo:
+    with pytest.raises(errors.DomainError) as excinfo:
         policy.Policy(("https",), ("",))
 
     assert excinfo.value.code == "invalid_host"

@@ -1,5 +1,5 @@
-from tesser.srv.record import Record
+import tesser.srv.record as record
 
 
-class Request(Record):
+class Request(record.Record):
     pass

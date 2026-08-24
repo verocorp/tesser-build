@@ -1,5 +1,5 @@
-from datetime import datetime, timezone
-from decimal import Decimal
+import datetime
+import decimal
 
 
 def canonical_str(value: str) -> str:
@@ -18,11 +18,11 @@ def canonical_bytes(value: bytes) -> bytes:
     return value
 
 
-def canonical_decimal(value: Decimal) -> str:
+def canonical_decimal(value: decimal.Decimal) -> str:
     return str(value)
 
 
-def canonical_datetime(value: datetime) -> str:
+def canonical_datetime(value: datetime.datetime) -> str:
     if value.tzinfo is None:
         raise ValueError("naive datetimes have no canonical form; carry an aware datetime")
-    return value.astimezone(timezone.utc).isoformat(timespec="microseconds")
+    return value.astimezone(datetime.timezone.utc).isoformat(timespec="microseconds")

@@ -9,7 +9,7 @@ import campaign.application.ports.campaign_repository as campaign_repository
 import campaign.application.ports.target_policy as target_policy
 import campaign.application.service as service
 import campaign.client.client as client
-from tesser.errors import DomainError, InfraError, Kind
+import tesser.errors as errors
 
 
 @ts.fake
@@ -105,7 +105,7 @@ class FakeTargetPolicyBlocking(target_policy.TargetPolicy):
 @ts.fake
 class FakeTargetPolicyOutage(target_policy.TargetPolicy):
     def check(self, request: target_policy.CheckTargetRequest) -> target_policy.CheckTargetResponse:
-        raise InfraError("linkpolicy unavailable")
+        raise errors.InfraError("linkpolicy unavailable")
 
 
 @ts.fake
@@ -118,9 +118,9 @@ def test_rejection_is_a_conflict_and_creates_nothing() -> None:
     repo = FakeCampaignRepositoryRecording()
     svc = service.CampaignService(repo, FakeTargetPolicyBlocking(), FakeCampaignIdentity(), repo)
     req = client.AddLinkRequest(campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x")
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         svc.add_link(req)
-    assert caught.value.kind is Kind.CONFLICT
+    assert caught.value.kind is errors.Kind.CONFLICT
     assert repo.saved == []
 
 
@@ -128,7 +128,7 @@ def test_outage_propagates_and_creates_nothing() -> None:
     repo = FakeCampaignRepositoryRecording()
     svc = service.CampaignService(repo, FakeTargetPolicyOutage(), FakeCampaignIdentity(), repo)
     req = client.AddLinkRequest(campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x")
-    with pytest.raises(InfraError):
+    with pytest.raises(errors.InfraError):
         svc.add_link(req)
     assert repo.saved == []
 

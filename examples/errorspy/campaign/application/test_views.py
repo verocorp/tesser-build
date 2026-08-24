@@ -4,7 +4,7 @@ import pytest
 
 import campaign.application.ports.campaign_repository as campaign_repository
 import campaign.application.views as views
-from tesser.errors import DomainError, Kind
+import tesser.errors as errors
 
 
 def test_a_found_record_becomes_the_parts_a_campaign_is_rebuilt_from() -> None:
@@ -38,14 +38,14 @@ def test_a_missing_outcome_is_a_not_found_naming_the_campaign() -> None:
     found = campaign_repository.FindCampaignResponse(
         outcome=campaign_repository.CampaignLookup.MISSING, campaigns=()
     )
-    with pytest.raises(DomainError) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         views.MapToCampaignSpec(
             find_campaign_request=campaign_repository.FindCampaignRequest(
                 campaign_id="c9"
             ),
             found_campaign=found,
         )
-    assert ei.value.kind is Kind.NOT_FOUND
+    assert ei.value.kind is errors.Kind.NOT_FOUND
     assert ei.value.code == "campaign_missing"
     assert ei.value.message == "no campaign 'c9'"
 

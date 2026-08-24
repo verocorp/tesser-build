@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import enum
-from typing import Protocol
+import typing
 
 import tesser.application as ts
 
@@ -96,7 +96,7 @@ class ListCampaignsResponse(ts.Response):
         self.campaigns = campaigns
 
 
-class CampaignRepository(ts.Port, Protocol):
+class CampaignRepository(ts.Port, typing.Protocol):
 
     def save(self, request: SaveCampaignRequest) -> SaveCampaignResponse: ...
 

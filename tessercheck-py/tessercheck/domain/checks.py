@@ -3,12 +3,12 @@ import builtins
 import io
 import re
 import tokenize
-from typing import Final, Literal
+import typing
 
 import tesser.domain as ts
-from tesser.serialization import canonical_int, canonical_str
+import tesser.serialization as serialization
 
-TESSER_BASE_BLOCKS: Final[dict[tuple[str, str], str]] = {
+TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.application", "ApplicationService"): "service",
     ("tesser.application", "Mapper"): "mapper",
     ("tesser.application", "Port"): "port",
@@ -40,15 +40,15 @@ TESSER_BASE_BLOCKS: Final[dict[tuple[str, str], str]] = {
     ("tesser.srv", "Response"): "protocol_response",
 }
 
-TESSER_ENTRY: Final[tuple[str, str]] = ("tesser.srv", "main")
+TESSER_ENTRY: typing.Final[tuple[str, str]] = ("tesser.srv", "main")
 
-TESSER_DECORATORS: Final[dict[tuple[str, str], str]] = {
+TESSER_DECORATORS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.app", "load"): "load",
     ("tesser.testing", "helper"): "helper",
     ("tesser.testing", "fake"): "fake",
 }
 
-TS_NAME_BY_BLOCK: Final[dict[str, str]] = {
+TS_NAME_BY_BLOCK: typing.Final[dict[str, str]] = {
     "request": "ts.Request",
     "response": "ts.Response",
     "port_request": "ts.Request",
@@ -58,29 +58,29 @@ TS_NAME_BY_BLOCK: Final[dict[str, str]] = {
     "component_spec": "ts.Spec",
 }
 
-ROLES: Final[tuple[str, ...]] = ("domain", "application", "client", "adapters", "component")
+ROLES: typing.Final[tuple[str, ...]] = ("domain", "application", "client", "adapters", "component")
 
-PORTS_PACKAGE: Final[str] = "ports"
+PORTS_PACKAGE: typing.Final[str] = "ports"
 
-PORTS_PARENT_ROLE: Final[str] = "application"
+PORTS_PARENT_ROLE: typing.Final[str] = "application"
 
-PORTS_HOME: Final[str] = "application/ports"
+PORTS_HOME: typing.Final[str] = "application/ports"
 
-PORTS_IMPORT_PATH: Final[str] = "application.ports"
+PORTS_IMPORT_PATH: typing.Final[str] = "application.ports"
 
-PORTS_KINDS: Final[frozenset[str]] = frozenset({"port", "port_request", "port_response"})
+PORTS_KINDS: typing.Final[frozenset[str]] = frozenset({"port", "port_request", "port_response"})
 
-APP_PACKAGES: Final[tuple[str, ...]] = ("srv", "app")
+APP_PACKAGES: typing.Final[tuple[str, ...]] = ("srv", "app")
 
-APP_KINDS: Final[frozenset[str]] = frozenset(
+APP_KINDS: typing.Final[frozenset[str]] = frozenset(
     {"app", "loader", "app_config", "app_spec", "config_repository"}
 )
 
-COMPONENT_KINDS: Final[frozenset[str]] = frozenset(
+COMPONENT_KINDS: typing.Final[frozenset[str]] = frozenset(
     {"component", "component_config", "component_spec"}
 )
 
-KIND_ROLE: Final[dict[str, str]] = {
+KIND_ROLE: typing.Final[dict[str, str]] = {
     "aggregate": "domain",
     "entity": "domain",
     "valueobject": "domain",
@@ -101,12 +101,12 @@ KIND_ROLE: Final[dict[str, str]] = {
     "component_spec": "component",
 }
 
-KIND_HOME: Final[dict[str, str]] = {
+KIND_HOME: typing.Final[dict[str, str]] = {
     block: (f"the {role} package" if role == PORTS_HOME else f"{role}.py")
     for block, role in KIND_ROLE.items()
 }
 
-KIND_NAME: Final[dict[str, str]] = {
+KIND_NAME: typing.Final[dict[str, str]] = {
     "aggregate": "an aggregate",
     "entity": "an entity",
     "valueobject": "a value object",
@@ -138,31 +138,31 @@ KIND_NAME: Final[dict[str, str]] = {
     "protocol_response": "a protocol response record",
 }
 
-SRV_KINDS: Final[frozenset[str]] = frozenset(
+SRV_KINDS: typing.Final[frozenset[str]] = frozenset(
     block for (package, _), block in TESSER_BASE_BLOCKS.items() if package == "tesser.srv"
 )
 
-PROTOCOL_KINDS: Final[frozenset[str]] = SRV_KINDS - frozenset({"host"})
+PROTOCOL_KINDS: typing.Final[frozenset[str]] = SRV_KINDS - frozenset({"host"})
 
-PROTOCOL_PACKAGE: Final[str] = "protocol"
+PROTOCOL_PACKAGE: typing.Final[str] = "protocol"
 
-TREE_DECLARATION: Final[str] = ".tesser-root"
+TREE_DECLARATION: typing.Final[str] = ".tesser-root"
 
-DECLARED_APP: Final[str] = "app"
+DECLARED_APP: typing.Final[str] = "app"
 
-DECLARED_MISSING: Final[str] = "missing"
+DECLARED_MISSING: typing.Final[str] = "missing"
 
-DECLARED_UNREADABLE: Final[str] = "unreadable"
+DECLARED_UNREADABLE: typing.Final[str] = "unreadable"
 
-DECLARED_UNRECOGNIZED: Final[str] = "unrecognized"
+DECLARED_UNRECOGNIZED: typing.Final[str] = "unrecognized"
 
-DO_NOT_USE_PREFIX: Final[str] = "do_not_use_"
+DO_NOT_USE_PREFIX: typing.Final[str] = "do_not_use_"
 
-KERNEL_PACKAGE: Final[str] = "kernel"
+KERNEL_PACKAGE: typing.Final[str] = "kernel"
 
-TESSER: Final[str] = "tesser"
+TESSER: typing.Final[str] = "tesser"
 
-TESSER_NAMESPACES: Final[frozenset[str]] = frozenset(
+TESSER_NAMESPACES: typing.Final[frozenset[str]] = frozenset(
     {
         "app",
         "component",
@@ -177,7 +177,7 @@ TESSER_NAMESPACES: Final[frozenset[str]] = frozenset(
     }
 )
 
-TESSER_STDLIB: Final[frozenset[str]] = frozenset(
+TESSER_STDLIB: typing.Final[frozenset[str]] = frozenset(
     {
         "__future__",
         "typing",
@@ -189,29 +189,29 @@ TESSER_STDLIB: Final[frozenset[str]] = frozenset(
     }
 )
 
-STUB_SUFFIX: Final[str] = ".pyi"
+STUB_SUFFIX: typing.Final[str] = ".pyi"
 
-IMPORTLIB: Final[str] = "importlib"
+IMPORTLIB: typing.Final[str] = "importlib"
 
-BUILTIN_IMPORT: Final[str] = "__import__"
+BUILTIN_IMPORT: typing.Final[str] = "__import__"
 
-BUILTINS: Final[str] = "builtins"
+BUILTINS: typing.Final[str] = "builtins"
 
-SYS_MODULE: Final[str] = "sys"
+SYS_MODULE: typing.Final[str] = "sys"
 
-DEBT_MARKER: Final[str] = "tesser:debt"
+DEBT_MARKER: typing.Final[str] = "tesser:debt"
 
-DEBT_FILE_MARKER: Final[str] = "tesser:debt-file"
+DEBT_FILE_MARKER: typing.Final[str] = "tesser:debt-file"
 
-CODE_SHAPE: Final[re.Pattern[str]] = re.compile(r"TB[0-9]{3}\Z")
+CODE_SHAPE: typing.Final[re.Pattern[str]] = re.compile(r"TB[0-9]{3}\Z")
 
-DIRECTIVE: Final[re.Pattern[str]] = re.compile(
+DIRECTIVE: typing.Final[re.Pattern[str]] = re.compile(
     r"^#\s*(!|type:|noqa|tesser:debt|pragma|fmt:|isort:|ruff:)"
 )
 
-CODING_DECL: Final[re.Pattern[str]] = re.compile(r"^#.*?coding[:=]\s*[-\w.]+")
+CODING_DECL: typing.Final[re.Pattern[str]] = re.compile(r"^#.*?coding[:=]\s*[-\w.]+")
 
-MUTABLE_COLLECTIONS: Final[frozenset[str]] = frozenset(
+MUTABLE_COLLECTIONS: typing.Final[frozenset[str]] = frozenset(
     {
         "list",
         "dict",
@@ -229,15 +229,15 @@ MUTABLE_COLLECTIONS: Final[frozenset[str]] = frozenset(
     }
 )
 
-MOCK_MODULES: Final[frozenset[str]] = frozenset({"unittest.mock", "mock"})
+MOCK_MODULES: typing.Final[frozenset[str]] = frozenset({"unittest.mock", "mock"})
 
-PATCHER_FIXTURES: Final[frozenset[str]] = frozenset({"monkeypatch", "mocker"})
+PATCHER_FIXTURES: typing.Final[frozenset[str]] = frozenset({"monkeypatch", "mocker"})
 
-BUILTIN_NAMES: Final[frozenset[str]] = frozenset(
+BUILTIN_NAMES: typing.Final[frozenset[str]] = frozenset(
     name for name in dir(builtins) if not name.startswith("_")
 )
 
-ROLE_TESSER_PACKAGE: Final[dict[str, str]] = {
+ROLE_TESSER_PACKAGE: typing.Final[dict[str, str]] = {
     "domain": "tesser.domain",
     "application": "tesser.application",
     "client": "tesser.context",
@@ -245,7 +245,7 @@ ROLE_TESSER_PACKAGE: Final[dict[str, str]] = {
     "component": "tesser.component",
 }
 
-DECLARATION_BLOCKS: Final[frozenset[str]] = frozenset(
+DECLARATION_BLOCKS: typing.Final[frozenset[str]] = frozenset(
     {
         "request",
         "response",
@@ -261,7 +261,7 @@ DECLARATION_BLOCKS: Final[frozenset[str]] = frozenset(
     }
 )
 
-DATA_BLOCKS: Final[frozenset[str]] = frozenset(
+DATA_BLOCKS: typing.Final[frozenset[str]] = frozenset(
     {
         "spec",
         "app_spec",
@@ -277,11 +277,11 @@ DATA_BLOCKS: Final[frozenset[str]] = frozenset(
     }
 )
 
-PAIRED_PLACES: Final[frozenset[str]] = frozenset(
+PAIRED_PLACES: typing.Final[frozenset[str]] = frozenset(
     {"role", "kernel", "shell-srv", "shell-app", "protocol"}
 )
 
-NORM_IMPORTS: Final[dict[str, frozenset[str]]] = {
+NORM_IMPORTS: typing.Final[dict[str, frozenset[str]]] = {
     "domain": frozenset({"tesser.errors", "tesser.serialization"}),
     "application": frozenset({"tesser.errors"}),
     "adapters": frozenset({"tesser.errors"}),
@@ -293,7 +293,7 @@ NORM_IMPORTS: Final[dict[str, frozenset[str]]] = {
     ),
 }
 
-SAME_CONTEXT_IMPORTS: Final[dict[str, tuple[str, ...]]] = {
+SAME_CONTEXT_IMPORTS: typing.Final[dict[str, tuple[str, ...]]] = {
     "domain": (),
     "client": (),
     "application": ("domain", "client"),
@@ -301,13 +301,13 @@ SAME_CONTEXT_IMPORTS: Final[dict[str, tuple[str, ...]]] = {
     "component": ("application", "adapters", "client"),
 }
 
-TESTS_ROLE: Final[str] = "tests"
+TESTS_ROLE: typing.Final[str] = "tests"
 
-EVAL_PREFIX: Final[str] = "eval_"
+EVAL_PREFIX: typing.Final[str] = "eval_"
 
-EVAL_HOME: Final[str] = "gateways"
+EVAL_HOME: typing.Final[str] = "gateways"
 
-TEST_TIER_HOME: Final[dict[str, tuple[str, str | None]]] = {
+TEST_TIER_HOME: typing.Final[dict[str, tuple[str, str | None]]] = {
     "domain": ("domain", None),
     "application": ("application", None),
     "client": ("client", None),
@@ -317,7 +317,7 @@ TEST_TIER_HOME: Final[dict[str, tuple[str, str | None]]] = {
     "repositories": ("adapters", "repositories"),
 }
 
-TEST_TIER_REACH: Final[dict[str, tuple[str, ...]]] = {
+TEST_TIER_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "domain": SAME_CONTEXT_IMPORTS["domain"],
     "application": SAME_CONTEXT_IMPORTS["application"],
     "client": SAME_CONTEXT_IMPORTS["client"],
@@ -328,29 +328,29 @@ TEST_TIER_REACH: Final[dict[str, tuple[str, ...]]] = {
     TESTS_ROLE: ROLES + (TESTS_ROLE,),
 }
 
-TEST_TIER_FOREIGN: Final[dict[str, tuple[str, ...]]] = {
+TEST_TIER_FOREIGN: typing.Final[dict[str, tuple[str, ...]]] = {
     "gateways": ("client",),
     "component": ("client",),
     TESTS_ROLE: ("application", "client"),
 }
 
-ADAPTER_TEST_TIERS: Final[frozenset[str]] = frozenset({"handlers", "gateways", "repositories"})
+ADAPTER_TEST_TIERS: typing.Final[frozenset[str]] = frozenset({"handlers", "gateways", "repositories"})
 
-SRV_TIER: Final[str] = "srv"
+SRV_TIER: typing.Final[str] = "srv"
 
-APP_TIER: Final[str] = "an app"
+APP_TIER: typing.Final[str] = "an app"
 
-PROTOCOL_TIER: Final[str] = "protocol"
+PROTOCOL_TIER: typing.Final[str] = "protocol"
 
-STRAY_TIER: Final[str] = "stray"
+STRAY_TIER: typing.Final[str] = "stray"
 
-ROOT_TESTS_TIER: Final[str] = "the root tests package"
+ROOT_TESTS_TIER: typing.Final[str] = "the root tests package"
 
-SHELL_PACKAGES: Final[frozenset[str]] = frozenset(APP_PACKAGES) | {PROTOCOL_PACKAGE, TESTS_ROLE}
+SHELL_PACKAGES: typing.Final[frozenset[str]] = frozenset(APP_PACKAGES) | {PROTOCOL_PACKAGE, TESTS_ROLE}
 
-KERNEL_TIER: Final[str] = "kernel"
+KERNEL_TIER: typing.Final[str] = "kernel"
 
-TEST_TIER_SHELL: Final[dict[str, frozenset[str]]] = {
+TEST_TIER_SHELL: typing.Final[dict[str, frozenset[str]]] = {
     ROOT_TESTS_TIER: SHELL_PACKAGES,
     SRV_TIER: frozenset({"srv", "app", "protocol"}),
     APP_TIER: frozenset({"app"}),
@@ -366,19 +366,21 @@ TEST_TIER_SHELL: Final[dict[str, frozenset[str]]] = {
     TESTS_ROLE: frozenset({"protocol"}),
 }
 
-PRIMITIVES: Final[frozenset[str]] = frozenset({"str", "int", "float", "bool", "bytes"})
+PRIMITIVES: typing.Final[frozenset[str]] = frozenset({"str", "int", "float", "bool", "bytes"})
 
-MAPPER_PREFIX: Final[str] = "MapTo"
+MAPPER_PREFIX: typing.Final[str] = "MapTo"
 
-MAPPER_SUFFIX: Final[str] = "_mapper"
+MAPPER_SUFFIX: typing.Final[str] = "_mapper"
 
-PORT_DTO_PRIMITIVES: Final[frozenset[str]] = PRIMITIVES - frozenset({"bool"})
+PORT_DTO_PRIMITIVES: typing.Final[frozenset[str]] = PRIMITIVES - frozenset({"bool"})
 
-ENUM_BASES: Final[frozenset[str]] = frozenset({"Enum"})
+ENUM_BASES: typing.Final[frozenset[str]] = frozenset({"Enum"})
 
-ENUM_MODULE: Final[str] = "enum"
+ENUM_MODULE: typing.Final[str] = "enum"
 
-CORE_STDLIB: Final[dict[str, frozenset[str]]] = {
+FUTURE_MODULE: typing.Final[str] = "__future__"
+
+CORE_STDLIB: typing.Final[dict[str, frozenset[str]]] = {
     "domain": frozenset(
         {
             "__future__",
@@ -393,23 +395,26 @@ CORE_STDLIB: Final[dict[str, frozenset[str]]] = {
             "io",
             "tokenize",
             "builtins",
+            "collections.abc",
+            "urllib.parse",
+            "copy",
         }
     ),
     "client": frozenset({"__future__", "typing"}),
     "application": frozenset({"__future__", "typing"}),
 }
 
-PORTS_STDLIB: Final[frozenset[str]] = frozenset({"__future__", "typing", "enum"})
+PORTS_STDLIB: typing.Final[frozenset[str]] = frozenset({"__future__", "typing", "enum"})
 
-DOMAIN_BLOCKS: Final[frozenset[str]] = frozenset({"aggregate", "entity", "valueobject"})
+DOMAIN_BLOCKS: typing.Final[frozenset[str]] = frozenset({"aggregate", "entity", "valueobject"})
 
-WRAPPABLE_SCALARS: Final[frozenset[str]] = frozenset(
+WRAPPABLE_SCALARS: typing.Final[frozenset[str]] = frozenset(
     {"str", "int", "float", "bytes", "Decimal", "date", "datetime", "time"}
 )
 
-NON_WRAPPABLE_SCALARS: Final[frozenset[str]] = frozenset({"bool", "complex"})
+NON_WRAPPABLE_SCALARS: typing.Final[frozenset[str]] = frozenset({"bool", "complex"})
 
-CANONICAL_EXIT: Final[dict[str, str]] = {
+CANONICAL_EXIT: typing.Final[dict[str, str]] = {
     "str": "__str__",
     "int": "__int__",
     "float": "__float__",
@@ -420,11 +425,11 @@ CANONICAL_EXIT: Final[dict[str, str]] = {
     "time": "__str__",
 }
 
-CONVERSION_DUNDERS: Final[frozenset[str]] = frozenset(
+CONVERSION_DUNDERS: typing.Final[frozenset[str]] = frozenset(
     {"__str__", "__int__", "__float__", "__bytes__"}
 )
 
-CANONICAL_HELPER: Final[dict[str, str]] = {
+CANONICAL_HELPER: typing.Final[dict[str, str]] = {
     "str": "canonical_str",
     "int": "canonical_int",
     "float": "canonical_float",
@@ -433,7 +438,7 @@ CANONICAL_HELPER: Final[dict[str, str]] = {
     "datetime": "canonical_datetime",
 }
 
-LANGUAGE_FIXED: Final[frozenset[str]] = frozenset(
+LANGUAGE_FIXED: typing.Final[frozenset[str]] = frozenset(
     {
         "__init__",
         "__hash__",
@@ -450,11 +455,11 @@ LANGUAGE_FIXED: Final[frozenset[str]] = frozenset(
     }
 )
 
-COMPARISON_DUNDERS: Final[frozenset[str]] = frozenset(
+COMPARISON_DUNDERS: typing.Final[frozenset[str]] = frozenset(
     {"__eq__", "__ne__", "__lt__", "__le__", "__gt__", "__ge__"}
 )
 
-RETURN_WRAPPERS: Final[frozenset[str]] = frozenset(
+RETURN_WRAPPERS: typing.Final[frozenset[str]] = frozenset(
     {
         "tuple",
         "Tuple",
@@ -477,7 +482,7 @@ RETURN_WRAPPERS: Final[frozenset[str]] = frozenset(
     }
 )
 
-SELF_NAMES: Final[frozenset[str]] = frozenset({"Self", "Never", "NoReturn", "None"})
+SELF_NAMES: typing.Final[frozenset[str]] = frozenset({"Self", "Never", "NoReturn", "None"})
 
 
 class TreeRoot(ts.ValueObject):
@@ -492,7 +497,7 @@ class TreeRoot(ts.ValueObject):
         object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
-        return canonical_str(self._value)
+        return serialization.canonical_str(self._value)
 
 
 class Path(ts.ValueObject):
@@ -505,7 +510,7 @@ class Path(ts.ValueObject):
         object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
-        return canonical_str(self._value)
+        return serialization.canonical_str(self._value)
 
 
 class Line(ts.ValueObject):
@@ -518,7 +523,7 @@ class Line(ts.ValueObject):
         object.__setattr__(self, "_value", value)
 
     def __int__(self) -> int:
-        return canonical_int(self._value)
+        return serialization.canonical_int(self._value)
 
 
 class Code(ts.ValueObject):
@@ -531,7 +536,7 @@ class Code(ts.ValueObject):
         object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
-        return canonical_str(self._value)
+        return serialization.canonical_str(self._value)
 
 
 class Text(ts.ValueObject):
@@ -544,7 +549,7 @@ class Text(ts.ValueObject):
         object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
-        return canonical_str(self._value)
+        return serialization.canonical_str(self._value)
 
 
 class Target(ts.ValueObject):
@@ -557,7 +562,7 @@ class Target(ts.ValueObject):
         object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
-        return canonical_str(self._value)
+        return serialization.canonical_str(self._value)
 
 
 class EdgeForm(ts.ValueObject):
@@ -570,7 +575,7 @@ class EdgeForm(ts.ValueObject):
         object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
-        return canonical_str(self._value)
+        return serialization.canonical_str(self._value)
 
 
 class ImportForm(ts.ValueObject):
@@ -583,7 +588,7 @@ class ImportForm(ts.ValueObject):
         object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
-        return canonical_str(self._value)
+        return serialization.canonical_str(self._value)
 
 
 class DebtScope(ts.ValueObject):
@@ -596,7 +601,7 @@ class DebtScope(ts.ValueObject):
         object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
-        return canonical_str(self._value)
+        return serialization.canonical_str(self._value)
 
 
 class DebtForm(ts.ValueObject):
@@ -609,7 +614,7 @@ class DebtForm(ts.ValueObject):
         object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
-        return canonical_str(self._value)
+        return serialization.canonical_str(self._value)
 
 
 class Violation(ts.ValueObject):
@@ -906,6 +911,7 @@ class CodebaseSpec(ts.Spec):
         exports: tuple[str, ...] = (),
         imports: tuple[str, ...] = (),
         stdlib: tuple[str, ...] = (),
+        pure_stdlib: tuple[str, ...] = (),
     ) -> None:
         self.sources = sources
         self.declared = declared
@@ -914,6 +920,7 @@ class CodebaseSpec(ts.Spec):
         self.exports = exports
         self.imports = imports
         self.stdlib = stdlib
+        self.pure_stdlib = pure_stdlib
 
 
 class Codebase(ts.AggregateRoot):
@@ -980,7 +987,9 @@ class Codebase(ts.AggregateRoot):
         self._export = spec.exports[0] if len(spec.exports) == 1 else None
         self._imports = spec.imports
         self._stdlib = frozenset(spec.stdlib)
+        self._pure_stdlib = spec.pure_stdlib
         self._used_imports: set[str] = set()
+        self._used_pure_stdlib: set[str] = set()
         self._domain_enums: frozenset[tuple[str, str]] = frozenset()
 
     def violations(self) -> tuple[Violation, ...]:
@@ -988,6 +997,7 @@ class Codebase(ts.AggregateRoot):
         if declaration:
             return declaration
         self._used_imports = set()
+        self._used_pure_stdlib = set()
         found = list(self._broken)
         blocks = dict(TESSER_BASE_BLOCKS)
         changed = True
@@ -1269,7 +1279,7 @@ class Codebase(ts.AggregateRoot):
         is_package: bool,
         contexts: frozenset[str],
         export: str | None = None,
-    ) -> Literal[
+    ) -> typing.Literal[
         "conftest-root",
         "conftest",
         "test",
@@ -1663,13 +1673,14 @@ class Codebase(ts.AggregateRoot):
                     1,
                     "TB044",
                     "this tree declares an unrecognized kind; a declaration is "
-                    "'app', then only 'skip <dir>', 'export <dir>', and "
-                    "'import <package>' lines",
+                    "'app', then only 'skip <dir>', 'export <dir>', "
+                    "'import <package>', and 'stdlib <module>' lines",
                 )
             )
         if len(self._exports) <= 1:
             found.extend(self._export_declaration_violations())  # tesser:debt TB051
             found.extend(self._import_declaration_violations())  # tesser:debt TB051
+            found.extend(self._stdlib_declaration_violations())  # tesser:debt TB051
         for relative in self._nested:
             found.append(
                 Violation(
@@ -1791,7 +1802,55 @@ class Codebase(ts.AggregateRoot):
             )
             for declared in self._imports
             if declared not in self._used_imports
+        ) + tuple(
+            Violation(
+                TREE_DECLARATION,
+                1,
+                "TB044",
+                f"this tree declares 'stdlib {declared}' and nothing uses it; "
+                "a stdlib declaration that legalizes nothing is itself a finding",
+            )
+            for declared in self._pure_stdlib
+            if declared not in self._used_pure_stdlib
         )
+
+    def _stdlib_declaration_violations(self) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for declared in self._pure_stdlib:
+            head = declared.split(".")[0]
+            if head not in self._stdlib:
+                found.append(
+                    Violation(
+                        TREE_DECLARATION,
+                        1,
+                        "TB044",
+                        f"this tree declares 'stdlib {declared}' but that is not "
+                        "the stdlib; a stdlib declaration widens the domain's pure "
+                        "stdlib, an external package is declared with import",
+                    )
+                )
+            elif declared in CORE_STDLIB["domain"] or head in CORE_STDLIB["domain"]:
+                found.append(
+                    Violation(
+                        TREE_DECLARATION,
+                        1,
+                        "TB044",
+                        f"this tree declares 'stdlib {declared}' but the domain "
+                        "already imports it; a stdlib declaration widens the default "
+                        "pure stdlib, never repeats it",
+                    )
+                )
+        return tuple(found)
+
+    def _pure_domain_import(self, target: str) -> bool:
+        head = target.split(".")[0]
+        if target in CORE_STDLIB["domain"] or head in CORE_STDLIB["domain"]:
+            return True
+        for declared in self._pure_stdlib:
+            if target == declared or target.startswith(declared + "."):
+                self._used_pure_stdlib.add(declared)
+                return True
+        return False
 
     def _homeless_violations(self, module: Module) -> tuple[Violation, ...]:
         return (
@@ -1887,6 +1946,7 @@ class Codebase(ts.AggregateRoot):
                         "a role __init__ only re-exports from its own role",
                     )
                 )
+            found.extend(self._member_form_violations(module, edge))  # tesser:debt TB051
             found.extend(self._form_violations(module, edge))  # tesser:debt TB051
         return tuple(found)
 
@@ -2075,7 +2135,7 @@ class Codebase(ts.AggregateRoot):
                     break
             if covered:
                 continue
-            if target in CORE_STDLIB["domain"] or pieces[0] in CORE_STDLIB["domain"]:
+            if self._pure_domain_import(target):  # tesser:debt TB051
                 continue
             found.append(
                 Violation(
@@ -2116,17 +2176,6 @@ class Codebase(ts.AggregateRoot):
             target = str(imp._target)
             lineno = int(imp._lineno)
             if target in norms:
-                if str(imp._form) != "from":
-                    found.append(
-                        Violation(
-                            module.path(),
-                            lineno,
-                            "TB050",
-                            f"{module.name()} imports {target} whole; a norm module "
-                            "is from-imported by name, never whole — the ts alias "
-                            "belongs to the placement's own package",
-                        )
-                    )
                 continue
             seen_any = True
             if target != package:
@@ -2149,16 +2198,7 @@ class Codebase(ts.AggregateRoot):
                 )
             else:
                 seen_own = True
-                if str(imp._form) == "from":
-                    found.append(
-                        Violation(
-                            module.path(),
-                            lineno,
-                            "TB050",
-                            f"{module.name()} imports names from {target}; {once_clause}",
-                        )
-                    )
-                elif str(imp._form) == "alias":
+                if str(imp._form) == "alias":
                     found.append(
                         Violation(
                             module.path(),
@@ -4152,10 +4192,10 @@ class Codebase(ts.AggregateRoot):
                         break
                 if covered:
                     continue
-                if (
-                    role in CORE_STDLIB
-                    and target not in CORE_STDLIB[role]
-                    and pieces[0] not in CORE_STDLIB[role]
+                if role in CORE_STDLIB and not (
+                    self._pure_domain_import(target)  # tesser:debt TB051
+                    if role == "domain"
+                    else (target in CORE_STDLIB[role] or pieces[0] in CORE_STDLIB[role])
                 ):
                     found.append(
                         Violation(
@@ -5539,22 +5579,30 @@ class Codebase(ts.AggregateRoot):
                     "a relative import resolves inside the tree",
                 )
             )
+        for edge in module.import_edges():
+            found.extend(Codebase._member_form_violations(module, edge))
         return tuple(found)
+
+    @staticmethod
+    def _member_form_violations(module: Module, edge: ImportEdge) -> tuple[Violation, ...]:
+        target = str(edge._target)
+        if str(edge._form) != "member" or target == FUTURE_MODULE:
+            return ()
+        return (
+            Violation(
+                module.path(),
+                int(edge._lineno),
+                "TB053",
+                f"{module.name()} imports names from {target}; "
+                "every import is a module import — import x or import x as name, "
+                "never from x import name",
+            ),
+        )
 
     @staticmethod
     def _form_violations(module: Module, edge: ImportEdge) -> tuple[Violation, ...]:
         target = str(edge._target)
         lineno = int(edge._lineno)
-        if str(edge._form) == "member":
-            return (
-                Violation(
-                    module.path(),
-                    lineno,
-                    "TB053",
-                    f"{module.name()} imports names from {target}; "
-                    "a context module is imported as an aliased module, never its members",
-                ),
-            )
         if str(edge._form) == "bare":
             return (
                 Violation(

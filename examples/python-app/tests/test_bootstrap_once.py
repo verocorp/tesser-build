@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import app.app as app
 import campaign.client.client as client
-from tests.support import app_config
+import tests.support as support
 
 
 def test_graph_built_once_state_persists_across_calls() -> None:
-    built = app.App(app_config())
+    built = app.App(support.app_config())
     try:
         view = built.campaign.client.create_campaign(client.CreateCampaignRequest("100.00", "USD"))
         built.campaign.client.add_link(
@@ -22,7 +22,7 @@ def test_graph_built_once_state_persists_across_calls() -> None:
 
 
 def test_a_component_is_built_once_and_reused_across_calls() -> None:
-    built = app.App(app_config())
+    built = app.App(support.app_config())
     try:
         first = built.campaign.client
         for _ in range(5):
@@ -33,8 +33,8 @@ def test_a_component_is_built_once_and_reused_across_calls() -> None:
 
 
 def test_two_apps_do_not_share_a_component() -> None:
-    first = app.App(app_config())
-    second = app.App(app_config())
+    first = app.App(support.app_config())
+    second = app.App(support.app_config())
     try:
         assert first.campaign.client is not second.campaign.client
     finally:

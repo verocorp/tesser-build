@@ -3,7 +3,8 @@ from __future__ import annotations
 import pytest
 
 import campaign.domain.values as values
-from tesser.errors import DomainError, Kind
+import kernel.slug as kernel_slug
+import tesser.errors as errors
 
 
 def test_campaign_id_round_trips_through_its_canonical_exit() -> None:
@@ -31,10 +32,10 @@ def test_campaign_ids_with_different_digits_are_different_values() -> None:
     "value", ["", "0123456789abcde", "0123456789abcdef0", "0123456789ABCDEF", "0123456789abcdeg"]
 )
 def test_a_campaign_id_that_is_not_sixteen_lowercase_hex_is_rejected(value: str) -> None:
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         values.CampaignID(value)
 
-    assert caught.value.kind is Kind.VALIDATION
+    assert caught.value.kind is errors.Kind.VALIDATION
     assert caught.value.code == "invalid_campaign_id"
 
 
@@ -69,7 +70,7 @@ def test_target_urls_differing_only_in_path_are_different_values() -> None:
 
 
 def test_a_target_url_carrying_a_control_character_is_rejected() -> None:
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         values.TargetURL("https://ok.example/\r\nX-Injected: yes")
 
     assert caught.value.code == "invalid_target_url"
@@ -88,22 +89,22 @@ def test_a_target_url_carrying_a_control_character_is_rejected() -> None:
     ],
 )
 def test_a_target_url_that_is_not_http_with_a_host_is_rejected(value: str) -> None:
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         values.TargetURL(value)
 
-    assert caught.value.kind is Kind.VALIDATION
+    assert caught.value.kind is errors.Kind.VALIDATION
     assert caught.value.code == "invalid_target_url"
 
 
 def test_the_slug_re_exported_here_round_trips_through_its_canonical_exit() -> None:
-    slug = values.Slug("spring-sale")
+    slug = kernel_slug.Slug("spring-sale")
 
-    assert values.Slug(str(slug)) == slug
+    assert kernel_slug.Slug(str(slug)) == slug
 
 
 @pytest.mark.parametrize("value", ["", "Promo", "promo sale", "-promo", "promo-", "promo_sale"])
 def test_the_slug_re_exported_here_still_rejects_a_malformed_value(value: str) -> None:
-    with pytest.raises(DomainError) as caught:
-        values.Slug(value)
+    with pytest.raises(errors.DomainError) as caught:
+        kernel_slug.Slug(value)
 
     assert caught.value.code == "invalid_slug"
