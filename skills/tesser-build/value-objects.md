@@ -24,7 +24,8 @@ persistence-only column, a local implementation detail. Blanket wrapping is
 
 **Near-misses that are NOT value objects:**
 - A **Spec / DTO** — a data carrier crossing a layer boundary. No behavior, no
-  validation, primitive leaves. It *feeds* a value object's constructor.
+  validation, primitive leaves. It *feeds* a value object's constructor,
+  and that constructor is the only place it is read (TB083).
 - A **persistence/row model** — shaped by storage, not by the domain.
 - An **enum / type code** — a closed set of named constants that *selects*
   behavior; it's a primitive with a name, not a value object. Declare it as a

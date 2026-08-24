@@ -8980,6 +8980,433 @@ def test_a_value_object_does_not_hand_back_a_domain_enum() -> None:
     assert not any("Thing.spoken" in f and "reaches sibling" in f for f in findings)
 
 
+def test_a_spec_initializes_its_domain_object_and_does_nothing_else() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/tag.py",
+                "shop.domain.tag",
+                "import tesser.domain as ts\n"
+                "class TagSpec(ts.Spec):\n"
+                "    def __init__(self, value: str) -> None:\n"
+                "        self.value = value\n"
+                "class BagSpec(ts.Spec):\n"
+                "    def __init__(self, tag: TagSpec) -> None:\n"
+                "        self.tag = tag\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, spec: TagSpec) -> None:\n"
+                "        object.__setattr__(self, '_value', spec.value)\n"
+                "class Bag(ts.Entity):\n"
+                "    def __init__(self, spec: BagSpec) -> None:\n"
+                "        self._tag = Tag(spec.tag)\n"
+                "        self._spec = spec\n"
+                "    def retag(self, spec: TagSpec) -> None:\n"
+                "        self._tag = Tag(spec)\n"
+                "    def label(self, spec: TagSpec) -> str:\n"
+                "        return spec.value\n",
+                False,
+            ),
+            (
+                "shop/adapters/handlers.py",
+                "shop.adapters.handlers",
+                "import tesser.adapters as ts\n"
+                "import shop.domain.tag as tag\n"
+                "class Keeper(ts.Handler):\n"
+                "    def __init__(self, spec: tag.TagSpec) -> None:\n"
+                "        object.__setattr__(self, '_spec', spec)\n"
+                "    def peek(self) -> str:\n"
+                "        built = tag.TagSpec(value='x')\n"
+                "        return built.value\n"
+                "    def forward(self) -> tag.Tag:\n"
+                "        return tag.Tag(tag.TagSpec(value='y'))\n"
+                "    def shadow(self, spec: tag.TagSpec) -> list:\n"
+                "        return [spec.value for spec in ('a', 'b')]\n",
+                False,
+            ),
+            (
+                "shop/domain/test_tag.py",
+                "shop.domain.test_tag",
+                "import tesser.testing as ts\n"
+                "import shop.domain.tag as tag\n"
+                "@ts.helper\n"
+                "def _spec() -> tag.TagSpec:\n"
+                "    return tag.TagSpec(value='x')\n"
+                "def test_reads_its_helper_spec() -> None:\n"
+                "    spec = _spec()\n"
+                "    assert tag.Tag(spec) is not None\n"
+                "    assert spec.value == 'x'\n",
+                False,
+            ),
+        ))).violations()
+    )
+    tb083 = tuple(f for f in findings if " TB083 " in f)
+    assert tb083 == (
+        "shop/domain/tag.py:14: TB083 shop.domain.tag.Bag.__init__ keeps the spec 'spec'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "shop/domain/tag.py:18: TB083 shop.domain.tag.Bag.label reads 'value' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+        "shop/adapters/handlers.py:5: TB083 shop.adapters.handlers.Keeper.__init__ keeps the spec 'spec'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "shop/adapters/handlers.py:8: TB083 shop.adapters.handlers.Keeper.peek reads 'value' of the spec 'built'; "
+        "a spec is only read where it initializes its domain object",
+    )
+
+
+def test_a_spec_is_held_by_an_annotation_or_by_a_maker_function() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "mint/domain/coin.py",
+                "mint.domain.coin",
+                "import tesser.domain as ts\n"
+                "class CoinSpec(ts.Spec):\n"
+                "    def __init__(self, face: str) -> None:\n"
+                "        self.face = face\n"
+                "class Coin(ts.ValueObject):\n"
+                "    def __init__(self, spec: CoinSpec) -> None:\n"
+                "        object.__setattr__(self, '_face', spec.face)\n"
+                "def make_coin_spec() -> CoinSpec:\n"
+                "    return CoinSpec(face='h')\n"
+                "def describe() -> str:\n"
+                "    local = CoinSpec(face='t')\n"
+                "    return local.face\n",
+                False,
+            ),
+            (
+                "mint/adapters/press.py",
+                "mint.adapters.press",
+                "import tesser.adapters as ts\n"
+                "import mint.domain.coin as coin\n"
+                "class Press(ts.Handler):\n"
+                "    def annotated(self) -> str:\n"
+                "        held: coin.CoinSpec = coin.make_coin_spec()\n"
+                "        return held.face\n"
+                "    def borrowed(self) -> str:\n"
+                "        made = coin.make_coin_spec()\n"
+                "        return made.face\n",
+                False,
+            ),
+        ))).violations()
+    )
+    tb083 = tuple(f for f in findings if " TB083 " in f)
+    assert tb083 == (
+        "mint/domain/coin.py:12: TB083 mint.domain.coin.describe reads 'face' of the spec 'local'; "
+        "a spec is only read where it initializes its domain object",
+        "mint/adapters/press.py:6: TB083 mint.adapters.press.Press.annotated reads 'face' of the spec 'held'; "
+        "a spec is only read where it initializes its domain object",
+        "mint/adapters/press.py:9: TB083 mint.adapters.press.Press.borrowed reads 'face' of the spec 'made'; "
+        "a spec is only read where it initializes its domain object",
+    )
+
+
+def test_a_nested_parameter_named_for_the_spec_is_a_different_name() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "forge/domain/blade.py",
+                "forge.domain.blade",
+                "import tesser.domain as ts\n"
+                "class BladeSpec(ts.Spec):\n"
+                "    def __init__(self, edge: str) -> None:\n"
+                "        self.edge = edge\n"
+                "class Blade(ts.ValueObject):\n"
+                "    def __init__(self, spec: BladeSpec) -> None:\n"
+                "        object.__setattr__(self, '_edge', spec.edge)\n",
+                False,
+            ),
+            (
+                "forge/adapters/bench.py",
+                "forge.adapters.bench",
+                "import tesser.adapters as ts\n"
+                "import forge.domain.blade as blade\n"
+                "class Bench(ts.Handler):\n"
+                "    def positional(self, spec: blade.BladeSpec) -> None:\n"
+                "        def inner(spec: str, /) -> str:\n"
+                "            return spec.edge\n"
+                "        return None\n"
+                "    def starred(self, spec: blade.BladeSpec) -> None:\n"
+                "        def inner(*spec: str) -> str:\n"
+                "            return spec.edge\n"
+                "        return None\n"
+                "    def doubled(self, spec: blade.BladeSpec) -> None:\n"
+                "        def inner(**spec: str) -> str:\n"
+                "            return spec.edge\n"
+                "        return None\n"
+                "    def keyworded(self, spec: blade.BladeSpec) -> None:\n"
+                "        def inner(*, spec: str) -> str:\n"
+                "            return spec.edge\n"
+                "        return None\n"
+                "    def lambdad(self, spec: blade.BladeSpec) -> None:\n"
+                "        made = lambda spec: spec.edge\n"
+                "        return None\n"
+                "    def open_nested(self, spec: blade.BladeSpec) -> None:\n"
+                "        def inner() -> str:\n"
+                "            return spec.edge\n"
+                "        return None\n"
+                "    def open_lambda(self, spec: blade.BladeSpec) -> None:\n"
+                "        made = lambda: spec.edge\n"
+                "        return None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    tb083 = tuple(f for f in findings if " TB083 " in f)
+    assert tb083 == (
+        "forge/adapters/bench.py:25: TB083 forge.adapters.bench.Bench.open_nested.inner reads 'edge' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+        "forge/adapters/bench.py:28: TB083 forge.adapters.bench.Bench.open_lambda reads 'edge' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+    )
+
+
+def test_a_config_reads_its_spec_where_it_initializes_itself() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/component/setup.py",
+                "shop.component.setup",
+                "import tesser.component as ts\n"
+                "class SetupSpec(ts.Spec):\n"
+                "    def __init__(self, host: str) -> None:\n"
+                "        self.host = host\n"
+                "class Setup(ts.Config):\n"
+                "    def __init__(self, spec: SetupSpec) -> None:\n"
+                "        self.host = spec.host\n"
+                "    def echo(self, spec: SetupSpec) -> str:\n"
+                "        return spec.host\n",
+                False,
+            ),
+            (
+                "app/boot.py",
+                "app.boot",
+                "import tesser.app as ts\n"
+                "class BootSpec(ts.Spec):\n"
+                "    def __init__(self, name: str) -> None:\n"
+                "        self.name = name\n"
+                "class Boot(ts.Config):\n"
+                "    def __init__(self, spec: BootSpec) -> None:\n"
+                "        self.name = spec.name\n"
+                "    def echo(self, spec: BootSpec) -> str:\n"
+                "        return spec.name\n",
+                False,
+            ),
+        ))).violations()
+    )
+    tb083 = tuple(f for f in findings if " TB083 " in f)
+    assert tb083 == (
+        "shop/component/setup.py:9: TB083 shop.component.setup.Setup.echo reads 'host' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+        "app/boot.py:9: TB083 app.boot.Boot.echo reads 'name' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+    )
+
+
+def test_a_mapper_and_a_wider_spec_keep_only_what_they_assemble() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/application/mapping.py",
+                "shop.application.mapping",
+                "import tesser.application as ts\n"
+                "import shop.domain.thing as thing\n"
+                "class Fold(ts.Mapper):\n"
+                "    def __init__(self, spec: thing.ThingSpec) -> None:\n"
+                "        self._spec = spec\n"
+                "        object.__setattr__(self, '_twin', spec)\n"
+                "    def unfold(self, spec: thing.ThingSpec) -> None:\n"
+                "        self._spec = spec\n",
+                False,
+            ),
+            (
+                "shop/component/wiring.py",
+                "shop.component.wiring",
+                "import tesser.component as ts\n"
+                "class InnerSpec(ts.Spec):\n"
+                "    def __init__(self, host: str) -> None:\n"
+                "        self.host = host\n"
+                "class OuterSpec(ts.Spec):\n"
+                "    def __init__(self, inner: InnerSpec) -> None:\n"
+                "        self.inner = inner\n"
+                "    def rewrap(self, inner: InnerSpec) -> None:\n"
+                "        self.inner = inner\n",
+                False,
+            ),
+            (
+                "app/plan.py",
+                "app.plan",
+                "import tesser.app as ts\n"
+                "class LegSpec(ts.Spec):\n"
+                "    def __init__(self, name: str) -> None:\n"
+                "        self.name = name\n"
+                "class RunSpec(ts.Spec):\n"
+                "    def __init__(self, leg: LegSpec) -> None:\n"
+                "        self.leg = leg\n"
+                "    def relay(self, leg: LegSpec) -> None:\n"
+                "        self.leg = leg\n",
+                False,
+            ),
+        ))).violations()
+    )
+    tb083 = tuple(f for f in findings if " TB083 " in f)
+    assert tb083 == (
+        "shop/application/mapping.py:8: TB083 shop.application.mapping.Fold.unfold keeps the spec 'spec'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "shop/component/wiring.py:9: TB083 shop.component.wiring.OuterSpec.rewrap keeps the spec 'inner'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "app/plan.py:9: TB083 app.plan.RunSpec.relay keeps the spec 'leg'; "
+        "a spec is never kept, it initializes its domain object and is done",
+    )
+
+
+def test_a_comprehension_hides_the_spec_only_when_it_binds_the_name() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/adapters/lister.py",
+                "shop.adapters.lister",
+                "import tesser.adapters as ts\n"
+                "import shop.domain.thing as thing\n"
+                "class Lister(ts.Handler):\n"
+                "    def spread(self, spec: thing.ThingSpec) -> list:\n"
+                "        return [spec.text for each in (1, 2)]\n"
+                "    def paired(self, spec: thing.ThingSpec) -> dict:\n"
+                "        return {each: spec.text for each in (1, 2)}\n"
+                "    def genned(self, spec: thing.ThingSpec) -> object:\n"
+                "        return (spec.text for each in (1, 2))\n"
+                "    def setted(self, spec: thing.ThingSpec) -> set:\n"
+                "        return {spec.text for each in (1, 2)}\n"
+                "    def hidden(self, spec: thing.ThingSpec) -> set:\n"
+                "        return {spec.text for spec in (1, 2)}\n",
+                False,
+            ),
+        ))).violations()
+    )
+    tb083 = tuple(f for f in findings if " TB083 " in f)
+    assert tb083 == (
+        "shop/adapters/lister.py:5: TB083 shop.adapters.lister.Lister.spread reads 'text' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+        "shop/adapters/lister.py:7: TB083 shop.adapters.lister.Lister.paired reads 'text' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+        "shop/adapters/lister.py:9: TB083 shop.adapters.lister.Lister.genned reads 'text' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+        "shop/adapters/lister.py:11: TB083 shop.adapters.lister.Lister.setted reads 'text' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+    )
+
+
+def test_one_line_reaching_for_the_spec_twice_is_reported_once() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/adapters/twice.py",
+                "shop.adapters.twice",
+                "import tesser.adapters as ts\n"
+                "import shop.domain.thing as thing\n"
+                "class Twice(ts.Handler):\n"
+                "    def read(self, spec: thing.ThingSpec) -> str:\n"
+                "        return spec.text + spec.text\n"
+                "    def hold(self, spec: thing.ThingSpec) -> None:\n"
+                "        self.first = spec; self.second = spec\n",
+                False,
+            ),
+        ))).violations()
+    )
+    tb083 = tuple(f for f in findings if " TB083 " in f)
+    assert tb083 == (
+        "shop/adapters/twice.py:5: TB083 shop.adapters.twice.Twice.read reads 'text' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+        "shop/adapters/twice.py:7: TB083 shop.adapters.twice.Twice.hold keeps the spec 'spec'; "
+        "a spec is never kept, it initializes its domain object and is done",
+    )
+
+
+def test_writing_through_the_spec_is_not_reading_it() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/adapters/hider.py",
+                "shop.adapters.hider",
+                "import tesser.adapters as ts\n"
+                "import shop.domain.thing as thing\n"
+                "class Hider(ts.Handler):\n"
+                "    def nest(self, spec: thing.ThingSpec) -> object:\n"
+                "        class Inner:\n"
+                "            def peek(self) -> str:\n"
+                "                return spec.text\n"
+                "        return Inner\n"
+                "    def write(self, spec: thing.ThingSpec) -> None:\n"
+                "        spec.text = 'x'\n"
+                "        return None\n"
+                "    def deep(self, spec: thing.ThingSpec) -> str:\n"
+                "        return spec.inner.text\n",
+                False,
+            ),
+        ))).violations()
+    )
+    tb083 = tuple(f for f in findings if " TB083 " in f)
+    assert tb083 == (
+        "shop/adapters/hider.py:7: TB083 shop.adapters.hider.Hider.nest.Inner.peek reads 'text' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+        "shop/adapters/hider.py:13: TB083 shop.adapters.hider.Hider.deep reads 'inner' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+    )
+
+
+def test_a_spec_is_read_through_a_keyword_a_guard_or_an_async_method() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "lace/domain/knot.py",
+                "lace.domain.knot",
+                "import tesser.domain as ts\n"
+                "class KnotSpec(ts.Spec):\n"
+                "    def __init__(self, loop: str) -> None:\n"
+                "        self.loop = loop\n"
+                "class Knot(ts.ValueObject):\n"
+                "    def __init__(self, spec: KnotSpec) -> None:\n"
+                "        object.__setattr__(self, '_loop', spec.loop)\n",
+                False,
+            ),
+            (
+                "lace/adapters/tie.py",
+                "lace.adapters.tie",
+                "import tesser.adapters as ts\n"
+                "import lace.domain.knot as knot\n"
+                "class Tie(ts.Handler):\n"
+                "    def __init__(self, spec: knot.KnotSpec) -> None:\n"
+                "        self.made = knot.Knot(spec.loop)\n"
+                "    def keyworded(self, spec: knot.KnotSpec) -> object:\n"
+                "        return dict(loop=spec.loop)\n"
+                "    def guarded(self, spec: knot.KnotSpec) -> list:\n"
+                "        return [each for each in (1, 2) if spec.loop]\n"
+                "    async def awaited(self, spec: knot.KnotSpec) -> str:\n"
+                "        return spec.loop\n",
+                False,
+            ),
+        ))).violations()
+    )
+    tb083 = tuple(f for f in findings if " TB083 " in f)
+    assert tb083 == (
+        "lace/adapters/tie.py:5: TB083 lace.adapters.tie.Tie.__init__ reads 'loop' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+        "lace/adapters/tie.py:7: TB083 lace.adapters.tie.Tie.keyworded reads 'loop' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+        "lace/adapters/tie.py:9: TB083 lace.adapters.tie.Tie.guarded reads 'loop' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+        "lace/adapters/tie.py:11: TB083 lace.adapters.tie.Tie.awaited reads 'loop' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+    )
+
+
 def test_a_conftest_imports_modules_never_names() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
@@ -9043,4 +9470,182 @@ def test_a_nested_from_import_is_still_a_member_import() -> None:
         "nest/domain/thing.py:4: TB053 nest.domain.thing imports names from decimal; "
         "every import is a module import" in f
         for f in findings
+    )
+
+
+def test_a_spec_is_tracked_through_aliases_stores_and_shadows() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/tag.py",
+                "shop.domain.tag",
+                "import tesser.domain as ts\n"
+                "class TagSpec(ts.Spec):\n"
+                "    def __init__(self, value: str) -> None:\n"
+                "        self.value = value\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, spec: TagSpec) -> None:\n"
+                "        object.__setattr__(self, '_value', spec.value)\n",
+                False,
+            ),
+            (
+                "shop/adapters/keeper.py",
+                "shop.adapters.keeper",
+                "import typing\n"
+                "import tesser.adapters as ts\n"
+                "import shop.domain.tag as tag\n"
+                "def _quoted() -> 'tag.TagSpec':\n"
+                "    return tag.TagSpec(value='x')\n"
+                "class Keeper(ts.Handler):\n"
+                "    def __init__(self, spec: tag.TagSpec) -> None:\n"
+                "        self._direct = tag.TagSpec(value='x')\n"
+                "        self._made = _quoted()\n"
+                "        self._listed = [spec]\n"
+                "        setattr(self, '_set', spec)\n"
+                "        self._typed: tag.TagSpec = spec\n"
+                "    def aliased(self, spec: tag.TagSpec) -> str:\n"
+                "        alias = spec\n"
+                "        again = alias\n"
+                "        return again.value\n"
+                "    def quoted(self, spec: 'tag.TagSpec') -> str:\n"
+                "        return spec.value\n"
+                "    def optional(self, spec: typing.Optional[tag.TagSpec]) -> str:\n"
+                "        return spec.value if spec else ''\n"
+                "    def reflected(self, spec: tag.TagSpec) -> object:\n"
+                "        return (getattr(spec, 'value'), vars(spec))\n"
+                "    def iterated(self, spec: tag.TagSpec) -> list:\n"
+                "        return [x for spec in spec.items]\n"
+                "    def looped(self, spec: tag.TagSpec) -> str:\n"
+                "        for spec in ('a', 'b'):\n"
+                "            return spec.upper()\n"
+                "        return ''\n"
+                "    def opened(self, spec: tag.TagSpec) -> str:\n"
+                "        with open('f') as spec:\n"
+                "            return spec.read()\n"
+                "    def caught(self, spec: tag.TagSpec) -> object:\n"
+                "        try:\n"
+                "            return None\n"
+                "        except ValueError as spec:\n"
+                "            return spec.args\n"
+                "    def replaced(self, spec: tag.TagSpec) -> str:\n"
+                "        spec = 'plain'\n"
+                "        return spec.upper()\n"
+                "    def unrelated(self, value: int) -> int:\n"
+                "        def inner() -> None:\n"
+                "            value = tag.TagSpec(value='x')\n"
+                "        return value.real\n",
+                False,
+            ),
+        ))).violations()
+    )
+    tb083 = tuple(f for f in findings if " TB083 " in f)
+    assert tb083 == (
+        "shop/adapters/keeper.py:8: TB083 shop.adapters.keeper.Keeper.__init__ keeps the spec 'tag.TagSpec'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "shop/adapters/keeper.py:9: TB083 shop.adapters.keeper.Keeper.__init__ keeps the spec '_quoted'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "shop/adapters/keeper.py:10: TB083 shop.adapters.keeper.Keeper.__init__ keeps the spec 'spec'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "shop/adapters/keeper.py:11: TB083 shop.adapters.keeper.Keeper.__init__ keeps the spec 'spec'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "shop/adapters/keeper.py:12: TB083 shop.adapters.keeper.Keeper.__init__ keeps the spec 'spec'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "shop/adapters/keeper.py:16: TB083 shop.adapters.keeper.Keeper.aliased reads 'value' of the spec 'again'; "
+        "a spec is only read where it initializes its domain object",
+        "shop/adapters/keeper.py:18: TB083 shop.adapters.keeper.Keeper.quoted reads 'value' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+        "shop/adapters/keeper.py:20: TB083 shop.adapters.keeper.Keeper.optional reads 'value' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+        "shop/adapters/keeper.py:22: TB083 shop.adapters.keeper.Keeper.reflected reads '__dict__' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+        "shop/adapters/keeper.py:22: TB083 shop.adapters.keeper.Keeper.reflected reads 'value' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+        "shop/adapters/keeper.py:24: TB083 shop.adapters.keeper.Keeper.iterated reads 'items' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
+    )
+
+
+def test_a_spec_is_tracked_at_module_level_through_makers_mutators_and_match() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/tag.py",
+                "shop.domain.tag",
+                "import tesser.domain as ts\n"
+                "class TagSpec(ts.Spec):\n"
+                "    def __init__(self, value: str) -> None:\n"
+                "        self.value = value\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, spec: TagSpec) -> None:\n"
+                "        object.__setattr__(self, '_value', spec.value)\n",
+                False,
+            ),
+            (
+                "shop/application/mapper.py",
+                "shop.application.mapper",
+                "import tesser.application as ts\n"
+                "import shop.domain.tag as tag\n"
+                "class MapToTagSpec(ts.Mapper):\n"
+                "    def __init__(self, value: str) -> None:\n"
+                "        self._value = value\n"
+                "    def spec(self) -> tag.TagSpec:\n"
+                "        return tag.TagSpec(value=self._value)\n",
+                False,
+            ),
+            (
+                "shop/adapters/top.py",
+                "shop.adapters.top",
+                "import tesser.adapters as ts\n"
+                "import shop.domain.tag as tag\n"
+                "import shop.application.mapper as mapper\n"
+                "TOP = tag.TagSpec(value='x')\n"
+                "SHOUT = TOP.value\n"
+                "class Keeper(ts.Handler):\n"
+                "    HELD = tag.TagSpec(value='y')\n"
+                "    def __init__(self, m: mapper.MapToTagSpec, spec: tag.TagSpec, flag: bool) -> None:\n"
+                "        self._made = m.spec()\n"
+                "        self._either = spec if flag else TOP\n"
+                "        self._items: list = []\n"
+                "        self._items.append(spec)\n"
+                "        self._links = set()\n"
+                "        self._links.add(spec)\n"
+                "        out = [(held := spec) for _ in range(1)]\n"
+                "        self._held = held\n"
+                "        self._value = TOP.value\n"
+                "    def matched(self, spec: tag.TagSpec) -> str:\n"
+                "        match [1]:\n"
+                "            case [spec]:\n"
+                "                return spec.upper()\n"
+                "            case str() as spec:\n"
+                "                return spec.upper()\n"
+                "        return ''\n"
+                "    def copied(self, spec: tag.TagSpec) -> object:\n"
+                "        import copy\n"
+                "        return copy.copy(spec)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    tb083 = tuple(f for f in findings if " TB083 " in f)
+    assert tb083 == (
+        "shop/adapters/top.py:4: TB083 shop.adapters.top keeps the spec 'tag.TagSpec'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "shop/adapters/top.py:5: TB083 shop.adapters.top reads 'value' of the spec 'TOP'; "
+        "a spec is only read where it initializes its domain object",
+        "shop/adapters/top.py:7: TB083 shop.adapters.top.Keeper keeps the spec 'tag.TagSpec'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "shop/adapters/top.py:9: TB083 shop.adapters.top.Keeper.__init__ keeps the spec 'm.spec'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "shop/adapters/top.py:10: TB083 shop.adapters.top.Keeper.__init__ keeps the spec 'spec'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "shop/adapters/top.py:12: TB083 shop.adapters.top.Keeper.__init__ keeps the spec 'spec'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "shop/adapters/top.py:16: TB083 shop.adapters.top.Keeper.__init__ keeps the spec 'held'; "
+        "a spec is never kept, it initializes its domain object and is done",
+        "shop/adapters/top.py:17: TB083 shop.adapters.top.Keeper.__init__ reads 'value' of the spec 'TOP'; "
+        "a spec is only read where it initializes its domain object",
+        "shop/adapters/top.py:27: TB083 shop.adapters.top.Keeper.copied reads '__dict__' of the spec 'spec'; "
+        "a spec is only read where it initializes its domain object",
     )

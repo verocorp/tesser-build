@@ -48,7 +48,8 @@
         "TB002",
         "TB004",
         "TB010",
-        "TB080"
+        "TB080",
+        "TB083"
       ],
       "rationale": [
         "rationale/*_test.go"
