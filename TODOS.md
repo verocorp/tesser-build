@@ -16,8 +16,8 @@ ruling Chris has not made yet:
   owns the property. Candidate carve-out: a dunder may read the contract its
   base defines. Or: the design is right and the debt marker is its honest cost.
 - [ ] **`examples/python-app/protocol/http.py:95`** — `HttpResponse.problem`
-  composes `cls.json`, the one door that sets Content-Type. Inlining duplicates
-  the door; the marker preserves it. Candidate carve-out: classmethod builders
+  composes `cls.json`, the one path that sets Content-Type. Inlining duplicates
+  that path; the marker preserves it. Candidate carve-out: classmethod builders
   composing builders. Or: inline and accept three duplicated lines.
 - [ ] **`examples/python-app/srv/http/main.py:27,28`** — `run` passes
   `self.stop` to `signal.signal`. The outsider (the signal machinery) is the
@@ -217,7 +217,7 @@ against `main` at v0.0.71.0 rather than transcribed.
   name policy), errorspy gained `CampaignID`, llmport gained `BookingID`,
   python-app's `deactivate_link` validates `values.CampaignID`, and
   `linkpolicy.check` passes through `policy.TargetURL`. A malformed lookup key
-  is now a validation error at the door instead of a lookup miss — the same
+  is now a validation error at the constructor instead of a lookup miss — the same
   behaviour change `get_campaign` precedented. Every new ID value object
   validates shape only (non-empty); existence stays with the adapter.
 - [ ] **`add_link` carries the body-length debt marker, now at 24 statements.** It
@@ -565,7 +565,7 @@ against `main` at v0.0.71.0 rather than transcribed.
   VOs (an HttpRequest must be constructible from whatever arrived).
   (a3) **Wire-record construction should be one spec in, then instance
   methods** (Chris ruling 2026-08-08). `Response` currently has FOUR
-  construction doors (`json`/`problem`/`redirect`/`respond`) where the
+  construction paths (`json`/`problem`/`redirect`/`respond`) where the
   repo's own rule — enforced for domain constructors as "takes exactly one
   ts.Spec" — is one. They passed only because wire kinds carry placement
   and import rules but no signature rules. Two of them are not even
@@ -577,7 +577,7 @@ against `main` at v0.0.71.0 rather than transcribed.
   Narrowed 2026-08-08 (conformance sweep): `respond` is GONE from every
   response record — exception mapping is host policy now (srv/http/host.py,
   srv/cli/main.py, agent.py) — and constructor defaults are gone from all
-  wire records. What remains of (a3) is the door question alone:
+  wire records. What remains of (a3) is the construction-path question alone:
   HttpResponse.json/problem/redirect and CliResponse.ok are
   construct-from-another-shape classmethods still awaiting the one-spec
   ruling; ToolTurn has none.
@@ -1059,7 +1059,7 @@ against `main` at v0.0.71.0 rather than transcribed.
     candidate designs are: a TB003-sanctioned same-class private rebuild
     (`object.__new__(EnclosingClass)` + setattr of declared fields inside the
     class's own methods — Go's package-private struct-literal idiom ported),
-    or union-typed doors (rejected once already: special cases for a
+    or union-typed constructors (rejected once already: special cases for a
     perf-only benefit).
   - **Trigger:** a measured performance problem in a real consumer, not
     aesthetics.
@@ -1138,9 +1138,9 @@ against `main` at v0.0.71.0 rather than transcribed.
     Ruling the form means adding the helper to each tree's `serialization.py`,
     routing `Day`, and the map grows to match `_CANONICAL_EXIT`'s keys.
 
-- [ ] **The Go single-door ANALYZER (TB017's analog)** (2026-07-21, wave C2
+- [ ] **The Go single-construction-path ANALYZER (TB017's analog)** (2026-07-21, wave C2
   review; the example half is done)
-  - **What:** the one-door ruling is language-independent and every *rendering*
+  - **What:** the one-constructor ruling is language-independent and every *rendering*
     now agrees — `go.md` states the rule, and `examples/catalog/labels.go` is
     down to one `NewLabels`. What is still missing is the machine: no Go
     analyzer flags a second exported constructor, so on the Go side this stays
@@ -1149,10 +1149,10 @@ against `main` at v0.0.71.0 rather than transcribed.
     the two languages teach. That is the honest state, and `go.md` says so —
     but a consumer's Go repo can still grow a `RequireX` and nothing catches it.
   - **Shape:** a `go/analysis` pass over exported funcs returning their own
-    package type, mirroring TB017's "any second door, name-agnostic". The
+    package type, mirroring TB017's "any second construction path, name-agnostic". The
     interesting Go-specific question is whether `NewX`/`MustNewX` counts as two
-    doors — it does not (the `mustnew` convention is a sanctioned panic-wrapper
-    over the same door), so the check must exempt the `Must*` twin explicitly.
+    construction paths — it does not (the `mustnew` convention is a sanctioned panic-wrapper
+    over the same constructor), so the check must exempt the `Must*` twin explicitly.
   - **Start at:** `internal/analyzers/` alongside the existing passes; folds
     into the queued Go serialization umbrella.
 
@@ -1439,11 +1439,11 @@ change; each waits for a real need.
 
 - [ ] **`Dsn` value object + a persisted context**
   - **What:** the coordinate-value-object demonstration — a `Dsn` parsed at the
-    wiring construction door (scheme + host + database), validated, with a
+    wiring constructor (scheme + host + database), validated, with a
     `redacted()` exit so credentials never reach a log — needs a context that
     actually persists to a real backend. Deferred: a SQL repository CI never
     connects to is CI-unrun code, the same reason `srv/wrk` is omitted.
-  - **Why:** demonstrates coordinate VOs at the construction door and the
+  - **Why:** demonstrates coordinate VOs at the constructor and the
     end-to-end credential flow in running code; the example currently keeps its
     in-memory `storage` coordinate, so there is no DSN to wrap.
   - **How:** when a context gains a genuine persistence need, add the `Dsn` VO in

@@ -1077,7 +1077,7 @@ class Codebase(ts.AggregateRoot):
                         found.extend(
                             self._composition_violations(module, cls, fields, leaf)  # tesser:debt TB051
                         )
-                        found.extend(self._door_violations(module, cls))  # tesser:debt TB051
+                        found.extend(self._construction_path_violations(module, cls))  # tesser:debt TB051
                         found.extend(self._exit_violations(module, cls, leaf))  # tesser:debt TB051
                     else:
                         found.extend(self._copy_violations(module, cls, fields))  # tesser:debt TB051
@@ -2729,7 +2729,7 @@ class Codebase(ts.AggregateRoot):
                         "TB010",
                         f"{module.name()}.{cls.name}.{item.name} passes the raw primitive through; "
                         "a value object's accessor returns a value object — "
-                        "the canonical exit is the only primitive door",
+                        "the canonical exit is the only primitive exit",
                     )
                 )
         return tuple(found)
@@ -2769,7 +2769,7 @@ class Codebase(ts.AggregateRoot):
                     )
         return tuple(found)
 
-    def _door_violations(self, module: Module, cls: ast.ClassDef) -> tuple[Violation, ...]:
+    def _construction_path_violations(self, module: Module, cls: ast.ClassDef) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for item in cls.body:
             if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -2816,21 +2816,21 @@ class Codebase(ts.AggregateRoot):
                         if isinstance(child, ast.expr)
                     )
                 produced = frozenset(name for name, _ in produced_pairs)
-            second_door = bool(produced & {cls.name, "Self"})
+            second_path = bool(produced & {cls.name, "Self"})
             if not produced and any(
                 isinstance(node.func, ast.Name) and node.func.id in ("cls", cls.name)
                 for node in ast.walk(item)
                 if isinstance(node, ast.Call)
             ):
-                second_door = True
-            if second_door:
+                second_path = True
+            if second_path:
                 found.append(
                     Violation(
                         module.path(),
                         item.lineno,
                         "TB017",
-                        f"{module.name()}.{cls.name}.{item.name} is a second construction door; "
-                        "a value object has one door — its own __init__",
+                        f"{module.name()}.{cls.name}.{item.name} is a second construction path; "
+                        "a value object has one construction path — its own __init__",
                     )
                 )
         return tuple(found)
@@ -4576,12 +4576,43 @@ class Codebase(ts.AggregateRoot):
                             key is not None and TESSER_DECORATORS.get(key) == ("fake")
                             for key in (module._resolve(decorator) for decorator in stmt.decorator_list)
                         )):
+                    if stmt.name.startswith("Test"):
+                        for item in stmt.body:
+                            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                                if not item.name.startswith("test_"):
+                                    found.append(
+                                        Violation(
+                                            module.path(),
+                                            item.lineno,
+                                            "TB071",
+                                            f"{where}.{item.name} is not a test method; a test class holds only test methods",
+                                        )
+                                    )
+                            elif isinstance(item, ast.ClassDef):
+                                found.append(
+                                    Violation(
+                                        module.path(),
+                                        item.lineno,
+                                        "TB071",
+                                        f"{where}.{item.name} is a nested class; a test class holds test methods, never nested classes",
+                                    )
+                                )
+                            else:
+                                found.append(
+                                    Violation(
+                                        module.path(),
+                                        item.lineno,
+                                        "TB071",
+                                        f"{where} carries a loose statement in its body; a test class holds test methods, never loose statements",
+                                    )
+                                )
+                        continue
                     found.append(
                         Violation(
                             module.path(),
                             stmt.lineno,
                             "TB072",
-                            f"{where} is an undeclared class; a test double declares itself with @ts.fake",
+                            f"{where} is an undeclared class; a class in a test module is a Test-prefixed test class or declares itself with @ts.fake",
                         )
                     )
                 elif not any(
@@ -4745,21 +4776,39 @@ class Codebase(ts.AggregateRoot):
                     None,
                 ))
         if init is None:
-            return ()
+            return (
+                Violation(
+                    module.path(),
+                    cls.lineno,
+                    "TB080",
+                    f"{module.name()}.{cls.name} defines no __init__; "
+                    "a value object constructs in its own __init__",
+                ),
+            )
         where = f"{module.name()}.{cls.name}.__init__"
+        if init.args.vararg is not None or init.args.kwarg is not None:
+            found.append(
+                Violation(
+                    module.path(),
+                    init.lineno,
+                    "TB080",
+                    f"{where} uses *args/**kwargs; "
+                    "a value object declares its construction data as named parameters",
+                )
+            )
         for arg in ([
                     arg
                     for arg in init.args.posonlyargs + init.args.args + init.args.kwonlyargs
                     if arg.arg != "self"
                 ]):
-            if not self._allowed_annotation(module, arg.annotation, blocks, frozenset({"valueobject"}), domain_enums=True):
+            if not self._allowed_annotation(module, arg.annotation, blocks, frozenset({"spec"}), domain_enums=True):
                 found.append(
                     Violation(
                         module.path(),
                         init.lineno,
                         "TB080",
                         f"{where} parameter {arg.arg!r} is not allowed; "
-                        "a value object constructs from primitives and value objects",
+                        "a value object constructs from primitives and specs, never value objects",
                     )
                 )
         return tuple(found)
@@ -4771,8 +4820,19 @@ class Codebase(ts.AggregateRoot):
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
+        init_seen = False
         for item in cls.body:
             if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                found.append(
+                    Violation(
+                        module.path(),
+                        item.lineno,
+                        "TB080",
+                        f"{module.name()}.{cls.name} carries a class-level statement; "
+                        "a spec declares its fields as __init__ parameters, "
+                        "where the field rules can read them",
+                    )
+                )
                 continue
             where = f"{module.name()}.{cls.name}.{item.name}"
             if item.name != "__init__":
@@ -4785,21 +4845,42 @@ class Codebase(ts.AggregateRoot):
                     )
                 )
                 continue
+            init_seen = True
+            if item.args.vararg is not None or item.args.kwarg is not None:
+                found.append(
+                    Violation(
+                        module.path(),
+                        item.lineno,
+                        "TB080",
+                        f"{where} uses *args/**kwargs; a spec declares its fields "
+                        "as named __init__ parameters, where the field rules can read them",
+                    )
+                )
             for arg in ([
                         arg
                         for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
                         if arg.arg != "self"
                     ]):
-                if not self._allowed_annotation(module, arg.annotation, blocks, frozenset({"valueobject", "spec"}), domain_enums=True):
+                if not self._allowed_annotation(module, arg.annotation, blocks, frozenset({"spec"}), domain_enums=True):
                     found.append(
                         Violation(
                             module.path(),
                             item.lineno,
                             "TB080",
                             f"{where} parameter {arg.arg!r} is not allowed; "
-                            "a spec field is a primitive, a value object, or a child spec",
+                            "a spec field is a primitive or a child spec, never a value object",
                         )
                     )
+        if not init_seen:
+            found.append(
+                Violation(
+                    module.path(),
+                    cls.lineno,
+                    "TB080",
+                    f"{module.name()}.{cls.name} defines no __init__; "
+                    "a spec defines the __init__ that carries its fields",
+                )
+            )
         return tuple(found)
 
     def _dto_violations(
@@ -5499,6 +5580,12 @@ class Codebase(ts.AggregateRoot):
         if node is None:
             return False
         if isinstance(node, ast.Constant):
+            if isinstance(node.value, str):
+                try:
+                    quoted = ast.parse(node.value, mode="eval").body
+                except SyntaxError:
+                    return False
+                return self._allowed_annotation(module, quoted, blocks, allowed_blocks, enums, primitives, domain_enums)
             return node.value is Ellipsis or node.value is None
         if isinstance(node, ast.Name) and node.id in enums:
             return True

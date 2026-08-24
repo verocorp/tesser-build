@@ -3,7 +3,7 @@
 <!-- tb-status: full -->
 
 **A domain object never serializes itself, and its primitives leave through
-exactly one door per shape.** This norm is scoped to the domain data types —
+exactly one constructor per shape.** This norm is scoped to the domain data types —
 value objects, entities, aggregates — and to the two places that consume their
 serialized form: gateways (repositories, cross-context, vendor) and the
 application service's Respond step. Handlers never touch it: they translate
@@ -19,7 +19,7 @@ data crosses an edge (maintainer rulings 2026-07-20).
    representation leak that also enables decomposed-form equality, and was
    red-teamed out in the reference discipline. Wire and storage shapes are
    edge property; the domain exports none of them.
-2. **Inbound has one door: spec → constructor.** Reconstruction (from a row,
+2. **Inbound has one path: spec → constructor.** Reconstruction (from a row,
    a payload, a wire request) builds the spec and goes through the validating
    constructor, so every invariant re-runs on the way in. Stale persisted
    data surfacing as a constructor error on read is a feature. The spec is
@@ -174,8 +174,9 @@ belongs to the edge, recorded where its golden test lives.
   reads as a leaf shape (not misreported as structured), but the leaf itself
   is a TB016 violation — those scalars are not value-object material.
 - **TB016** (the value-object-primitives check) flags rule 5's internal
-  half: what a VO may be built from. A compound holds child VOs, not bare
-  primitives. The wrappable set is "primitive" in the DDD sense — the
+  half: what a VO **holds**, not what it constructs from (that is TB080 —
+  primitives and child specs, never value objects). A compound holds child
+  VOs, not bare primitives. The wrappable set is "primitive" in the DDD sense — the
   language scalars plus the stdlib temporals (`date`/`datetime`/`time`),
   which a compound wraps in child VOs just like a `Decimal`, and a
   `date`-backed leaf exits as canonical text via `__str__` (maintainer ruling
@@ -187,16 +188,16 @@ belongs to the edge, recorded where its golden test lives.
   wrappable set is now exactly the set with a ruled canonical exit; there is
   no must-wrap-without-an-exit gap. Types with no stereotype meaning at all
   (`UUID`, `Enum`) stay out of contract rather than guessed at.
-- **TB017** (the single-construction-door check) flags the inbound half of the
+- **TB017** (the single-construction-path check) flags the inbound half of the
   same discipline: a value object constructs through its own `__init__` and
   nothing else, so **any** classmethod or staticmethod returning its own type
-  is a second door — name-agnostic, because the name was never what made it
-  one (`from_spec`, `parse`, `new`, `require`, `of` alike). Two doors mean two
+  is a second constructor — name-agnostic, because the name was never what made it
+  one (`from_spec`, `parse`, `new`, `require`, `of` alike). Two constructors mean two
   invariant sets on one type: if `new` is permissive and `require` demands
-  non-empty, what the type guarantees depends on which door the caller picked.
-  A factory returning some *other* type is not a door and is left alone; specs
+  non-empty, what the type guarantees depends on which construction path the caller picked.
+  A factory returning some *other* type is not a construction path and is left alone; specs
   are inert carriers and out of scope; entities and aggregates fall under
-  TB080, whose door rule is the spec itself — a domain constructor takes
+  TB080, whose construction rule is the spec itself — a domain constructor takes
   exactly one `ts.Spec`.
 - **TB018** (the canonical-exit-routing check) flags rule 3's delegation half:
   a leaf's conversion dunder must be a one-line delegation to the
@@ -278,7 +279,7 @@ belongs to the edge, recorded where its golden test lives.
 ## Now build it
 
 - Python mechanics: `python.md#value-objects` (canonical exits, child VOs),
-  `python.md#the-spec-pattern` (inbound door), `python.md#ports` (the ports
+  `python.md#the-spec-pattern` (inbound construction), `python.md#ports` (the ports
   package and its DTO rules). Compound shape verified in
   `examples/python-app/campaign/domain/money.py`; the walk-plus-DTO pair
   verified in `examples/serdepy/parcel/tests/test_record_construction.py`

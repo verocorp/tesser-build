@@ -238,7 +238,7 @@ the shell migration. The srv matrix ruled it per-kind (2026-08-07):
 value equality for every wire record, so `ToolTurn` and `Tool` carry the
 guarantee without a per-class patch. The freeze is SHALLOW by design —
 it stops rebinding, not mutation of a field's referent — so a record
-holding a container copies it at the door: the HTTP protocol records copy
+holding a container copies it in its constructor: the HTTP protocol records copy
 their header and param maps, and `Tool` deep-copies its schema in and
 out of `schema()` because the host hands that dict to a provider SDK.
 

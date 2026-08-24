@@ -87,11 +87,11 @@ stdlib-`ast` conformance analyzer for the `ts.*`-shell conventions in
 Classification is declared, never inferred — a class is judged by the
 `tesser` base it names. The 36 shipped codes cover value-object shape and
 serialization (`TB002`–`TB018` — value equality only, no representation
-leak, one construction door, one canonical exit per backing type),
+leak, one construction path, one canonical exit per backing type),
 module/class structure (`TB040`–`TB043`), import form and the tier matrices
 (`TB050`–`TB066` — every module carries an import row keyed on where it sits,
 with no exempt modules), test placement and module totality (`TB070`–`TB073`),
-construction doors and boundary signatures (`TB080`–`TB082`), and the
+construction paths and boundary signatures (`TB080`–`TB082`), and the
 tree-wide **norm checks** with no test exemption: zero comments (`TB020`),
 fakes-only test doubles (`TB030`), and debt-marker hygiene (`TB090` — a
 suppression that suppresses nothing is itself a finding). The full per-code
@@ -263,7 +263,7 @@ primitive accessors, and `Equal` where `==` is unavailable or unsafe) and the
 exempt — `skills/tesser-build/comments.md`). The Python side goes further:
 `tessercheck-py` judges every class by its declared `ts.*` base — identity
 checks (TB010–TB012), the serialization norm (TB015–TB018 — a domain object
-never serializes itself, one construction door, one canonical exit;
+never serializes itself, one construction path, one canonical exit;
 `skills/tesser-build/serialization.md`), the **testing norm** (TB030: a test
 double is a hand-written fake, never a mocking library; TB070–TB073:
 test placement and totality — `skills/tesser-build/testing.md`), plus

@@ -198,7 +198,7 @@ file says *how*, and it is the cross-cutting layer they assume.
   temporary exemptions: a module that genuinely cannot be tested (one exists —
   an srv module bound to an uninstallable vendor SDK) carries a site-level
   `# tesser:debt TB074` where the finding lands, as visible debt.
-- **`TB071` + `TB073` (test-module totality)** — rule 9, and the analyzer's
+- **`TB071` + `TB072` + `TB073` (test-module totality)** — rule 9, and the analyzer's
   first **totality** check (they superseded the frozen-dataclass era's
   `TB032`). Every other check hunts a known-bad shape and stays quiet
   otherwise. That is the wrong instrument here, because the failure mode is
@@ -209,7 +209,23 @@ file says *how*, and it is the cross-cutting layer they assume.
 
   Classification is declared, never inferred: a test module holds tests,
   **`@ts.helper`** builders, and **`@ts.fake`** doubles, and a module-level
-  function that is none of those is a `TB071` finding. `TB073` is the shape
+  function that is none of those is a `TB071` finding. Tests come in two
+  shapes: a module-level `test_*` function, or a `test_*` method on a
+  **`Test`-prefixed test class** — grouping a subject's scenarios under a
+  test class is allowed, and a test class holds *only* test methods (any
+  other method on it is a `TB071` finding — including pytest's xunit hooks:
+  `setup_method`, `teardown_method`, and `@pytest.fixture` methods are
+  findings too; shared arrangement goes through module-level `@ts.helper`
+  builders, and per-test setup is written in the test where the reader can
+  see it). The totality reaches the whole class body: a nested class or a
+  loose statement inside a test class is a finding, exactly as it would be
+  at module level — nesting is not an escape hatch. The `Test` prefix
+  matches pytest's default collection glob (`python_classes = Test*`); the
+  analyzer assumes that default, so a tree that overrides `python_classes`
+  is out of contract. A class that is neither
+  `Test`-prefixed nor a declared `@ts.fake` is a `TB072` finding. The
+  `Test` prefix is load-bearing: it is what pytest collects, so a test
+  class named anything else would hold tests that silently never run. `TB073` is the shape
   half: a declared helper takes only defaulted primitives, has no control
   flow, and builds a spec. A helper that legitimately builds something else —
   a wired object graph for an end-to-end test, a JSON payload — declares
@@ -219,9 +235,10 @@ file says *how*, and it is the cross-cutting layer they assume.
   offending statement); the declaration half is never optional.
 
   Two scope facts worth knowing before you argue with a finding:
-  **methods are not judged** — every non-test method on a class in a test file
-  is a hand-written double, which rule 1 *requires*, so judging them would
-  report the norm's own mandated shape as a violation. And **a test module is
+  **a fake's methods are not judged** — every method on a `@ts.fake` class
+  is a hand-written double's surface, which rule 1 *requires*, so judging
+  them would report the norm's own mandated shape as a violation (a *test
+  class's* methods ARE judged — see above: test methods only). And **a test module is
   one whose basename starts with `test_`**; a helper-only module beside the
   tests is not a sanctioned parking spot — a non-test, non-conftest module
   under a `tests` package is a placement finding outright (TB041), and even
@@ -252,9 +269,13 @@ is ruled.
   package, and each location fixes what the test may import (TB070). The
   root tests package reaches a context only through its wiring and client;
   everything else it drives through bootstrap, protocol, and srv.
-- **Test grouping / structure.** Whether a type's scenarios group under a test
-  class, and at what grain ("unit" = a type, a callable, or a concern). Cut
-  from v0: too ambiguous on the right shape to encode as doctrine.
+- **Test grouping / structure.** Partially ruled (2026-08-23): grouping
+  scenarios under a `Test`-prefixed class is **allowed** — the analyzer
+  admits test classes and requires that they hold only test methods
+  (`TB071`/`TB072`). Still open: whether test classes will be *required*
+  (the intent is to eventually enforce specific classes — e.g. a test class
+  per aggregate — but that is not ruled), and at what grain ("unit" = a
+  type, a callable, or a concern).
 - **Table tests / `@pytest.mark.parametrize`.** Prior art points both ways.
   Currently used for rejection cases in the worked trees; not ruled.
 - **Coverage stance.** No percentage gate anywhere, and v0 inherits that —
