@@ -5,16 +5,40 @@ import pytest
 import tessercheck.domain.rulebook as rulebook
 
 
-def test_a_violation_call_takes_four_positional_args() -> None:
+def test_a_violation_spec_carries_all_four_fields() -> None:
     checks_text = (
         "TS_NAME_BY_BLOCK: dict = {}\n"
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _module_violations(self) -> None:\n"
-        "        Violation('only-message; a clause')\n"
+        "        Violation(ViolationSpec('only-message; a clause'))\n"
     )
     with pytest.raises(RuntimeError, match="exactly the four"):
         rulebook.render(checks_text, (), "")
+
+
+def test_a_violation_call_takes_one_violation_spec() -> None:
+    checks_text = (
+        "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
+        "class Codebase:\n"
+        "    def _module_violations(self) -> None:\n"
+        "        Violation('p', 1, 'TB040', 'a head; a clause')\n"
+    )
+    with pytest.raises(RuntimeError, match="exactly the four"):
+        rulebook.render(checks_text, (), "")
+
+
+def test_a_violation_spec_may_name_its_fields() -> None:
+    checks_text = (
+        "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
+        "class Codebase:\n"
+        "    def _module_violations(self) -> None:\n"
+        "        Violation(ViolationSpec('p', 1, code='TB040', message='a head; a clause'))\n"
+    )
+    rendered = rulebook.render(checks_text, (), "")
+    assert "| TB040 | a clause |" in rendered
 
 
 def test_a_violation_code_must_be_literal_or_bound() -> None:
@@ -23,7 +47,7 @@ def test_a_violation_code_must_be_literal_or_bound() -> None:
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _module_violations(self) -> None:\n"
-        "        Violation(p, 1, computed, 'head; a clause')\n"
+        "        Violation(ViolationSpec(p, 1, computed, 'head; a clause'))\n"
     )
     with pytest.raises(RuntimeError, match="neither a literal"):
         rulebook.render(checks_text, (), "")
@@ -35,8 +59,8 @@ def test_one_clause_carries_one_code() -> None:
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _module_violations(self) -> None:\n"
-        "        Violation('p', 1, 'TB040', 'a head; one shared clause')\n"
-        "        Violation('p', 1, 'TB041', 'b head; one shared clause')\n"
+        "        Violation(ViolationSpec('p', 1, 'TB040', 'a head; one shared clause'))\n"
+        "        Violation(ViolationSpec('p', 1, 'TB041', 'b head; one shared clause'))\n"
     )
     with pytest.raises(RuntimeError, match="one clause has one code"):
         rulebook.render(checks_text, (), "")
@@ -48,7 +72,7 @@ def test_a_message_without_a_normative_clause_is_rejected() -> None:
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _module_violations(self) -> None:\n"
-        "        Violation('p', 1, 'TB040', 'a bare head with no tail')\n"
+        "        Violation(ViolationSpec('p', 1, 'TB040', 'a bare head with no tail'))\n"
     )
     with pytest.raises(RuntimeError, match="normative clause"):
         rulebook.render(checks_text, (), "")
@@ -60,7 +84,7 @@ def test_a_clause_carrying_a_hole_is_rejected() -> None:
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _module_violations(self) -> None:\n"
-        "        Violation('p', 1, 'TB040', f'head; a clause about {target}')\n"
+        "        Violation(ViolationSpec('p', 1, 'TB040', f'head; a clause about {target}'))\n"
     )
     with pytest.raises(RuntimeError, match="not a literal"):
         rulebook.render(checks_text, (), "")
@@ -72,7 +96,7 @@ def test_a_message_hole_with_no_reader_name_is_rejected() -> None:
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _module_violations(self) -> None:\n"
-        "        Violation('p', 1, 'TB040', f'{mystery} head; a clause')\n"
+        "        Violation(ViolationSpec('p', 1, 'TB040', f'{mystery} head; a clause'))\n"
     )
     with pytest.raises(RuntimeError, match="extend HOLE_NAMES"):
         rulebook.render(checks_text, (), "")
@@ -84,7 +108,7 @@ def test_a_subject_with_no_applies_to_entry_is_rejected() -> None:
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _unmapped_violations(self) -> None:\n"
-        "        Violation('p', 1, 'TB040', 'head; a clause')\n"
+        "        Violation(ViolationSpec('p', 1, 'TB040', 'head; a clause'))\n"
     )
     with pytest.raises(RuntimeError, match="APPLIES_TO"):
         rulebook.render(checks_text, (), "")
@@ -95,7 +119,7 @@ def test_a_checks_module_without_the_block_name_map_is_rejected() -> None:
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _module_violations(self) -> None:\n"
-        "        Violation('p', 1, 'TB040', 'head; a clause')\n"
+        "        Violation(ViolationSpec('p', 1, 'TB040', 'head; a clause'))\n"
     )
     with pytest.raises(RuntimeError, match="TS_NAME_BY_BLOCK"):
         rulebook.render(checks_text, (), "")
@@ -107,8 +131,8 @@ def test_a_row_carries_the_code_the_reach_and_every_source_line() -> None:
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _comment_violations(self) -> None:\n"
-        "        Violation('p', 1, 'TB020', 'first shape; the shared tail')\n"
-        "        Violation('p', 2, 'TB020', 'second shape; the shared tail')\n"
+        "        Violation(ViolationSpec('p', 1, 'TB020', 'first shape; the shared tail'))\n"
+        "        Violation(ViolationSpec('p', 2, 'TB020', 'second shape; the shared tail'))\n"
     )
     rendered = rulebook.render(checks_text, (), "")
     rows = [line for line in rendered.splitlines() if line.startswith("| TB")]
@@ -124,7 +148,7 @@ def test_a_hole_prefix_is_stripped_from_the_fires_when_shape() -> None:
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _comment_violations(self) -> None:\n"
-        "        Violation('p', 1, 'TB020', f'{where} says nothing; the tail')\n"
+        "        Violation(ViolationSpec('p', 1, 'TB020', f'{where} says nothing; the tail'))\n"
     )
     rendered = rulebook.render(checks_text, (), "")
     assert "| TB020 | the tail | every module | says nothing |" in rendered
@@ -136,7 +160,7 @@ def test_an_assert_literal_containing_the_clause_is_the_fixture() -> None:
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _comment_violations(self) -> None:\n"
-        "        Violation('p', 1, 'TB020', 'a shape; the shared tail')\n"
+        "        Violation(ViolationSpec('p', 1, 'TB020', 'a shape; the shared tail'))\n"
     )
     modules = (
         (
@@ -157,7 +181,7 @@ def test_contracts_pair_each_section_id_with_its_name() -> None:
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _comment_violations(self) -> None:\n"
-        "        Violation('p', 1, 'TB020', 'a shape; the rendered tail')\n"
+        "        Violation(ViolationSpec('p', 1, 'TB020', 'a shape; the rendered tail'))\n"
     )
     text = (
         "[importlinter]\n"
@@ -182,7 +206,7 @@ def test_render_reports_an_uncovered_rule_as_none() -> None:
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _comment_violations(self) -> None:\n"
-        "        Violation('p', 1, 'TB020', 'a shape; the rendered tail')\n"
+        "        Violation(ViolationSpec('p', 1, 'TB020', 'a shape; the rendered tail'))\n"
     )
     rendered = rulebook.render(checks_text, (), "")
     assert (
@@ -197,7 +221,7 @@ def test_render_names_the_covering_test_and_the_contract_rows() -> None:
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _comment_violations(self) -> None:\n"
-        "        Violation('p', 1, 'TB020', 'a shape; the rendered tail')\n"
+        "        Violation(ViolationSpec('p', 1, 'TB020', 'a shape; the rendered tail'))\n"
     )
     modules = (
         (
@@ -221,7 +245,7 @@ def test_render_without_the_protocol_package_constant_is_rejected() -> None:
         "TS_NAME_BY_BLOCK: dict = {}\n"
         "class Codebase:\n"
         "    def _comment_violations(self) -> None:\n"
-        "        Violation('p', 1, 'TB020', 'a shape; the rendered tail')\n"
+        "        Violation(ViolationSpec('p', 1, 'TB020', 'a shape; the rendered tail'))\n"
     )
     with pytest.raises(RuntimeError, match="PROTOCOL_PACKAGE"):
         rulebook.render(checks_text, (), "")

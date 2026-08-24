@@ -1592,9 +1592,9 @@ def test_construction_containers_discriminate_specs_from_value_objects() -> None
 
 def test_edge_records_reject_an_empty_target() -> None:
     with pytest.raises(ValueError):
-        checks.ImportEdge("", 1, False, False)
+        checks.ImportEdge(checks.ImportEdgeSpec("", 1, False, False))
     with pytest.raises(ValueError):
-        checks.TesserImport("", 1, False, False)
+        checks.TesserImport(checks.TesserImportSpec("", 1, False, False))
 
 
 def test_optional_construction_data_is_the_only_union() -> None:
