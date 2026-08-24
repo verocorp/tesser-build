@@ -51,6 +51,9 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "head": "⟨scalar⟩",
     "named": "⟨types⟩",
     "spec_name": "⟨name⟩",
+    "shared_class": "⟨class⟩",
+    "spec_label": "⟨spec⟩",
+    "owner_label": "⟨class⟩",
 }
 
 APPLIES_TO: typing.Final[dict[str, str]] = {
@@ -72,6 +75,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Codebase._string_equality_violations": "every module",
     "Codebase._sibling_reference_violations": "every class, in every module",
     "Codebase._spec_use_violations": "every function that holds a spec, in every module",
+    "Codebase._spec_shared_violations": "domain object `__init__`",
     "Codebase._vo_field_violations": "value object class",
     "Codebase._exposure_violations": "value object class",
     "Codebase._composition_violations": "value object class",
@@ -226,7 +230,7 @@ def render(  # tesser:debt TB051
             return None
         bound = dict(zip(VIOLATION_FIELDS, spec.args))
         for keyword in spec.keywords:
-            if keyword.arg is None:
+            if keyword.arg is None or keyword.arg in bound:
                 return None
             bound[keyword.arg] = keyword.value
         if set(bound) != set(VIOLATION_FIELDS):

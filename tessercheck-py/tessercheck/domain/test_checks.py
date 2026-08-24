@@ -1570,8 +1570,8 @@ def test_construction_containers_discriminate_specs_from_value_objects() -> None
         "WrapsMaybe.__init__" in f and "parameter 'tag' is not allowed" in f
         for f in findings
     )
-    assert not any("FromSpecs.__init__ parameter" in f for f in findings)
-    assert not any("FromMaybeSpec.__init__ parameter" in f for f in findings)
+    assert any("FromSpecs.__init__ parameter 'specs' is not allowed" in f for f in findings)
+    assert any("FromMaybeSpec.__init__ parameter" in f and "is not allowed" in f for f in findings)
     assert any(
         "CartonSpec.__init__" in f and "parameter 'tags' is not allowed" in f
         and "a spec field is a primitive or a child spec, never a value object" in f
@@ -9715,3 +9715,50 @@ def test_a_spec_is_read_only_by_the_init_of_its_own_object() -> None:
         "shop/domain/family.py:34: TB080 shop.domain.family.Wide.__init__ takes 2 parameters; "
         "a value object takes one primitive or exactly one ts.Spec"
     ) in findings
+
+
+def test_a_spec_constructs_exactly_one_object_and_a_value_object_takes_it_exactly() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/pair.py",
+                "shop.domain.pair",
+                "import typing\n"
+                "import tesser.domain as ts\n"
+                "class PairSpec(ts.Spec):\n"
+                "    def __init__(self, left: str, right: str) -> None:\n"
+                "        self.left = left\n"
+                "        self.right = right\n"
+                "class Pair(ts.ValueObject):\n"
+                "    def __init__(self, spec: PairSpec) -> None:\n"
+                "        object.__setattr__(self, '_left', spec.left)\n"
+                "class Twin(ts.ValueObject):\n"
+                "    def __init__(self, spec: PairSpec) -> None:\n"
+                "        object.__setattr__(self, '_right', spec.right)\n"
+                "class Many(ts.ValueObject):\n"
+                "    def __init__(self, specs: tuple[PairSpec, ...]) -> None:\n"
+                "        object.__setattr__(self, '_pairs', tuple(Pair(s) for s in specs))\n"
+                "class Maybe(ts.ValueObject):\n"
+                "    def __init__(self, spec: typing.Optional[PairSpec]) -> None:\n"
+                "        object.__setattr__(self, '_pair', Pair(spec) if spec else None)\n"
+                "class Quoted(ts.Entity):\n"
+                "    def __init__(self, spec: 'PairSpec') -> None:\n"
+                "        self._pair = Pair(spec)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert (
+        "shop/domain/pair.py:10: TB083 shop.domain.pair.Twin takes shop.domain.pair.PairSpec, "
+        "which shop.domain.pair.Pair already takes; a spec constructs exactly one object"
+    ) in findings
+    assert (
+        "shop/domain/pair.py:14: TB080 shop.domain.pair.Many.__init__ parameter 'specs' is not allowed; "
+        "a value object constructs from one primitive or one spec, never value objects"
+    ) in findings
+    assert (
+        "shop/domain/pair.py:17: TB080 shop.domain.pair.Maybe.__init__ parameter 'spec' is not allowed; "
+        "a value object constructs from one primitive or one spec, never value objects"
+    ) in findings
+    assert not any("Quoted" in f and " TB080 " in f for f in findings)

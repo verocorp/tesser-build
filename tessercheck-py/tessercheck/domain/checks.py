@@ -1066,6 +1066,7 @@ class Codebase(ts.AggregateRoot):
         self._spec_methods: dict[str, SpecType] = {}
         self._spec_owner: dict[tuple[str, str], tuple[str, str]] = {}
         self._spec_fields: dict[tuple[str, str], dict[str, SpecType]] = {}
+        self._spec_shared: list[tuple[str, str, int, tuple[str, str], tuple[str, str]]] = []
 
     def violations(self) -> tuple[Violation, ...]:
         declaration = self._declaration_violations()  # tesser:debt TB051
@@ -1146,7 +1147,9 @@ class Codebase(ts.AggregateRoot):
                     elif block in SPEC_READER_BLOCKS and len(params) == 1:
                         taken = self._spec_key(module, params[0].annotation, blocks)
                         if taken is not None and not taken[1]:
-                            self._spec_owner.setdefault(taken[0], (module.name(), cls.name))
+                            first = self._spec_owner.setdefault(taken[0], (module.name(), cls.name))
+                            if first != (module.name(), cls.name):
+                                self._spec_shared.append((module.name(), cls.name, cls.lineno, taken[0], first))
                     elif block in SPEC_BLOCKS:
                         self._spec_fields[(module.name(), cls.name)] = {
                             arg.arg: field
@@ -1154,6 +1157,7 @@ class Codebase(ts.AggregateRoot):
                             if (field := self._spec_key(module, arg.annotation, blocks)) is not None
                         }
         self._spec_methods = {name: made for name, made in returning.items() if made is not None}
+        self._spec_shared.sort()
         for module in self._modules:
             found.extend(self._comment_violations(module))  # tesser:debt TB051
             found.extend(self._double_violations(module))  # tesser:debt TB051
@@ -1166,6 +1170,7 @@ class Codebase(ts.AggregateRoot):
                 "test", "conftest", "conftest-root", "eval"
             ):
                 found.extend(self._spec_use_violations(module, blocks))  # tesser:debt TB051
+                found.extend(self._spec_shared_violations(module))  # tesser:debt TB051
             if self._export == TESSER and self._locate(  # tesser:debt TB051
                 module.name(), module.is_package(), contexts, self._export
             ) == "test":
@@ -2809,6 +2814,33 @@ class Codebase(ts.AggregateRoot):
                             "scope; a shadowed builtin is never called — rename the binding",
                         ))
                     )
+        return tuple(found)
+
+    @staticmethod
+    def _unquoted(node: ast.expr | None) -> ast.expr | None:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            try:
+                return ast.parse(node.value, mode="eval").body
+            except SyntaxError:
+                return None
+        return node
+
+    def _spec_shared_violations(self, module: Module) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for shared_module, shared_class, line, shared_spec, shared_owner in self._spec_shared:
+            if shared_module != module.name():
+                continue
+            spec_label = ".".join(shared_spec)
+            owner_label = ".".join(shared_owner)
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    line,
+                    "TB083",
+                    f"{module.name()}.{shared_class} takes {spec_label}, which {owner_label} already takes; "
+                    "a spec constructs exactly one object",
+                ))
+            )
         return tuple(found)
 
     def _spec_key(
@@ -5419,7 +5451,14 @@ class Codebase(ts.AggregateRoot):
                 ))
             )
         for arg in params:
-            if not self._allowed_annotation(module, arg.annotation, blocks, frozenset({"spec"}), domain_enums=True):
+            plain = self._allowed_annotation(module, arg.annotation, blocks, frozenset(), domain_enums=True)
+            taken = self._spec_key(module, arg.annotation, blocks)
+            exact = (
+                taken is not None
+                and not taken[1]
+                and isinstance(self._unquoted(arg.annotation), (ast.Name, ast.Attribute))  # tesser:debt TB051
+            )
+            if not (plain or exact):
                 found.append(
                     Violation(ViolationSpec(
                         module.path(),
@@ -5940,7 +5979,8 @@ class Codebase(ts.AggregateRoot):
                 ))
             )
         for arg in params:
-            param_key = module._resolve(arg.annotation) if arg.annotation is not None else None
+            unquoted = self._unquoted(arg.annotation)  # tesser:debt TB051
+            param_key = module._resolve(unquoted) if unquoted is not None else None
             if (blocks.get(param_key) if param_key is not None else None) != param_block:
                 found.append(
                     Violation(ViolationSpec(
