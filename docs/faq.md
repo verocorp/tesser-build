@@ -64,7 +64,8 @@ defensive checks. Scatter validation across services and parents, and every
 new call site is a chance to forget one rule; the check count grows with the
 codebase instead of staying at one. A parent never re-states a child's rule
 for the same reason: the parent's constructor takes raw construction data
-(primitives and specs, never built value objects — ruled 2026-08-23) and
+(one primitive for a leaf, one spec for anything wider, never built value
+objects — ruled 2026-08-23/24) and
 builds each child through the child's own constructor, so every child rule
 runs exactly once, at the one place it lives.
 

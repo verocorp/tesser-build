@@ -169,9 +169,9 @@ class MoneyCurrency(ts.ValueObject):
 
 class Money(ts.ValueObject):
 
-    def __init__(self, amount: str, currency: str) -> None:   # the one constructor: primitives in, child VOs built
-        object.__setattr__(self, "_amount", MoneyAmount(amount))
-        object.__setattr__(self, "_currency", MoneyCurrency(currency))
+    def __init__(self, spec: MoneySpec) -> None:              # the one constructor: its spec in, child VOs built
+        object.__setattr__(self, "_amount", MoneyAmount(spec.amount))
+        object.__setattr__(self, "_currency", MoneyCurrency(spec.currency))
 
     @property
     def amount(self) -> MoneyAmount:              # components exposed as VOs, never primitives
@@ -195,18 +195,23 @@ the child; the compound's methods guard only cross-field relations — so no
 construction path can skip a rule, and no rule has two homes. Verified impl:
 `examples/python-app/campaign/domain/money.py`.
 
-**Construction (ruled 2026-08-23, superseding both the 2026-07-20
-(b)-uniform ruling and the shells revision's value-object allowance):**
-construction data is **primitives and specs, never value objects**. A
-**value object's** single constructor takes **primitives and child specs**
-— `Money("9.99", "USD")` — and builds its child value objects inside; a
-value object is never a constructor parameter (a spec field or constructor
-parameter typed as a VO is TB080). A **structured domain object** — entity
-or aggregate — constructs from **exactly one `ts.Spec`** (the same shape as
-Go's `NewCampaign(spec)`), converts the spec's data to value objects in its
-`__init__`, and from then on its methods hold, take, and return only value
-objects. That `__init__` is the only place a spec is read: everywhere else
-code builds a spec and hands it on whole — it never reads a spec's fields
+**Construction (ruled 2026-08-24, superseding the 2026-08-23
+primitives-and-specs ruling, the 2026-07-20 (b)-uniform ruling, and the
+shells revision's value-object allowance):** construction data is
+**primitives and specs, never value objects**, and a constructor takes
+**exactly one parameter**. A **leaf** value object wrapping one value takes
+that primitive — `Slug(value)`, `MoneyAmount("9.99")`. Anything with
+**two or more construction values** — a compound value object, an entity,
+an aggregate — takes **exactly one `ts.Spec`** (`Money(MoneySpec("9.99",
+"USD"))`, `Campaign(spec)`, the same shape as Go's `NewCampaign(spec)`;
+TB080), converts the spec's data to value objects in its `__init__`, and
+from then on its methods hold, take, and return only value objects; a value
+object is never a constructor parameter or a spec field. That `__init__` is
+the only place **its own** spec is read: a parent reads its own spec's
+fields and hands a child spec on **whole** — `money.Money(spec.budget)`,
+`ShortLink(link_spec)` — never reaching through it (`spec.budget.amount`
+is TB083, because `MoneySpec` belongs to `Money.__init__`). Everywhere
+else code builds a spec and passes it on; it never reads a spec's fields
 and never stores one (TB083; a test module is exempt, because a
 completeness test reads the spec it fed the constructor — `testing.md`
 rule 2). The one holder besides a spec carrying its child spec is a
@@ -380,7 +385,7 @@ class Campaign(ts.AggregateRoot):
 
     def __init__(self, spec: CampaignSpec) -> None:
         self._id = values.CampaignID(spec.id)
-        self._budget = money.Money(spec.budget.amount, spec.budget.currency)
+        self._budget = money.Money(spec.budget)
         admitted: list[short_link.ShortLink] = []
         for i, link_spec in enumerate(spec.links):
             try:
@@ -962,10 +967,11 @@ path; it converts each primitive to a value object and validates.
 - **Nesting mirrors composition:** `CampaignSpec` holds `MoneySpec` and
   `ShortLinkSpec`s, never flattened prefixed fields; a change to the child's
   construction touches the child's spec only.
-- **Value objects take primitives and child specs at their own constructor —
-  never value objects** (`Slug(value)`, `Money(amount, currency)`).
-  **Entities and aggregates take exactly one spec** (`ShortLink(spec)`,
-  `Campaign(spec)`).
+- **A leaf value object takes its one primitive** (`Slug(value)`); **any
+  domain object with two or more construction values takes exactly one
+  spec** (`Money(spec)`, `ShortLink(spec)`, `Campaign(spec)`) — never value
+  objects. A parent hands a child spec on whole; only the child's own
+  `__init__` reads it.
 
 **Return types:** domain functions return domain types. If callers must
 sum/filter/group a returned list before it's useful, introduce the type that
@@ -975,14 +981,14 @@ represents the finished result.
 
 ```python
 def test_money_equality() -> None:
-    a = money.Money("1.50", "USD")
-    b = money.Money("1.50", "USD")
+    a = money.Money(money.MoneySpec("1.50", "USD"))
+    b = money.Money(money.MoneySpec("1.50", "USD"))
     assert a == b
     assert hash(a) == hash(b)
 
 def test_money_rejects_a_malformed_currency() -> None:
     with pytest.raises(DomainError):
-        money.Money("1.00", "usd")
+        money.Money(money.MoneySpec("1.00", "usd"))
 
 def test_campaign_rejects_a_duplicate_slug() -> None:
     with pytest.raises(DomainError):
