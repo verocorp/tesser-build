@@ -3,7 +3,7 @@ from __future__ import annotations
 import enum
 import re
 import typing
-import urllib.parse as parse
+import urllib.parse
 
 import tesser.domain as ts
 
@@ -47,7 +47,7 @@ class TargetURL(ts.ValueObject):
     def __init__(self, value: str) -> None:
         if any(ord(ch) < 0x20 for ch in value):
             raise errors.invalid("invalid_target_url", "target url must not contain control characters")
-        parsed = parse.urlparse(value)
+        parsed = urllib.parse.urlparse(value)
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
             raise errors.invalid("invalid_target_url", f"target url {value!r} must be http(s) with a host")
         object.__setattr__(self, "_value", value)

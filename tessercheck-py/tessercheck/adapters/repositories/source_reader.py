@@ -60,17 +60,14 @@ class FilesystemSourceReader(ts.Repository):
                     if not value:
                         root = source_reader.RootForm.UNRECOGNIZED
                         break
+                    dotted = all(part.isidentifier() for part in value.split("."))
                     if directive == SKIP_DIRECTIVE and "/" not in value:
                         skips.add(value)
                     elif directive == EXPORT_DIRECTIVE and value.isidentifier():
                         exports.append(value)
-                    elif directive == IMPORT_DIRECTIVE and all(
-                        part.isidentifier() for part in value.split(".")
-                    ):
+                    elif directive == IMPORT_DIRECTIVE and dotted:
                         imports.append(value)
-                    elif directive == STDLIB_DIRECTIVE and all(
-                        part.isidentifier() for part in value.split(".")
-                    ):
+                    elif directive == STDLIB_DIRECTIVE and dotted:
                         pure_stdlib.append(value)
                     else:
                         root = source_reader.RootForm.UNRECOGNIZED

@@ -583,8 +583,8 @@ class ImportForm(ts.ValueObject):
     _value: str
 
     def __init__(self, value: str) -> None:
-        if value not in ("from", "ts", "alias"):
-            raise ValueError("import form must be from, ts, or alias")
+        if value not in ("from", "ts", "alias", "bare"):
+            raise ValueError("import form must be from, ts, alias, or bare")
         object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
@@ -680,13 +680,15 @@ class TesserImport(ts.ValueObject):
     _lineno: Line
     _form: ImportForm
 
-    def __init__(self, target: str, lineno: int, as_ts: bool, from_form: bool) -> None:
+    def __init__(
+        self, target: str, lineno: int, as_ts: bool, from_form: bool, bare: bool = False
+    ) -> None:
         object.__setattr__(self, "_target", Target(target))
         object.__setattr__(self, "_lineno", Line(lineno))
         object.__setattr__(
             self,
             "_form",
-            ImportForm("from" if from_form else "ts" if as_ts else "alias"),
+            ImportForm("from" if from_form else "ts" if as_ts else "bare" if bare else "alias"),
         )
 
 
@@ -785,7 +787,13 @@ class Module(ts.Entity):
                     if alias.name.split(".")[0] == TESSER:
                         if id(node) in top_level:
                             tesser_imports.append(
-                                TesserImport(alias.name, node.lineno, alias.asname == "ts", False)
+                                TesserImport(
+                                    alias.name,
+                                    node.lineno,
+                                    alias.asname == "ts",
+                                    False,
+                                    alias.asname is None,
+                                )
                             )
                         else:
                             nested_tesser.append((alias.name, node.lineno))
@@ -1400,7 +1408,11 @@ class Codebase(ts.AggregateRoot):
                 placement = (tier_parts[0], tier_parts[1])
             if placement is None or placement[1] == STRAY_TIER:
                 return self._conftest_leaf_violations(module)  # tesser:debt TB051
-            return self._test_placement_violations(module, placement[0], placement[1], contexts)  # tesser:debt TB051
+            return tuple(
+                violation
+                for edge in module.import_edges()
+                for violation in self._member_form_violations(module, edge)  # tesser:debt TB051
+            ) + self._test_placement_violations(module, placement[0], placement[1], contexts)  # tesser:debt TB051
         if place == "test":
             return self._test_module_violations(module, blocks, contexts)  # tesser:debt TB051
         if place == "eval":
@@ -1869,6 +1881,10 @@ class Codebase(ts.AggregateRoot):
         if self._export != TESSER:
             tops = tops - {TESSER}
         return tuple(
+            violation
+            for edge in module.import_edges()
+            for violation in self._member_form_violations(module, edge)  # tesser:debt TB051
+        ) + tuple(
             Violation(
                 module.path(),
                 lineno,
@@ -2176,6 +2192,18 @@ class Codebase(ts.AggregateRoot):
             target = str(imp._target)
             lineno = int(imp._lineno)
             if target in norms:
+                if str(imp._form) == "bare":
+                    found.append(
+                        Violation(
+                            module.path(),
+                            lineno,
+                            "TB050",
+                            f"{module.name()} imports {target} without an alias; a norm "
+                            "module is imported as an aliased module — a bare import binds "
+                            "the whole tesser package, and the ts alias belongs to the "
+                            "placement's own package",
+                        )
+                    )
                 continue
             seen_any = True
             if target != package:
@@ -2198,7 +2226,16 @@ class Codebase(ts.AggregateRoot):
                 )
             else:
                 seen_own = True
-                if str(imp._form) == "alias":
+                if str(imp._form) == "from":
+                    found.append(
+                        Violation(
+                            module.path(),
+                            lineno,
+                            "TB050",
+                            f"{module.name()} imports names from {target}; {once_clause}",
+                        )
+                    )
+                elif str(imp._form) in ("alias", "bare"):
                     found.append(
                         Violation(
                             module.path(),
@@ -5610,7 +5647,8 @@ class Codebase(ts.AggregateRoot):
                     lineno,
                     "TB053",
                     f"{module.name()} imports {target} without an alias; "
-                    "a context module is imported as an aliased module, never its members",
+                    "a context module is imported as an aliased module — the analyzer "
+                    "resolves a name as attribute over alias",
                 ),
             )
         return ()

@@ -1,8 +1,5 @@
 import pathlib
 
-import pytest
-
-import tessercheck.domain.checks as domain
 import tessercheck.tests.conftest as conftest
 
 def test_skip_dirs_are_not_walked(tmp_path: pathlib.Path) -> None:
@@ -136,6 +133,31 @@ def test_an_import_declaration_reaches_the_pure_roles_end_to_end(tmp_path: pathl
     )
     findings = conftest.check_raw(tmp_path)
     assert not any("imports money_kernel" in f for f in findings), findings
+
+
+def test_a_stdlib_declaration_reaches_the_domain_end_to_end(tmp_path: pathlib.Path) -> None:
+    conftest.conforming_tree(tmp_path)
+    conftest.write_module(
+        tmp_path,
+        "shop/domain/price.py",
+        "import tesser.domain as ts\n"
+        "import sqlite3\n"
+        "class PriceSpec(ts.Spec):\n"
+        "    def __init__(self, text: str) -> None:\n"
+        "        self.text = text\n",
+    )
+    conftest.write_module(
+        tmp_path,
+        "shop/domain/test_price.py",
+        "def test_price_exists() -> None:\n"
+        "    assert True\n",
+    )
+    (tmp_path / ".tesser-root").write_text("app\n")
+    undeclared = conftest.check_raw(tmp_path)
+    assert any("imports sqlite3" in f for f in undeclared), undeclared
+    (tmp_path / ".tesser-root").write_text("app\nstdlib sqlite3\n")
+    declared = conftest.check_raw(tmp_path)
+    assert declared == (), declared
 
 
 def test_an_unreadable_declaration_is_a_finding(tmp_path: pathlib.Path) -> None:

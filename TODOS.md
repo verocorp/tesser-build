@@ -390,6 +390,23 @@ against `main` at v0.0.71.0 rather than transcribed.
   rather than global classification; or require kind-table rows to carry a
   ruling reference the same way `.tesser-root` carries tree facts.
 
+## Module-only imports wave followups (2026-08-24, branch `worktree-imports-module-only`)
+
+- [ ] **A parameter or local that shadows a module alias has no rule.** Six
+  live handler sites bind a parameter `client` over `import <ctx>.client.client
+  as client` (safe today: annotations are strings and bodies use the alias
+  only in unshadowed methods); `service.py` dodges the same collision by hand
+  with `import kernel.slug as kernel_slug`. TB033 covers builtins only, and
+  `Module._resolve` maps `name.Attr` to the alias with no scope analysis. A
+  shadowing rule over module aliases would make the convention enforced.
+- [ ] **A package `__init__` re-export that shares a submodule's name shadows
+  the submodule at `import a.b.c as c`** (`tesser.srv.main`,
+  `tesser.testing.fake`/`helper` — the function is bound, not the module;
+  `mypy --strict` accepts it). Zero live instances after the migration; the
+  sibling tests import the package instead, which TB074 pairs by filename
+  only. A rule that a re-exported name never equals a submodule name would
+  close it.
+
 ## Import-totality wave followups (2026-08-06, branch `worktree-io-import-restrictions`)
 
 - [x] **python-app conformance + remove the sigcheck CI ratchet** — RESOLVED

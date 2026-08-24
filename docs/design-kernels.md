@@ -158,6 +158,12 @@ three are TB044 findings, reported before any module finding):
 - it never repeats the default — `stdlib typing` legalizes nothing.
 - it must be *used*, for the same reason an `import` line must.
 
+Like `import`, a `stdlib` line is a purity waiver, and the analyzer checks
+its shape, not its purity: `stdlib os` is accepted. Enumerating the IO
+modules is the trap the allowlist inverted away from, and the line sits in
+a one-line diff of a file every reviewer reads — the tree decides what its
+domain may reach for, in review, not the analyzer.
+
 The shipped default is evidence-driven and stays so: `collections.abc`,
 `urllib.parse`, and `copy` were admitted 2026-08-24 (the latter two burned
 the last `# tesser:debt TB062` markers in `examples/python-app`).

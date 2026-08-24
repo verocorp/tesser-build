@@ -69,9 +69,15 @@ def test_every_violation_site_yields_a_rulebook_row() -> None:
         for number in number.split(",")
     }
     assert sites, "no Violation construction site was found; the scan itself is broken"
-    dropped = sorted(site.lineno for site in sites if site.lineno not in rendered_lines)
+    site_lines = {site.lineno for site in sites}
+    dropped = sorted(site_lines - rendered_lines)
     assert dropped == [], (
         f"Violation sites at checks.py lines {dropped} yield no rulebook row; "
         "a construction shape the generator cannot read drops rules silently, "
         "and test_every_rule_has_a_fixture then passes vacuously"
+    )
+    phantom = sorted(rendered_lines - site_lines)
+    assert phantom == [], (
+        f"rulebook rows cite checks.py lines {phantom} with no Violation site; "
+        "a row that names no construction site describes a rule that does not exist"
     )

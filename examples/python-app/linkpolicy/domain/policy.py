@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import typing
-import urllib.parse as parse
+import urllib.parse
 
 import tesser.domain as ts
 
@@ -124,7 +124,7 @@ class Policy(ts.ValueObject):
         return self._blocked_hosts
 
     def evaluate(self, target_url: str) -> Verdict:
-        parsed = parse.urlparse(target_url)
+        parsed = urllib.parse.urlparse(target_url)
         if parsed.scheme not in {str(s) for s in self._allowed_schemes}:
             return Verdict(
                 target_url, False, f"scheme {parsed.scheme or '(none)'!r} not allowed"

@@ -53,8 +53,9 @@ excused moved into the tesser runtime.)
 `import x` or `import x as name`, never `from x import name` — the stdlib,
 the tesser norm modules, kernels, and the tree's own modules alike. The one
 form with no module spelling, `from __future__ import annotations`, is the
-one exemption; a package `__init__` that re-exports (`from kernel.slug import
-Slug as Slug`) is TB042's business, not an import. A context module further
+one exemption; a kernel or tesser `__init__` that re-exports (`from kernel.slug
+import Slug as Slug`) is TB042's business, not an import — a role `__init__`
+holds module imports or nothing, as it always has. A context module further
 carries an alias (`import campaign.domain.money as money`), because the
 analyzer resolves names as attribute-over-alias.
 
@@ -515,7 +516,7 @@ class FindCampaignResponse(ts.Response):
         self.campaigns = campaigns
 
 
-class CampaignRepository(ts.Port, Protocol):
+class CampaignRepository(ts.Port, typing.Protocol):
 
     def save(self, request: SaveCampaignRequest) -> SaveCampaignResponse: ...
 
@@ -673,7 +674,8 @@ app-level `bootstrap` nests the configs and constructs each component in
 dependency order. A component selects its impl inline where it constructs
 (coordinate `if`s in `__init__` — the verified impl has no helper method); module
 constants are `Final`; every import is a module import, and a context module
-is imported **as an aliased module, never its members** (TB053).
+is imported **as an aliased module** (TB053) — the analyzer resolves a name
+as attribute over alias.
 
 ```python
 # campaign/component/component.py (verified impl) — coordinate-driven, fail-fast, uniform
