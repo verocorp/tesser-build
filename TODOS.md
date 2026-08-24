@@ -392,6 +392,19 @@ against `main` at v0.0.71.0 rather than transcribed.
 
 ## TB083 spec-use follow-ups (2026-08-24, v0.0.80.0 ship red team)
 
+- [ ] **An orphan spec — one no `__init__` takes — is reported nowhere useful.**
+  Every read of it is a TB083 finding whose message asks for an owner that
+  does not exist. A finding on the spec itself ("taken by no `__init__`; a
+  spec constructs exactly one object") was built and pulled: 11 analyzer
+  fixtures sketch throwaway specs, and the ruling was not asked for. Rule on
+  it; the code is one block in `_spec_shared_violations`.
+- [ ] **A subclass that takes its base's spec is reported as a second taker.**
+  `class Sub(Base)` with both `__init__(self, spec: SSpec)` fires "a spec
+  constructs exactly one object" — decide whether one lineage counts as one
+  object.
+- [ ] **Tuple-unpack from a maker returning `tuple[XSpec, XSpec]`, `[spec][0]`,
+  and `{'k': spec}['k']` are untyped** — "bind it to something else first" is
+  a general escape alongside the dict/`*args` items above.
 - [ ] **TB051 has no type-alias carve-out.** `checks.py` `SpecType = tuple[tuple[str, str], bool]`
   is a type alias, not a constant: `typing.Final` makes mypy reject it as an
   annotation, `typing.TypeAlias` does not satisfy the rule, and `type X = ...`

@@ -9762,3 +9762,71 @@ def test_a_spec_constructs_exactly_one_object_and_a_value_object_takes_it_exactl
         "a value object constructs from one primitive or one spec, never value objects"
     ) in findings
     assert not any("Quoted" in f and " TB080 " in f for f in findings)
+
+
+def test_a_second_taker_a_tuple_target_keep_and_a_test_module_maker_name_are_handled() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/coin.py",
+                "shop.domain.coin",
+                "import tesser.domain as ts\n"
+                "class CoinSpec(ts.Spec):\n"
+                "    def __init__(self, face: str) -> None:\n"
+                "        self.face = face\n"
+                "class OrphanSpec(ts.Spec):\n"
+                "    def __init__(self, face: str) -> None:\n"
+                "        self.face = face\n"
+                "class Coin(ts.ValueObject):\n"
+                "    def __init__(self, spec: CoinSpec) -> None:\n"
+                "        object.__setattr__(self, '_face', spec.face)\n"
+                "class Token(ts.ValueObject):\n"
+                "    def __init__(self, spec: CoinSpec) -> None:\n"
+                "        object.__setattr__(self, '_face', spec.face)\n"
+                "def make() -> CoinSpec:\n"
+                "    return CoinSpec(face='h')\n",
+                False,
+            ),
+            (
+                "shop/adapters/press.py",
+                "shop.adapters.press",
+                "import tesser.adapters as ts\n"
+                "import shop.domain.coin as coin\n"
+                "class Press(ts.Handler):\n"
+                "    def __init__(self, spec: coin.CoinSpec, faces: tuple[coin.CoinSpec, ...]) -> None:\n"
+                "        self._a, self._b = spec, 1\n"
+                "        self._kind = spec.__class__\n"
+                "        self._some = faces[0:1]\n"
+                "        self._first = faces[0].face\n"
+                "    def peek(self) -> str:\n"
+                "        made = coin.make()\n"
+                "        return made.face\n",
+                False,
+            ),
+            (
+                "shop/domain/test_coin.py",
+                "shop.domain.test_coin",
+                "import tesser.testing as ts\n"
+                "class TestNoise:\n"
+                "    def test_it(self) -> None:\n"
+                "        assert True\n"
+                "def make() -> str:\n"
+                "    return 'x'\n",
+                False,
+            ),
+        ))).violations()
+    )
+    tb083 = tuple(f for f in findings if " TB083 " in f)
+    assert tb083 == (
+        "shop/domain/coin.py:11: TB083 shop.domain.coin.Token takes shop.domain.coin.CoinSpec, "
+        "which shop.domain.coin.Coin already takes; a spec constructs exactly one object",
+        "shop/adapters/press.py:5: TB083 shop.adapters.press.Press.__init__ keeps the spec 'spec'; "
+        "a spec is never kept, it initializes its own object and is done",
+        "shop/adapters/press.py:7: TB083 shop.adapters.press.Press.__init__ keeps the spec 'faces[0:1]'; "
+        "a spec is never kept, it initializes its own object and is done",
+        "shop/adapters/press.py:8: TB083 shop.adapters.press.Press.__init__ reads 'face' of the spec 'faces[0]'; "
+        "a spec is only read where it initializes its own object",
+        "shop/adapters/press.py:11: TB083 shop.adapters.press.Press.peek reads 'face' of the spec 'made'; "
+        "a spec is only read where it initializes its own object",
+    )

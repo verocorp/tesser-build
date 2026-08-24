@@ -416,6 +416,8 @@ SPEC_READER_BLOCKS: typing.Final[frozenset[str]] = DOMAIN_BLOCKS | frozenset(
 
 SpecType = tuple[tuple[str, str], bool]  # tesser:debt TB051
 
+TEST_TIER: typing.Final[frozenset[str]] = frozenset({"test", "conftest", "conftest-root", "eval"})
+
 WRAPPABLE_SCALARS: typing.Final[frozenset[str]] = frozenset(
     {"str", "int", "float", "bytes", "Decimal", "date", "datetime", "time"}
 )
@@ -1065,6 +1067,7 @@ class Codebase(ts.AggregateRoot):
         self._spec_makers: dict[tuple[str, str], SpecType] = {}
         self._spec_methods: dict[str, SpecType] = {}
         self._spec_owner: dict[tuple[str, str], tuple[str, str]] = {}
+        self._spec_takers: dict[tuple[str, str], set[tuple[str, str]]] = {}
         self._spec_fields: dict[tuple[str, str], dict[str, SpecType]] = {}
         self._spec_shared: list[tuple[str, str, int, tuple[str, str], tuple[str, str]]] = []
 
@@ -1119,7 +1122,13 @@ class Codebase(ts.AggregateRoot):
             and self._enum_base(module, stmt) is not None  # tesser:debt TB051
         )
         self._spec_makers = {}
-        for module in self._modules:
+        checked = [
+            module
+            for module in self._modules
+            if self._locate(module.name(), module.is_package(), contexts, self._export)  # tesser:debt TB051
+            not in TEST_TIER
+        ]
+        for module in checked:
             for fn in module.body():
                 if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     made = self._spec_key(module, fn.returns, blocks)
@@ -1127,8 +1136,9 @@ class Codebase(ts.AggregateRoot):
                         self._spec_makers[(module.name(), fn.name)] = made
         returning: dict[str, SpecType | None] = {}
         self._spec_owner = {}
+        self._spec_takers = {}
         self._spec_fields = {}
-        for module in self._modules:
+        for module in checked:
             for cls in module.class_defs():
                 block = blocks.get((module.name(), cls.name))
                 for item in cls.body:
@@ -1148,6 +1158,7 @@ class Codebase(ts.AggregateRoot):
                         taken = self._spec_key(module, params[0].annotation, blocks)
                         if taken is not None and not taken[1]:
                             first = self._spec_owner.setdefault(taken[0], (module.name(), cls.name))
+                            self._spec_takers.setdefault(taken[0], set()).add((module.name(), cls.name))
                             if first != (module.name(), cls.name):
                                 self._spec_shared.append((module.name(), cls.name, cls.lineno, taken[0], first))
                     elif block in SPEC_BLOCKS:
@@ -1166,9 +1177,7 @@ class Codebase(ts.AggregateRoot):
             found.extend(self._sibling_reference_violations(module))  # tesser:debt TB051
             found.extend(self._dynamic_import_violations(module))  # tesser:debt TB051
             found.extend(self._module_violations(module, blocks, contexts))  # tesser:debt TB051
-            if self._locate(module.name(), module.is_package(), contexts, self._export) not in (  # tesser:debt TB051
-                "test", "conftest", "conftest-root", "eval"
-            ):
+            if self._locate(module.name(), module.is_package(), contexts, self._export) not in TEST_TIER:  # tesser:debt TB051
                 found.extend(self._spec_use_violations(module, blocks))  # tesser:debt TB051
                 found.extend(self._spec_shared_violations(module))  # tesser:debt TB051
             if self._export == TESSER and self._locate(  # tesser:debt TB051
@@ -2914,7 +2923,7 @@ class Codebase(ts.AggregateRoot):
             if isinstance(node, ast.Subscript):
                 owner = typed(node.value, names)
                 if owner is not None and owner[1]:
-                    return (owner[0], False)
+                    return owner if isinstance(node.slice, ast.Slice) else (owner[0], False)
                 return None
             if isinstance(node, ast.IfExp):
                 return typed(node.body, names) or typed(node.orelse, names)
@@ -3094,7 +3103,9 @@ class Codebase(ts.AggregateRoot):
                     return carried(node.value, names)
                 return ast.unparse(node.annotation) if annotation(node.annotation) is not None else None
             if isinstance(node, ast.Assign) and any(
-                isinstance(t, (ast.Attribute, ast.Subscript)) for t in node.targets
+                isinstance(t, (ast.Attribute, ast.Subscript))
+                for target in node.targets
+                for t in (target.elts if isinstance(target, (ast.Tuple, ast.List)) else [target])
             ):
                 return carried(node.value, names)
             if isinstance(node, ast.AugAssign) and isinstance(node.target, (ast.Attribute, ast.Subscript)):
@@ -3123,7 +3134,7 @@ class Codebase(ts.AggregateRoot):
         def read(node: ast.AST, names: dict[str, SpecType]) -> tuple[str, str, tuple[str, str]] | None:
             if isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load):
                 owner = typed(node.value, names)
-                if owner is not None and not owner[1]:
+                if owner is not None and not owner[1] and not node.attr.startswith("__"):
                     return ast.unparse(node.value), node.attr, owner[0]
                 return None
             if isinstance(node, ast.Call) and node.args:
@@ -3218,7 +3229,7 @@ class Codebase(ts.AggregateRoot):
                 hit = read(cur, names)
                 if hit is not None:
                     spec_name, field, key = hit
-                    licensed = owner_here is not None and self._spec_owner.get(key) == owner_here
+                    licensed = owner_here is not None and owner_here in self._spec_takers.get(key, set())
                     if not licensed and (cur.lineno, field, spec_name) not in seen:
                         seen.add((cur.lineno, field, spec_name))
                         found.append(
@@ -5435,12 +5446,8 @@ class Codebase(ts.AggregateRoot):
                     "a value object declares its construction data as named parameters",
                 ))
             )
-        params = [
-            arg
-            for arg in init.args.posonlyargs + init.args.args + init.args.kwonlyargs
-            if arg.arg != "self"
-        ]
-        if len(params) != 1:
+        params = (init.args.posonlyargs + init.args.args)[1:] + init.args.kwonlyargs
+        if len(params) != 1 and init.args.vararg is None and init.args.kwarg is None:
             found.append(
                 Violation(ViolationSpec(
                     module.path(),
