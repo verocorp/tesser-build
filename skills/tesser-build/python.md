@@ -207,8 +207,11 @@ Go's `NewCampaign(spec)`), converts the spec's data to value objects in its
 `__init__`, and from then on its methods hold, take, and return only value
 objects. That `__init__` is the only place a spec is read: everywhere else
 code builds a spec and hands it on whole — it never reads a spec's fields
-and never stores one (TB083). The one holder besides a spec carrying its
-child spec is a mapper assembling a parent spec. There is **no `from_spec`** and no factory of any spelling: on a
+and never stores one (TB083; a test module is exempt, because a
+completeness test reads the spec it fed the constructor — `testing.md`
+rule 2). The one holder besides a spec carrying its child spec is a
+mapper assembling a parent spec. There is **no `from_spec`** and no
+factory of any spelling: on a
 value object, **any** classmethod or staticmethod returning its own type
 (`Self`, quoted, or inferred from a body that constructs `cls`) is a second
 construction path (TB017) — `from_spec`, `parse`, `new`, `require`, `of`

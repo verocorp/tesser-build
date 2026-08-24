@@ -1005,6 +1005,7 @@ class Codebase(ts.AggregateRoot):
         self._used_imports: set[str] = set()
         self._used_pure_stdlib: set[str] = set()
         self._domain_enums: frozenset[tuple[str, str]] = frozenset()
+        self._spec_makers: frozenset[tuple[str, str]] = frozenset()
 
     def violations(self) -> tuple[Violation, ...]:
         declaration = self._declaration_violations()  # tesser:debt TB051
@@ -1062,7 +1063,7 @@ class Codebase(ts.AggregateRoot):
             for fn in module.body()
             if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef))
             and fn.returns is not None
-            and blocks.get(module._resolve(fn.returns) or ("", "")) in SPEC_BLOCKS
+            and self._spec_annotation(module, fn.returns, blocks)
         )
         for module in self._modules:
             found.extend(self._comment_violations(module))  # tesser:debt TB051
@@ -1072,7 +1073,8 @@ class Codebase(ts.AggregateRoot):
             found.extend(self._sibling_reference_violations(module))  # tesser:debt TB051
             found.extend(self._dynamic_import_violations(module))  # tesser:debt TB051
             found.extend(self._module_violations(module, blocks, contexts))  # tesser:debt TB051
-            found.extend(self._spec_use_violations(module, blocks))  # tesser:debt TB051
+            if self._locate(module.name(), module.is_package(), contexts, self._export) != "test":  # tesser:debt TB051
+                found.extend(self._spec_use_violations(module, blocks))  # tesser:debt TB051
             if self._export == TESSER and self._locate(  # tesser:debt TB051
                 module.name(), module.is_package(), contexts, self._export
             ) == "test":
@@ -2718,14 +2720,40 @@ class Codebase(ts.AggregateRoot):
                     )
         return tuple(found)
 
+    @staticmethod
+    def _spec_return(module: Module, node: ast.expr) -> tuple[str, str] | None:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            try:
+                node = ast.parse(node.value, mode="eval").body
+            except SyntaxError:
+                return None
+        return module._resolve(node)
+
+    def _spec_annotation(
+        self, module: Module, node: ast.expr | None, blocks: dict[tuple[str, str], str]
+    ) -> bool:
+        if node is None:
+            return False
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            try:
+                node = ast.parse(node.value, mode="eval").body
+            except SyntaxError:
+                return False
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+            return self._spec_annotation(module, node.left, blocks) or self._spec_annotation(
+                module, node.right, blocks
+            )
+        if isinstance(node, ast.Subscript) and Codebase._annotation_head(node) in ("Optional", "Union"):
+            inner = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
+            return any(self._spec_annotation(module, each, blocks) for each in inner)
+        key = module._resolve(node)
+        return key is not None and blocks.get(key) in SPEC_BLOCKS
+
     def _spec_use_violations(
         self, module: Module, blocks: dict[tuple[str, str], str]
     ) -> tuple[Violation, ...]:
         def is_spec(node: ast.expr | None) -> bool:
-            if node is None:
-                return False
-            key = module._resolve(node)
-            return key is not None and blocks.get(key) in SPEC_BLOCKS
+            return self._spec_annotation(module, node, blocks)
 
         def makes_spec(node: ast.expr) -> bool:
             if is_spec(node):
@@ -2735,138 +2763,268 @@ class Codebase(ts.AggregateRoot):
             key = module._resolve(node)
             return key is not None and key in self._spec_makers
 
-        def rebinds(fn: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda, names: set[str]) -> bool:
-            args = fn.args
-            bound = {a.arg for a in args.posonlyargs + args.args + args.kwonlyargs}
-            if args.vararg is not None:
-                bound.add(args.vararg.arg)
-            if args.kwarg is not None:
-                bound.add(args.kwarg.arg)
-            return bool(bound & names)
+        def spec_value(node: ast.expr, names: set[str]) -> str | None:
+            if isinstance(node, ast.Await):
+                return spec_value(node.value, names)
+            if isinstance(node, ast.NamedExpr):
+                return spec_value(node.value, names)
+            if isinstance(node, ast.Name) and node.id in names:
+                return node.id
+            if isinstance(node, ast.Call) and makes_spec(node.func):
+                return ast.unparse(node.func)
+            if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+                for elt in node.elts:
+                    hit = spec_value(elt, names)
+                    if hit is not None:
+                        return hit
+            if isinstance(node, ast.Dict):
+                for elt in node.values:
+                    hit = spec_value(elt, names)
+                    if hit is not None:
+                        return hit
+            return None
 
-        def held(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
-            names = {
+        def bound(fn: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda) -> set[str]:
+            args = fn.args
+            out = {a.arg for a in args.posonlyargs + args.args + args.kwonlyargs}
+            if args.vararg is not None:
+                out.add(args.vararg.arg)
+            if args.kwarg is not None:
+                out.add(args.kwarg.arg)
+            return out
+
+        def scope(nodes: list[ast.AST]) -> list[ast.AST]:
+            out: list[ast.AST] = []
+            stack = list(nodes)
+            while stack:
+                cur = stack.pop()
+                out.append(cur)
+                if isinstance(
+                    cur,
+                    (
+                        ast.FunctionDef,
+                        ast.AsyncFunctionDef,
+                        ast.Lambda,
+                        ast.ClassDef,
+                        ast.ListComp,
+                        ast.SetComp,
+                        ast.DictComp,
+                        ast.GeneratorExp,
+                    ),
+                ):
+                    continue
+                stack.extend(ast.iter_child_nodes(cur))
+            return out
+
+        def stored(node: ast.AST) -> list[str]:
+            return [t.id for t in ast.walk(node) if isinstance(t, ast.Name) and isinstance(t.ctx, ast.Store)]
+
+        def held(fn: ast.FunctionDef | ast.AsyncFunctionDef, names: set[str]) -> set[str]:
+            names = set(names) | {
                 a.arg
                 for a in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs
                 if is_spec(a.annotation)
             }
-            for node in ast.walk(fn):
-                if (
-                    isinstance(node, ast.Assign)
-                    and len(node.targets) == 1
-                    and isinstance(node.targets[0], ast.Name)
-                    and isinstance(node.value, ast.Call)
-                    and makes_spec(node.value.func)
+            local = scope(list(fn.body))
+            changed = True
+            while changed:
+                changed = False
+                for node in local:
+                    if isinstance(node, ast.Assign) and spec_value(node.value, names) is not None:
+                        for target in node.targets:
+                            if isinstance(target, ast.Name) and target.id not in names:
+                                names.add(target.id)
+                                changed = True
+                    elif (
+                        isinstance(node, ast.AnnAssign)
+                        and isinstance(node.target, ast.Name)
+                        and node.target.id not in names
+                        and (
+                            is_spec(node.annotation)
+                            or (node.value is not None and spec_value(node.value, names) is not None)
+                        )
+                    ):
+                        names.add(node.target.id)
+                        changed = True
+                    elif (
+                        isinstance(node, ast.NamedExpr)
+                        and isinstance(node.target, ast.Name)
+                        and node.target.id not in names
+                        and spec_value(node.value, names) is not None
+                    ):
+                        names.add(node.target.id)
+                        changed = True
+            shadowed: set[str] = set()
+            for node in local:
+                if isinstance(node, (ast.For, ast.AsyncFor)):
+                    shadowed.update(stored(node.target))
+                elif isinstance(node, (ast.With, ast.AsyncWith)):
+                    for item in node.items:
+                        if item.optional_vars is not None:
+                            shadowed.update(stored(item.optional_vars))
+                elif isinstance(node, ast.ExceptHandler) and node.name is not None:
+                    shadowed.add(node.name)
+                elif isinstance(node, ast.Assign) and spec_value(node.value, names) is None:
+                    for target in node.targets:
+                        shadowed.update(stored(target))
+                elif isinstance(node, ast.AnnAssign) and not is_spec(node.annotation) and (
+                    node.value is None or spec_value(node.value, names) is None
                 ):
-                    names.add(node.targets[0].id)
-                elif (
-                    isinstance(node, ast.AnnAssign)
-                    and isinstance(node.target, ast.Name)
-                    and is_spec(node.annotation)
-                ):
-                    names.add(node.target.id)
-            return names
+                    shadowed.update(stored(node.target))
+                elif isinstance(node, ast.AugAssign):
+                    shadowed.update(stored(node.target))
+                elif isinstance(node, ast.NamedExpr) and spec_value(node.value, names) is None:
+                    shadowed.update(stored(node.target))
+                elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                    shadowed.update(alias.asname or alias.name.split(".")[0] for alias in node.names)
+            return names - shadowed
 
         def kept(node: ast.AST, names: set[str]) -> str | None:
-            if (
-                isinstance(node, ast.Assign)
-                and isinstance(node.value, ast.Name)
-                and node.value.id in names
-                and any(isinstance(t, ast.Attribute) for t in node.targets)
+            if isinstance(node, ast.Assign) and any(
+                isinstance(t, (ast.Attribute, ast.Subscript)) for t in node.targets
             ):
-                return node.value.id
-            if (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "__setattr__"
-                and len(node.args) == 3
-                and isinstance(node.args[2], ast.Name)
-                and node.args[2].id in names
-            ):
-                return node.args[2].id
+                return spec_value(node.value, names)
+            if isinstance(node, ast.AugAssign) and isinstance(node.target, (ast.Attribute, ast.Subscript)):
+                return spec_value(node.value, names)
+            if isinstance(node, ast.AnnAssign) and isinstance(node.target, (ast.Attribute, ast.Subscript)):
+                if node.value is not None:
+                    return spec_value(node.value, names)
+                return ast.unparse(node.annotation) if is_spec(node.annotation) else None
+            if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Attribute) and node.func.attr == "__setattr__":
+                    if len(node.args) == 3:
+                        return spec_value(node.args[2], names)
+                    if len(node.args) == 2:
+                        return spec_value(node.args[1], names)
+                if isinstance(node.func, ast.Name) and node.func.id == "setattr" and len(node.args) == 3:
+                    return spec_value(node.args[2], names)
             return None
 
-        parent: dict[int, ast.ClassDef] = {}
-        for stmt in module.body():
-            for node in ast.walk(stmt):
-                if isinstance(node, ast.ClassDef):
-                    for item in node.body:
-                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                            parent[id(item)] = node
+        def read(node: ast.AST, names: set[str]) -> tuple[str, str] | None:
+            if (
+                isinstance(node, ast.Attribute)
+                and isinstance(node.ctx, ast.Load)
+                and isinstance(node.value, ast.Name)
+                and node.value.id in names
+            ):
+                return node.value.id, node.attr
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in ("getattr", "vars")
+                and node.args
+                and isinstance(node.args[0], ast.Name)
+                and node.args[0].id in names
+            ):
+                field = (
+                    node.args[1].value
+                    if len(node.args) > 1
+                    and isinstance(node.args[1], ast.Constant)
+                    and isinstance(node.args[1].value, str)
+                    else "__dict__"
+                )
+                return node.args[0].id, field
+            return None
+
         found: list[Violation] = []
         seen: set[tuple[int, str, str]] = set()
-        for stmt in module.body():
-            for fn in ast.walk(stmt):
-                if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+
+        def scan(
+            nodes: list[ast.AST],
+            names: set[str],
+            where: str,
+            constructing: bool,
+            assembling: bool,
+        ) -> None:
+            for cur in scope(nodes):
+                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    scan(
+                        list(cur.body),
+                        held(cur, names - bound(cur)),
+                        f"{where}.{cur.name}",
+                        constructing,
+                        assembling,
+                    )
                     continue
-                names = held(fn)
-                if not names:
+                if isinstance(cur, ast.Lambda):
+                    scan([cur.body], names - bound(cur), where, constructing, assembling)
                     continue
-                cls = parent.get(id(fn))
-                block = blocks.get((module.name(), cls.name)) if cls is not None else None
-                constructing = fn.name == "__init__" and block in SPEC_READER_BLOCKS
-                assembling = fn.name == "__init__" and (block in SPEC_BLOCKS or block == "mapper")
-                where = (
-                    f"{module.name()}.{cls.name}.{fn.name}"
-                    if cls is not None
-                    else f"{module.name()}.{fn.name}"
-                )
-                stack: list[ast.AST] = list(ast.iter_child_nodes(fn))
-                while stack:
-                    cur = stack.pop()
-                    if isinstance(cur, ast.ClassDef):
-                        continue
-                    if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
-                        if rebinds(cur, names):
-                            continue
-                        stack.extend(ast.iter_child_nodes(cur))
-                        continue
-                    if isinstance(cur, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
-                        targets = {
-                            t.id
-                            for comp in cur.generators
-                            for t in ast.walk(comp.target)
-                            if isinstance(t, ast.Name)
-                        }
-                        if targets & names:
-                            continue
-                    if not isinstance(cur, (ast.stmt, ast.expr)):
-                        stack.extend(ast.iter_child_nodes(cur))
-                        continue
-                    spec_name = kept(cur, names)
-                    if spec_name is not None and not assembling and (cur.lineno, "keeps", spec_name) not in seen:
-                        seen.add((cur.lineno, "keeps", spec_name))
+                if isinstance(cur, ast.ClassDef):
+                    scan(list(cur.body), names, f"{where}.{cur.name}", constructing, assembling)
+                    continue
+                if isinstance(cur, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
+                    first, rest = cur.generators[0], cur.generators[1:]
+                    scan([first.iter], names, where, constructing, assembling)
+                    inner = names - {
+                        t.id
+                        for comp in cur.generators
+                        for t in ast.walk(comp.target)
+                        if isinstance(t, ast.Name)
+                    }
+                    parts: list[ast.AST] = [*first.ifs]
+                    for comp in rest:
+                        parts.extend([comp.iter, *comp.ifs])
+                    parts.extend([cur.key, cur.value] if isinstance(cur, ast.DictComp) else [cur.elt])
+                    scan(parts, inner, where, constructing, assembling)
+                    continue
+                if not isinstance(cur, (ast.stmt, ast.expr)):
+                    continue
+                spec_name = kept(cur, names)
+                if spec_name is not None and not assembling and (cur.lineno, "keeps", spec_name) not in seen:
+                    seen.add((cur.lineno, "keeps", spec_name))
+                    found.append(
+                        Violation(
+                            module.path(),
+                            cur.lineno,
+                            "TB083",
+                            f"{where} keeps the spec {spec_name!r}; "
+                            "a spec is never kept, it initializes its domain object and is done",
+                        )
+                    )
+                hit = read(cur, names)
+                if hit is not None and not constructing:
+                    spec_name, field = hit
+                    if (cur.lineno, field, spec_name) not in seen:
+                        seen.add((cur.lineno, field, spec_name))
                         found.append(
                             Violation(
                                 module.path(),
                                 cur.lineno,
                                 "TB083",
-                                f"{where} keeps the spec {spec_name!r}; "
-                                "a spec is never kept, it initializes its domain object and is done",
+                                f"{where} reads {field!r} of the spec {spec_name!r}; "
+                                "a spec is only read where it initializes its domain object",
                             )
                         )
-                    if (
-                        not constructing
-                        and isinstance(cur, ast.Attribute)
-                        and isinstance(cur.ctx, ast.Load)
-                        and isinstance(cur.value, ast.Name)
-                        and cur.value.id in names
-                    ):
-                        spec_name = cur.value.id
-                        field = cur.attr
-                        if (cur.lineno, field, spec_name) not in seen:
-                            seen.add((cur.lineno, field, spec_name))
-                            found.append(
-                                Violation(
-                                    module.path(),
-                                    cur.lineno,
-                                    "TB083",
-                                    f"{where} reads {field!r} of the spec {spec_name!r}; "
-                                    "a spec is only read where it initializes its domain object",
-                                )
-                            )
-                    stack.extend(ast.iter_child_nodes(cur))
-        return tuple(found)
+
+        def roots() -> list[tuple[ast.FunctionDef | ast.AsyncFunctionDef, ast.ClassDef | None]]:
+            out: list[tuple[ast.FunctionDef | ast.AsyncFunctionDef, ast.ClassDef | None]] = []
+            stack: list[tuple[ast.AST, ast.ClassDef | None]] = [(stmt, None) for stmt in module.body()]
+            while stack:
+                cur, cls = stack.pop()
+                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    out.append((cur, cls))
+                    continue
+                if isinstance(cur, ast.Lambda):
+                    continue
+                if isinstance(cur, ast.ClassDef):
+                    stack.extend((item, cur) for item in cur.body)
+                    continue
+                stack.extend((child, cls) for child in ast.iter_child_nodes(cur))
+            return out
+
+        for fn, cls in roots():
+            block = blocks.get((module.name(), cls.name)) if cls is not None else None
+            where = (
+                f"{module.name()}.{cls.name}.{fn.name}" if cls is not None else f"{module.name()}.{fn.name}"
+            )
+            scan(
+                list(fn.body),
+                held(fn, set()),
+                where,
+                fn.name == "__init__" and block in SPEC_READER_BLOCKS,
+                fn.name == "__init__" and (block in SPEC_BLOCKS or block == "mapper"),
+            )
+        return tuple(sorted(found, key=lambda v: int(v.line())))
 
     def _string_equality_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []

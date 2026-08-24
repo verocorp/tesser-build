@@ -23,8 +23,8 @@ def test_a_short_link_carries_every_field_of_its_spec() -> None:
 
     link = short_link.ShortLink(spec)
 
-    assert link.slug == kernel_slug.Slug("spring-sale")
-    assert link.target_url == values.TargetURL("https://ok.example/x")
+    assert link.slug == kernel_slug.Slug(spec.slug)
+    assert link.target_url == values.TargetURL(spec.target_url)
     assert link.status == values.LinkStatus(values.LinkState.ACTIVE)
 
 
