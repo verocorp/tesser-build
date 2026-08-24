@@ -6,7 +6,7 @@ import tesser.testing as ts
 import linkpolicy.client.client as linkpolicy_client
 import reports.adapters.gateways.policy_verdicts as policy_verdicts
 import reports.application.ports.verdict_source as verdict_source
-from tesser.errors import InfraError
+import tesser.errors as errors
 
 
 @ts.fake
@@ -94,9 +94,9 @@ def test_a_policy_context_with_no_verdicts_yields_no_records() -> None:
 
 
 def test_a_failure_inside_the_policy_context_reaches_the_caller() -> None:
-    verdicts = FakeLinkPolicyClient(error=InfraError("policy store unreachable"))
+    verdicts = FakeLinkPolicyClient(error=errors.InfraError("policy store unreachable"))
 
-    with pytest.raises(InfraError):
+    with pytest.raises(errors.InfraError):
         policy_verdicts.PolicyVerdictGateway(verdicts).verdicts(
             verdict_source.ListVerdictsRequest()
         )

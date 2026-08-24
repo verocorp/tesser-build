@@ -6,7 +6,7 @@ import tesser.testing as ts
 import linkpolicy.application.ports.verdict_repository as verdict_repository
 import linkpolicy.application.service as service
 import linkpolicy.client.client as client
-from tesser.errors import DomainError, InfraError
+import tesser.errors as errors
 
 
 @ts.fake
@@ -89,9 +89,9 @@ def test_check_records_a_denial_as_the_denied_decision() -> None:
 
 
 def test_check_propagates_a_repository_failure() -> None:
-    repo = FakeVerdictRepository(error=InfraError("linkpolicy store unavailable"))
+    repo = FakeVerdictRepository(error=errors.InfraError("linkpolicy store unavailable"))
 
-    with pytest.raises(InfraError):
+    with pytest.raises(errors.InfraError):
         service.LinkPolicyService(repo).check(client.CheckRequest("https://ok.example/x"))
 
 
@@ -136,15 +136,15 @@ def test_list_verdicts_returns_what_check_recorded() -> None:
 
 
 def test_list_verdicts_propagates_a_repository_failure() -> None:
-    repo = FakeVerdictRepository(error=InfraError("linkpolicy store unavailable"))
+    repo = FakeVerdictRepository(error=errors.InfraError("linkpolicy store unavailable"))
 
-    with pytest.raises(InfraError):
+    with pytest.raises(errors.InfraError):
         service.LinkPolicyService(repo).list_verdicts(client.ListVerdictsRequest())
 
 
 def test_check_refuses_an_empty_url_and_records_nothing() -> None:
     repo = FakeVerdictRepository()
-    with pytest.raises(DomainError) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         service.LinkPolicyService(repo).check(client.CheckRequest(""))
     assert ei.value.code == "invalid_target_url"
     assert repo.records == []

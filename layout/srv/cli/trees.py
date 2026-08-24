@@ -4,18 +4,18 @@ import sys
 
 import tesser.srv as ts
 
-from app.loader import load
+import app.loader as loader
 import repo.adapters.handlers.cli as cli
-from protocol.cli import CliRequest, CliResponse, UsageError
+import protocol.cli as protocol_cli
 
 class TreesHost(ts.Host):
 
     def run(self, argv: list[str]) -> int:
-        handler = cli.Handler(load().repo.client)
+        handler = cli.Handler(loader.load().repo.client)
         try:
-            response = handler.trees(CliRequest(args=tuple(argv)))
-        except UsageError as error:
-            response = CliResponse(2, stdout="", stderr=str(error))
+            response = handler.trees(protocol_cli.CliRequest(args=tuple(argv)))
+        except protocol_cli.UsageError as error:
+            response = protocol_cli.CliResponse(2, stdout="", stderr=str(error))
         if response.stdout:
             print(response.stdout)
         if response.stderr:

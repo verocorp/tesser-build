@@ -40,8 +40,10 @@ app"). Every further line is one of: a `skip <dir>` directive naming a
 directory the walk ignores for this tree; an `export <dir>` directive naming
 the tree's **exported kernel** (at most one line — a tree has one exported
 kernel, because the export is the package's import name and a package has
-one name; see `docs/design-kernels.md`); or an `import <package>` directive
-naming an external kernel this tree's pure roles and kernels may import. This is where repo-specific configuration lives:
+one name; see `docs/design-kernels.md`); an `import <package>` directive
+naming an external kernel this tree's pure roles and kernels may import; or
+a `stdlib <module>` directive adding a stdlib module to the pure stdlib the
+domain role and kernels may import (`docs/design-kernels.md`). This is where repo-specific configuration lives:
 **the analyzer carries nothing specific to any repo** (maintainer ruling
 2026-08-14) — tessercheck-py's own fixture directory is skipped by *its*
 declaration, not by a hardcoded name in the reader. The universal skip set

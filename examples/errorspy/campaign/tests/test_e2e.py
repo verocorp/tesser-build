@@ -7,14 +7,14 @@ import tesser.testing as ts
 import campaign.adapters.gateways.repo_storage as repo_storage
 import campaign.adapters.handlers.http as handlers
 import campaign.application.service as service
-from storage import FakeStorage
+import storage
 
 
 @ts.helper
 def _handler(*, down: bool = False) -> handlers.Handler:  # tesser:debt TB073
     return handlers.Handler(
         service.CampaignService(
-            repo_storage.StorageCampaignRepository(FakeStorage(down=down))
+            repo_storage.StorageCampaignRepository(storage.FakeStorage(down=down))
         )
     )
 

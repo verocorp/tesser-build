@@ -1,5 +1,5 @@
 import json
-from pathlib import Path
+import pathlib
 
 import tessercheck.adapters.repositories.source_reader as source_repository
 import tessercheck.application.ports.source_reader as source_reader
@@ -24,7 +24,7 @@ def test_every_place_is_earned_by_a_checked_tree_or_is_a_finding() -> None:
             f"_locate({name!r}) = {got!r}, expected the finding place {expected!r}"
         )
     finding_places = frozenset(expected for _, _, expected in finding_rows)
-    repo = Path(__file__).resolve().parents[3]
+    repo = pathlib.Path(__file__).resolve().parents[3]
     manifest = json.loads((repo / "manifest.json").read_text(encoding="utf-8"))
     reader = source_repository.FilesystemSourceReader()
     exercised: set[str] = set()

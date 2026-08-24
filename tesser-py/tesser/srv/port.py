@@ -1,5 +1,5 @@
-from typing import Protocol
+import typing
 
 
-class Port(Protocol):
+class Port(typing.Protocol):
     pass

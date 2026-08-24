@@ -1,9 +1,9 @@
 import pytest
 
-from tesser.domain.entity import Entity
+import tesser.domain.entity as entity
 
 
-class Named(Entity):
+class Named(entity.Entity):
 
     def __init__(self, key: str, label: str) -> None:
         self._key = key
@@ -25,7 +25,7 @@ def test_entity_hash_follows_identity() -> None:
 
 
 def test_a_different_type_with_the_same_identity_is_not_equal() -> None:
-    class Other(Entity):
+    class Other(entity.Entity):
 
         def __init__(self, key: str) -> None:
             self._key = key
@@ -38,7 +38,7 @@ def test_a_different_type_with_the_same_identity_is_not_equal() -> None:
 
 
 def test_an_entity_without_identity_says_so() -> None:
-    class Undeclared(Entity):
+    class Undeclared(entity.Entity):
         pass
 
     with pytest.raises(NotImplementedError, match="must declare `identity`"):
@@ -48,4 +48,4 @@ def test_an_entity_without_identity_says_so() -> None:
 def test_a_subclass_may_not_override_the_identity_contract() -> None:
     for name in ("__eq__", "__hash__"):
         with pytest.raises(TypeError, match=f"must not override {name}"):
-            type("Custom", (Entity,), {name: lambda self, other=None: True})
+            type("Custom", (entity.Entity,), {name: lambda self, other=None: True})

@@ -3,6 +3,7 @@ from __future__ import annotations
 import tesser.domain as ts
 
 import campaign.domain.values as values
+import kernel.slug as kernel_slug
 
 
 class ShortLinkSpec(ts.Spec):
@@ -16,14 +17,14 @@ class ShortLinkSpec(ts.Spec):
 class ShortLink(ts.Entity):
 
     def __init__(self, spec: ShortLinkSpec) -> None:
-        self._slug = values.Slug(spec.slug)
+        self._slug = kernel_slug.Slug(spec.slug)
         self._target_url = values.TargetURL(spec.target_url)
         self._status = values.LinkStatus(
             values.LinkState.ACTIVE if spec.active else values.LinkState.INACTIVE
         )
 
     @property
-    def slug(self) -> values.Slug:
+    def slug(self) -> kernel_slug.Slug:
         return self._slug
 
     @property
@@ -38,5 +39,5 @@ class ShortLink(ts.Entity):
         self._status = values.LinkStatus(values.LinkState.INACTIVE)
 
     @property
-    def identity(self) -> values.Slug:
+    def identity(self) -> kernel_slug.Slug:
         return self._slug

@@ -3,7 +3,7 @@ from __future__ import annotations
 import tesser.domain as ts
 
 import campaign.domain.values as values
-from tesser.errors import conflict
+import tesser.errors as errors
 
 
 class ShortLinkSpec(ts.Spec):
@@ -34,7 +34,7 @@ class ShortLink(ts.Entity):
 
     def deactivate(self) -> None:
         if self._status == values.LinkStatus("inactive"):
-            raise conflict(
+            raise errors.conflict(
                 "already_deactivated", f"short link {self._slug} is already deactivated"
             )
         self._status = values.LinkStatus("inactive")

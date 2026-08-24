@@ -5,8 +5,8 @@ import tesser.testing as ts
 
 import campaign.adapters.handlers.http as http
 import campaign.client.client as campaign_client
-from tesser.errors import DomainError, invalid
-from protocol.http import BadRequest, HttpRequest
+import tesser.errors as errors
+import protocol.http as protocol_http
 
 
 @ts.fake
@@ -72,7 +72,7 @@ def test_create_campaign_answers_201_with_the_campaign_payload() -> None:
     handler = http.Handler(client)
 
     resp = handler.create_campaign(
-        HttpRequest(
+        protocol_http.HttpRequest(
             "POST", "/", {}, {}, {}, b'{"budget": {"amount": "100.00", "currency": "USD"}}'
         )
     )
@@ -92,7 +92,7 @@ def test_create_campaign_answers_json() -> None:
     handler = http.Handler(client)
 
     resp = handler.create_campaign(
-        HttpRequest(
+        protocol_http.HttpRequest(
             "POST", "/", {}, {}, {}, b'{"budget": {"amount": "100.00", "currency": "USD"}}'
         )
     )
@@ -107,7 +107,7 @@ def test_create_campaign_forwards_the_budget_fields_it_read() -> None:
     handler = http.Handler(client)
 
     handler.create_campaign(
-        HttpRequest(
+        protocol_http.HttpRequest(
             "POST", "/", {}, {}, {}, b'{"budget": {"amount": "250.00", "currency": "EUR"}}'
         )
     )
@@ -122,8 +122,8 @@ def test_create_campaign_refuses_a_budget_that_is_not_an_object() -> None:
     client = FakeCampaignClientScripted()
     handler = http.Handler(client)
 
-    with pytest.raises(BadRequest):
-        handler.create_campaign(HttpRequest("POST", "/", {}, {}, {}, b'{"budget": "100.00"}'))
+    with pytest.raises(protocol_http.BadRequest):
+        handler.create_campaign(protocol_http.HttpRequest("POST", "/", {}, {}, {}, b'{"budget": "100.00"}'))
 
     assert client.requests == []
 
@@ -132,9 +132,9 @@ def test_create_campaign_refuses_a_budget_amount_that_is_not_a_string() -> None:
     client = FakeCampaignClientScripted()
     handler = http.Handler(client)
 
-    with pytest.raises(BadRequest):
+    with pytest.raises(protocol_http.BadRequest):
         handler.create_campaign(
-            HttpRequest("POST", "/", {}, {}, {}, b'{"budget": {"amount": 100, "currency": "USD"}}')
+            protocol_http.HttpRequest("POST", "/", {}, {}, {}, b'{"budget": {"amount": 100, "currency": "USD"}}')
         )
 
     assert client.requests == []
@@ -144,8 +144,8 @@ def test_create_campaign_refuses_a_body_that_is_not_json() -> None:
     client = FakeCampaignClientScripted()
     handler = http.Handler(client)
 
-    with pytest.raises(BadRequest):
-        handler.create_campaign(HttpRequest("POST", "/", {}, {}, {}, b"not json"))
+    with pytest.raises(protocol_http.BadRequest):
+        handler.create_campaign(protocol_http.HttpRequest("POST", "/", {}, {}, {}, b"not json"))
 
     assert client.requests == []
 
@@ -160,7 +160,7 @@ def test_add_link_answers_200_with_the_links_of_the_campaign() -> None:
     handler = http.Handler(FakeCampaignClientScripted(view))
 
     resp = handler.add_link(
-        HttpRequest(
+        protocol_http.HttpRequest(
             "POST",
             "/",
             {},
@@ -184,7 +184,7 @@ def test_add_link_forwards_the_three_fields_it_read() -> None:
     handler = http.Handler(client)
 
     handler.add_link(
-        HttpRequest(
+        protocol_http.HttpRequest(
             "POST",
             "/",
             {},
@@ -206,9 +206,9 @@ def test_add_link_refuses_a_body_with_a_missing_field() -> None:
     client = FakeCampaignClientScripted()
     handler = http.Handler(client)
 
-    with pytest.raises(BadRequest):
+    with pytest.raises(protocol_http.BadRequest):
         handler.add_link(
-            HttpRequest("POST", "/", {}, {}, {}, b'{"campaign_id": "0123456789abcdef"}')
+            protocol_http.HttpRequest("POST", "/", {}, {}, {}, b'{"campaign_id": "0123456789abcdef"}')
         )
 
     assert client.requests == []
@@ -224,7 +224,7 @@ def test_deactivate_link_answers_200_with_the_link_reported_inactive() -> None:
     handler = http.Handler(FakeCampaignClientScripted(view))
 
     resp = handler.deactivate_link(
-        HttpRequest(
+        protocol_http.HttpRequest(
             "POST", "/", {}, {}, {}, b'{"campaign_id": "0123456789abcdef", "slug": "promo"}'
         )
     )
@@ -242,7 +242,7 @@ def test_deactivate_link_forwards_the_campaign_and_slug_it_read() -> None:
     handler = http.Handler(client)
 
     handler.deactivate_link(
-        HttpRequest(
+        protocol_http.HttpRequest(
             "POST", "/", {}, {}, {}, b'{"campaign_id": "0123456789abcdef", "slug": "promo"}'
         )
     )
@@ -260,7 +260,7 @@ def test_get_campaign_reads_the_id_off_the_path() -> None:
     handler = http.Handler(client)
 
     resp = handler.get_campaign(
-        HttpRequest("GET", "/", {"campaign_id": "0123456789abcdef"}, {}, {}, b"")
+        protocol_http.HttpRequest("GET", "/", {"campaign_id": "0123456789abcdef"}, {}, {}, b"")
     )
 
     assert resp.status_code == 200
@@ -273,8 +273,8 @@ def test_get_campaign_refuses_a_request_with_no_campaign_id_on_the_path() -> Non
     client = FakeCampaignClientScripted()
     handler = http.Handler(client)
 
-    with pytest.raises(BadRequest):
-        handler.get_campaign(HttpRequest("GET", "/", {}, {}, {}, b""))
+    with pytest.raises(protocol_http.BadRequest):
+        handler.get_campaign(protocol_http.HttpRequest("GET", "/", {}, {}, {}, b""))
 
     assert client.requests == []
 
@@ -282,7 +282,7 @@ def test_get_campaign_refuses_a_request_with_no_campaign_id_on_the_path() -> Non
 def test_resolve_answers_a_redirect_to_the_target() -> None:
     handler = http.Handler(FakeCampaignClientScripted(resolved="https://ok.example/x"))
 
-    resp = handler.resolve(HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
+    resp = handler.resolve(protocol_http.HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
 
     assert resp.status_code == 302
     assert resp.headers["Location"] == "https://ok.example/x"
@@ -294,27 +294,27 @@ def test_resolve_refuses_a_target_carrying_a_control_character() -> None:
         FakeCampaignClientScripted(resolved="https://ok.example/\r\nX-Injected: yes")
     )
 
-    with pytest.raises(BadRequest):
-        handler.resolve(HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
+    with pytest.raises(protocol_http.BadRequest):
+        handler.resolve(protocol_http.HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
 
 
 def test_resolve_refuses_a_request_with_no_slug_on_the_path() -> None:
     client = FakeCampaignClientScripted(resolved="https://ok.example/x")
     handler = http.Handler(client)
 
-    with pytest.raises(BadRequest):
-        handler.resolve(HttpRequest("GET", "/", {}, {}, {}, b""))
+    with pytest.raises(protocol_http.BadRequest):
+        handler.resolve(protocol_http.HttpRequest("GET", "/", {}, {}, {}, b""))
 
     assert client.requests == []
 
 
 def test_a_client_rejection_travels_out_of_the_handler_unconverted() -> None:
-    client = FakeCampaignClientScripted(error=invalid("invalid_slug", "slug is malformed"))
+    client = FakeCampaignClientScripted(error=errors.invalid("invalid_slug", "slug is malformed"))
     handler = http.Handler(client)
 
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         handler.add_link(
-            HttpRequest(
+            protocol_http.HttpRequest(
                 "POST",
                 "/",
                 {},

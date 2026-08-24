@@ -4,7 +4,7 @@ import pytest
 
 import linkpolicy.adapters.gateways.repo_memory as repo_memory
 import linkpolicy.application.ports.verdict_repository as verdict_repository
-from tesser.errors import InfraError
+import tesser.errors as errors
 
 
 def test_all_answers_nothing_before_anything_is_recorded() -> None:
@@ -74,7 +74,7 @@ def test_recording_the_same_url_twice_keeps_only_the_latest_verdict() -> None:
 def test_record_fails_when_the_store_is_down() -> None:
     subject = repo_memory.InMemoryVerdictRepository(down=True)
 
-    with pytest.raises(InfraError) as excinfo:
+    with pytest.raises(errors.InfraError) as excinfo:
         subject.record(
             verdict_repository.RecordVerdictRequest(
                 "https://ok.example/x", verdict_repository.VerdictDecision.ALLOWED, "ok"
@@ -87,7 +87,7 @@ def test_record_fails_when_the_store_is_down() -> None:
 def test_all_fails_when_the_store_is_down() -> None:
     subject = repo_memory.InMemoryVerdictRepository(down=True)
 
-    with pytest.raises(InfraError) as excinfo:
+    with pytest.raises(errors.InfraError) as excinfo:
         subject.all(verdict_repository.ListVerdictsRequest())
 
     assert str(excinfo.value) == "linkpolicy store unavailable"

@@ -9,7 +9,7 @@ import campaign.component.config as campaign_config
 import linkpolicy.component.config as linkpolicy_config
 import reports.client.client as reports_client
 import reports.component.config as reports_config
-from tesser.errors import DomainError
+import tesser.errors as errors
 
 
 def test_an_app_builds_one_component_per_slice() -> None:
@@ -53,7 +53,7 @@ def test_an_app_wires_its_components_to_each_other() -> None:
 
 
 def test_an_app_refuses_a_slice_its_component_rejects() -> None:
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         app.App(
             config.Config(
                 config.Spec(
@@ -69,7 +69,7 @@ def test_an_app_refuses_a_slice_its_component_rejects() -> None:
 
 
 def test_an_app_refuses_an_unsupported_backend() -> None:
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         app.App(
             config.Config(
                 config.Spec(

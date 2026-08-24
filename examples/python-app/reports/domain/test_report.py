@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 import reports.domain.report as report
-from tesser.errors import DomainError
+import tesser.errors as errors
 
 
 def test_a_link_carries_its_slug_and_target_as_value_objects() -> None:
@@ -13,7 +13,7 @@ def test_a_link_carries_its_slug_and_target_as_value_objects() -> None:
 
 
 def test_a_link_refuses_a_target_the_reader_cannot_follow() -> None:
-    with pytest.raises(DomainError):
+    with pytest.raises(errors.DomainError):
         report.Link("spring-sale", "not-a-url")
 
 
@@ -26,7 +26,7 @@ def test_a_recorded_verdict_reads_its_flag_as_a_decision() -> None:
 
 
 def test_a_recorded_verdict_refuses_an_empty_reason() -> None:
-    with pytest.raises(DomainError):
+    with pytest.raises(errors.DomainError):
         report.RecordedVerdict("https://a.example/s", True, "")
 
 

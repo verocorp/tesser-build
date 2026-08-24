@@ -40,9 +40,9 @@ package of its own.
 
 The target declares itself: a checkable tree carries a `.tesser-root` file at
 its root. The declaration has a total grammar — first line `app`, then only
-`skip <dir>` lines naming directories the walk ignores for this tree (this is
-where repo-specific configuration lives; the analyzer hardcodes nothing about
-any repo). An undeclared, unreadable, or unrecognized root, or a
+`skip <dir>`, `export <dir>`, `import <package>`, and `stdlib <module>` lines
+(`docs/design-kernels.md` has the grammar; this is where repo-specific
+configuration lives, and the analyzer hardcodes nothing about any repo). An undeclared, unreadable, or unrecognized root, or a
 `.tesser-root` nested below the root, is a `TB044` finding; a symlinked
 directory inside the tree is `TB045`, because the walk never follows symlinks
 and must say what it could not see. When a TB044 or TB045 fires it is the only

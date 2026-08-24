@@ -4,10 +4,10 @@ import shutil
 import signal
 import subprocess
 import sys
-from pathlib import Path
+import pathlib
 
-_FIXTURES = Path(__file__).parent / "fixtures"
-_TESSER_PY = Path(__file__).resolve().parents[3]
+_FIXTURES = pathlib.Path(__file__).parent / "fixtures"
+_TESSER_PY = pathlib.Path(__file__).resolve().parents[3]
 assert (_TESSER_PY / "tesser" / "domain").is_dir(), (
     f"{_TESSER_PY} is not the tesser-py root — this module moved without "
     "updating its parents[] anchor"
@@ -17,7 +17,7 @@ _JUNK_DIRS = ("mutants", "__pycache__", ".mypy_cache", ".pytest_cache")
 
 
 def _run(
-    args: "list[str]", cwd: Path, env: "dict[str, str]", timeout: int
+    args: "list[str]", cwd: pathlib.Path, env: "dict[str, str]", timeout: int
 ) -> "subprocess.CompletedProcess[str]":
     proc = subprocess.Popen(
         args,
@@ -50,7 +50,7 @@ def _clean_env() -> "dict[str, str]":
 class _Outcome:
     def __init__(
         self,
-        project: Path,
+        project: pathlib.Path,
         env: "dict[str, str]",
         run: "subprocess.CompletedProcess[str]",
     ) -> None:
@@ -78,7 +78,7 @@ class _Outcome:
         return mutants_file.read_text()
 
 
-def _mutmut_on(fixture: str, tmp_path: Path) -> _Outcome:
+def _mutmut_on(fixture: str, tmp_path: pathlib.Path) -> _Outcome:
     project = tmp_path / fixture
     shutil.copytree(
         _FIXTURES / fixture, project, ignore=shutil.ignore_patterns(*_JUNK_DIRS)
@@ -104,7 +104,7 @@ def _mutmut_on(fixture: str, tmp_path: Path) -> _Outcome:
     return _Outcome(project, env, run)
 
 
-def _fixture_files(root: Path) -> "dict[str, bytes]":
+def _fixture_files(root: pathlib.Path) -> "dict[str, bytes]":
     files: "dict[str, bytes]" = {}
     for path in root.rglob("*"):
         relative = path.relative_to(root)
@@ -134,7 +134,7 @@ def test_fixtures_stay_in_lockstep() -> None:
     )
 
 
-def test_a_ts_valueobject_is_fully_visible_to_mutmut(tmp_path: Path) -> None:
+def test_a_ts_valueobject_is_fully_visible_to_mutmut(tmp_path: pathlib.Path) -> None:
     outcome = _mutmut_on("tsvo", tmp_path)
     assert outcome.run.returncode == 0, outcome.run.stdout + outcome.run.stderr
     mutants = outcome.mutants()
@@ -147,7 +147,7 @@ def test_a_ts_valueobject_is_fully_visible_to_mutmut(tmp_path: Path) -> None:
     assert survivors == "", f"mutants escaped the fixture suite:\n{survivors}"
 
 
-def test_a_dataclass_valueobject_is_skipped_by_mutmut_wholesale(tmp_path: Path) -> None:
+def test_a_dataclass_valueobject_is_skipped_by_mutmut_wholesale(tmp_path: pathlib.Path) -> None:
     outcome = _mutmut_on("dcvo", tmp_path)
     output = outcome.run.stdout + outcome.run.stderr
     assert outcome.run.returncode != 0

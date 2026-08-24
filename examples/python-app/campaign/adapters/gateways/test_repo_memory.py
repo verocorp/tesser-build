@@ -4,7 +4,7 @@ import pytest
 
 import campaign.adapters.gateways.repo_memory as repo_memory
 import campaign.application.ports.campaign_repository as campaign_repository
-from tesser.errors import InfraError
+import tesser.errors as errors
 
 
 def test_a_saved_campaign_is_found_by_its_id() -> None:
@@ -167,7 +167,7 @@ def test_every_saved_campaign_is_listed() -> None:
 def test_an_unavailable_store_fails_closed_on_every_read_and_write() -> None:
     repo = repo_memory.InMemoryCampaignRepository(down=True)
 
-    with pytest.raises(InfraError):
+    with pytest.raises(errors.InfraError):
         repo.save(
             campaign_repository.SaveCampaignRequest(
                 id="0123456789abcdef",
@@ -175,13 +175,13 @@ def test_an_unavailable_store_fails_closed_on_every_read_and_write() -> None:
                 links=(),
             )
         )
-    with pytest.raises(InfraError):
+    with pytest.raises(errors.InfraError):
         repo.find(campaign_repository.FindCampaignRequest(campaign_id="0123456789abcdef"))
-    with pytest.raises(InfraError):
+    with pytest.raises(errors.InfraError):
         repo.find_by_slug(campaign_repository.FindCampaignBySlugRequest(slug="promo"))
-    with pytest.raises(InfraError):
+    with pytest.raises(errors.InfraError):
         repo.slug_taken(campaign_repository.SlugTakenRequest(slug="promo"))
-    with pytest.raises(InfraError):
+    with pytest.raises(errors.InfraError):
         repo.all(campaign_repository.ListCampaignsRequest())
 
 

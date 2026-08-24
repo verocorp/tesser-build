@@ -1,10 +1,10 @@
-from typing import Protocol, runtime_checkable
+import typing
 
-from tesser.application.port import Port
+import tesser.application.port as port
 
 
-@runtime_checkable
-class _Shaped(Port, Protocol):
+@typing.runtime_checkable
+class _Shaped(port.Port, typing.Protocol):
     def act(self) -> int: ...
 
 
@@ -16,13 +16,13 @@ class _Impl:
 
 def test_port_is_satisfied_structurally_without_inheritance() -> None:
     assert isinstance(_Impl(), _Shaped)
-    assert Port not in type(_Impl()).__mro__
+    assert port.Port not in type(_Impl()).__mro__
 
 
 def test_port_is_a_protocol_base_that_extends_into_new_protocols() -> None:
-    assert Port in _Shaped.__mro__
+    assert port.Port in _Shaped.__mro__
 
 
 def test_port_carries_no_behavior_of_its_own() -> None:
-    own = {name for name in vars(Port) if not name.startswith("_")}
+    own = {name for name in vars(port.Port) if not name.startswith("_")}
     assert own == set(), own

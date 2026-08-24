@@ -1,4 +1,4 @@
-from typing import Protocol
+import typing
 
 import tesser.adapters
 import tesser.application
@@ -9,15 +9,15 @@ import tesser.srv
 import tesser.testing
 
 
-class _AskThings(tesser.context.Client, Protocol):
+class _AskThings(tesser.context.Client, typing.Protocol):
     def ask(self, question: object) -> object: ...
 
 
-class _SaveThings(tesser.application.Port, Protocol):
+class _SaveThings(tesser.application.Port, typing.Protocol):
     def save(self, thing: object) -> None: ...
 
 
-class _ServeThings(tesser.srv.Port, Protocol):
+class _ServeThings(tesser.srv.Port, typing.Protocol):
     def __call__(self, request: object) -> object: ...
 
 

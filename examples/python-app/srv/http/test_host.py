@@ -6,12 +6,12 @@ import socket
 import threading
 
 import app.loader as loader
-from srv.http.host import MAX_BUFFERED_BODY, HttpHost
+import srv.http.host as http_host
 
 
 def test_the_server_answers_a_routed_request() -> None:
     app = loader.load()
-    host = HttpHost(("127.0.0.1", 0), app)
+    host = http_host.HttpHost(("127.0.0.1", 0), app)
     stop = threading.Event()
     thread = threading.Thread(target=host.run, args=(stop,))
     thread.start()
@@ -38,7 +38,7 @@ def test_the_server_answers_a_routed_request() -> None:
 
 def test_the_server_answers_an_unknown_route_with_a_problem_document() -> None:
     app = loader.load()
-    host = HttpHost(("127.0.0.1", 0), app)
+    host = http_host.HttpHost(("127.0.0.1", 0), app)
     stop = threading.Event()
     thread = threading.Thread(target=host.run, args=(stop,))
     thread.start()
@@ -59,7 +59,7 @@ def test_the_server_answers_an_unknown_route_with_a_problem_document() -> None:
 
 def test_the_server_answers_a_routed_get_with_the_campaign_it_created() -> None:
     app = loader.load()
-    host = HttpHost(("127.0.0.1", 0), app)
+    host = http_host.HttpHost(("127.0.0.1", 0), app)
     stop = threading.Event()
     thread = threading.Thread(target=host.run, args=(stop,))
     thread.start()
@@ -89,7 +89,7 @@ def test_the_server_answers_a_routed_get_with_the_campaign_it_created() -> None:
 
 def test_the_server_refuses_a_streaming_body_it_cannot_buffer() -> None:
     app = loader.load()
-    host = HttpHost(("127.0.0.1", 0), app)
+    host = http_host.HttpHost(("127.0.0.1", 0), app)
     stop = threading.Event()
     thread = threading.Thread(target=host.run, args=(stop,))
     thread.start()
@@ -112,7 +112,7 @@ def test_the_server_refuses_a_streaming_body_it_cannot_buffer() -> None:
 
 def test_the_server_refuses_a_declared_length_that_is_not_ascii_digits() -> None:
     app = loader.load()
-    host = HttpHost(("127.0.0.1", 0), app)
+    host = http_host.HttpHost(("127.0.0.1", 0), app)
     stop = threading.Event()
     thread = threading.Thread(target=host.run, args=(stop,))
     thread.start()
@@ -133,7 +133,7 @@ def test_the_server_refuses_a_declared_length_that_is_not_ascii_digits() -> None
 
 def test_the_server_refuses_two_disagreeing_declarations_rather_than_framing_one() -> None:
     app = loader.load()
-    host = HttpHost(("127.0.0.1", 0), app)
+    host = http_host.HttpHost(("127.0.0.1", 0), app)
     stop = threading.Event()
     thread = threading.Thread(target=host.run, args=(stop,))
     thread.start()
@@ -154,13 +154,13 @@ def test_the_server_refuses_two_disagreeing_declarations_rather_than_framing_one
 
 def test_the_server_refuses_a_body_over_the_buffer_limit() -> None:
     app = loader.load()
-    host = HttpHost(("127.0.0.1", 0), app)
+    host = http_host.HttpHost(("127.0.0.1", 0), app)
     stop = threading.Event()
     thread = threading.Thread(target=host.run, args=(stop,))
     thread.start()
     try:
         port = host._server.server_address[1]
-        oversized = str(MAX_BUFFERED_BODY + 1).encode("ascii")
+        oversized = str(http_host.MAX_BUFFERED_BODY + 1).encode("ascii")
         with socket.create_connection(("127.0.0.1", port), timeout=5) as sock:
             sock.sendall(
                 b"POST /campaigns HTTP/1.1\r\nHost: x\r\nContent-Length: " + oversized + b"\r\n\r\n"
@@ -176,7 +176,7 @@ def test_the_server_refuses_a_body_over_the_buffer_limit() -> None:
 def test_the_host_runs_until_its_stop_is_set() -> None:
     app = loader.load()
     try:
-        host = HttpHost(("127.0.0.1", 0), app)
+        host = http_host.HttpHost(("127.0.0.1", 0), app)
         stop = threading.Event()
         thread = threading.Thread(target=host.run, args=(stop,))
         thread.start()

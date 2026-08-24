@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pathlib import Path
+import pathlib
 
 import pytest
 
@@ -9,7 +9,7 @@ import tessercheck.application.ports.rulebook_sources as rulebook_sources
 
 
 def test_the_read_carries_the_checks_text_and_the_contracts_text(
-    tmp_path: Path,
+    tmp_path: pathlib.Path,
 ) -> None:
     (tmp_path / "tessercheck" / "domain").mkdir(parents=True)
     (tmp_path / "tessercheck" / "tests").mkdir(parents=True)
@@ -30,7 +30,7 @@ def test_the_read_carries_the_checks_text_and_the_contracts_text(
 
 
 def test_the_wired_module_leads_and_the_domain_siblings_follow_in_order(
-    tmp_path: Path,
+    tmp_path: pathlib.Path,
 ) -> None:
     (tmp_path / "tessercheck" / "domain").mkdir(parents=True)
     (tmp_path / "tessercheck" / "tests").mkdir(parents=True)
@@ -62,7 +62,7 @@ def test_the_wired_module_leads_and_the_domain_siblings_follow_in_order(
     ]
 
 
-def test_a_domain_module_that_is_not_a_test_is_left_out(tmp_path: Path) -> None:
+def test_a_domain_module_that_is_not_a_test_is_left_out(tmp_path: pathlib.Path) -> None:
     (tmp_path / "tessercheck" / "domain").mkdir(parents=True)
     (tmp_path / "tessercheck" / "tests").mkdir(parents=True)
     (tmp_path / "tessercheck" / "domain" / "checks.py").write_text(
@@ -83,7 +83,7 @@ def test_a_domain_module_that_is_not_a_test_is_left_out(tmp_path: Path) -> None:
     ]
 
 
-def test_a_tree_without_the_checks_module_refuses_to_answer(tmp_path: Path) -> None:
+def test_a_tree_without_the_checks_module_refuses_to_answer(tmp_path: pathlib.Path) -> None:
     (tmp_path / "tessercheck" / "domain").mkdir(parents=True)
     (tmp_path / "tessercheck" / "tests").mkdir(parents=True)
     (tmp_path / "tessercheck" / "tests" / "test_checks.py").write_text(
@@ -96,7 +96,7 @@ def test_a_tree_without_the_checks_module_refuses_to_answer(tmp_path: Path) -> N
         )
 
 
-def test_a_tree_without_the_contracts_file_refuses_to_answer(tmp_path: Path) -> None:
+def test_a_tree_without_the_contracts_file_refuses_to_answer(tmp_path: pathlib.Path) -> None:
     (tmp_path / "tessercheck" / "domain").mkdir(parents=True)
     (tmp_path / "tessercheck" / "tests").mkdir(parents=True)
     (tmp_path / "tessercheck" / "domain" / "checks.py").write_text(

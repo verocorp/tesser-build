@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import sys
-from typing import Final
+import typing
 
 import tesser.srv as ts
 
-from app.loader import load
+import app.loader as loader
 import campaign.adapters.handlers.cli as cli
-from protocol.cli import CliRequest, CliResponse, Command, UsageError
-from tesser.errors import DomainError, InfraError, exit_code_for
+import protocol.cli as protocol_cli
+import tesser.errors as errors
 
-_USAGE: Final[str] = (
+_USAGE: typing.Final[str] = (
     "usage: python -m srv.cli.main <command> [args]\n"
     "commands:\n"
     "  create-campaign <budget_amount> <currency>\n"
@@ -22,31 +22,31 @@ _USAGE: Final[str] = (
 class CliHost(ts.Host):
 
     def run(self, argv: list[str]) -> int:
-        app = load()
+        app = loader.load()
         try:
             campaign = cli.Handler(app.campaign.client)
-            commands: dict[str, Command] = {
+            commands: dict[str, protocol_cli.Command] = {
                 "create-campaign": campaign.create_campaign,
                 "add-link": campaign.add_link,
                 "deactivate-link": campaign.deactivate_link,
             }
             if not argv or argv[0] not in commands:
-                resp = CliResponse(2, stdout="", stderr=_USAGE)
+                resp = protocol_cli.CliResponse(2, stdout="", stderr=_USAGE)
             else:
                 try:
-                    resp = commands[argv[0]](CliRequest(args=tuple(argv[1:])))
-                except UsageError as e:
-                    resp = CliResponse(2, stdout="", stderr=str(e))
-                except DomainError as e:
-                    resp = CliResponse(
-                        exit_code_for(e.kind), stdout="", stderr=f"[{e.code}] {e.message}"
+                    resp = commands[argv[0]](protocol_cli.CliRequest(args=tuple(argv[1:])))
+                except protocol_cli.UsageError as e:
+                    resp = protocol_cli.CliResponse(2, stdout="", stderr=str(e))
+                except errors.DomainError as e:
+                    resp = protocol_cli.CliResponse(
+                        errors.exit_code_for(e.kind), stdout="", stderr=f"[{e.code}] {e.message}"
                     )
-                except InfraError:
-                    resp = CliResponse(
+                except errors.InfraError:
+                    resp = protocol_cli.CliResponse(
                         1, stdout="", stderr="a dependency is unavailable; please retry"
                     )
                 except Exception:
-                    resp = CliResponse(1, stdout="", stderr="unexpected error")
+                    resp = protocol_cli.CliResponse(1, stdout="", stderr="unexpected error")
             if resp.stdout:
                 print(resp.stdout)  # noqa: T201
             if resp.stderr:

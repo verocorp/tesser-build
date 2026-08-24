@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import enum
-from typing import Protocol
+import typing
 
 import tesser.application as ts
 
@@ -52,6 +52,7 @@ class ReadSourcesResponse(ts.Response):
         exports: tuple[str, ...],
         imports: tuple[str, ...],
         stdlib: tuple[str, ...],
+        pure_stdlib: tuple[str, ...],
     ) -> None:
         self.root = root
         self.nested = nested
@@ -60,8 +61,9 @@ class ReadSourcesResponse(ts.Response):
         self.exports = exports
         self.imports = imports
         self.stdlib = stdlib
+        self.pure_stdlib = pure_stdlib
 
 
-class SourceReader(ts.Port, Protocol):
+class SourceReader(ts.Port, typing.Protocol):
 
     def sources(self, request: ReadSourcesRequest) -> ReadSourcesResponse: ...

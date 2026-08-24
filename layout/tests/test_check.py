@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pathlib import Path
+import pathlib
 
 import tesser.testing as ts
 
@@ -10,7 +10,7 @@ import repo.component.component as wire
 
 
 @ts.helper
-def _repo(root: Path) -> Path:  # tesser:debt TB073
+def _repo(root: pathlib.Path) -> pathlib.Path:  # tesser:debt TB073
     (root / "scripts").mkdir()
     (root / "scripts" / "verify").write_text(
         "run_appone() {\n"
@@ -42,25 +42,25 @@ def _repo(root: Path) -> Path:  # tesser:debt TB073
     return root
 
 
-def test_a_consistent_repo_checks_clean(tmp_path: Path) -> None:
+def test_a_consistent_repo_checks_clean(tmp_path: pathlib.Path) -> None:
     response = wire.Repo(config.Config(config.Spec())).client.check(client.CheckRequest(repo_root=str(_repo(tmp_path))))
     assert response.problems == ()
     assert response.counts == ("6", "1")
 
 
-def test_an_unregistered_directory_is_reported_through_the_stack(tmp_path: Path) -> None:
+def test_an_unregistered_directory_is_reported_through_the_stack(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "utils").mkdir()
     response = wire.Repo(config.Config(config.Spec())).client.check(client.CheckRequest(repo_root=str(tmp_path)))
     assert any("'utils' has no manifest.json row" in p for p in response.problems)
 
 
-def test_trees_lists_app_rows_through_the_client(tmp_path: Path) -> None:
+def test_trees_lists_app_rows_through_the_client(tmp_path: pathlib.Path) -> None:
     response = wire.Repo(config.Config(config.Spec())).client.trees(client.TreesRequest(repo_root=str(_repo(tmp_path))))
     assert response.trees == ("appone",)
 
 
-def test_a_malformed_manifest_is_one_message_not_a_crash(tmp_path: Path) -> None:
+def test_a_malformed_manifest_is_one_message_not_a_crash(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "manifest.json").write_text("{ truncated")
     response = wire.Repo(config.Config(config.Spec())).client.check(client.CheckRequest(repo_root=str(tmp_path)))
@@ -68,7 +68,7 @@ def test_a_malformed_manifest_is_one_message_not_a_crash(tmp_path: Path) -> None
     assert "manifest.json is unreadable" in response.problems[0]
 
 
-def test_a_nonexistent_root_is_a_problem_not_a_crash(tmp_path: Path) -> None:
+def test_a_nonexistent_root_is_a_problem_not_a_crash(tmp_path: pathlib.Path) -> None:
     response = wire.Repo(config.Config(config.Spec())).client.check(
         client.CheckRequest(repo_root=str(tmp_path / "no-such-dir"))
     )

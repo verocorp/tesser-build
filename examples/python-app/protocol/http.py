@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import urllib.parse
-from collections.abc import Mapping
-from typing import Protocol
+import collections.abc as abc
+import typing
 
 import tesser.srv as ts
 
@@ -29,9 +29,9 @@ class HttpRequest(ts.Request):
         self,
         method: str,
         path: str,
-        path_params: Mapping[str, str],
-        query_params: Mapping[str, str],
-        headers: Mapping[str, str],
+        path_params: abc.Mapping[str, str],
+        query_params: abc.Mapping[str, str],
+        headers: abc.Mapping[str, str],
         body: bytes,
     ) -> None:
         super().__init__(
@@ -45,9 +45,9 @@ class HttpRequest(ts.Request):
 
     method: str
     path: str
-    path_params: Mapping[str, str]
-    query_params: Mapping[str, str]
-    headers: Mapping[str, str]
+    path_params: abc.Mapping[str, str]
+    query_params: abc.Mapping[str, str]
+    headers: abc.Mapping[str, str]
     body: bytes
 
     def json_body(self) -> JSONObject:
@@ -71,7 +71,7 @@ class HttpRequest(ts.Request):
 
 class HttpResponse(ts.Response):
 
-    def __init__(self, status_code: int, body: bytes, headers: Mapping[str, str]) -> None:
+    def __init__(self, status_code: int, body: bytes, headers: abc.Mapping[str, str]) -> None:
         super().__init__(
             status_code=status_code,
             body=body,
@@ -80,10 +80,10 @@ class HttpResponse(ts.Response):
 
     status_code: int
     body: bytes
-    headers: Mapping[str, str]
+    headers: abc.Mapping[str, str]
 
     @classmethod
-    def json(cls, status_code: int, body: JSONObject, headers: Mapping[str, str] | None = None) -> HttpResponse:
+    def json(cls, status_code: int, body: JSONObject, headers: abc.Mapping[str, str] | None = None) -> HttpResponse:
         payload = json.dumps(body).encode("utf-8")
         declared = dict(headers or {})
         if not any(name.lower() == "content-type" for name in declared):
@@ -113,7 +113,7 @@ class HttpResponse(ts.Response):
         return data
 
 
-class Endpoint(ts.Port, Protocol):
+class Endpoint(ts.Port, typing.Protocol):
 
     def __call__(self, request: HttpRequest, /) -> HttpResponse: ...
 
@@ -133,8 +133,8 @@ class Match(ts.Record):
     def __init__(
         self,
         endpoint: Endpoint,
-        path_params: Mapping[str, str],
-        query_params: Mapping[str, str],
+        path_params: abc.Mapping[str, str],
+        query_params: abc.Mapping[str, str],
     ) -> None:
         super().__init__(
             endpoint=endpoint,
@@ -143,8 +143,8 @@ class Match(ts.Record):
         )
 
     endpoint: Endpoint
-    path_params: Mapping[str, str]
-    query_params: Mapping[str, str]
+    path_params: abc.Mapping[str, str]
+    query_params: abc.Mapping[str, str]
 
 
 class Router(ts.Record):

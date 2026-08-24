@@ -2,24 +2,17 @@ from __future__ import annotations
 
 import math
 import re
-from datetime import datetime
-from decimal import Decimal, InvalidOperation
-from typing import Final
+import datetime
+import decimal
+import typing
 
 import tesser.domain as ts
 
-from tesser.serialization import (
-    canonical_bytes,
-    canonical_datetime,
-    canonical_decimal,
-    canonical_float,
-    canonical_int,
-    canonical_str,
-)
+import tesser.serialization as serialization
 
-_CODE_RE: Final[re.Pattern[str]] = re.compile(r"[A-Z0-9]([A-Z0-9-]{0,30}[A-Z0-9])?")
-_DIGEST_LEN: Final[int] = 32
-_HEAVY_KG: Final[float] = 20.0
+_CODE_RE: typing.Final[re.Pattern[str]] = re.compile(r"[A-Z0-9]([A-Z0-9-]{0,30}[A-Z0-9])?")
+_DIGEST_LEN: typing.Final[int] = 32
+_HEAVY_KG: typing.Final[float] = 20.0
 
 
 class ParcelCode(ts.ValueObject):
@@ -30,7 +23,7 @@ class ParcelCode(ts.ValueObject):
         object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
-        return canonical_str(self._value)
+        return serialization.canonical_str(self._value)
 
     _value: str
 
@@ -43,7 +36,7 @@ class ItemCount(ts.ValueObject):
         object.__setattr__(self, "_value", value)
 
     def __int__(self) -> int:
-        return canonical_int(self._value)
+        return serialization.canonical_int(self._value)
 
     _value: int
 
@@ -56,7 +49,7 @@ class WeightClass(ts.ValueObject):
         object.__setattr__(self, "_value", value)
 
     def __str__(self) -> str:
-        return canonical_str(self._value)
+        return serialization.canonical_str(self._value)
 
     _value: str
 
@@ -69,7 +62,7 @@ class WeightKg(ts.ValueObject):
         object.__setattr__(self, "_value", value)
 
     def __float__(self) -> float:
-        return canonical_float(self._value)
+        return serialization.canonical_float(self._value)
 
     _value: float
 
@@ -82,7 +75,7 @@ class LabelDigest(ts.ValueObject):
         object.__setattr__(self, "_value", value)
 
     def __bytes__(self) -> bytes:
-        return canonical_bytes(self._value)
+        return serialization.canonical_bytes(self._value)
 
     _value: bytes
 
@@ -91,24 +84,24 @@ class DeclaredValue(ts.ValueObject):
 
     def __init__(self, value: str) -> None:
         try:
-            parsed = Decimal(value)
-        except InvalidOperation as e:
+            parsed = decimal.Decimal(value)
+        except decimal.InvalidOperation as e:
             raise ValueError(f"invalid declared value: {value!r}") from e
         if parsed < 0:
             raise ValueError(f"declared value must not be negative: {parsed}")
         object.__setattr__(self, "_value", parsed)
 
     def __str__(self) -> str:
-        return canonical_decimal(self._value)
+        return serialization.canonical_decimal(self._value)
 
-    _value: Decimal
+    _value: decimal.Decimal
 
 
 class ScannedAt(ts.ValueObject):
 
     def __init__(self, value: str) -> None:
         try:
-            parsed = datetime.fromisoformat(value)
+            parsed = datetime.datetime.fromisoformat(value)
         except ValueError as e:
             raise ValueError(f"invalid scan time: {value!r}") from e
         if parsed.tzinfo is None:
@@ -116,9 +109,9 @@ class ScannedAt(ts.ValueObject):
         object.__setattr__(self, "_value", parsed)
 
     def __str__(self) -> str:
-        return canonical_datetime(self._value)
+        return serialization.canonical_datetime(self._value)
 
-    _value: datetime
+    _value: datetime.datetime
 
 
 class ParcelSpec(ts.Spec):

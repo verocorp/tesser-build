@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import enum
-from typing import Protocol
+import typing
 
 import tesser.application as ts
 
@@ -37,7 +37,7 @@ class ReserveSlotResponse(ts.Response):
         self.available = available
 
 
-class SlotDirectory(ts.Port, Protocol):
+class SlotDirectory(ts.Port, typing.Protocol):
 
     def available(self, request: AvailableSlotsRequest) -> AvailableSlotsResponse: ...
 

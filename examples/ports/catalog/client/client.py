@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol
+import typing
 
 import tesser.context as ts
 
@@ -50,7 +50,7 @@ class ListItemsResponse(ts.Response):
         self.items = items
 
 
-class CatalogClient(ts.Client, Protocol):
+class CatalogClient(ts.Client, typing.Protocol):
 
     def add(self, request: AddItemRequest) -> AddItemResponse: ...
 

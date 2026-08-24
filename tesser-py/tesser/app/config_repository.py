@@ -1,5 +1,5 @@
-from typing import Protocol
+import typing
 
 
-class ConfigRepository(Protocol):
+class ConfigRepository(typing.Protocol):
     pass

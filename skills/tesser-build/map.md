@@ -17,10 +17,10 @@ thin app-level layer that wires and hosts them.
 
 **The tree declares itself.** A checkable app tree carries a `.tesser-root`
 file at its root — that one file is what makes the directory a tessercheck
-subject. The file allows exactly two things — a first line `app`, then only
-`skip <dir>` lines naming directories the walk ignores for this tree
-(tree-specific skips go in this file, never in the analyzer's code); anything
-else is a finding. A missing, unreadable, or wrong `.tesser-root`, or one
+subject. The file has a total grammar — a first line `app`, then only
+`skip <dir>`, `export <dir>`, `import <package>`, and `stdlib <module>` lines
+(`kernels.md`; tree-specific configuration goes in this file, never in the
+analyzer's code); anything else is a finding. A missing, unreadable, or wrong `.tesser-root`, or one
 nested inside another tree, is a `TB044` finding; a symlinked directory
 inside the tree is `TB045` (the walk never follows symlinks and must say what
 it could not see). When one of these fires it is the only finding reported,

@@ -3,7 +3,7 @@ from __future__ import annotations
 import ast
 import inspect
 import textwrap
-from pathlib import Path
+import pathlib
 
 import pytest
 import tesser.testing as ts
@@ -18,6 +18,7 @@ def _spec(
     exports: tuple[str, ...] = (),
     imports: tuple[str, ...] = (),
     stdlib: tuple[str, ...] = (),
+    pure_stdlib: tuple[str, ...] = (),
     base: tuple[tuple[str, str, str | None, bool], ...] = (
         (
             "shop/domain/thing.py",
@@ -77,6 +78,7 @@ def _spec(
         exports=exports,
         imports=imports,
         stdlib=stdlib,
+        pure_stdlib=pure_stdlib,
     )
 
 
@@ -715,8 +717,9 @@ def test_protocol_module_tesser_import_is_exactly_once_as_ts() -> None:
         for f in findings
     )
     assert any(
-        "protocol.form imports names from tesser.srv; "
-        "a protocol module imports tesser.srv exactly once, as ts" in f
+        "protocol.form imports names from tesser.srv; every import is a "
+        "module import — import x or import x as name, never from x "
+        "import name" in f
         for f in findings
     )
     assert any(
@@ -929,7 +932,7 @@ def test_a_mapper_lives_only_in_the_application_role() -> None:
 
 
 def test_every_kind_row_names_a_real_tesser_export() -> None:
-    root = Path(__file__).resolve().parents[3] / "tesser-py"
+    root = pathlib.Path(__file__).resolve().parents[3] / "tesser-py"
     rows = list(checks.TESSER_BASE_BLOCKS) + list(checks.TESSER_DECORATORS)
     for package, name in rows:
         exports = (root / package.replace(".", "/") / "__init__.py").read_text()
@@ -1985,8 +1988,9 @@ def test_role_module_tesser_import_is_exactly_once_as_ts() -> None:
         for f in findings
     )
     assert any(
-        "fromform.domain.thing imports names from tesser.domain; "
-        "a role module imports its tesser package exactly once, as ts" in f
+        "fromform.domain.thing imports names from tesser.domain; every import is a "
+        "module import — import x or import x as name, never from x "
+        "import name" in f
         for f in findings
     )
     assert any(
@@ -2054,10 +2058,12 @@ def test_role_init_only_reexports_its_own_role() -> None:
     )
     assert not any("imports pkg.domain.vo" in f for f in findings)
     assert any(
-        "pkg.domain imports names from pkg.domain.vo; "
-        "a context module is imported as an aliased module, never its members" in f
+        "pkg.domain imports names from pkg.domain.vo; every import is a "
+        "module import — import x or import x as name, never from x "
+        "import name" in f
         for f in findings
     )
+    assert len([f for f in findings if "TB053" in f]) == 1, findings
 
 
 def test_a_role_init_may_import_a_module_but_never_a_class() -> None:
@@ -2100,8 +2106,9 @@ def test_a_role_init_may_import_a_module_but_never_a_class() -> None:
     )
 
     assert any(
-        "mod.domain imports names from mod.domain.vo; "
-        "a context module is imported as an aliased module, never its members" in f
+        "mod.domain imports names from mod.domain.vo; every import is a "
+        "module import — import x or import x as name, never from x "
+        "import name" in f
         for f in tuple(
                      f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                      for v in checks.Codebase(_spec(sources=(vo, class_form, client, client_init))).violations()
@@ -2400,7 +2407,7 @@ def test_pure_core_stdlib_allowlist() -> None:
             (
                 "io1/adapters/gateways.py",
                 "io1.adapters.gateways",
-                "from pathlib import Path\n"
+                "import pathlib\n"
                 "import tesser.adapters as ts\n"
                 "class DiskRepository(ts.Repository):\n"
                 "    def load(self, key: str) -> str: ...\n",
@@ -2455,13 +2462,15 @@ def test_context_module_import_form() -> None:
         ))).violations()
                )
     assert any(
-        "form.application.service imports names from form.client.client; "
-        "a context module is imported as an aliased module, never its members" in f
+        "form.application.service imports names from form.client.client; every import is a "
+        "module import — import x or import x as name, never from x "
+        "import name" in f
         for f in findings
     )
     assert any(
         "form.component.component imports form.application.service without an alias; "
-        "a context module is imported as an aliased module, never its members" in f
+        "a context module is imported as an aliased module — the analyzer "
+        "resolves a name as attribute over alias" in f
         for f in findings
     )
 
@@ -2530,8 +2539,15 @@ def test_relative_imports_resolve_against_the_package() -> None:
         for f in findings
     )
     assert any(
-        "rel.component.component imports names from rel.client.client; "
-        "a context module is imported as an aliased module, never its members" in f
+        "rel.domain imports names from rel.domain.money; every import is a "
+        "module import — import x or import x as name, never from x "
+        "import name" in f
+        for f in findings
+    )
+    assert any(
+        "rel.component.component imports names from rel.client.client; every import is a "
+        "module import — import x or import x as name, never from x "
+        "import name" in f
         for f in findings
     )
     assert any(
@@ -2736,8 +2752,9 @@ def test_srv_and_app_tesser_form_modes() -> None:
         for f in findings
     )
     assert any(
-        "app.fromform imports names from tesser.app; "
-        "an app module imports tesser.app exactly once, as ts" in f
+        "app.fromform imports names from tesser.app; every import is a "
+        "module import — import x or import x as name, never from x "
+        "import name" in f
         for f in findings
     )
     assert any(
@@ -2918,7 +2935,7 @@ def test_form_rule_fires_in_tests_and_srv_and_skips_illegal_edges() -> None:
                 "skipctx/domain/thing.py",
                 "skipctx.domain.thing",
                 "import tesser.domain as ts\n"
-                "from shop.client.client import AskRequest\n"
+                "import shop.client.client\n"
                 "class SkipSpec(ts.Spec):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n",
@@ -2927,13 +2944,15 @@ def test_form_rule_fires_in_tests_and_srv_and_skips_illegal_edges() -> None:
         ))).violations()
                )
     assert any(
-        "shop.test_forms imports names from shop.domain.thing; "
-        "a context module is imported as an aliased module, never its members" in f
+        "shop.test_forms imports names from shop.domain.thing; every import is a "
+        "module import — import x or import x as name, never from x "
+        "import name" in f
         for f in findings
     )
     assert any(
-        "srv.http imports names from shop.adapters.gateways; "
-        "a context module is imported as an aliased module, never its members" in f
+        "srv.http imports names from shop.adapters.gateways; every import is a "
+        "module import — import x or import x as name, never from x "
+        "import name" in f
         for f in findings
     )
     assert any(
@@ -2955,7 +2974,7 @@ def test_a_denied_app_edge_is_not_form_checked() -> None:
                 "srv/host.py",
                 "srv.host",
                 "import tesser.srv as ts\n"
-                "from shop.domain import thing\n",
+                "import shop.domain\n",
                 False,
             ),
         ))).violations()
@@ -2965,7 +2984,7 @@ def test_a_denied_app_edge_is_not_form_checked() -> None:
         and "a host reaches a context only through its handlers" in f
         for f in findings
     )
-    assert not any("srv.host" in f and "never its members" in f for f in findings)
+    assert not any("srv.host" in f and "attribute over alias" in f for f in findings)
 
 
 def test_production_never_imports_the_tests_package() -> None:
@@ -3209,7 +3228,7 @@ def test_a_protocol_module_imports_nothing_else_from_its_tree() -> None:
     )
 
 
-def test_a_norm_module_is_from_imported_where_its_placement_allows() -> None:
+def test_a_norm_module_is_imported_as_a_module_where_its_placement_allows() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
@@ -3217,15 +3236,32 @@ def test_a_norm_module_is_from_imported_where_its_placement_allows() -> None:
                 "fine/domain/money.py",
                 "fine.domain.money",
                 "import tesser.domain as ts\n"
-                "from tesser.serialization import canonical_str\n"
+                "import tesser.serialization as serialization\n"
                 "class MoneySpec(ts.Spec):\n"
                 "    def __init__(self, code: str) -> None:\n"
-                "        self.code = canonical_str(code)\n",
+                "        self.code = serialization.canonical_str(code)\n",
                 False,
             ),
             (
                 "fine/domain/test_money.py",
                 "fine.domain.test_money",
+                "def test_money_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "member/domain/money.py",
+                "member.domain.money",
+                "import tesser.domain as ts\n"
+                "from tesser.serialization import canonical_str\n"
+                "class MemberSpec(ts.Spec):\n"
+                "    def __init__(self, code: str) -> None:\n"
+                "        self.code = canonical_str(code)\n",
+                False,
+            ),
+            (
+                "member/domain/test_money.py",
+                "member.domain.test_money",
                 "def test_money_exists() -> None:\n"
                 "    assert True\n",
                 False,
@@ -3251,10 +3287,10 @@ def test_a_norm_module_is_from_imported_where_its_placement_allows() -> None:
                 "appside/application/service.py",
                 "appside.application.service",
                 "import tesser.application as ts\n"
-                "from tesser.serialization import canonical_str\n"
+                "import tesser.serialization as serialization\n"
                 "class SideService(ts.ApplicationService):\n"
                 "    def ask(self, code: str) -> str:\n"
-                "        return canonical_str(code)\n",
+                "        return serialization.canonical_str(code)\n",
                 False,
             ),
             (
@@ -3267,10 +3303,10 @@ def test_a_norm_module_is_from_imported_where_its_placement_allows() -> None:
             (
                 "only/domain/money.py",
                 "only.domain.money",
-                "from tesser.serialization import canonical_str\n"
+                "import tesser.serialization as serialization\n"
                 "class OnlyMoney:\n"
                 "    def __init__(self, code: str) -> None:\n"
-                "        self.code = canonical_str(code)\n",
+                "        self.code = serialization.canonical_str(code)\n",
                 False,
             ),
             (
@@ -3284,9 +3320,15 @@ def test_a_norm_module_is_from_imported_where_its_placement_allows() -> None:
                )
     assert not any("fine.domain.money" in f for f in findings)
     assert any(
-        "whole.domain.money imports tesser.serialization whole; a norm module "
-        "is from-imported by name, never whole — the ts alias belongs to the "
-        "placement's own package" in f
+        "whole.domain.money imports tesser.serialization without an alias; a norm module "
+        "is imported as an aliased module — a bare import binds the whole tesser package, "
+        "and the ts alias belongs to the placement's own package" in f
+        for f in findings
+    )
+    assert any(
+        "member.domain.money imports names from tesser.serialization; every import is a "
+        "module import — import x or import x as name, never from x "
+        "import name" in f
         for f in findings
     )
     assert any(
@@ -3302,7 +3344,7 @@ def test_a_norm_module_is_from_imported_where_its_placement_allows() -> None:
     )
 
 
-def test_wiring_bootstrap_and_srv_may_from_import_tesser_errors() -> None:
+def test_wiring_bootstrap_and_srv_may_import_tesser_errors_as_a_module() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
@@ -3310,7 +3352,7 @@ def test_wiring_bootstrap_and_srv_may_from_import_tesser_errors() -> None:
                 "shop/component/component.py",
                 "shop.component.component",
                 "import tesser.component as ts\n"
-                "from tesser.errors import invalid\n"
+                "import tesser.errors as errors\n"
                 "class Wiring(ts.Component):\n"
                 "    def close(self) -> None:\n"
                 "        return None\n",
@@ -3327,7 +3369,7 @@ def test_wiring_bootstrap_and_srv_may_from_import_tesser_errors() -> None:
                 "app/wire.py",
                 "app.wire",
                 "import tesser.app as ts\n"
-                "from tesser.errors import invalid\n",
+                "import tesser.errors as errors\n",
                 False,
             ),
             (
@@ -3341,13 +3383,30 @@ def test_wiring_bootstrap_and_srv_may_from_import_tesser_errors() -> None:
                 "srv/run.py",
                 "srv.run",
                 "import tesser.srv as ts\n"
-                "from tesser.errors import invalid\n",
+                "import tesser.errors as errors\n",
                 False,
             ),
             (
                 "srv/test_run.py",
                 "srv.test_run",
                 "def test_run_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "member/component/component.py",
+                "member.component.component",
+                "import tesser.component as ts\n"
+                "from tesser.errors import invalid\n"
+                "class Wiring(ts.Component):\n"
+                "    def close(self) -> None:\n"
+                "        return None\n",
+                False,
+            ),
+            (
+                "member/component/test_component.py",
+                "member.component.test_component",
+                "def test_wire_exists() -> None:\n"
                 "    assert True\n",
                 False,
             ),
@@ -3373,6 +3432,12 @@ def test_wiring_bootstrap_and_srv_may_from_import_tesser_errors() -> None:
     assert not any("app.wire" in f and "tesser.errors" in f for f in findings)
     assert not any("srv.run" in f and "tesser.errors" in f for f in findings)
     assert any(
+        "member.component.component imports names from tesser.errors; every import is a "
+        "module import — import x or import x as name, never from x "
+        "import name" in f
+        for f in findings
+    )
+    assert any(
         "astray.component.component imports tesser.domain; "
         "a component module's tesser imports are tesser.component, "
         "and tesser.errors" in f
@@ -3380,7 +3445,7 @@ def test_wiring_bootstrap_and_srv_may_from_import_tesser_errors() -> None:
     )
 
 
-def test_any_role_but_client_may_from_import_tesser_errors() -> None:
+def test_any_role_but_client_may_import_tesser_errors_as_a_module() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
@@ -3388,11 +3453,11 @@ def test_any_role_but_client_may_from_import_tesser_errors() -> None:
                 "shop/domain/money.py",
                 "shop.domain.money",
                 "import tesser.domain as ts\n"
-                "from tesser.errors import invalid\n"
+                "import tesser.errors as errors\n"
                 "class MoneySpec(ts.Spec):\n"
                 "    def __init__(self, code: str) -> None:\n"
                 "        if not code:\n"
-                "            raise invalid(\"bad_code\", \"code is empty\")\n"
+                "            raise errors.invalid(\"bad_code\", \"code is empty\")\n"
                 "        self.code = code\n",
                 False,
             ),
@@ -3408,10 +3473,10 @@ def test_any_role_but_client_may_from_import_tesser_errors() -> None:
                 "shop.application.views",
                 "import tesser.application as ts\n"
                 "import shop.client.client as client\n"
-                "from tesser.errors import not_found\n"
+                "import tesser.errors as errors\n"
                 "class ViewService(ts.ApplicationService):\n"
                 "    def ask(self, request: client.AskRequest) -> client.AskResponse:\n"
-                "        raise not_found(\"no_row\", request.text)\n",
+                "        raise errors.not_found(\"no_row\", request.text)\n",
                 False,
             ),
             (
@@ -3425,10 +3490,10 @@ def test_any_role_but_client_may_from_import_tesser_errors() -> None:
                 "shop/adapters/gateways.py",
                 "shop.adapters.gateways",
                 "import tesser.adapters as ts\n"
-                "from tesser.errors import InfraError\n"
+                "import tesser.errors as errors\n"
                 "class MemoryGateway(ts.Gateway):\n"
                 "    def load(self, key: str) -> str:\n"
-                "        raise InfraError(key)\n",
+                "        raise errors.InfraError(key)\n",
                 False,
             ),
             (
@@ -3439,10 +3504,27 @@ def test_any_role_but_client_may_from_import_tesser_errors() -> None:
                 False,
             ),
             (
+                "member/domain/money.py",
+                "member.domain.money",
+                "import tesser.domain as ts\n"
+                "from tesser.errors import invalid\n"
+                "class MemberSpec(ts.Spec):\n"
+                "    def __init__(self, code: str) -> None:\n"
+                "        self.code = code\n",
+                False,
+            ),
+            (
+                "member/domain/test_money.py",
+                "member.domain.test_money",
+                "def test_money_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
                 "stray/client/client.py",
                 "stray.client.client",
                 "import tesser.context as ts\n"
-                "from tesser.errors import invalid\n"
+                "import tesser.errors as errors\n"
                 "class AskRequest(ts.Request):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n",
@@ -3459,10 +3541,10 @@ def test_any_role_but_client_may_from_import_tesser_errors() -> None:
                 "astray/adapters/gateways.py",
                 "astray.adapters.gateways",
                 "import tesser.adapters as ts\n"
-                "from tesser.serialization import canonical_str\n"
+                "import tesser.serialization as serialization\n"
                 "class StrayGateway(ts.Gateway):\n"
                 "    def load(self, key: str) -> str:\n"
-                "        return canonical_str(key)\n",
+                "        return serialization.canonical_str(key)\n",
                 False,
             ),
             (
@@ -3477,6 +3559,12 @@ def test_any_role_but_client_may_from_import_tesser_errors() -> None:
     assert not any("shop.domain.money" in f for f in findings)
     assert not any("shop.application.views" in f for f in findings)
     assert not any("shop.adapters.gateways" in f for f in findings)
+    assert any(
+        "member.domain.money imports names from tesser.errors; every import is a "
+        "module import — import x or import x as name, never from x "
+        "import name" in f
+        for f in findings
+    )
     assert any(
         "stray.client.client imports tesser.errors; "
         "a role module imports only its own tesser package" in f
@@ -4436,8 +4524,9 @@ def test_test_module_tesser_import_rules() -> None:
         for f in findings
     )
     assert any(
-        "shop.test_fromform imports names from tesser.testing; "
-        "a test module imports tesser.testing at most once, as ts" in f
+        "shop.test_fromform imports names from tesser.testing; every import is a "
+        "module import — import x or import x as name, never from x "
+        "import name" in f
         for f in findings
     )
 
@@ -4663,10 +4752,24 @@ def test_a_fake_may_implement_a_protocol_port() -> None:
     assert not any("shop.test_doors.FakeDoor" in f for f in findings)
 
 
-def test_a_test_module_may_from_import_tesser_serialization() -> None:
+def test_a_test_module_may_import_tesser_serialization_as_a_module() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/test_thing.py",
+                "shop.domain.test_thing",
+                "import tesser.serialization as serialization\n"
+                "def test_canonical() -> None:\n"
+                '    assert serialization.canonical_str("x") == "x"\n',
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any("shop.domain.test_thing" in f for f in findings)
+    member = tuple(
+                 f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                 for v in checks.Codebase(_spec(sources=(
             (
                 "shop/domain/test_thing.py",
                 "shop.domain.test_thing",
@@ -4676,8 +4779,13 @@ def test_a_test_module_may_from_import_tesser_serialization() -> None:
                 False,
             ),
         ))).violations()
-               )
-    assert not any("shop.domain.test_thing" in f for f in findings)
+             )
+    assert any(
+        "shop.domain.test_thing imports names from tesser.serialization; every import is a "
+        "module import — import x or import x as name, never from x "
+        "import name" in f
+        for f in member
+    )
 
 
 def test_comments_docstrings_and_bare_strings_are_flagged() -> None:
@@ -5857,7 +5965,7 @@ def test_a_conforming_ports_module_is_silent() -> None:
                 "shop.application.ports.sink",
                 "from __future__ import annotations\n"
                 "import enum\n"
-                "from typing import Protocol\n"
+                "import typing\n"
                 "import tesser.application as ts\n"
                 "class Outcome(enum.Enum):\n"
                 "    STORED = 'stored'\n"
@@ -5875,7 +5983,7 @@ def test_a_conforming_ports_module_is_silent() -> None:
                 "class ListRequest(ts.Request):\n"
                 "    def __init__(self) -> None:\n"
                 "        return None\n"
-                "class Sink(ts.Port, Protocol):\n"
+                "class Sink(ts.Port, typing.Protocol):\n"
                 "    def save(self, request: SaveRequest) -> SaveResponse: ...\n"
                 "    def all(self, request: ListRequest) -> SaveResponse: ...\n",
                 False,
@@ -5886,6 +5994,42 @@ def test_a_conforming_ports_module_is_silent() -> None:
         f"a conforming ports module produced findings: "
         f"{[f for f in findings if 'ports/sink.py' in f]}"
     )
+
+
+def test_a_ports_module_imports_a_module_never_names() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
+                "",
+                True,
+            ),
+            (
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
+                "from __future__ import annotations\n"
+                "from typing import Protocol\n"
+                "import tesser.application as ts\n"
+                "class SaveRequest(ts.Request):\n"
+                "    def __init__(self, id: str) -> None:\n"
+                "        self.id = id\n"
+                "class SaveResponse(ts.Response):\n"
+                "    def __init__(self, id: str) -> None:\n"
+                "        self.id = id\n"
+                "class Sink(ts.Port, Protocol):\n"
+                "    def save(self, request: SaveRequest) -> SaveResponse: ...\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "shop.application.ports.sink imports names from typing; every import is a "
+        "module import — import x or import x as name, never from x "
+        "import name" in f
+        for f in findings
+    ), findings
 
 
 def test_a_ports_package_holds_only_ports_modules() -> None:
@@ -7272,7 +7416,7 @@ def test_pure_roles_may_import_kernels() -> None:
                 "def test_money_exists() -> None:\n"
                 "    assert True\n",
                 False,
-            ), ('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nfrom kernel.money import Money\nimport money_kernel\nclass Price(ts.ValueObject):\n    _money: Money\n    def __init__(self, amount: int) -> None:\n        object.__setattr__(self, "_money", Money(amount))\n', False),
+            ), ('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nimport kernel.money as money\nimport money_kernel\nclass Price(ts.ValueObject):\n    _money: money.Money\n    def __init__(self, amount: int) -> None:\n        object.__setattr__(self, "_money", money.Money(amount))\n', False),
             (
                 "shop/domain/test_price.py",
                 "shop.domain.test_price",
@@ -7282,6 +7426,30 @@ def test_pure_roles_may_import_kernels() -> None:
             )), imports=('money_kernel',))).violations()
     )
     assert not any("shop/domain/price.py" in f for f in findings), findings
+    member = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        object.__setattr__(self, "_amount", amount)\n', False),
+            (
+                "kernel/test_money.py",
+                "kernel.test_money",
+                "def test_money_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ), ('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nfrom kernel.money import Money\nclass Price(ts.ValueObject):\n    _money: Money\n    def __init__(self, amount: int) -> None:\n        object.__setattr__(self, "_money", Money(amount))\n', False),
+            (
+                "shop/domain/test_price.py",
+                "shop.domain.test_price",
+                "def test_price_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            )))).violations()
+    )
+    assert any(
+        "shop.domain.price imports names from kernel.money; every import is a "
+        "module import — import x or import x as name, never from x "
+        "import name" in f
+        for f in member
+    ), member
 
 
 def test_an_undeclared_package_in_a_pure_role_is_still_a_finding() -> None:
@@ -7328,7 +7496,7 @@ def test_an_exported_kernel_is_governed_like_a_kernel() -> None:
                 "def test_svc_exists() -> None:\n"
                 "    assert True\n",
                 False,
-            ), ('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nfrom shells.svc import Svc\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False),
+            ), ('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nimport shells.svc as svc\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False),
             (
                 "shop/domain/test_price.py",
                 "shop.domain.test_price",
@@ -7393,6 +7561,320 @@ def test_an_unused_import_declaration_is_a_finding() -> None:
     ), findings
 
 
+def test_a_future_import_is_not_a_member_import() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "fut/domain/thing.py",
+                "fut.domain.thing",
+                "from __future__ import annotations\n"
+                "import tesser.domain as ts\n"
+                "class FutSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n",
+                False,
+            ),
+            (
+                "fut/domain/test_thing.py",
+                "fut.domain.test_thing",
+                "def test_thing_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert not any("fut.domain.thing" in f for f in findings), findings
+
+
+@ts.helper
+def _stdlib_spec(
+    module: str = "collections",
+    stdlib: tuple[str, ...] = ("collections", "typing", "enum"),
+    pure_stdlib: tuple[str, ...] = (),
+    extra: tuple[tuple[str, str, str | None, bool], ...] = (),
+) -> checks.CodebaseSpec:
+    return _spec(
+        sources=(
+            (
+                "coll/domain/thing.py",
+                "coll.domain.thing",
+                "import tesser.domain as ts\n"
+                f"import {module}\n"
+                "class CollSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n",
+                False,
+            ),
+            (
+                "coll/domain/test_thing.py",
+                "coll.domain.test_thing",
+                "def test_thing_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            ("kernel/__init__.py", "kernel", "", True),
+            (
+                "kernel/money.py",
+                "kernel.money",
+                "import tesser.domain as ts\n"
+                f"import {module}\n"
+                "class Money(ts.ValueObject):\n"
+                "    _amount: int\n"
+                "    def __init__(self, amount: int) -> None:\n"
+                '        object.__setattr__(self, "_amount", amount)\n',
+                False,
+            ),
+            (
+                "kernel/test_money.py",
+                "kernel.test_money",
+                "def test_money_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ) + extra,
+        stdlib=stdlib,
+        pure_stdlib=pure_stdlib,
+    )
+
+
+def test_a_stdlib_declaration_widens_the_domain_and_the_kernel() -> None:
+    declared = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(
+            _stdlib_spec(pure_stdlib=("collections",))
+        ).violations()
+    )
+    assert declared == (), declared
+    submodule = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_stdlib_spec(
+            module="http.client",
+            stdlib=("http", "typing", "enum"),
+            pure_stdlib=("http",),
+        )).violations()
+    )
+    assert submodule == (), submodule
+    bare = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_stdlib_spec()).violations()
+    )
+    assert any(
+        "coll.domain.thing imports collections; domain, client, and application "
+        "import only their context, their kernels, their tesser package, "
+        "and the pure stdlib" in f
+        for f in bare
+    ), bare
+    assert any(
+        "kernel.money imports collections; a kernel imports only its "
+        "kernel, tesser.domain, declared kernels, and the pure stdlib" in f
+        for f in bare
+    ), bare
+
+
+def test_a_stdlib_declaration_widens_neither_application_nor_client() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_stdlib_spec(
+            pure_stdlib=("collections",),
+            extra=(
+                (
+                    "coll/application/service.py",
+                    "coll.application.service",
+                    "import tesser.application as ts\n"
+                    "import collections\n"
+                    "class CollService(ts.ApplicationService):\n"
+                    "    pass\n",
+                    False,
+                ),
+                (
+                    "coll/application/test_service.py",
+                    "coll.application.test_service",
+                    "def test_service_exists() -> None:\n"
+                    "    assert True\n",
+                    False,
+                ),
+                (
+                    "coll/client/client.py",
+                    "coll.client.client",
+                    "import tesser.context as ts\n"
+                    "import collections\n"
+                    "class CollRequest(ts.Request):\n"
+                    "    def __init__(self, text: str) -> None:\n"
+                    "        self.text = text\n",
+                    False,
+                ),
+                (
+                    "coll/client/test_client.py",
+                    "coll.client.test_client",
+                    "def test_client_exists() -> None:\n"
+                    "    assert True\n",
+                    False,
+                ),
+            ),
+        )).violations()
+    )
+    assert any("coll.application.service imports collections" in f for f in findings), findings
+    assert any("coll.client.client imports collections" in f for f in findings), findings
+    assert not any("coll.domain.thing" in f for f in findings), findings
+
+
+def test_a_stdlib_declaration_names_the_stdlib_and_widens_it_and_is_used() -> None:
+    stray = (
+        (
+            "bad/domain/thing.py",
+            "bad.domain.thing",
+            "import tesser.domain as ts\n"
+            "import requests\n"
+            "class BadSpec(ts.Spec):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n",
+            False,
+        ),
+        (
+            "bad/domain/test_thing.py",
+            "bad.domain.test_thing",
+            "def test_thing_exists() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+    )
+    external = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(
+            _stdlib_spec(pure_stdlib=("requests",), extra=stray)
+        ).violations()
+    )
+    assert external == (
+        ".tesser-root:1: TB044 this tree declares 'stdlib requests' but that is "
+        "not the stdlib; a stdlib declaration widens the domain's pure stdlib, "
+        "an external package is declared with import",
+    ), external
+    repeated = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(
+            _stdlib_spec(pure_stdlib=("typing",), extra=stray)
+        ).violations()
+    )
+    assert repeated == (
+        ".tesser-root:1: TB044 this tree declares 'stdlib typing' but the domain "
+        "already imports it; a stdlib declaration widens the default pure stdlib, "
+        "never repeats it",
+    ), repeated
+    unused = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_stdlib_spec(
+            stdlib=("collections", "typing", "enum", "sqlite3"),
+            pure_stdlib=("collections", "sqlite3"),
+        )).violations()
+    )
+    assert unused == (
+        ".tesser-root:1: TB044 this tree declares 'stdlib sqlite3' and nothing "
+        "uses it; a stdlib declaration that legalizes nothing is itself a finding",
+    ), unused
+
+
+def test_a_stdlib_declaration_below_a_default_module_is_a_repeat() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_stdlib_spec(
+            module="typing",
+            pure_stdlib=("typing.io",),
+        )).violations()
+    )
+    assert findings == (
+        ".tesser-root:1: TB044 this tree declares 'stdlib typing.io' but the domain "
+        "already imports it; a stdlib declaration widens the default pure stdlib, "
+        "never repeats it",
+    ), findings
+
+
+def test_the_default_pure_stdlib_carries_the_shapes_a_domain_reaches_for() -> None:
+    silent = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "wide/domain/thing.py",
+                "wide.domain.thing",
+                "import tesser.domain as ts\n"
+                "import collections.abc\n"
+                "import urllib.parse\n"
+                "import copy\n"
+                "class WideSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n",
+                False,
+            ),
+            (
+                "wide/domain/test_thing.py",
+                "wide.domain.test_thing",
+                "def test_thing_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert silent == (), silent
+    loud = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "narrow/domain/thing.py",
+                "narrow.domain.thing",
+                "import tesser.domain as ts\n"
+                "import urllib.request\n"
+                "import collections\n"
+                "class NarrowSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n",
+                False,
+            ),
+            (
+                "narrow/domain/test_thing.py",
+                "narrow.domain.test_thing",
+                "def test_thing_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any("narrow.domain.thing imports urllib.request" in f for f in loud), loud
+    assert any("narrow.domain.thing imports collections;" in f for f in loud), loud
+
+
+def test_a_kernel_module_imports_a_module_never_names() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            ("kernel/__init__.py", "kernel", "", True),
+            (
+                "kernel/money.py",
+                "kernel.money",
+                "import tesser.domain as ts\n"
+                "from typing import Final\n"
+                "class Money(ts.ValueObject):\n"
+                "    _amount: int\n"
+                "    def __init__(self, amount: int) -> None:\n"
+                '        object.__setattr__(self, "_amount", amount)\n',
+                False,
+            ),
+            (
+                "kernel/test_money.py",
+                "kernel.test_money",
+                "def test_money_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ), stdlib=("typing",))).violations()
+    )
+    assert any(
+        "kernel.money imports names from typing; every import is a "
+        "module import — import x or import x as name, never from x "
+        "import name" in f
+        for f in findings
+    ), findings
+
+
 def test_kernel_siblings_import_each_other_in_both_kernel_shapes() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
@@ -7410,14 +7892,14 @@ def test_kernel_siblings_import_each_other_in_both_kernel_shapes() -> None:
                 "def test_base_exists() -> None:\n"
                 "    assert True\n",
                 False,
-            ), ('shells/rich.py', 'shells.rich', 'import tesser.domain as ts\nfrom shells.base import BaseSpec\nclass RichSpec(ts.Spec):\n    def __init__(self, base: BaseSpec) -> None:\n        self.base = base\n', False),
+            ), ('shells/rich.py', 'shells.rich', 'import tesser.domain as ts\nimport shells.base as shellsbase\nclass RichSpec(ts.Spec):\n    def __init__(self, base: shellsbase.BaseSpec) -> None:\n        self.base = base\n', False),
             (
                 "shells/test_rich.py",
                 "shells.test_rich",
                 "def test_rich_exists() -> None:\n"
                 "    assert True\n",
                 False,
-            ), ('kernel/rates.py', 'kernel.rates', 'import tesser.domain as ts\nfrom kernel.money import Money\nclass Rate(ts.ValueObject):\n    _money: Money\n    def __init__(self, amount: int) -> None:\n        object.__setattr__(self, "_money", Money(amount))\n', False),
+            ), ('kernel/rates.py', 'kernel.rates', 'import tesser.domain as ts\nimport kernel.money as money\nclass Rate(ts.ValueObject):\n    _money: money.Money\n    def __init__(self, amount: int) -> None:\n        object.__setattr__(self, "_money", money.Money(amount))\n', False),
             (
                 "kernel/test_rates.py",
                 "kernel.test_rates",
@@ -7518,7 +8000,7 @@ def test_an_export_naming_a_bare_module_is_a_finding() -> None:
 def test_a_kernel_test_may_reach_the_trees_other_kernel() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('shells/__init__.py', 'shells', '', True), ('shells/base.py', 'shells.base', 'import tesser.domain as ts\nclass BaseSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False), ('kernel/test_money.py', 'kernel.test_money', 'from kernel.money import Money\nfrom shells.base import BaseSpec\ndef test_money() -> None:\n    assert Money(1) == Money(1)\n', False)), exports=('shells',))).violations()
+        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('shells/__init__.py', 'shells', '', True), ('shells/base.py', 'shells.base', 'import tesser.domain as ts\nclass BaseSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False), ('kernel/test_money.py', 'kernel.test_money', 'import kernel.money as money\nimport shells.base as shellsbase\ndef test_money() -> None:\n    assert money.Money(1) == money.Money(1)\n    assert shellsbase.BaseSpec("x") is not None\n', False)), exports=('shells',))).violations()
     )
     assert not any("kernel/test_money.py" in f for f in findings), findings
 
@@ -7705,9 +8187,9 @@ def _tesser_export_spec(
         (
             "tesser/domain/test_valueobject.py",
             "tesser.domain.test_valueobject",
-            "from tesser.domain.valueobject import ValueObject\n"
+            "import tesser.domain.valueobject as valueobject\n"
             "def test_equality() -> None:\n"
-            "    assert ValueObject() == ValueObject()\n",
+            "    assert valueobject.ValueObject() == valueobject.ValueObject()\n",
             False,
         ),
     ),
@@ -7727,6 +8209,37 @@ def test_the_shells_tree_is_clean_and_not_context_shaped() -> None:
         for v in checks.Codebase(_tesser_export_spec()).violations()
     )
     assert findings == (), findings
+
+
+def test_a_tesser_shell_module_imports_a_module_never_names() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_tesser_export_spec(
+            sources=(
+                (
+                    "tesser/domain/tag.py",
+                    "tesser.domain.tag",
+                    "from typing import Final\n"
+                    "class Tag:\n"
+                    "    def __init__(self, text: str) -> None:\n"
+                    "        self.text = text\n",
+                    False,
+                ),
+                (
+                    "tesser/domain/test_tag.py",
+                    "tesser.domain.test_tag",
+                    "def test_tag_exists() -> None:\n"
+                    "    assert True\n",
+                    False,
+                ),
+            ),
+        )).violations()
+    )
+    assert findings == (
+        "tesser/domain/tag.py:1: TB053 tesser.domain.tag imports names from typing; "
+        "every import is a module import — import x or import x as name, "
+        "never from x import name",
+    ), findings
 
 
 def test_a_tesser_init_only_reexports_from_the_distribution() -> None:
@@ -8465,3 +8978,69 @@ def test_a_value_object_does_not_hand_back_a_domain_enum() -> None:
     assert not any("Thing.width" in f and "reaches sibling" in f for f in findings)
     assert not any("Thing.__init__" in f and "reaches sibling" in f for f in findings)
     assert not any("Thing.spoken" in f and "reaches sibling" in f for f in findings)
+
+
+def test_a_conftest_imports_modules_never_names() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "conftest.py",
+                "conftest",
+                "from __future__ import annotations\n"
+                "from typing import Final\n"
+                "import pathlib\n"
+                "ROOT: Final[str] = str(pathlib.Path('.'))\n",
+                False,
+            ),
+            (
+                "shop/tests/conftest.py",
+                "shop.tests.conftest",
+                "from typing import Final\n"
+                "SEEN: Final[int] = 1\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "conftest.py:2: TB053 conftest imports names from typing; every import is a "
+        "module import — import x or import x as name, never from x import name" in f
+        for f in findings
+    )
+    assert any(
+        "shop/tests/conftest.py:1: TB053 shop.tests.conftest imports names from typing; "
+        "every import is a module import" in f
+        for f in findings
+    )
+    assert not any("imports names from __future__" in f for f in findings)
+    assert not any("imports names from pathlib" in f for f in findings)
+
+
+def test_a_nested_from_import_is_still_a_member_import() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "nest/domain/thing.py",
+                "nest.domain.thing",
+                "import tesser.domain as ts\n"
+                "class ThingSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        from decimal import Decimal\n"
+                "        self.text = str(Decimal(text))\n",
+                False,
+            ),
+            (
+                "nest/domain/test_thing.py",
+                "nest.domain.test_thing",
+                "def test_thing_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "nest/domain/thing.py:4: TB053 nest.domain.thing imports names from decimal; "
+        "every import is a module import" in f
+        for f in findings
+    )

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 import campaign.domain.labels as labels
-from tesser.errors import DomainError
+import tesser.errors as errors
 
 
 def test_labels_equality_is_order_independent() -> None:
@@ -21,16 +21,16 @@ def test_labels_get_returns_a_value_object() -> None:
 
 
 def test_labels_reject_empty_keys_and_values() -> None:
-    with pytest.raises(DomainError):
+    with pytest.raises(errors.DomainError):
         labels.Labels((("", "prod"),))
-    with pytest.raises(DomainError):
+    with pytest.raises(errors.DomainError):
         labels.Labels((("env", ""),))
-    with pytest.raises(DomainError):
+    with pytest.raises(errors.DomainError):
         labels.LabelValue("")
 
 
 def test_labels_reject_a_duplicate_key() -> None:
-    with pytest.raises(DomainError):
+    with pytest.raises(errors.DomainError):
         labels.Labels((("env", "prod"), ("env", "dev")))
 
 

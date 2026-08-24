@@ -4,7 +4,7 @@ import pytest
 
 import campaign.application.ports.campaign_repository as campaign_repository
 import campaign.application.views as views
-from tesser.errors import DomainError, Kind
+import tesser.errors as errors
 
 
 def test_a_found_slug_lookup_exposes_the_parts_the_campaign_is_rebuilt_from() -> None:
@@ -42,7 +42,7 @@ def test_a_missing_slug_lookup_is_refused_before_anything_is_rebuilt() -> None:
         outcome=campaign_repository.CampaignLookup.MISSING, campaigns=()
     )
 
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         views.MapToCampaignSpecFromSlugLookup(
             find_campaign_by_slug_request=campaign_repository.FindCampaignBySlugRequest(
                 slug="promo"
@@ -50,7 +50,7 @@ def test_a_missing_slug_lookup_is_refused_before_anything_is_rebuilt() -> None:
             found_campaign=found,
         )
 
-    assert caught.value.kind is Kind.NOT_FOUND
+    assert caught.value.kind is errors.Kind.NOT_FOUND
     assert caught.value.code == "link_missing"
     assert "promo" in caught.value.message
 

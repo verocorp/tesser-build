@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Final
+import collections.abc as abc
+import typing
 
 import tesser.adapters as ts
 
 import scheduling.client.client as client
 import protocol.voice as voice
 
-PROVIDE_NAME: Final[str] = "provide_name"
-CHOOSE_SLOT: Final[str] = "choose_slot"
-CONFIRM_BOOKING: Final[str] = "confirm_booking"
-TOOLS_FOR_STEP: Final[dict[str, tuple[str, ...]]] = {
+PROVIDE_NAME: typing.Final[str] = "provide_name"
+CHOOSE_SLOT: typing.Final[str] = "choose_slot"
+CONFIRM_BOOKING: typing.Final[str] = "confirm_booking"
+TOOLS_FOR_STEP: typing.Final[dict[str, tuple[str, ...]]] = {
     "collect_name": (PROVIDE_NAME,),
     "choose_slot": (CHOOSE_SLOT,),
     "confirm": (CHOOSE_SLOT, CONFIRM_BOOKING),
@@ -26,7 +26,7 @@ class LlmToolHandler(ts.Handler):
         self._booking_id = booking_id
         self._declarations: dict[
             str,
-            tuple[str, Callable[[client.BookingStateResponse], dict[str, object]]],
+            tuple[str, abc.Callable[[client.BookingStateResponse], dict[str, object]]],
         ] = {
             PROVIDE_NAME: (
                 "Record the caller's full name.",

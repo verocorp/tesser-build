@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
+import pathlib
 
 import tesser.testing as ts
 
@@ -10,7 +10,7 @@ import repo.application.ports.repo_reader as repo_reader
 
 
 @ts.helper
-def _repo(root: Path) -> Path:  # tesser:debt TB073
+def _repo(root: pathlib.Path) -> pathlib.Path:  # tesser:debt TB073
     (root / "manifest.json").write_text('{"appone": "app"}')
     (root / "scripts").mkdir()
     (root / "scripts" / "verify").write_text("run_appone() {\n}\n")
@@ -23,12 +23,12 @@ def _repo(root: Path) -> Path:  # tesser:debt TB073
 
 
 @ts.helper
-def _read(root: Path) -> repo_reader.ReadRepoResponse:  # tesser:debt TB073
+def _read(root: pathlib.Path) -> repo_reader.ReadRepoResponse:  # tesser:debt TB073
     reader = file_repository.FilesystemRepoReader()
     return reader.read(repo_reader.ReadRepoRequest(repo_root=str(root)))
 
 
-def test_a_repo_reads_whole(tmp_path: Path) -> None:
+def test_a_repo_reads_whole(tmp_path: pathlib.Path) -> None:
     read = _read(_repo(tmp_path))
     assert read.manifest.state is repo_reader.ManifestState.READ
     assert [(row.key, row.kind) for row in read.manifest.rows] == [("appone", "app")]
@@ -38,7 +38,7 @@ def test_a_repo_reads_whole(tmp_path: Path) -> None:
     assert read.requirements == ("appone",)
 
 
-def test_a_missing_manifest_reports_missing(tmp_path: Path) -> None:
+def test_a_missing_manifest_reports_missing(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "manifest.json").unlink()
     read = _read(tmp_path)
@@ -46,7 +46,7 @@ def test_a_missing_manifest_reports_missing(tmp_path: Path) -> None:
     assert read.manifest.rows == ()
 
 
-def test_a_malformed_manifest_reports_malformed_with_the_parse_note(tmp_path: Path) -> None:
+def test_a_malformed_manifest_reports_malformed_with_the_parse_note(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "manifest.json").write_text("{ truncated")
     read = _read(tmp_path)
@@ -54,21 +54,21 @@ def test_a_malformed_manifest_reports_malformed_with_the_parse_note(tmp_path: Pa
     assert read.manifest.note != ""
 
 
-def test_a_misshapen_manifest_reports_misshapen(tmp_path: Path) -> None:
+def test_a_misshapen_manifest_reports_misshapen(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "manifest.json").write_text('["a", "b"]')
     read = _read(tmp_path)
     assert read.manifest.state is repo_reader.ManifestState.MISSHAPEN
 
 
-def test_a_missing_verify_file_reports_missing(tmp_path: Path) -> None:
+def test_a_missing_verify_file_reports_missing(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "scripts" / "verify").unlink()
     read = _read(tmp_path)
     assert read.verify.state is repo_reader.FileState.MISSING
 
 
-def test_entries_mark_directories_and_symlinks(tmp_path: Path) -> None:
+def test_entries_mark_directories_and_symlinks(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     outside = tmp_path.parent / f"{tmp_path.name}-outside"
     outside.mkdir()
@@ -79,7 +79,7 @@ def test_entries_mark_directories_and_symlinks(tmp_path: Path) -> None:
     assert forms["vendored"] is repo_reader.EntryForm.SYMLINK
 
 
-def test_entries_keep_github_and_drop_other_hidden_and_skip_dirs(tmp_path: Path) -> None:
+def test_entries_keep_github_and_drop_other_hidden_and_skip_dirs(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / ".venv").mkdir()
     (tmp_path / ".hidden").mkdir()
@@ -90,7 +90,7 @@ def test_entries_keep_github_and_drop_other_hidden_and_skip_dirs(tmp_path: Path)
     assert ".hidden" not in names
 
 
-def test_the_walk_reports_declarations_with_relative_paths(tmp_path: Path) -> None:
+def test_the_walk_reports_declarations_with_relative_paths(tmp_path: pathlib.Path) -> None:
     read = _read(_repo(tmp_path))
     assert [(record.path, record.state) for record in read.declarations] == [
         ("appone/.tesser-root", repo_reader.FileState.READ)
@@ -98,21 +98,21 @@ def test_the_walk_reports_declarations_with_relative_paths(tmp_path: Path) -> No
     assert read.declarations[0].text == "app\n"
 
 
-def test_a_bom_prefixed_declaration_decodes(tmp_path: Path) -> None:
+def test_a_bom_prefixed_declaration_decodes(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "appone" / ".tesser-root").write_bytes(b"\xef\xbb\xbfapp\n")
     read = _read(tmp_path)
     assert read.declarations[0].text == "app\n"
 
 
-def test_an_undecodable_declaration_reports_unreadable(tmp_path: Path) -> None:
+def test_an_undecodable_declaration_reports_unreadable(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "appone" / ".tesser-root").write_bytes(b"\xff\xfe\x00app")
     read = _read(tmp_path)
     assert read.declarations[0].state is repo_reader.FileState.UNREADABLE
 
 
-def test_a_declaration_that_is_a_directory_is_not_a_declaration(tmp_path: Path) -> None:
+def test_a_declaration_that_is_a_directory_is_not_a_declaration(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "appone" / ".tesser-root").unlink()
     (tmp_path / "appone" / ".tesser-root").mkdir()
@@ -120,7 +120,7 @@ def test_a_declaration_that_is_a_directory_is_not_a_declaration(tmp_path: Path) 
     assert read.declarations == ()
 
 
-def test_the_walk_finds_requirements_at_depth(tmp_path: Path) -> None:
+def test_the_walk_finds_requirements_at_depth(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     deep = tmp_path / "docs" / "buried" / "tree"
     deep.mkdir(parents=True)
@@ -129,7 +129,7 @@ def test_the_walk_finds_requirements_at_depth(tmp_path: Path) -> None:
     assert "docs/buried/tree" in read.requirements
 
 
-def test_the_walk_skips_ignored_directories(tmp_path: Path) -> None:
+def test_the_walk_skips_ignored_directories(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     hidden = tmp_path / "appone" / ".venv"
     hidden.mkdir()
@@ -140,7 +140,7 @@ def test_the_walk_skips_ignored_directories(tmp_path: Path) -> None:
     assert read.requirements == ("appone",)
 
 
-def test_the_walk_never_follows_symlinked_directories(tmp_path: Path) -> None:
+def test_the_walk_never_follows_symlinked_directories(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     outside = tmp_path.parent / f"{tmp_path.name}-smuggle"
     outside.mkdir()
@@ -152,14 +152,14 @@ def test_the_walk_never_follows_symlinked_directories(tmp_path: Path) -> None:
     assert read.requirements == ("appone",)
 
 
-def test_a_dangling_symlink_does_not_crash_the_walk(tmp_path: Path) -> None:
+def test_a_dangling_symlink_does_not_crash_the_walk(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "appone" / "vendored").symlink_to(tmp_path / "no-such-target")
     read = _read(tmp_path)
     assert read.manifest.state is repo_reader.ManifestState.READ
 
 
-def test_an_unlistable_directory_does_not_crash_the_walk(tmp_path: Path) -> None:
+def test_an_unlistable_directory_does_not_crash_the_walk(tmp_path: pathlib.Path) -> None:
     if os.geteuid() == 0:
         return
     _repo(tmp_path)
@@ -173,7 +173,7 @@ def test_an_unlistable_directory_does_not_crash_the_walk(tmp_path: Path) -> None
     assert read.manifest.state is repo_reader.ManifestState.READ
 
 
-def test_a_top_level_dangling_symlink_is_an_entry_with_symlink_form(tmp_path: Path) -> None:
+def test_a_top_level_dangling_symlink_is_an_entry_with_symlink_form(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "vendored").symlink_to(tmp_path / "no-such-target")
     read = _read(tmp_path)
@@ -181,7 +181,7 @@ def test_a_top_level_dangling_symlink_is_an_entry_with_symlink_form(tmp_path: Pa
     assert forms["vendored"] is repo_reader.EntryForm.SYMLINK
 
 
-def test_an_undecodable_manifest_reports_unreadable(tmp_path: Path) -> None:
+def test_an_undecodable_manifest_reports_unreadable(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "manifest.json").write_bytes(b"\xff\xfe\x00{}")
     read = _read(tmp_path)

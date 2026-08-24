@@ -1,5 +1,5 @@
-from collections.abc import Mapping
-from typing import ClassVar
+import collections.abc as abc
+import typing
 
 import pytest
 
@@ -8,11 +8,11 @@ import tesser.srv
 
 class Ask(tesser.srv.Request):
 
-    def __init__(self, path: str = "/", headers: Mapping[str, str] | None = None) -> None:
+    def __init__(self, path: str = "/", headers: abc.Mapping[str, str] | None = None) -> None:
         super().__init__(path=path, headers=dict(headers or {}))
 
     path: str
-    headers: Mapping[str, str]
+    headers: abc.Mapping[str, str]
 
 
 class Reply(tesser.srv.Response):
@@ -209,7 +209,7 @@ def test_a_record_field_may_not_carry_a_class_level_default() -> None:
 def test_a_classvar_is_not_a_field_and_cannot_be_shadowed_per_instance() -> None:
     class Tagged(tesser.srv.Response):
 
-        KIND: ClassVar[str] = "reply"
+        KIND: typing.ClassVar[str] = "reply"
 
         def __init__(self, status: int) -> None:
             super().__init__(status=status)

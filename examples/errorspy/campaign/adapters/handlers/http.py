@@ -6,7 +6,7 @@ import tesser.adapters as ts
 
 import campaign.client.client as client
 import protocol.http as http
-from tesser.errors import DomainError, InfraError, status_for
+import tesser.errors as errors
 
 
 class Handler(ts.Handler):
@@ -68,8 +68,8 @@ class Handler(ts.Handler):
                     "detail": str(e),
                 },
             )
-        except DomainError as e:
-            status = status_for(e.kind)
+        except errors.DomainError as e:
+            status = errors.status_for(e.kind)
             problem: http.JSONObject = {
                 "type": f"/problems/{e.code}",
                 "title": e.code.replace("_", " "),
@@ -84,7 +84,7 @@ class Handler(ts.Handler):
                     for p in e.problems
                 ]
             return http.Response(status, problem)
-        except InfraError:
+        except errors.InfraError:
             return http.Response(
                 503,
                 {
@@ -121,8 +121,8 @@ class Handler(ts.Handler):
                     "detail": str(e),
                 },
             )
-        except DomainError as e:
-            status = status_for(e.kind)
+        except errors.DomainError as e:
+            status = errors.status_for(e.kind)
             problem: http.JSONObject = {
                 "type": f"/problems/{e.code}",
                 "title": e.code.replace("_", " "),
@@ -137,7 +137,7 @@ class Handler(ts.Handler):
                     for p in e.problems
                 ]
             return http.Response(status, problem)
-        except InfraError:
+        except errors.InfraError:
             return http.Response(
                 503,
                 {
@@ -191,8 +191,8 @@ class Handler(ts.Handler):
                     "detail": str(e),
                 },
             )
-        except DomainError as e:
-            status = status_for(e.kind)
+        except errors.DomainError as e:
+            status = errors.status_for(e.kind)
             problem: http.JSONObject = {
                 "type": f"/problems/{e.code}",
                 "title": e.code.replace("_", " "),
@@ -207,7 +207,7 @@ class Handler(ts.Handler):
                     for p in e.problems
                 ]
             return http.Response(status, problem)
-        except InfraError:
+        except errors.InfraError:
             return http.Response(
                 503,
                 {
@@ -244,8 +244,8 @@ class Handler(ts.Handler):
                     "detail": str(e),
                 },
             )
-        except DomainError as e:
-            status = status_for(e.kind)
+        except errors.DomainError as e:
+            status = errors.status_for(e.kind)
             problem: http.JSONObject = {
                 "type": f"/problems/{e.code}",
                 "title": e.code.replace("_", " "),
@@ -260,7 +260,7 @@ class Handler(ts.Handler):
                     for p in e.problems
                 ]
             return http.Response(status, problem)
-        except InfraError:
+        except errors.InfraError:
             return http.Response(
                 503,
                 {

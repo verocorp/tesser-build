@@ -2,23 +2,23 @@ from __future__ import annotations
 
 import signal
 import threading
-from types import FrameType
-from typing import Optional
+import types
+import typing
 
 import tesser.srv as ts
 
-from app.loader import load
-from srv.http.host import HttpHost
+import app.loader as loader
+import srv.http.host as host
 
 
 class HttpEdge(ts.Host):
 
     def __init__(self) -> None:
-        self._app = load()
-        self._host = HttpHost((self._app.http.host, self._app.http.port), self._app)
+        self._app = loader.load()
+        self._host = host.HttpHost((self._app.http.host, self._app.http.port), self._app)
         self._stop = threading.Event()
 
-    def stop(self, signum: int, frame: Optional[FrameType]) -> None:
+    def stop(self, signum: int, frame: typing.Optional[types.FrameType]) -> None:
         self._stop.set()
 
     def run(self, argv: list[str]) -> int:

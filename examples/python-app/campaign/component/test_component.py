@@ -7,7 +7,7 @@ import campaign.application.ports.target_policy as target_policy
 import campaign.client.client as client
 import campaign.component.config as config
 import campaign.component.component as wire
-from tesser.errors import DomainError, Kind
+import tesser.errors as errors
 
 
 @ts.fake
@@ -33,18 +33,18 @@ class FakeTargetPolicyBlocking(target_policy.TargetPolicy):
 
 
 def test_an_absent_storage_coordinate_is_refused_by_name() -> None:
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         wire.Campaign(config.Config(config.Spec(storage="")), FakeTargetPolicyAllowing())
 
-    assert caught.value.kind is Kind.VALIDATION
+    assert caught.value.kind is errors.Kind.VALIDATION
     assert caught.value.code == "missing_coordinate"
 
 
 def test_an_unsupported_storage_backend_is_refused_by_name() -> None:
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         wire.Campaign(config.Config(config.Spec(storage="postgres")), FakeTargetPolicyAllowing())
 
-    assert caught.value.kind is Kind.VALIDATION
+    assert caught.value.kind is errors.Kind.VALIDATION
     assert caught.value.code == "unknown_backend"
     assert "postgres" in caught.value.message
 
@@ -73,7 +73,7 @@ def test_a_component_hands_the_policy_it_was_given_to_the_service() -> None:
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
 
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         built.client.add_link(
             client.AddLinkRequest(
                 campaign_id=created.campaign_id, slug="promo", target_url="https://bad.example/x"
@@ -90,7 +90,7 @@ def test_two_components_do_not_share_a_store() -> None:
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
 
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         second.client.get_campaign(client.GetCampaignRequest(campaign_id=created.campaign_id))
 
     assert caught.value.code == "campaign_missing"
@@ -101,5 +101,5 @@ def test_a_component_closes_what_it_built() -> None:
 
     built.close()
 
-    with pytest.raises(DomainError):
+    with pytest.raises(errors.DomainError):
         built.client.get_campaign(client.GetCampaignRequest(campaign_id="0123456789abcdef"))

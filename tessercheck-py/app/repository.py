@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol
+import typing
 
 import tesser.app as ts
 
@@ -9,7 +9,7 @@ import tessercheck.component.config as tessercheck_config
 import app.config as config
 
 
-class ConfigRepository(ts.ConfigRepository, Protocol):
+class ConfigRepository(ts.ConfigRepository, typing.Protocol):
 
     def get(self) -> config.Config: ...
 

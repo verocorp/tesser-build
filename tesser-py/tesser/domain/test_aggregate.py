@@ -1,12 +1,12 @@
-from tesser.domain.aggregate import AggregateRoot
-from tesser.domain.entity import Entity
+import tesser.domain.aggregate as aggregate
+import tesser.domain.entity as entity
 
 
 def test_aggregate_root_extends_entity() -> None:
-    assert issubclass(AggregateRoot, Entity)
-    assert Entity in AggregateRoot.__mro__
+    assert issubclass(aggregate.AggregateRoot, entity.Entity)
+    assert entity.Entity in aggregate.AggregateRoot.__mro__
 
 
 def test_aggregate_root_adds_no_behavior_of_its_own() -> None:
-    own = {name for name in vars(AggregateRoot) if not name.startswith("__")}
+    own = {name for name in vars(aggregate.AggregateRoot) if not name.startswith("__")}
     assert own == set(), own

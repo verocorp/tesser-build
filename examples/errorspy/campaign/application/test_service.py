@@ -6,7 +6,7 @@ import tesser.testing as ts
 import campaign.application.ports.campaign_repository as campaign_repository
 import campaign.application.service as service
 import campaign.client.client as client
-from tesser.errors import DomainError, InfraError, Kind
+import tesser.errors as errors
 
 
 @ts.fake
@@ -85,7 +85,7 @@ def test_creating_a_campaign_stores_its_window_and_links() -> None:
 
 def test_creating_a_campaign_with_a_bad_slug_is_refused_before_anything_is_stored() -> None:
     repo = FakeCampaignRepository()
-    with pytest.raises(DomainError) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         service.CampaignService(repo).create_campaign(
             client.CreateCampaignRequest(
                 campaign_id="c1",
@@ -94,7 +94,7 @@ def test_creating_a_campaign_with_a_bad_slug_is_refused_before_anything_is_store
                 links=(client.LinkBody(slug="BAD", target_url="https://x.com"),),
             )
         )
-    assert ei.value.kind is Kind.VALIDATION
+    assert ei.value.kind is errors.Kind.VALIDATION
     assert ei.value.code == "bad_slug"
     assert ei.value.field == "links[0].slug"
     assert repo.saves == []
@@ -102,7 +102,7 @@ def test_creating_a_campaign_with_a_bad_slug_is_refused_before_anything_is_store
 
 def test_creating_a_campaign_with_a_backwards_window_is_refused() -> None:
     repo = FakeCampaignRepository()
-    with pytest.raises(DomainError) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         service.CampaignService(repo).create_campaign(
             client.CreateCampaignRequest(
                 campaign_id="c1",
@@ -117,7 +117,7 @@ def test_creating_a_campaign_with_a_backwards_window_is_refused() -> None:
 
 def test_creating_a_campaign_with_two_identical_slugs_is_a_conflict() -> None:
     repo = FakeCampaignRepository()
-    with pytest.raises(DomainError) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         service.CampaignService(repo).create_campaign(
             client.CreateCampaignRequest(
                 campaign_id="c1",
@@ -129,16 +129,16 @@ def test_creating_a_campaign_with_two_identical_slugs_is_a_conflict() -> None:
                 ),
             )
         )
-    assert ei.value.kind is Kind.CONFLICT
+    assert ei.value.kind is errors.Kind.CONFLICT
     assert ei.value.code == "duplicate_slug"
     assert repo.saves == []
 
 
 def test_getting_a_campaign_that_was_never_created_is_not_found() -> None:
     svc = service.CampaignService(FakeCampaignRepository())
-    with pytest.raises(DomainError) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         svc.get_campaign(client.GetCampaignRequest(campaign_id="nope"))
-    assert ei.value.kind is Kind.NOT_FOUND
+    assert ei.value.kind is errors.Kind.NOT_FOUND
     assert ei.value.code == "campaign_missing"
     assert ei.value.message == "no campaign 'nope'"
 
@@ -180,7 +180,7 @@ def test_adding_a_link_answers_a_view_of_every_link_and_stores_it() -> None:
 
 def test_adding_a_link_with_two_bad_fields_reports_both_at_once() -> None:
     repo = FakeCampaignRepository()
-    with pytest.raises(DomainError) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         service.CampaignService(repo).add_link(
             client.AddLinkRequest(campaign_id="c1", slug="BAD", target_url="ftp://nope")
         )
@@ -190,7 +190,7 @@ def test_adding_a_link_with_two_bad_fields_reports_both_at_once() -> None:
 
 def test_adding_a_link_validates_the_fields_before_the_repository_is_touched() -> None:
     repo = FakeCampaignRepository()
-    with pytest.raises(DomainError):
+    with pytest.raises(errors.DomainError):
         service.CampaignService(repo).add_link(
             client.AddLinkRequest(campaign_id="c1", slug="BAD", target_url="ftp://nope")
         )
@@ -200,7 +200,7 @@ def test_adding_a_link_validates_the_fields_before_the_repository_is_touched() -
 
 def test_adding_a_link_to_a_campaign_that_does_not_exist_is_not_found() -> None:
     repo = FakeCampaignRepository()
-    with pytest.raises(DomainError) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         service.CampaignService(repo).add_link(
             client.AddLinkRequest(
                 campaign_id="nope", slug="spring-sale", target_url="https://x.com"
@@ -221,13 +221,13 @@ def test_adding_a_link_whose_slug_is_already_taken_is_a_conflict() -> None:
             links=(client.LinkBody(slug="spring-sale", target_url="https://x.com"),),
         )
     )
-    with pytest.raises(DomainError) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         svc.add_link(
             client.AddLinkRequest(
                 campaign_id="c1", slug="spring-sale", target_url="https://y.com"
             )
         )
-    assert ei.value.kind is Kind.CONFLICT
+    assert ei.value.kind is errors.Kind.CONFLICT
     assert ei.value.code == "duplicate_slug"
     assert repo.saves == ["c1"]
 
@@ -246,11 +246,11 @@ def test_a_sixth_link_is_refused_at_the_cap() -> None:
             ),
         )
     )
-    with pytest.raises(DomainError) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         svc.add_link(
             client.AddLinkRequest(campaign_id="c1", slug="link-9", target_url="https://x.com")
         )
-    assert ei.value.kind is Kind.CONFLICT
+    assert ei.value.kind is errors.Kind.CONFLICT
     assert ei.value.code == "too_many_links"
 
 
@@ -284,17 +284,17 @@ def test_deactivating_a_link_that_is_not_in_the_campaign_is_not_found() -> None:
             links=(client.LinkBody(slug="spring-sale", target_url="https://x.com"),),
         )
     )
-    with pytest.raises(DomainError) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         svc.deactivate_link(
             client.DeactivateLinkRequest(campaign_id="c1", slug="ghost-link")
         )
-    assert ei.value.kind is Kind.NOT_FOUND
+    assert ei.value.kind is errors.Kind.NOT_FOUND
     assert ei.value.code == "link_missing"
 
 
 def test_deactivating_a_link_on_a_campaign_that_does_not_exist_is_not_found() -> None:
     repo = FakeCampaignRepository()
-    with pytest.raises(DomainError) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         service.CampaignService(repo).deactivate_link(
             client.DeactivateLinkRequest(campaign_id="nope", slug="spring-sale")
         )
@@ -312,39 +312,39 @@ def test_deactivating_a_link_named_by_an_invalid_slug_is_a_validation_failure() 
             links=(client.LinkBody(slug="spring-sale", target_url="https://x.com"),),
         )
     )
-    with pytest.raises(DomainError) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         svc.deactivate_link(client.DeactivateLinkRequest(campaign_id="c1", slug="BAD"))
-    assert ei.value.kind is Kind.VALIDATION
+    assert ei.value.kind is errors.Kind.VALIDATION
     assert ei.value.code == "bad_slug"
 
 
 def test_an_empty_campaign_id_is_a_validation_failure_before_the_repository_is_read() -> None:
     repo = FakeCampaignRepository()
-    with pytest.raises(DomainError) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         service.CampaignService(repo).get_campaign(client.GetCampaignRequest(campaign_id=""))
-    assert ei.value.kind is Kind.VALIDATION
+    assert ei.value.kind is errors.Kind.VALIDATION
     assert ei.value.code == "bad_campaign_id"
     assert repo.finds == []
 
 
 def test_deactivating_with_an_empty_campaign_id_is_a_validation_failure() -> None:
     repo = FakeCampaignRepository()
-    with pytest.raises(DomainError) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         service.CampaignService(repo).deactivate_link(
             client.DeactivateLinkRequest(campaign_id="", slug="spring-sale")
         )
-    assert ei.value.kind is Kind.VALIDATION
+    assert ei.value.kind is errors.Kind.VALIDATION
     assert ei.value.code == "bad_campaign_id"
     assert repo.finds == []
 
 
 def test_adding_a_link_collects_the_campaign_id_problem_with_its_siblings() -> None:
     repo = FakeCampaignRepository()
-    with pytest.raises(DomainError) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         service.CampaignService(repo).add_link(
             client.AddLinkRequest(campaign_id="", slug="BAD", target_url="ftp://x")
         )
-    assert ei.value.kind is Kind.VALIDATION
+    assert ei.value.kind is errors.Kind.VALIDATION
     assert ei.value.code == "validation_failed"
     assert [p.field for p in ei.value.problems] == ["campaign_id", "slug", "target_url"]
     assert repo.finds == []
@@ -352,7 +352,7 @@ def test_adding_a_link_collects_the_campaign_id_problem_with_its_siblings() -> N
 
 def test_creating_a_campaign_with_an_empty_id_is_refused_before_anything_is_stored() -> None:
     repo = FakeCampaignRepository()
-    with pytest.raises(DomainError) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         service.CampaignService(repo).create_campaign(
             client.CreateCampaignRequest(
                 campaign_id="",
@@ -361,7 +361,7 @@ def test_creating_a_campaign_with_an_empty_id_is_refused_before_anything_is_stor
                 links=(),
             )
         )
-    assert ei.value.kind is Kind.VALIDATION
+    assert ei.value.kind is errors.Kind.VALIDATION
     assert ei.value.code == "bad_campaign_id"
     assert repo.saves == []
 
@@ -375,11 +375,11 @@ def test_a_stored_record_with_a_corrupt_slug_is_infrastructure_not_validation() 
             campaign_repository.LinkRecord(slug="BAD SLUG", target_url="https://x.com"),
         ),
     )
-    with pytest.raises(InfraError) as ei:
+    with pytest.raises(errors.InfraError) as ei:
         service.CampaignService(repo).get_campaign(
             client.GetCampaignRequest(campaign_id="c1")
         )
-    assert not isinstance(ei.value, DomainError)
+    assert not isinstance(ei.value, errors.DomainError)
     assert str(ei.value).startswith("corrupted campaign record 'c1': ")
 
 
@@ -392,13 +392,13 @@ def test_a_corrupt_stored_record_keeps_the_domain_complaint_as_its_cause() -> No
             campaign_repository.LinkRecord(slug="BAD SLUG", target_url="https://x.com"),
         ),
     )
-    with pytest.raises(InfraError) as ei:
+    with pytest.raises(errors.InfraError) as ei:
         service.CampaignService(repo).get_campaign(
             client.GetCampaignRequest(campaign_id="c1")
         )
     cause = ei.value.__cause__
-    assert isinstance(cause, DomainError)
-    assert cause.kind is Kind.VALIDATION
+    assert isinstance(cause, errors.DomainError)
+    assert cause.kind is errors.Kind.VALIDATION
     assert cause.code == "bad_slug"
 
 
@@ -409,7 +409,7 @@ def test_a_stored_record_with_a_backwards_window_is_an_infrastructure_failure() 
         window=campaign_repository.WindowRecord(start="2026-02-01", end="2026-01-01"),
         links=(),
     )
-    with pytest.raises(InfraError) as ei:
+    with pytest.raises(errors.InfraError) as ei:
         service.CampaignService(repo).get_campaign(
             client.GetCampaignRequest(campaign_id="c1")
         )

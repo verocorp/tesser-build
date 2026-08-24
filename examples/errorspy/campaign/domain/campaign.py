@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from typing import Final
+import typing
 
 import tesser.domain as ts
 
 import campaign.domain.short_link as short_link
 import campaign.domain.values as values
-from tesser.errors import DomainError, conflict, not_found, wrap
+import tesser.errors as errors
 
-_MAX_LINKS: Final[int] = 5
+_MAX_LINKS: typing.Final[int] = 5
 
 
 class CampaignSpec(ts.Spec):
@@ -33,14 +33,14 @@ class Campaign(ts.AggregateRoot):
         for i, link_spec in enumerate(spec.links):
             try:
                 link = short_link.ShortLink(link_spec)
-            except DomainError as e:
-                raise wrap(e, f"link {i}: {e}", field=f"links[{i}].{e.field}") from e
+            except errors.DomainError as e:
+                raise errors.wrap(e, f"link {i}: {e}", field=f"links[{i}].{e.field}") from e
             if any(existing.slug == link.slug for existing in self._links):
-                raise conflict(
+                raise errors.conflict(
                     "duplicate_slug", f"slug {link.slug} already in campaign {self._id}"
                 )
             if len(self._links) >= _MAX_LINKS:
-                raise conflict(
+                raise errors.conflict(
                     "too_many_links",
                     f"campaign {self._id} is at the {_MAX_LINKS}-link cap",
                 )
@@ -49,11 +49,11 @@ class Campaign(ts.AggregateRoot):
     def add_link(self, spec: short_link.ShortLinkSpec) -> None:
         link = short_link.ShortLink(spec)
         if any(existing.slug == link.slug for existing in self._links):
-            raise conflict(
+            raise errors.conflict(
                 "duplicate_slug", f"slug {link.slug} already in campaign {self._id}"
             )
         if len(self._links) >= _MAX_LINKS:
-            raise conflict(
+            raise errors.conflict(
                 "too_many_links",
                 f"campaign {self._id} is at the {_MAX_LINKS}-link cap",
             )
@@ -64,7 +64,7 @@ class Campaign(ts.AggregateRoot):
             if link.slug == slug:
                 link.deactivate()
                 return
-        raise not_found("link_missing", f"no link {slug} in campaign {self._id}")
+        raise errors.not_found("link_missing", f"no link {slug} in campaign {self._id}")
 
     @property
     def id(self) -> str:

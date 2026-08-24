@@ -5,11 +5,11 @@ import pytest
 import linkpolicy.client.client as client
 import linkpolicy.component.config as config
 import linkpolicy.component.component as wire
-from tesser.errors import DomainError
+import tesser.errors as errors
 
 
 def test_a_component_rejects_an_absent_storage_coordinate() -> None:
-    with pytest.raises(DomainError) as excinfo:
+    with pytest.raises(errors.DomainError) as excinfo:
         wire.LinkPolicy(config.Config(config.Spec("")))
 
     assert excinfo.value.code == "missing_coordinate"
@@ -17,7 +17,7 @@ def test_a_component_rejects_an_absent_storage_coordinate() -> None:
 
 
 def test_a_component_rejects_a_backend_it_does_not_support() -> None:
-    with pytest.raises(DomainError) as excinfo:
+    with pytest.raises(errors.DomainError) as excinfo:
         wire.LinkPolicy(config.Config(config.Spec("redis")))
 
     assert excinfo.value.code == "unknown_backend"

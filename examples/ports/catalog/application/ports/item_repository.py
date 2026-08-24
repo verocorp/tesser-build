@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import enum
-from typing import Protocol
+import typing
 
 import tesser.application as ts
 
@@ -57,7 +57,7 @@ class ListItemsResponse(ts.Response):
         self.items = items
 
 
-class ItemRepository(ts.Port, Protocol):
+class ItemRepository(ts.Port, typing.Protocol):
 
     def save(self, request: SaveItemRequest) -> SaveItemResponse: ...
 

@@ -5,7 +5,8 @@ import tesser.testing as ts
 
 import campaign.domain.short_link as short_link
 import campaign.domain.values as values
-from tesser.errors import DomainError
+import kernel.slug as kernel_slug
+import tesser.errors as errors
 
 
 @ts.helper
@@ -22,7 +23,7 @@ def test_a_short_link_carries_every_field_of_its_spec() -> None:
 
     link = short_link.ShortLink(spec)
 
-    assert link.slug == values.Slug(spec.slug)
+    assert link.slug == kernel_slug.Slug(spec.slug)
     assert link.target_url == values.TargetURL(spec.target_url)
     assert link.status == values.LinkStatus(values.LinkState.ACTIVE)
 
@@ -54,14 +55,14 @@ def test_deactivate_leaves_the_slug_and_target_untouched() -> None:
 
     link.deactivate()
 
-    assert link.slug == values.Slug("promo")
+    assert link.slug == kernel_slug.Slug("promo")
     assert link.target_url == values.TargetURL("https://ok.example/a")
 
 
 def test_a_short_link_is_identified_by_its_slug() -> None:
     link = short_link.ShortLink(_spec(slug="promo"))
 
-    assert link.identity == values.Slug("promo")
+    assert link.identity == kernel_slug.Slug("promo")
 
 
 def test_two_short_links_with_the_same_slug_are_the_same_entity() -> None:
@@ -81,7 +82,7 @@ def test_two_short_links_with_different_slugs_are_different_entities() -> None:
 
 @pytest.mark.parametrize("slug", ["", "Promo", "promo sale", "-promo"])
 def test_a_short_link_refuses_a_malformed_slug(slug: str) -> None:
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         short_link.ShortLink(_spec(slug=slug))
 
     assert caught.value.code == "invalid_slug"
@@ -89,7 +90,7 @@ def test_a_short_link_refuses_a_malformed_slug(slug: str) -> None:
 
 @pytest.mark.parametrize("target_url", ["", "ftp://ok.example/x", "javascript:alert(1)"])
 def test_a_short_link_refuses_a_target_that_is_not_an_http_url(target_url: str) -> None:
-    with pytest.raises(DomainError) as caught:
+    with pytest.raises(errors.DomainError) as caught:
         short_link.ShortLink(_spec(target_url=target_url))
 
     assert caught.value.code == "invalid_target_url"

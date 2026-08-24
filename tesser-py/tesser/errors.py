@@ -1,6 +1,6 @@
 import enum
-from collections.abc import Callable
-from typing import assert_never
+import collections.abc as abc
+import typing
 
 
 class Kind(enum.Enum):
@@ -87,7 +87,7 @@ def wrap(err: DomainError, message: str, *, field: str | None = None) -> DomainE
     )
 
 
-def collect(**fields: Callable[[], object]) -> None:
+def collect(**fields: abc.Callable[[], object]) -> None:
     problems: list[NeedsDesignFieldProblem] = []
     for name, thunk in fields.items():
         try:
@@ -113,7 +113,7 @@ def status_for(kind: Kind) -> int:
             return 404
         case Kind.CONFLICT:
             return 409
-    assert_never(kind)
+    typing.assert_never(kind)
 
 
 def exit_code_for(kind: Kind) -> int:
@@ -124,4 +124,4 @@ def exit_code_for(kind: Kind) -> int:
             return 1
         case Kind.CONFLICT:
             return 1
-    assert_never(kind)
+    typing.assert_never(kind)

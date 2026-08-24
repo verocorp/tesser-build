@@ -1,40 +1,40 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
-from typing import Final
+import pathlib
+import typing
 
 import tesser.srv as ts
 
 import tessercheck.adapters.handlers.cli as cli
-from app.loader import load
-from protocol.cli import CliRequest, CliResponse, UsageError
+import app.loader as loader
+import protocol.cli as protocol_cli
 
-_USAGE: Final[str] = "usage: python -m srv.cli.rules [tree] [--check]"
+_USAGE: typing.Final[str] = "usage: python -m srv.cli.rules [tree] [--check]"
 
-_OUTPUT: Final[str] = "RULES.md"
+_OUTPUT: typing.Final[str] = "RULES.md"
 
-_HERE: Final[str] = "."
+_HERE: typing.Final[str] = "."
 
 
 def run(argv: list[str]) -> int:  # tesser:debt TB051
     check = "--check" in argv
     args = [arg for arg in argv if arg != "--check"]
-    app = load()
+    app = loader.load()
     try:
         handler = cli.Handler(app.tessercheck.client)
         try:
-            resp = handler.rulebook(CliRequest(args=tuple(args)))
-        except UsageError as e:
-            resp = CliResponse(2, stdout="", stderr=f"{e}\n{_USAGE}")
+            resp = handler.rulebook(protocol_cli.CliRequest(args=tuple(args)))
+        except protocol_cli.UsageError as e:
+            resp = protocol_cli.CliResponse(2, stdout="", stderr=f"{e}\n{_USAGE}")
         except Exception:
-            resp = CliResponse(1, stdout="", stderr="unexpected error")
+            resp = protocol_cli.CliResponse(1, stdout="", stderr="unexpected error")
         if resp.exit_code != 0:
             if resp.stderr:
                 print(resp.stderr, file=sys.stderr)
             return resp.exit_code
         root = args[0] if args else _HERE
-        output = Path(root) / _OUTPUT
+        output = pathlib.Path(root) / _OUTPUT
         if check:
             if not output.exists() or output.read_text() != resp.stdout:
                 print(

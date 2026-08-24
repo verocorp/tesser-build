@@ -1,4 +1,4 @@
-from pathlib import Path
+import pathlib
 
 import tesser.adapters as ts
 
@@ -10,7 +10,7 @@ class FilesystemRulebookSources(ts.Repository):
     def read(
         self, request: rulebook_sources.ReadRulebookRequest
     ) -> rulebook_sources.ReadRulebookResponse:
-        base = Path(request.tree)
+        base = pathlib.Path(request.tree)
         modules = [
             base / "tessercheck" / "tests" / "test_checks.py",
             *sorted((base / "tessercheck" / "domain").glob("test_*.py")),

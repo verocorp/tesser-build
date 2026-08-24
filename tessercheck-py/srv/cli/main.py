@@ -1,27 +1,27 @@
 from __future__ import annotations
 
 import sys
-from typing import Final
+import typing
 
 import tesser.srv as ts
 
 import tessercheck.adapters.handlers.cli as cli
-from app.loader import load
-from protocol.cli import CliRequest, CliResponse, UsageError
+import app.loader as loader
+import protocol.cli as protocol_cli
 
-_USAGE: Final[str] = "usage: python -m srv.cli.main [tree]"
+_USAGE: typing.Final[str] = "usage: python -m srv.cli.main [tree]"
 
 
 def run(argv: list[str]) -> int:  # tesser:debt TB051
-    app = load()
+    app = loader.load()
     try:
         handler = cli.Handler(app.tessercheck.client)
         try:
-            resp = handler.check(CliRequest(args=tuple(argv)))
-        except UsageError as e:
-            resp = CliResponse(2, stdout="", stderr=f"{e}\n{_USAGE}")
+            resp = handler.check(protocol_cli.CliRequest(args=tuple(argv)))
+        except protocol_cli.UsageError as e:
+            resp = protocol_cli.CliResponse(2, stdout="", stderr=f"{e}\n{_USAGE}")
         except Exception:
-            resp = CliResponse(1, stdout="", stderr="unexpected error")
+            resp = protocol_cli.CliResponse(1, stdout="", stderr="unexpected error")
         if resp.stdout:
             print(resp.stdout)
         if resp.stderr:

@@ -5,8 +5,8 @@ import tesser.testing as ts
 
 import reports.adapters.handlers.http as http
 import reports.client.client as client
-from protocol.http import HttpRequest
-from tesser.errors import InfraError
+import protocol.http as protocol_http
+import tesser.errors as errors
 
 
 @ts.fake
@@ -33,7 +33,7 @@ def test_a_report_comes_back_as_a_json_object_of_link_rows() -> None:
     )
 
     resp = http.Handler(reports).links_by_verdict(
-        HttpRequest("GET", "/reports/links", {}, {}, {}, b"")
+        protocol_http.HttpRequest("GET", "/reports/links", {}, {}, {}, b"")
     )
 
     assert resp.status_code == 200
@@ -56,7 +56,7 @@ def test_every_row_the_client_serves_reaches_the_body_in_order() -> None:
     )
 
     resp = http.Handler(reports).links_by_verdict(
-        HttpRequest("GET", "/reports/links", {}, {}, {}, b"")
+        protocol_http.HttpRequest("GET", "/reports/links", {}, {}, {}, b"")
     )
 
     rows = resp.json_body()["links"]
@@ -68,7 +68,7 @@ def test_an_empty_report_is_an_empty_list_and_not_an_error() -> None:
     reports = FakeReportsClient()
 
     resp = http.Handler(reports).links_by_verdict(
-        HttpRequest("GET", "/reports/links", {}, {}, {}, b"")
+        protocol_http.HttpRequest("GET", "/reports/links", {}, {}, {}, b"")
     )
 
     assert resp.status_code == 200
@@ -79,7 +79,7 @@ def test_the_handler_declares_json_on_the_way_out() -> None:
     reports = FakeReportsClient()
 
     resp = http.Handler(reports).links_by_verdict(
-        HttpRequest("GET", "/reports/links", {}, {}, {}, b"")
+        protocol_http.HttpRequest("GET", "/reports/links", {}, {}, {}, b"")
     )
 
     assert resp.headers["Content-Type"] == "application/json"
@@ -89,7 +89,7 @@ def test_the_handler_asks_its_own_client_once() -> None:
     reports = FakeReportsClient()
 
     http.Handler(reports).links_by_verdict(
-        HttpRequest("GET", "/reports/links", {}, {}, {}, b"")
+        protocol_http.HttpRequest("GET", "/reports/links", {}, {}, {}, b"")
     )
 
     assert len(reports.requests) == 1
@@ -97,9 +97,9 @@ def test_the_handler_asks_its_own_client_once() -> None:
 
 
 def test_a_client_failure_leaves_the_handler_rather_than_becoming_a_body() -> None:
-    reports = FakeReportsClient(error=InfraError("reports unavailable"))
+    reports = FakeReportsClient(error=errors.InfraError("reports unavailable"))
 
-    with pytest.raises(InfraError):
+    with pytest.raises(errors.InfraError):
         http.Handler(reports).links_by_verdict(
-            HttpRequest("GET", "/reports/links", {}, {}, {}, b"")
+            protocol_http.HttpRequest("GET", "/reports/links", {}, {}, {}, b"")
         )
