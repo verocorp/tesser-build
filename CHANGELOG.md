@@ -5,6 +5,47 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.78.0] - 2026-08-24
+
+Two rulings land. Tests may group under classes: a `Test`-prefixed class
+holding test methods is now a legal shape in a test module. And construction
+data is primitives and specs, never value objects: a value object's
+constructor takes primitives and child specs and builds its children inside,
+so no already-constructed domain object ever rides through construction.
+"Door" leaves the vocabulary — the docs and the findings now say
+"constructor" and "construction path".
+
+### Added
+- **Test classes.** A test module may group a subject's scenarios under a
+  `Test`-prefixed class (pytest's default collection glob), and the totality
+  check follows them in: every method on a test class must be a `test_*`
+  method, and a nested class or a loose statement in the class body is a
+  finding, exactly as it would be at module level. A class that is neither
+  `Test`-prefixed nor a declared `@ts.fake` stays a finding. Whether test
+  classes will one day be *required* is recorded as open in `testing.md`.
+- **Construction guards that keep the new rule honest.** A spec that
+  declares a field as a class-level annotation, takes `*args`/`**kwargs`, or
+  omits `__init__` is now a finding, and so is a value object without
+  `__init__` or with `*args`/`**kwargs` — the same guards the DTO rules
+  always had, so the tightened rule cannot be bypassed by shape.
+
+### Changed
+- **TB080 tightens: construction data carries no value object.** A value
+  object's constructor parameter and a spec's field may be a primitive
+  (domain enums included), a child spec, an optional of either, or a tuple
+  of either — never a value object, bare or smuggled inside a container.
+  The messages state the rule: "a value object constructs from primitives
+  and specs, never value objects"; "a spec field is a primitive or a child
+  spec, never a value object".
+- **Quoted forward references resolve in construction annotations**, so a
+  recursive child spec (`kids: tuple["ForwardSpec", ...]`) is expressible
+  instead of a false positive.
+- **The "door" vocabulary is retired** from the living docs and the finding
+  messages — TB017 now reports "a second construction path", TB010 "the
+  canonical exit is the only primitive exit" — and every rendering of the
+  two rulings (skill files, FAQ, README, coverage matrix, agent guide) says
+  the same thing. skill-version 52.
+
 ## [0.0.77.0] - 2026-08-23
 
 An enum is a primitive, and the checker now agrees. A plain `enum.Enum`
