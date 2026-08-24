@@ -18,7 +18,9 @@ class ShortLink(ts.Entity):
     def __init__(self, spec: ShortLinkSpec) -> None:
         self._slug = values.Slug(spec.slug)
         self._target_url = values.TargetURL(spec.target_url)
-        self._status = values.LinkStatus("active" if spec.active else "inactive")
+        self._status = values.LinkStatus(
+            values.LinkState.ACTIVE if spec.active else values.LinkState.INACTIVE
+        )
 
     @property
     def slug(self) -> values.Slug:
@@ -33,7 +35,7 @@ class ShortLink(ts.Entity):
         return self._status
 
     def deactivate(self) -> None:
-        self._status = values.LinkStatus("inactive")
+        self._status = values.LinkStatus(values.LinkState.INACTIVE)
 
     @property
     def identity(self) -> values.Slug:

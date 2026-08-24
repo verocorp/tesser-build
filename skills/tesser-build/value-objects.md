@@ -27,7 +27,9 @@ persistence-only column, a local implementation detail. Blanket wrapping is
   validation, primitive leaves. It *feeds* a value object's constructor.
 - A **persistence/row model** — shaped by storage, not by the domain.
 - An **enum / type code** — a closed set of named constants that *selects*
-  behavior; it's a primitive with a name, not a value object.
+  behavior; it's a primitive with a name, not a value object. Declare it as a
+  plain `enum.Enum` (no `ts.*` base) in the domain; it feeds specs and
+  value-object constructors like any other primitive leaf.
 
 ## Rules
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import enum
 import re
 from typing import Final
 from urllib.parse import urlparse  # tesser:debt TB062
@@ -11,7 +12,6 @@ from tesser.errors import invalid
 from tesser.serialization import canonical_str
 
 _CAMPAIGN_ID_RE: Final[re.Pattern[str]] = re.compile(r"[a-f0-9]{16}")
-_LINK_STATES: Final[frozenset[str]] = frozenset({"active", "inactive"})
 
 
 class CampaignID(ts.ValueObject):
@@ -27,15 +27,15 @@ class CampaignID(ts.ValueObject):
     _value: str
 
 
+class LinkState(enum.Enum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+
+
 class LinkStatus(ts.ValueObject):
 
-    def __init__(self, value: str) -> None:
-        if value not in _LINK_STATES:
-            raise invalid(
-                "invalid_link_status",
-                f"link status {value!r} must be one of {', '.join(sorted(_LINK_STATES))}",
-            )
-        object.__setattr__(self, "_value", value)
+    def __init__(self, value: LinkState) -> None:
+        object.__setattr__(self, "_value", value.value)
 
     def __str__(self) -> str:
         return canonical_str(self._value)

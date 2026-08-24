@@ -54,7 +54,7 @@ def test_the_links_accessor_hands_back_copies_the_caller_cannot_mutate() -> None
 
     c.links[0].deactivate()
 
-    assert c.links[0].status == values.LinkStatus("active")
+    assert c.links[0].status == values.LinkStatus(values.LinkState.ACTIVE)
 
 
 def test_add_short_link_admits_a_new_slug() -> None:
@@ -157,8 +157,8 @@ def test_deactivate_short_link_flips_only_the_named_link() -> None:
     c.deactivate_short_link(values.Slug("promo"))
 
     assert [link.status for link in c.links] == [
-        values.LinkStatus("inactive"),
-        values.LinkStatus("active"),
+        values.LinkStatus(values.LinkState.INACTIVE),
+        values.LinkStatus(values.LinkState.ACTIVE),
     ]
 
 

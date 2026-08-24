@@ -306,7 +306,9 @@ class ShortLink(ts.Entity):
     def __init__(self, spec: ShortLinkSpec) -> None:       # the single construction path
         self._slug = values.Slug(spec.slug)
         self._target_url = values.TargetURL(spec.target_url)
-        self._status = values.LinkStatus("active" if spec.active else "inactive")
+        self._status = values.LinkStatus(
+            values.LinkState.ACTIVE if spec.active else values.LinkState.INACTIVE
+        )
 
     @property
     def slug(self) -> values.Slug:
@@ -317,7 +319,7 @@ class ShortLink(ts.Entity):
         return self._status
 
     def deactivate(self) -> None:                          # lifecycle transition
-        self._status = values.LinkStatus("inactive")
+        self._status = values.LinkStatus(values.LinkState.INACTIVE)
 
     @property
     def identity(self) -> values.Slug:                     # the base compares and hashes by this
@@ -330,6 +332,15 @@ class ShortLink(ts.Entity):
   read-only `@property` accessors returning value objects, no setters. An
   accessor must never hand back a backing mutable collection — return a
   defensive copy (TB011).
+- A closed set of states is a **domain enum** — a plain `enum.Enum` in
+  `values.py` (`LinkState`), no `ts.*` base. An enum is a primitive with a
+  name: legal as a spec field and as a value-object constructor parameter,
+  exactly like `str`. The `LinkStatus` value object wraps it (storing the
+  member's string value, so the canonical `__str__` exit stands) and never
+  hands the enum back out — TB010 flags an accessor returning one. The enum
+  lives beside the value objects it feeds, because a role module imports its
+  tesser package exactly once (TB050) and ruff bans an unused import, so an
+  enum-only module has no legal form.
 - Equality is **identity**, and the base owns it: declare the `identity`
   property (the ID value object) and `ts.Entity` compares and hashes by it —
   a hand-written `__eq__`/`__hash__` raises at class definition.
@@ -515,9 +526,10 @@ class CampaignRepository(ts.Port, Protocol):
   response hierarchy is a union mypy cannot check for exhaustiveness.
 - **A multi-outcome answer is an enum outcome plus payload; a collection is a
   tuple.** Where cardinality *is* the answer (list-all), the tuple alone says
-  it — no outcome enum. The enum is a plain `enum.Enum`, never `StrEnum` or
-  `IntEnum` (TB052): a str- or int-backed member compares equal to a raw
-  literal and reopens the typo the enum closes.
+  it — no outcome enum. The enum is a plain `enum.Enum`, never `StrEnum`/
+  `IntEnum` or a hand-mixed base (`class Outcome(str, enum.Enum)`) (TB052):
+  a str- or int-backed member compares equal to a raw literal and reopens
+  the typo the enum closes.
 - **Mapping stays in the application role, never in ports.** A sibling
   `mapping.py` / `views.py` owns domain ↔ port-DTO translation — it may import
   the domain and the ports package; ports import neither.
