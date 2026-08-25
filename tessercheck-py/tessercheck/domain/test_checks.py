@@ -1597,6 +1597,31 @@ def test_edge_records_reject_an_empty_target() -> None:
         checks.TesserImport(checks.TesserImportSpec("", 1, False, False))
 
 
+def test_a_spec_reference_is_a_symbol_with_a_shape() -> None:
+    with pytest.raises(ValueError):
+        checks.SpecShape("some")
+    with pytest.raises(ValueError):
+        checks.Symbol(checks.SymbolSpec("", "MoneySpec"))
+    with pytest.raises(ValueError):
+        checks.Symbol(checks.SymbolSpec("shop.domain.money", ""))
+    assert str(checks.SpecShape("one")) == "one"
+    assert checks.SpecShape("many") == checks.SPEC_MANY
+    assert checks.SpecShape("one") != checks.SPEC_MANY
+    one = checks.SpecRef(checks.SpecRefSpec(checks.SymbolSpec("shop.domain.money", "MoneySpec"), "one"))
+    assert one.shape() == checks.SPEC_ONE
+    assert one.many().shape() == checks.SPEC_MANY
+    assert one.many().one() == one
+    assert one.many().symbol() == one.symbol()
+    assert one.many() != one
+    same = checks.Symbol(checks.SymbolSpec("shop.domain.money", "MoneySpec"))
+    other = checks.Symbol(checks.SymbolSpec("shop.domain.money", "PriceSpec"))
+    assert same == one.symbol()
+    assert hash(same) == hash(one.symbol())
+    assert same != other
+    assert {same: "owner"}[one.symbol()] == "owner"
+    assert one.symbol() != ("shop.domain.money", "MoneySpec")
+
+
 def test_optional_construction_data_is_the_only_union() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
