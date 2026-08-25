@@ -821,7 +821,14 @@ def test_mapper_shape_rules_are_flagged() -> None:
                 "class MapToThing(ts.Mapper, client.AskResponse):\n"
                 "    def __init__(self, request: client.AskRequest) -> None:\n"
                 "        super().__init__(text=request.text, rows=())\n"
-                "        super().__init__(text=request.text, rows=())\n",
+                "        super().__init__(text=request.text, rows=())\n"
+                "class MapToAskResponseLater(ts.Mapper, client.AskResponse):\n"
+                "    def __init__(self, request: client.AskRequest) -> None:\n"
+                "        if request.text:\n"
+                "            super().__init__(text=request.text, rows=())\n"
+                "        setattr(self, 'text', 'x')\n"
+                "        vars(self)['rows'] = ()\n"
+                "        self.__dict__['text'] = 'y'\n",
                 False,
             ),
         ))).violations()
@@ -873,6 +880,18 @@ def test_mapper_shape_rules_are_flagged() -> None:
         "shop.application.nested.MapToThing.__init__ calls super().__init__ 2 times" in f
         for f in findings
     )
+    assert any(
+        "shop/application/nested.py:10: TB080 shop.application.nested.MapToAskResponseLater.__init__ "
+        "calls super().__init__ inside a branch; a mapper calls it as a statement of the "
+        "constructor body, so the target is always initialized" in f
+        for f in findings
+    )
+    assert any(
+        "MapToAskResponseLater.__init__ calls super().__init__ 0 times" in f for f in findings
+    )
+    assert any("nested.py:11: TB080 shop.application.nested.MapToAskResponseLater stores 'setattr'" in f for f in findings)
+    assert any("nested.py:12: TB080 shop.application.nested.MapToAskResponseLater stores 'vars'" in f for f in findings)
+    assert any("nested.py:13: TB080 shop.application.nested.MapToAskResponseLater stores '__dict__'" in f for f in findings)
 
 def test_a_conformant_mapper_passes_every_shape_rule() -> None:
     findings = tuple(
@@ -914,9 +933,23 @@ def test_a_conformant_mapper_passes_every_shape_rule() -> None:
                 "        super().__init__(text=request.text, rows=rows)\n",
                 False,
             ),
+            (
+                "shop/application/test_good.py",
+                "shop.application.test_good",
+                "import tesser.testing as ts\n"
+                "import shop.application.good as good\n"
+                "import shop.client.client as client\n"
+                "@ts.helper\n"
+                "def answer(text: str = 'hi') -> good.MapToAskResponse:\n"
+                "    return good.MapToAskResponse(client.AskRequest(text=text, rows=()))\n"
+                "def test_answer() -> None:\n"
+                "    assert answer().text == 'hi'\n",
+                False,
+            ),
         ))).violations()
                )
     assert not any("shop.application.good" in f and " TB080 " in f for f in findings), findings
+    assert not any("returns no construction data" in f for f in findings), findings
 
 def test_a_mapper_lives_only_in_the_application_role() -> None:
     findings = tuple(

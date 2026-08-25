@@ -5408,6 +5408,8 @@ class Codebase(ts.AggregateRoot):
                 ))
             )
         helper_key = module._resolve(fn.returns) if fn.returns is not None else None
+        if helper_key is not None and blocks.get(helper_key) == "mapper":
+            helper_key = self._mapper_target.get(helper_key)
         if (blocks.get(helper_key) if helper_key is not None else None) not in DATA_BLOCKS:
             found.append(
                 Violation(ViolationSpec(
@@ -5837,7 +5839,17 @@ class Codebase(ts.AggregateRoot):
                             "whole objects, never a field already pulled off one",
                         ))
                     )
-            supers = 0
+            supers = sum(
+                1
+                for stmt in init.body
+                if isinstance(stmt, ast.Expr)
+                and isinstance(stmt.value, ast.Call)
+                and isinstance(stmt.value.func, ast.Attribute)
+                and stmt.value.func.attr == "__init__"
+                and isinstance(stmt.value.func.value, ast.Call)
+                and isinstance(stmt.value.func.value.func, ast.Name)
+                and stmt.value.func.value.func.id == "super"
+            )
             for node in ast.walk(init):
                 if (
                     isinstance(node, ast.Call)
@@ -5846,8 +5858,20 @@ class Codebase(ts.AggregateRoot):
                     and isinstance(node.func.value, ast.Call)
                     and isinstance(node.func.value.func, ast.Name)
                     and node.func.value.func.id == "super"
+                    and not any(
+                        isinstance(stmt, ast.Expr) and stmt.value is node for stmt in init.body
+                    )
                 ):
-                    supers += 1
+                    found.append(
+                        Violation(ViolationSpec(
+                            module.path(),
+                            node.lineno,
+                            "TB080",
+                            f"{where}.__init__ calls super().__init__ inside a branch; a mapper "
+                            "calls it as a statement of the constructor body, so the target is "
+                            "always initialized",
+                        ))
+                    )
                 stored: ast.expr | None = None
                 if isinstance(node, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
                     targets = node.targets if isinstance(node, ast.Assign) else [node.target]
@@ -5867,8 +5891,30 @@ class Codebase(ts.AggregateRoot):
                     and node.func.attr == "__setattr__"
                 ):
                     stored = node
+                if stored is None and (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id in ("setattr", "vars")
+                    and node.args
+                    and isinstance(node.args[0], ast.Name)
+                    and node.args[0].id == "self"
+                ):
+                    stored = node
+                if stored is None and (
+                    isinstance(node, ast.Attribute)
+                    and node.attr == "__dict__"
+                    and isinstance(node.value, ast.Name)
+                    and node.value.id == "self"
+                ):
+                    stored = node
                 if stored is not None:
-                    field = stored.attr if isinstance(stored, ast.Attribute) else "__setattr__"
+                    field = (
+                        stored.attr
+                        if isinstance(stored, ast.Attribute)
+                        else stored.func.id
+                        if isinstance(stored, ast.Call) and isinstance(stored.func, ast.Name)
+                        else "__setattr__"
+                    )
                     found.append(
                         Violation(ViolationSpec(
                             module.path(),
