@@ -68,6 +68,28 @@ class BookingID(ts.ValueObject):
         return serialization.canonical_str(self._value)
 
 
+class ReoffersSpec(ts.Spec):
+
+    def __init__(self, offered: tuple[tuple[str, ...], ...]) -> None:
+        self.offered = offered
+
+
+class Reoffers(ts.ValueObject):
+
+    _offered: tuple[tuple[Slot, ...], ...]
+
+    def __init__(self, spec: ReoffersSpec) -> None:
+        object.__setattr__(
+            self,
+            "_offered",
+            tuple(tuple(Slot(label) for label in each) for each in spec.offered),
+        )
+
+    @property
+    def offered(self) -> tuple[tuple[Slot, ...], ...]:
+        return self._offered
+
+
 class BookingSpec(ts.Spec):
 
     def __init__(
@@ -145,10 +167,10 @@ class Booking(ts.AggregateRoot):
             raise ValueError(f"not available at step {self._step}")
         self._step = Step(BOOKED)
 
-    def settle(self, reoffers: tuple[tuple[Slot, ...], ...]) -> None:
+    def settle(self, reoffers: Reoffers) -> None:
         if str(self._step) != BOOKED:
             raise ValueError(f"not available at step {self._step}")
-        for offered in reoffers:
+        for offered in reoffers.offered:
             if not offered:
                 raise ValueError("no slots are available")
             self._offered = offered

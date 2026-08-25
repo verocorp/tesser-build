@@ -220,7 +220,7 @@ def test_settling_with_no_reoffer_leaves_the_booking_booked() -> None:
         domain.BookingSpec(step="booked", name="Ada", chosen="mon-9am", offered=("mon-9am",))
     )
 
-    booking.settle(())
+    booking.settle(domain.Reoffers(domain.ReoffersSpec(offered=())))
 
     assert str(booking.step()) == "booked"
     assert str(booking.chosen()) == "mon-9am"
@@ -231,7 +231,7 @@ def test_settling_with_a_reoffer_sends_the_booking_back_to_choosing() -> None:
         domain.BookingSpec(step="booked", name="Ada", chosen="mon-9am", offered=("mon-9am",))
     )
 
-    booking.settle(((domain.Slot("tue-2pm"),),))
+    booking.settle(domain.Reoffers(domain.ReoffersSpec(offered=(("tue-2pm",),))))
 
     assert str(booking.step()) == "choose_slot"
     assert booking.chosen() is None
@@ -244,7 +244,7 @@ def test_settling_with_an_empty_reoffer_is_an_error() -> None:
     )
 
     with pytest.raises(ValueError, match="no slots are available"):
-        booking.settle(((),))
+        booking.settle(domain.Reoffers(domain.ReoffersSpec(offered=((),))))
 
 
 def test_settling_a_booking_that_was_never_booked_is_an_error() -> None:
@@ -253,4 +253,27 @@ def test_settling_a_booking_that_was_never_booked_is_an_error() -> None:
     )
 
     with pytest.raises(ValueError, match="not available at step"):
-        booking.settle(())
+        booking.settle(domain.Reoffers(domain.ReoffersSpec(offered=())))
+
+
+def test_reoffers_turn_every_offered_label_into_a_slot() -> None:
+    reoffers = domain.Reoffers(domain.ReoffersSpec(offered=(("mon-9am", "tue-2pm"),)))
+
+    assert tuple(
+        tuple(str(slot) for slot in each) for each in reoffers.offered
+    ) == (("mon-9am", "tue-2pm"),)
+
+
+def test_reoffers_refuse_a_slot_label_that_is_blank() -> None:
+    with pytest.raises(ValueError, match="slot label must be non-empty"):
+        domain.Reoffers(domain.ReoffersSpec(offered=((" ",),)))
+
+
+def test_reoffers_are_equal_when_they_offer_the_same_slots() -> None:
+    one = domain.Reoffers(domain.ReoffersSpec(offered=(("mon-9am",),)))
+    same = domain.Reoffers(domain.ReoffersSpec(offered=(("mon-9am",),)))
+    other = domain.Reoffers(domain.ReoffersSpec(offered=(("tue-2pm",),)))
+
+    assert one == same
+    assert one != other
+    assert len({one, same, other}) == 2

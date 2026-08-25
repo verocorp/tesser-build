@@ -93,9 +93,9 @@ def test_a_reserved_slot_hands_the_booking_no_reoffer_at_all() -> None:
         outcome=slot_directory.ReservationOutcome.RESERVED, available=()
     )
 
-    mapper = views.MapToSettledBooking(reserved_slot=reserved)
+    mapper = views.MapToReoffersSpec(reserved_slot=reserved)
 
-    assert mapper.reoffered_slots_mappers == ()
+    assert mapper.offered == ()
 
 
 def test_a_taken_slot_hands_the_booking_one_reoffer_of_the_slots_still_open() -> None:
@@ -103,9 +103,9 @@ def test_a_taken_slot_hands_the_booking_one_reoffer_of_the_slots_still_open() ->
         outcome=slot_directory.ReservationOutcome.SLOT_TAKEN, available=("tue-2pm",)
     )
 
-    mapper = views.MapToSettledBooking(reserved_slot=reserved)
+    mapper = views.MapToReoffersSpec(reserved_slot=reserved)
 
-    assert tuple(m.slots for m in mapper.reoffered_slots_mappers) == (("tue-2pm",),)
+    assert mapper.offered == (("tue-2pm",),)
 
 
 def test_a_taken_slot_with_nothing_open_still_hands_the_booking_a_reoffer() -> None:
@@ -113,9 +113,9 @@ def test_a_taken_slot_with_nothing_open_still_hands_the_booking_a_reoffer() -> N
         outcome=slot_directory.ReservationOutcome.SLOT_TAKEN, available=()
     )
 
-    mapper = views.MapToSettledBooking(reserved_slot=reserved)
+    mapper = views.MapToReoffersSpec(reserved_slot=reserved)
 
-    assert tuple(m.slots for m in mapper.reoffered_slots_mappers) == ((),)
+    assert mapper.offered == ((),)
 
 
 def test_a_reserved_slot_leaves_the_confirmed_booking_alone() -> None:
@@ -123,7 +123,7 @@ def test_a_reserved_slot_leaves_the_confirmed_booking_alone() -> None:
         domain.BookingSpec(step="booked", name="Ada", chosen="mon-9am", offered=("mon-9am",))
     )
 
-    booking.settle(())
+    booking.settle(domain.Reoffers(domain.ReoffersSpec(offered=())))
 
     assert str(booking.step()) == "booked"
     assert str(booking.chosen()) == "mon-9am"
@@ -134,7 +134,7 @@ def test_a_taken_slot_sends_the_booking_back_to_choosing_from_the_new_offer() ->
         domain.BookingSpec(step="booked", name="Ada", chosen="mon-9am", offered=("mon-9am",))
     )
 
-    booking.settle(((domain.Slot("tue-2pm"),),))
+    booking.settle(domain.Reoffers(domain.ReoffersSpec(offered=(("tue-2pm",),))))
 
     assert str(booking.step()) == "choose_slot"
     assert booking.chosen() is None
