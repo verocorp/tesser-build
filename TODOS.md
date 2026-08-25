@@ -436,6 +436,19 @@ against `main` at v0.0.71.0 rather than transcribed.
   the open question.
 - [ ] **Within one line, findings come out in reverse source order.** The
   sort key is the line only; `Violation` carries no column.
+- [ ] **`SpecRef.one()`/`.many()` rebuild the `Symbol` from `str()`** (v0.0.82.0
+  adversarial review). `Text.__str__` is `serialization.canonical_str`, a
+  display hook; identity is rebuilt from display, which convention 3 forbids.
+  Latent: `canonical_str` is the identity function today, so the round-trip
+  holds and the whole-tree fuzz found no difference. Closing it collides with
+  two rules — TB080 (a spec field is a primitive or a spec, never a built
+  `Symbol`) and TB083 (a value object keeps no spec) — so it needs a ruling on
+  how a compound value object re-enters its constructor with one component
+  changed, not a one-line edit.
+- [ ] **Two `__init__` definitions in one class taking different specs tie on
+  the `_spec_shared` sort key** (`entry[:3]`, because `Symbol` is not
+  orderable); the two findings at that line keep insertion order where the
+  tuple sorted them by spec name. Degenerate input; nothing pins the order.
 
 ## Module-only imports wave followups (2026-08-24, branch `worktree-imports-module-only`)
 
