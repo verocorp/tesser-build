@@ -124,6 +124,11 @@ What does **not** work is the domain emitting the DTO to save one of the above: 
 reads as a convenience and buys the N-way coupling. Both good patterns are the same
 sanctioned mapper (Respond) reached from the two directions a caller actually arrives
 from — the domain object's representation still never lives on the domain object.
+In Python the translation itself has a checked shape: a mapper *is* its target
+(`class MapToSaveCampaignRequest(ts.Mapper, SaveCampaignRequest)`), built in one
+`super().__init__` call from whole objects, so the service reads
+`self._repo.save(MapToSaveCampaignRequest(c))` and the field-by-field mapping
+lives in one place it never has to spell out (`python.md`, TB080).
 
 ## How the machine sees it
 

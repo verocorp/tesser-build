@@ -70,7 +70,9 @@ not classify is a finding;
 value object takes one primitive or exactly one `ts.Spec`; `TB083` — a
 spec initializes its own object and does nothing else — read anywhere but
 the `__init__` of the object that takes it, or kept on an object, is a
-finding; `skills/tesser-build/value-objects.md`).
+finding; a mapper is its target — `ts.Mapper` plus the spec or DTO it maps
+to, one `super().__init__`, nothing stored, no other method (`TB080`);
+`skills/tesser-build/value-objects.md`, `skills/tesser-build/python.md`).
 The full check list with per-code rules is `tessercheck-py/RULES.md`; which
 convention has a doc, an example, and a checker is `roadmap/ROADMAP.md`.
 

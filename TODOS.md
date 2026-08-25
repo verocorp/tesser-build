@@ -45,7 +45,9 @@ way the decorator was hiding: they teach module functions, which TB051 now bans.
 (The `srv/http/main.py` example was one of the three; v0.0.75.0 rewrote it to
 `ts.main` and the ruling that allowed it, so only the two below remain.)
 
-- [ ] **`python.md:529` shows `required_campaign` as a module function**, cited
+- [x] **`python.md:529` shows `required_campaign` as a module function** — RESOLVED
+  v0.0.83.0: the section now teaches the is-a mapper (`MapToCampaignSpec(ts.Mapper,
+  campaign.CampaignSpec)`), which is what errorspy holds. Original entry: cited
   as "verified impl: examples/errorspy/". The verified impl no longer has it —
   `examples/errorspy/campaign/application/views.py` holds
   `MapToShortLinkSpec(ts.Mapper)` and `MapToCampaignSpec(ts.Mapper)` and no
@@ -220,7 +222,10 @@ against `main` at v0.0.71.0 rather than transcribed.
   is now a validation error at the constructor instead of a lookup miss — the same
   behaviour change `get_campaign` precedented. Every new ID value object
   validates shape only (non-empty); existence stays with the adapter.
-- [ ] **`add_link` carries the body-length debt marker, now at 24 statements.** It
+- [ ] **`add_link` carries the body-length debt marker, now at 24 statements.**
+  (v0.0.83.0: the is-a mapper took the method to 17 statements — every
+  accessor-and-assemble block became one constructor call — and the cap itself
+  went in v0.0.72.0, so this entry is history unless the cap returns.) It
   does six things — validate, check policy, check availability, load, mutate,
   save, respond — and the mapper style costs a statement per boundary crossing;
   the v0.0.71.0 caller-side collection assemblies added four more. Either the
@@ -291,7 +296,11 @@ against `main` at v0.0.71.0 rather than transcribed.
   paths avoided it by exposing the rows/records they were given for the service
   to assemble. No TB080 or argument-position TB082 debt marker remains anywhere;
   the only service debt markers left are the three body-length ones.
-- [ ] **Inbound is not symmetric with outbound, and the rules should say so.**
+- [x] **Inbound is not symmetric with outbound, and the rules should say so** —
+  RESOLVED v0.0.83.0 by dissolving the asymmetry: both directions are now a
+  mapper constructor (`MapToCampaignSpec(request, issued, links)` inbound,
+  `MapToSaveCampaignRequest(c)` outbound), so N sources is just N parameters
+  and there is no assembly step left to be asymmetric about. Original entry:
   Outbound has exactly one source (the aggregate). Inbound has N (the request
   plus whatever the service obtained — identity now, a clock or a policy
   verdict later), so `MapToCampaignSpec` takes three arguments. A GoF builder
@@ -299,13 +308,13 @@ against `main` at v0.0.71.0 rather than transcribed.
   `| None` state cost five completeness guards and a temporal "build first"
   contract that mappers do not have. `ts.Builder` was added and removed in the
   same branch; do not re-add it without solving that.
-- [ ] **The `"active"` literals survive outside the mappers — three now.**
+- [ ] **The `"active"` literals survive — three, now back inside the mappers.**
   `campaign/adapters/handlers/cli.py:48` counts active links for its message
-  (handler — ruled out of scope), `campaign/application/views.py:72` builds
-  a `ShortLinkSpec` from a stored record on the reconstitution path, and since
-  v0.0.71.0 the `add_link` service comprehension converts
-  `link_record.status == "active"` inbound, because a mapper may not originate
-  the literal. Adversarial note (2026-08-20): the collapse is one-directional
+  (handler — ruled out of scope); since v0.0.83.0 the two inbound mappers
+  (`views.MapToCampaignSpecFromSlugLookup`, `service.MapToCampaignSpecFromRecord`)
+  convert `link_record.status == "active"` inside `super().__init__`, because
+  the originated-literal clause went with the accessor mapper and the mapping
+  is the one place the collapse belongs. Adversarial note (2026-08-20): the collapse is one-directional
   and *persisted* — any stored status that is not exactly `"active"` (an
   external writer, a case variant, a future third state) reads back as
   inactive, and the next `add_link`/`deactivate_link` full-record rewrite
@@ -461,6 +470,50 @@ against `main` at v0.0.71.0 rather than transcribed.
   `for` over a one-shaped spec binds nothing; and the `taken.shape() ==
   SPEC_ONE` clause in the TB080 constructor rule, which a neutering mutant
   survived and looks redundant with the `Name`/`Attribute` clause after it.
+
+## Mapper is-a wave follow-ups (2026-08-25, v0.0.83.0)
+
+Ruling (Chris, 2026-08-25): a mapper is its target — `class MapToXSpec(ts.Mapper,
+XSpec)`, one `super().__init__`, nothing stored, no other method — and the service
+reads `Campaign(MapToCampaignSpec(...))`. The accessor mapper (v0.0.61.0–v0.0.71.0)
+is gone. Recommendations 4–6 of that discussion were NOT taken in this wave and
+wait for a ruling:
+
+- [ ] **Decisions still live inside mappers.** `MapToShortLinkSpec` (python-app)
+  matches on the policy verdict and the slug availability and raises `conflict`;
+  `MapToCampaignSpecFromRecord`, `MapToCampaignSpecFromSlugLookup`,
+  `MapToCampaignView` (python-app), `MapToCampaignSpec` (errorspy) and
+  `MapToBookingSpec` (llmport) match on a lookup outcome and raise. A spec
+  constructor raising a domain conflict hides the refusal inside a constructor
+  call; a service that reads like a book would show "blocked destination →
+  conflict" as its own statement. Recommendation: a mapper never raises; the
+  outcome `match` moves back into the service as a statement. Blocked on the
+  TB082 re-cut below, because a `match` on a port response field is not "a
+  single call" today.
+- [ ] **TB082's remaining clauses were written for the accessor mapper.** The
+  one-mapper-assembly clause is gone with this wave. "Names a straight
+  accessor", "computes in an argument", and "match subject is a single call"
+  stay; the second is what makes `Campaign(MapToCampaignSpec(...))` legal (a
+  mapper is a declared kind), the third is what keeps the outcome matches in
+  the mappers. Re-cut with the decision above.
+- [ ] **A domain method's parameters have no rule.** TB019 governs returns
+  only; `Labels.get(key: str)` (python-app) takes a primitive and nothing
+  reports it. Mirror clause: a domain object's public method takes a value
+  object, an entity, or the spec it forwards whole.
+- [ ] **"Stores nothing" reads `self.x = …`, `self.x: T = …`, `self.x += …` and
+  any `.__setattr__(` call.** `setattr(self, …)`, `self.__dict__[…] = …`, and
+  `vars(self)[…]` bypass it; a nested function assigning to `self` inside
+  `__init__` is walked and caught, a lambda is not a statement and cannot.
+- [ ] **A mapper's second base is checked by block, not by name.** Any class in
+  `DATA_BLOCKS` qualifies, so `class MapToThing(ts.Mapper, SomeRequest)` in a
+  *domain* module would classify; the role rule (a mapper's home is
+  `application`) is what stops it, not the mapper clause.
+- [ ] **The name clause is `target_name in cls.name`.** `MapToItemViewX` and
+  `MapToXItemView` both pass; the intent is `MapTo` + target + optional
+  `From…` suffix, and the substring check is looser than that.
+- [ ] **A mapper still accepts a child spec parameter it never reads**, e.g.
+  `MapToCampaignSpec(..., links: ShortLinksSpec)` forwards it whole. TB083
+  covers the read; nothing says the parameter must be used at all.
 
 ## Module-only imports wave followups (2026-08-24, branch `worktree-imports-module-only`)
 

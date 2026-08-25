@@ -214,8 +214,9 @@ is TB083, because `MoneySpec` belongs to `Money.__init__`). Everywhere
 else code builds a spec and passes it on; it never reads a spec's fields
 and never stores one (TB083; a test module is exempt, because a
 completeness test reads the spec it fed the constructor — `testing.md`
-rule 2). The one holder besides a spec carrying its child spec is a
-mapper assembling a parent spec. There is **no `from_spec`** and no
+rule 2). A spec `__init__` holding its child spec is the one holder;
+a mapper is not one — it hands a child spec whole into `super().__init__`
+and keeps nothing (TB080). There is **no `from_spec`** and no
 factory of any spelling: on a
 value object, **any** classmethod or staticmethod returning its own type
 (`Self`, quoted, or inferred from a body that constructs `cls`) is a second
@@ -560,20 +561,45 @@ class CampaignRepository(ts.Port, typing.Protocol):
   `mapping.py` / `views.py` owns domain ↔ port-DTO translation — it may import
   the domain and the ports package; ports import neither.
 
-The reader matches, exhaustively:
+The reader is a **mapper** (TB080): a class that subclasses `ts.Mapper` and
+then the one spec or DTO it maps to, so constructing the mapper constructs
+the target. Its `__init__` takes whole objects (never a field pulled off
+one), matches exhaustively where the port answer has outcomes, and calls
+`super().__init__(...)` exactly once; it stores nothing of its own and has
+no other method, and it is named `MapTo` plus its target. A nested target
+is a nested mapper (`budget=MapToMoneySpec(request)`); a collection is
+`tuple(MapToLinkRecord(link) for link in c.links)`. The service then reads
+`campaign.Campaign(MapToCampaignSpec(request, found))` and
+`self._repo.save(MapToSaveCampaignRequest(c))`: the mapping is hidden in one
+place, and the service reads as the use case (maintainer ruling 2026-08-25,
+superseding the 2026-08-17 accessor mapper, whose every field the service
+had to re-name at the construction site). A spec built by a mapper is still
+a spec — bind it, pass it whole, never read its fields in the service
+(TB083 types the local as the target).
 
 ```python
 # campaign/application/views.py (verified impl: examples/errorspy/)
-def required_campaign(
-    found: campaign_repository.FindCampaignResponse, campaign_id: str
-) -> campaign.Campaign:
-    match found.outcome:
-        case campaign_repository.CampaignLookup.FOUND:
-            return rebuilt_campaign(found.campaigns[0])
-        case campaign_repository.CampaignLookup.MISSING:
-            raise not_found("campaign_missing", f"no campaign {campaign_id!r}")
-        case _ as unreachable:
-            typing.assert_never(unreachable)
+class MapToCampaignSpec(ts.Mapper, campaign.CampaignSpec):
+
+    def __init__(
+        self,
+        find_campaign_request: campaign_repository.FindCampaignRequest,
+        found_campaign: campaign_repository.FindCampaignResponse,
+    ) -> None:
+        match found_campaign.outcome:
+            case campaign_repository.CampaignLookup.FOUND:
+                record = found_campaign.campaigns[0]
+            case campaign_repository.CampaignLookup.MISSING:
+                raise errors.not_found(
+                    "campaign_missing", f"no campaign {find_campaign_request.campaign_id!r}"
+                )
+            case _ as unreachable:
+                typing.assert_never(unreachable)
+        super().__init__(
+            id=record.id,
+            window=values.DateWindowSpec(start=record.window.start, end=record.window.end),
+            links=tuple(MapToShortLinkSpec(link_record=link) for link in record.links),
+        )
 ```
 
 `typing.assert_never` is the whole point of the enum: add a third outcome and
@@ -631,7 +657,7 @@ class StorageCampaignRepository(ts.Repository):
   from the implementation it serves by the import matrix, not by discipline.
 - **The adapter speaks records** (TB081): port DTOs and primitives cross the
   port; the *application layer* reconstructs the aggregate through its spec
-  (`Campaign(_campaign_spec(record))`), so invariants re-run — never build a
+  (`campaign.Campaign(MapToCampaignSpec(request, found))`), so invariants re-run — never build a
   domain object by assigning attributes.
 - **No domain math.** A finder may filter/order (persistence selection);
   summing or rule-checking is a leak.
