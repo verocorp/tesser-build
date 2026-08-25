@@ -5872,7 +5872,7 @@ class Codebase(ts.AggregateRoot):
                     found.append(
                         Violation(ViolationSpec(
                             module.path(),
-                            node.lineno,
+                            stored.lineno,
                             "TB080",
                             f"{where} stores {field!r}; a mapper stores nothing but its target's "
                             "fields — it calls super().__init__ once and assigns nothing itself",
