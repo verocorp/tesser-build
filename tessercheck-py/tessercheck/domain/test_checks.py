@@ -834,7 +834,14 @@ def test_mapper_shape_rules_are_flagged() -> None:
                 "        this = self\n"
                 "        me = this\n"
                 "        setattr(me, 'smuggled', row)\n"
-                "        super().__init__(label=row.label)\n",
+                "        del self.label\n"
+                "        self.rows[0] = row\n"
+                "        super().__init__(label=row.label)\n"
+                "class MapToRowRequestAsync(ts.Mapper, client.RowRequest):\n"
+                "    async def __init__(self, byid: dict[str, client.RowRequest], pick: typing.Callable[[], str], lit: typing.Literal['str']) -> None:\n"
+                "        holder = [0]\n"
+                "        holder[self.label == ''] = 1\n"
+                "        super().__init__(label=byid['a'].label)\n",
                 False,
             ),
             (
@@ -930,6 +937,15 @@ def test_mapper_shape_rules_are_flagged() -> None:
     assert any("MapToRowRequestSly parameter 'tags' is a primitive" in f for f in findings)
     assert any("MapToRowRequestSly parameter 'n' is a primitive" in f for f in findings)
     assert any("MapToRowRequestSly stores 'setattr'" in f for f in findings)
+    assert any("sloppy.py:35: TB080 shop.application.sloppy.MapToRowRequestSly stores 'label'" in f for f in findings)
+    assert any("sloppy.py:36: TB080 shop.application.sloppy.MapToRowRequestSly stores 'rows'" in f for f in findings)
+    assert any(
+        "MapToRowRequestAsync.__init__ is async; a mapper's constructor runs the mapping "
+        "when it is called, and a coroutine never does" in f
+        for f in findings
+    )
+    assert not any("MapToRowRequestAsync parameter" in f for f in findings), findings
+    assert not any("MapToRowRequestAsync stores" in f for f in findings), findings
     assert any(
         "shop.application.sloppy.Sloppy.compute is a method" in f
         and "a mapper holds only __init__, because it is its target and the "

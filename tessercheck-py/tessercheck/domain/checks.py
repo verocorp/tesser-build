@@ -5845,6 +5845,16 @@ class Codebase(ts.AggregateRoot):
                 ))
             )
         else:
+            if isinstance(init, ast.AsyncFunctionDef):
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        init.lineno,
+                        "TB080",
+                        f"{where}.__init__ is async; a mapper's constructor runs the mapping "
+                        "when it is called, and a coroutine never does",
+                    ))
+                )
             if len(inits) > 1:
                 found.append(
                     Violation(ViolationSpec(
@@ -5884,7 +5894,12 @@ class Codebase(ts.AggregateRoot):
                 if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
                     return primitive_leaf(node.left) or primitive_leaf(node.right)
                 if isinstance(node, ast.Subscript):
+                    head = self._annotation_head(node)  # tesser:debt TB051
                     inner = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
+                    if head in ("Callable", "Literal", "type", "Type"):
+                        return False
+                    if head in ("dict", "Dict", "Mapping", "MutableMapping"):
+                        inner = inner[-1:]
                     return any(primitive_leaf(each) for each in inner)
                 return self._annotation_head(node) in PRIMITIVES  # tesser:debt TB051
 
@@ -5972,19 +5987,25 @@ class Codebase(ts.AggregateRoot):
                     targets = [item.optional_vars for item in node.items if item.optional_vars is not None]
                 elif isinstance(node, ast.NamedExpr):
                     targets = [node.target]
+                elif isinstance(node, ast.Delete):
+                    targets = list(node.targets)
                 stored: ast.expr | None = None
-                for written in targets:
-                    for leaf in ast.walk(written):
-                        if not isinstance(leaf, (ast.Attribute, ast.Subscript)):
-                            continue
-                        root: ast.expr = leaf
-                        while isinstance(root, (ast.Attribute, ast.Subscript, ast.Starred)):
-                            root = root.value
-                        if isinstance(root, ast.Name) and root.id in selves:
-                            stored = leaf
-                            break
-                    if stored is not None:
-                        break
+                pending = list(targets)
+                while pending and stored is None:
+                    leaf = pending.pop(0)
+                    if isinstance(leaf, (ast.Tuple, ast.List)):
+                        pending = list(leaf.elts) + pending
+                        continue
+                    if isinstance(leaf, ast.Starred):
+                        pending.insert(0, leaf.value)
+                        continue
+                    if not isinstance(leaf, (ast.Attribute, ast.Subscript)):
+                        continue
+                    root: ast.expr = leaf
+                    while isinstance(root, (ast.Attribute, ast.Subscript)):
+                        root = root.value
+                    if isinstance(root, ast.Name) and root.id in selves:
+                        stored = leaf
                 if stored is None and (
                     isinstance(node, ast.Call)
                     and isinstance(node.func, ast.Attribute)
@@ -6016,13 +6037,16 @@ class Codebase(ts.AggregateRoot):
                 ):
                     stored = node.func.value
                 if stored is not None:
+                    named: ast.expr = stored
+                    while isinstance(named, ast.Subscript):
+                        named = named.value
                     field = (
-                        stored.attr
-                        if isinstance(stored, ast.Attribute)
-                        else stored.func.id
-                        if isinstance(stored, ast.Call) and isinstance(stored.func, ast.Name)
+                        named.attr
+                        if isinstance(named, ast.Attribute)
+                        else named.func.id
+                        if isinstance(named, ast.Call) and isinstance(named.func, ast.Name)
                         else "__setattr__"
-                        if isinstance(stored, ast.Call)
+                        if isinstance(named, ast.Call)
                         else "__dict__"
                     )
                     found.append(

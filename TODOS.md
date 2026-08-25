@@ -520,6 +520,11 @@ wait for a ruling:
   stored `record.id`** — the two are equal in every fixture, so no test can
   tell them apart; a corrupted record with a different id would report the
   request's.
+- [ ] **A store through a container holding `self`** (`holder = [self];
+  holder[0].x = …`) and **a mapper class defined inside a function** are not
+  seen — the alias walk follows only `name = self` chains, and
+  `_nested_class_defs` recurses into classes, not functions (unreachable in a
+  role module today because TB051 bans the function).
 - [ ] **A mapper's second base is checked by block, not by name.** Any class in
   `DATA_BLOCKS` qualifies, so `class MapToThing(ts.Mapper, SomeRequest)` in a
   *domain* module would classify; the role rule (a mapper's home is

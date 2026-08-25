@@ -5,6 +5,59 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.83.0] - 2026-08-25
+
+A mapper **is its target**. `class MapToCampaignSpec(ts.Mapper, campaign.CampaignSpec)`
+takes whole objects and calls `super().__init__(...)` once, so the service reads
+`Campaign(MapToCampaignSpec(request, issued, links))` and
+`self._repo.save(MapToSaveCampaignRequest(c))`. The accessor mapper of
+v0.0.61.0–v0.0.71.0 — exposes the parts, the service re-names every field at
+the construction site — is gone: the field-by-field mapping lives in one
+place, and a service reads as the use case. (Maintainer ruling 2026-08-25.)
+
+### Changed
+- **`TB080` mapper clauses.** A mapper starts with `MapTo`, subclasses
+  `ts.Mapper` and then exactly one spec or DTO (its target), carries the
+  target's name, takes whole objects, calls `super().__init__` exactly once,
+  assigns nothing to itself (no `self.x = …`, no `__setattr__`), and holds no
+  other method. Gone with the accessor shape: the originated-literal clause,
+  the `_mapper` nesting suffix, and "never constructs what it maps to".
+- **`TB082`** drops "a declared kind is assembled from the accessors of one
+  mapper" — there are no accessors to assemble from.
+- **`TB083`** no longer licenses a mapper `__init__` to keep a spec, and types a
+  name bound to a mapper constructor as the mapper's spec base, so a service
+  reading `spec.field` off a `MapToXSpec(...)` local is a finding, exactly as
+  it is for `XSpec(...)`.
+- Every mapper in the example trees is its target: python-app (eleven, plus
+  `MapToLinkView`), errorspy, ports (targets are the client DTOs), llmport, and
+  layout, whose four part-mappers collapse into one `MapToRepoSpec` over the
+  whole `ReadRepoResponse` and delete ~60 lines of tuple assembly from each
+  service method.
+- llmport's domain gains a `Reoffers` value object (over `ReoffersSpec`);
+  `Booking.settle` takes it, because the settle-path mappers had no spec or
+  DTO to be.
+- `python.md`'s reader section teaches the is-a mapper (it had taught a
+  module-function shape TB051 bans and the cited example had abandoned);
+  `application-services.md`, `coverage.md`, and `CLAUDE.md` carry the ruling.
+  Skill version 56.
+
+### Fixed
+- The stores-nothing clause reports at the stored target's line, and also
+  catches `setattr(self, …)`, `vars(self)`, and `self.__dict__`; the
+  `super().__init__` call must be a statement of the constructor body (one in
+  a branch or after an early return left the target uninitialized); a
+  `@ts.helper` may return a mapper, because it is the DTO it builds. From
+  the pre-landing review: a mapper with no `__init__`, with a class-level
+  statement, a decorator, or a class keyword, with `*args`/`**kwargs`, or
+  storing through a tuple target, a `for`/`with` target, or a method call on
+  one of its own fields is a finding; so is a parameter typed `str | None`,
+  `Optional[str]`, or `list[str]` (a primitive under a wrapper), an
+  unannotated parameter, a decorated or duplicate `__init__`, and a store
+  through an alias of `self`.
+- layout's `assert_never` names read `unreachable_*` again (a dropped letter
+  had made them `unreadable_*` beside a real UNREADABLE state), and the empty
+  manifest/entries/declarations case is pinned by a test.
+
 ## [0.0.82.0] - 2026-08-25
 
 The analyzer's own walk now eats its cooking. The TB083 walk carried "which
