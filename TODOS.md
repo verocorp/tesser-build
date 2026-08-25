@@ -449,6 +449,18 @@ against `main` at v0.0.71.0 rather than transcribed.
   the `_spec_shared` sort key** (`entry[:3]`, because `Symbol` is not
   orderable); the two findings at that line keep insertion order where the
   tuple sorted them by spec name. Degenerate input; nothing pins the order.
+- [ ] **Twelve walk branches execute under the suite but no assertion pins
+  them** (v0.0.82.0 coverage audit, mutation-tested; all pre-date the
+  `SpecRef` change): maker-method name collision on the same spec and on a
+  different spec (`checks.py` `returning`); a many-shaped `__init__`
+  parameter must not register an owner; two second-takers in one module and
+  their finding order; `tuple[tuple[XSpec, ...], ...]` yields no ref;
+  `spec.kids.greeting` / `spec.kids.name` / `copy.copy(spec.kids)` must not
+  resolve or read; `spec['k'].name` on a one-shaped owner; `spec.kids[1:]`
+  keeps the many shape; a plain `for k in spec.kids: self._n = k.name`; a
+  `for` over a one-shaped spec binds nothing; and the `taken.shape() ==
+  SPEC_ONE` clause in the TB080 constructor rule, which a neutering mutant
+  survived and looks redundant with the `Name`/`Attribute` clause after it.
 
 ## Module-only imports wave followups (2026-08-24, branch `worktree-imports-module-only`)
 
