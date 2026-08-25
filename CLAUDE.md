@@ -54,7 +54,7 @@ bump `skill-version` in `skills/tesser-build/SKILL.md`.
 These three are the value-object core, not the whole enforced set. The Python
 analyzer also carries the identity taxonomy (`TB010`–`TB012`), the
 serialization norm (`TB015`–`TB018`), the comments norm (`TB020`, mirrored by
-the Go `comments` analyzer), the import norm (`TB050`–`TB066` — every module in
+the Go `comments` analyzer), the import norm (`TB050`–`TB069` — every module in
 the tree carries an import row keyed on where it sits; there are no exempt
 modules, so a root module and a `conftest` are leaves that import nothing from
 the tree), and the testing norm (`TB030` — a test double is a hand-written
@@ -70,7 +70,9 @@ not classify is a finding;
 value object takes one primitive or exactly one `ts.Spec`; `TB083` — a
 spec initializes its own object and does nothing else — read anywhere but
 the `__init__` of the object that takes it, or kept on an object, is a
-finding; `skills/tesser-build/value-objects.md`).
+finding; a mapper is its target — `ts.Mapper` plus the spec or DTO it maps
+to, one `super().__init__`, nothing stored, no other method (`TB080`);
+`skills/tesser-build/value-objects.md`, `skills/tesser-build/python.md`).
 The full check list with per-code rules is `tessercheck-py/RULES.md`; which
 convention has a doc, an example, and a checker is `roadmap/ROADMAP.md`.
 

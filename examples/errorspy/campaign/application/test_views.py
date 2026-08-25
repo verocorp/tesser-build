@@ -22,15 +22,14 @@ def test_a_found_record_becomes_the_parts_a_campaign_is_rebuilt_from() -> None:
             ),
         ),
     )
-    mapper = views.MapToCampaignSpec(
+    spec = views.MapToCampaignSpec(
         find_campaign_request=campaign_repository.FindCampaignRequest(campaign_id="c1"),
         found_campaign=found,
     )
-    assert mapper.campaign_id == "c1"
-    assert (mapper.window_start, mapper.window_end) == ("2026-01-01", "2026-02-01")
+    assert spec.id == "c1"
+    assert (spec.window.start, spec.window.end) == ("2026-01-01", "2026-02-01")
     assert tuple(
-        (link_mapper.slug, link_mapper.target_url)
-        for link_mapper in mapper.short_link_spec_mappers
+        (link.slug, link.target_url) for link in spec.links
     ) == (("spring-sale", "https://x.com"),)
 
 
@@ -65,11 +64,11 @@ def test_a_record_with_a_corrupt_slug_still_exposes_the_slug_the_repository_gave
             ),
         ),
     )
-    mapper = views.MapToCampaignSpec(
+    spec = views.MapToCampaignSpec(
         find_campaign_request=campaign_repository.FindCampaignRequest(campaign_id="c1"),
         found_campaign=found,
     )
-    assert mapper.short_link_spec_mappers[0].slug == "BAD SLUG"
+    assert spec.links[0].slug == "BAD SLUG"
 
 
 def test_a_sound_record_exposes_every_link_it_carried_in_order() -> None:
@@ -86,10 +85,8 @@ def test_a_sound_record_exposes_every_link_it_carried_in_order() -> None:
             ),
         ),
     )
-    mapper = views.MapToCampaignSpec(
+    spec = views.MapToCampaignSpec(
         find_campaign_request=campaign_repository.FindCampaignRequest(campaign_id="c1"),
         found_campaign=found,
     )
-    assert tuple(
-        link_mapper.slug for link_mapper in mapper.short_link_spec_mappers
-    ) == ("alpha-one", "beta-two")
+    assert tuple(link.slug for link in spec.links) == ("alpha-one", "beta-two")

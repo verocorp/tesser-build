@@ -9,7 +9,7 @@ import scheduling.application.ports.slot_directory as slot_directory
 import scheduling.domain.scheduling as domain
 
 
-class MapToBookingSpec(ts.Mapper):
+class MapToBookingSpec(ts.Mapper, domain.BookingSpec):
 
     def __init__(self, found_booking: booking_repository.FindBookingResponse) -> None:
         match found_booking.presence:
@@ -19,55 +19,23 @@ class MapToBookingSpec(ts.Mapper):
                 raise KeyError("booking not found")
             case _ as unreachable:
                 typing.assert_never(unreachable)
-        self._step = view.step
-        self._name = view.name
-        self._chosen = view.chosen
-        self._offered = view.offered
-
-    @property
-    def step(self) -> str:
-        return self._step
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @property
-    def chosen(self) -> str:
-        return self._chosen
-
-    @property
-    def offered(self) -> tuple[str, ...]:
-        return self._offered
+        super().__init__(
+            step=view.step, name=view.name, chosen=view.chosen, offered=view.offered
+        )
 
 
-class MapToReofferedSlots(ts.Mapper):
+class MapToReoffersSpec(ts.Mapper, domain.ReoffersSpec):
 
     def __init__(self, reserved_slot: slot_directory.ReserveSlotResponse) -> None:
-        self._slots = reserved_slot.available
-
-    @property
-    def slots(self) -> tuple[str, ...]:
-        return self._slots
-
-
-class MapToSettledBooking(ts.Mapper):
-
-    def __init__(self, reserved_slot: slot_directory.ReserveSlotResponse) -> None:
-        self._reoffered_slots_mappers: tuple[MapToReofferedSlots, ...] = ()
+        offered: tuple[tuple[str, ...], ...] = ()
         match reserved_slot.outcome:
             case slot_directory.ReservationOutcome.RESERVED:
                 pass
             case slot_directory.ReservationOutcome.SLOT_TAKEN:
-                self._reoffered_slots_mappers = (
-                    MapToReofferedSlots(reserved_slot=reserved_slot),
-                )
+                offered = (reserved_slot.available,)
             case _ as unreachable:
                 typing.assert_never(unreachable)
-
-    @property
-    def reoffered_slots_mappers(self) -> tuple[MapToReofferedSlots, ...]:
-        return self._reoffered_slots_mappers
+        super().__init__(offered=offered)
 
 
 def began(found: booking_repository.FindBookingResponse) -> domain.Booking:  # tesser:debt TB051

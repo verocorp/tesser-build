@@ -5,10 +5,25 @@ import typing
 import tesser.application as ts
 
 import campaign.application.ports.campaign_repository as campaign_repository
+import campaign.domain.campaign as campaign
+import campaign.domain.money as money
+import campaign.domain.short_link as short_link
+import campaign.domain.short_links as short_links
+import campaign.domain.values as values
 import tesser.errors as errors
 
 
-class MapToCampaignSpecFromSlugLookup(ts.Mapper):
+class MapToShortLinkSpecFromRecord(ts.Mapper, short_link.ShortLinkSpec):
+
+    def __init__(self, link_record: campaign_repository.LinkRecord) -> None:
+        super().__init__(
+            slug=link_record.slug,
+            target_url=link_record.target_url,
+            active=link_record.status == values.LinkState.ACTIVE.value,
+        )
+
+
+class MapToCampaignSpecFromSlugLookup(ts.Mapper, campaign.CampaignSpec):
 
     def __init__(
         self,
@@ -25,35 +40,10 @@ class MapToCampaignSpecFromSlugLookup(ts.Mapper):
                 )
             case _ as unreachable:
                 typing.assert_never(unreachable)
-        self._find_campaign_by_slug_request = find_campaign_by_slug_request
-        self._found_campaign = found_campaign
-        self._campaign_id = record.id
-        self._budget_amount = record.budget.amount
-        self._budget_currency = record.budget.currency
-        self._link_records = tuple(record.links)
-
-    @property
-    def find_campaign_by_slug_request(
-        self,
-    ) -> campaign_repository.FindCampaignBySlugRequest:
-        return self._find_campaign_by_slug_request
-
-    @property
-    def found_campaign(self) -> campaign_repository.FindCampaignResponse:
-        return self._found_campaign
-
-    @property
-    def campaign_id(self) -> str:
-        return self._campaign_id
-
-    @property
-    def budget_amount(self) -> str:
-        return self._budget_amount
-
-    @property
-    def budget_currency(self) -> str:
-        return self._budget_currency
-
-    @property
-    def link_records(self) -> tuple[campaign_repository.LinkRecord, ...]:
-        return self._link_records
+        super().__init__(
+            id=record.id,
+            budget=money.MoneySpec(amount=record.budget.amount, currency=record.budget.currency),
+            links=short_links.ShortLinksSpec(links=tuple(
+                MapToShortLinkSpecFromRecord(link_record=link_record) for link_record in record.links
+            )),
+        )

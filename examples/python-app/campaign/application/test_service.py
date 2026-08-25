@@ -510,28 +510,29 @@ def _missing_campaign_view() -> campaign_queries.FindCampaignViewResponse:
     )
 
 
-def test_the_campaign_view_mapper_exposes_what_it_was_given() -> None:
-    request = campaign_queries.FindCampaignViewRequest(campaign_id="0123456789abcdef")
-    found = _found_campaign_view()
-    mapper = service.MapToCampaignView(
-        find_campaign_view_request=request, found_campaign_view=found
-    )
-    assert mapper.find_campaign_view_request is request
-    assert mapper.found_campaign_view is found
-
-
-def test_the_campaign_view_mapper_exposes_the_row_it_was_given() -> None:
-    mapper = service.MapToCampaignView(
+def test_the_campaign_view_mapper_is_the_view_built_from_the_row() -> None:
+    view = service.MapToCampaignView(
         find_campaign_view_request=campaign_queries.FindCampaignViewRequest(
             campaign_id="0123456789abcdef"
         ),
         found_campaign_view=_found_campaign_view(),
     )
-    assert mapper.campaign_id == "0123456789abcdef"
-    assert mapper.budget_amount == "10.00"
-    assert mapper.budget_currency == "USD"
-    assert [link.slug for link in mapper.link_rows] == ["promo"]
-    assert [link.status for link in mapper.link_rows] == ["inactive"]
+    assert isinstance(view, client.CampaignView)
+    assert view.campaign_id == "0123456789abcdef"
+    assert view.budget_amount == "10.00"
+    assert view.budget_currency == "USD"
+    assert [link.slug for link in view.links] == ["promo"]
+    assert [link.status for link in view.links] == ["inactive"]
+
+
+def test_the_link_view_mapper_is_the_view_built_from_the_row() -> None:
+    view = service.MapToLinkView(link_row=campaign_queries.LinkViewRow(
+        slug="promo", target_url="https://ok.example/x", status="inactive"
+    ))
+    assert isinstance(view, client.LinkView)
+    assert (view.slug, view.target_url, view.status) == (
+        "promo", "https://ok.example/x", "inactive"
+    )
 
 
 def test_the_campaign_view_mapper_refuses_a_missing_campaign() -> None:
@@ -545,17 +546,7 @@ def test_the_campaign_view_mapper_refuses_a_missing_campaign() -> None:
     assert caught.value.code == "campaign_missing"
 
 
-def test_the_save_request_mapper_exposes_the_aggregate_it_was_given() -> None:
-    aggregate = campaign.Campaign(campaign.CampaignSpec(
-        id="0123456789abcdef",
-        budget=money.MoneySpec(amount="10.00", currency="USD"),
-        links=short_links.ShortLinksSpec(links=()),
-    ))
-    mapper = service.MapToSaveCampaignRequest(campaign_aggregate=aggregate)
-    assert mapper.campaign_aggregate is aggregate
-
-
-def test_the_save_request_mapper_stringifies_the_aggregate_into_link_record_mappers() -> None:
+def test_the_save_request_mapper_stringifies_the_aggregate_into_the_request() -> None:
     aggregate = campaign.Campaign(campaign.CampaignSpec(
         id="0123456789abcdef",
         budget=money.MoneySpec(amount="10.00", currency="USD"),
@@ -564,42 +555,45 @@ def test_the_save_request_mapper_stringifies_the_aggregate_into_link_record_mapp
             short_link.ShortLinkSpec(slug="old", target_url="https://ok.example/y", active=False),
         )),
     ))
-    mapper = service.MapToSaveCampaignRequest(campaign_aggregate=aggregate)
-    assert mapper.record_id == "0123456789abcdef"
-    assert mapper.money_record_mapper.amount == "10.00"
-    assert mapper.money_record_mapper.currency == "USD"
-    assert [m.slug for m in mapper.link_record_mappers] == ["promo", "old"]
-    assert [m.status for m in mapper.link_record_mappers] == ["active", "inactive"]
+    save_request = service.MapToSaveCampaignRequest(campaign_aggregate=aggregate)
+    assert isinstance(save_request, campaign_repository.SaveCampaignRequest)
+    assert save_request.id == "0123456789abcdef"
+    assert save_request.budget.amount == "10.00"
+    assert save_request.budget.currency == "USD"
+    assert [record.slug for record in save_request.links] == ["promo", "old"]
+    assert [record.status for record in save_request.links] == ["active", "inactive"]
 
 
-def test_the_save_request_mapper_maps_no_links_to_no_mappers() -> None:
+def test_the_save_request_mapper_maps_no_links_to_no_records() -> None:
     aggregate = campaign.Campaign(campaign.CampaignSpec(
         id="0123456789abcdef",
         budget=money.MoneySpec(amount="10.00", currency="USD"),
         links=short_links.ShortLinksSpec(links=()),
     ))
-    mapper = service.MapToSaveCampaignRequest(campaign_aggregate=aggregate)
-    assert mapper.link_record_mappers == ()
+    save_request = service.MapToSaveCampaignRequest(campaign_aggregate=aggregate)
+    assert save_request.links == ()
 
 
-def test_the_campaign_spec_mapper_exposes_what_it_was_given() -> None:
-    request = client.CreateCampaignRequest(budget_amount="10.00", budget_currency="USD")
-    issued = campaign_identity.IssueCampaignIdentityResponse(campaign_id="0123456789abcdef")
+def test_the_campaign_spec_mapper_takes_the_id_from_the_issued_identity_and_the_links_whole() -> None:
     given = short_links.ShortLinksSpec(
         links=(short_link.ShortLinkSpec(slug="promo", target_url="https://ok.example/x", active=True),)
     )
-    mapper = service.MapToCampaignSpec(
-        create_campaign_request=request,
-        issued_campaign_identity=issued,
+    spec = service.MapToCampaignSpec(
+        create_campaign_request=client.CreateCampaignRequest(
+            budget_amount="10.00", budget_currency="USD"
+        ),
+        issued_campaign_identity=campaign_identity.IssueCampaignIdentityResponse(
+            campaign_id="0123456789abcdef"
+        ),
         links=given,
     )
-    assert mapper.create_campaign_request is request
-    assert mapper.issued_campaign_identity is issued
-    assert mapper.links is given
+    assert isinstance(spec, campaign.CampaignSpec)
+    assert spec.id == "0123456789abcdef"
+    assert spec.links is given
 
 
-def test_the_campaign_spec_mapper_takes_the_id_from_the_issued_identity() -> None:
-    mapper = service.MapToCampaignSpec(
+def test_the_campaign_spec_mapper_nests_the_money_spec_from_the_request() -> None:
+    spec = service.MapToCampaignSpec(
         create_campaign_request=client.CreateCampaignRequest(
             budget_amount="10.00", budget_currency="USD"
         ),
@@ -608,35 +602,24 @@ def test_the_campaign_spec_mapper_takes_the_id_from_the_issued_identity() -> Non
         ),
         links=short_links.ShortLinksSpec(links=()),
     )
-    assert mapper.campaign_id == "0123456789abcdef"
+    assert isinstance(spec.budget, money.MoneySpec)
+    assert spec.budget.amount == "10.00"
+    assert spec.budget.currency == "USD"
+    assert str(campaign.Campaign(spec).budget.amount) == "10.00"
 
 
-def test_the_nested_budget_mapper_takes_the_money_parts_from_the_request() -> None:
-    request = client.CreateCampaignRequest(budget_amount="10.00", budget_currency="USD")
-    mapper = service.MapToCampaignSpec(
-        create_campaign_request=request,
-        issued_campaign_identity=campaign_identity.IssueCampaignIdentityResponse(
-            campaign_id="0123456789abcdef"
-        ),
-        links=short_links.ShortLinksSpec(links=()),
-    )
-    assert mapper.budget_mapper.create_campaign_request is request
-    assert mapper.budget_mapper.amount == "10.00"
-    assert mapper.budget_mapper.currency == "USD"
-
-
-def test_the_link_record_mapper_exposes_the_entity_it_was_given() -> None:
+def test_the_link_record_mapper_stringifies_the_entity() -> None:
     entity = short_link.ShortLink(short_link.ShortLinkSpec(
         slug="promo", target_url="https://ok.example/x", active=True
     ))
-    mapper = service.MapToLinkRecord(short_link_entity=entity)
-    assert mapper.short_link_entity is entity
-    assert mapper.slug == "promo"
-    assert mapper.target_url == "https://ok.example/x"
-    assert mapper.status == "active"
+    record = service.MapToLinkRecord(short_link_entity=entity)
+    assert isinstance(record, campaign_repository.LinkRecord)
+    assert record.slug == "promo"
+    assert record.target_url == "https://ok.example/x"
+    assert record.status == "active"
 
 
-def test_the_campaign_spec_mapper_from_a_record_exposes_the_link_records_it_was_given() -> None:
+def test_the_campaign_spec_mapper_from_a_record_rebuilds_the_links_it_was_given() -> None:
     find_campaign_request = campaign_repository.FindCampaignRequest(campaign_id="0123456789abcdef")
     record = campaign_repository.CampaignRecord(
         id="0123456789abcdef",
@@ -648,14 +631,13 @@ def test_the_campaign_spec_mapper_from_a_record_exposes_the_link_records_it_was_
     found_campaign = campaign_repository.FindCampaignResponse(
         outcome=campaign_repository.CampaignLookup.FOUND, campaigns=(record,)
     )
-    mapper = service.MapToCampaignSpecFromRecord(
+    spec = service.MapToCampaignSpecFromRecord(
         find_campaign_request=find_campaign_request, found_campaign=found_campaign
     )
-    assert mapper.find_campaign_request is find_campaign_request
-    assert mapper.found_campaign is found_campaign
-    assert mapper.campaign_id == "0123456789abcdef"
-    assert (mapper.budget_amount, mapper.budget_currency) == ("10.00", "USD")
-    assert mapper.link_records == record.links
+    assert isinstance(spec, campaign.CampaignSpec)
+    assert spec.id == "0123456789abcdef"
+    assert (spec.budget.amount, spec.budget.currency) == ("10.00", "USD")
+    assert [(link.slug, link.active) for link in spec.links.links] == [("promo", False)]
 
 
 def test_deactivate_link_refuses_a_malformed_campaign_id_before_the_repository_is_touched() -> None:

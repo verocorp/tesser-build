@@ -54,6 +54,9 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "shared_class": "⟨class⟩",
     "spec_label": "⟨spec⟩",
     "owner_label": "⟨class⟩",
+    "target_name": "⟨class⟩",
+    "supers": "⟨count⟩",
+    "len(inits)": "⟨count⟩",
 }
 
 APPLIES_TO: typing.Final[dict[str, str]] = {

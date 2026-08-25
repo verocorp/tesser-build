@@ -124,12 +124,23 @@ What does **not** work is the domain emitting the DTO to save one of the above: 
 reads as a convenience and buys the N-way coupling. Both good patterns are the same
 sanctioned mapper (Respond) reached from the two directions a caller actually arrives
 from — the domain object's representation still never lives on the domain object.
+In Python the translation itself has a checked shape: a mapper *is* its target
+(`class MapToSaveCampaignRequest(ts.Mapper, SaveCampaignRequest)`), built in one
+`super().__init__` call from whole objects, so the service reads
+`self._repo.save(MapToSaveCampaignRequest(c))` and the field-by-field mapping
+lives in one place it never has to spell out (`python.md`, TB080).
 
 ## How the machine sees it
 
-**No analyzer backs this in v2.** Unlike value objects, entities, and
-aggregates, an application service has no structural signal `tessercheck` keys on;
-its correctness is enforced by review, not the compiler. The leakage checks
+**The Python analyzer backs the shape, not the judgement.** A
+`ts.ApplicationService` subclass is the structural signal `tessercheck` keys on:
+`TB081` requires every constructor dependency to be a `ts.Port` and every public
+method to take exactly one `ts.Request` and return one `ts.Response`; `TB082`
+rejects a delegation chain, a nested branch, a condition that is not one domain
+call, a value computed in an argument position, and a raw request field crossing
+into a port. What no check judges is whether the body *coordinates* or *decides*
+— that stays review, not the compiler (and Go has no mirror of these checks
+today). The leakage checks
 below are a *future*-analyzer seed, not a live check — and even then only two of
 the four grep cleanly. A `for`-loop over domain objects is not by itself a
 violation: a repository legitimately loops to decompose an aggregate, and a
