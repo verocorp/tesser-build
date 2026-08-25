@@ -85,15 +85,20 @@ The Python analog ([`tessercheck-py/`](tessercheck-py/)): a zero-dependency,
 stdlib-`ast` conformance analyzer for the `ts.*`-shell conventions in
 [`skills/tesser-build/python.md`](skills/tesser-build/python.md).
 Classification is declared, never inferred — a class is judged by the
-`tesser` base it names. The 36 shipped codes cover value-object shape and
-serialization (`TB002`–`TB018` — value equality only, no representation
-leak, one construction path, one canonical exit per backing type),
-module/class structure (`TB040`–`TB043`), import form and the tier matrices
-(`TB050`–`TB066` — every module carries an import row keyed on where it sits,
-with no exempt modules), test placement and module totality (`TB070`–`TB073`),
-construction paths and boundary signatures (`TB080`–`TB082`), and the
+`tesser` base it names. The 43 shipped codes cover value-object shape and
+serialization (`TB002`–`TB019` — value equality only, no representation
+leak, one construction path, one canonical exit per backing type, domain
+objects out of public behavior),
+module/class structure (`TB040`–`TB045`), import form and the tier matrices
+(`TB050`–`TB069` — every module carries an import row keyed on where it sits,
+with no exempt modules), test placement and module totality (`TB070`–`TB074`),
+construction paths and boundary signatures (`TB080`–`TB083` — an entity or
+aggregate is built from one spec and a value object from one primitive or one
+spec, a spec initializes only its own object, and a mapper *is* the spec or
+DTO it maps to), and the
 tree-wide **norm checks** with no test exemption: zero comments (`TB020`),
-fakes-only test doubles (`TB030`), and debt-marker hygiene (`TB090` — a
+fakes-only test doubles (`TB030`), no called shadowed builtin (`TB033`), and
+debt-marker hygiene (`TB090` — a
 suppression that suppresses nothing is itself a finding). The full per-code
 table is [`tessercheck-py/RULES.md`](tessercheck-py/RULES.md), generated from the
 implementation. Run it from `tessercheck-py/` as `python -m srv.cli.main
@@ -123,7 +128,7 @@ runs the mutmut CLI over the same value object built both ways and asserts
 mutants are generated and killed for the `ts.ValueObject` build while the
 dataclass build produces none. `skills/tesser-build/python.md` teaches the
 shape; the analyzer classifies it (a `ts.ValueObject` subclass is a value
-object to `TB010`–`TB014` and the serialization norm).
+object to `TB010`–`TB012` and the serialization norm).
 
 ### Using it in CI: the `go tool` directive
 

@@ -155,7 +155,8 @@ language), `map.md#how-contexts-connect` covers how contexts talk (through the
 `Client` + DTOs, one-way dependencies, fail-closed sync calls —
 `gateway-cross-context.md`), and in Python the contexts are *discovered* by
 their `Client` seam and gated by the totality guard
-(`tessercheck --app-root`).
+(`python -m srv.cli.main path/to/tree` from a checkout, or `tessercheck-check
+path/to/tree` from the packaged CLI).
 
 ## 13. Where does business logic go — the service, or the domain?
 

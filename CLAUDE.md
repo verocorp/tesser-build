@@ -54,7 +54,7 @@ bump `skill-version` in `skills/tesser-build/SKILL.md`.
 These three are the value-object core, not the whole enforced set. The Python
 analyzer also carries the identity taxonomy (`TB010`–`TB012`), the
 serialization norm (`TB015`–`TB018`), the comments norm (`TB020`, mirrored by
-the Go `comments` analyzer), the import norm (`TB050`–`TB066` — every module in
+the Go `comments` analyzer), the import norm (`TB050`–`TB069` — every module in
 the tree carries an import row keyed on where it sits; there are no exempt
 modules, so a root module and a `conftest` are leaves that import nothing from
 the tree), and the testing norm (`TB030` — a test double is a hand-written

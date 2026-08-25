@@ -28,8 +28,9 @@ place, and a service reads as the use case. (Maintainer ruling 2026-08-25.)
   name bound to a mapper constructor as the mapper's spec base, so a service
   reading `spec.field` off a `MapToXSpec(...)` local is a finding, exactly as
   it is for `XSpec(...)`.
-- Every mapper in the example trees is its target: python-app (eleven, plus
-  `MapToLinkView`), errorspy, ports (targets are the client DTOs), llmport, and
+- Every mapper in the example trees is its target: python-app (thirteen —
+  eleven in `service.py`, two in `views.py`), errorspy, ports (targets are the
+  client DTOs), llmport, and
   layout, whose four part-mappers collapse into one `MapToRepoSpec` over the
   whole `ReadRepoResponse` and delete ~60 lines of tuple assembly from each
   service method.
@@ -45,7 +46,7 @@ place, and a service reads as the use case. (Maintainer ruling 2026-08-25.)
 - The stores-nothing clause reports at the stored target's line, and also
   catches `setattr(self, …)`, `vars(self)`, and `self.__dict__`; the
   `super().__init__` call must be a statement of the constructor body (one in
-  a branch or after an early return left the target uninitialized); a
+  a branch left the target uninitialized); a
   `@ts.helper` may return a mapper, because it is the DTO it builds. From
   the pre-landing review: a mapper with no `__init__`, with a class-level
   statement, a decorator, or a class keyword, with `*args`/`**kwargs`, or

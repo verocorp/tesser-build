@@ -435,25 +435,57 @@ Coordination only — no business logic. Four named steps
 (`application-services.md`): convert → delegate → persist → respond. Every
 dependency is a `ts.Port` `Protocol` (the analyzer requires it), every public
 method takes exactly one `ts.Request` and returns a `ts.Response`, and the
-method inlines its logic — no delegation chains, at most ten source lines,
-one level of branching, a condition satisfied by one domain call.
+method inlines its logic — no delegation chains,
+one level of branching, a condition satisfied by one domain call. Every
+translation the method needs is a **mapper** — a class that *is* the spec or
+DTO it maps to (`MapTo…`, **Application ports** below) — so the service names
+the use case and never spells a field out.
 
 ```python
-# campaign/application/service.py (verified impl: examples/errorspy/)
+# campaign/application/service.py (verified impl: examples/python-app/)
 class CampaignService(ts.ApplicationService):
 
-    def __init__(self, repo: campaign_repository.CampaignRepository) -> None:
+    def __init__(
+        self,
+        repo: campaign_repository.CampaignRepository,
+        identity_gateway: campaign_identity.CampaignIdentity,
+        queries: campaign_queries.CampaignQueries,
+    ) -> None:
         self._repo = repo
+        self._identity_gateway = identity_gateway
+        self._queries = queries
 
     def create_campaign(self, req: client.CreateCampaignRequest) -> client.CampaignView:
-        c = campaign.Campaign(views.create_spec(req))
-        self._repo.save(views.save_request(c))
-        return views.campaign_view(c)
+        issued_campaign_identity = self._identity_gateway.issue(
+            campaign_identity.IssueCampaignIdentityRequest()
+        )
+        c = campaign.Campaign(MapToCampaignSpec(
+            create_campaign_request=req,
+            issued_campaign_identity=issued_campaign_identity,
+            links=short_links.ShortLinksSpec(links=()),
+        ))
+        save_request = MapToSaveCampaignRequest(campaign_aggregate=c)
+        self._repo.save(save_request)
+        find_campaign_view_request = campaign_queries.FindCampaignViewRequest(
+            campaign_id=save_request.id,
+        )
+        found_campaign_view = self._queries.find_view(find_campaign_view_request)
+        return MapToCampaignView(
+            find_campaign_view_request=find_campaign_view_request,
+            found_campaign_view=found_campaign_view,
+        )
 
     def get_campaign(self, req: client.GetCampaignRequest) -> client.CampaignView:
-        found = self._repo.find(campaign_repository.FindCampaignRequest(campaign_id=req.campaign_id))
-        c = views.required_campaign(found, req.campaign_id)
-        return views.campaign_view(c)
+        campaign_id = values.CampaignID(req.campaign_id)
+        campaign_id_text = str(campaign_id)
+        find_campaign_view_request = campaign_queries.FindCampaignViewRequest(
+            campaign_id=campaign_id_text,
+        )
+        found_campaign_view = self._queries.find_view(find_campaign_view_request)
+        return MapToCampaignView(
+            find_campaign_view_request=find_campaign_view_request,
+            found_campaign_view=found_campaign_view,
+        )
 ```
 
 - **No `for` over domain objects, no arithmetic on domain quantities, no `if`

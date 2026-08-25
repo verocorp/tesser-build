@@ -501,9 +501,20 @@ wait for a ruling:
   reports it. Mirror clause: a domain object's public method takes a value
   object, an entity, or the spec it forwards whole.
 - [ ] **"Stores nothing" reads `self.x = …`, `self.x: T = …`, `self.x += …` and
-  any `.__setattr__(` call.** `setattr(self, …)`, `self.__dict__[…] = …`, and
-  `vars(self)[…]` bypass it; a nested function assigning to `self` inside
-  `__init__` is walked and caught, a lambda is not a statement and cannot.
+  any `.__setattr__(` call.** (v0.0.83.0 closed the three named bypasses:
+  `setattr(self, …)`, `self.__dict__[…] = …`, and `vars(self)[…]` are stores
+  now, as are `del self.x`, a store through an alias of `self`, and a tuple or
+  `for`/`with` target.) What remains: a nested function assigning to `self`
+  inside `__init__` is walked and caught, a lambda is not a statement and
+  cannot be.
+- [ ] **"Always initialized" is a reachability claim the check does not make.**
+  The `super().__init__` clause (`checks.py:5957`) only proves the call is a
+  top-level `ast.Expr` of `__init__.body`; a `return` earlier in that body
+  still leaves the target uninitialized and reports nothing. The rule string
+  says "so the target is always initialized" — and `RULES.md`, being
+  generated from it, repeats the overclaim. Either weaken the wording to what
+  it checks (the call is a statement, not nested in a branch) or add the
+  early-return clause. Found by the v0.0.83.0 cross-model doc review.
 - [ ] **Base order reclassifies a mapper out of the rule.** Block assignment
   takes the first base that resolves, so `class MapToXSpec(XSpec, ts.Mapper)`
   is a spec, not a mapper, and no mapper clause runs. Contained today only by
