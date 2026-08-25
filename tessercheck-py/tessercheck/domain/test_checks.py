@@ -778,15 +778,38 @@ def test_mapper_shape_rules_are_flagged() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
+                "shop/client/client.py",
+                "shop.client.client",
+                "import tesser.context as ts\n"
+                "class RowRequest(ts.Request):\n"
+                "    def __init__(self, label: str) -> None:\n"
+                "        self.label = label\n"
+                "class AskRequest(ts.Request):\n"
+                "    def __init__(self, text: str, rows: tuple[RowRequest, ...]) -> None:\n"
+                "        self.text = text\n"
+                "        self.rows = rows\n"
+                "class RowView(ts.Response):\n"
+                "    def __init__(self, label: str) -> None:\n"
+                "        self.label = label\n"
+                "class AskResponse(ts.Response):\n"
+                "    def __init__(self, text: str, rows: tuple[RowView, ...]) -> None:\n"
+                "        self.text = text\n"
+                "        self.rows = rows\n",
+                False,
+            ),
+            (
                 "shop/application/sloppy.py",
                 "shop.application.sloppy",
                 "import tesser.application as ts\n"
-                "from shop.client.client import AskRequest\n"
+                "import shop.client.client as client\n"
                 "class Sloppy(ts.Mapper):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self._text = text\n"
-                "        self._tag = 'fixed'\n"
+                "        object.__setattr__(self, '_tag', text)\n"
                 "    def compute(self) -> str:\n"
+                "        return self._text\n"
+                "    @property\n"
+                "    def text(self) -> str:\n"
                 "        return self._text\n",
                 False,
             ),
@@ -794,16 +817,11 @@ def test_mapper_shape_rules_are_flagged() -> None:
                 "shop/application/nested.py",
                 "shop.application.nested",
                 "import tesser.application as ts\n"
-                "from shop.client.client import AskRequest\n"
-                "class MapToOther(ts.Mapper):\n"
-                "    def __init__(self, request: AskRequest) -> None:\n"
-                "        self._request = request\n"
-                "class MapToThing(ts.Mapper):\n"
-                "    def __init__(self, request: AskRequest) -> None:\n"
-                "        self._other = MapToOther(request)\n"
-                "    @property\n"
-                "    def other(self) -> MapToOther:\n"
-                "        return self._other\n",
+                "import shop.client.client as client\n"
+                "class MapToThing(ts.Mapper, client.AskResponse):\n"
+                "    def __init__(self, request: client.AskRequest) -> None:\n"
+                "        super().__init__(text=request.text, rows=())\n"
+                "        super().__init__(text=request.text, rows=())\n",
                 False,
             ),
         ))).violations()
@@ -816,81 +834,89 @@ def test_mapper_shape_rules_are_flagged() -> None:
         for f in findings
     )
     assert any(
+        "shop.application.sloppy.Sloppy is not its target" in f
+        and "a mapper subclasses ts.Mapper and then the one spec or DTO it maps to, "
+        "so constructing the mapper constructs the target" in f
+        for f in findings
+    )
+    assert any(
         "shop.application.sloppy.Sloppy parameter 'text' is a primitive" in f
         and "a mapper takes whole objects, never a field already pulled off one" in f
         for f in findings
     )
     assert any(
+        "shop.application.sloppy.Sloppy stores '_text'" in f
+        and "a mapper stores nothing but its target's fields — it calls "
+        "super().__init__ once and assigns nothing itself" in f
+        for f in findings
+    )
+    assert any("shop.application.sloppy.Sloppy stores '__setattr__'" in f for f in findings)
+    assert any(
+        "shop.application.sloppy.Sloppy.__init__ calls super().__init__ 0 times" in f
+        and "a mapper calls it exactly once, because that call is the mapping" in f
+        for f in findings
+    )
+    assert any(
         "shop.application.sloppy.Sloppy.compute is a method" in f
-        and "a mapper holds only __init__ and the accessors it exposes" in f
+        and "a mapper holds only __init__, because it is its target and the "
+        "target already carries the fields" in f
+        for f in findings
+    )
+    assert any("shop.application.sloppy.Sloppy.text is a method" in f for f in findings)
+    assert any(
+        "shop.application.nested.MapToThing does not name AskResponse" in f
+        and "a mapper is named MapTo plus its target, so the reader knows what "
+        "the constructor yields" in f
         for f in findings
     )
     assert any(
-        "shop.application.sloppy.Sloppy carries the literal 'fixed'" in f
-        and "a mapper originates nothing — every value it exposes comes from "
-        "what it was given" in f
+        "shop.application.nested.MapToThing.__init__ calls super().__init__ 2 times" in f
         for f in findings
     )
-    assert any(
-        "shop.application.nested.MapToThing.other returns a mapper" in f
-        and "a nested mapper accessor ends in _mapper, so the reader knows to "
-        "keep dotting" in f
-        for f in findings
-    )
-
-
-def test_an_index_and_an_error_message_are_not_originated_data() -> None:
-    findings = tuple(
-                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
-            (
-                "shop/application/reading.py",
-                "shop.application.reading",
-                "import tesser.application as ts\n"
-                "import shop.client.client as client\n"
-                "from tesser.errors import not_found\n"
-                "class MapToFirst(ts.Mapper):\n"
-                "    def __init__(self, answer: client.AskResponse) -> None:\n"
-                "        if not answer.rows:\n"
-                "            raise not_found('row_missing', 'no row in the answer')\n"
-                "        self._answer = answer\n"
-                "        self._first = answer.rows[0]\n",
-                False,
-            ),
-        ))).violations()
-               )
-    assert not any("originates nothing" in f for f in findings), findings
-
 
 def test_a_conformant_mapper_passes_every_shape_rule() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
+                "shop/client/client.py",
+                "shop.client.client",
+                "import tesser.context as ts\n"
+                "class RowRequest(ts.Request):\n"
+                "    def __init__(self, label: str) -> None:\n"
+                "        self.label = label\n"
+                "class AskRequest(ts.Request):\n"
+                "    def __init__(self, text: str, rows: tuple[RowRequest, ...]) -> None:\n"
+                "        self.text = text\n"
+                "        self.rows = rows\n"
+                "class RowView(ts.Response):\n"
+                "    def __init__(self, label: str) -> None:\n"
+                "        self.label = label\n"
+                "class AskResponse(ts.Response):\n"
+                "    def __init__(self, text: str, rows: tuple[RowView, ...]) -> None:\n"
+                "        self.text = text\n"
+                "        self.rows = rows\n",
+                False,
+            ),
+            (
                 "shop/application/good.py",
                 "shop.application.good",
                 "import tesser.application as ts\n"
-                "from shop.client.client import AskRequest\n"
-                "class MapToInner(ts.Mapper):\n"
-                "    def __init__(self, request: AskRequest) -> None:\n"
-                "        self._request = request\n"
-                "        self._text = request.text\n"
-                "    @property\n"
-                "    def text(self) -> str:\n"
-                "        return self._text\n"
-                "class MapToOuter(ts.Mapper):\n"
-                "    def __init__(self, request: AskRequest) -> None:\n"
-                "        self._request = request\n"
-                "        self._inner_mapper = MapToInner(request)\n"
-                "    @property\n"
-                "    def inner_mapper(self) -> MapToInner:\n"
-                "        return self._inner_mapper\n",
+                "import shop.client.client as client\n"
+                "class MapToRowView(ts.Mapper, client.RowView):\n"
+                "    def __init__(self, row: client.RowRequest) -> None:\n"
+                "        super().__init__(label=row.label)\n"
+                "class MapToAskResponse(ts.Mapper, client.AskResponse):\n"
+                "    def __init__(self, request: client.AskRequest) -> None:\n"
+                "        if not request.text:\n"
+                "            raise ValueError('empty')\n"
+                "        rows = tuple(MapToRowView(row) for row in request.rows)\n"
+                "        super().__init__(text=request.text, rows=rows)\n",
                 False,
             ),
         ))).violations()
                )
-    assert not any("a mapper" in f for f in findings), findings
-
+    assert not any("shop.application.good" in f and " TB080 " in f for f in findings), findings
 
 def test_a_mapper_lives_only_in_the_application_role() -> None:
     findings = tuple(
@@ -1039,7 +1065,7 @@ def test_aggregate_constructor_violations_are_flagged() -> None:
     )
 
 
-def test_computing_in_an_argument_and_assembling_from_two_readers_are_flagged() -> None:
+def test_computing_in_an_argument_is_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
@@ -1063,11 +1089,7 @@ def test_computing_in_an_argument_and_assembling_from_two_readers_are_flagged() 
                 "import shop.client.client as client\n"
                 "class NestingService(ts.ApplicationService):\n"
                 "    def ask(self, request: client.AskRequest) -> client.AskResponse:\n"
-                "        return client.AskResponse(text=str(request.text), tag='t')\n"
-                "    def spread(self, request: client.AskRequest) -> client.AskResponse:\n"
-                "        first = self._one(request)\n"
-                "        second = self._two(request)\n"
-                "        return client.AskResponse(text=first.text, tag=second.tag)\n",
+                "        return client.AskResponse(text=str(request.text), tag='t')\n",
                 False,
             ),
         ))).violations()
@@ -1078,52 +1100,36 @@ def test_computing_in_an_argument_and_assembling_from_two_readers_are_flagged() 
         "a reader, or a declared kind" in f
         for f in findings
     )
-    assert any(
-        "NestingService.spread assembles from 2 readers" in f
-        and "a declared kind is assembled from the accessors of one mapper" in f
-        for f in findings
-    )
 
-
-def test_a_mapper_that_constructs_its_target_is_flagged() -> None:
+def test_a_mapper_is_read_as_the_spec_it_constructs() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "shop/client/client.py",
-                "shop.client.client",
-                "import tesser.context as ts\n"
-                "class AskRequest(ts.Request):\n"
-                "    def __init__(self, text: str) -> None:\n"
-                "        self.text = text\n"
-                "class AskResponse(ts.Response):\n"
-                "    def __init__(self, text: str) -> None:\n"
-                "        self.text = text\n",
-                False,
-            ),
-            (
-                "shop/application/eager.py",
-                "shop.application.eager",
+                "shop/application/service.py",
+                "shop.application.service",
                 "import tesser.application as ts\n"
                 "import shop.client.client as client\n"
-                "class MapToAskResponse(ts.Mapper):\n"
+                "import shop.domain.thing as thing\n"
+                "class MapToThingSpec(ts.Mapper, thing.ThingSpec):\n"
                 "    def __init__(self, request: client.AskRequest) -> None:\n"
-                "        self._request = request\n"
-                "        self._response = client.AskResponse(text=request.text)\n"
-                "    @property\n"
-                "    def response(self) -> client.AskResponse:\n"
-                "        return self._response\n",
+                "        super().__init__(text=request.text)\n"
+                "class ThingService(ts.ApplicationService):\n"
+                "    def make(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        built = thing.Thing(MapToThingSpec(request))\n"
+                "        spec = MapToThingSpec(request)\n"
+                "        return client.AskResponse(text=spec.text)\n",
                 False,
             ),
         ))).violations()
                )
+    assert not any("MapToThingSpec" in f and " TB080 " in f for f in findings), findings
+    assert not any("computes in an argument" in f for f in findings), findings
     assert any(
-        "shop.application.eager.MapToAskResponse constructs what it maps to" in f
-        and "a mapper exposes the parts and the caller assembles them, so every field "
-        "is named where it is read" in f
+        "shop/application/service.py:11: TB083 shop.application.service.ThingService.make "
+        "reads 'text' of the spec 'spec'" in f
         for f in findings
-    )
-
+    ), findings
 
 def test_a_raw_request_value_reaching_a_port_is_flagged() -> None:
     findings = tuple(
@@ -9230,7 +9236,7 @@ def test_a_config_reads_its_spec_where_it_initializes_itself() -> None:
     )
 
 
-def test_a_mapper_and_a_wider_spec_keep_only_what_they_assemble() -> None:
+def test_a_mapper_and_a_wider_spec_never_keep_a_spec() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in checks.Codebase(_spec(sources=(
@@ -9279,6 +9285,10 @@ def test_a_mapper_and_a_wider_spec_keep_only_what_they_assemble() -> None:
     )
     tb083 = tuple(f for f in findings if " TB083 " in f)
     assert tb083 == (
+        "shop/application/mapping.py:5: TB083 shop.application.mapping.Fold.__init__ keeps the spec 'spec'; "
+        "a spec is never kept, it initializes its own object and is done",
+        "shop/application/mapping.py:6: TB083 shop.application.mapping.Fold.__init__ keeps the spec 'spec'; "
+        "a spec is never kept, it initializes its own object and is done",
         "shop/application/mapping.py:8: TB083 shop.application.mapping.Fold.unfold keeps the spec 'spec'; "
         "a spec is never kept, it initializes its own object and is done",
         "shop/component/wiring.py:9: TB083 shop.component.wiring.OuterSpec.rewrap keeps the spec 'inner'; "

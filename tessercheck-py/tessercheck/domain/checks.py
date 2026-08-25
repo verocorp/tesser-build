@@ -370,8 +370,6 @@ PRIMITIVES: typing.Final[frozenset[str]] = frozenset({"str", "int", "float", "bo
 
 MAPPER_PREFIX: typing.Final[str] = "MapTo"
 
-MAPPER_SUFFIX: typing.Final[str] = "_mapper"
-
 PORT_DTO_PRIMITIVES: typing.Final[frozenset[str]] = PRIMITIVES - frozenset({"bool"})
 
 ENUM_BASES: typing.Final[frozenset[str]] = frozenset({"Enum"})
@@ -1138,6 +1136,7 @@ class Codebase(ts.AggregateRoot):
         self._spec_takers: dict[Symbol, set[tuple[str, str]]] = {}
         self._spec_fields: dict[Symbol, dict[str, SpecRef]] = {}
         self._spec_shared: list[tuple[str, str, int, Symbol, tuple[str, str]]] = []
+        self._mapper_target: dict[tuple[str, str], tuple[str, str]] = {}
 
     def violations(self) -> tuple[Violation, ...]:
         declaration = self._declaration_violations()  # tesser:debt TB051
@@ -1169,6 +1168,14 @@ class Codebase(ts.AggregateRoot):
                     if source is not None:
                         blocks[key] = source
                         changed = True
+        self._mapper_target = {}
+        for module in self._modules:
+            for cls in module.class_defs():
+                if blocks.get((module.name(), cls.name)) != "mapper" or len(cls.bases) != 2:
+                    continue
+                target_key = module._resolve(cls.bases[1])
+                if target_key is not None and blocks.get(target_key) in DATA_BLOCKS:
+                    self._mapper_target[(module.name(), cls.name)] = target_key
         named: set[str] = set()
         for module in self._modules:
             parts = module.name().split(".")
@@ -2951,6 +2958,8 @@ class Codebase(ts.AggregateRoot):
                         return found.many()
             return None
         key = module._resolve(node)
+        if key is not None and blocks.get(key) == "mapper":
+            key = self._mapper_target.get(key)
         if key is not None and blocks.get(key) in SPEC_BLOCKS:
             return SpecRef(SpecRefSpec(SymbolSpec(key[0], key[1]), "one"))
         return None
@@ -3343,7 +3352,7 @@ class Codebase(ts.AggregateRoot):
                 (module.name(), cls.name)
                 if cls is not None and fn.name == "__init__" and block in SPEC_READER_BLOCKS
                 else None,
-                fn.name == "__init__" and (block in SPEC_BLOCKS or block == "mapper"),
+                fn.name == "__init__" and block in SPEC_BLOCKS,
             )
         return tuple(sorted(found, key=lambda v: int(v.line())))
 
@@ -5783,6 +5792,29 @@ class Codebase(ts.AggregateRoot):
                     "what it maps to, because its parameters already say what it maps from",
                 ))
             )
+        target = self._mapper_target.get((module.name(), cls.name))
+        if target is None:
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    cls.lineno,
+                    "TB080",
+                    f"{where} is not its target; a mapper subclasses ts.Mapper and then "
+                    "the one spec or DTO it maps to, so constructing the mapper constructs the target",
+                ))
+            )
+        else:
+            target_name = target[1]
+            if target_name not in cls.name:
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        cls.lineno,
+                        "TB080",
+                        f"{where} does not name {target_name}; a mapper is named "
+                        "MapTo plus its target, so the reader knows what the constructor yields",
+                    ))
+                )
         init = (next(
                     (
                         item
@@ -5805,71 +5837,69 @@ class Codebase(ts.AggregateRoot):
                             "whole objects, never a field already pulled off one",
                         ))
                     )
-        for item in cls.body:
-            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                continue
-            if item.name == "__init__":
-                continue
-            if not any(
-                isinstance(decorator, ast.Name) and decorator.id == "property"
-                for decorator in item.decorator_list
-            ):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        item.lineno,
-                        "TB080",
-                        f"{where}.{item.name} is a method; a mapper holds only __init__ "
-                        "and the accessors it exposes",
-                    ))
-                )
-                continue
-            mapper_key = module._resolve(item.returns) if item.returns is not None else None
-            if (
-                blocks.get(mapper_key) if mapper_key is not None else None
-            ) == "mapper" and not item.name.endswith(MAPPER_SUFFIX):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        item.lineno,
-                        "TB080",
-                        f"{where}.{item.name} returns a mapper; a nested mapper accessor "
-                        "ends in _mapper, so the reader knows to keep dotting",
-                    ))
-                )
-        exempt: set[int] = set()
-        for node in ast.walk(cls):
-            if isinstance(node, ast.Raise):
-                exempt.update(id(inner) for inner in ast.walk(node))
-            elif isinstance(node, ast.Subscript):
-                exempt.update(id(inner) for inner in ast.walk(node.slice))
-        for node in ast.walk(cls):
-            if isinstance(node, ast.Call):
-                built_key = module._resolve(node.func)
-                built = blocks.get(built_key) if built_key is not None else None
-                if built in DATA_BLOCKS:
+            supers = 0
+            for node in ast.walk(init):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "__init__"
+                    and isinstance(node.func.value, ast.Call)
+                    and isinstance(node.func.value.func, ast.Name)
+                    and node.func.value.func.id == "super"
+                ):
+                    supers += 1
+                stored: ast.expr | None = None
+                if isinstance(node, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
+                    targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                    stored = next(
+                        (
+                            target
+                            for target in targets
+                            if isinstance(target, ast.Attribute)
+                            and isinstance(target.value, ast.Name)
+                            and target.value.id == "self"
+                        ),
+                        None,
+                    )
+                if stored is None and (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "__setattr__"
+                ):
+                    stored = node
+                if stored is not None:
+                    field = stored.attr if isinstance(stored, ast.Attribute) else "__setattr__"
                     found.append(
                         Violation(ViolationSpec(
                             module.path(),
                             node.lineno,
                             "TB080",
-                            f"{where} constructs what it maps to; a mapper exposes the parts "
-                            "and the caller assembles them, so every field is named where it is read",
+                            f"{where} stores {field!r}; a mapper stores nothing but its target's "
+                            "fields — it calls super().__init__ once and assigns nothing itself",
                         ))
                     )
-            if not isinstance(node, ast.Constant):
+            if supers != 1:
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        init.lineno,
+                        "TB080",
+                        f"{where}.__init__ calls super().__init__ {supers} times; a mapper "
+                        "calls it exactly once, because that call is the mapping",
+                    ))
+                )
+        for item in cls.body:
+            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
-            if node.value is None or node.value is Ellipsis:
-                continue
-            if id(node) in exempt:
+            if item.name == "__init__":
                 continue
             found.append(
                 Violation(ViolationSpec(
                     module.path(),
-                    node.lineno,
+                    item.lineno,
                     "TB080",
-                    f"{where} carries the literal {node.value!r}; a mapper originates "
-                    "nothing — every value it exposes comes from what it was given",
+                    f"{where}.{item.name} is a method; a mapper holds only __init__, "
+                    "because it is its target and the target already carries the fields",
                 ))
             )
         return tuple(found)
@@ -6163,35 +6193,6 @@ class Codebase(ts.AggregateRoot):
                         "TB082",
                         f"{where} computes in an argument; a service method names what it "
                         "computes in a local, and passes a name, a reader, or a declared kind",
-                    ))
-                )
-            call_key = module._resolve(node.func)
-            built = blocks.get(call_key) if call_key is not None else None
-            if built not in DATA_BLOCKS:
-                continue
-            bases: set[str | None] = set()
-            for value in list(node.args) + [kw.value for kw in node.keywords]:
-                if not isinstance(value, ast.Attribute):
-                    continue
-                reader: list[str] = []
-                current: ast.expr = value
-                while isinstance(current, ast.Attribute):
-                    reader.append(current.attr)
-                    current = current.value
-                if not isinstance(current, ast.Name):
-                    bases.add(None)
-                    continue
-                reader.append(current.id)
-                bases.add(".".join(reversed(reader[1:])))
-            bases.discard(None)
-            if len(bases) > 1:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        node.lineno,
-                        "TB082",
-                        f"{where} assembles from {len(bases)} readers; a declared kind is "
-                        "assembled from the accessors of one mapper",
                     ))
                 )
         for node in ast.walk(fn):
