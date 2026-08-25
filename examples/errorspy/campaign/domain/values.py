@@ -103,15 +103,15 @@ class DateWindowSpec(ts.Spec):
 
 class DateWindow(ts.ValueObject):
 
-    def __init__(self, start_value: str, end_value: str) -> None:
+    def __init__(self, spec: DateWindowSpec) -> None:
         try:
-            start = Day(start_value)
+            start = Day(spec.start)
         except errors.DomainError as e:
-            raise errors.wrap(e, f"invalid start date {start_value!r}", field="start") from e.__cause__
+            raise errors.wrap(e, f"invalid start date {spec.start!r}", field="start") from e.__cause__
         try:
-            end = Day(end_value)
+            end = Day(spec.end)
         except errors.DomainError as e:
-            raise errors.wrap(e, f"invalid end date {end_value!r}", field="end") from e.__cause__
+            raise errors.wrap(e, f"invalid end date {spec.end!r}", field="end") from e.__cause__
         if not start._value < end._value:
             raise errors.invalid(
                 "window_order",

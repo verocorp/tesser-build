@@ -23,7 +23,7 @@ class Campaign(ts.AggregateRoot):
 
     def __init__(self, spec: CampaignSpec) -> None:
         self._id = values.CampaignID(spec.id)
-        self._budget = money.Money(spec.budget.amount, spec.budget.currency)
+        self._budget = money.Money(spec.budget)
         self._links = short_links.ShortLinks(spec.links)
 
     @property

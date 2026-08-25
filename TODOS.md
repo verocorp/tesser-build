@@ -392,10 +392,31 @@ against `main` at v0.0.71.0 rather than transcribed.
 
 ## TB083 spec-use follow-ups (2026-08-24, v0.0.80.0 ship red team)
 
-- [ ] **Container-typed spec parameters never enter the tracked set.**
-  `_spec_annotation` unwraps `Optional`/`Union`/`X | None` only, so
-  `specs: list[XSpec]`, `Sequence[XSpec]`, `tuple[XSpec, ...]`, `*args: XSpec`
-  are untracked and `specs[0].value` / `for s in specs: s.value` are silent.
+- [ ] **An orphan spec — one no `__init__` takes — is reported nowhere useful.**
+  Every read of it is a TB083 finding whose message asks for an owner that
+  does not exist. A finding on the spec itself ("taken by no `__init__`; a
+  spec constructs exactly one object") was built and pulled: 11 analyzer
+  fixtures sketch throwaway specs, and the ruling was not asked for. Rule on
+  it; the code is one block in `_spec_shared_violations`.
+- [ ] **A subclass that takes its base's spec is reported as a second taker.**
+  `class Sub(Base)` with both `__init__(self, spec: SSpec)` fires "a spec
+  constructs exactly one object" — decide whether one lineage counts as one
+  object.
+- [ ] **Tuple-unpack from a maker returning `tuple[XSpec, XSpec]`, `[spec][0]`,
+  and `{'k': spec}['k']` are untyped** — "bind it to something else first" is
+  a general escape alongside the dict/`*args` items above.
+- [ ] **TB051 has no type-alias carve-out.** `checks.py` `SpecType = tuple[tuple[str, str], bool]`
+  is a type alias, not a constant: `typing.Final` makes mypy reject it as an
+  annotation, `typing.TypeAlias` does not satisfy the rule, and `type X = ...`
+  needs 3.12 while the tree targets >=3.11. It carries `# tesser:debt TB051`
+  — the first code to need the carve-out; rule on `TypeAlias` (or a `type`
+  statement once the floor moves).
+- [x] **Container-typed spec parameters never enter the tracked set — RESOLVED
+  v0.0.81.0.** `_spec_key` types `tuple`/`list`/`Sequence`/`Iterable` of a
+  spec as a many-typed name; a `for` loop (plain or `enumerate`), a
+  comprehension target, or a subscript over it binds the element, so
+  `specs[0].value` and `for s in specs: s.value` are findings. Still open:
+  `*args: XSpec` / `**kw: XSpec`, and `dict[str, XSpec]` values.
 - [ ] **Tracking is flow-insensitive.** One rebinding anywhere in a function
   (`if flag: spec = 'plain'`) drops the name for the whole function, so a
   later genuine `spec.value` is missed — the deliberate price of the

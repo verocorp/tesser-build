@@ -16,11 +16,16 @@ class ReportsService(ts.ApplicationService):
 
     def links_by_verdict(self, req: client.LinksByVerdictRequest) -> client.LinksByVerdictResponse:
         listed_links = self._links.links(link_source.ListLinksRequest())
-        links = tuple(report.Link(slug=f.slug, target_url=f.target_url) for f in listed_links.links)
+        links = tuple(
+            report.Link(report.LinkSpec(slug=f.slug, target_url=f.target_url))
+            for f in listed_links.links
+        )
         listed_verdicts = self._verdicts.verdicts(verdict_source.ListVerdictsRequest())
         verdicts = tuple(
             report.RecordedVerdict(
-                f.target_url, f.decision == verdict_source.VerdictDecision.ALLOWED, f.reason
+                report.RecordedVerdictSpec(
+                    f.target_url, f.decision == verdict_source.VerdictDecision.ALLOWED, f.reason
+                )
             )
             for f in listed_verdicts.verdicts
         )
@@ -39,10 +44,12 @@ class ReportsService(ts.ApplicationService):
             )
             joined.append(
                 report.LinkVerdict(
-                    slug=link_slug,
-                    target_url=link_target,
-                    allowed=link_allowed,
-                    reason=link_reason,
+                    report.LinkVerdictSpec(
+                        slug=link_slug,
+                        target_url=link_target,
+                        allowed=link_allowed,
+                        reason=link_reason,
+                    )
                 )
             )
         joined.sort(key=lambda r: (str(r.allowed) == "allowed", str(r.slug)))

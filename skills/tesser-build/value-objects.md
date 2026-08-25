@@ -86,12 +86,13 @@ Construction mechanics, spec structure, and language idioms: see
    components. No standardized single-primitive form (Money, a person's
    name) → compound: child value objects, constructed from primitives and
    child specs at its single constructor — never from value objects (ruled
-   2026-08-23). Which shape a compound's constructor takes is per-language:
-   Go uses a spec at 2+ fields (a spec prevents a definition cascade through
-   every parent that embeds the type); Python's canonical compound takes the
-   primitives directly (`Money("9.99", "USD")`), with a child spec where the
-   construction data nests. See `go.md#the-spec-pattern` /
-   `python.md#the-spec-pattern`.
+   2026-08-23). A compound's constructor takes **exactly one spec** in both
+   languages (Go since the spec pattern; Python since 2026-08-24, TB080): a
+   leaf wraps its one primitive, anything with two or more construction
+   values takes a spec (`Money(MoneySpec("9.99", "USD"))`), because a spec
+   prevents a definition cascade through every parent that embeds the
+   type — and that spec is read only by that constructor (TB083). See
+   `go.md#the-spec-pattern` / `python.md#the-spec-pattern`.
 2. **Equality path.** If every logical value has exactly one representation,
    native equality works. If the same logical value has multiple
    representations (decimals: `1.5` vs `1.50`), native equality LIES — block

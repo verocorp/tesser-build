@@ -5,6 +5,41 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.81.0] - 2026-08-24
+
+Two rulings close the spec pattern. A value object takes **one primitive or
+exactly one spec**: a leaf wraps its one value (`Slug(value)`), and anything
+with two or more construction values takes a `ts.Spec` (`Money(MoneySpec(...))`),
+which is what Go has done at 2+ fields all along. And a spec belongs to
+**its own object**: only the `__init__` of the class that takes a spec may
+read its fields, so a parent hands a child spec on whole (`Money(spec.budget)`)
+and never reaches through it (`spec.budget.amount` is a finding).
+
+### Changed
+- **`TB080`** — a value object's `__init__` takes exactly one parameter, and
+  that parameter is a primitive/enum or exactly one `ts.Spec` (not
+  `tuple[XSpec, ...]`, not `XSpec | None`). A second parameter is a finding.
+  Supersedes the 2026-08-23 "primitives and child specs" allowance.
+- **`TB083`** binds each spec to its owner. Every spec-holding name is typed
+  (annotation incl. quoted/`Optional`/union/tuple-of, constructor, maker
+  function or unambiguous spec-returning method, alias, walrus, `await`,
+  loop variable over a tuple-of-spec field, subscript, comprehension target),
+  spec fields are typed from the spec's own `__init__`, and a read is
+  licensed only inside the `__init__` of the object that takes that spec.
+  `Parent.__init__` may read `spec.child` and pass it to `Child(spec.child)`;
+  `spec.child.name`, `spec.kids[0].name`, and `kid.name` in `for kid in
+  spec.kids` are findings. A second class taking an already-taken spec is
+  reported at its definition (`a spec constructs exactly one object`).
+- Every multi-field value object in the example trees takes its spec:
+  `Money`, `Verdict`, `Policy`, `Link`, `RecordedVerdict`, `LinkVerdict`
+  (python-app) and `DateWindow` (errorspy); 50 construction sites follow.
+  tessercheck's own `Violation`, `Debt`, `ImportEdge`, `TesserImport`,
+  `Comment`, and `RuleRow` take specs too (218 sites), and the rulebook reads
+  a violation's fields through its `ViolationSpec`.
+- The entity/aggregate/config constructor rule reads quoted annotations.
+- `python.md`, `value-objects.md`, `serialization.md`, `faq.md`,
+  `coverage.md`, and CLAUDE.md say the same thing; skill-version 55.
+
 ## [0.0.80.0] - 2026-08-24
 
 A spec initializes its domain object and does nothing else. The new

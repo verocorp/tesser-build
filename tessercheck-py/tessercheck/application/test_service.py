@@ -78,7 +78,7 @@ def test_the_rulebook_never_reaches_the_source_reader() -> None:
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _comment_violations(self) -> None:\n"
-        "        Violation('p', 1, 'TB020', 'a shape; the served tail')\n"
+        "        Violation(ViolationSpec('p', 1, 'TB020', 'a shape; the served tail'))\n"
     )
     checker = service.TessercheckService(reader, sources)
     checker.rulebook(client.RulebookRequest(tree="some/tree"))
@@ -92,7 +92,7 @@ def test_the_rulebook_answer_carries_the_rendered_rules_and_contracts() -> None:
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
         "class Codebase:\n"
         "    def _comment_violations(self) -> None:\n"
-        "        Violation('p', 1, 'TB020', 'a shape; the served tail')\n"
+        "        Violation(ViolationSpec('p', 1, 'TB020', 'a shape; the served tail'))\n"
     )
     checker = service.TessercheckService(
         FakeSourceReader(source_reader.RootForm.APP), sources

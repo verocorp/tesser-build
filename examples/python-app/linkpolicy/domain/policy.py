@@ -77,12 +77,20 @@ class Decision(ts.ValueObject):
     _value: str
 
 
-class Verdict(ts.ValueObject):
+class VerdictSpec(ts.Spec):
 
     def __init__(self, target_url: str, allowed: bool, reason: str) -> None:
-        object.__setattr__(self, "_target_url", TargetURL(target_url))
-        object.__setattr__(self, "_allowed", Decision("allowed" if allowed else "denied"))
-        object.__setattr__(self, "_reason", Reason(reason))
+        self.target_url = target_url
+        self.allowed = allowed
+        self.reason = reason
+
+
+class Verdict(ts.ValueObject):
+
+    def __init__(self, spec: VerdictSpec) -> None:
+        object.__setattr__(self, "_target_url", TargetURL(spec.target_url))
+        object.__setattr__(self, "_allowed", Decision("allowed" if spec.allowed else "denied"))
+        object.__setattr__(self, "_reason", Reason(spec.reason))
 
     @property
     def target_url(self) -> TargetURL:
@@ -101,18 +109,25 @@ class Verdict(ts.ValueObject):
     _reason: Reason
 
 
-class Policy(ts.ValueObject):
+class PolicySpec(ts.Spec):
 
     def __init__(
         self,
         allowed_schemes: tuple[str, ...] = _DEFAULT_SCHEMES,
         blocked_hosts: tuple[str, ...] = _DEFAULT_BLOCKED,
     ) -> None:
+        self.allowed_schemes = allowed_schemes
+        self.blocked_hosts = blocked_hosts
+
+
+class Policy(ts.ValueObject):
+
+    def __init__(self, spec: PolicySpec) -> None:
         object.__setattr__(
-            self, "_allowed_schemes", tuple(Scheme(s) for s in allowed_schemes)
+            self, "_allowed_schemes", tuple(Scheme(s) for s in spec.allowed_schemes)
         )
         object.__setattr__(
-            self, "_blocked_hosts", tuple(Host(h) for h in blocked_hosts)
+            self, "_blocked_hosts", tuple(Host(h) for h in spec.blocked_hosts)
         )
 
     @property
@@ -127,12 +142,14 @@ class Policy(ts.ValueObject):
         parsed = urllib.parse.urlparse(target_url)
         if parsed.scheme not in {str(s) for s in self._allowed_schemes}:
             return Verdict(
-                target_url, False, f"scheme {parsed.scheme or '(none)'!r} not allowed"
+                VerdictSpec(
+                    target_url, False, f"scheme {parsed.scheme or '(none)'!r} not allowed"
+                )
             )
         host = parsed.hostname or ""
         if host in {str(h) for h in self._blocked_hosts}:
-            return Verdict(target_url, False, f"host {host!r} is blocked")
-        return Verdict(target_url, True, "ok")
+            return Verdict(VerdictSpec(target_url, False, f"host {host!r} is blocked"))
+        return Verdict(VerdictSpec(target_url, True, "ok"))
 
     _allowed_schemes: tuple[Scheme, ...]
     _blocked_hosts: tuple[Host, ...]

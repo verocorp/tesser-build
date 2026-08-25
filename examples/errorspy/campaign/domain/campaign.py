@@ -28,7 +28,7 @@ class Campaign(ts.AggregateRoot):
 
     def __init__(self, spec: CampaignSpec) -> None:
         self._id = str(values.CampaignID(spec.id))
-        self._window = values.DateWindow(spec.window.start, spec.window.end)
+        self._window = values.DateWindow(spec.window)
         self._links: list[short_link.ShortLink] = []
         for i, link_spec in enumerate(spec.links):
             try:

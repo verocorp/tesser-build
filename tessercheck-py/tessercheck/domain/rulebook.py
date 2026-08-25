@@ -51,6 +51,9 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "head": "⟨scalar⟩",
     "named": "⟨types⟩",
     "spec_name": "⟨name⟩",
+    "shared_class": "⟨class⟩",
+    "spec_label": "⟨spec⟩",
+    "owner_label": "⟨class⟩",
 }
 
 APPLIES_TO: typing.Final[dict[str, str]] = {
@@ -72,6 +75,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Codebase._string_equality_violations": "every module",
     "Codebase._sibling_reference_violations": "every class, in every module",
     "Codebase._spec_use_violations": "every function that holds a spec, in every module",
+    "Codebase._spec_shared_violations": "domain object `__init__`",
     "Codebase._vo_field_violations": "value object class",
     "Codebase._exposure_violations": "value object class",
     "Codebase._composition_violations": "value object class",
@@ -148,14 +152,12 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
 
 WHERE_PREFIX: typing.Final[re.Pattern[str]] = re.compile(r"^(?:⟨[^⟩]+⟩[.:]*)+\s*")
 
+VIOLATION_SPEC: typing.Final[str] = "ViolationSpec"
 
-class RuleRow(ts.ValueObject):
+VIOLATION_FIELDS: typing.Final[tuple[str, ...]] = ("path", "line", "code", "message")
 
-    _clause: checks.Text
-    _code: checks.Code
-    _applies_to: checks.Text
-    _shapes: tuple[checks.Text, ...]
-    _linenos: tuple[checks.Line, ...]
+
+class RuleRowSpec(ts.Spec):
 
     def __init__(
         self,
@@ -165,14 +167,30 @@ class RuleRow(ts.ValueObject):
         shapes: tuple[str, ...],
         linenos: tuple[int, ...],
     ) -> None:
-        object.__setattr__(self, "_clause", checks.Text(clause))
-        object.__setattr__(self, "_code", checks.Code(code))
-        object.__setattr__(self, "_applies_to", checks.Text(applies_to))
+        self.clause = clause
+        self.code = code
+        self.applies_to = applies_to
+        self.shapes = shapes
+        self.linenos = linenos
+
+
+class RuleRow(ts.ValueObject):
+
+    _clause: checks.Text
+    _code: checks.Code
+    _applies_to: checks.Text
+    _shapes: tuple[checks.Text, ...]
+    _linenos: tuple[checks.Line, ...]
+
+    def __init__(self, spec: RuleRowSpec) -> None:
+        object.__setattr__(self, "_clause", checks.Text(spec.clause))
+        object.__setattr__(self, "_code", checks.Code(spec.code))
+        object.__setattr__(self, "_applies_to", checks.Text(spec.applies_to))
         object.__setattr__(
-            self, "_shapes", tuple(checks.Text(shape) for shape in shapes)
+            self, "_shapes", tuple(checks.Text(shape) for shape in spec.shapes)
         )
         object.__setattr__(
-            self, "_linenos", tuple(checks.Line(line) for line in linenos)
+            self, "_linenos", tuple(checks.Line(line) for line in spec.linenos)
         )
 
     def clause(self) -> checks.Text:
@@ -196,6 +214,29 @@ def render(  # tesser:debt TB051
     test_modules: tuple[tuple[str, str], ...] = (),
     contracts_text: str = "",
 ) -> str:
+    def spec_fields(call: ast.Call) -> dict[str, ast.expr] | None:
+        if call.keywords or len(call.args) != 1:
+            return None
+        spec = call.args[0]
+        if not isinstance(spec, ast.Call):
+            return None
+        if isinstance(spec.func, ast.Name):
+            named = spec.func.id
+        elif isinstance(spec.func, ast.Attribute):
+            named = spec.func.attr
+        else:
+            return None
+        if named != VIOLATION_SPEC or len(spec.args) > len(VIOLATION_FIELDS):
+            return None
+        bound = dict(zip(VIOLATION_FIELDS, spec.args))
+        for keyword in spec.keywords:
+            if keyword.arg is None or keyword.arg in bound:
+                return None
+            bound[keyword.arg] = keyword.value
+        if set(bound) != set(VIOLATION_FIELDS):
+            return None
+        return bound
+
     tree = ast.parse(checks_text)
     assertions: list[tuple[str, tuple[str, ...]]] = []
     for _, module_text in test_modules:
@@ -282,12 +323,13 @@ def render(  # tesser:debt TB051
                         bindings.append(bound_args)
             for binding in bindings or [{}]:
                 for call in calls:
-                    if call.keywords or len(call.args) != 4:
+                    fields = spec_fields(call)
+                    if fields is None:
                         raise RuntimeError(
                             f"checks.py:{call.lineno}: Violation takes exactly the four "
-                            "positional arguments (path, line, code, message)"
+                            "spec fields (path, line, code, message), as one ViolationSpec"
                         )
-                    code_expr = call.args[2]
+                    code_expr = fields["code"]
                     if isinstance(code_expr, ast.Constant) and isinstance(
                         code_expr.value, str
                     ):
@@ -301,7 +343,7 @@ def render(  # tesser:debt TB051
                         )
                     if code is None:
                         continue
-                    message_node = call.args[3]
+                    message_node = fields["message"]
                     if isinstance(message_node, ast.Constant) and isinstance(
                         message_node.value, str
                     ):
@@ -410,11 +452,13 @@ def render(  # tesser:debt TB051
     ]
     for row in (
         RuleRow(
-            clause,
-            codes[clause],
-            applies[clause],
-            tuple(shapes[clause]),
-            tuple(linenos[clause]),
+            RuleRowSpec(
+                clause,
+                codes[clause],
+                applies[clause],
+                tuple(shapes[clause]),
+                tuple(linenos[clause]),
+            )
         )
         for clause in order
     ):

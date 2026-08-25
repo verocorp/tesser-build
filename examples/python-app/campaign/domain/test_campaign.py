@@ -34,7 +34,7 @@ def test_a_campaign_carries_every_field_of_its_spec() -> None:
     c = campaign.Campaign(spec)
 
     assert c.id == values.CampaignID(spec.id)
-    assert c.budget == money.Money(spec.budget.amount, spec.budget.currency)
+    assert c.budget == money.Money(spec.budget)
     assert [link.slug for link in c.links] == [kernel_slug.Slug(spec.links.links[0].slug)]
 
 

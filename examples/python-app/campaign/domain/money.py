@@ -53,9 +53,9 @@ class MoneyCurrency(ts.ValueObject):
 
 class Money(ts.ValueObject):
 
-    def __init__(self, amount: str, currency: str) -> None:
-        object.__setattr__(self, "_amount", MoneyAmount(amount))
-        object.__setattr__(self, "_currency", MoneyCurrency(currency))
+    def __init__(self, spec: MoneySpec) -> None:
+        object.__setattr__(self, "_amount", MoneyAmount(spec.amount))
+        object.__setattr__(self, "_currency", MoneyCurrency(spec.currency))
 
     @property
     def amount(self) -> MoneyAmount:
