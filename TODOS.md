@@ -405,12 +405,6 @@ against `main` at v0.0.71.0 rather than transcribed.
 - [ ] **Tuple-unpack from a maker returning `tuple[XSpec, XSpec]`, `[spec][0]`,
   and `{'k': spec}['k']` are untyped** — "bind it to something else first" is
   a general escape alongside the dict/`*args` items above.
-- [ ] **TB051 has no type-alias carve-out.** `checks.py` `SpecType = tuple[tuple[str, str], bool]`
-  is a type alias, not a constant: `typing.Final` makes mypy reject it as an
-  annotation, `typing.TypeAlias` does not satisfy the rule, and `type X = ...`
-  needs 3.12 while the tree targets >=3.11. It carries `# tesser:debt TB051`
-  — the first code to need the carve-out; rule on `TypeAlias` (or a `type`
-  statement once the floor moves).
 - [x] **Container-typed spec parameters never enter the tracked set — RESOLVED
   v0.0.81.0.** `_spec_key` types `tuple`/`list`/`Sequence`/`Iterable` of a
   spec as a many-typed name; a `for` loop (plain or `enumerate`), a
@@ -442,6 +436,31 @@ against `main` at v0.0.71.0 rather than transcribed.
   the open question.
 - [ ] **Within one line, findings come out in reverse source order.** The
   sort key is the line only; `Violation` carries no column.
+- [ ] **`SpecRef.one()`/`.many()` rebuild the `Symbol` from `str()`** (v0.0.82.0
+  adversarial review). `Text.__str__` is `serialization.canonical_str`, a
+  display hook; identity is rebuilt from display, which convention 3 forbids.
+  Latent: `canonical_str` is the identity function today, so the round-trip
+  holds and the whole-tree fuzz found no difference. Closing it collides with
+  two rules — TB080 (a spec field is a primitive or a spec, never a built
+  `Symbol`) and TB083 (a value object keeps no spec) — so it needs a ruling on
+  how a compound value object re-enters its constructor with one component
+  changed, not a one-line edit.
+- [ ] **Two `__init__` definitions in one class taking different specs tie on
+  the `_spec_shared` sort key** (`entry[:3]`, because `Symbol` is not
+  orderable); the two findings at that line keep insertion order where the
+  tuple sorted them by spec name. Degenerate input; nothing pins the order.
+- [ ] **Twelve walk branches execute under the suite but no assertion pins
+  them** (v0.0.82.0 coverage audit, mutation-tested; all pre-date the
+  `SpecRef` change): maker-method name collision on the same spec and on a
+  different spec (`checks.py` `returning`); a many-shaped `__init__`
+  parameter must not register an owner; two second-takers in one module and
+  their finding order; `tuple[tuple[XSpec, ...], ...]` yields no ref;
+  `spec.kids.greeting` / `spec.kids.name` / `copy.copy(spec.kids)` must not
+  resolve or read; `spec['k'].name` on a one-shaped owner; `spec.kids[1:]`
+  keeps the many shape; a plain `for k in spec.kids: self._n = k.name`; a
+  `for` over a one-shaped spec binds nothing; and the `taken.shape() ==
+  SPEC_ONE` clause in the TB080 constructor rule, which a neutering mutant
+  survived and looks redundant with the `Name`/`Attribute` clause after it.
 
 ## Module-only imports wave followups (2026-08-24, branch `worktree-imports-module-only`)
 

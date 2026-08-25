@@ -414,8 +414,6 @@ SPEC_READER_BLOCKS: typing.Final[frozenset[str]] = DOMAIN_BLOCKS | frozenset(
     {"component_config", "app_config"}
 )
 
-SpecType = tuple[tuple[str, str], bool]  # tesser:debt TB051
-
 TEST_TIER: typing.Final[frozenset[str]] = frozenset({"test", "conftest", "conftest-root", "eval"})
 
 WRAPPABLE_SCALARS: typing.Final[frozenset[str]] = frozenset(
@@ -625,6 +623,76 @@ class DebtForm(ts.ValueObject):
 
     def __str__(self) -> str:
         return serialization.canonical_str(self._value)
+
+
+class SymbolSpec(ts.Spec):
+
+    def __init__(self, module: str, name: str) -> None:
+        self.module = module
+        self.name = name
+
+
+class Symbol(ts.ValueObject):
+
+    _module: Text
+    _name: Text
+
+    def __init__(self, spec: SymbolSpec) -> None:
+        object.__setattr__(self, "_module", Text(spec.module))
+        object.__setattr__(self, "_name", Text(spec.name))
+
+    def module(self) -> Text:
+        return self._module
+
+    def name(self) -> Text:
+        return self._name
+
+
+class SpecShape(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        if value not in ("one", "many"):
+            raise ValueError("spec shape must be one or many")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return serialization.canonical_str(self._value)
+
+
+class SpecRefSpec(ts.Spec):
+
+    def __init__(self, symbol: SymbolSpec, shape: str) -> None:
+        self.symbol = symbol
+        self.shape = shape
+
+
+class SpecRef(ts.ValueObject):
+
+    _symbol: Symbol
+    _shape: SpecShape
+
+    def __init__(self, spec: SpecRefSpec) -> None:
+        object.__setattr__(self, "_symbol", Symbol(spec.symbol))
+        object.__setattr__(self, "_shape", SpecShape(spec.shape))
+
+    def symbol(self) -> Symbol:
+        return self._symbol
+
+    def shape(self) -> SpecShape:
+        return self._shape
+
+    def one(self) -> "SpecRef":
+        return SpecRef(SpecRefSpec(SymbolSpec(str(self._symbol.module()), str(self._symbol.name())), "one"))
+
+    def many(self) -> "SpecRef":
+        return SpecRef(SpecRefSpec(SymbolSpec(str(self._symbol.module()), str(self._symbol.name())), "many"))
+
+
+SPEC_ONE: typing.Final[SpecShape] = SpecShape("one")
+
+SPEC_MANY: typing.Final[SpecShape] = SpecShape("many")
 
 
 class ViolationSpec(ts.Spec):
@@ -1064,12 +1132,12 @@ class Codebase(ts.AggregateRoot):
         self._used_imports: set[str] = set()
         self._used_pure_stdlib: set[str] = set()
         self._domain_enums: frozenset[tuple[str, str]] = frozenset()
-        self._spec_makers: dict[tuple[str, str], SpecType] = {}
-        self._spec_methods: dict[str, SpecType] = {}
-        self._spec_owner: dict[tuple[str, str], tuple[str, str]] = {}
-        self._spec_takers: dict[tuple[str, str], set[tuple[str, str]]] = {}
-        self._spec_fields: dict[tuple[str, str], dict[str, SpecType]] = {}
-        self._spec_shared: list[tuple[str, str, int, tuple[str, str], tuple[str, str]]] = []
+        self._spec_makers: dict[tuple[str, str], SpecRef] = {}
+        self._spec_methods: dict[str, SpecRef] = {}
+        self._spec_owner: dict[Symbol, tuple[str, str]] = {}
+        self._spec_takers: dict[Symbol, set[tuple[str, str]]] = {}
+        self._spec_fields: dict[Symbol, dict[str, SpecRef]] = {}
+        self._spec_shared: list[tuple[str, str, int, Symbol, tuple[str, str]]] = []
 
     def violations(self) -> tuple[Violation, ...]:
         declaration = self._declaration_violations()  # tesser:debt TB051
@@ -1134,10 +1202,11 @@ class Codebase(ts.AggregateRoot):
                     made = self._spec_key(module, fn.returns, blocks)
                     if made is not None:
                         self._spec_makers[(module.name(), fn.name)] = made
-        returning: dict[str, SpecType | None] = {}
+        returning: dict[str, SpecRef | None] = {}
         self._spec_owner = {}
         self._spec_takers = {}
         self._spec_fields = {}
+        self._spec_shared = []
         for module in checked:
             for cls in module.class_defs():
                 block = blocks.get((module.name(), cls.name))
@@ -1156,19 +1225,21 @@ class Codebase(ts.AggregateRoot):
                         )
                     elif block in SPEC_READER_BLOCKS and len(params) == 1:
                         taken = self._spec_key(module, params[0].annotation, blocks)
-                        if taken is not None and not taken[1]:
-                            first = self._spec_owner.setdefault(taken[0], (module.name(), cls.name))
-                            self._spec_takers.setdefault(taken[0], set()).add((module.name(), cls.name))
+                        if taken is not None and taken.shape() == SPEC_ONE:
+                            first = self._spec_owner.setdefault(taken.symbol(), (module.name(), cls.name))
+                            self._spec_takers.setdefault(taken.symbol(), set()).add((module.name(), cls.name))
                             if first != (module.name(), cls.name):
-                                self._spec_shared.append((module.name(), cls.name, cls.lineno, taken[0], first))
+                                self._spec_shared.append(
+                                    (module.name(), cls.name, cls.lineno, taken.symbol(), first)
+                                )
                     elif block in SPEC_BLOCKS:
-                        self._spec_fields[(module.name(), cls.name)] = {
+                        self._spec_fields[Symbol(SymbolSpec(module.name(), cls.name))] = {
                             arg.arg: field
                             for arg in params
                             if (field := self._spec_key(module, arg.annotation, blocks)) is not None
                         }
         self._spec_methods = {name: made for name, made in returning.items() if made is not None}
-        self._spec_shared.sort()
+        self._spec_shared.sort(key=lambda entry: entry[:3])
         for module in self._modules:
             found.extend(self._comment_violations(module))  # tesser:debt TB051
             found.extend(self._double_violations(module))  # tesser:debt TB051
@@ -2839,7 +2910,7 @@ class Codebase(ts.AggregateRoot):
         for shared_module, shared_class, line, shared_spec, shared_owner in self._spec_shared:
             if shared_module != module.name():
                 continue
-            spec_label = ".".join(shared_spec)
+            spec_label = f"{shared_spec.module()}.{shared_spec.name()}"
             owner_label = ".".join(shared_owner)
             found.append(
                 Violation(ViolationSpec(
@@ -2854,7 +2925,7 @@ class Codebase(ts.AggregateRoot):
 
     def _spec_key(
         self, module: Module, node: ast.expr | None, blocks: dict[tuple[str, str], str]
-    ) -> SpecType | None:
+    ) -> SpecRef | None:
         if node is None:
             return None
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
@@ -2876,21 +2947,21 @@ class Codebase(ts.AggregateRoot):
             if head in ("tuple", "list", "set", "frozenset", "Sequence", "Iterable", "Collection"):
                 for each in inner:
                     found = self._spec_key(module, each, blocks)
-                    if found is not None and not found[1]:
-                        return (found[0], True)
+                    if found is not None and found.shape() == SPEC_ONE:
+                        return found.many()
             return None
         key = module._resolve(node)
         if key is not None and blocks.get(key) in SPEC_BLOCKS:
-            return (key, False)
+            return SpecRef(SpecRefSpec(SymbolSpec(key[0], key[1]), "one"))
         return None
 
     def _spec_use_violations(
         self, module: Module, blocks: dict[tuple[str, str], str]
     ) -> tuple[Violation, ...]:
-        def annotation(node: ast.expr | None) -> SpecType | None:
+        def annotation(node: ast.expr | None) -> SpecRef | None:
             return self._spec_key(module, node, blocks)
 
-        def maker(node: ast.expr) -> SpecType | None:
+        def maker(node: ast.expr) -> SpecRef | None:
             made = annotation(node)
             if made is not None:
                 return made
@@ -2903,7 +2974,7 @@ class Codebase(ts.AggregateRoot):
                 return self._spec_methods.get(node.attr)
             return None
 
-        def typed(node: ast.expr, names: dict[str, SpecType]) -> SpecType | None:
+        def typed(node: ast.expr, names: dict[str, SpecRef]) -> SpecRef | None:
             if isinstance(node, (ast.Await, ast.NamedExpr)):
                 return typed(node.value, names)
             if isinstance(node, ast.Name):
@@ -2917,13 +2988,13 @@ class Codebase(ts.AggregateRoot):
                 return None
             if isinstance(node, ast.Attribute):
                 owner = typed(node.value, names)
-                if owner is not None and not owner[1]:
-                    return self._spec_fields.get(owner[0], {}).get(node.attr)
+                if owner is not None and owner.shape() == SPEC_ONE:
+                    return self._spec_fields.get(owner.symbol(), {}).get(node.attr)
                 return None
             if isinstance(node, ast.Subscript):
                 owner = typed(node.value, names)
-                if owner is not None and owner[1]:
-                    return owner if isinstance(node.slice, ast.Slice) else (owner[0], False)
+                if owner is not None and owner.shape() == SPEC_MANY:
+                    return owner if isinstance(node.slice, ast.Slice) else owner.one()
                 return None
             if isinstance(node, ast.IfExp):
                 return typed(node.body, names) or typed(node.orelse, names)
@@ -2934,7 +3005,7 @@ class Codebase(ts.AggregateRoot):
                         return found
             return None
 
-        def carried(node: ast.expr, names: dict[str, SpecType]) -> str | None:
+        def carried(node: ast.expr, names: dict[str, SpecRef]) -> str | None:
             if isinstance(node, (ast.Name, ast.Call, ast.Attribute, ast.Subscript)) and typed(node, names) is not None:
                 if isinstance(node, ast.Name):
                     return node.id
@@ -2999,12 +3070,12 @@ class Codebase(ts.AggregateRoot):
         def stored(node: ast.AST) -> list[str]:
             return [t.id for t in ast.walk(node) if isinstance(t, ast.Name) and isinstance(t.ctx, ast.Store)]
 
-        def element(target: ast.expr, iterable: ast.expr, names: dict[str, SpecType]) -> tuple[str, SpecType] | None:
+        def element(target: ast.expr, iterable: ast.expr, names: dict[str, SpecRef]) -> tuple[str, SpecRef] | None:
             many = typed(iterable, names)
-            if many is None or not many[1]:
+            if many is None or many.shape() != SPEC_MANY:
                 return None
             if isinstance(target, ast.Name):
-                return target.id, (many[0], False)
+                return target.id, many.one()
             if (
                 isinstance(target, ast.Tuple)
                 and len(target.elts) == 2
@@ -3013,10 +3084,10 @@ class Codebase(ts.AggregateRoot):
                 and isinstance(iterable.func, ast.Name)
                 and iterable.func.id == "enumerate"
             ):
-                return target.elts[1].id, (many[0], False)
+                return target.elts[1].id, many.one()
             return None
 
-        def held_in(body: list[ast.stmt], names: dict[str, SpecType]) -> dict[str, SpecType]:
+        def held_in(body: list[ast.stmt], names: dict[str, SpecRef]) -> dict[str, SpecRef]:
             names = dict(names)
             local = scope(list(body))
             local.extend(
@@ -3087,7 +3158,7 @@ class Codebase(ts.AggregateRoot):
                                 shadowed.add(pattern.rest)
             return {name: made for name, made in names.items() if name not in shadowed}
 
-        def held(fn: ast.FunctionDef | ast.AsyncFunctionDef, names: dict[str, SpecType]) -> dict[str, SpecType]:
+        def held(fn: ast.FunctionDef | ast.AsyncFunctionDef, names: dict[str, SpecRef]) -> dict[str, SpecRef]:
             seeded = dict(names)
             for a in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs:
                 made = annotation(a.annotation)
@@ -3095,7 +3166,7 @@ class Codebase(ts.AggregateRoot):
                     seeded[a.arg] = made
             return held_in(list(fn.body), seeded)
 
-        def kept(node: ast.AST, names: dict[str, SpecType], top: bool) -> str | None:
+        def kept(node: ast.AST, names: dict[str, SpecRef], top: bool) -> str | None:
             if top and isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) for t in node.targets):
                 return carried(node.value, names)
             if top and isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
@@ -3131,15 +3202,15 @@ class Codebase(ts.AggregateRoot):
                     return carried(node.args[2], names)
             return None
 
-        def read(node: ast.AST, names: dict[str, SpecType]) -> tuple[str, str, tuple[str, str]] | None:
+        def read(node: ast.AST, names: dict[str, SpecRef]) -> tuple[str, str, Symbol] | None:
             if isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load):
                 owner = typed(node.value, names)
-                if owner is not None and not owner[1] and not node.attr.startswith("__"):
-                    return ast.unparse(node.value), node.attr, owner[0]
+                if owner is not None and owner.shape() == SPEC_ONE and not node.attr.startswith("__"):
+                    return ast.unparse(node.value), node.attr, owner.symbol()
                 return None
             if isinstance(node, ast.Call) and node.args:
                 owner = typed(node.args[0], names)
-                if owner is None or owner[1]:
+                if owner is None or owner.shape() == SPEC_MANY:
                     return None
                 if isinstance(node.func, ast.Name) and node.func.id in ("getattr", "vars"):
                     field = (
@@ -3149,9 +3220,9 @@ class Codebase(ts.AggregateRoot):
                         and isinstance(node.args[1].value, str)
                         else "__dict__"
                     )
-                    return ast.unparse(node.args[0]), field, owner[0]
+                    return ast.unparse(node.args[0]), field, owner.symbol()
                 if ast.unparse(node.func).split(".")[-1] in ("asdict", "astuple", "copy", "deepcopy"):
-                    return ast.unparse(node.args[0]), "__dict__", owner[0]
+                    return ast.unparse(node.args[0]), "__dict__", owner.symbol()
             return None
 
         found: list[Violation] = []
@@ -3159,7 +3230,7 @@ class Codebase(ts.AggregateRoot):
 
         def scan(
             nodes: list[ast.AST],
-            names: dict[str, SpecType],
+            names: dict[str, SpecRef],
             where: str,
             owner_here: tuple[str, str] | None,
             assembling: bool,
@@ -5462,7 +5533,7 @@ class Codebase(ts.AggregateRoot):
             taken = self._spec_key(module, arg.annotation, blocks)
             exact = (
                 taken is not None
-                and not taken[1]
+                and taken.shape() == SPEC_ONE
                 and isinstance(self._unquoted(arg.annotation), (ast.Name, ast.Attribute))  # tesser:debt TB051
             )
             if not (plain or exact):

@@ -5,6 +5,35 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.82.0] - 2026-08-25
+
+The analyzer's own walk now eats its cooking. The TB083 walk carried "which
+spec, one or many" as a positional pair — `tuple[tuple[str, str], bool]` —
+the exact primitive obsession the toolkit tells consumers not to write, and
+the first code in the repo to need a type alias. It is three value objects
+now, and the type-alias question goes away with the alias.
+
+### Changed
+- **`Symbol`** (a class reference: `module()` and `name()`), **`SpecShape`**
+  (`one` or `many`, a string-valued discriminator like `DebtScope`), and
+  **`SpecRef`** (a `Symbol` plus a `SpecShape`, built from a `SpecRefSpec`
+  that holds its `SymbolSpec` the way the v0.0.80.0 holder ruling says)
+  replace `SpecType` in `tessercheck-py`. The owner, taker, and field tables
+  are keyed by `Symbol`; every `taken[1]` / `owner[0]` index is now
+  `.shape() == SPEC_ONE` / `.symbol()`. Findings are unchanged: a
+  differential run over the eight gated trees and a thousand generated
+  ones produced the same finding sets.
+- The `SpecType` line's `# tesser:debt TB051` marker and the TODOS entry
+  asking for a type-alias carve-out are gone; `SPEC_ONE` / `SPEC_MANY` are
+  `typing.Final` constants like every other module-level value.
+- The three value objects carry a direct test: bad shape and empty symbol
+  rejected, `.one()` / `.many()` round-trip, equality and use as a dict key.
+
+### Recorded
+- `SpecRef.one()` / `.many()` rebuild the `Symbol` through `str()`, which is
+  the display exit; latent today (`canonical_str` is the identity), and
+  closing it needs a ruling that reconciles TB080 with TB083 (TODOS.md).
+
 ## [0.0.81.0] - 2026-08-24
 
 Two rulings close the spec pattern. A value object takes **one primitive or
