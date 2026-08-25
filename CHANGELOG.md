@@ -53,7 +53,9 @@ place, and a service reads as the use case. (Maintainer ruling 2026-08-25.)
   one of its own fields is a finding; so is a parameter typed `str | None`,
   `Optional[str]`, or `list[str]` (a primitive under a wrapper), an
   unannotated parameter, a decorated or duplicate `__init__`, and a store
-  through an alias of `self`.
+  through an alias of `self`, `del self.x`, or an `async` `__init__`; a
+  `dict[str, Dto]`, `Callable`, or `Literal` parameter is not a primitive,
+  and a `self` read inside a subscript index is not a store.
 - layout's `assert_never` names read `unreachable_*` again (a dropped letter
   had made them `unreadable_*` beside a real UNREADABLE state), and the empty
   manifest/entries/declarations case is pinned by a test.

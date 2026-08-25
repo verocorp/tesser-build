@@ -525,6 +525,12 @@ wait for a ruling:
   seen — the alias walk follows only `name = self` chains, and
   `_nested_class_defs` recurses into classes, not functions (unreachable in a
   role module today because TB051 bans the function).
+- [ ] **A module-global write inside a mapper `__init__`** (`global _SEEN;
+  _SEEN = view`) is not a self-rooted store and nothing reports it — whether
+  that is the clause's remit is a ruling.
+- [ ] **Three review cycles each found new edges of the mapper clauses**
+  (bypasses → false positives → `del`/`async`); the cycle-3 fixes shipped
+  without a fourth adversarial pass. Worth one fresh pass on main.
 - [ ] **A mapper's second base is checked by block, not by name.** Any class in
   `DATA_BLOCKS` qualifies, so `class MapToThing(ts.Mapper, SomeRequest)` in a
   *domain* module would classify; the role rule (a mapper's home is
