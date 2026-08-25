@@ -1185,22 +1185,33 @@ def test_a_mapper_is_read_as_the_spec_it_constructs() -> None:
                 "class MapToThingSpec(ts.Mapper, thing.ThingSpec):\n"
                 "    def __init__(self, request: client.AskRequest) -> None:\n"
                 "        super().__init__(text=request.text)\n"
+                "class MapToAskResponse(ts.Mapper, client.AskResponse):\n"
+                "    def __init__(self, request: client.AskRequest) -> None:\n"
+                "        super().__init__(text=request.text)\n"
+                "class MapToNowhere(ts.Mapper, nowhere.Gone):\n"
+                "    def __init__(self, request: client.AskRequest) -> None:\n"
+                "        super().__init__(text=request.text)\n"
                 "class ThingService(ts.ApplicationService):\n"
                 "    def make(self, request: client.AskRequest) -> client.AskResponse:\n"
                 "        built = thing.Thing(MapToThingSpec(request))\n"
                 "        spec = MapToThingSpec(request)\n"
-                "        return client.AskResponse(text=spec.text)\n",
+                "        view = MapToAskResponse(request)\n"
+                "        other = MapToAskResponse(request)\n"
+                "        return client.AskResponse(text=view.text + other.text + spec.text)\n",
                 False,
             ),
         ))).violations()
                )
     assert not any("MapToThingSpec" in f and " TB080 " in f for f in findings), findings
     assert not any("computes in an argument" in f for f in findings), findings
+    assert not any("assembles from" in f for f in findings), findings
     assert any(
-        "shop/application/service.py:11: TB083 shop.application.service.ThingService.make "
+        "shop/application/service.py:19: TB083 shop.application.service.ThingService.make "
         "reads 'text' of the spec 'spec'" in f
         for f in findings
     ), findings
+    assert not any("of the spec 'view'" in f or "of the spec 'other'" in f for f in findings), findings
+    assert any("shop.application.service.MapToNowhere is not its target" in f for f in findings), findings
 
 def test_a_raw_request_value_reaching_a_port_is_flagged() -> None:
     findings = tuple(

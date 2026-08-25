@@ -525,6 +525,16 @@ def test_the_campaign_view_mapper_is_the_view_built_from_the_row() -> None:
     assert [link.status for link in view.links] == ["inactive"]
 
 
+def test_the_link_view_mapper_is_the_view_built_from_the_row() -> None:
+    view = service.MapToLinkView(link_row=campaign_queries.LinkViewRow(
+        slug="promo", target_url="https://ok.example/x", status="inactive"
+    ))
+    assert isinstance(view, client.LinkView)
+    assert (view.slug, view.target_url, view.status) == (
+        "promo", "https://ok.example/x", "inactive"
+    )
+
+
 def test_the_campaign_view_mapper_refuses_a_missing_campaign() -> None:
     with pytest.raises(errors.DomainError) as caught:
         service.MapToCampaignView(
