@@ -405,12 +405,6 @@ against `main` at v0.0.71.0 rather than transcribed.
 - [ ] **Tuple-unpack from a maker returning `tuple[XSpec, XSpec]`, `[spec][0]`,
   and `{'k': spec}['k']` are untyped** — "bind it to something else first" is
   a general escape alongside the dict/`*args` items above.
-- [ ] **TB051 has no type-alias carve-out.** `checks.py` `SpecType = tuple[tuple[str, str], bool]`
-  is a type alias, not a constant: `typing.Final` makes mypy reject it as an
-  annotation, `typing.TypeAlias` does not satisfy the rule, and `type X = ...`
-  needs 3.12 while the tree targets >=3.11. It carries `# tesser:debt TB051`
-  — the first code to need the carve-out; rule on `TypeAlias` (or a `type`
-  statement once the floor moves).
 - [x] **Container-typed spec parameters never enter the tracked set — RESOLVED
   v0.0.81.0.** `_spec_key` types `tuple`/`list`/`Sequence`/`Iterable` of a
   spec as a many-typed name; a `for` loop (plain or `enumerate`), a
