@@ -801,6 +801,7 @@ def test_mapper_shape_rules_are_flagged() -> None:
                 "shop/application/sloppy.py",
                 "shop.application.sloppy",
                 "import functools\n"
+                "import typing\n"
                 "import tesser.application as ts\n"
                 "import shop.client.client as client\n"
                 "class Sloppy(ts.Mapper):\n"
@@ -824,7 +825,16 @@ def test_mapper_shape_rules_are_flagged() -> None:
                 "    pass\n"
                 "class MapToAskRequestTwice(ts.Mapper, client.AskRequest, client.RowRequest):\n"
                 "    def __init__(self, row: client.RowRequest) -> None:\n"
-                "        super().__init__(text=row.label, rows=())\n",
+                "        super().__init__(text=row.label, rows=())\n"
+                "class MapToRowRequestSly(ts.Mapper, client.RowRequest):\n"
+                "    def __init__(self, row: client.RowRequest) -> None:\n"
+                "        super().__init__(label=row.label)\n"
+                "    @typing.no_type_check\n"
+                "    def __init__(self, row, name: typing.Optional[str], tags: list[str], n: 'int | None') -> None:\n"
+                "        this = self\n"
+                "        me = this\n"
+                "        setattr(me, 'smuggled', row)\n"
+                "        super().__init__(label=row.label)\n",
                 False,
             ),
             (
@@ -879,13 +889,13 @@ def test_mapper_shape_rules_are_flagged() -> None:
     )
     assert any("Sloppy.__init__ uses *args or **kwargs; a mapper names each whole object it takes" in f for f in findings)
     assert any("Sloppy parameter 'tag' is a primitive" in f for f in findings)
-    assert any("Sloppy stores '_n'" in f and "sloppy.py:9:" in f for f in findings)
     assert any("Sloppy stores '_n'" in f and "sloppy.py:10:" in f for f in findings)
-    assert any("sloppy.py:11: TB080 shop.application.sloppy.Sloppy stores '_a'" in f for f in findings)
-    assert any("sloppy.py:12: TB080 shop.application.sloppy.Sloppy stores '_c'" in f for f in findings)
-    assert any("sloppy.py:14: TB080 shop.application.sloppy.Sloppy stores 'rows'" in f for f in findings)
+    assert any("Sloppy stores '_n'" in f and "sloppy.py:11:" in f for f in findings)
+    assert any("sloppy.py:12: TB080 shop.application.sloppy.Sloppy stores '_a'" in f for f in findings)
+    assert any("sloppy.py:13: TB080 shop.application.sloppy.Sloppy stores '_c'" in f for f in findings)
+    assert any("sloppy.py:15: TB080 shop.application.sloppy.Sloppy stores 'rows'" in f for f in findings)
     assert any(
-        "sloppy.py:5: TB080 shop.application.sloppy.Sloppy carries a class-level statement; "
+        "sloppy.py:6: TB080 shop.application.sloppy.Sloppy carries a class-level statement; "
         "a mapper stores nothing but its target's fields, so its body is one __init__" in f
         for f in findings
     )
@@ -901,6 +911,25 @@ def test_mapper_shape_rules_are_flagged() -> None:
         for f in findings
     )
     assert any("MapToAskRequestTwice is not its target" in f for f in findings)
+    assert any(
+        "MapToRowRequestSly defines __init__ 2 times; a mapper has one constructor, "
+        "because the last definition silently wins" in f
+        for f in findings
+    )
+    assert any(
+        "MapToRowRequestSly.__init__ is decorated; a mapper's constructor is plain, "
+        "because a decorator can replace the mapping" in f
+        for f in findings
+    )
+    assert any(
+        "MapToRowRequestSly parameter 'row' has no annotation; a mapper names the whole "
+        "object it takes" in f
+        for f in findings
+    )
+    assert any("MapToRowRequestSly parameter 'name' is a primitive" in f for f in findings)
+    assert any("MapToRowRequestSly parameter 'tags' is a primitive" in f for f in findings)
+    assert any("MapToRowRequestSly parameter 'n' is a primitive" in f for f in findings)
+    assert any("MapToRowRequestSly stores 'setattr'" in f for f in findings)
     assert any(
         "shop.application.sloppy.Sloppy.compute is a method" in f
         and "a mapper holds only __init__, because it is its target and the "

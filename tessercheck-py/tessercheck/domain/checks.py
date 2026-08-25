@@ -5828,14 +5828,12 @@ class Codebase(ts.AggregateRoot):
                     "that is the mapping",
                 ))
             )
-        init = (next(
-                    (
-                        item
-                        for item in cls.body
-                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "__init__"
-                    ),
-                    None,
-                ))
+        inits = [
+            item
+            for item in cls.body
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "__init__"
+        ]
+        init = inits[-1] if inits else None
         if init is None:
             found.append(
                 Violation(ViolationSpec(
@@ -5847,6 +5845,26 @@ class Codebase(ts.AggregateRoot):
                 ))
             )
         else:
+            if len(inits) > 1:
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        init.lineno,
+                        "TB080",
+                        f"{where} defines __init__ {len(inits)} times; a mapper has one "
+                        "constructor, because the last definition silently wins",
+                    ))
+                )
+            if init.decorator_list:
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        init.lineno,
+                        "TB080",
+                        f"{where}.__init__ is decorated; a mapper's constructor is plain, "
+                        "because a decorator can replace the mapping",
+                    ))
+                )
             if init.args.vararg is not None or init.args.kwarg is not None:
                 found.append(
                     Violation(ViolationSpec(
@@ -5857,12 +5875,36 @@ class Codebase(ts.AggregateRoot):
                         "whole object it takes",
                     ))
                 )
+            def primitive_leaf(node: ast.expr) -> bool:
+                if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                    try:
+                        node = ast.parse(node.value, mode="eval").body
+                    except SyntaxError:
+                        return False
+                if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+                    return primitive_leaf(node.left) or primitive_leaf(node.right)
+                if isinstance(node, ast.Subscript):
+                    inner = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
+                    return any(primitive_leaf(each) for each in inner)
+                return self._annotation_head(node) in PRIMITIVES  # tesser:debt TB051
+
             for arg in (
                 list(init.args.posonlyargs) + list(init.args.args) + list(init.args.kwonlyargs)
             ):
-                if arg.arg == "self" or arg.annotation is None:
+                if arg.arg == "self":
                     continue
-                if self._annotation_head(arg.annotation) in PRIMITIVES:  # tesser:debt TB051
+                if arg.annotation is None:
+                    found.append(
+                        Violation(ViolationSpec(
+                            module.path(),
+                            arg.lineno,
+                            "TB080",
+                            f"{where} parameter {arg.arg!r} has no annotation; a mapper names "
+                            "the whole object it takes",
+                        ))
+                    )
+                    continue
+                if primitive_leaf(arg.annotation):
                     found.append(
                         Violation(ViolationSpec(
                             module.path(),
@@ -5883,6 +5925,20 @@ class Codebase(ts.AggregateRoot):
                 and isinstance(stmt.value.func.value.func, ast.Name)
                 and stmt.value.func.value.func.id == "super"
             )
+            selves = {"self"}
+            grew = True
+            while grew:
+                grew = False
+                for node in ast.walk(init):
+                    if (
+                        isinstance(node, (ast.Assign, ast.NamedExpr))
+                        and isinstance(node.value, ast.Name)
+                        and node.value.id in selves
+                    ):
+                        for alias in (node.targets if isinstance(node, ast.Assign) else [node.target]):
+                            if isinstance(alias, ast.Name) and alias.id not in selves:
+                                selves.add(alias.id)
+                                grew = True
             for node in ast.walk(init):
                 if (
                     isinstance(node, ast.Call)
@@ -5924,7 +5980,7 @@ class Codebase(ts.AggregateRoot):
                         root: ast.expr = leaf
                         while isinstance(root, (ast.Attribute, ast.Subscript, ast.Starred)):
                             root = root.value
-                        if isinstance(root, ast.Name) and root.id == "self":
+                        if isinstance(root, ast.Name) and root.id in selves:
                             stored = leaf
                             break
                     if stored is not None:
@@ -5941,14 +5997,14 @@ class Codebase(ts.AggregateRoot):
                     and node.func.id in ("setattr", "vars", "delattr")
                     and node.args
                     and isinstance(node.args[0], ast.Name)
-                    and node.args[0].id == "self"
+                    and node.args[0].id in selves
                 ):
                     stored = node
                 if stored is None and (
                     isinstance(node, ast.Attribute)
                     and node.attr == "__dict__"
                     and isinstance(node.value, ast.Name)
-                    and node.value.id == "self"
+                    and node.value.id in selves
                 ):
                     stored = node
                 if stored is None and (
@@ -5956,7 +6012,7 @@ class Codebase(ts.AggregateRoot):
                     and isinstance(node.func, ast.Attribute)
                     and isinstance(node.func.value, ast.Attribute)
                     and isinstance(node.func.value.value, ast.Name)
-                    and node.func.value.value.id == "self"
+                    and node.func.value.value.id in selves
                 ):
                     stored = node.func.value
                 if stored is not None:
