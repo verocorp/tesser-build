@@ -1206,6 +1206,7 @@ class Codebase(ts.AggregateRoot):
         self._spec_owner = {}
         self._spec_takers = {}
         self._spec_fields = {}
+        self._spec_shared = []
         for module in checked:
             for cls in module.class_defs():
                 block = blocks.get((module.name(), cls.name))
