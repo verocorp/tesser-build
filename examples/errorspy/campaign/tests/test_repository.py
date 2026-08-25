@@ -24,11 +24,11 @@ def test_save_then_find_roundtrip() -> None:
     )
     find_campaign_request = campaign_repository.FindCampaignRequest(campaign_id="c1")
     found = repo.find(find_campaign_request)
-    mapper = views.MapToCampaignSpec(
+    spec = views.MapToCampaignSpec(
         find_campaign_request=find_campaign_request, found_campaign=found
     )
-    assert mapper.campaign_id == "c1"
-    assert mapper.short_link_spec_mappers[0].slug == "spring-sale"
+    assert spec.id == "c1"
+    assert spec.links[0].slug == "spring-sale"
 
 
 def test_missing_is_domain_not_found() -> None:

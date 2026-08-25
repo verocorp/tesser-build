@@ -48,29 +48,14 @@ class CampaignService(ts.ApplicationService):
             campaign_id=campaign_id_text
         )
         found = self._repo.find(find_campaign_request)
-        campaign_spec_mapper = views.MapToCampaignSpec(
+        found_campaign_spec = views.MapToCampaignSpec(
             find_campaign_request=find_campaign_request, found_campaign=found
-        )
-        found_link_specs = tuple(
-            short_link.ShortLinkSpec(
-                slug=short_link_spec_mapper.slug,
-                target_url=short_link_spec_mapper.target_url,
-            )
-            for short_link_spec_mapper in campaign_spec_mapper.short_link_spec_mappers
-        )
-        found_campaign_spec = campaign.CampaignSpec(
-            id=campaign_spec_mapper.campaign_id,
-            window=values.DateWindowSpec(
-                start=campaign_spec_mapper.window_start,
-                end=campaign_spec_mapper.window_end,
-            ),
-            links=found_link_specs,
         )
         try:
             c = campaign.Campaign(found_campaign_spec)
         except errors.DomainError as e:
             raise errors.InfraError(
-                f"corrupted campaign record {campaign_spec_mapper.campaign_id!r}: {e}"
+                f"corrupted campaign record {campaign_id_text!r}: {e}"
             ) from e
         view_links = tuple(str(link.slug) for link in c.links)
         return client.CampaignView(campaign_id=c.id, links=view_links)
@@ -87,29 +72,14 @@ class CampaignService(ts.ApplicationService):
             campaign_id=campaign_id_text
         )
         found = self._repo.find(find_campaign_request)
-        campaign_spec_mapper = views.MapToCampaignSpec(
+        found_campaign_spec = views.MapToCampaignSpec(
             find_campaign_request=find_campaign_request, found_campaign=found
-        )
-        found_link_specs = tuple(
-            short_link.ShortLinkSpec(
-                slug=short_link_spec_mapper.slug,
-                target_url=short_link_spec_mapper.target_url,
-            )
-            for short_link_spec_mapper in campaign_spec_mapper.short_link_spec_mappers
-        )
-        found_campaign_spec = campaign.CampaignSpec(
-            id=campaign_spec_mapper.campaign_id,
-            window=values.DateWindowSpec(
-                start=campaign_spec_mapper.window_start,
-                end=campaign_spec_mapper.window_end,
-            ),
-            links=found_link_specs,
         )
         try:
             c = campaign.Campaign(found_campaign_spec)
         except errors.DomainError as e:
             raise errors.InfraError(
-                f"corrupted campaign record {campaign_spec_mapper.campaign_id!r}: {e}"
+                f"corrupted campaign record {campaign_id_text!r}: {e}"
             ) from e
         c.add_link(short_link.ShortLinkSpec(slug=req.slug, target_url=req.target_url))
         window_start = str(c.window.start)
@@ -136,29 +106,14 @@ class CampaignService(ts.ApplicationService):
             campaign_id=campaign_id_text
         )
         found = self._repo.find(find_campaign_request)
-        campaign_spec_mapper = views.MapToCampaignSpec(
+        found_campaign_spec = views.MapToCampaignSpec(
             find_campaign_request=find_campaign_request, found_campaign=found
-        )
-        found_link_specs = tuple(
-            short_link.ShortLinkSpec(
-                slug=short_link_spec_mapper.slug,
-                target_url=short_link_spec_mapper.target_url,
-            )
-            for short_link_spec_mapper in campaign_spec_mapper.short_link_spec_mappers
-        )
-        found_campaign_spec = campaign.CampaignSpec(
-            id=campaign_spec_mapper.campaign_id,
-            window=values.DateWindowSpec(
-                start=campaign_spec_mapper.window_start,
-                end=campaign_spec_mapper.window_end,
-            ),
-            links=found_link_specs,
         )
         try:
             c = campaign.Campaign(found_campaign_spec)
         except errors.DomainError as e:
             raise errors.InfraError(
-                f"corrupted campaign record {campaign_spec_mapper.campaign_id!r}: {e}"
+                f"corrupted campaign record {campaign_id_text!r}: {e}"
             ) from e
         c.deactivate_link(values.Slug(req.slug))
         window_start = str(c.window.start)

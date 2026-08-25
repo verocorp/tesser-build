@@ -23,23 +23,13 @@ class CatalogService(ts.ApplicationService):
         entity_name = entity.name()
         save_item_request = item_repository.SaveItemRequest(id=entity_id, name=entity_name)
         self._items.save(save_item_request)
-        add_item_response_mapper = mapping.MapToAddItemResponse(entity=entity, checked=checked)
-        items = tuple(
-            client.ItemView(id=item_view_mapper.id, name=item_view_mapper.name)
-            for item_view_mapper in add_item_response_mapper.item_view_mappers
-        )
-        return client.AddItemResponse(items=items, reason=add_item_response_mapper.reason)
+        return mapping.MapToAddItemResponse(entity=entity, checked=checked)
 
     def get(self, request: client.GetItemRequest) -> client.GetItemResponse:
         item_id = item.ItemID(request.id)
         item_id_text = str(item_id)
         found = self._items.find(item_repository.FindItemRequest(id=item_id_text))
-        get_item_response_mapper = mapping.MapToGetItemResponse(found=found)
-        items = tuple(
-            client.ItemView(id=item_view_mapper.id, name=item_view_mapper.name)
-            for item_view_mapper in get_item_response_mapper.item_view_mappers
-        )
-        return client.GetItemResponse(items=items)
+        return mapping.MapToGetItemResponse(found=found)
 
     def list(self, request: client.ListItemsRequest) -> client.ListItemsResponse:
         listed = self._items.all(item_repository.ListItemsRequest())

@@ -5,25 +5,19 @@ import typing
 import tesser.application as ts
 
 import campaign.application.ports.campaign_repository as campaign_repository
+import campaign.domain.campaign as campaign
+import campaign.domain.short_link as short_link
+import campaign.domain.values as values
 import tesser.errors as errors
 
 
-class MapToShortLinkSpec(ts.Mapper):
+class MapToShortLinkSpec(ts.Mapper, short_link.ShortLinkSpec):
 
     def __init__(self, link_record: campaign_repository.LinkRecord) -> None:
-        self._slug = link_record.slug
-        self._target_url = link_record.target_url
-
-    @property
-    def slug(self) -> str:
-        return self._slug
-
-    @property
-    def target_url(self) -> str:
-        return self._target_url
+        super().__init__(slug=link_record.slug, target_url=link_record.target_url)
 
 
-class MapToCampaignSpec(ts.Mapper):
+class MapToCampaignSpec(ts.Mapper, campaign.CampaignSpec):
 
     def __init__(
         self,
@@ -40,26 +34,8 @@ class MapToCampaignSpec(ts.Mapper):
                 )
             case _ as unreachable:
                 typing.assert_never(unreachable)
-        self._campaign_id = record.id
-        self._window_start = record.window.start
-        self._window_end = record.window.end
-        self._short_link_spec_mappers = tuple(
-            MapToShortLinkSpec(link_record=link) for link in record.links
+        super().__init__(
+            id=record.id,
+            window=values.DateWindowSpec(start=record.window.start, end=record.window.end),
+            links=tuple(MapToShortLinkSpec(link) for link in record.links),
         )
-
-    @property
-    def campaign_id(self) -> str:
-        return self._campaign_id
-
-    @property
-    def window_start(self) -> str:
-        return self._window_start
-
-    @property
-    def window_end(self) -> str:
-        return self._window_end
-
-    @property
-    def short_link_spec_mappers(self) -> tuple[MapToShortLinkSpec, ...]:
-        return self._short_link_spec_mappers
-
