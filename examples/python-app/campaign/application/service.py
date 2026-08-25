@@ -171,12 +171,7 @@ class MapToCampaignSpecFromRecord(ts.Mapper, campaign.CampaignSpec):
             id=record.id,
             budget=money.MoneySpec(amount=record.budget.amount, currency=record.budget.currency),
             links=short_links.ShortLinksSpec(links=tuple(
-                short_link.ShortLinkSpec(
-                    slug=link_record.slug,
-                    target_url=link_record.target_url,
-                    active=link_record.status == "active",
-                )
-                for link_record in record.links
+                campaign_views.MapToShortLinkSpecFromRecord(link_record=link_record) for link_record in record.links
             )),
         )
 

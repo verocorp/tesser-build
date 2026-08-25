@@ -151,3 +151,22 @@ def test_the_mapper_is_a_repo_spec_a_repo_builds_from() -> None:
     spec = mapping.MapToRepoSpec(_read())
     built = domain.Repo(spec)
     assert built.trees() == (domain.Text("layout"),)
+
+
+def test_empty_collections_map_to_empty_tuples() -> None:
+    read = repo_reader.ReadRepoResponse(
+        manifest=repo_reader.ManifestRecord(
+            state=repo_reader.ManifestState.READ, rows=(), note=""
+        ),
+        verify=repo_reader.FileRecord(state=repo_reader.FileState.READ, text=""),
+        workflow=repo_reader.FileRecord(state=repo_reader.FileState.READ, text=""),
+        top=(),
+        examples=(),
+        declarations=(),
+        requirements=(),
+    )
+
+    spec = mapping.MapToRepoSpec(read)
+
+    assert spec.manifest == (domain.READ, (), "")
+    assert (spec.top, spec.examples, spec.declarations, spec.requirements) == ((), (), (), ())

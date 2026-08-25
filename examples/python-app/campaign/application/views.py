@@ -9,7 +9,18 @@ import campaign.domain.campaign as campaign
 import campaign.domain.money as money
 import campaign.domain.short_link as short_link
 import campaign.domain.short_links as short_links
+import campaign.domain.values as values
 import tesser.errors as errors
+
+
+class MapToShortLinkSpecFromRecord(ts.Mapper, short_link.ShortLinkSpec):
+
+    def __init__(self, link_record: campaign_repository.LinkRecord) -> None:
+        super().__init__(
+            slug=link_record.slug,
+            target_url=link_record.target_url,
+            active=link_record.status == values.LinkState.ACTIVE.value,
+        )
 
 
 class MapToCampaignSpecFromSlugLookup(ts.Mapper, campaign.CampaignSpec):
@@ -33,11 +44,6 @@ class MapToCampaignSpecFromSlugLookup(ts.Mapper, campaign.CampaignSpec):
             id=record.id,
             budget=money.MoneySpec(amount=record.budget.amount, currency=record.budget.currency),
             links=short_links.ShortLinksSpec(links=tuple(
-                short_link.ShortLinkSpec(
-                    slug=link_record.slug,
-                    target_url=link_record.target_url,
-                    active=link_record.status == "active",
-                )
-                for link_record in record.links
+                MapToShortLinkSpecFromRecord(link_record=link_record) for link_record in record.links
             )),
         )

@@ -567,7 +567,9 @@ the target. Its `__init__` takes whole objects (never a field pulled off
 one), matches exhaustively where the port answer has outcomes, and calls
 `super().__init__(...)` exactly once; it stores nothing of its own and has
 no other method, and it is named `MapTo` plus its target. A nested target
-is a nested mapper (`budget=MapToMoneySpec(request)`); a collection is
+is a nested mapper when it needs its own translation
+(`budget=MapToMoneySpec(request)`) or a plain spec constructor when it does
+not (`window=values.DateWindowSpec(start=…, end=…)`); a collection is
 `tuple(MapToLinkRecord(link) for link in c.links)`. The service then reads
 `campaign.Campaign(MapToCampaignSpec(request, found))` and
 `self._repo.save(MapToSaveCampaignRequest(c))`: the mapping is hidden in one

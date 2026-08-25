@@ -776,7 +776,7 @@ def test_every_declared_block_has_a_name_and_a_home() -> None:
 def test_mapper_shape_rules_are_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in checks.Codebase(_spec(base=(), sources=(
             (
                 "shop/client/client.py",
                 "shop.client.client",
@@ -800,17 +800,31 @@ def test_mapper_shape_rules_are_flagged() -> None:
             (
                 "shop/application/sloppy.py",
                 "shop.application.sloppy",
+                "import functools\n"
                 "import tesser.application as ts\n"
                 "import shop.client.client as client\n"
                 "class Sloppy(ts.Mapper):\n"
-                "    def __init__(self, text: str) -> None:\n"
+                "    CACHE: dict[str, str] = {}\n"
+                "    def __init__(self, text: str, /, *rest: str, tag: str = '', **kw: str) -> None:\n"
                 "        self._text = text\n"
                 "        object.__setattr__(self, '_tag', text)\n"
+                "        self._n: int = 1\n"
+                "        self._n += 1\n"
+                "        self._a, [self._b] = text, [text]\n"
+                "        for self._c in (text,):\n"
+                "            pass\n"
+                "        self.rows.append(text)\n"
                 "    def compute(self) -> str:\n"
                 "        return self._text\n"
                 "    @property\n"
                 "    def text(self) -> str:\n"
-                "        return self._text\n",
+                "        return self._text\n"
+                "@functools.cache\n"
+                "class MapToAskRequestBare(ts.Mapper, client.AskRequest):\n"
+                "    pass\n"
+                "class MapToAskRequestTwice(ts.Mapper, client.AskRequest, client.RowRequest):\n"
+                "    def __init__(self, row: client.RowRequest) -> None:\n"
+                "        super().__init__(text=row.label, rows=())\n",
                 False,
             ),
             (
@@ -860,9 +874,33 @@ def test_mapper_shape_rules_are_flagged() -> None:
     assert any("shop.application.sloppy.Sloppy stores '__setattr__'" in f for f in findings)
     assert any(
         "shop.application.sloppy.Sloppy.__init__ calls super().__init__ 0 times" in f
-        and "a mapper calls it exactly once, because that call is the mapping" in f
+        and "a mapper calls super().__init__ exactly once, because that call is the mapping" in f
         for f in findings
     )
+    assert any("Sloppy.__init__ uses *args or **kwargs; a mapper names each whole object it takes" in f for f in findings)
+    assert any("Sloppy parameter 'tag' is a primitive" in f for f in findings)
+    assert any("Sloppy stores '_n'" in f and "sloppy.py:9:" in f for f in findings)
+    assert any("Sloppy stores '_n'" in f and "sloppy.py:10:" in f for f in findings)
+    assert any("sloppy.py:11: TB080 shop.application.sloppy.Sloppy stores '_a'" in f for f in findings)
+    assert any("sloppy.py:12: TB080 shop.application.sloppy.Sloppy stores '_c'" in f for f in findings)
+    assert any("sloppy.py:14: TB080 shop.application.sloppy.Sloppy stores 'rows'" in f for f in findings)
+    assert any(
+        "sloppy.py:5: TB080 shop.application.sloppy.Sloppy carries a class-level statement; "
+        "a mapper stores nothing but its target's fields, so its body is one __init__" in f
+        for f in findings
+    )
+    assert any(
+        "MapToAskRequestBare has no __init__; a mapper's constructor is the mapping, so "
+        "without one the target's own constructor is exposed" in f
+        for f in findings
+    )
+    assert any(
+        "MapToAskRequestBare declares a decorator or a class keyword; a mapper is a plain "
+        "class, because a metaclass or decorator can replace the constructor that is the "
+        "mapping" in f
+        for f in findings
+    )
+    assert any("MapToAskRequestTwice is not its target" in f for f in findings)
     assert any(
         "shop.application.sloppy.Sloppy.compute is a method" in f
         and "a mapper holds only __init__, because it is its target and the "
@@ -896,7 +934,7 @@ def test_mapper_shape_rules_are_flagged() -> None:
 def test_a_conformant_mapper_passes_every_shape_rule() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in checks.Codebase(_spec(base=(), sources=(
             (
                 "shop/client/client.py",
                 "shop.client.client",

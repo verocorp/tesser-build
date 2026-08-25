@@ -5817,6 +5817,17 @@ class Codebase(ts.AggregateRoot):
                         "MapTo plus its target, so the reader knows what the constructor yields",
                     ))
                 )
+        if cls.decorator_list or cls.keywords:
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    cls.lineno,
+                    "TB080",
+                    f"{where} declares a decorator or a class keyword; a mapper is a plain "
+                    "class, because a metaclass or decorator can replace the constructor "
+                    "that is the mapping",
+                ))
+            )
         init = (next(
                     (
                         item
@@ -5825,9 +5836,31 @@ class Codebase(ts.AggregateRoot):
                     ),
                     None,
                 ))
-        if init is not None:
-            for arg in list(init.args.args)[1:] + list(init.args.kwonlyargs):
-                if arg.annotation is None:
+        if init is None:
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    cls.lineno,
+                    "TB080",
+                    f"{where} has no __init__; a mapper's constructor is the mapping, so "
+                    "without one the target's own constructor is exposed",
+                ))
+            )
+        else:
+            if init.args.vararg is not None or init.args.kwarg is not None:
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        init.lineno,
+                        "TB080",
+                        f"{where}.__init__ uses *args or **kwargs; a mapper names each "
+                        "whole object it takes",
+                    ))
+                )
+            for arg in (
+                list(init.args.posonlyargs) + list(init.args.args) + list(init.args.kwonlyargs)
+            ):
+                if arg.arg == "self" or arg.annotation is None:
                     continue
                 if self._annotation_head(arg.annotation) in PRIMITIVES:  # tesser:debt TB051
                     found.append(
@@ -5872,19 +5905,30 @@ class Codebase(ts.AggregateRoot):
                             "always initialized",
                         ))
                     )
+                targets: list[ast.expr] = []
+                if isinstance(node, ast.Assign):
+                    targets = list(node.targets)
+                elif isinstance(node, (ast.AugAssign, ast.AnnAssign)):
+                    targets = [node.target]
+                elif isinstance(node, (ast.For, ast.AsyncFor)):
+                    targets = [node.target]
+                elif isinstance(node, (ast.With, ast.AsyncWith)):
+                    targets = [item.optional_vars for item in node.items if item.optional_vars is not None]
+                elif isinstance(node, ast.NamedExpr):
+                    targets = [node.target]
                 stored: ast.expr | None = None
-                if isinstance(node, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
-                    targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-                    stored = next(
-                        (
-                            target
-                            for target in targets
-                            if isinstance(target, ast.Attribute)
-                            and isinstance(target.value, ast.Name)
-                            and target.value.id == "self"
-                        ),
-                        None,
-                    )
+                for written in targets:
+                    for leaf in ast.walk(written):
+                        if not isinstance(leaf, (ast.Attribute, ast.Subscript)):
+                            continue
+                        root: ast.expr = leaf
+                        while isinstance(root, (ast.Attribute, ast.Subscript, ast.Starred)):
+                            root = root.value
+                        if isinstance(root, ast.Name) and root.id == "self":
+                            stored = leaf
+                            break
+                    if stored is not None:
+                        break
                 if stored is None and (
                     isinstance(node, ast.Call)
                     and isinstance(node.func, ast.Attribute)
@@ -5894,7 +5938,7 @@ class Codebase(ts.AggregateRoot):
                 if stored is None and (
                     isinstance(node, ast.Call)
                     and isinstance(node.func, ast.Name)
-                    and node.func.id in ("setattr", "vars")
+                    and node.func.id in ("setattr", "vars", "delattr")
                     and node.args
                     and isinstance(node.args[0], ast.Name)
                     and node.args[0].id == "self"
@@ -5907,6 +5951,14 @@ class Codebase(ts.AggregateRoot):
                     and node.value.id == "self"
                 ):
                     stored = node
+                if stored is None and (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and isinstance(node.func.value, ast.Attribute)
+                    and isinstance(node.func.value.value, ast.Name)
+                    and node.func.value.value.id == "self"
+                ):
+                    stored = node.func.value
                 if stored is not None:
                     field = (
                         stored.attr
@@ -5914,6 +5966,8 @@ class Codebase(ts.AggregateRoot):
                         else stored.func.id
                         if isinstance(stored, ast.Call) and isinstance(stored.func, ast.Name)
                         else "__setattr__"
+                        if isinstance(stored, ast.Call)
+                        else "__dict__"
                     )
                     found.append(
                         Violation(ViolationSpec(
@@ -5931,11 +5985,22 @@ class Codebase(ts.AggregateRoot):
                         init.lineno,
                         "TB080",
                         f"{where}.__init__ calls super().__init__ {supers} times; a mapper "
-                        "calls it exactly once, because that call is the mapping",
+                        "calls super().__init__ exactly once, because that call is the mapping",
                     ))
                 )
         for item in cls.body:
+            if isinstance(item, ast.Pass):
+                continue
             if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        item.lineno,
+                        "TB080",
+                        f"{where} carries a class-level statement; a mapper stores nothing "
+                        "but its target's fields, so its body is one __init__",
+                    ))
+                )
                 continue
             if item.name == "__init__":
                 continue

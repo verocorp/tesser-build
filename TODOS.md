@@ -504,6 +504,22 @@ wait for a ruling:
   any `.__setattr__(` call.** `setattr(self, …)`, `self.__dict__[…] = …`, and
   `vars(self)[…]` bypass it; a nested function assigning to `self` inside
   `__init__` is walked and caught, a lambda is not a statement and cannot.
+- [ ] **Base order reclassifies a mapper out of the rule.** Block assignment
+  takes the first base that resolves, so `class MapToXSpec(XSpec, ts.Mapper)`
+  is a spec, not a mapper, and no mapper clause runs. Contained today only by
+  placement (TB052) and the domain import matrix (TB050); wants a clause of
+  its own (a class with `ts.Mapper` anywhere in its bases is a mapper).
+- [ ] **A nested function inside a mapper `__init__` that assigns to its own
+  parameter** (`def inner(obj): obj.x = …; inner(self)`) is not a store the
+  clause sees; neither is a lambda. Same shape as the TB083 closure hole.
+- [ ] **ports' `CatalogService.list` still hand-assembles `client.ItemView`**
+  while `add`/`get` return mappers; `MapToItemView` covers it. Left as-is
+  because the ruling that a service must use a mapper (the retired TB082
+  assembly clause) is the open re-cut above.
+- [ ] **errorspy's InfraError message now names the requested id, not the
+  stored `record.id`** — the two are equal in every fixture, so no test can
+  tell them apart; a corrupted record with a different id would report the
+  request's.
 - [ ] **A mapper's second base is checked by block, not by name.** Any class in
   `DATA_BLOCKS` qualifies, so `class MapToThing(ts.Mapper, SomeRequest)` in a
   *domain* module would classify; the role rule (a mapper's home is

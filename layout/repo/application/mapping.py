@@ -22,8 +22,8 @@ class MapToRepoSpec(ts.Mapper, domain.RepoSpec):
                 manifest_state = domain.MALFORMED
             case repo_reader.ManifestState.MISSHAPEN:
                 manifest_state = domain.MISSHAPEN
-            case _ as unreadable_manifest:
-                typing.assert_never(unreadable_manifest)
+            case _ as unreachable_manifest:
+                typing.assert_never(unreachable_manifest)
         manifest_rows = tuple((row.key, row.kind) for row in read.manifest.rows)
         file_states: list[str] = []
         for file_record in (read.verify, read.workflow):
@@ -34,8 +34,8 @@ class MapToRepoSpec(ts.Mapper, domain.RepoSpec):
                     file_states.append(domain.MISSING)
                 case repo_reader.FileState.UNREADABLE:
                     file_states.append(domain.UNREADABLE)
-                case _ as unreadable_file:
-                    typing.assert_never(unreadable_file)
+                case _ as unreachable_file:
+                    typing.assert_never(unreachable_file)
         verify_state, workflow_state = file_states
         declared: list[tuple[str, str, str]] = []
         for declaration_record in read.declarations:
@@ -46,8 +46,8 @@ class MapToRepoSpec(ts.Mapper, domain.RepoSpec):
                     declaration_state = domain.MISSING
                 case repo_reader.FileState.UNREADABLE:
                     declaration_state = domain.UNREADABLE
-                case _ as unreadable_declaration:
-                    typing.assert_never(unreadable_declaration)
+                case _ as unreachable_declaration:
+                    typing.assert_never(unreachable_declaration)
             declared.append(
                 (declaration_record.path, declaration_state, declaration_record.text)
             )
@@ -60,8 +60,8 @@ class MapToRepoSpec(ts.Mapper, domain.RepoSpec):
                         entry_form = domain.DIRECTORY
                     case repo_reader.EntryForm.SYMLINK:
                         entry_form = domain.SYMLINK
-                    case _ as unreadable_entry:
-                        typing.assert_never(unreadable_entry)
+                    case _ as unreachable_entry:
+                        typing.assert_never(unreachable_entry)
                 listed.append((entry_record.name, entry_form))
             listings.append(tuple(listed))
         top, examples = listings
