@@ -92,10 +92,11 @@ objects out of public behavior),
 module/class structure (`TB040`–`TB045`), import form and the tier matrices
 (`TB050`–`TB069` — every module carries an import row keyed on where it sits,
 with no exempt modules), test placement and module totality (`TB070`–`TB074`),
-construction paths and boundary signatures (`TB080`–`TB083` — an entity or
+construction paths and boundary signatures (`TB080`–`TB084` — an entity or
 aggregate is built from one spec and a value object from one primitive or one
-spec, a spec initializes only its own object, and a mapper *is* the spec or
-DTO it maps to), and the
+spec, a spec initializes only its own object, a mapper *is* the spec or
+DTO it maps to, and control flow comes back as a `ts.Outcome` a service
+matches exhaustively), and the
 tree-wide **norm checks** with no test exemption: zero comments (`TB020`),
 fakes-only test doubles (`TB030`), no called shadowed builtin (`TB033`), and
 debt-marker hygiene (`TB090` — a

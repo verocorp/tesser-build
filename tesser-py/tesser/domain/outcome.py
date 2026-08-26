@@ -62,9 +62,9 @@ class Outcome(enum.Enum):
                 "and nothing else — behavior belongs on the object that returns it"
             )
         for member in members.values():
-            if type(member._value_) is not _Auto:
+            if type(member._value_) is not _Auto:  # tesser:debt TB084
                 raise TypeError(
-                    f"{cls.__name__}.{member._name_} carries a value: an outcome member "
+                    f"{cls.__name__}.{member._name_} carries a value: an outcome member "  # tesser:debt TB084
                     "is enum.auto(), because an outcome is matched, never serialized"
                 )
 

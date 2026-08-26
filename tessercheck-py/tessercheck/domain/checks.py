@@ -4154,7 +4154,7 @@ class Codebase(ts.AggregateRoot):
                     )
                     or (
                         member_value is not None
-                        and Codebase._is_enum_auto(module, member_value)  # tesser:debt TB051
+                        and Codebase._is_enum_auto(module, member_value)
                     )
                 )
             )
@@ -6447,10 +6447,11 @@ class Codebase(ts.AggregateRoot):
         otherwise: set[str] = set()
         for node in ast.walk(fn):
             target: ast.expr | None = None
+            value: ast.expr | None = None
             if isinstance(node, ast.Assign) and len(node.targets) == 1:
-                target = node.targets[0]
+                target, value = node.targets[0], node.value
             elif isinstance(node, (ast.AnnAssign, ast.AugAssign, ast.NamedExpr)):
-                target = node.target
+                target, value = node.target, node.value
             elif isinstance(node, (ast.For, ast.AsyncFor, ast.comprehension)):
                 otherwise.update(sub.id for sub in ast.walk(node.target) if isinstance(sub, ast.Name))
                 continue
@@ -6463,7 +6464,7 @@ class Codebase(ts.AggregateRoot):
                 continue
             if not isinstance(target, ast.Name):
                 continue
-            if isinstance(node.value, ast.Call):
+            if isinstance(value, ast.Call):
                 bound.add(target.id)
             else:
                 otherwise.add(target.id)
@@ -6780,14 +6781,14 @@ class Codebase(ts.AggregateRoot):
     def _returned(node: ast.expr) -> typing.Iterator[ast.expr]:
         yield node
         if isinstance(node, ast.IfExp):
-            yield from Codebase._returned(node.body)  # tesser:debt TB051
-            yield from Codebase._returned(node.orelse)  # tesser:debt TB051
+            yield from Codebase._returned(node.body)
+            yield from Codebase._returned(node.orelse)
         elif isinstance(node, ast.Tuple):
             for element in node.elts:
-                yield from Codebase._returned(element)  # tesser:debt TB051
+                yield from Codebase._returned(element)
         elif isinstance(node, ast.BoolOp):
             for value in node.values:
-                yield from Codebase._returned(value)  # tesser:debt TB051
+                yield from Codebase._returned(value)
 
     @staticmethod
     def _names_outcome(
@@ -6803,7 +6804,7 @@ class Codebase(ts.AggregateRoot):
                     quoted = ast.parse(sub.value, mode="eval").body
                 except SyntaxError:
                     continue
-                if not isinstance(quoted, ast.Constant) and Codebase._names_outcome(module, quoted, blocks):  # tesser:debt TB051
+                if not isinstance(quoted, ast.Constant) and Codebase._names_outcome(module, quoted, blocks):
                     return True
         return False
 
@@ -6813,10 +6814,10 @@ class Codebase(ts.AggregateRoot):
     ) -> bool:
         if isinstance(pattern, ast.MatchOr):
             return all(
-                Codebase._is_member_pattern(module, alternative, blocks)  # tesser:debt TB051
+                Codebase._is_member_pattern(module, alternative, blocks)
                 for alternative in pattern.patterns
             )
-        return isinstance(pattern, ast.MatchValue) and Codebase._outcome_key(module, pattern.value, blocks) is not None  # tesser:debt TB051
+        return isinstance(pattern, ast.MatchValue) and Codebase._outcome_key(module, pattern.value, blocks) is not None
 
     @staticmethod
     def _outcome_key(
