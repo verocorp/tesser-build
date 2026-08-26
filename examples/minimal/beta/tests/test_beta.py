@@ -5,6 +5,9 @@ import beta.component.component as component
 import beta.component.config as config
 
 
-def test_an_unknown_key_is_not_held() -> None:
-    wired = component.Beta(config.Config(config.Spec(key="k")))
-    assert wired.client.check(client.CheckRequest(key="x")).held == "no"
+class TestBetaContext:
+
+    def test_an_unknown_key_is_not_held(self) -> None:
+        wired = component.Beta(config.Config(config.Spec(key="k")))
+        checked = wired.client.check(client.CheckRequest(key="x"))
+        assert checked.held == "no"

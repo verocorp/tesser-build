@@ -14,5 +14,9 @@ class FakeClient(client.Client):
         return client.AddResponse(name=request.name)
 
 
-def test_add_prints_the_added_name() -> None:
-    assert cli.Handler(FakeClient()).add(protocol_cli.CliRequest(args=("a",))).line == protocol_cli.Line(text="a")
+class TestHandler:
+
+    def test_add_prints_the_added_name(self) -> None:
+        handler = cli.Handler(FakeClient())
+        response = handler.add(protocol_cli.CliRequest(args=("a",)))
+        assert response.line == protocol_cli.Line(text="a")

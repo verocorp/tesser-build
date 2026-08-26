@@ -5,6 +5,9 @@ import app.config as config
 import beta.component.config as beta_config
 
 
-def test_a_config_carries_each_component_config() -> None:
-    spec = config.Spec(alpha_config.Config(alpha_config.Spec("memory")), beta_config.Config(beta_config.Spec("k")))
-    assert config.Config(spec).beta.key == "k"
+class TestConfig:
+
+    def test_a_config_carries_each_component_config(self) -> None:
+        spec = config.Spec(alpha_config.Config(alpha_config.Spec("memory")), beta_config.Config(beta_config.Spec("k")))
+        cfg = config.Config(spec)
+        assert cfg.beta is spec.beta

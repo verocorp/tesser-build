@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import typing
+
 import tesser.adapters as ts
 
 import alpha.client.client as client
 import protocol.cli as cli
-import tesser.errors as errors
+
+_ADD_USAGE: typing.Final[str] = "usage: add <name>"
 
 
 class Handler(ts.Handler):
@@ -13,10 +16,6 @@ class Handler(ts.Handler):
         self._client = client
 
     def add(self, request: cli.CliRequest) -> cli.CliResponse:
-        if len(request.args) != 1:
-            raise cli.UsageError("usage: add <name>")
-        try:
-            added = self._client.add(client.AddRequest(name=request.args[0]))
-        except errors.DomainError as e:
-            return cli.CliResponse(exit_code=errors.exit_code_for(e.kind), line=cli.Line(text=e.message))
+        name = request.arg(0, "name", _ADD_USAGE)
+        added = self._client.add(client.AddRequest(name=name))
         return cli.CliResponse(exit_code=0, line=cli.Line(text=added.name))

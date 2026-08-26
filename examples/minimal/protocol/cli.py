@@ -24,6 +24,11 @@ class CliRequest(ts.Request):
 
     args: tuple[str, ...]
 
+    def arg(self, index: int, name: str, usage: str) -> str:
+        if index >= len(self.args) or not self.args[index]:
+            raise UsageError(f"missing argument <{name}>\n{usage}")
+        return self.args[index]
+
 
 class CliResponse(ts.Response):
 

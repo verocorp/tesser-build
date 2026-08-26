@@ -14,6 +14,9 @@ class FakeBetaClient(beta_client.Client):
         return beta_client.CheckResponse(held="no")
 
 
-def test_an_unheld_key_is_refused() -> None:
-    checked = gateway.BetaCheckGateway(FakeBetaClient()).check(port.CheckRequest(name="a"))
-    assert checked.verdict is port.Verdict.REFUSED
+class TestBetaCheckGateway:
+
+    def test_an_unheld_key_is_refused(self) -> None:
+        checks = gateway.BetaCheckGateway(FakeBetaClient())
+        checked = checks.check(port.CheckRequest(name="a"))
+        assert checked.verdict is port.Verdict.REFUSED

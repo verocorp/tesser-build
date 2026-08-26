@@ -17,6 +17,6 @@ class SaveResponse(ts.Response):
         self.name = name
 
 
-class ThingRepository(ts.Port, typing.Protocol):
+class WidgetRepository(ts.Port, typing.Protocol):
 
     def save(self, request: SaveRequest) -> SaveResponse: ...

@@ -37,16 +37,16 @@ class Part(ts.Entity):
         return self._id
 
 
-class ThingSpec(ts.Spec):
+class WidgetSpec(ts.Spec):
 
     def __init__(self, name: str, part: PartSpec) -> None:
         self.name = name
         self.part = part
 
 
-class Thing(ts.AggregateRoot):
+class Widget(ts.AggregateRoot):
 
-    def __init__(self, spec: ThingSpec) -> None:
+    def __init__(self, spec: WidgetSpec) -> None:
         self._name = Name(spec.name)
         self._part = Part(spec.part)
         self._label = label.Label(spec.name)

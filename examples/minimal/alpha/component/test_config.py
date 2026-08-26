@@ -3,5 +3,9 @@ from __future__ import annotations
 import alpha.component.config as config
 
 
-def test_a_config_carries_its_spec() -> None:
-    assert config.Config(config.Spec(storage="memory")).storage == "memory"
+class TestConfig:
+
+    def test_a_config_carries_its_spec(self) -> None:
+        spec = config.Spec(storage="memory")
+        cfg = config.Config(spec)
+        assert cfg.storage == spec.storage

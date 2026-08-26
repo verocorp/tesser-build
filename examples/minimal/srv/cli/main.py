@@ -20,6 +20,10 @@ class CliHost(ts.Host):
                 response = handler.add(protocol_cli.CliRequest(args=tuple(argv)))
             except protocol_cli.UsageError as e:
                 response = protocol_cli.CliResponse(exit_code=2, line=protocol_cli.Line(text=str(e)))
+            except errors.DomainError as e:
+                response = protocol_cli.CliResponse(
+                    exit_code=errors.exit_code_for(e.kind), line=protocol_cli.Line(text=e.message)
+                )
             except errors.InfraError:
                 response = protocol_cli.CliResponse(exit_code=1, line=protocol_cli.Line(text="unavailable"))
             sys.stdout.write(response.line.text + "\n")
