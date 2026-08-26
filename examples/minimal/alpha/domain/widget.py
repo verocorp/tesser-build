@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tesser.domain as ts
 
-import kernel.ident as ident
+import kernel.identity as identity
 import shared.label as label
 import tesser.errors as errors
 import tesser.serialization as serialization
@@ -30,10 +30,10 @@ class PartSpec(ts.Spec):
 class Part(ts.Entity):
 
     def __init__(self, spec: PartSpec) -> None:
-        self._id = ident.Ident(spec.id)
+        self._id = identity.Identity(spec.id)
 
     @property
-    def identity(self) -> ident.Ident:
+    def identity(self) -> identity.Identity:
         return self._id
 
 

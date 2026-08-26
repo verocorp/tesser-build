@@ -2,6 +2,47 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Rulings surfaced by the minimal tree (2026-08-26, PR #132, `examples/minimal/`)
+
+The minimally conforming tree was hand-built to make the rulebook visible as
+code, and three places the rulebook is thinner than the code Chris wants were
+found by building it. Each is a ruling, not a bug; each is marked in the tree
+where it lands.
+
+- [ ] **Error handling: the host should not know the error types.** Today
+  `examples/minimal/srv/cli/main.py` (and the verified
+  `examples/python-app/srv/cli/main.py`) catch `UsageError`, `DomainError`,
+  and `InfraError` and map them to exit codes — `handlers.md` rule 7 and
+  the error-norms ruling put the one respond path at the edge. Chris
+  (2026-08-26): the application should decide what and how application
+  errors are surfaced to the user, not the host; the host should be unaware
+  of those types. Needs a design: what crosses the `Client` on failure (an
+  outcome on the response? a single edge-facing rejection?), what the
+  handler returns, and what — if anything — the host still maps.
+- [ ] **Adapter-side mappers have no home in the rulebook.** A gateway and a
+  repository want to end in `return MapToX(answer)` so an adapter reads as
+  call-then-map, never as logic. `tesser.adapters` has no `Mapper`, and
+  `KIND_ROLE` says a mapper lives in `application`, so
+  `examples/minimal/alpha/adapters/gateways/beta_check.py` and
+  `examples/minimal/beta/adapters/repositories/memory.py` import
+  `tesser.application` for the base (`tesser:debt TB050`) and carry
+  `tesser:debt TB052` on the mapper class. Ruling: add `Mapper` to
+  `tesser.adapters` and admit `mapper` in `adapters` (TB052), then drop the
+  markers.
+- [ ] **A mapper over a library's primitive result.** `MapToHasKeyResponse`
+  takes the `bool` a db client hands back, which TB080 forbids ("a mapper
+  takes whole objects, never a field already pulled off one") — marked
+  `tesser:debt TB080`. A repository wrapping a client that returns
+  primitives is the normal case, so either the rule carves out the adapter
+  side or the client's result is wrapped first. Decide with the item above.
+- [ ] **Faking a peer's client in a context test.** The context `tests/` tier
+  may import a foreign `client` (TB070), but `testing.md` rule 1's two tiers
+  (double one collaborator through its port / real in-memory port) never
+  name a peer client, and the verified impl fakes the port instead. The
+  minimal tree now fakes the port too. The earlier idea stands: a bounded
+  context provides its own fake/test `Client` implementation for consumers
+  (prior-session TODO, not done here).
+
 ## Sibling-reference rule: three open sub-rulings (2026-08-23, v0.0.76.0)
 
 TB051's structural clause (a method may not reference a sibling method; direct
