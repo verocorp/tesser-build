@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import enum
+
 import tesser.domain as ts
 
 import kernel.identity as identity
@@ -37,6 +39,11 @@ class Part(ts.Entity):
         return self._id
 
 
+class Taken(ts.Outcome):
+    TAKEN = enum.auto()
+    HELD = enum.auto()
+
+
 class WidgetSpec(ts.Spec):
 
     def __init__(self, name: str, part: PartSpec) -> None:
@@ -58,3 +65,10 @@ class Widget(ts.AggregateRoot):
     @property
     def part(self) -> Part:
         return self._part
+
+    def take(self, spec: PartSpec) -> Taken:
+        part = Part(spec)
+        if part == self._part:
+            return Taken.HELD
+        self._part = part
+        return Taken.TAKEN

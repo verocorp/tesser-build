@@ -19,5 +19,5 @@ class TestAlpha:
 
     def test_the_wired_client_adds_a_widget(self) -> None:
         wired = component.Alpha(config.Config(config.Spec(storage="memory")), FakeBetaCheck())
-        added = wired.client.add(client.AddRequest(name="a"))
+        added = wired.client.add(client.AddRequest(name="a", part="p"))
         assert added.name == "a"

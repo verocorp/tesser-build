@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import typing
+
 import tesser.application as ts
 
 import alpha.application.ports.beta_check as beta_check
@@ -12,6 +14,12 @@ class MapToWidgetSpec(ts.Mapper, widget.WidgetSpec):
 
     def __init__(self, request: client.AddRequest) -> None:
         super().__init__(name=request.name, part=widget.PartSpec(id=request.name))
+
+
+class MapToPartSpec(ts.Mapper, widget.PartSpec):
+
+    def __init__(self, request: client.AddRequest) -> None:
+        super().__init__(id=request.part)
 
 
 class MapToCheckRequest(ts.Mapper, beta_check.CheckRequest):
@@ -40,6 +48,12 @@ class AlphaService(ts.ApplicationService):
 
     def add(self, request: client.AddRequest) -> client.AddResponse:
         added = widget.Widget(MapToWidgetSpec(request))
-        self._checks.check(MapToCheckRequest(added))
-        self._widgets.save(MapToSaveRequest(added))
+        taken = added.take(MapToPartSpec(request))
+        match taken:
+            case widget.Taken.TAKEN:
+                self._widgets.save(MapToSaveRequest(added))
+            case widget.Taken.HELD:
+                self._checks.check(MapToCheckRequest(added))
+            case _ as never:
+                typing.assert_never(never)
         return MapToAddResponse(added)

@@ -16,8 +16,9 @@ behavior may return. (Maintainer ruling 2026-08-08.)
 ## The norm
 
 1. **A public method returns a domain object.** Its own type, another value
-   object, an entity, or a collection of them. Containers are transparent —
-   `tuple[Money, ...]` is fine, `tuple[tuple[str, int], ...]` is not.
+   object, an entity, an outcome (rule 6), or a collection of them. Containers
+   are transparent — `tuple[Money, ...]` is fine, `tuple[tuple[str, int], ...]`
+   is not.
 2. **The comparison dunders are not implemented.** `__eq__`, `__ne__`, `__lt__`,
    `__le__`, `__gt__`, `__ge__` are *not* fixed by the language — CPython hands
    back whatever they return — so a `-> bool` there is a choice, and it is the
@@ -35,10 +36,12 @@ behavior may return. (Maintainer ruling 2026-08-08.)
    - **Language-fixed dunders.** CPython raises `TypeError` if these return
      anything else, verified per dunder: `__hash__`, `__str__`, `__repr__`,
      `__bool__`, `__len__`, `__int__`, `__float__`, `__bytes__`, `__index__`,
-     `__format__`, and `__contains__` (which coerces). `__bool__` is where the
-     boolean terminator actually lives — ONE language-pinned site, not a bool
-     at every predicate. A leaf's canonical conversion exit is among these, and
-     `serialization.md` rule 3 requires it; TB015/TB018 govern it, not this norm.
+     `__format__`, and `__contains__` (which coerces). `__bool__` stays licensed
+     because the language fixes it, but it is *not* how a caller branches on
+     what the domain did — that is an outcome (rule 6); `__bool__` is truthiness
+     (an empty collection), one language-pinned site. A leaf's canonical
+     conversion exit is among these, and `serialization.md` rule 3 requires it;
+     TB015/TB018 govern it, not this norm.
    - **A `-> None` transition.** A command has no value to promote; whether it
      should return the new state instead is the fact-vs-lifecycle decision
      `entities.md` leaves to the domain.
@@ -53,7 +56,25 @@ behavior may return. (Maintainer ruling 2026-08-08.)
    over `LinkState.ACTIVE`/`INACTIVE`, `Decision` over allowed/denied),
    string-backed so it has a canonical exit. The enum is a primitive with a
    name, declared plain in the domain (no `ts.*` base); the value object
-   wraps it the way a `Slug` wraps a `str`, and never hands it back out.
+   wraps it the way a `Slug` wraps a `str`, and never hands it back out. That
+   is what the object *is*. What a call *did* is rule 6.
+6. **Control flow comes back as an outcome.** When a caller needs to act on
+   what a transition did — continue or stop, taken or held, matched or
+   deferred — the transition returns a `ts.Outcome`: a closed set of names,
+   declared in the domain, that subclasses `ts.Outcome` alone, carries nothing
+   but `enum.auto()` members, and is a value object (Vernon's standard type;
+   maintainer ruling 2026-08-26). It is the **return value** of a call, never
+   a **field**: nothing holds one, no spec or DTO carries one, no port speaks
+   one, and it has no canonical exit because it never leaves the process — it
+   lives between the `return` and the `match`. The only reader is a `match`
+   that closes with `case _ as never: assert_never(never)`, so a member added
+   later fails `mypy --strict` at every reader instead of falling through. A
+   member is named in exactly two places: the `return` that produces it and
+   the `case` that consumes it; `== Outcome.X` anywhere is a branch the type
+   checker cannot exhaust. Two members is the loop shape (`while True:
+   match outcome:`); a third member is a type error at every site, not a
+   redesign. If you find yourself wanting to persist or transmit one, it was a
+   status — a field, on the spec, with an exit (rule 5). (TB084.)
 
 ## Decisions you must make
 
@@ -65,6 +86,13 @@ behavior may return. (Maintainer ruling 2026-08-08.)
    carry primitives;
    they unwrap through the canonical exit (`str(vo)`, `int(vo)`). The domain
    exports no shape (`serialization.md` rule 1).
+3. **Is the caller asking what the object is, or what a call did?** A field
+   is state: the repository must write it down and read it back, so it lives
+   on the spec with an exit, and behavior that depends on it lives on the
+   type. A return value is an answer: nobody stores it, the caller acts on it
+   once — that is an outcome (rule 6). The test: *could the repository need
+   this to rebuild the object?* Yes → field. No → outcome. One `status()`
+   serving both is the thing rule 5 calls the coat.
 
 ## Tests you must write
 
@@ -74,6 +102,9 @@ behavior may return. (Maintainer ruling 2026-08-08.)
   undecided case cannot exist.
 - **Edge unwraps once:** the DTO built at the boundary carries the primitive;
   the domain object never handed one out.
+- **Every outcome member is reachable:** one test per member drives the
+  transition into that answer and asserts the state it left behind. The
+  exhaustiveness of the readers is mypy's test, not yours.
 
 ## Common mistakes
 
@@ -88,6 +119,18 @@ behavior may return. (Maintainer ruling 2026-08-08.)
 - **Unwrapping in the domain.** `str(...)`/`bool(...)` inside a domain method,
   to compare or branch, drags the representation back into the model. Compare
   the value objects.
+- **The status accessor.** `status() -> RunOutcome` computed from a field, so
+  the caller can `match` on what the object *is*. That is a field reported
+  through an outcome's type — the coat with a new hat. An outcome comes back
+  from a transition (`advance() -> Advance`), never from an accessor
+  (decision 3).
+- **An enum with `is_*` methods.** `Progress.is_done()` is `== DONE` spelled
+  as a word: a third member makes it silently `False`. A domain enum is
+  members-only (TB051), and an outcome is members-only (TB084); the branch is
+  the `match`, closed by `assert_never`.
+- **The loop on `__bool__`.** `while run:` reads as one call, but it is a
+  second spelling of the same thing and cannot grow a third state. Return a
+  two-member outcome and `match` it (rule 6).
 
 ## How the machine sees it
 
@@ -99,12 +142,25 @@ annotation), reads containers through to their payload, and resolves a
 
 It also stands down where another check already owns the shape, so one leak is
 never reported twice: a bare `return self._x` belongs to TB010 (value object)
-and TB011 (aggregate collection); a spec-typed return belongs to TB015.
+and TB011 (aggregate collection); a spec-typed return belongs to TB015. A
+`ts.Outcome` return is a domain object to TB019.
+
+`TB084` owns the outcome itself, keyed on the declared `ts.Outcome` base: the
+class subclasses it alone, undecorated, and carries nothing but `enum.auto()`
+members; no domain object holds one as a field (a spec, DTO, or port carrying
+one is already TB080/TB081); and across every non-test module a member is
+named only as a `return` value or inside a `case` pattern, and every `match`
+that names one closes on `case _ as never: assert_never(never)`. The runtime
+base (`tesser.domain.Outcome`) raises at class definition for a method or a
+valued member, so the shape holds even where the analyzer does not run. What
+the analyzer cannot see is `.value`/`.name` read off an *instance* — the
+member value is `auto()` precisely so there is nothing meaningful to read.
 
 There is no Go analyzer yet — a named gap, tracked in `TODOS.md`.
 
 ## Now build it
 
-- Python: `python.md#value-objects`, then `serialization.md` for the edge
+- Python: `python.md#value-objects`, `python.md#outcomes` for control flow,
+  then `serialization.md` for the edge
 - The base contracts: `value-objects.md` rule 4, `entities.md` rule 6,
   `aggregates.md` rule 4

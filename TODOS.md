@@ -2,6 +2,26 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Follow-ons from the outcome ruling (2026-08-26, v0.0.84.0)
+
+- [ ] **Retire `TB082`'s `if <one call>` clause, or keep it?** With
+  `ts.Outcome` the service has one branching shape (`match` + `assert_never`).
+  An `if` whose test is one domain call only ever tested truthiness
+  (`__bool__`, an empty collection) and is now a second spelling of the same
+  thing. Chris to rule; the clause was left as-is in the wave rather than
+  widened silently.
+- [ ] **Instance-level `.value` / `.name` on an outcome is invisible to the
+  analyzer.** `Advance.DONE.value` is caught (the member reference is outside
+  a match); `outcome.value` on a local is not, because the walk does not type
+  locals. `enum.auto()` makes the value meaningless, which is the mitigation,
+  not a check.
+- [ ] **A loop-shaped verified impl.** `examples/minimal` carries the
+  two-arm `match`; the `while True: match outcome:` loop lives only as the
+  analyzer's fixture. A pilot-pulled use case with a real multi-step
+  transition should land in `examples/python-app` and replace the fixture
+  citation in `python.md#outcomes`.
+- [ ] **Go has no `Outcome` mirror** — the same named gap as `TB019`.
+
 ## Rulings surfaced by the minimal tree (2026-08-26, PR #132, `examples/minimal/`)
 
 The minimally conforming tree was hand-built to make the rulebook visible as

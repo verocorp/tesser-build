@@ -22,5 +22,5 @@ class TestAppLoader:
 
     def test_the_loader_builds_an_app_from_its_repository(self) -> None:
         built = loader.AppLoader(FakeConfigRepository()).load()
-        added = built.alpha.client.add(alpha_client.AddRequest(name="a"))
+        added = built.alpha.client.add(alpha_client.AddRequest(name="a", part="p"))
         assert added.name == "a"

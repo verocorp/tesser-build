@@ -5,6 +5,50 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.84.0] - 2026-08-26
+
+Control flow comes back as an **outcome**. A transition the caller must act on
+returns a `ts.Outcome` — a closed set of names that is a value object (Vernon's
+standard type) and the *return value* of a call, never a field: nothing stores
+it, no spec, DTO, or port carries it, and it has no canonical exit because it
+never leaves the process. The one reader is a `match` closed by
+`case _ as never: typing.assert_never(never)`, so a member added later fails
+`mypy --strict` at every reader. Two members is the loop shape
+(`while True: match outcome:`); a third is a type error, not a redesign.
+(Maintainer ruling 2026-08-26, arrived at by building the alternatives: a
+public `-> bool` hides a third state, an enum with `is_*` methods goes
+silently `False` on a new member, `__bool__` as loop terminator is binary
+only, and `if order.status == PAID` in a service is the service writing the
+rule down — the leak is computing the answer, not asking for it.)
+
+### Added
+- **`tesser.domain.Outcome`** — a memberless `enum.Enum` base whose
+  `__init_subclass__` raises for a method or a valued member, so the shape
+  holds at import time even where the analyzer does not run.
+- **`TB084`** (outcome): subclasses `ts.Outcome` alone, undecorated,
+  members-only, every member `enum.auto()`; no domain object holds one as a
+  field; across every non-test module a member is named only as a `return`
+  value or inside a `case` pattern; every `match` naming one closes on
+  `assert_never`.
+- `examples/minimal`: `Widget.take(spec) -> Taken` and the service `match`
+  over it — every `ts.*` block, now including the outcome. `AddRequest`
+  gains `part`, the CLI takes `add <name> <part>`.
+
+### Changed
+- **`TB019`** counts a `ts.Outcome` return as a domain object.
+- **`TB081`** treats an outcome in a port signature as a domain object
+  crossing a port.
+- **`TB082`** accepts a `match` subject that is a local bound to one call
+  (the outcome a transition returned), so the loop is one shape.
+- **`domain-return.md`** rule 6 (outcomes), decision 3 (field vs return
+  value — *could the repository need this to rebuild the object?*), three new
+  common mistakes (the status accessor, the enum with `is_*`, the loop on
+  `__bool__`); rule 3 now says `__bool__` is truthiness, not a branch.
+  **`application-services.md`** leakage check 4 is re-cut from "a conditional
+  on domain state" to "a conditional that *computes* domain state" — asking is
+  coordination, spelling the operator is the leak. **`python.md#outcomes`**
+  is the verified rendering. `skill-version` 56 → 57.
+
 ## [0.0.83.0] - 2026-08-25
 
 A mapper **is its target**. `class MapToCampaignSpec(ts.Mapper, campaign.CampaignSpec)`

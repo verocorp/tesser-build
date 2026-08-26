@@ -9992,3 +9992,223 @@ def test_a_second_taker_a_tuple_target_keep_and_a_test_module_maker_name_are_han
         "shop/adapters/press.py:11: TB083 shop.adapters.press.Press.peek reads 'face' of the spec 'made'; "
         "a spec is only read where it initializes its own object",
     )
+
+
+def test_an_outcome_is_a_closed_set_of_auto_members() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/advance.py",
+                "shop.domain.advance",
+                "import enum\n"
+                "import tesser.domain as ts\n"
+                "class Advance(ts.Outcome):\n"
+                "    CONTINUE = enum.auto()\n"
+                "    DONE = enum.auto()\n"
+                "class Mixed(str, ts.Outcome):\n"
+                "    A = enum.auto()\n"
+                "@enum.unique\n"
+                "class Tagged(ts.Outcome):\n"
+                "    A = enum.auto()\n"
+                "class Chatty(ts.Outcome):\n"
+                "    A = enum.auto()\n"
+                "    def is_a(self) -> bool:\n"
+                "        return True\n"
+                "class Valued(ts.Outcome):\n"
+                "    A = 'a'\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any("Advance" in f for f in findings)
+    assert any(
+        "shop.domain.advance.Mixed mixes another base into its outcome; "
+        "an outcome subclasses ts.Outcome alone, because a mixed-in base gives "
+        "its members a value to compare against outside a match" in f
+        for f in findings
+    )
+    assert any(
+        "shop.domain.advance.Tagged is decorated or keyworded; "
+        "an outcome is a bare class statement, because a decorator or a metaclass "
+        "rewrites the closed set into a home for behavior" in f
+        for f in findings
+    )
+    assert any(
+        "shop.domain.advance.Chatty carries more than its members; "
+        "an outcome is a closed set of names and nothing else, "
+        "because behavior belongs on the object that returns it" in f
+        for f in findings
+    )
+    assert any(
+        "shop.domain.advance.Valued gives a member a value; "
+        "an outcome member is enum.auto(), because an outcome is matched, "
+        "never serialized" in f
+        for f in findings
+    )
+
+
+def test_an_outcome_is_returned_and_matched_never_held() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/run.py",
+                "shop.domain.run",
+                "import enum\n"
+                "import tesser.domain as ts\n"
+                "class Advance(ts.Outcome):\n"
+                "    CONTINUE = enum.auto()\n"
+                "    DONE = enum.auto()\n"
+                "class RunSpec(ts.Spec):\n"
+                "    def __init__(self, steps: int) -> None:\n"
+                "        self.steps = steps\n"
+                "class Run(ts.AggregateRoot):\n"
+                "    _last: Advance\n"
+                "    def __init__(self, spec: RunSpec) -> None:\n"
+                "        self._steps = spec.steps\n"
+                "    def advance(self) -> Advance:\n"
+                "        return self._step()\n"
+                "    def _step(self) -> Advance:\n"
+                "        return Advance.DONE\n",
+                False,
+            ),
+            (
+                "shop/application/ports/runs.py",
+                "shop.application.ports.runs",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.domain.run as run\n"
+                "class SaveRequest(ts.Request):\n"
+                "    def __init__(self, steps: int) -> None:\n"
+                "        self.steps = steps\n"
+                "class SaveResponse(ts.Response):\n"
+                "    def __init__(self, steps: int) -> None:\n"
+                "        self.steps = steps\n"
+                "class Runs(ts.Port, typing.Protocol):\n"
+                "    def save(self, request: SaveRequest) -> run.Advance: ...\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any("Run.advance returns" in f for f in findings)
+    assert any(
+        "shop.domain.run.Run field _last holds an outcome; "
+        "an outcome is returned and matched, never held — "
+        "what must be kept is state, on a spec with an exit" in f
+        for f in findings
+    )
+    assert any(
+        "TB081" in f and "Runs.save carries an outcome in its signature" in f
+        for f in findings
+    )
+
+
+def test_an_outcome_member_is_read_only_by_an_exhaustive_match() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/run.py",
+                "shop.domain.run",
+                "import enum\n"
+                "import tesser.domain as ts\n"
+                "class Advance(ts.Outcome):\n"
+                "    CONTINUE = enum.auto()\n"
+                "    DONE = enum.auto()\n"
+                "class RunSpec(ts.Spec):\n"
+                "    def __init__(self, steps: int) -> None:\n"
+                "        self.steps = steps\n"
+                "class Run(ts.AggregateRoot):\n"
+                "    def __init__(self, spec: RunSpec) -> None:\n"
+                "        self._steps = spec.steps\n"
+                "    def advance(self) -> Advance:\n"
+                "        return Advance.DONE\n",
+                False,
+            ),
+            (
+                "shop/application/ports/runs.py",
+                "shop.application.ports.runs",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class SaveRequest(ts.Request):\n"
+                "    def __init__(self, steps: int) -> None:\n"
+                "        self.steps = steps\n"
+                "class SaveResponse(ts.Response):\n"
+                "    def __init__(self, steps: int) -> None:\n"
+                "        self.steps = steps\n"
+                "class Runs(ts.Port, typing.Protocol):\n"
+                "    def save(self, request: SaveRequest) -> SaveResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/application/driver.py",
+                "shop.application.driver",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.application.ports.runs as runs\n"
+                "import shop.client.client as client\n"
+                "import shop.domain.run as run\n"
+                "class MapToRunSpec(ts.Mapper, run.RunSpec):\n"
+                "    def __init__(self, request: client.AskRequest) -> None:\n"
+                "        super().__init__(steps=len(request.text))\n"
+                "class MapToSaveRequest(ts.Mapper, runs.SaveRequest):\n"
+                "    def __init__(self, driven: run.Run) -> None:\n"
+                "        super().__init__(steps=0)\n"
+                "class Driver(ts.ApplicationService):\n"
+                "    def __init__(self, runs: runs.Runs) -> None:\n"
+                "        self._runs = runs\n"
+                "    def drive(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        driven = run.Run(MapToRunSpec(request))\n"
+                "        outcome = driven.advance()\n"
+                "        while True:\n"
+                "            match outcome:\n"
+                "                case run.Advance.CONTINUE:\n"
+                "                    self._runs.save(MapToSaveRequest(driven))\n"
+                "                    outcome = driven.advance()\n"
+                "                case run.Advance.DONE:\n"
+                "                    break\n"
+                "                case _ as never:\n"
+                "                    typing.assert_never(never)\n"
+                "        return client.AskResponse(text='')\n"
+                "    def leaks(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        driven = run.Run(MapToRunSpec(request))\n"
+                "        match driven.advance():\n"
+                "            case run.Advance.DONE:\n"
+                "                self._runs.save(MapToSaveRequest(driven))\n"
+                "        return client.AskResponse(text='')\n"
+                "    def compares(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        driven = run.Run(MapToRunSpec(request))\n"
+                "        if driven.advance() is run.Advance.DONE:\n"
+                "            self._runs.save(MapToSaveRequest(driven))\n"
+                "        return client.AskResponse(text='')\n",
+                False,
+            ),
+            (
+                "shop/application/test_driver.py",
+                "shop.application.test_driver",
+                "import shop.domain.run as run\n"
+                "def test_a_run_finishes() -> None:\n"
+                "    assert run.Run(run.RunSpec(steps=1)).advance() is run.Advance.DONE\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any("Driver.drive" in f for f in findings)
+    assert not any("driver.py:2" in f and "TB084" in f for f in findings)
+    assert not any("run.py" in f and "TB084" in f for f in findings)
+    assert sum("without closing on assert_never" in f for f in findings) == 1
+    assert any(
+        "shop/application/driver.py:30: TB084 "
+        "shop.application.driver matches an outcome without closing on assert_never; "
+        "a match on an outcome ends in `case _ as never: assert_never(never)`, "
+        "because a member added later is otherwise a silent site" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.driver names Advance.DONE outside a match; "
+        "an outcome member is read only by a match, because a member compared "
+        "anywhere else is a branch the type checker cannot exhaust" in f
+        for f in findings
+    )
+    assert not any("test_driver" in f and "TB084" in f for f in findings)
