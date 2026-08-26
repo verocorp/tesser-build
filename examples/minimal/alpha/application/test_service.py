@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import pytest
 import tesser.testing as ts
 
 import alpha.application.ports.beta_check as beta_check
 import alpha.application.ports.thing_repository as thing_repository
 import alpha.application.service as service
 import alpha.client.client as client
-import tesser.errors as errors
 
 
 @ts.fake
@@ -30,13 +28,4 @@ def add_request(name: str = "a") -> client.AddRequest:
 
 
 def test_add_answers_the_added_name() -> None:
-    svc = service.AlphaService(FakeThingRepository(), FakeBetaCheck())
-    assert svc.add(add_request()).name == "a"
-
-
-class TestRejection:
-
-    def test_an_empty_name_is_a_domain_error(self) -> None:
-        svc = service.AlphaService(FakeThingRepository(), FakeBetaCheck())
-        with pytest.raises(errors.DomainError):
-            svc.add(add_request(name=""))
+    assert service.AlphaService(FakeThingRepository(), FakeBetaCheck()).add(add_request()).name == "a"

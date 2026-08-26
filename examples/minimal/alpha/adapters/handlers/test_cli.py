@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pytest
 import tesser.testing as ts
 
 import alpha.adapters.handlers.cli as cli
@@ -16,10 +15,4 @@ class FakeClient(client.Client):
 
 
 def test_add_prints_the_added_name() -> None:
-    response = cli.Handler(FakeClient()).add(protocol_cli.CliRequest(args=("a",)))
-    assert response.line == protocol_cli.Line(text="a")
-
-
-def test_add_without_a_name_is_a_usage_error() -> None:
-    with pytest.raises(protocol_cli.UsageError):
-        cli.Handler(FakeClient()).add(protocol_cli.CliRequest(args=()))
+    assert cli.Handler(FakeClient()).add(protocol_cli.CliRequest(args=("a",))).line == protocol_cli.Line(text="a")

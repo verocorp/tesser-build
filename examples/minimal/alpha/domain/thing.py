@@ -1,21 +1,5 @@
 from __future__ import annotations
 
-import ast
-import builtins
-import collections.abc as abc
-import copy
-import datetime
-import decimal
-import enum
-import fractions
-import io
-import math
-import re
-import statistics
-import tokenize
-import typing
-import urllib.parse
-
 import tesser.domain as ts
 
 import kernel.ident as ident

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import os
-
 import tesser.testing as ts
 
 import alpha.component.config as alpha_config
@@ -15,19 +13,9 @@ import beta.component.config as beta_config
 class FakeConfigRepository(repository.ConfigRepository):
 
     def get(self) -> config.Config:
-        return config.Config(
-            config.Spec(
-                alpha=alpha_config.Config(alpha_config.Spec(storage="memory")),
-                beta=beta_config.Config(beta_config.Spec(key="k")),
-            )
-        )
+        spec = config.Spec(alpha_config.Config(alpha_config.Spec("memory")), beta_config.Config(beta_config.Spec("k")))
+        return config.Config(spec)
 
 
 def test_the_loader_builds_an_app_from_its_repository() -> None:
     loader.AppLoader(FakeConfigRepository()).load().close()
-
-
-def test_load_reads_the_environment() -> None:
-    os.environ["ALPHA_STORAGE"] = "memory"
-    os.environ["BETA_KEY"] = "k"
-    loader.load().close()

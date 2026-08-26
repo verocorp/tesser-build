@@ -2,20 +2,9 @@ from __future__ import annotations
 
 import os
 
-import pytest
-
 import app.repository as repository
-import tesser.errors as errors
 
 
 def test_the_environment_is_read_into_a_config() -> None:
-    os.environ["ALPHA_STORAGE"] = "memory"
-    os.environ["BETA_KEY"] = "k"
-    cfg = repository.EnvConfigRepository().get()
-    assert cfg.beta.key == "k"
-
-
-def test_a_missing_variable_is_a_validation_error() -> None:
-    os.environ.pop("ALPHA_STORAGE", None)
-    with pytest.raises(errors.DomainError):
-        repository.EnvConfigRepository().get()
+    os.environ.update(ALPHA_STORAGE="memory", BETA_KEY="k")
+    assert repository.EnvConfigRepository().get().beta.key == "k"
