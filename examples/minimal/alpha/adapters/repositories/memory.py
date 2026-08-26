@@ -12,7 +12,7 @@ class MemoryThingRepository(ts.Repository):
 
     def save(self, request: thing_repository.SaveRequest) -> thing_repository.SaveResponse:
         self._names.add(request.name)
-        return thing_repository.SaveResponse()
+        return thing_repository.SaveResponse(name=request.name)
 
     def close(self) -> None:
         self._names.clear()

@@ -13,8 +13,8 @@ class SaveRequest(ts.Request):
 
 class SaveResponse(ts.Response):
 
-    def __init__(self) -> None:
-        return None
+    def __init__(self, name: str) -> None:
+        self.name = name
 
 
 class ThingRepository(ts.Port, typing.Protocol):

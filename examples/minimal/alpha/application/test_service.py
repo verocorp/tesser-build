@@ -12,7 +12,7 @@ import alpha.client.client as client
 class FakeThingRepository(thing_repository.ThingRepository):
 
     def save(self, request: thing_repository.SaveRequest) -> thing_repository.SaveResponse:
-        return thing_repository.SaveResponse()
+        return thing_repository.SaveResponse(name=request.name)
 
 
 @ts.fake
