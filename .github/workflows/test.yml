@@ -130,6 +130,22 @@ jobs:
       - name: examples/ports — tessercheck + mypy --strict + pytest
         run: scripts/verify ports
 
+  minimal-example:
+    # Gates the minimally conforming tree at the same bar: tessercheck zero
+    # findings + mypy --strict + pytest. Every placement, every allowed import,
+    # every ts.* block, the smallest body that passes.
+    name: minimal example (tessercheck + mypy --strict + pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dev tooling
+        run: pip install -r examples/minimal/requirements-dev.txt
+      - name: examples/minimal — tessercheck + mypy --strict + pytest
+        run: scripts/verify minimal
+
   serdepy-example:
     # Gates the serialization-norm worked example (Python) at the same bar:
     # tessercheck zero findings + mypy --strict + pytest. Shows every

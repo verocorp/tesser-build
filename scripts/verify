@@ -109,6 +109,20 @@ run_ports() {
   pytest -q || return 1
 }
 
+# The minimally conforming tree: two contexts, a kernel, an exported kernel,
+# protocol, srv, and app, each module importing everything its placement
+# allows and declaring every ts.* block, with the smallest body that passes.
+# It does nothing useful on purpose — it is the rulebook rendered as code.
+run_minimal() {
+  cd "$ROOT/examples/minimal" || return 1
+  step "tessercheck (zero findings over the whole tree)"
+  tessercheck_tree "$PWD" || return 1
+  step "mypy --strict"
+  MYPYPATH=.:../../tesser-py mypy --strict kernel shared protocol alpha beta app srv tests conftest.py || return 1
+  step "pytest"
+  pytest -q || return 1
+}
+
 run_serdepy() {
   cd "$ROOT/examples/serdepy" || return 1
   step "tessercheck (zero findings over the whole tree)"
@@ -205,6 +219,7 @@ run_tree() {
   case "$tree" in
     llmport)        run_llmport ;;
     python-app)     run_python_app ;;
+    minimal)        run_minimal ;;
     serdepy)        run_serdepy ;;
     ports)          run_ports ;;
     errorspy)       run_errorspy ;;
