@@ -23,13 +23,20 @@ rule down — the leak is computing the answer, not asking for it.)
 
 ### Added
 - **`tesser.domain.Outcome`** — a memberless `enum.Enum` base whose
-  `__init_subclass__` raises for a method or a valued member, so the shape
-  holds at import time even where the analyzer does not run.
-- **`TB084`** (outcome): subclasses `ts.Outcome` alone, undecorated,
-  members-only, every member `enum.auto()`; no domain object holds one as a
-  field; across every non-test module a member is named only as a `return`
-  value or inside a `case` pattern; every `match` naming one closes on
-  `assert_never`.
+  `__init_subclass__` raises for a method (any name, dunders included), a
+  valued member (anything but `auto()`), a mixed-in or intermediate base, or
+  a custom metaclass, and whose members raise on `.value`/`.name` — so the
+  shape holds, and there is nothing to read, even where the analyzer does not
+  run.
+- **`TB084`** (outcome): subclasses `ts.Outcome` directly and alone,
+  undecorated, members-only, every member `enum.auto()`; nothing keeps one
+  (an annotated field, or `self._x = self.transition()` off the object's own
+  outcome-returning method); across every non-test module a member is named only as a
+  `return` value or inside a `case` pattern and the class only in an
+  annotation, a return, or a case pattern; no function takes one as a
+  parameter; nothing reads `_value_`/`_name_`; every `match` naming one closes
+  on an unguarded `case _ as never: assert_never(never)` with `assert_never`
+  still `typing`'s.
 - `examples/minimal`: `Widget.take(spec) -> Taken` and the service `match`
   over it — every `ts.*` block, now including the outcome. `AddRequest`
   gains `part`, the CLI takes `add <name> <part>`.
@@ -38,8 +45,9 @@ rule down — the leak is computing the answer, not asking for it.)
 - **`TB019`** counts a `ts.Outcome` return as a domain object.
 - **`TB081`** treats an outcome in a port signature as a domain object
   crossing a port.
-- **`TB082`** accepts a `match` subject that is a local bound to one call
-  (the outcome a transition returned), so the loop is one shape.
+- **`TB082`** accepts a `match` subject that is a local every assignment of
+  which is one call (the outcome a transition returned), so the loop is one
+  shape.
 - **`domain-return.md`** rule 6 (outcomes), decision 3 (field vs return
   value — *could the repository need this to rebuild the object?*), three new
   common mistakes (the status accessor, the enum with `is_*`, the loop on

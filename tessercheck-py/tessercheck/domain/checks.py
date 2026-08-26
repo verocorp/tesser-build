@@ -411,9 +411,13 @@ DOMAIN_BLOCKS: typing.Final[frozenset[str]] = frozenset({"aggregate", "entity", 
 
 OUTCOME_BLOCK: typing.Final[str] = "outcome"
 
+OUTCOME_BASE: typing.Final[tuple[str, str]] = ("tesser.domain", "Outcome")
+
 DOMAIN_OBJECT_BLOCKS: typing.Final[frozenset[str]] = DOMAIN_BLOCKS | frozenset({OUTCOME_BLOCK})
 
 ASSERT_NEVER: typing.Final[str] = "assert_never"
+
+OUTCOME_SUNDERS: typing.Final[frozenset[str]] = frozenset({"_value_", "_name_"})
 
 TYPING_MODULE: typing.Final[str] = "typing"
 
@@ -4149,19 +4153,8 @@ class Codebase(ts.AggregateRoot):
                         and isinstance(member_value.operand.value, (int, float))
                     )
                     or (
-                        isinstance(member_value, ast.Call)
-                        and isinstance(member_value.func, ast.Attribute)
-                        and isinstance(member_value.func.value, ast.Name)
-                        and module._package_aliases.get(member_value.func.value.id)
-                        == ENUM_MODULE
-                        and member_value.func.attr == "auto"
-                    )
-                    or (
-                        isinstance(member_value, ast.Call)
-                        and isinstance(member_value.func, ast.Name)
-                        and (origin := module._imported.get(member_value.func.id)) is not None
-                        and origin[0] == ENUM_MODULE
-                        and origin[1] == "auto"
+                        member_value is not None
+                        and Codebase._is_enum_auto(module, member_value)  # tesser:debt TB051
                     )
                 )
             )
@@ -6367,6 +6360,7 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         found.extend(self._provenance_violations(module, where, fn))  # tesser:debt TB051
+        bound_to_calls = self._names_bound_to_calls(fn)  # tesser:debt TB051
         for stmt in fn.body:
             if not isinstance(stmt, ast.Assign):
                 continue
@@ -6436,7 +6430,7 @@ class Codebase(ts.AggregateRoot):
             elif isinstance(node, ast.Match):
                 if not isinstance(node.subject, ast.Call) and not (
                     isinstance(node.subject, ast.Name)
-                    and node.subject.id in self._names_bound_to_calls(fn)  # tesser:debt TB051
+                    and node.subject.id in bound_to_calls
                 ):
                     found.append(
                         Violation(ViolationSpec(
@@ -6465,15 +6459,30 @@ class Codebase(ts.AggregateRoot):
     @staticmethod
     def _names_bound_to_calls(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> frozenset[str]:
         bound: set[str] = set()
+        otherwise: set[str] = set()
         for node in ast.walk(fn):
-            if (
-                isinstance(node, ast.Assign)
-                and len(node.targets) == 1
-                and isinstance(node.targets[0], ast.Name)
-                and isinstance(node.value, ast.Call)
-            ):
-                bound.add(node.targets[0].id)
-        return frozenset(bound)
+            target: ast.expr | None = None
+            if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                target = node.targets[0]
+            elif isinstance(node, (ast.AnnAssign, ast.AugAssign, ast.NamedExpr)):
+                target = node.target
+            elif isinstance(node, (ast.For, ast.AsyncFor, ast.comprehension)):
+                otherwise.update(sub.id for sub in ast.walk(node.target) if isinstance(sub, ast.Name))
+                continue
+            elif isinstance(node, (ast.With, ast.AsyncWith)):
+                for item in node.items:
+                    if item.optional_vars is not None:
+                        otherwise.update(
+                            sub.id for sub in ast.walk(item.optional_vars) if isinstance(sub, ast.Name)
+                        )
+                continue
+            if not isinstance(target, ast.Name):
+                continue
+            if isinstance(node.value, ast.Call):
+                bound.add(target.id)
+            else:
+                otherwise.add(target.id)
+        return frozenset(bound - otherwise)
 
     def _outcome_violations(self, module: Module, cls: ast.ClassDef) -> tuple[Violation, ...]:
         where = f"{module.name()}.{cls.name}"
@@ -6487,6 +6496,16 @@ class Codebase(ts.AggregateRoot):
                     f"{where} mixes another base into its outcome; an outcome subclasses "
                     "ts.Outcome alone, because a mixed-in base gives its members a value "
                     "to compare against outside a match",
+                ))
+            )
+        elif cls.bases and module._resolve(cls.bases[0]) != OUTCOME_BASE:
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    cls.lineno,
+                    "TB084",
+                    f"{where} subclasses another outcome; an outcome subclasses ts.Outcome "
+                    "directly, because a hierarchy reopens the closed set",
                 ))
             )
         if cls.decorator_list or cls.keywords:
@@ -6574,34 +6593,122 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         matched: set[int] = set()
+        attributes: list[ast.Attribute] = []
+        names: list[ast.expr] = []
+        annotated: set[int] = set()
         for node in (sub for stmt in module.body() for sub in ast.walk(stmt)):
-            if not isinstance(node, ast.Match):
-                continue
-            outcome_match = False
-            for case in node.cases:
-                for sub in ast.walk(case.pattern):
-                    if isinstance(sub, ast.MatchValue) and self._outcome_key(module, sub.value, blocks) is not None:  # tesser:debt TB051
-                        outcome_match = True
-                        matched.add(id(sub.value))
-            if outcome_match and not self._closes_with_assert_never(module, node):  # tesser:debt TB051
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        node.lineno,
-                        "TB084",
-                        f"{module.name()} matches an outcome without closing on assert_never; "
-                        "a match on an outcome ends in `case _ as never: assert_never(never)`, "
-                        "because a member added later is otherwise a silent site",
-                    ))
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for arg in node.args.posonlyargs + node.args.args + node.args.kwonlyargs:
+                    if arg.annotation is None:
+                        continue
+                    annotated.update(id(sub) for sub in ast.walk(arg.annotation))
+                    if self._names_outcome(module, arg.annotation, blocks):  # tesser:debt TB051
+                        taker = node.name
+                        found.append(
+                            Violation(ViolationSpec(
+                                module.path(),
+                                node.lineno,
+                                "TB084",
+                                f"{module.name()}.{taker} takes an outcome; an outcome is returned "
+                                "and matched, never passed on, because it lives between the return "
+                                "and the match",
+                            ))
+                        )
+                if node.returns is not None:
+                    annotated.update(id(sub) for sub in ast.walk(node.returns))
+            elif isinstance(node, ast.AnnAssign):
+                annotated.update(id(sub) for sub in ast.walk(node.annotation))
+                if isinstance(node.target, ast.Attribute) and self._names_outcome(module, node.annotation, blocks):  # tesser:debt TB051
+                    kept = ast.unparse(node.target)
+                    found.append(
+                        Violation(ViolationSpec(
+                            module.path(),
+                            node.lineno,
+                            "TB084",
+                            f"{module.name()} keeps an outcome on {kept}; "
+                            "an outcome is returned and matched, never kept, because what must "
+                            "be kept is state, on a spec with an exit",
+                        ))
+                    )
+            elif isinstance(node, ast.ClassDef):
+                annotated.update(id(sub) for base in node.bases for sub in ast.walk(base))
+                own = frozenset(
+                    item.name
+                    for item in node.body
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and item.returns is not None
+                    and self._names_outcome(module, item.returns, blocks)  # tesser:debt TB051
                 )
-        for node in (sub for stmt in module.body() for sub in ast.walk(stmt)):
-            if isinstance(node, ast.Return) and node.value is not None:
-                matched.add(id(node.value))
-        for node in (sub for stmt in module.body() for sub in ast.walk(stmt)):
-            if not isinstance(node, ast.Attribute) or id(node) in matched:
-                continue
+                for assignment in ast.walk(node):
+                    if not isinstance(assignment, ast.Assign):
+                        continue
+                    call = assignment.value
+                    if not (
+                        isinstance(call, ast.Call)
+                        and isinstance(call.func, ast.Attribute)
+                        and isinstance(call.func.value, ast.Name)
+                        and call.func.value.id == "self"
+                        and call.func.attr in own
+                    ):
+                        continue
+                    for target in assignment.targets:
+                        if not isinstance(target, ast.Attribute):
+                            continue
+                        kept = ast.unparse(target)
+                        found.append(
+                            Violation(ViolationSpec(
+                                module.path(),
+                                assignment.lineno,
+                                "TB084",
+                                f"{module.name()} keeps an outcome on {kept}; "
+                                "an outcome is returned and matched, never kept, because what must "
+                                "be kept is state, on a spec with an exit",
+                            ))
+                        )
+            if isinstance(node, ast.Attribute):
+                attributes.append(node)
+                names.append(node)
+                if node.attr in OUTCOME_SUNDERS:
+                    sunder = node.attr
+                    found.append(
+                        Violation(ViolationSpec(
+                            module.path(),
+                            node.lineno,
+                            "TB084",
+                            f"{module.name()} reads {sunder}; an outcome is matched, never read, "
+                            "because its value and name are the exhaustiveness the type checker "
+                            "cannot see",
+                        ))
+                    )
+            elif isinstance(node, ast.Name):
+                names.append(node)
+            elif isinstance(node, ast.Return) and node.value is not None:
+                matched.update(id(sub) for sub in ast.walk(node.value))
+            elif isinstance(node, ast.Match):
+                outcome_match = False
+                for case in node.cases:
+                    for sub in ast.walk(case.pattern):
+                        if isinstance(sub, ast.MatchValue) and self._outcome_key(module, sub.value, blocks) is not None:  # tesser:debt TB051
+                            outcome_match = True
+                            matched.add(id(sub.value))
+                if outcome_match and not self._closes_with_assert_never(module, node):  # tesser:debt TB051
+                    found.append(
+                        Violation(ViolationSpec(
+                            module.path(),
+                            node.lineno,
+                            "TB084",
+                            f"{module.name()} matches an outcome without closing on assert_never; "
+                            "a match on an outcome ends in `case _ as never: assert_never(never)`, "
+                            "because a member added later is otherwise a silent site",
+                        ))
+                    )
+        member_bases: set[int] = set()
+        for node in attributes:
             key = self._outcome_key(module, node, blocks)  # tesser:debt TB051
             if key is None:
+                continue
+            member_bases.update(id(sub) for sub in ast.walk(node.value))
+            if id(node) in matched:
                 continue
             outcome = key[1]
             member = node.attr
@@ -6615,7 +6722,35 @@ class Codebase(ts.AggregateRoot):
                     "anywhere else is a branch the type checker cannot exhaust",
                 ))
             )
+        for node in names:
+            if id(node) in annotated or id(node) in member_bases:
+                continue
+            key = module._resolve(node)
+            if key is None or blocks.get(key) != OUTCOME_BLOCK:
+                continue
+            outcome = key[1]
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    node.lineno,
+                    "TB084",
+                    f"{module.name()} reaches into {outcome}; an outcome class is named only "
+                    "in an annotation, a return, or a case pattern, because indexing, getattr, "
+                    "and iteration read members the type checker cannot exhaust",
+                ))
+            )
         return tuple(found)
+
+    @staticmethod
+    def _names_outcome(
+        module: Module, node: ast.expr, blocks: dict[tuple[str, str], str]
+    ) -> bool:
+        for sub in ast.walk(node):
+            if isinstance(sub, (ast.Name, ast.Attribute)):
+                key = module._resolve(sub)
+                if key is not None and blocks.get(key) == OUTCOME_BLOCK:
+                    return True
+        return False
 
     @staticmethod
     def _outcome_key(
@@ -6632,6 +6767,8 @@ class Codebase(ts.AggregateRoot):
     def _closes_with_assert_never(module: Module, node: ast.Match) -> bool:
         last = node.cases[-1]
         pattern = last.pattern
+        if last.guard is not None:
+            return False
         if not (isinstance(pattern, ast.MatchAs) and pattern.name is not None):
             return False
         wildcard = pattern.pattern
@@ -6639,7 +6776,7 @@ class Codebase(ts.AggregateRoot):
             isinstance(wildcard, ast.MatchAs) and wildcard.pattern is None and wildcard.name is None
         ):
             return False
-        if len(last.body) != 1 or not isinstance(last.body[0], ast.Expr):
+        if len(last.body) != 1 or not isinstance(last.body[0], (ast.Expr, ast.Return)):
             return False
         call = last.body[0].value
         if not (isinstance(call, ast.Call) and len(call.args) == 1 and not call.keywords):
@@ -6647,13 +6784,25 @@ class Codebase(ts.AggregateRoot):
         if not (isinstance(call.args[0], ast.Name) and call.args[0].id == pattern.name):
             return False
         callee = call.func
+        rebound = {
+            target.id
+            for assignment in module.assignments()
+            for target in (
+                assignment.targets if isinstance(assignment, ast.Assign) else [assignment.target]
+            )
+            if isinstance(target, ast.Name)
+        }
         if isinstance(callee, ast.Attribute) and isinstance(callee.value, ast.Name):
             return (
                 module._package_aliases.get(callee.value.id) == TYPING_MODULE
                 and callee.attr == ASSERT_NEVER
+                and callee.value.id not in rebound
             )
         if isinstance(callee, ast.Name):
-            return module._imported.get(callee.id) == (TYPING_MODULE, ASSERT_NEVER)
+            return (
+                module._imported.get(callee.id) == (TYPING_MODULE, ASSERT_NEVER)
+                and callee.id not in rebound
+            )
         return False
 
     @staticmethod

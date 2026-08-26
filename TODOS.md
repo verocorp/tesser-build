@@ -10,11 +10,6 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   (`__bool__`, an empty collection) and is now a second spelling of the same
   thing. Chris to rule; the clause was left as-is in the wave rather than
   widened silently.
-- [ ] **Instance-level `.value` / `.name` on an outcome is invisible to the
-  analyzer.** `Advance.DONE.value` is caught (the member reference is outside
-  a match); `outcome.value` on a local is not, because the walk does not type
-  locals. `enum.auto()` makes the value meaningless, which is the mitigation,
-  not a check.
 - [ ] **A loop-shaped verified impl.** `examples/minimal` carries the
   two-arm `match`; the `while True: match outcome:` loop lives only as the
   analyzer's fixture. A pilot-pulled use case with a real multi-step

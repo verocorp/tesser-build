@@ -146,15 +146,21 @@ and TB011 (aggregate collection); a spec-typed return belongs to TB015. A
 `ts.Outcome` return is a domain object to TB019.
 
 `TB084` owns the outcome itself, keyed on the declared `ts.Outcome` base: the
-class subclasses it alone, undecorated, and carries nothing but `enum.auto()`
-members; no domain object holds one as a field (a spec, DTO, or port carrying
-one is already TB080/TB081); and across every non-test module a member is
-named only as a `return` value or inside a `case` pattern, and every `match`
-that names one closes on `case _ as never: assert_never(never)`. The runtime
-base (`tesser.domain.Outcome`) raises at class definition for a method or a
-valued member, so the shape holds even where the analyzer does not run. What
-the analyzer cannot see is `.value`/`.name` read off an *instance* — the
-member value is `auto()` precisely so there is nothing meaningful to read.
+class subclasses `ts.Outcome` directly and alone (no mixin, no hierarchy),
+undecorated, and carries nothing but `enum.auto()` members; nothing keeps one
+— not an annotated field, not `self._last = self.advance()` (a spec, DTO, or
+port carrying one is already TB080/TB081); and across every non-test module a
+member is named only as a `return` value or inside a `case` pattern, the class
+itself is named only in an annotation, a return, or a case pattern (no
+`Advance["DONE"]`, `getattr`, or iteration), and every `match` that names one
+closes on an unguarded `case _ as never: assert_never(never)` (or `return
+assert_never(never)`) with `assert_never` still bound to `typing`'s; no
+function takes an outcome as a parameter; and nothing reads `_value_` or
+`_name_`. The runtime
+base (`tesser.domain.Outcome`) raises at class definition for a method (any name, dunders included), a
+valued member, a mixed-in or intermediate base, or a custom metaclass — and
+`.value`/`.name` raise on every member — so the shape holds, and there is
+nothing to read, even where the analyzer does not run.
 
 There is no Go analyzer yet — a named gap, tracked in `TODOS.md`.
 

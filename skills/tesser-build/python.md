@@ -468,24 +468,30 @@ class Widget(ts.AggregateRoot):
         return MapToAddResponse(added)
 ```
 
-- **`ts.Outcome` alone, undecorated, members only, every member
-  `enum.auto()`** (TB084). The runtime base raises at class definition for a
-  method or a valued member; the analyzer reports the same shapes. There is no
-  `str`/`int` mixin and no `.value` worth reading — an outcome is matched,
-  never serialized.
+- **`ts.Outcome` directly and alone, undecorated, members only, every member
+  `enum.auto()`** (TB084) — no mixin, no intermediate base. The runtime base
+  raises at class definition for a method (any name, dunders included), a
+  valued member, a mixed-in or intermediate base, or a custom metaclass, and
+  `.value`/`.name` raise on every member; the analyzer reports the same shapes
+  and flags `_value_`/`_name_`. An outcome is matched, never read, never
+  serialized.
 - **Returned by a transition, read by a `match`.** A member is named in
   exactly two places: the `return` that produces it and the `case` that
-  consumes it. `is Taken.HELD` / `== Taken.HELD` anywhere else is TB084; a
-  `status()` accessor returning one is the status-in-a-coat mistake
-  (`domain-return.md`).
+  consumes it. `is Taken.HELD` / `== Taken.HELD` anywhere else is TB084, and
+  so is naming the class outside an annotation (`Taken["HELD"]`,
+  `getattr(Taken, ...)`, `list(Taken)`); a `status()` accessor returning one
+  is the status-in-a-coat mistake (`domain-return.md`).
 - **Every `match` on an outcome closes on `case _ as never:
-  typing.assert_never(never)`** (TB084) — the `-> None` handler that just does
-  side effects per arm otherwise fails open when a member is added (verified:
-  mypy reports nothing without the closer). Import `typing` as a module, per
-  the import norm.
-- **Never held, never carried.** A domain field annotated with an outcome is
-  TB084; a spec, DTO, or port signature carrying one is already
-  TB080/TB081. What must be kept is state, on the spec, with an exit.
+  typing.assert_never(never)`** (TB084) — unguarded, one statement, the name
+  still `typing`'s — because the `-> None` handler that just does side effects
+  per arm otherwise fails open when a member is added (verified: mypy reports
+  nothing without the closer). Import `typing` as a module, per the import
+  norm.
+- **Never held, never carried, never passed on.** A field annotated with an
+  outcome, `self._last = self.advance()` off the object's own
+  outcome-returning method, or a parameter typed as an outcome, is TB084; a
+  spec, DTO, or port signature carrying one is already TB080/TB081. What
+  must be kept is state, on the spec, with an exit.
 - **Each arm is coordination**: one port call and/or one transition, `break`
   or `return`. A rule inside an arm is leakage check 4.
 - **The loop** is the two-member case, `while True:` around the `match`, the

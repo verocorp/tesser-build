@@ -48,3 +48,92 @@ def test_an_outcome_member_carries_no_value() -> None:
 
         class Named(ts.Outcome):
             DONE = "done"
+
+
+def test_an_outcome_member_carries_no_hand_picked_int() -> None:
+    with pytest.raises(TypeError, match=r"Picked.DONE carries a value"):
+
+        class Picked(ts.Outcome):
+            DONE = 5
+
+    with pytest.raises(TypeError, match=r"Counted.CONTINUE carries a value"):
+
+        class Counted(ts.Outcome):
+            CONTINUE = 1
+            DONE = 2
+
+    with pytest.raises(TypeError, match=r"Truthy.DONE carries a value"):
+
+        class Truthy(ts.Outcome):
+            DONE = True
+
+
+def test_an_outcome_admits_no_custom_metaclass() -> None:
+    class Sneaky(enum.EnumMeta):
+        def sneaky(cls) -> bool:
+            return True
+
+    with pytest.raises(TypeError, match=r"Hidden uses a custom metaclass"):
+
+        class Hidden(ts.Outcome, metaclass=Sneaky):
+            DONE = enum.auto()
+
+
+def test_an_outcome_hides_no_behavior_behind_an_underscore() -> None:
+    with pytest.raises(TypeError, match=r"defines '_helper'"):
+
+        class Sneaky(ts.Outcome):
+            DONE = enum.auto()
+
+            def _helper(self) -> bool:
+                return True
+
+    with pytest.raises(TypeError, match=r"defines '_make'"):
+
+        class Crafty(ts.Outcome):
+            DONE = enum.auto()
+
+            @classmethod
+            def _make(cls) -> bool:
+                return True
+
+    with pytest.raises(TypeError, match=r"defines '__bool__'"):
+
+        class Falsy(ts.Outcome):
+            DONE = enum.auto()
+
+            def __bool__(self) -> bool:
+                return False
+
+    with pytest.raises(TypeError, match=r"defines '__str__'"):
+
+        class Wired(ts.Outcome):
+            DONE = enum.auto()
+
+            def __str__(self) -> str:
+                return "done"
+
+
+def test_an_outcome_subclasses_outcome_directly_and_alone() -> None:
+    with pytest.raises(TypeError, match=r"Mixed subclasses int, Outcome"):
+
+        class Mixed(int, ts.Outcome):
+            DONE = enum.auto()
+
+    class Base(ts.Outcome):
+        pass
+
+    with pytest.raises(TypeError, match=r"Derived subclasses Base"):
+
+        class Derived(Base):
+            DONE = enum.auto()
+
+
+def test_an_outcome_carries_nothing_to_read() -> None:
+    with pytest.raises(TypeError, match=r"Advance is matched, never read: an outcome carries no value"):
+        Advance.DONE.value
+    with pytest.raises(TypeError, match=r"Advance is matched, never read: an outcome carries no name"):
+        Advance.DONE.name
+    assert repr(Advance.DONE) == "<Advance.DONE: 2>"
+    assert Advance.DONE is Advance.DONE
+    assert len({Advance.CONTINUE, Advance.DONE}) == 2
