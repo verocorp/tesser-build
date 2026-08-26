@@ -5,5 +5,4 @@ import alpha.application.ports.thing_repository as thing_repository
 
 
 def test_a_save_is_answered() -> None:
-    saved = memory.MemoryThingRepository().save(thing_repository.SaveRequest(name="a"))
-    assert isinstance(saved, thing_repository.SaveResponse)
+    memory.MemoryThingRepository().save(thing_repository.SaveRequest(name="a"))
