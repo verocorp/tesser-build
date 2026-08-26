@@ -6,12 +6,11 @@ import alpha.client.client as alpha_client
 import alpha.component.config as alpha_config
 import app.config as config
 import app.loader as loader
-import app.repository as repository
 import beta.component.config as beta_config
 
 
 @ts.fake
-class FakeConfigRepository(repository.ConfigRepository):
+class FakeConfigRepository(loader.ConfigRepository):
 
     def get(self) -> config.Config:
         spec = config.Spec(alpha_config.Config(alpha_config.Spec("memory")), beta_config.Config(beta_config.Spec("a")))
