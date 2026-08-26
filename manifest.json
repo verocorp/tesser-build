@@ -10,6 +10,7 @@
   "examples/golangci": "ungated",
   "examples/lending": "ungated",
   "examples/llmport": "app",
+  "examples/minimal": "app",
   "examples/ports": "app",
   "examples/python-app": "app",
   "examples/running": "ungated",
