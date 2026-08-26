@@ -42,6 +42,15 @@ where it lands.
   minimal tree now fakes the port too. The earlier idea stands: a bounded
   context provides its own fake/test `Client` implementation for consumers
   (prior-session TODO, not done here).
+- [ ] **An exported kernel is never imported by its own app.** `kernels.md`
+  gives the exported kernel one purpose — "other apps/packages must import
+  this domain-level code" — and the app-scoped `kernel/` the internal one.
+  The walk does not enforce that split: `examples/minimal/alpha/domain/widget.py`
+  imports `shared.label` (the tree's `export shared`) and passes, so a
+  context can couple to the tree's public namespace from the inside. Ruling
+  (Chris 2026-08-26): nothing in the app imports the exported kernel; the
+  checker should flag it (a TB062-family row for the exported package), and
+  `widget.py`'s `Label` field goes when it lands.
 
 ## Sibling-reference rule: three open sub-rulings (2026-08-23, v0.0.76.0)
 
