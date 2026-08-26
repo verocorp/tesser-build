@@ -20,5 +20,5 @@ class TestAlphaContext:
 
     def test_a_cli_add_reaches_the_wired_service(self) -> None:
         wired = component.Alpha(config.Config(config.Spec(storage="memory")), FakeBetaCheck())
-        response = cli.Handler(wired.client).add(protocol_cli.CliRequest(args=("a",)))
+        response = cli.Handler(wired.client).add(protocol_cli.CliRequest(args=("a", "p")))
         assert response.line.text == "a"

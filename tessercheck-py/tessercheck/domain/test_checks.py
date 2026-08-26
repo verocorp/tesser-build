@@ -1331,16 +1331,18 @@ def test_service_body_rules_are_flagged() -> None:
                 "from shop.client.client import AskRequest, AskResponse\n"
                 "class BusyService(ts.ApplicationService):\n"
                 "    def nested(self, request: AskRequest) -> AskResponse:\n"
-                "        if request.ping():\n"
-                "            if request.pong():\n"
-                "                return AskResponse(text='')\n"
+                "        match request.ping():\n"
+                "            case 1:\n"
+                "                match request.pong():\n"
+                "                    case 1:\n"
+                "                        return AskResponse(text='')\n"
                 "        return AskResponse(text='')\n"
                 "    def compares(self, request: AskRequest) -> AskResponse:\n"
                 "        if request.text == 'x':\n"
                 "            return AskResponse(text='')\n"
                 "        return AskResponse(text='')\n"
-                "    def combines(self, request: AskRequest) -> AskResponse:\n"
-                "        if request.ready() and request.good():\n"
+                "    def loops(self, request: AskRequest) -> AskResponse:\n"
+                "        while request.ready():\n"
                 "            return AskResponse(text='')\n"
                 "        return AskResponse(text='')\n",
                 False,
@@ -1354,15 +1356,15 @@ def test_service_body_rules_are_flagged() -> None:
         for f in findings
     )
     assert any(
-        "BusyService.compares" in f
-        and "is not a single call; a service method satisfies a condition with one domain call"
-        in f
+        "BusyService.compares branches with if; a service method branches only by "
+        "matching an outcome — `while True:` ended by a match arm is the loop — "
+        "because a truth test on a domain object is a bool the domain never handed out" in f
         for f in findings
     )
     assert any(
-        "BusyService.combines" in f
-        and "is not a single call; a service method satisfies a condition with one domain call"
-        in f
+        "BusyService.loops branches with while; a service method branches only by "
+        "matching an outcome — `while True:` ended by a match arm is the loop — "
+        "because a truth test on a domain object is a bool the domain never handed out" in f
         for f in findings
     )
 
@@ -9992,3 +9994,553 @@ def test_a_second_taker_a_tuple_target_keep_and_a_test_module_maker_name_are_han
         "shop/adapters/press.py:11: TB083 shop.adapters.press.Press.peek reads 'face' of the spec 'made'; "
         "a spec is only read where it initializes its own object",
     )
+
+
+def test_an_outcome_is_a_closed_set_of_auto_members() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/advance.py",
+                "shop.domain.advance",
+                "import enum\n"
+                "import tesser.domain as ts\n"
+                "class Advance(ts.Outcome):\n"
+                "    CONTINUE = enum.auto()\n"
+                "    DONE = enum.auto()\n"
+                "class Mixed(str, ts.Outcome):\n"
+                "    A = enum.auto()\n"
+                "@enum.unique\n"
+                "class Tagged(ts.Outcome):\n"
+                "    A = enum.auto()\n"
+                "class Chatty(ts.Outcome):\n"
+                "    A = enum.auto()\n"
+                "    def is_a(self) -> bool:\n"
+                "        return True\n"
+                "class Valued(ts.Outcome):\n"
+                "    A = 'a'\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any("Advance" in f for f in findings)
+    assert any(
+        "shop.domain.advance.Mixed mixes another base into its outcome; "
+        "an outcome subclasses ts.Outcome alone, because a mixed-in base gives "
+        "its members a value to compare against outside a match" in f
+        for f in findings
+    )
+    assert any(
+        "shop.domain.advance.Tagged is decorated or keyworded; "
+        "an outcome is a bare class statement, because a decorator or a metaclass "
+        "rewrites the closed set into a home for behavior" in f
+        for f in findings
+    )
+    assert any(
+        "shop.domain.advance.Chatty carries more than its members; "
+        "an outcome is a closed set of names and nothing else, "
+        "because behavior belongs on the object that returns it" in f
+        for f in findings
+    )
+    assert any(
+        "shop.domain.advance.Valued gives a member a value; "
+        "an outcome member is enum.auto(), because an outcome is matched, "
+        "never serialized" in f
+        for f in findings
+    )
+
+
+def test_an_outcome_is_returned_and_matched_never_held() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/run.py",
+                "shop.domain.run",
+                "import enum\n"
+                "import tesser.domain as ts\n"
+                "class Advance(ts.Outcome):\n"
+                "    CONTINUE = enum.auto()\n"
+                "    DONE = enum.auto()\n"
+                "class RunSpec(ts.Spec):\n"
+                "    def __init__(self, steps: int) -> None:\n"
+                "        self.steps = steps\n"
+                "class Run(ts.AggregateRoot):\n"
+                "    _last: Advance\n"
+                "    def __init__(self, spec: RunSpec) -> None:\n"
+                "        self._steps = spec.steps\n"
+                "    def advance(self) -> Advance:\n"
+                "        return self._step()\n"
+                "    def _step(self) -> Advance:\n"
+                "        return Advance.DONE\n",
+                False,
+            ),
+            (
+                "shop/application/ports/runs.py",
+                "shop.application.ports.runs",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.domain.run as run\n"
+                "class SaveRequest(ts.Request):\n"
+                "    def __init__(self, steps: int) -> None:\n"
+                "        self.steps = steps\n"
+                "class SaveResponse(ts.Response):\n"
+                "    def __init__(self, steps: int) -> None:\n"
+                "        self.steps = steps\n"
+                "class Runs(ts.Port, typing.Protocol):\n"
+                "    def save(self, request: SaveRequest) -> run.Advance: ...\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any("Run.advance returns" in f for f in findings)
+    assert any(
+        "shop.domain.run.Run field _last holds an outcome; "
+        "an outcome is returned and matched, never held — "
+        "what must be kept is state, on a spec with an exit" in f
+        for f in findings
+    )
+    assert any(
+        "TB081" in f and "Runs.save carries an outcome in its signature" in f
+        for f in findings
+    )
+
+
+def test_an_outcome_member_is_read_only_by_an_exhaustive_match() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/run.py",
+                "shop.domain.run",
+                "import enum\n"
+                "import tesser.domain as ts\n"
+                "class Advance(ts.Outcome):\n"
+                "    CONTINUE = enum.auto()\n"
+                "    DONE = enum.auto()\n"
+                "class RunSpec(ts.Spec):\n"
+                "    def __init__(self, steps: int) -> None:\n"
+                "        self.steps = steps\n"
+                "class Run(ts.AggregateRoot):\n"
+                "    def __init__(self, spec: RunSpec) -> None:\n"
+                "        self._steps = spec.steps\n"
+                "    def advance(self) -> Advance:\n"
+                "        return Advance.DONE\n",
+                False,
+            ),
+            (
+                "shop/application/ports/runs.py",
+                "shop.application.ports.runs",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class SaveRequest(ts.Request):\n"
+                "    def __init__(self, steps: int) -> None:\n"
+                "        self.steps = steps\n"
+                "class SaveResponse(ts.Response):\n"
+                "    def __init__(self, steps: int) -> None:\n"
+                "        self.steps = steps\n"
+                "class Runs(ts.Port, typing.Protocol):\n"
+                "    def save(self, request: SaveRequest) -> SaveResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/application/driver.py",
+                "shop.application.driver",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.application.ports.runs as runs\n"
+                "import shop.client.client as client\n"
+                "import shop.domain.run as run\n"
+                "class MapToRunSpec(ts.Mapper, run.RunSpec):\n"
+                "    def __init__(self, request: client.AskRequest) -> None:\n"
+                "        super().__init__(steps=len(request.text))\n"
+                "class MapToSaveRequest(ts.Mapper, runs.SaveRequest):\n"
+                "    def __init__(self, driven: run.Run) -> None:\n"
+                "        super().__init__(steps=0)\n"
+                "class Driver(ts.ApplicationService):\n"
+                "    def __init__(self, runs: runs.Runs) -> None:\n"
+                "        self._runs = runs\n"
+                "    def drive(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        driven = run.Run(MapToRunSpec(request))\n"
+                "        outcome = driven.advance()\n"
+                "        while True:\n"
+                "            match outcome:\n"
+                "                case run.Advance.CONTINUE:\n"
+                "                    self._runs.save(MapToSaveRequest(driven))\n"
+                "                    outcome = driven.advance()\n"
+                "                case run.Advance.DONE:\n"
+                "                    break\n"
+                "                case _ as never:\n"
+                "                    typing.assert_never(never)\n"
+                "        return client.AskResponse(text='')\n"
+                "    def leaks(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        driven = run.Run(MapToRunSpec(request))\n"
+                "        match driven.advance():\n"
+                "            case run.Advance.DONE:\n"
+                "                self._runs.save(MapToSaveRequest(driven))\n"
+                "        return client.AskResponse(text='')\n"
+                "    def compares(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        driven = run.Run(MapToRunSpec(request))\n"
+                "        if driven.advance() is run.Advance.DONE:\n"
+                "            self._runs.save(MapToSaveRequest(driven))\n"
+                "        return client.AskResponse(text='')\n",
+                False,
+            ),
+            (
+                "shop/application/test_driver.py",
+                "shop.application.test_driver",
+                "import shop.domain.run as run\n"
+                "def test_a_run_finishes() -> None:\n"
+                "    assert run.Run(run.RunSpec(steps=1)).advance() is run.Advance.DONE\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any("Driver.drive" in f for f in findings)
+    assert not any("driver.py:2" in f and "TB084" in f for f in findings)
+    assert not any("run.py" in f and "TB084" in f for f in findings)
+    assert sum("without closing on assert_never" in f for f in findings) == 1
+    assert any(
+        "shop/application/driver.py:30: TB084 "
+        "shop.application.driver matches an outcome without closing on assert_never; "
+        "a match on an outcome ends in `case _ as never: assert_never(never)`, "
+        "because a member added later is otherwise a silent site" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.driver names Advance.DONE outside a match; "
+        "an outcome member is read only by a match, because a member compared "
+        "anywhere else is a branch the type checker cannot exhaust" in f
+        for f in findings
+    )
+    assert not any("test_driver" in f and "TB084" in f for f in findings)
+
+
+def test_an_outcome_is_tracked_through_the_shapes_the_rules_do_not_name() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/run.py",
+                "shop.domain.run",
+                "import enum\n"
+                "from enum import auto\n"
+                "import tesser.domain as ts\n"
+                "class Advance(ts.Outcome):\n"
+                "    CONTINUE = auto()\n"
+                "    DONE = auto()\n"
+                "class Keyed(ts.Outcome, metaclass=enum.EnumMeta):\n"
+                "    A = enum.auto()\n"
+                "class Annotated(ts.Outcome):\n"
+                "    A: int = 1\n"
+                "class RunSpec(ts.Spec):\n"
+                "    def __init__(self, steps: int, last: Advance) -> None:\n"
+                "        self.steps = steps\n"
+                "        self.last = last\n"
+                "class Run(ts.AggregateRoot):\n"
+                "    def __init__(self, spec: RunSpec) -> None:\n"
+                "        self._steps = spec.steps\n"
+                "    def advance(self) -> Advance:\n"
+                "        def pick() -> Advance:\n"
+                "            return Advance.DONE\n"
+                "        return pick()\n"
+                "    async def later(self) -> Advance:\n"
+                "        return Advance.CONTINUE\n",
+                False,
+            ),
+            (
+                "shop/application/ports/runs.py",
+                "shop.application.ports.runs",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class SaveRequest(ts.Request):\n"
+                "    def __init__(self, steps: int) -> None:\n"
+                "        self.steps = steps\n"
+                "class SaveResponse(ts.Response):\n"
+                "    def __init__(self, steps: int) -> None:\n"
+                "        self.steps = steps\n"
+                "class Runs(ts.Port, typing.Protocol):\n"
+                "    def save(self, request: SaveRequest) -> SaveResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/application/driver.py",
+                "shop.application.driver",
+                "from typing import assert_never\n"
+                "import tesser.application as ts\n"
+                "import shop.application.ports.runs as runs\n"
+                "import shop.client.client as client\n"
+                "import shop.domain.run as run\n"
+                "class MapToRunSpec(ts.Mapper, run.RunSpec):\n"
+                "    def __init__(self, request: client.AskRequest) -> None:\n"
+                "        super().__init__(steps=len(request.text), last=run.Advance.DONE)\n"
+                "class MapToSaveRequest(ts.Mapper, runs.SaveRequest):\n"
+                "    def __init__(self, driven: run.Run) -> None:\n"
+                "        super().__init__(steps=0)\n"
+                "class Driver(ts.ApplicationService):\n"
+                "    def __init__(self, runs: runs.Runs) -> None:\n"
+                "        self._runs = runs\n"
+                "    def annotated(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        driven = run.Run(MapToRunSpec(request))\n"
+                "        outcome: run.Advance = driven.advance()\n"
+                "        match outcome:\n"
+                "            case run.Advance.CONTINUE:\n"
+                "                self._runs.save(MapToSaveRequest(driven))\n"
+                "            case run.Advance.DONE:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                assert_never(never)\n"
+                "        return client.AskResponse(text='')\n"
+                "    def bare_wildcard(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        driven = run.Run(MapToRunSpec(request))\n"
+                "        match driven.advance():\n"
+                "            case run.Advance.DONE:\n"
+                "                pass\n"
+                "            case _:\n"
+                "                pass\n"
+                "        return client.AskResponse(text='')\n"
+                "    def two_statements(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        driven = run.Run(MapToRunSpec(request))\n"
+                "        match driven.advance():\n"
+                "            case run.Advance.DONE:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                driven.advance()\n"
+                "                assert_never(never)\n"
+                "        return client.AskResponse(text='')\n"
+                "    def unbound(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        driven = run.Run(MapToRunSpec(request))\n"
+                "        outcome = driven.advance()\n"
+                "        outcome = request.text\n"
+                "        match outcome:\n"
+                "            case run.Advance.DONE:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                assert_never(never)\n"
+                "        return client.AskResponse(text='')\n"
+                "    def reads_value(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        driven = run.Run(MapToRunSpec(request))\n"
+                "        outcome = driven.advance()\n"
+                "        code = outcome.value\n"
+                "        return client.AskResponse(text=str(code))\n",
+                False,
+            ),
+        ))).violations()
+               )
+    tb084 = tuple(f for f in findings if "TB084" in f)
+    assert not any("Advance" in f and "TB084" in f and "run.py" in f for f in findings)
+    assert any("run.py:7: TB084 shop.domain.run.Keyed is decorated or keyworded" in f for f in findings)
+    assert any("run.py:10: TB084 shop.domain.run.Annotated gives a member a value" in f for f in findings)
+    assert any(
+        "TB080" in f and "RunSpec.__init__ parameter 'last' is not allowed" in f for f in findings
+    )
+    assert not any("Driver.annotated" in f for f in findings)
+    assert not any("driver.py:1" in f and "TB084" in f for f in findings)
+    assert any("driver.py:8: TB084 shop.application.driver names Advance.DONE outside a match" in f for f in findings)
+    assert any("driver.py:28: TB084" in f and "without closing on assert_never" in f for f in findings)
+    assert any("driver.py:36: TB084" in f and "without closing on assert_never" in f for f in findings)
+    assert any(
+        "Driver.unbound match subject is not a single call; "
+        "a service method satisfies a condition with one domain call" in f
+        for f in findings
+    )
+    assert not any("Driver.unbound" in f and "TB084" in f for f in findings)
+    assert not any("reads_value" in f and "TB084" in f for f in findings)
+    assert any("run.py:12: TB084 shop.domain.run.__init__ takes an outcome" in f for f in findings)
+    assert len(tb084) == 6
+
+
+def test_an_outcome_is_neither_kept_nor_reached_into_nor_widened() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/run.py",
+                "shop.domain.run",
+                "import enum\n"
+                "import tesser.domain as ts\n"
+                "class Advance(ts.Outcome):\n"
+                "    CONTINUE = enum.auto()\n"
+                "    DONE = enum.auto()\n"
+                "class Base(ts.Outcome):\n"
+                "    pass\n"
+                "class Derived(Base):\n"
+                "    A = enum.auto()\n"
+                "class RunSpec(ts.Spec):\n"
+                "    def __init__(self, steps: int) -> None:\n"
+                "        self.steps = steps\n"
+                "class Run(ts.AggregateRoot):\n"
+                "    def __init__(self, spec: RunSpec) -> None:\n"
+                "        self._steps = spec.steps\n"
+                "    def advance(self) -> Advance:\n"
+                "        return Advance.DONE\n"
+                "    def remember(self) -> None:\n"
+                "        self._last = self.advance()\n"
+                "    def annotate(self) -> None:\n"
+                "        self._latest: Advance = self.advance()\n"
+                "    def reach(self) -> None:\n"
+                "        first = Advance['DONE']\n"
+                "        second = getattr(Advance, 'DONE')\n"
+                "        third = list(Advance)\n"
+                "    def both(self) -> tuple[Advance, ...]:\n"
+                "        return (Advance.DONE, Advance.CONTINUE) if self._steps else (Advance.DONE,)\n"
+                "    def react(self, outcome: Advance) -> None:\n"
+                "        return None\n"
+                "    def peek(self) -> None:\n"
+                "        outcome = self.advance()\n"
+                "        number = outcome._value_\n"
+                "    def quoted(self, outcome: 'Advance') -> None:\n"
+                "        return None\n"
+                "    def carry(self) -> None:\n"
+                "        outcome = self.advance()\n"
+                "        self._kept = outcome\n"
+                "        self._boxed = [self.advance()]\n"
+                "        self._first, self._second = self.advance(), None\n"
+                "    def degrade(self) -> Clock:\n"
+                "        return Clock(1 if self.advance() is Advance.DONE else 0)\n"
+                "class Clock(ts.ValueObject):\n"
+                "    _tick: int\n"
+                "    def __init__(self, tick: int) -> None:\n"
+                "        object.__setattr__(self, '_tick', tick)\n"
+                "    def advance(self) -> Clock:\n"
+                "        return Clock(self._tick + 1)\n"
+                "class Board(ts.Entity):\n"
+                "    def __init__(self, spec: RunSpec) -> None:\n"
+                "        self._clock = Clock(spec.steps)\n"
+                "        self._clock = self._clock.advance()\n",
+                False,
+            ),
+            (
+                "shop/application/ports/runs.py",
+                "shop.application.ports.runs",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class SaveRequest(ts.Request):\n"
+                "    def __init__(self, steps: int) -> None:\n"
+                "        self.steps = steps\n"
+                "class SaveResponse(ts.Response):\n"
+                "    def __init__(self, steps: int) -> None:\n"
+                "        self.steps = steps\n"
+                "class Runs(ts.Port, typing.Protocol):\n"
+                "    def save(self, request: SaveRequest) -> SaveResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/application/driver.py",
+                "shop.application.driver",
+                "import typing\n"
+                "from typing import assert_never\n"
+                "import tesser.application as ts\n"
+                "import shop.application.ports.runs as runs\n"
+                "import shop.client.client as client\n"
+                "import shop.domain.run as run\n"
+                "class MapToRunSpec(ts.Mapper, run.RunSpec):\n"
+                "    def __init__(self, request: client.AskRequest) -> None:\n"
+                "        super().__init__(steps=len(request.text))\n"
+                "class Driver(ts.ApplicationService):\n"
+                "    def __init__(self, runs: runs.Runs) -> None:\n"
+                "        self._runs = runs\n"
+                "    def guarded(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        driven = run.Run(MapToRunSpec(request))\n"
+                "        match driven.advance():\n"
+                "            case run.Advance.DONE:\n"
+                "                pass\n"
+                "            case _ as never if False:\n"
+                "                typing.assert_never(never)\n"
+                "        return client.AskResponse(text='')\n"
+                "    def shadowed(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        driven = run.Run(MapToRunSpec(request))\n"
+                "        assert_never = print\n"
+                "        match driven.advance():\n"
+                "            case run.Advance.DONE:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                assert_never(never)\n"
+                "        return client.AskResponse(text='')\n"
+                "    def returning(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        driven = run.Run(MapToRunSpec(request))\n"
+                "        match driven.advance():\n"
+                "            case run.Advance.DONE:\n"
+                "                return client.AskResponse(text='d')\n"
+                "            case run.Advance.CONTINUE:\n"
+                "                return client.AskResponse(text='c')\n"
+                "            case _ as never:\n"
+                "                return typing.assert_never(never)\n"
+                "    def laundered(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        driven = run.Run(MapToRunSpec(request))\n"
+                "        for outcome in (driven.advance(),):\n"
+                "            match outcome:\n"
+                "                case run.Advance.DONE:\n"
+                "                    pass\n"
+                "                case _ as never:\n"
+                "                    typing.assert_never(never)\n"
+                "        outcome = driven.advance()\n"
+                "        return client.AskResponse(text='')\n"
+                "    def swallowed(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        driven = run.Run(MapToRunSpec(request))\n"
+                "        match driven.advance():\n"
+                "            case run.Advance.CONTINUE | run.Advance.DONE:\n"
+                "                pass\n"
+                "            case object():\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return client.AskResponse(text='')\n",
+                False,
+            ),
+        ))).violations()
+               )
+    tb084 = tuple(f for f in findings if "TB084" in f)
+    assert any(
+        "run.py:8: TB084 shop.domain.run.Derived subclasses another outcome; "
+        "an outcome subclasses ts.Outcome directly, because a hierarchy reopens the closed set" in f
+        for f in findings
+    )
+    assert any(
+        "run.py:19: TB084 shop.domain.run keeps an outcome on self._last; "
+        "an outcome is returned and matched, never kept, because what must "
+        "be kept is state, on a spec with an exit" in f
+        for f in findings
+    )
+    assert any("run.py:21: TB084 shop.domain.run keeps an outcome on self._latest" in f for f in findings)
+    for line in (23, 24, 25):
+        assert any(
+            f"run.py:{line}: TB084 shop.domain.run reaches into Advance; an outcome class is named only "
+            "in an annotation, a return, or a case pattern, because indexing, getattr, "
+            "and iteration read members the type checker cannot exhaust" in f
+            for f in findings
+        )
+    assert not any("run.py:17" in f and "TB084" in f for f in findings)
+    assert not any("run.py:27" in f and "TB084" in f for f in findings)
+    assert any(
+        "run.py:28: TB084 shop.domain.run.react takes an outcome; an outcome is returned "
+        "and matched, never passed on, because it lives between the return and the match" in f
+        for f in findings
+    )
+    assert any(
+        "run.py:32: TB084 shop.domain.run reads _value_; an outcome is matched, never read, "
+        "because its value and name are the exhaustiveness the type checker cannot see" in f
+        for f in findings
+    )
+    assert not any("Base" in f and "TB084" in f for f in findings)
+    assert not any("Board" in f and "TB084" in f for f in findings)
+    assert not any("_clock" in f for f in findings)
+    assert any("run.py:33: TB084 shop.domain.run.quoted takes an outcome" in f for f in findings)
+    assert any("run.py:37: TB084 shop.domain.run keeps an outcome on self._kept" in f for f in findings)
+    assert any("run.py:38: TB084 shop.domain.run keeps an outcome on self._boxed" in f for f in findings)
+    assert any("run.py:39: TB084 shop.domain.run keeps an outcome on self._first" in f for f in findings)
+    assert not any("self._second" in f for f in findings)
+    assert any("run.py:41: TB084 shop.domain.run names Advance.DONE outside a match" in f for f in findings)
+    assert any("driver.py:15: TB084" in f and "without closing on assert_never" in f for f in findings)
+    assert any("driver.py:24: TB084" in f and "without closing on assert_never" in f for f in findings)
+    assert not any("driver.py:33" in f and "TB084" in f for f in findings)
+    assert not any("Driver.returning" in f and "TB082" in f for f in findings)
+    assert any("Driver.laundered match subject is not a single call" in f for f in findings)
+    assert any(
+        "driver.py:54: TB084 shop.application.driver mixes a pattern into an outcome match; "
+        "every arm before the closer names members, because a class, capture, or guarded arm "
+        "swallows a member added later" in f
+        for f in findings
+    )
+    assert not any("driver.py:5" in f and "TB084" in f and "driver.py:54" not in f for f in findings)
+    assert len(tb084) == 16

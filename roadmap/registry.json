@@ -382,12 +382,14 @@
       "py_example": [
         "examples/python-app",
         "examples/serdepy",
-        "examples/errorspy"
+        "examples/errorspy",
+        "examples/minimal"
       ],
       "go_example": [],
       "go_analyzers": [],
       "py_checks": [
-        "TB019"
+        "TB019",
+        "TB084"
       ],
       "rationale": []
     },

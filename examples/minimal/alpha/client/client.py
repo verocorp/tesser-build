@@ -7,8 +7,9 @@ import tesser.context as ts
 
 class AddRequest(ts.Request):
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, part: str) -> None:
         self.name = name
+        self.part = part
 
 
 class AddResponse(ts.Response):

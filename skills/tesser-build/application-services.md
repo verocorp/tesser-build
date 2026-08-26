@@ -34,9 +34,15 @@ myself?* Yes → application service.
 ## Rules
 
 1. **No business logic in the service.** No domain calculation, no invariant
-   decision, no branching on domain state. If it's a rule, it belongs on a
-   domain object (a type, an aggregate transition, or a domain service). The
-   leakage checks below are how you catch yourself breaking this.
+   decision, no computing a decision from domain state. If it's a rule, it
+   belongs on a domain object (a type, an aggregate transition, or a domain
+   service). The service may *ask* — a `match` on the `ts.Outcome` a
+   transition returned (`domain-return.md` rule 6) — and that is its only
+   branch: no `if`, no conditional `while` (`while True:` ended by a match
+   arm is the loop), because a truth test on a domain object is a bool the
+   domain never handed out, and it never spells an operator or a domain
+   constant of its own. The leakage
+   checks below are how you catch yourself breaking this.
 2. **The four-step shape.** Every method reads as a short sequence of named
    steps, each one call:
    1. **Convert** — request DTO → domain input (a spec or value objects). Pure
@@ -136,9 +142,12 @@ lives in one place it never has to spell out (`python.md`, TB080).
 `ts.ApplicationService` subclass is the structural signal `tessercheck` keys on:
 `TB081` requires every constructor dependency to be a `ts.Port` and every public
 method to take exactly one `ts.Request` and return one `ts.Response`; `TB082`
-rejects a delegation chain, a nested branch, a condition that is not one domain
-call, a value computed in an argument position, and a raw request field crossing
-into a port. What no check judges is whether the body *coordinates* or *decides*
+rejects a delegation chain, any `if` or `while` (a service branches only by
+`match`, on one domain call or a local bound to one — the outcome a transition
+returned), a nested `match`, a value computed in an argument position, and a
+raw request field crossing into a port; `TB084` requires a `match` on an
+outcome to close on `assert_never`. A conditional *expression* (`x if c else
+y`) is not yet in TB082's reach — a named follow-on. What no check judges is whether the body *coordinates* or *decides*
 — that stays review, not the compiler (and Go has no mirror of these checks
 today). The leakage checks
 below are a *future*-analyzer seed, not a live check — and even then only two of
@@ -180,8 +189,16 @@ on the owning type — see "Recognizing a missing domain type"):
    slicing an ID). The identity type should own its formatting.
 3. **Arithmetic on domain quantities** outside a conversion function
    (`total += line.Amount`). Money/measure math lives on the value object.
-4. **A conditional on domain state** (`if order.status == ...`). The decision
-   belongs behind a guarded method on the aggregate.
+4. **A conditional that computes domain state** (`if order.status == ...`,
+   `if a.total() > b.limit()`, `while run.status() != Status.DONE`). The
+   service has written the rule down — `==`, `PAID`, `>` — and it can now
+   drift from the aggregate's own. The decision belongs behind a guarded
+   method on the aggregate: the service calls `order.ship()` and the method
+   refuses if the state does not allow it. Where the service must act on what
+   the transition did, the transition returns a `ts.Outcome` and the service
+   matches it, each arm one port call and/or one transition, closed by
+   `assert_never` (`domain-return.md` rule 6). Asking is coordination;
+   computing the answer is the leak.
 
 Signals 1–2 are grep-visible; 3–4 need to know what's a domain quantity/state,
 so they are review-only. None is a bare grep — layer and intent matter (see

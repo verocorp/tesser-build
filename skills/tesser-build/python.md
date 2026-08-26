@@ -429,14 +429,101 @@ class Campaign(ts.AggregateRoot):
   aggregates:** root-guarded transitions that re-establish the invariant
   before returning.
 
+## Outcomes {#outcomes}
+
+A transition the caller must act on returns a `ts.Outcome` — a closed set of
+names that is a value object (`domain-return.md` rule 6). It is the answer to
+a call, never a field: nothing stores it, and it has no canonical exit because
+it never leaves the process.
+
+```python
+# alpha/domain/widget.py (verified impl: examples/minimal/)
+class Taken(ts.Outcome):
+    TAKEN = enum.auto()
+    HELD = enum.auto()
+
+
+class Widget(ts.AggregateRoot):
+
+    def take(self, spec: PartSpec) -> Taken:
+        part = Part(spec)
+        if part == self._part:
+            return Taken.HELD
+        self._part = part
+        return Taken.TAKEN
+```
+
+```python
+# alpha/application/alpha_service.py (verified impl: examples/minimal/)
+    def add(self, request: client.AddRequest) -> client.AddResponse:
+        added = widget.Widget(MapToWidgetSpec(request))
+        taken = added.take(MapToPartSpec(request))
+        match taken:
+            case widget.Taken.TAKEN:
+                self._widgets.save(MapToSaveRequest(added))
+            case widget.Taken.HELD:
+                self._checks.check(MapToCheckRequest(added))
+            case _ as never:
+                typing.assert_never(never)
+        return MapToAddResponse(added)
+```
+
+- **`ts.Outcome` directly and alone, undecorated, members only, every member
+  `enum.auto()`** (TB084) — no mixin, no intermediate base. The runtime base
+  raises at class definition for a method (any name, dunders included), a
+  valued member, a mixed-in or intermediate base, or a custom metaclass, and
+  `.value`/`.name` raise on every member; the analyzer reports the same shapes
+  and flags `_value_`/`_name_`. An outcome is matched, never read, never
+  serialized.
+- **Returned by a transition, read by a `match`.** A member is named in
+  exactly two places: the `return` that produces it and the `case` that
+  consumes it. `is Taken.HELD` / `== Taken.HELD` anywhere else is TB084, and
+  so is naming the class outside an annotation (`Taken["HELD"]`,
+  `getattr(Taken, ...)`, `list(Taken)`); a `status()` accessor returning one
+  is the status-in-a-coat mistake (`domain-return.md`).
+- **Every `match` on an outcome closes on `case _ as never:
+  typing.assert_never(never)`** (TB084) — unguarded, one statement, the name
+  still `typing`'s — because the `-> None` handler that just does side effects
+  per arm otherwise fails open when a member is added (verified: mypy reports
+  nothing without the closer). Import `typing` as a module, per the import
+  norm.
+- **Never held, never carried, never passed on.** A field annotated with an
+  outcome, `self._last = self.advance()` off the object's own
+  outcome-returning method, or a parameter typed as an outcome, is TB084; a
+  spec, DTO, or port signature carrying one is already TB080/TB081. What
+  must be kept is state, on the spec, with an exit.
+- **Each arm is coordination**: one port call and/or one transition, `break`
+  or `return`. A rule inside an arm is leakage check 4.
+- **The loop** is the two-member case, `while True:` around the `match`, the
+  subject a local rebound by the arm that continues:
+
+```python
+# the analyzer's own fixture (tessercheck-py, test_an_outcome_member_is_read_only_by_an_exhaustive_match)
+        outcome = driven.advance()
+        while True:
+            match outcome:
+                case run.Advance.CONTINUE:
+                    self._runs.save(MapToSaveRequest(driven))
+                    outcome = driven.advance()
+                case run.Advance.DONE:
+                    break
+                case _ as never:
+                    typing.assert_never(never)
+```
+
+  TB082 accepts a `match` subject that is one call or a local bound to one.
+  A third member (`BLOCKED`) is a type error at every reader, not a redesign.
+
 ## Application services
 
 Coordination only — no business logic. Four named steps
 (`application-services.md`): convert → delegate → persist → respond. Every
 dependency is a `ts.Port` `Protocol` (the analyzer requires it), every public
 method takes exactly one `ts.Request` and returns a `ts.Response`, and the
-method inlines its logic — no delegation chains,
-one level of branching, a condition satisfied by one domain call. Every
+method inlines its logic — no delegation chains, no `if`, no conditional
+`while`: the one branch a service has is a `match` on the `ts.Outcome` a
+transition returned (**Outcomes**, above), one level deep, and the one loop
+is `while True:` ended by a match arm's `break`. Every
 translation the method needs is a **mapper** — a class that *is* the spec or
 DTO it maps to (`MapTo…`, **Application ports** below) — so the service names
 the use case and never spells a field out.
@@ -488,9 +575,10 @@ class CampaignService(ts.ApplicationService):
         )
 ```
 
-- **No `for` over domain objects, no arithmetic on domain quantities, no `if`
-  on domain state** in the method — the leakage checks
-  (`application-services.md#domain-logic-leakage-checks`).
+- **No `for` over domain objects, no arithmetic on domain quantities, no
+  conditional that computes domain state** in the method — the leakage checks
+  (`application-services.md#domain-logic-leakage-checks`). The service
+  branches one way: `match` on an outcome, closed by `assert_never`.
 - **Return a DTO** (a `client.py` view), never the domain object.
 - **Every dependency is a port, injected, never built here** (TB081), and the
   port is declared in the context's `application/ports/` package — never in

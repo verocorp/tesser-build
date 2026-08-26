@@ -29,7 +29,7 @@ Legend: ✅ done · 🟡 partial · ❌ absent · — intentionally n/a.
 | Norm: testing | ❌ | ❌ | 🟡 partial | 🟡 Py only (TB030, TB070, TB071, TB072, TB073, TB074) | ❌ |
 | Norm: comments | ✅ | ✅ | ✅ | ✅ 1 Go + 1 Py | ❌ |
 | Norm: serialization | ✅ | ❌ | ✅ | 🟡 Py only (TB015, TB016, TB017, TB018) | ❌ |
-| Norm: domain return | ✅ | ❌ | ✅ | 🟡 Py only (TB019) | ❌ |
+| Norm: domain return | ✅ | ❌ | ✅ | 🟡 Py only (TB019, TB084) | ❌ |
 | Norm: logging | ❌ | ❌ | 🟡 stub | ❌ | ❌ |
 | Norm: imports | ❌ | ❌ | ❌ | 🟡 Py only (TB050, TB053, TB060, TB061, TB062, TB063, TB064, TB065, TB066, TB067, TB068) | ❌ |
 

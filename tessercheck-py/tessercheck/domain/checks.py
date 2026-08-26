@@ -20,6 +20,7 @@ TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.domain", "AggregateRoot"): "aggregate",
     ("tesser.domain", "Entity"): "entity",
     ("tesser.domain", "ValueObject"): "valueobject",
+    ("tesser.domain", "Outcome"): "outcome",
     ("tesser.domain", "Spec"): "spec",
     ("tesser.adapters", "Repository"): "repository",
     ("tesser.adapters", "Gateway"): "gateway",
@@ -84,6 +85,7 @@ KIND_ROLE: typing.Final[dict[str, str]] = {
     "aggregate": "domain",
     "entity": "domain",
     "valueobject": "domain",
+    "outcome": "domain",
     "spec": "domain",
     "service": "application",
     "mapper": "application",
@@ -110,6 +112,7 @@ KIND_NAME: typing.Final[dict[str, str]] = {
     "aggregate": "an aggregate",
     "entity": "an entity",
     "valueobject": "a value object",
+    "outcome": "an outcome",
     "spec": "a spec",
     "service": "a service",
     "mapper": "a mapper",
@@ -405,6 +408,18 @@ CORE_STDLIB: typing.Final[dict[str, frozenset[str]]] = {
 PORTS_STDLIB: typing.Final[frozenset[str]] = frozenset({"__future__", "typing", "enum"})
 
 DOMAIN_BLOCKS: typing.Final[frozenset[str]] = frozenset({"aggregate", "entity", "valueobject"})
+
+OUTCOME_BLOCK: typing.Final[str] = "outcome"
+
+OUTCOME_BASE: typing.Final[tuple[str, str]] = ("tesser.domain", "Outcome")
+
+DOMAIN_OBJECT_BLOCKS: typing.Final[frozenset[str]] = DOMAIN_BLOCKS | frozenset({OUTCOME_BLOCK})
+
+ASSERT_NEVER: typing.Final[str] = "assert_never"
+
+OUTCOME_SUNDERS: typing.Final[frozenset[str]] = frozenset({"_value_", "_name_"})
+
+TYPING_MODULE: typing.Final[str] = "typing"
 
 SPEC_BLOCKS: typing.Final[frozenset[str]] = frozenset({"spec", "component_spec", "app_spec"})
 
@@ -1258,6 +1273,7 @@ class Codebase(ts.AggregateRoot):
             if self._locate(module.name(), module.is_package(), contexts, self._export) not in TEST_TIER:  # tesser:debt TB051
                 found.extend(self._spec_use_violations(module, blocks))  # tesser:debt TB051
                 found.extend(self._spec_shared_violations(module))  # tesser:debt TB051
+                found.extend(self._outcome_use_violations(module, blocks))  # tesser:debt TB051
             if self._export == TESSER and self._locate(  # tesser:debt TB051
                 module.name(), module.is_package(), contexts, self._export
             ) == "test":
@@ -1277,6 +1293,8 @@ class Codebase(ts.AggregateRoot):
                 elif block == "valueobject":
                     found.extend(self._valueobject_violations(module, cls, blocks))  # tesser:debt TB051
                     found.extend(self._vo_field_violations(module, cls))  # tesser:debt TB051
+                elif block == OUTCOME_BLOCK:
+                    found.extend(self._outcome_violations(module, cls))  # tesser:debt TB051
                 if block in DOMAIN_BLOCKS:
                     fields = [
                         (stmt.target.id, stmt.annotation, stmt.lineno)
@@ -1304,6 +1322,7 @@ class Codebase(ts.AggregateRoot):
                         )
                         found.extend(self._structured_exit_violations(module, cls))  # tesser:debt TB051
                     found.extend(self._domain_return_violations(module, cls, blocks))  # tesser:debt TB051
+                    found.extend(self._outcome_field_violations(module, cls, fields, blocks))  # tesser:debt TB051
                 elif block == "spec":
                     found.extend(self._spec_violations(module, cls, blocks))  # tesser:debt TB051
                 elif block in ("request", "response", "port_request", "port_response"):
@@ -3776,7 +3795,7 @@ class Codebase(ts.AggregateRoot):
                 if key is not None and blocks.get(key) == "spec":
                     spec_return = True
                     continue
-                if key is not None and blocks.get(key) in DOMAIN_BLOCKS:
+                if key is not None and blocks.get(key) in DOMAIN_OBJECT_BLOCKS:
                     continue
                 offenders.append(name)
             if spec_return:
@@ -4134,19 +4153,8 @@ class Codebase(ts.AggregateRoot):
                         and isinstance(member_value.operand.value, (int, float))
                     )
                     or (
-                        isinstance(member_value, ast.Call)
-                        and isinstance(member_value.func, ast.Attribute)
-                        and isinstance(member_value.func.value, ast.Name)
-                        and module._package_aliases.get(member_value.func.value.id)
-                        == ENUM_MODULE
-                        and member_value.func.attr == "auto"
-                    )
-                    or (
-                        isinstance(member_value, ast.Call)
-                        and isinstance(member_value.func, ast.Name)
-                        and (origin := module._imported.get(member_value.func.id)) is not None
-                        and origin[0] == ENUM_MODULE
-                        and origin[1] == "auto"
+                        member_value is not None
+                        and Codebase._is_enum_auto(module, member_value)
                     )
                 )
             )
@@ -5477,7 +5485,7 @@ class Codebase(ts.AggregateRoot):
                 for sub in ast.walk(annotation) if annotation is not None else ():
                     if isinstance(sub, (ast.Name, ast.Attribute)):
                         key = module._resolve(sub)
-                        if key is not None and blocks.get(key) in DOMAIN_BLOCKS:
+                        if key is not None and blocks.get(key) in DOMAIN_OBJECT_BLOCKS:
                             touched = blocks[key]
                             break
                 if touched is not None:
@@ -6352,6 +6360,7 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         found.extend(self._provenance_violations(module, where, fn))  # tesser:debt TB051
+        bound_to_calls = self._names_bound_to_calls(fn)  # tesser:debt TB051
         for stmt in fn.body:
             if not isinstance(stmt, ast.Assign):
                 continue
@@ -6387,39 +6396,27 @@ class Codebase(ts.AggregateRoot):
                     ))
                 )
         for node in ast.walk(fn):
-            if isinstance(node, ast.If):
-                if not isinstance(node.test, ast.Call):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            node.lineno,
-                            "TB082",
-                            f"{where} if condition is not a single call; "
-                            "a service method satisfies a condition with one domain call",
-                        ))
-                    )
-                governed = list(node.body)
-                if not (
-                    len(node.orelse) == 1
-                    and isinstance(node.orelse[0], ast.If)
-                    and node.orelse[0].col_offset == node.col_offset
-                ):
-                    governed.extend(node.orelse)
-                if (any(
-                            isinstance(sub, (ast.If, ast.Match))
-                            for stmt in governed
-                            for sub in ast.walk(stmt)
-                        )):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            node.lineno,
-                            "TB082",
-                            f"{where} nests a conditional; a service method branches one level deep",
-                        ))
-                    )
+            if isinstance(node, (ast.If, ast.While)) and not (
+                isinstance(node, ast.While)
+                and isinstance(node.test, ast.Constant)
+                and node.test.value is True
+            ):
+                keyword = "if" if isinstance(node, ast.If) else "while"
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        node.lineno,
+                        "TB082",
+                        f"{where} branches with {keyword}; a service method branches only by "
+                        "matching an outcome — `while True:` ended by a match arm is the loop — "
+                        "because a truth test on a domain object is a bool the domain never handed out",
+                    ))
+                )
             elif isinstance(node, ast.Match):
-                if not isinstance(node.subject, ast.Call):
+                if not isinstance(node.subject, ast.Call) and not (
+                    isinstance(node.subject, ast.Name)
+                    and node.subject.id in bound_to_calls
+                ):
                     found.append(
                         Violation(ViolationSpec(
                             module.path(),
@@ -6430,7 +6427,7 @@ class Codebase(ts.AggregateRoot):
                         ))
                     )
                 if (any(
-                            isinstance(sub, (ast.If, ast.Match))
+                            isinstance(sub, ast.Match)
                             for stmt in ([stmt for case in node.cases for stmt in case.body])
                             for sub in ast.walk(stmt)
                         )):
@@ -6443,6 +6440,437 @@ class Codebase(ts.AggregateRoot):
                         ))
                     )
         return tuple(found)
+
+    @staticmethod
+    def _names_bound_to_calls(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> frozenset[str]:
+        bound: set[str] = set()
+        otherwise: set[str] = set()
+        for node in ast.walk(fn):
+            target: ast.expr | None = None
+            value: ast.expr | None = None
+            if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                target, value = node.targets[0], node.value
+            elif isinstance(node, (ast.AnnAssign, ast.AugAssign, ast.NamedExpr)):
+                target, value = node.target, node.value
+            elif isinstance(node, (ast.For, ast.AsyncFor, ast.comprehension)):
+                otherwise.update(sub.id for sub in ast.walk(node.target) if isinstance(sub, ast.Name))
+                continue
+            elif isinstance(node, (ast.With, ast.AsyncWith)):
+                for item in node.items:
+                    if item.optional_vars is not None:
+                        otherwise.update(
+                            sub.id for sub in ast.walk(item.optional_vars) if isinstance(sub, ast.Name)
+                        )
+                continue
+            if not isinstance(target, ast.Name):
+                continue
+            if isinstance(value, ast.Call):
+                bound.add(target.id)
+            else:
+                otherwise.add(target.id)
+        return frozenset(bound - otherwise)
+
+    def _outcome_violations(self, module: Module, cls: ast.ClassDef) -> tuple[Violation, ...]:
+        where = f"{module.name()}.{cls.name}"
+        found: list[Violation] = []
+        if len(cls.bases) > 1:
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    cls.lineno,
+                    "TB084",
+                    f"{where} mixes another base into its outcome; an outcome subclasses "
+                    "ts.Outcome alone, because a mixed-in base gives its members a value "
+                    "to compare against outside a match",
+                ))
+            )
+        elif cls.bases and module._resolve(cls.bases[0]) != OUTCOME_BASE:
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    cls.lineno,
+                    "TB084",
+                    f"{where} subclasses another outcome; an outcome subclasses ts.Outcome "
+                    "directly, because a hierarchy reopens the closed set",
+                ))
+            )
+        if cls.decorator_list or cls.keywords:
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    cls.lineno,
+                    "TB084",
+                    f"{where} is decorated or keyworded; an outcome is a bare class statement, "
+                    "because a decorator or a metaclass rewrites the closed set into a home for behavior",
+                ))
+            )
+        for item in self._enum_extras(module, cls):  # tesser:debt TB051
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    item.lineno,
+                    "TB084",
+                    f"{where} carries more than its members; an outcome is a closed set of "
+                    "names and nothing else, because behavior belongs on the object that returns it",
+                ))
+            )
+        for item in cls.body:
+            value: ast.expr | None = None
+            if isinstance(item, ast.Assign) and len(item.targets) == 1:
+                value = item.value
+            elif isinstance(item, ast.AnnAssign):
+                value = item.value
+            if value is None or self._is_enum_auto(module, value):  # tesser:debt TB051
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    item.lineno,
+                    "TB084",
+                    f"{where} gives a member a value; an outcome member is enum.auto(), "
+                    "because an outcome is matched, never serialized",
+                ))
+            )
+        return tuple(found)
+
+    @staticmethod
+    def _is_enum_auto(module: Module, value: ast.expr) -> bool:
+        if not isinstance(value, ast.Call) or value.args or value.keywords:
+            return False
+        if isinstance(value.func, ast.Attribute) and isinstance(value.func.value, ast.Name):
+            return (
+                module._package_aliases.get(value.func.value.id) == ENUM_MODULE
+                and value.func.attr == "auto"
+            )
+        if isinstance(value.func, ast.Name):
+            origin = module._imported.get(value.func.id)
+            return origin is not None and origin == (ENUM_MODULE, "auto")
+        return False
+
+    def _outcome_field_violations(
+        self,
+        module: Module,
+        cls: ast.ClassDef,
+        fields: list[tuple[str, ast.expr, int]],
+        blocks: dict[tuple[str, str], str],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for field, ann, lineno in fields:
+            for sub in ast.walk(ann):
+                if not isinstance(sub, (ast.Name, ast.Attribute)):
+                    continue
+                key = module._resolve(sub)
+                if key is not None and blocks.get(key) == OUTCOME_BLOCK:
+                    found.append(
+                        Violation(ViolationSpec(
+                            module.path(),
+                            lineno,
+                            "TB084",
+                            f"{module.name()}.{cls.name} field {field} holds an outcome; "
+                            "an outcome is returned and matched, never held — "
+                            "what must be kept is state, on a spec with an exit",
+                        ))
+                    )
+                    break
+        return tuple(found)
+
+    def _outcome_use_violations(
+        self, module: Module, blocks: dict[tuple[str, str], str]
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        matched: set[int] = set()
+        attributes: list[ast.Attribute] = []
+        names: list[ast.expr] = []
+        annotated: set[int] = set()
+        for node in (sub for stmt in module.body() for sub in ast.walk(stmt)):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                extras = [arg for arg in (node.args.vararg, node.args.kwarg) if arg is not None]
+                for arg in node.args.posonlyargs + node.args.args + node.args.kwonlyargs + extras:
+                    if arg.annotation is None:
+                        continue
+                    annotated.update(id(sub) for sub in ast.walk(arg.annotation))
+                    if self._names_outcome(module, arg.annotation, blocks):  # tesser:debt TB051
+                        taker = node.name
+                        found.append(
+                            Violation(ViolationSpec(
+                                module.path(),
+                                node.lineno,
+                                "TB084",
+                                f"{module.name()}.{taker} takes an outcome; an outcome is returned "
+                                "and matched, never passed on, because it lives between the return "
+                                "and the match",
+                            ))
+                        )
+                if node.returns is not None:
+                    annotated.update(id(sub) for sub in ast.walk(node.returns))
+            elif isinstance(node, ast.AnnAssign):
+                annotated.update(id(sub) for sub in ast.walk(node.annotation))
+                if isinstance(node.target, ast.Attribute) and self._names_outcome(module, node.annotation, blocks):  # tesser:debt TB051
+                    kept = ast.unparse(node.target)
+                    found.append(
+                        Violation(ViolationSpec(
+                            module.path(),
+                            node.lineno,
+                            "TB084",
+                            f"{module.name()} keeps an outcome on {kept}; "
+                            "an outcome is returned and matched, never kept, because what must "
+                            "be kept is state, on a spec with an exit",
+                        ))
+                    )
+            elif isinstance(node, ast.ClassDef):
+                annotated.update(id(sub) for base in node.bases for sub in ast.walk(base))
+                own = frozenset(
+                    item.name
+                    for item in node.body
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and item.returns is not None
+                    and self._names_outcome(module, item.returns, blocks)  # tesser:debt TB051
+                )
+                carriers: set[str] = set()
+                for assignment in ast.walk(node):
+                    if not isinstance(assignment, (ast.Assign, ast.AnnAssign)):
+                        continue
+                    value = assignment.value
+                    if value is None:
+                        continue
+                    produces = any(
+                        isinstance(sub, ast.Call)
+                        and isinstance(sub.func, ast.Attribute)
+                        and isinstance(sub.func.value, ast.Name)
+                        and sub.func.value.id == "self"
+                        and sub.func.attr in own
+                        for sub in ast.walk(value)
+                    ) or any(
+                        isinstance(sub, ast.Name) and sub.id in carriers for sub in ast.walk(value)
+                    )
+                    if not produces:
+                        continue
+                    targets = assignment.targets if isinstance(assignment, ast.Assign) else [assignment.target]
+                    receiving: list[ast.expr] = []
+                    for target in targets:
+                        if (
+                            isinstance(target, ast.Tuple)
+                            and isinstance(value, ast.Tuple)
+                            and len(target.elts) == len(value.elts)
+                        ):
+                            receiving.extend(
+                                element
+                                for element, given in zip(target.elts, value.elts)
+                                if any(
+                                    isinstance(sub, ast.Call)
+                                    and isinstance(sub.func, ast.Attribute)
+                                    and isinstance(sub.func.value, ast.Name)
+                                    and sub.func.value.id == "self"
+                                    and sub.func.attr in own
+                                    or isinstance(sub, ast.Name) and sub.id in carriers
+                                    for sub in ast.walk(given)
+                                )
+                            )
+                        else:
+                            receiving.append(target)
+                    for target in receiving:
+                        for leaf in ast.walk(target):
+                            if isinstance(leaf, ast.Name):
+                                carriers.add(leaf.id)
+                    for target in receiving:
+                        for leaf in ast.walk(target):
+                            if not isinstance(leaf, ast.Attribute):
+                                continue
+                            kept = ast.unparse(leaf)
+                            found.append(
+                                Violation(ViolationSpec(
+                                    module.path(),
+                                    assignment.lineno,
+                                    "TB084",
+                                    f"{module.name()} keeps an outcome on {kept}; "
+                                    "an outcome is returned and matched, never kept, because what must "
+                                    "be kept is state, on a spec with an exit",
+                                ))
+                            )
+            if isinstance(node, ast.Attribute):
+                attributes.append(node)
+                names.append(node)
+                if node.attr in OUTCOME_SUNDERS:
+                    sunder = node.attr
+                    found.append(
+                        Violation(ViolationSpec(
+                            module.path(),
+                            node.lineno,
+                            "TB084",
+                            f"{module.name()} reads {sunder}; an outcome is matched, never read, "
+                            "because its value and name are the exhaustiveness the type checker "
+                            "cannot see",
+                        ))
+                    )
+            elif isinstance(node, ast.Name):
+                names.append(node)
+            elif isinstance(node, ast.Return) and node.value is not None:
+                matched.update(id(sub) for sub in self._returned(node.value))  # tesser:debt TB051
+            elif isinstance(node, ast.Match):
+                outcome_match = False
+                for case in node.cases:
+                    for sub in ast.walk(case.pattern):
+                        if isinstance(sub, ast.MatchValue) and self._outcome_key(module, sub.value, blocks) is not None:  # tesser:debt TB051
+                            outcome_match = True
+                            matched.add(id(sub.value))
+                if outcome_match:
+                    for case in node.cases[:-1]:
+                        if case.guard is None and self._is_member_pattern(module, case.pattern, blocks):  # tesser:debt TB051
+                            continue
+                        found.append(
+                            Violation(ViolationSpec(
+                                module.path(),
+                                case.pattern.lineno,
+                                "TB084",
+                                f"{module.name()} mixes a pattern into an outcome match; "
+                                "every arm before the closer names members, because a class, "
+                                "capture, or guarded arm swallows a member added later",
+                            ))
+                        )
+                if outcome_match and not self._closes_with_assert_never(module, node):  # tesser:debt TB051
+                    found.append(
+                        Violation(ViolationSpec(
+                            module.path(),
+                            node.lineno,
+                            "TB084",
+                            f"{module.name()} matches an outcome without closing on assert_never; "
+                            "a match on an outcome ends in `case _ as never: assert_never(never)`, "
+                            "because a member added later is otherwise a silent site",
+                        ))
+                    )
+        member_bases: set[int] = set()
+        for node in attributes:
+            key = self._outcome_key(module, node, blocks)  # tesser:debt TB051
+            if key is None:
+                continue
+            member_bases.update(id(sub) for sub in ast.walk(node.value))
+            if id(node) in matched:
+                continue
+            outcome = key[1]
+            member = node.attr
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    node.lineno,
+                    "TB084",
+                    f"{module.name()} names {outcome}.{member} outside a match; "
+                    "an outcome member is read only by a match, because a member compared "
+                    "anywhere else is a branch the type checker cannot exhaust",
+                ))
+            )
+        for node in names:
+            if id(node) in annotated or id(node) in member_bases:
+                continue
+            key = module._resolve(node)
+            if key is None or blocks.get(key) != OUTCOME_BLOCK:
+                continue
+            outcome = key[1]
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    node.lineno,
+                    "TB084",
+                    f"{module.name()} reaches into {outcome}; an outcome class is named only "
+                    "in an annotation, a return, or a case pattern, because indexing, getattr, "
+                    "and iteration read members the type checker cannot exhaust",
+                ))
+            )
+        return tuple(found)
+
+    @staticmethod
+    def _returned(node: ast.expr) -> typing.Iterator[ast.expr]:
+        yield node
+        if isinstance(node, ast.IfExp):
+            yield from Codebase._returned(node.body)
+            yield from Codebase._returned(node.orelse)
+        elif isinstance(node, ast.Tuple):
+            for element in node.elts:
+                yield from Codebase._returned(element)
+        elif isinstance(node, ast.BoolOp):
+            for value in node.values:
+                yield from Codebase._returned(value)
+
+    @staticmethod
+    def _names_outcome(
+        module: Module, node: ast.expr, blocks: dict[tuple[str, str], str]
+    ) -> bool:
+        for sub in ast.walk(node):
+            if isinstance(sub, (ast.Name, ast.Attribute)):
+                key = module._resolve(sub)
+                if key is not None and blocks.get(key) == OUTCOME_BLOCK:
+                    return True
+            elif isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+                try:
+                    quoted = ast.parse(sub.value, mode="eval").body
+                except SyntaxError:
+                    continue
+                if not isinstance(quoted, ast.Constant) and Codebase._names_outcome(module, quoted, blocks):
+                    return True
+        return False
+
+    @staticmethod
+    def _is_member_pattern(
+        module: Module, pattern: ast.pattern, blocks: dict[tuple[str, str], str]
+    ) -> bool:
+        if isinstance(pattern, ast.MatchOr):
+            return all(
+                Codebase._is_member_pattern(module, alternative, blocks)
+                for alternative in pattern.patterns
+            )
+        return isinstance(pattern, ast.MatchValue) and Codebase._outcome_key(module, pattern.value, blocks) is not None
+
+    @staticmethod
+    def _outcome_key(
+        module: Module, node: ast.expr, blocks: dict[tuple[str, str], str]
+    ) -> tuple[str, str] | None:
+        if not isinstance(node, ast.Attribute):
+            return None
+        key = module._resolve(node.value)
+        if key is None or blocks.get(key) != OUTCOME_BLOCK:
+            return None
+        return key
+
+    @staticmethod
+    def _closes_with_assert_never(module: Module, node: ast.Match) -> bool:
+        last = node.cases[-1]
+        pattern = last.pattern
+        if last.guard is not None:
+            return False
+        if not (isinstance(pattern, ast.MatchAs) and pattern.name is not None):
+            return False
+        wildcard = pattern.pattern
+        if wildcard is not None and not (
+            isinstance(wildcard, ast.MatchAs) and wildcard.pattern is None and wildcard.name is None
+        ):
+            return False
+        if len(last.body) != 1 or not isinstance(last.body[0], (ast.Expr, ast.Return)):
+            return False
+        call = last.body[0].value
+        if not (isinstance(call, ast.Call) and len(call.args) == 1 and not call.keywords):
+            return False
+        if not (isinstance(call.args[0], ast.Name) and call.args[0].id == pattern.name):
+            return False
+        callee = call.func
+        rebound = {
+            target.id
+            for assignment in module.assignments()
+            for target in (
+                assignment.targets if isinstance(assignment, ast.Assign) else [assignment.target]
+            )
+            if isinstance(target, ast.Name)
+        }
+        if isinstance(callee, ast.Attribute) and isinstance(callee.value, ast.Name):
+            return (
+                module._package_aliases.get(callee.value.id) == TYPING_MODULE
+                and callee.attr == ASSERT_NEVER
+                and callee.value.id not in rebound
+            )
+        if isinstance(callee, ast.Name):
+            return (
+                module._imported.get(callee.id) == (TYPING_MODULE, ASSERT_NEVER)
+                and callee.id not in rebound
+            )
+        return False
 
     @staticmethod
     def _stray_import_violations(module: Module) -> tuple[Violation, ...]:

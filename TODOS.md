@@ -2,6 +2,31 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Follow-ons from the outcome ruling (2026-08-26, v0.0.84.0)
+
+- [ ] **A conditional expression in a service is a branch TB082 does not
+  see.** `if`/`while` statements are findings (ruled 2026-08-26: a truth test
+  on a domain object is a bool the domain never handed out), but
+  `x if cond else y` and a comprehension's `if` clause pass —
+  `examples/python-app`'s `reports` and `linkpolicy` services carry both,
+  branching on port-DTO strings. Same ruling, one more node kind, plus the
+  two example rewrites (the answer is a port outcome enum matched in a
+  mapper).
+- [ ] **Outcome tracking through locals.** TB084 tracks a kept outcome only
+  from the class's own outcome-returning methods (`self._x = self.m()`, or a
+  local bound from one); `self._x = other.advance()` and handing a local to
+  an `object`-typed parameter are invisible, as are `vars(outcome)` /
+  `getattr(outcome, "_value_")` / `type(outcome)(2)`. Closing them means
+  typing locals in the walk — a design, not a clause. Ruled out of scope
+  2026-08-26 (second adversarial pass); the runtime's raising `.value`/`.name`
+  covers the readable path.
+- [ ] **A loop-shaped verified impl.** `examples/minimal` carries the
+  two-arm `match`; the `while True: match outcome:` loop lives only as the
+  analyzer's fixture. A pilot-pulled use case with a real multi-step
+  transition should land in `examples/python-app` and replace the fixture
+  citation in `python.md#outcomes`.
+- [ ] **Go has no `Outcome` mirror** — the same named gap as `TB019`.
+
 ## Rulings surfaced by the minimal tree (2026-08-26, PR #132, `examples/minimal/`)
 
 The minimally conforming tree was hand-built to make the rulebook visible as

@@ -57,6 +57,12 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "target_name": "⟨class⟩",
     "supers": "⟨count⟩",
     "len(inits)": "⟨count⟩",
+    "outcome": "⟨outcome⟩",
+    "kept": "⟨field⟩",
+    "taker": "⟨function⟩",
+    "sunder": "⟨attribute⟩",
+    "keyword": "⟨keyword⟩",
+    "member": "⟨member⟩",
 }
 
 APPLIES_TO: typing.Final[dict[str, str]] = {
@@ -88,6 +94,9 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Codebase._copy_violations": "entity or aggregate accessor",
     "Codebase._held_root_violations": "entity or aggregate field",
     "Codebase._domain_return_violations": "domain object public method",
+    "Codebase._outcome_violations": "outcome class",
+    "Codebase._outcome_field_violations": "domain object field",
+    "Codebase._outcome_use_violations": "every non-test module",
     "a service method": "public service method",
     "a client method": "client protocol method",
     "a domain constructor": "aggregate or entity `__init__`",
