@@ -8,9 +8,8 @@ import beta.component.config as beta_config
 
 
 def test_two_real_components_wire_end_to_end() -> None:
-    beta = beta_component.Beta(beta_config.Config(beta_config.Spec(keys=("w",))))
+    beta = beta_component.Beta(beta_config.Config(beta_config.Spec(key="a")))
     alpha = alpha_component.Alpha(alpha_config.Config(alpha_config.Spec(storage="memory")), beta.client)
-    added = alpha.client.add(alpha_client.AddRequest(id="w", name="a", count=1))
-    assert tuple(view.id for view in added.wholes) == ("w",)
+    assert alpha.client.add(alpha_client.AddRequest(name="a")).name == "a"
     alpha.close()
     beta.close()

@@ -2,27 +2,21 @@ from __future__ import annotations
 
 import tesser.adapters as ts
 
-import alpha.application.ports.whole_repository as whole_repository
+import alpha.application.ports.thing_repository as thing_repository
 import tesser.errors as errors
 
 
-class MemoryWholeRepository(ts.Repository):
+class MemoryThingRepository(ts.Repository):
 
     def __init__(self) -> None:
-        self._rows: dict[str, whole_repository.WholeRecord] = {}
+        self._names: set[str] = set()
         self._open = True
 
-    def save(self, request: whole_repository.SaveWholeRequest) -> whole_repository.SaveWholeResponse:
+    def save(self, request: thing_repository.SaveRequest) -> thing_repository.SaveResponse:
         if not self._open:
             raise errors.InfraError("repository is closed")
-        self._rows[request.id] = whole_repository.WholeRecord(request.id, request.name, request.count)
-        return whole_repository.SaveWholeResponse()
-
-    def find(self, request: whole_repository.FindWholeRequest) -> whole_repository.FindWholeResponse:
-        row = self._rows.get(request.id)
-        if row is None:
-            return whole_repository.FindWholeResponse(whole_repository.Lookup.ABSENT, ())
-        return whole_repository.FindWholeResponse(whole_repository.Lookup.PRESENT, (row,))
+        self._names.add(request.name)
+        return thing_repository.SaveResponse()
 
     def close(self) -> None:
         self._open = False

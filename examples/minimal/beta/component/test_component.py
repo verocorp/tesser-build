@@ -5,7 +5,7 @@ import beta.component.component as component
 import beta.component.config as config
 
 
-def test_the_wired_client_checks_a_configured_key() -> None:
-    wired = component.Beta(config.Config(config.Spec(keys=("k",))))
+def test_the_wired_client_checks_the_configured_key() -> None:
+    wired = component.Beta(config.Config(config.Spec(key="k")))
     assert wired.client.check(client.CheckRequest(key="k")).held == "yes"
     wired.close()

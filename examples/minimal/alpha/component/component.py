@@ -16,8 +16,8 @@ class Alpha(ts.Component):
     def __init__(self, cfg: config.Config, beta: beta_client.Client) -> None:
         if cfg.storage != "memory":
             raise errors.invalid("unknown_backend", f"alpha storage {cfg.storage!r} not supported")
-        self._wholes = memory.MemoryWholeRepository()
-        self.client: client.Client = service.AlphaService(self._wholes, beta_check.BetaCheckGateway(beta))
+        self._things = memory.MemoryThingRepository()
+        self.client: client.Client = service.AlphaService(self._things, beta_check.BetaCheckGateway(beta))
 
     def close(self) -> None:
-        self._wholes.close()
+        self._things.close()

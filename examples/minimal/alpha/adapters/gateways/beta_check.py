@@ -14,7 +14,7 @@ class BetaCheckGateway(ts.Gateway):
 
     def check(self, request: beta_check.CheckRequest) -> beta_check.CheckResponse:
         try:
-            answer = self._beta.check(beta_client.CheckRequest(key=request.id))
+            answer = self._beta.check(beta_client.CheckRequest(key=request.name))
         except errors.DomainError as e:
             raise errors.InfraError("beta refused the check") from e
         verdict = beta_check.Verdict.OK if answer.held == "yes" else beta_check.Verdict.REFUSED

@@ -13,23 +13,10 @@ class Handler(ts.Handler):
         self._client = client
 
     def add(self, request: cli.CliRequest) -> cli.CliResponse:
-        if len(request.args) != 3:
-            raise cli.UsageError("usage: add <id> <name> <count>")
-        id, name, raw_count = request.args
-        try:
-            count = int(raw_count)
-        except ValueError:
-            raise cli.UsageError("count must be an integer") from None
-        view = self._client.add(client.AddRequest(id=id, name=name, count=count))
-        added = ", ".join(whole.id for whole in view.wholes)
-        return cli.CliResponse(exit_code=0, line=cli.Line(text=added))
-
-    def get(self, request: cli.CliRequest) -> cli.CliResponse:
         if len(request.args) != 1:
-            raise cli.UsageError("usage: get <id>")
+            raise cli.UsageError("usage: add <name>")
         try:
-            view = self._client.get(client.GetRequest(id=request.args[0]))
+            added = self._client.add(client.AddRequest(name=request.args[0]))
         except errors.DomainError as e:
             return cli.CliResponse(exit_code=errors.exit_code_for(e.kind), line=cli.Line(text=e.message))
-        found = ", ".join(whole.name for whole in view.wholes)
-        return cli.CliResponse(exit_code=0, line=cli.Line(text=found))
+        return cli.CliResponse(exit_code=0, line=cli.Line(text=added.name))

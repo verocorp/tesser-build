@@ -13,8 +13,8 @@ class Verdict(enum.Enum):
 
 class CheckRequest(ts.Request):
 
-    def __init__(self, id: str) -> None:
-        self.id = id
+    def __init__(self, name: str) -> None:
+        self.name = name
 
 
 class CheckResponse(ts.Response):

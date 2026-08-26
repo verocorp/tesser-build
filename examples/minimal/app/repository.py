@@ -23,13 +23,12 @@ class EnvConfigRepository(ConfigRepository):
         storage = os.environ.get("ALPHA_STORAGE")
         if storage is None:
             raise errors.invalid("missing_env", "ALPHA_STORAGE is required")
-        raw_keys = os.environ.get("BETA_KEYS")
-        if raw_keys is None:
-            raise errors.invalid("missing_env", "BETA_KEYS is required")
-        keys = tuple(key for key in raw_keys.split(",") if key)
+        key = os.environ.get("BETA_KEY")
+        if key is None:
+            raise errors.invalid("missing_env", "BETA_KEY is required")
         return config.Config(
             config.Spec(
                 alpha=alpha_config.Config(alpha_config.Spec(storage=storage)),
-                beta=beta_config.Config(beta_config.Spec(keys=keys)),
+                beta=beta_config.Config(beta_config.Spec(key=key)),
             )
         )

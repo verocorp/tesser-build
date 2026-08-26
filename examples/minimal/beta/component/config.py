@@ -5,11 +5,11 @@ import tesser.component as ts
 
 class Spec(ts.Spec):
 
-    def __init__(self, keys: tuple[str, ...]) -> None:
-        self.keys = keys
+    def __init__(self, key: str) -> None:
+        self.key = key
 
 
 class Config(ts.Config):
 
     def __init__(self, spec: Spec) -> None:
-        self.keys = spec.keys
+        self.key = spec.key

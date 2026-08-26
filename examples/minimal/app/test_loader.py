@@ -18,17 +18,16 @@ class FakeConfigRepository(repository.ConfigRepository):
         return config.Config(
             config.Spec(
                 alpha=alpha_config.Config(alpha_config.Spec(storage="memory")),
-                beta=beta_config.Config(beta_config.Spec(keys=())),
+                beta=beta_config.Config(beta_config.Spec(key="k")),
             )
         )
 
 
 def test_the_loader_builds_an_app_from_its_repository() -> None:
-    built = loader.AppLoader(FakeConfigRepository()).load()
-    built.close()
+    loader.AppLoader(FakeConfigRepository()).load().close()
 
 
 def test_load_reads_the_environment() -> None:
     os.environ["ALPHA_STORAGE"] = "memory"
-    os.environ["BETA_KEYS"] = ""
+    os.environ["BETA_KEY"] = "k"
     loader.load().close()

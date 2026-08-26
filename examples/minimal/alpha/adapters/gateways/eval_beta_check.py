@@ -15,5 +15,5 @@ class SampledBetaClient(beta_client.Client):
 
 
 def test_a_sampled_answer_maps_to_a_verdict() -> None:
-    checked = gateway.BetaCheckGateway(SampledBetaClient()).check(port.CheckRequest(id="w"))
+    checked = gateway.BetaCheckGateway(SampledBetaClient()).check(port.CheckRequest(name="a"))
     assert checked.verdict is port.Verdict.OK
