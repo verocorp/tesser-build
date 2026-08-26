@@ -61,6 +61,7 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "kept": "⟨field⟩",
     "taker": "⟨function⟩",
     "sunder": "⟨attribute⟩",
+    "keyword": "⟨keyword⟩",
     "member": "⟨member⟩",
 }
 

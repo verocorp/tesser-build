@@ -137,3 +137,24 @@ def test_an_outcome_carries_nothing_to_read() -> None:
     assert repr(Advance.DONE) == "<Advance.DONE: 2>"
     assert Advance.DONE is Advance.DONE
     assert len({Advance.CONTINUE, Advance.DONE}) == 2
+
+
+def test_an_outcome_hides_no_behavior_in_the_enum_slots() -> None:
+    with pytest.raises(TypeError, match=r"Made defines '__new__'"):
+
+        class Made(ts.Outcome):
+            def __new__(cls, value: int) -> "Made":
+                made = object.__new__(cls)
+                made._value_ = value
+                return made
+
+            DONE = enum.auto()
+
+    with pytest.raises(TypeError, match=r"Counted defines '_generate_next_value_'"):
+
+        class Counted(ts.Outcome):
+            @staticmethod
+            def _generate_next_value_(name: str, start: int, count: int, last_values: list[int]) -> int:
+                return count + 1
+
+            DONE = enum.auto()

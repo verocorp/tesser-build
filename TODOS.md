@@ -4,12 +4,22 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 
 ## Follow-ons from the outcome ruling (2026-08-26, v0.0.84.0)
 
-- [ ] **Retire `TB082`'s `if <one call>` clause, or keep it?** With
-  `ts.Outcome` the service has one branching shape (`match` + `assert_never`).
-  An `if` whose test is one domain call only ever tested truthiness
-  (`__bool__`, an empty collection) and is now a second spelling of the same
-  thing. Chris to rule; the clause was left as-is in the wave rather than
-  widened silently.
+- [ ] **A conditional expression in a service is a branch TB082 does not
+  see.** `if`/`while` statements are findings (ruled 2026-08-26: a truth test
+  on a domain object is a bool the domain never handed out), but
+  `x if cond else y` and a comprehension's `if` clause pass —
+  `examples/python-app`'s `reports` and `linkpolicy` services carry both,
+  branching on port-DTO strings. Same ruling, one more node kind, plus the
+  two example rewrites (the answer is a port outcome enum matched in a
+  mapper).
+- [ ] **Outcome tracking through locals.** TB084 tracks a kept outcome only
+  from the class's own outcome-returning methods (`self._x = self.m()`, or a
+  local bound from one); `self._x = other.advance()` and handing a local to
+  an `object`-typed parameter are invisible, as are `vars(outcome)` /
+  `getattr(outcome, "_value_")` / `type(outcome)(2)`. Closing them means
+  typing locals in the walk — a design, not a clause. Ruled out of scope
+  2026-08-26 (second adversarial pass); the runtime's raising `.value`/`.name`
+  covers the readable path.
 - [ ] **A loop-shaped verified impl.** `examples/minimal` carries the
   two-arm `match`; the `while True: match outcome:` loop lives only as the
   analyzer's fixture. A pilot-pulled use case with a real multi-step

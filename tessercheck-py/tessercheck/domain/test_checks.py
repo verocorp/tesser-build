@@ -1331,16 +1331,18 @@ def test_service_body_rules_are_flagged() -> None:
                 "from shop.client.client import AskRequest, AskResponse\n"
                 "class BusyService(ts.ApplicationService):\n"
                 "    def nested(self, request: AskRequest) -> AskResponse:\n"
-                "        if request.ping():\n"
-                "            if request.pong():\n"
-                "                return AskResponse(text='')\n"
+                "        match request.ping():\n"
+                "            case 1:\n"
+                "                match request.pong():\n"
+                "                    case 1:\n"
+                "                        return AskResponse(text='')\n"
                 "        return AskResponse(text='')\n"
                 "    def compares(self, request: AskRequest) -> AskResponse:\n"
                 "        if request.text == 'x':\n"
                 "            return AskResponse(text='')\n"
                 "        return AskResponse(text='')\n"
-                "    def combines(self, request: AskRequest) -> AskResponse:\n"
-                "        if request.ready() and request.good():\n"
+                "    def loops(self, request: AskRequest) -> AskResponse:\n"
+                "        while request.ready():\n"
                 "            return AskResponse(text='')\n"
                 "        return AskResponse(text='')\n",
                 False,
@@ -1354,15 +1356,15 @@ def test_service_body_rules_are_flagged() -> None:
         for f in findings
     )
     assert any(
-        "BusyService.compares" in f
-        and "is not a single call; a service method satisfies a condition with one domain call"
-        in f
+        "BusyService.compares branches with if; a service method branches only by "
+        "matching an outcome — `while True:` ended by a match arm is the loop — "
+        "because a truth test on a domain object is a bool the domain never handed out" in f
         for f in findings
     )
     assert any(
-        "BusyService.combines" in f
-        and "is not a single call; a service method satisfies a condition with one domain call"
-        in f
+        "BusyService.loops branches with while; a service method branches only by "
+        "matching an outcome — `while True:` ended by a match arm is the loop — "
+        "because a truth test on a domain object is a bool the domain never handed out" in f
         for f in findings
     )
 
@@ -10387,6 +10389,15 @@ def test_an_outcome_is_neither_kept_nor_reached_into_nor_widened() -> None:
                 "    def peek(self) -> None:\n"
                 "        outcome = self.advance()\n"
                 "        number = outcome._value_\n"
+                "    def quoted(self, outcome: 'Advance') -> None:\n"
+                "        return None\n"
+                "    def carry(self) -> None:\n"
+                "        outcome = self.advance()\n"
+                "        self._kept = outcome\n"
+                "        self._boxed = [self.advance()]\n"
+                "        self._first, self._second = self.advance(), None\n"
+                "    def degrade(self) -> Clock:\n"
+                "        return Clock(1 if self.advance() is Advance.DONE else 0)\n"
                 "class Clock(ts.ValueObject):\n"
                 "    _tick: int\n"
                 "    def __init__(self, tick: int) -> None:\n"
@@ -10464,6 +10475,16 @@ def test_an_outcome_is_neither_kept_nor_reached_into_nor_widened() -> None:
                 "                case _ as never:\n"
                 "                    typing.assert_never(never)\n"
                 "        outcome = driven.advance()\n"
+                "        return client.AskResponse(text='')\n"
+                "    def swallowed(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        driven = run.Run(MapToRunSpec(request))\n"
+                "        match driven.advance():\n"
+                "            case run.Advance.CONTINUE | run.Advance.DONE:\n"
+                "                pass\n"
+                "            case object():\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
                 "        return client.AskResponse(text='')\n",
                 False,
             ),
@@ -10504,9 +10525,22 @@ def test_an_outcome_is_neither_kept_nor_reached_into_nor_widened() -> None:
     assert not any("Base" in f and "TB084" in f for f in findings)
     assert not any("Board" in f and "TB084" in f for f in findings)
     assert not any("_clock" in f for f in findings)
+    assert any("run.py:33: TB084 shop.domain.run.quoted takes an outcome" in f for f in findings)
+    assert any("run.py:37: TB084 shop.domain.run keeps an outcome on self._kept" in f for f in findings)
+    assert any("run.py:38: TB084 shop.domain.run keeps an outcome on self._boxed" in f for f in findings)
+    assert any("run.py:39: TB084 shop.domain.run keeps an outcome on self._first" in f for f in findings)
+    assert not any("self._second" in f for f in findings)
+    assert any("run.py:41: TB084 shop.domain.run names Advance.DONE outside a match" in f for f in findings)
     assert any("driver.py:15: TB084" in f and "without closing on assert_never" in f for f in findings)
     assert any("driver.py:24: TB084" in f and "without closing on assert_never" in f for f in findings)
     assert not any("driver.py:33" in f and "TB084" in f for f in findings)
     assert not any("Driver.returning" in f and "TB082" in f for f in findings)
     assert any("Driver.laundered match subject is not a single call" in f for f in findings)
-    assert len(tb084) == 10
+    assert any(
+        "driver.py:54: TB084 shop.application.driver mixes a pattern into an outcome match; "
+        "every arm before the closer names members, because a class, capture, or guarded arm "
+        "swallows a member added later" in f
+        for f in findings
+    )
+    assert not any("driver.py:5" in f and "TB084" in f and "driver.py:54" not in f for f in findings)
+    assert len(tb084) == 16

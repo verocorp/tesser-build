@@ -36,9 +36,12 @@ myself?* Yes → application service.
 1. **No business logic in the service.** No domain calculation, no invariant
    decision, no computing a decision from domain state. If it's a rule, it
    belongs on a domain object (a type, an aggregate transition, or a domain
-   service). The service may *ask* — one domain call, or a `match` on the
-   `ts.Outcome` a transition returned (`domain-return.md` rule 6) — but it
-   never spells an operator or a domain constant of its own. The leakage
+   service). The service may *ask* — a `match` on the `ts.Outcome` a
+   transition returned (`domain-return.md` rule 6) — and that is its only
+   branch: no `if`, no conditional `while` (`while True:` ended by a match
+   arm is the loop), because a truth test on a domain object is a bool the
+   domain never handed out, and it never spells an operator or a domain
+   constant of its own. The leakage
    checks below are how you catch yourself breaking this.
 2. **The four-step shape.** Every method reads as a short sequence of named
    steps, each one call:
@@ -139,11 +142,12 @@ lives in one place it never has to spell out (`python.md`, TB080).
 `ts.ApplicationService` subclass is the structural signal `tessercheck` keys on:
 `TB081` requires every constructor dependency to be a `ts.Port` and every public
 method to take exactly one `ts.Request` and return one `ts.Response`; `TB082`
-rejects a delegation chain, a nested branch, a condition that is not one domain
-call (a `match` subject may also be a local bound to one call — the outcome a
-transition returned), a value computed in an argument position, and a raw
-request field crossing into a port; `TB084` requires a `match` on an outcome to
-close on `assert_never`. What no check judges is whether the body *coordinates* or *decides*
+rejects a delegation chain, any `if` or `while` (a service branches only by
+`match`, on one domain call or a local bound to one — the outcome a transition
+returned), a nested `match`, a value computed in an argument position, and a
+raw request field crossing into a port; `TB084` requires a `match` on an
+outcome to close on `assert_never`. A conditional *expression* (`x if c else
+y`) is not yet in TB082's reach — a named follow-on. What no check judges is whether the body *coordinates* or *decides*
 — that stays review, not the compiler (and Go has no mirror of these checks
 today). The leakage checks
 below are a *future*-analyzer seed, not a live check — and even then only two of

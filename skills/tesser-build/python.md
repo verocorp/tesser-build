@@ -520,9 +520,10 @@ Coordination only — no business logic. Four named steps
 (`application-services.md`): convert → delegate → persist → respond. Every
 dependency is a `ts.Port` `Protocol` (the analyzer requires it), every public
 method takes exactly one `ts.Request` and returns a `ts.Response`, and the
-method inlines its logic — no delegation chains,
-one level of branching, a condition satisfied by one domain call or a `match`
-on the `ts.Outcome` one returned (**Outcomes**, above). Every
+method inlines its logic — no delegation chains, no `if`, no conditional
+`while`: the one branch a service has is a `match` on the `ts.Outcome` a
+transition returned (**Outcomes**, above), one level deep, and the one loop
+is `while True:` ended by a match arm's `break`. Every
 translation the method needs is a **mapper** — a class that *is* the spec or
 DTO it maps to (`MapTo…`, **Application ports** below) — so the service names
 the use case and never spells a field out.

@@ -45,9 +45,14 @@ rule down — the leak is computing the answer, not asking for it.)
 - **`TB019`** counts a `ts.Outcome` return as a domain object.
 - **`TB081`** treats an outcome in a port signature as a domain object
   crossing a port.
-- **`TB082`** accepts a `match` subject that is a local every assignment of
-  which is one call (the outcome a transition returned), so the loop is one
-  shape.
+- **`TB082`** — a service method branches only by `match`: `if` and a
+  conditional `while` are findings (`while True:` ended by a match arm is
+  the loop) (a truth test on a domain object is a bool the domain never
+  handed out — the "one domain call" `if` clause was the same leak with the
+  language doing the wrapping). The `match` subject may be one call or a
+  local every binding of which is one call (the outcome a transition
+  returned), so the loop is one shape. A conditional *expression* is not yet
+  in reach — recorded in `TODOS.md`.
 - **`domain-return.md`** rule 6 (outcomes), decision 3 (field vs return
   value — *could the repository need this to rebuild the object?*), three new
   common mistakes (the status accessor, the enum with `is_*`, the loop on

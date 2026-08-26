@@ -38,6 +38,19 @@ class Outcome(enum.Enum):
                 "and alone, because a mixed-in base gives its members a value to compare "
                 "against and a hierarchy reopens the closed set"
             )
+        if cls.__dict__.get("_new_member_") is not object.__new__:
+            raise TypeError(
+                f"{cls.__name__} defines '__new__': an outcome is a closed set of names "
+                "and nothing else — behavior belongs on the object that returns it"
+            )
+        generator = cls.__dict__.get("_generate_next_value_")
+        if isinstance(generator, staticmethod):
+            generator = generator.__func__
+        if generator is not Outcome._generate_next_value_:
+            raise TypeError(
+                f"{cls.__name__} defines '_generate_next_value_': an outcome is a closed set "
+                "of names and nothing else — behavior belongs on the object that returns it"
+            )
         members = cls.__dict__.get("_member_map_", {})
         for name, attribute in cls.__dict__.items():
             if name in members or name in _GENERATED:
