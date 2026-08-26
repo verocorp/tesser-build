@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import beta.adapters.repositories.memory as memory
-import beta.application.ports.key_store as key_store
+import beta.application.ports.key_repository as key_repository
 
 
-class TestMemoryKeyStore:
+class TestMemoryKeyRepository:
 
-    def test_the_configured_key_is_held(self) -> None:
-        keys = memory.MemoryKeyStore(key="k")
-        answer = keys.has(key_store.HasKeyRequest(key="k"))
-        assert answer.held is key_store.Held.YES
+    def test_the_stored_key_is_held(self) -> None:
+        keys = memory.MemoryKeyRepository()
+        answer = keys.has(key_repository.HasKeyRequest(key="k"))
+        assert answer.held is key_repository.Held.YES

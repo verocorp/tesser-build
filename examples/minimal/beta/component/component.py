@@ -11,7 +11,7 @@ import beta.component.config as config
 class Beta(ts.Component):
 
     def __init__(self, cfg: config.Config) -> None:
-        self._keys = memory.MemoryKeyStore(cfg.key)
+        self._keys = memory.MemoryKeyRepository()
         self.client: client.Client = beta_service.BetaService(self._keys)
 
     def close(self) -> None:

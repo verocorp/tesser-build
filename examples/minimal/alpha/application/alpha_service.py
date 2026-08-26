@@ -8,6 +8,24 @@ import alpha.client.client as client
 import alpha.domain.widget as widget
 
 
+class MapToWidgetSpec(ts.Mapper, widget.WidgetSpec):
+
+    def __init__(self, request: client.AddRequest) -> None:
+        super().__init__(name=request.name, part=widget.PartSpec(id=request.name))
+
+
+class MapToCheckRequest(ts.Mapper, beta_check.CheckRequest):
+
+    def __init__(self, added: widget.Widget) -> None:
+        super().__init__(name=str(added.identity))
+
+
+class MapToSaveRequest(ts.Mapper, widget_repository.SaveRequest):
+
+    def __init__(self, added: widget.Widget) -> None:
+        super().__init__(name=str(added.identity))
+
+
 class MapToAddResponse(ts.Mapper, client.AddResponse):
 
     def __init__(self, added: widget.Widget) -> None:
@@ -21,8 +39,7 @@ class AlphaService(ts.ApplicationService):
         self._checks = checks
 
     def add(self, request: client.AddRequest) -> client.AddResponse:
-        added = widget.Widget(widget.WidgetSpec(name=request.name, part=widget.PartSpec(id=request.name)))
-        added_name = str(added.identity)
-        self._checks.check(beta_check.CheckRequest(name=added_name))
-        self._widgets.save(widget_repository.SaveRequest(name=added_name))
-        return MapToAddResponse(added=added)
+        added = widget.Widget(MapToWidgetSpec(request))
+        self._checks.check(MapToCheckRequest(added))
+        self._widgets.save(MapToSaveRequest(added))
+        return MapToAddResponse(added)

@@ -23,6 +23,6 @@ class HasKeyResponse(ts.Response):
         self.held = held
 
 
-class KeyStore(ts.Port, typing.Protocol):
+class KeyRepository(ts.Port, typing.Protocol):
 
     def has(self, request: HasKeyRequest) -> HasKeyResponse: ...
