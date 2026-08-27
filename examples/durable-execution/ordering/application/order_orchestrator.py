@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tesser.application as ts
 
-import ordering.application.ports.catalog_repository as catalog_repository
+import ordering.application.ports.order_actions as order_actions
 import ordering.client.client as client
 import ordering.domain.order as order
 
@@ -13,7 +13,7 @@ class MapToOrderSpec(ts.Mapper, order.OrderSpec):
         super().__init__(order_id=request.order_id, sku=request.sku, quantity=request.quantity)
 
 
-class MapToPriceRequest(ts.Mapper, catalog_repository.PriceRequest):
+class MapToQuoteRequest(ts.Mapper, order_actions.QuoteRequest):
 
     def __init__(self, running: order.Order) -> None:
         super().__init__(sku=str(running.sku))
@@ -21,8 +21,8 @@ class MapToPriceRequest(ts.Mapper, catalog_repository.PriceRequest):
 
 class MapToPriceSpec(ts.Mapper, order.PriceSpec):
 
-    def __init__(self, priced: catalog_repository.PriceResponse) -> None:
-        super().__init__(cents=priced.cents)
+    def __init__(self, quoted: order_actions.QuoteResponse) -> None:
+        super().__init__(cents=quoted.cents)
 
 
 class MapToRunResponse(ts.Mapper, client.RunResponse):
@@ -33,11 +33,11 @@ class MapToRunResponse(ts.Mapper, client.RunResponse):
 
 class OrderOrchestrator(ts.ApplicationService):
 
-    def __init__(self, catalog: catalog_repository.CatalogRepository) -> None:
-        self._catalog = catalog
+    def __init__(self, actions: order_actions.OrderActions) -> None:
+        self._actions = actions
 
     async def run(self, request: client.RunRequest) -> client.RunResponse:
         running = order.Order(MapToOrderSpec(request))
-        priced = await self._catalog.price(MapToPriceRequest(running))
-        total = running.total(MapToPriceSpec(priced))
+        quoted = await self._actions.quote(MapToQuoteRequest(running))
+        total = running.total(MapToPriceSpec(quoted))
         return MapToRunResponse(running, total)

@@ -48,3 +48,31 @@ class WorkflowResponse(ts.Response):
         super().__init__(body=body)
 
     body: bytes
+
+
+class ActionRequest(ts.Request):
+
+    def __init__(self, body: bytes) -> None:
+        super().__init__(body=body)
+
+    body: bytes
+
+    def text(self, name: str) -> str:
+        try:
+            data = json.loads(self.body)
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            raise BadInvocation(f"malformed JSON: {e}") from e
+        if not isinstance(data, dict):
+            raise BadInvocation("expected a JSON object")
+        value = data.get(name)
+        if not isinstance(value, str):
+            raise BadInvocation(f"{name} must be a string")
+        return value
+
+
+class ActionResponse(ts.Response):
+
+    def __init__(self, body: bytes) -> None:
+        super().__init__(body=body)
+
+    body: bytes

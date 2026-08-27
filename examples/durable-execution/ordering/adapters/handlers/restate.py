@@ -21,3 +21,13 @@ class WorkflowHandler(ts.Handler):
         )
         body = json.dumps({"order_id": ran.order_id, "total_cents": ran.total_cents}).encode()
         return durable.WorkflowResponse(body=body)
+
+
+class ActionHandler(ts.Handler):
+
+    def __init__(self, actions: client.Actions) -> None:
+        self._actions = actions
+
+    def quote(self, request: durable.ActionRequest) -> durable.ActionResponse:
+        quoted = self._actions.quote(client.QuoteRequest(sku=request.text("sku")))
+        return durable.ActionResponse(body=json.dumps({"cents": quoted.cents}).encode())

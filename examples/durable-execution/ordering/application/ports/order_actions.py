@@ -5,18 +5,18 @@ import typing
 import tesser.application as ts
 
 
-class PriceRequest(ts.Request):
+class QuoteRequest(ts.Request):
 
     def __init__(self, sku: str) -> None:
         self.sku = sku
 
 
-class PriceResponse(ts.Response):
+class QuoteResponse(ts.Response):
 
     def __init__(self, cents: int) -> None:
         self.cents = cents
 
 
-class CatalogRepository(ts.Port, typing.Protocol):
+class OrderActions(ts.Port, typing.Protocol):
 
-    def price(self, request: PriceRequest) -> PriceResponse: ...
+    async def quote(self, request: QuoteRequest) -> QuoteResponse: ...

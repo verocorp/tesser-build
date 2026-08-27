@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import collections.abc as abc
-
 import tesser.component as ts
 import httpx
 import restate.client
 
+import ordering.adapters.gateways.restate_actions as restate_actions
 import ordering.adapters.gateways.restate_workflow as restate_workflow
 import ordering.adapters.repositories.memory as memory
-import ordering.adapters.repositories.restate as restate_repository
+import ordering.application.order_actions as order_actions
 import ordering.application.order_orchestrator as order_orchestrator
 import ordering.application.order_service as order_service
 import ordering.client.client as client
@@ -23,13 +22,10 @@ class Ordering(ts.Component):
         self.client: client.Client = order_service.OrderService(
             restate_workflow.RestateOrderWorkflow(restate.client.Client(self._http))
         )
-
-    def workflow(
-        self, run: abc.Callable[[str, abc.Callable[[], abc.Coroutine[object, object, bytes]]], abc.Awaitable[bytes]]
-    ) -> client.Orchestrator:
-        return order_orchestrator.OrderOrchestrator(
-            restate_repository.RestateCatalogRepository(self._catalog, run)
+        self.orchestrator: client.Orchestrator = order_orchestrator.OrderOrchestrator(
+            restate_actions.RestateOrderActions()
         )
+        self.actions: client.Actions = order_actions.OrderActions(self._catalog)
 
     async def close(self) -> None:
         await self._http.aclose()

@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import asyncio
-import collections.abc as abc
-
 import tesser.testing as ts
 
 import app.config as config
@@ -24,9 +21,4 @@ class TestAppLoader:
 
     def test_the_loader_builds_an_app_from_its_repository(self) -> None:
         built = loader.AppLoader(FakeConfigRepository()).load()
-
-        async def run(name: str, action: abc.Callable[[], abc.Coroutine[object, object, bytes]]) -> bytes:
-            return await action()
-
-        ran = asyncio.run(built.ordering.workflow(run).run(ordering_client.RunRequest(order_id="o1", sku="gadget", quantity=1)))
-        assert ran.total_cents == 1000
+        assert built.ordering.actions.quote(ordering_client.QuoteRequest(sku="gadget")).cents == 1000

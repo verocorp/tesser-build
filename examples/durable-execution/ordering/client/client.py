@@ -42,3 +42,20 @@ class RunResponse(ts.Response):
 class Orchestrator(ts.Client, typing.Protocol):
 
     async def run(self, request: RunRequest) -> RunResponse: ...
+
+
+class QuoteRequest(ts.Request):
+
+    def __init__(self, sku: str) -> None:
+        self.sku = sku
+
+
+class QuoteResponse(ts.Response):
+
+    def __init__(self, cents: int) -> None:
+        self.cents = cents
+
+
+class Actions(ts.Client, typing.Protocol):
+
+    def quote(self, request: QuoteRequest) -> QuoteResponse: ...

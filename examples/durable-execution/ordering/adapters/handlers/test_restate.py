@@ -40,3 +40,18 @@ class TestWorkflowHandler:
         handler = restate_handlers.WorkflowHandler(FakeOrchestrator())
         with pytest.raises(durable.BadInvocation):
             asyncio.run(handler.run(durable.WorkflowRequest(key="o1", body=b'{"quantity": 3}')))
+
+
+@ts.fake
+class FakeActions(client.Actions):
+
+    def quote(self, request: client.QuoteRequest) -> client.QuoteResponse:
+        return client.QuoteResponse(cents=250)
+
+
+class TestActionHandler:
+
+    def test_quoting_answers_the_cents(self) -> None:
+        handler = restate_handlers.ActionHandler(FakeActions())
+        response = handler.quote(durable.ActionRequest(body=b'{"sku": "widget"}'))
+        assert json.loads(response.body) == {"cents": 250}
