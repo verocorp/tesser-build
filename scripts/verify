@@ -123,6 +123,20 @@ run_minimal() {
   pytest -q || return 1
 }
 
+# The durable-execution example: one context whose workflow runs on Restate.
+# A CLI host places an order and starts the workflow through a port; the
+# Restate host serves the workflow and the action it calls, both through
+# handlers; the engine never touches the domain.
+run_durable_execution() {
+  cd "$ROOT/examples/durable-execution" || return 1
+  step "tessercheck (zero findings over the whole tree)"
+  tessercheck_tree "$PWD" || return 1
+  step "mypy --strict"
+  MYPYPATH=.:../../tesser-py mypy --strict protocol ordering app srv tests conftest.py || return 1
+  step "pytest"
+  pytest -q || return 1
+}
+
 run_serdepy() {
   cd "$ROOT/examples/serdepy" || return 1
   step "tessercheck (zero findings over the whole tree)"
@@ -220,6 +234,7 @@ run_tree() {
     llmport)        run_llmport ;;
     python-app)     run_python_app ;;
     minimal)        run_minimal ;;
+    durable-execution) run_durable_execution ;;
     serdepy)        run_serdepy ;;
     ports)          run_ports ;;
     errorspy)       run_errorspy ;;

@@ -5,6 +5,7 @@
   "examples": "ungated",
   "examples/catalog": "ungated",
   "examples/ddd": "ungated",
+  "examples/durable-execution": "app",
   "examples/editor": "ungated",
   "examples/errorspy": "app",
   "examples/golangci": "ungated",

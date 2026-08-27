@@ -146,6 +146,25 @@ jobs:
       - name: examples/minimal — tessercheck + mypy --strict + pytest
         run: scripts/verify minimal
 
+  durable-execution-example:
+    # Gates the durable-execution example at the same bar: tessercheck zero
+    # findings + mypy --strict + pytest. One context whose workflow runs on
+    # Restate: the CLI host starts it through a port, the Restate host serves
+    # the workflow and the action it calls through handlers, and the srv test
+    # boots the real host and reads its /discover manifest. restate_sdk,
+    # httpx, and hypercorn are installed; no restate-server runs in CI.
+    name: durable-execution example (tessercheck + mypy --strict + pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dev tooling
+        run: pip install -r examples/durable-execution/requirements-dev.txt
+      - name: examples/durable-execution — tessercheck + mypy --strict + pytest
+        run: scripts/verify durable-execution
+
   serdepy-example:
     # Gates the serialization-norm worked example (Python) at the same bar:
     # tessercheck zero findings + mypy --strict + pytest. Shows every
