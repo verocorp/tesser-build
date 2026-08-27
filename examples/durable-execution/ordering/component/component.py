@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import collections.abc as abc
 
 import tesser.component as ts
@@ -32,6 +31,6 @@ class Ordering(ts.Component):
             restate_repository.RestateCatalogRepository(self._catalog, run)
         )
 
-    def close(self) -> None:
-        asyncio.run(self._http.aclose())
+    async def close(self) -> None:
+        await self._http.aclose()
         self._catalog.close()

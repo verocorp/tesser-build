@@ -65,6 +65,9 @@ would surface. There is no second address: the durable step is in-process.
 `generic_send` on it. The component builds the real one —
 `restate.client.Client(httpx.AsyncClient(base_url=cfg.ingress))`, which is
 all `restate.create_client` does under its context manager — and closes it.
+Because an httpx client's connections belong to the loop that opened them,
+the app's lifecycle is async end to end: `Ordering.close` and `App.close`
+are `async`, and each host awaits them inside its own loop.
 The sibling test builds the same real client over `httpx.MockTransport`, an
 in-memory transport handed in explicitly, so what it checks is the URL the
 SDK forms (`/Ordering/o1/run/send`), the content-type, and the body, not a

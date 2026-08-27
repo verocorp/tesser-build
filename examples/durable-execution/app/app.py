@@ -12,5 +12,5 @@ class App(ts.App):
     def __init__(self, cfg: config.Config) -> None:
         self.ordering = ordering_component.Ordering(cfg.ordering)
 
-    def close(self) -> None:
-        self.ordering.close()
+    async def close(self) -> None:
+        await self.ordering.close()

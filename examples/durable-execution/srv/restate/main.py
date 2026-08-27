@@ -23,31 +23,36 @@ _BIND: typing.Final[str] = "127.0.0.1:9080"
 class RestateHost(ts.Host):
 
     def run(self, argv: list[str]) -> int:
-        built = loader.load()
-        try:
-            workflow = restate.Workflow(WORKFLOW)
-            passthrough = restate.serde.BytesSerde()
+        async def serve() -> None:
+            built = loader.load()
+            try:
+                workflow = restate.Workflow(WORKFLOW)
+                passthrough = restate.serde.BytesSerde()
 
-            @workflow.main(name=RUN, accept="*/*", input_serde=passthrough, output_serde=passthrough)
-            async def run_order(ctx: restate.WorkflowContext, body: bytes) -> bytes:
-                async def journaled(name: str, action: abc.Callable[[], abc.Coroutine[object, object, bytes]]) -> bytes:
-                    return await ctx.run_typed(name, action, restate.RunOptions(serde=passthrough))
+                @workflow.main(name=RUN, accept="*/*", input_serde=passthrough, output_serde=passthrough)
+                async def run_order(ctx: restate.WorkflowContext, body: bytes) -> bytes:
+                    async def journaled(
+                        name: str, action: abc.Callable[[], abc.Coroutine[object, object, bytes]]
+                    ) -> bytes:
+                        return await ctx.run_typed(name, action, restate.RunOptions(serde=passthrough))
 
-                handler = restate_handlers.WorkflowHandler(built.ordering.workflow(journaled))
-                try:
-                    response = await handler.run(durable.WorkflowRequest(key=ctx.key(), body=body))
-                except durable.BadInvocation as e:
-                    raise restate.TerminalError(str(e), status_code=400) from e
-                except errors.DomainError as e:
-                    raise restate.TerminalError(e.message, status_code=errors.status_for(e.kind)) from e
-                return response.body
+                    handler = restate_handlers.WorkflowHandler(built.ordering.workflow(journaled))
+                    try:
+                        response = await handler.run(durable.WorkflowRequest(key=ctx.key(), body=body))
+                    except durable.BadInvocation as e:
+                        raise restate.TerminalError(str(e), status_code=400) from e
+                    except errors.DomainError as e:
+                        raise restate.TerminalError(e.message, status_code=errors.status_for(e.kind)) from e
+                    return response.body
 
-            config = hypercorn.config.Config()
-            config.bind = [argv[0] if argv else _BIND]
-            asyncio.run(hypercorn.asyncio.serve(restate.app([workflow]), config))
-            return 0
-        finally:
-            built.close()
+                config = hypercorn.config.Config()
+                config.bind = [argv[0] if argv else _BIND]
+                await hypercorn.asyncio.serve(restate.app([workflow]), config)
+            finally:
+                await built.close()
+
+        asyncio.run(serve())
+        return 0
 
 
 if __name__ == "__main__":
