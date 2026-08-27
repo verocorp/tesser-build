@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import collections.abc as abc
 import typing
 
 import tesser.srv as ts
@@ -16,8 +17,6 @@ import tesser.errors as errors
 
 WORKFLOW: typing.Final[str] = "Ordering"
 RUN: typing.Final[str] = "run"
-ACTIONS: typing.Final[str] = "OrderingActions"
-QUOTE: typing.Final[str] = "quote"
 _BIND: typing.Final[str] = "127.0.0.1:9080"
 
 
@@ -26,27 +25,17 @@ class RestateHost(ts.Host):
     def run(self, argv: list[str]) -> int:
         built = loader.load()
         try:
-            workflow_handler = restate_handlers.WorkflowHandler(built.ordering.orchestrator)
-            action_handler = restate_handlers.ActionHandler(built.ordering.actions)
             workflow = restate.Workflow(WORKFLOW)
-            actions = restate.Service(ACTIONS)
             passthrough = restate.serde.BytesSerde()
 
             @workflow.main(name=RUN, accept="*/*", input_serde=passthrough, output_serde=passthrough)
             async def run_order(ctx: restate.WorkflowContext, body: bytes) -> bytes:
-                built.ordering.quotes.bind(ctx.generic_call)
-                try:
-                    response = await workflow_handler.run(durable.WorkflowRequest(key=ctx.key(), body=body))
-                except durable.BadInvocation as e:
-                    raise restate.TerminalError(str(e), status_code=400) from e
-                except errors.DomainError as e:
-                    raise restate.TerminalError(e.message, status_code=errors.status_for(e.kind)) from e
-                return response.body
+                async def journaled(name: str, action: abc.Callable[[], abc.Coroutine[object, object, bytes]]) -> bytes:
+                    return await ctx.run_typed(name, action, restate.RunOptions(serde=passthrough))
 
-            @actions.handler(name=QUOTE, accept="*/*", input_serde=passthrough, output_serde=passthrough)
-            async def quote(ctx: restate.Context, body: bytes) -> bytes:
+                handler = restate_handlers.WorkflowHandler(built.ordering.workflow(journaled))
                 try:
-                    response = action_handler.quote(durable.ActionRequest(body=body))
+                    response = await handler.run(durable.WorkflowRequest(key=ctx.key(), body=body))
                 except durable.BadInvocation as e:
                     raise restate.TerminalError(str(e), status_code=400) from e
                 except errors.DomainError as e:
@@ -55,7 +44,7 @@ class RestateHost(ts.Host):
 
             config = hypercorn.config.Config()
             config.bind = [argv[0] if argv else _BIND]
-            asyncio.run(hypercorn.asyncio.serve(restate.app([workflow, actions]), config))
+            asyncio.run(hypercorn.asyncio.serve(restate.app([workflow]), config))
             return 0
         finally:
             built.close()

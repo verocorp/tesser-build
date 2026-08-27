@@ -27,14 +27,7 @@ class TestWorkflowRequest:
         with pytest.raises(durable.BadInvocation):
             request.text("sku")
 
-
-class TestActionRequest:
-
-    def test_a_string_field_is_read_from_the_body(self) -> None:
-        request = durable.ActionRequest(body=b'{"sku": "widget"}')
-        assert request.text("sku") == "widget"
-
     def test_a_non_object_body_is_a_bad_invocation(self) -> None:
-        request = durable.ActionRequest(body=b"[]")
+        request = durable.WorkflowRequest(key="o1", body=b"[]")
         with pytest.raises(durable.BadInvocation):
             request.text("sku")

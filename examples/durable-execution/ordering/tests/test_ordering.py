@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import collections.abc as abc
 import json
 
 import ordering.adapters.handlers.restate as restate_handlers
@@ -11,23 +12,22 @@ import protocol.durable as durable
 
 class TestOrderingContext:
 
-    def test_a_workflow_run_quotes_through_the_action_handler_and_totals(self) -> None:
+    def test_a_workflow_run_journals_the_price_step_and_totals(self) -> None:
         wired = component.Ordering(config.Config(config.Spec(ingress="http://localhost:8080")))
-        actions = restate_handlers.ActionHandler(wired.actions)
-        workflow = restate_handlers.WorkflowHandler(wired.orchestrator)
-        routed: list[tuple[str, str]] = []
+        journal: dict[str, bytes] = {}
 
-        async def call(service: str, handler: str, arg: bytes) -> bytes:
-            routed.append((service, handler))
-            return actions.quote(durable.ActionRequest(body=arg)).body
+        async def run(name: str, action: abc.Callable[[], abc.Coroutine[object, object, bytes]]) -> bytes:
+            if name not in journal:
+                journal[name] = await action()
+            return journal[name]
 
-        async def run() -> durable.WorkflowResponse:
-            wired.quotes.bind(call)
-            return await workflow.run(
-                durable.WorkflowRequest(key="o1", body=b'{"sku": "gadget", "quantity": 2}')
-            )
+        async def invoke() -> durable.WorkflowResponse:
+            handler = restate_handlers.WorkflowHandler(wired.workflow(run))
+            return await handler.run(durable.WorkflowRequest(key="o1", body=b'{"sku": "gadget", "quantity": 2}'))
 
-        response = asyncio.run(run())
+        first = asyncio.run(invoke())
+        replayed = asyncio.run(invoke())
 
-        assert json.loads(response.body) == {"order_id": "o1", "total_cents": 2000}
-        assert routed == [("OrderingActions", "quote")]
+        assert json.loads(first.body) == {"order_id": "o1", "total_cents": 2000}
+        assert replayed == first
+        assert list(journal) == ["price"]

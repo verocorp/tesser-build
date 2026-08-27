@@ -14,7 +14,7 @@ import srv.restate.main as main
 
 class TestRestateHost:
 
-    def test_the_host_discovers_the_workflow_and_the_action_service(self) -> None:
+    def test_the_host_discovers_the_workflow(self) -> None:
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))
             port = probe.getsockname()[1]
@@ -42,5 +42,5 @@ class TestRestateHost:
                 host.wait()
         services = manifest["services"]
         assert isinstance(services, list)
-        assert {(s["name"], s["ty"]) for s in services} == {(main.WORKFLOW, "WORKFLOW"), (main.ACTIONS, "SERVICE")}
-        assert {h["name"] for s in services for h in s["handlers"]} == {main.RUN, main.QUOTE}
+        assert {(s["name"], s["ty"]) for s in services} == {(main.WORKFLOW, "WORKFLOW")}
+        assert {h["name"] for s in services for h in s["handlers"]} == {main.RUN}
