@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import tesser.testing as ts
 
 import ordering.application.order_service as order_service
@@ -13,7 +15,7 @@ class FakeOrderWorkflow(order_workflow.OrderWorkflow):
     def __init__(self) -> None:
         self.started: list[order_workflow.StartRequest] = []
 
-    def start(self, request: order_workflow.StartRequest) -> order_workflow.StartResponse:
+    async def start(self, request: order_workflow.StartRequest) -> order_workflow.StartResponse:
         self.started.append(request)
         return order_workflow.StartResponse(order_id=request.order_id)
 
@@ -27,10 +29,10 @@ class TestOrderService:
 
     def test_placing_answers_the_order_id(self) -> None:
         service = order_service.OrderService(FakeOrderWorkflow())
-        placed = service.place(place_request())
+        placed = asyncio.run(service.place(place_request()))
         assert placed.order_id == "o1"
 
     def test_placing_starts_the_workflow_for_the_order(self) -> None:
         workflows = FakeOrderWorkflow()
-        order_service.OrderService(workflows).place(place_request(order_id="o2", sku="gadget", quantity=3))
+        asyncio.run(order_service.OrderService(workflows).place(place_request(order_id="o2", sku="gadget", quantity=3)))
         assert [(s.order_id, s.sku, s.quantity) for s in workflows.started] == [("o2", "gadget", 3)]

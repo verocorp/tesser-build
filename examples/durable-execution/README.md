@@ -7,7 +7,7 @@ The chain, top to bottom, with where each link lives:
 | a CLI host places an order | `srv/cli/main.py` | `CliHost` → `ordering/adapters/handlers/cli.py` |
 | the initial application service | `ordering/application/order_service.py` | `OrderService.place` builds the `Order` aggregate |
 | it starts the workflow through a port | `ordering/application/ports/order_workflow.py` | `OrderWorkflow.start(StartRequest) -> StartResponse` |
-| the Restate SDK sends the workflow | `ordering/adapters/gateways/restate_workflow.py` | `RestateOrderWorkflow.start` → `RestateIngress.send` → `client.generic_send(WORKFLOW, RUN, body, key=order_id)` |
+| the Restate SDK sends the workflow | `ordering/adapters/gateways/restate_workflow.py` | `RestateOrderWorkflow.start` → `client.generic_send(WORKFLOW, RUN, body, key=order_id)` on the `RestateClient` the component built |
 | Restate's server calls the workflow handler | `srv/restate/main.py` | `RestateHost` mounts `@workflow.main()` → `ordering/adapters/handlers/restate.py` `WorkflowHandler.run` |
 | the orchestrator | `ordering/application/order_orchestrator.py` | `OrderOrchestrator.run` builds the `Order`, prices it through a port |
 | the port call is a journaled step | `ordering/adapters/repositories/restate.py` | `RestateCatalogRepository.price` runs the real repository inside `ctx.run_typed("price", …)` |
@@ -59,13 +59,25 @@ from the decorated handler object) is out of reach from the gateway; the
 srv test boots the real host and reads `/discover`, which is where a drift
 would surface. There is no second address: the durable step is in-process.
 
-## Async where the engine owns the loop, sync where it does not
+## The gateway holds the SDK's client, and nothing sits between
 
-The workflow side (`CatalogRepository`, `Orchestrator`, `WorkflowHandler`)
-is `async` because Restate runs the handler on its event loop and every
-journaled call is awaited. The ingress side (`OrderWorkflow`, `OrderService`)
-is sync: the CLI process has no loop, so `RestateOrderWorkflow.start` runs
-the SDK's async ingress client under `asyncio.run`.
+`RestateOrderWorkflow` takes a `restate.RestateClient` and calls
+`generic_send` on it. The component builds the real one —
+`restate.client.Client(httpx.AsyncClient(base_url=cfg.ingress))`, which is
+all `restate.create_client` does under its context manager — and closes it.
+The sibling test builds the same real client over `httpx.MockTransport`, an
+in-memory transport handed in explicitly, so what it checks is the URL the
+SDK forms (`/Ordering/o1/run/send`), the content-type, and the body, not a
+callable of this tree's own design.
+
+## Async everywhere the SDK is, sync only at the process edge
+
+The SDK is async on both sides — the ingress client and the workflow
+context — so the whole application is `async`: `OrderWorkflow`,
+`OrderService`, `Client.place`, the CLI handler, `CatalogRepository`,
+`Orchestrator`, `WorkflowHandler`. The only `asyncio.run` on the request
+path is in `CliHost`, because a process entry point is where a loop begins;
+the Restate host's loop is hypercorn's.
 
 ## Running it
 

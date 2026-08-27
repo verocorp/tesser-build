@@ -32,7 +32,7 @@ class OrderService(ts.ApplicationService):
     def __init__(self, workflows: order_workflow.OrderWorkflow) -> None:
         self._workflows = workflows
 
-    def place(self, request: client.PlaceRequest) -> client.PlaceResponse:
+    async def place(self, request: client.PlaceRequest) -> client.PlaceResponse:
         placed = order.Order(MapToOrderSpec(request))
-        started = self._workflows.start(MapToStartRequest(placed))
+        started = await self._workflows.start(MapToStartRequest(placed))
         return MapToPlaceResponse(started)

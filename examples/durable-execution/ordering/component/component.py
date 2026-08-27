@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import collections.abc as abc
 
 import tesser.component as ts
+import httpx
+import restate.client
 
 import ordering.adapters.gateways.restate_workflow as restate_workflow
 import ordering.adapters.repositories.memory as memory
@@ -17,9 +20,9 @@ class Ordering(ts.Component):
 
     def __init__(self, cfg: config.Config) -> None:
         self._catalog = memory.MemoryCatalogRepository()
-        ingress = restate_workflow.RestateIngress(cfg.ingress)
+        self._http = httpx.AsyncClient(base_url=cfg.ingress)
         self.client: client.Client = order_service.OrderService(
-            restate_workflow.RestateOrderWorkflow(ingress.send)
+            restate_workflow.RestateOrderWorkflow(restate.client.Client(self._http))
         )
 
     def workflow(
@@ -30,4 +33,5 @@ class Ordering(ts.Component):
         )
 
     def close(self) -> None:
+        asyncio.run(self._http.aclose())
         self._catalog.close()

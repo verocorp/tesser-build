@@ -21,7 +21,7 @@ class PlaceResponse(ts.Response):
 
 class Client(ts.Client, typing.Protocol):
 
-    def place(self, request: PlaceRequest) -> PlaceResponse: ...
+    async def place(self, request: PlaceRequest) -> PlaceResponse: ...
 
 
 class RunRequest(ts.Request):

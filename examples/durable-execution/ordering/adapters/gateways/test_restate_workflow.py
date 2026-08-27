@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import json
 
+import httpx
 import pytest
-import restate
+import restate.client
 
 import ordering.adapters.gateways.restate_workflow as restate_workflow
 import ordering.application.ports.order_workflow as order_workflow
@@ -13,23 +15,44 @@ import tesser.errors as errors
 class TestRestateOrderWorkflow:
 
     def test_starting_sends_the_order_to_the_workflow_keyed_by_its_id(self) -> None:
-        sent: list[tuple[str, str, bytes, str]] = []
+        seen: list[httpx.Request] = []
 
-        async def send(service: str, handler: str, arg: bytes, key: str) -> None:
-            sent.append((service, handler, arg, key))
+        def ingress(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            return httpx.Response(202, json={"invocationId": "inv_1", "status": "Accepted"})
 
-        workflows = restate_workflow.RestateOrderWorkflow(send)
-        started = workflows.start(order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2))
+        async def start() -> order_workflow.StartResponse:
+            async with httpx.AsyncClient(base_url="http://ingress", transport=httpx.MockTransport(ingress)) as http:
+                workflows = restate_workflow.RestateOrderWorkflow(restate.client.Client(http))
+                return await workflows.start(order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2))
+
+        started = asyncio.run(start())
 
         assert started.order_id == "o1"
-        service, handler, arg, key = sent[0]
-        assert (service, handler, key) == (restate_workflow.WORKFLOW, restate_workflow.RUN, "o1")
-        assert json.loads(arg) == {"sku": "widget", "quantity": 2}
+        assert seen[0].url.path == f"/{restate_workflow.WORKFLOW}/o1/{restate_workflow.RUN}/send"
+        assert seen[0].headers["content-type"] == "application/json"
+        assert json.loads(seen[0].content) == {"sku": "widget", "quantity": 2}
 
     def test_a_refused_send_is_an_infra_error(self) -> None:
-        async def send(service: str, handler: str, arg: bytes, key: str) -> None:
-            raise restate.HttpError(404, "Not Found")
+        def ingress(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(404, text="Not Found")
 
-        workflows = restate_workflow.RestateOrderWorkflow(send)
+        async def start() -> order_workflow.StartResponse:
+            async with httpx.AsyncClient(base_url="http://ingress", transport=httpx.MockTransport(ingress)) as http:
+                workflows = restate_workflow.RestateOrderWorkflow(restate.client.Client(http))
+                return await workflows.start(order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2))
+
         with pytest.raises(errors.InfraError):
-            workflows.start(order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2))
+            asyncio.run(start())
+
+    def test_an_unreachable_ingress_is_an_infra_error(self) -> None:
+        def ingress(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("connection refused")
+
+        async def start() -> order_workflow.StartResponse:
+            async with httpx.AsyncClient(base_url="http://ingress", transport=httpx.MockTransport(ingress)) as http:
+                workflows = restate_workflow.RestateOrderWorkflow(restate.client.Client(http))
+                return await workflows.start(order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2))
+
+        with pytest.raises(errors.InfraError):
+            asyncio.run(start())
