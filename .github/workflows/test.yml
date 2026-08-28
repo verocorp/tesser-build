@@ -149,8 +149,9 @@ jobs:
   asyncpg-example:
     # Gates the minimal tree with a real database behind it: asyncpg
     # repositories in both contexts, selected by the storage coordinate, and
-    # an e2e that bootstraps through the app loader alone and reads Postgres
-    # back. The service container is the database the e2e hits.
+    # an e2e that bootstraps through the app loader alone. The runner supplies
+    # the app's environment, as a deploy would; the service container is the
+    # database it points at.
     name: asyncpg example (tessercheck + mypy --strict + pytest against Postgres)
     runs-on: ubuntu-latest
     services:
@@ -176,7 +177,8 @@ jobs:
         run: pip install -r examples/asyncpg/requirements-dev.txt
       - name: examples/asyncpg — tessercheck + mypy --strict + pytest
         env:
-          ASYNCPG_DSN: postgres://tesser@localhost:5432/tesser
+          ALPHA_STORAGE: postgres://tesser@localhost:5432/tesser
+          BETA_STORAGE: postgres://tesser@localhost:5432/tesser
         run: scripts/verify asyncpg
 
   serdepy-example:

@@ -126,10 +126,11 @@ run_minimal() {
 # The minimal tree with a real database behind it: the same two contexts, each
 # with an in-memory and an asyncpg repository selected by the storage
 # coordinate, an async client/service/port chain, and an e2e that bootstraps
-# through the app loader alone and reads Postgres back. The gate needs a
-# reachable Postgres at ASYNCPG_DSN — there is no skip, because a skipped
-# e2e is a gate that passes without checking anything. CI provides a service
-# container; locally:
+# through the app loader alone. The app reads its own environment through
+# the config repository, so the runner supplies it — the same job a deploy
+# does. Tests never inject it. The gate needs a reachable Postgres at that
+# coordinate — there is no skip, because a skipped e2e is a gate that passes
+# without checking anything. CI provides a service container; locally:
 #
 #   docker run -d --name tesser-asyncpg-pg -e POSTGRES_USER=tesser \
 #     -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=tesser -p 5434:5432 postgres:16
@@ -142,8 +143,9 @@ run_asyncpg() {
   tessercheck_tree "$PWD" || return 1
   step "mypy --strict"
   MYPYPATH=.:../../tesser-py mypy --strict kernel shared protocol alpha beta app srv tests conftest.py || return 1
-  step "pytest (against Postgres at ASYNCPG_DSN)"
-  ASYNCPG_DSN="${ASYNCPG_DSN:-postgres://tesser@localhost:5434/tesser}" \
+  step "pytest (against Postgres at ALPHA_STORAGE / BETA_STORAGE)"
+  ALPHA_STORAGE="${ALPHA_STORAGE:-postgres://tesser@localhost:5434/tesser}" \
+  BETA_STORAGE="${BETA_STORAGE:-postgres://tesser@localhost:5434/tesser}" \
     pytest -q || return 1
 }
 

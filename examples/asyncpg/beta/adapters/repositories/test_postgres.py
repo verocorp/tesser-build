@@ -11,7 +11,7 @@ import beta.application.ports.key_repository as key_repository
 class TestPostgresKeyRepository:
 
     async def test_a_put_key_is_held_across_repositories(self) -> None:
-        dsn = os.environ["ASYNCPG_DSN"]
+        dsn = os.environ["BETA_STORAGE"]
         connection = await asyncpg.connect(dsn)
         await connection.execute("DROP TABLE IF EXISTS keys")
         await connection.close()
