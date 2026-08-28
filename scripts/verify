@@ -132,7 +132,10 @@ run_minimal() {
 # container; locally:
 #
 #   docker run -d --name tesser-asyncpg-pg -e POSTGRES_USER=tesser \
-#     -e POSTGRES_PASSWORD=tesser -e POSTGRES_DB=tesser -p 5434:5432 postgres:16
+#     -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=tesser -p 5434:5432 postgres:16
+#
+# Trust auth on a throwaway container means the DSN carries no password, so
+# nothing credential-shaped is ever committed.
 run_asyncpg() {
   cd "$ROOT/examples/asyncpg" || return 1
   step "tessercheck (zero findings over the whole tree)"
@@ -140,7 +143,7 @@ run_asyncpg() {
   step "mypy --strict"
   MYPYPATH=.:../../tesser-py mypy --strict kernel shared protocol alpha beta app srv tests conftest.py || return 1
   step "pytest (against Postgres at ASYNCPG_DSN)"
-  ASYNCPG_DSN="${ASYNCPG_DSN:-postgres://tesser:tesser@localhost:5434/tesser}" \
+  ASYNCPG_DSN="${ASYNCPG_DSN:-postgres://tesser@localhost:5434/tesser}" \
     pytest -q || return 1
 }
 

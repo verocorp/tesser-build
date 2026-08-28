@@ -158,7 +158,7 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_USER: tesser
-          POSTGRES_PASSWORD: tesser
+          POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: tesser
         ports:
           - 5432:5432
@@ -176,7 +176,7 @@ jobs:
         run: pip install -r examples/asyncpg/requirements-dev.txt
       - name: examples/asyncpg — tessercheck + mypy --strict + pytest
         env:
-          ASYNCPG_DSN: postgres://tesser:tesser@localhost:5432/tesser
+          ASYNCPG_DSN: postgres://tesser@localhost:5432/tesser
         run: scripts/verify asyncpg
 
   serdepy-example:
