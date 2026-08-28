@@ -14,5 +14,9 @@ class MemoryWidgetRepository(ts.Repository):
         self._names.add(request.name)
         return widget_repository.SaveResponse(name=request.name)
 
+    async def find(self, request: widget_repository.FindRequest) -> widget_repository.FindResponse:
+        found = widget_repository.Found.YES if request.name in self._names else widget_repository.Found.NO
+        return widget_repository.FindResponse(found=found)
+
     async def close(self) -> None:
         self._names.clear()

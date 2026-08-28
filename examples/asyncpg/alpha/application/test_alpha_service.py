@@ -18,6 +18,10 @@ class FakeWidgetRepository(widget_repository.WidgetRepository):
         self.saved.append(request.name)
         return widget_repository.SaveResponse(name=request.name)
 
+    async def find(self, request: widget_repository.FindRequest) -> widget_repository.FindResponse:
+        found = widget_repository.Found.YES if request.name in self.saved else widget_repository.Found.NO
+        return widget_repository.FindResponse(found=found)
+
 
 @ts.fake
 class FakeBetaCheck(beta_check.BetaCheck):
@@ -55,3 +59,11 @@ class TestAlphaService:
         await alpha_service.AlphaService(widgets, checks).add(add_request(name="a", part="a"))
         assert widgets.saved == []
         assert checks.checked == ["a"]
+
+    async def test_find_reports_whether_the_repository_holds_the_name(self) -> None:
+        service = alpha_service.AlphaService(FakeWidgetRepository(), FakeBetaCheck())
+        await service.add(add_request(name="a", part="p"))
+        found = await service.find(client.FindRequest(name="a"))
+        missing = await service.find(client.FindRequest(name="x"))
+        assert found.found == "yes"
+        assert missing.found == "no"

@@ -18,6 +18,20 @@ class AddResponse(ts.Response):
         self.name = name
 
 
+class FindRequest(ts.Request):
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+class FindResponse(ts.Response):
+
+    def __init__(self, found: str) -> None:
+        self.found = found
+
+
 class Client(ts.Client, typing.Protocol):
 
     async def add(self, request: AddRequest) -> AddResponse: ...
+
+    async def find(self, request: FindRequest) -> FindResponse: ...

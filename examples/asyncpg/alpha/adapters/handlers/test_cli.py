@@ -13,6 +13,9 @@ class FakeClient(client.Client):
     async def add(self, request: client.AddRequest) -> client.AddResponse:
         return client.AddResponse(name=request.name)
 
+    async def find(self, request: client.FindRequest) -> client.FindResponse:
+        return client.FindResponse(found="no")
+
 
 class TestHandler:
 

@@ -40,6 +40,12 @@ class MapToAddResponse(ts.Mapper, client.AddResponse):
         super().__init__(name=str(added.identity))
 
 
+class MapToFindRequest(ts.Mapper, widget_repository.FindRequest):
+
+    def __init__(self, sought: widget.Name) -> None:
+        super().__init__(name=str(sought))
+
+
 class AlphaService(ts.ApplicationService):
 
     def __init__(self, widgets: widget_repository.WidgetRepository, checks: beta_check.BetaCheck) -> None:
@@ -57,3 +63,8 @@ class AlphaService(ts.ApplicationService):
             case _ as never:
                 typing.assert_never(never)
         return MapToAddResponse(added)
+
+    async def find(self, request: client.FindRequest) -> client.FindResponse:
+        sought = widget.Name(request.name)
+        answer = await self._widgets.find(MapToFindRequest(sought))
+        return client.FindResponse(found=answer.found.value)

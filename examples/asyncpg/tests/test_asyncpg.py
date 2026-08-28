@@ -7,21 +7,22 @@ import beta.client.client as beta_client
 
 class TestLoadedApp:
 
-    async def test_a_second_load_reads_what_the_first_wrote(self) -> None:
-        first = loader.load()
-        held = await first.beta.client.hold(beta_client.HoldRequest(key="k"))
-        await first.close()
-        second = loader.load()
-        checked = await second.beta.client.check(beta_client.CheckRequest(key="k"))
-        await second.close()
-        assert held.key == "k"
-        assert checked.held == "yes"
-
-    async def test_alpha_takes_a_new_part_and_checks_a_held_one_through_beta(self) -> None:
+    async def test_the_loaded_app_writes_and_reads_both_contexts(self) -> None:
         built = loader.load()
-        await built.beta.client.hold(beta_client.HoldRequest(key="a"))
-        taken = await built.alpha.client.add(alpha_client.AddRequest(name="b", part="p"))
-        checked = await built.alpha.client.add(alpha_client.AddRequest(name="a", part="a"))
+        held = await built.beta.client.hold(beta_client.HoldRequest(key="e2e-held"))
+        checked = await built.beta.client.check(beta_client.CheckRequest(key="e2e-held"))
+        unheld = await built.beta.client.check(beta_client.CheckRequest(key="e2e-never-held"))
+        taken = await built.alpha.client.add(alpha_client.AddRequest(name="e2e-taken", part="p"))
+        found = await built.alpha.client.find(alpha_client.FindRequest(name="e2e-taken"))
+        missing = await built.alpha.client.find(alpha_client.FindRequest(name="e2e-never-added"))
+        kept = await built.alpha.client.add(alpha_client.AddRequest(name="e2e-held", part="e2e-held"))
+        unsaved = await built.alpha.client.find(alpha_client.FindRequest(name="e2e-held"))
         await built.close()
-        assert taken.name == "b"
-        assert checked.name == "a"
+        assert held.key == "e2e-held"
+        assert checked.held == "yes"
+        assert unheld.held == "no"
+        assert taken.name == "e2e-taken"
+        assert found.found == "yes"
+        assert missing.found == "no"
+        assert kept.name == "e2e-held"
+        assert unsaved.found == "no"
