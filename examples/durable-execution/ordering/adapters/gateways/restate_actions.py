@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import typing
 
 import tesser.adapters as ts
 import restate
@@ -10,11 +9,12 @@ import restate.extensions
 import ordering.application.ports.order_actions as order_actions
 import tesser.errors as errors
 
-ACTIONS: typing.Final[str] = "OrderingActions"
-QUOTE: typing.Final[str] = "quote"
-
 
 class RestateOrderActions(ts.Gateway):
+
+    def __init__(self, service: str, handler: str) -> None:
+        self._service = service
+        self._handler = handler
 
     async def quote(self, request: order_actions.QuoteRequest) -> order_actions.QuoteResponse:
         try:
@@ -25,7 +25,9 @@ class RestateOrderActions(ts.Gateway):
             raise errors.InfraError("quote was called outside a restate invocation")
         body = json.dumps({"sku": request.sku}).encode()
         try:
-            raw = await ctx.generic_call(ACTIONS, QUOTE, body, headers={"content-type": "application/json"})
+            raw = await ctx.generic_call(
+                self._service, self._handler, body, headers={"content-type": "application/json"}
+            )
         except restate.TerminalError as e:
             raise errors.DomainError(errors.Kind.NOT_FOUND, "action_rejected", e.message) from e
         data = json.loads(raw)

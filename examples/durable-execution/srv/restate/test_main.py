@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import signal
@@ -9,7 +10,7 @@ import sys
 import time
 import urllib.request
 
-import srv.restate.main as main
+import app.loader as loader
 
 
 class TestRestateHost:
@@ -40,7 +41,13 @@ class TestRestateHost:
             except subprocess.TimeoutExpired:
                 host.kill()
                 host.wait()
+        os.environ.update(RESTATE_INGRESS="http://localhost:8080")
+        built = loader.load()
+        try:
+            at = built.ordering.address
+        finally:
+            asyncio.run(built.close())
         services = manifest["services"]
         assert isinstance(services, list)
-        assert {(s["name"], s["ty"]) for s in services} == {(main.WORKFLOW, "WORKFLOW"), (main.ACTIONS, "SERVICE")}
-        assert {h["name"] for s in services for h in s["handlers"]} == {main.RUN, main.QUOTE}
+        assert {(s["name"], s["ty"]) for s in services} == {(at.workflow, "WORKFLOW"), (at.actions, "SERVICE")}
+        assert {h["name"] for s in services for h in s["handlers"]} == {at.run, at.quote}

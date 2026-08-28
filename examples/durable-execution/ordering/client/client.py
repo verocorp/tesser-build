@@ -5,6 +5,15 @@ import typing
 import tesser.context as ts
 
 
+class RestateAddress(ts.Response):
+
+    def __init__(self, workflow: str, run: str, actions: str, quote: str) -> None:
+        self.workflow = workflow
+        self.run = run
+        self.actions = actions
+        self.quote = quote
+
+
 class PlaceRequest(ts.Request):
 
     def __init__(self, order_id: str, sku: str, quantity: int) -> None:

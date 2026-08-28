@@ -23,13 +23,13 @@ class TestRestateOrderWorkflow:
 
         async def start() -> order_workflow.StartResponse:
             async with httpx.AsyncClient(base_url="http://ingress", transport=httpx.MockTransport(ingress)) as http:
-                workflows = restate_workflow.RestateOrderWorkflow(restate.client.Client(http))
+                workflows = restate_workflow.RestateOrderWorkflow(restate.client.Client(http), "Ordering", "run")
                 return await workflows.start(order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2))
 
         started = asyncio.run(start())
 
         assert started.order_id == "o1"
-        assert seen[0].url.path == f"/{restate_workflow.WORKFLOW}/o1/{restate_workflow.RUN}/send"
+        assert seen[0].url.path == "/Ordering/o1/run/send"
         assert seen[0].headers["content-type"] == "application/json"
         assert json.loads(seen[0].content) == {"sku": "widget", "quantity": 2}
 
@@ -39,7 +39,7 @@ class TestRestateOrderWorkflow:
 
         async def start() -> order_workflow.StartResponse:
             async with httpx.AsyncClient(base_url="http://ingress", transport=httpx.MockTransport(ingress)) as http:
-                workflows = restate_workflow.RestateOrderWorkflow(restate.client.Client(http))
+                workflows = restate_workflow.RestateOrderWorkflow(restate.client.Client(http), "Ordering", "run")
                 return await workflows.start(order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2))
 
         with pytest.raises(errors.InfraError):
@@ -51,7 +51,7 @@ class TestRestateOrderWorkflow:
 
         async def start() -> order_workflow.StartResponse:
             async with httpx.AsyncClient(base_url="http://ingress", transport=httpx.MockTransport(ingress)) as http:
-                workflows = restate_workflow.RestateOrderWorkflow(restate.client.Client(http))
+                workflows = restate_workflow.RestateOrderWorkflow(restate.client.Client(http), "Ordering", "run")
                 return await workflows.start(order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2))
 
         with pytest.raises(errors.InfraError):

@@ -7,11 +7,11 @@ The chain, top to bottom, with where each link lives:
 | a CLI host places an order | `srv/cli/main.py` | `CliHost` → `ordering/adapters/handlers/cli.py` |
 | the initial application service | `ordering/application/order_service.py` | `OrderService.place` builds the `Order` aggregate |
 | it starts the workflow through a port | `ordering/application/ports/order_workflow.py` | `OrderWorkflow.start(StartRequest) -> StartResponse` |
-| the Restate SDK sends the workflow | `ordering/adapters/gateways/restate_workflow.py` | `RestateOrderWorkflow.start` → `client.generic_send(WORKFLOW, RUN, body, key=order_id)` on the `RestateClient` the component built |
+| the Restate SDK sends the workflow | `ordering/adapters/gateways/restate_workflow.py` | `RestateOrderWorkflow.start` → `client.generic_send(service, handler, body, key=order_id)` on the `RestateClient` and the two names the component handed it |
 | Restate's server calls the workflow handler | `srv/restate/main.py` | `RestateHost` mounts `@workflow.main()` → `ordering/adapters/handlers/restate.py` `WorkflowHandler.run` |
 | the orchestrator, an internal application service | `ordering/application/order_orchestrator.py` | `OrderOrchestrator.run` builds the `Order`, asks its actions for a quote |
 | it runs the action through a port | `ordering/application/ports/order_actions.py` | `OrderActions.quote(QuoteRequest) -> QuoteResponse` |
-| the Restate SDK calls the action durably | `ordering/adapters/gateways/restate_actions.py` | `RestateOrderActions.quote` → `ctx.generic_call(ACTIONS, QUOTE, body)` on `restate.extensions.current_context()` |
+| the Restate SDK calls the action durably | `ordering/adapters/gateways/restate_actions.py` | `RestateOrderActions.quote` → `ctx.generic_call(service, handler, body)` on `restate.extensions.current_context()` |
 | Restate's server calls the action handler | `srv/restate/main.py` | `@actions.handler()` → `ActionHandler.quote` |
 | the action, an internal application service with a repository lookup | `ordering/application/order_actions.py` | `OrderActions.quote` → `CatalogRepository.price` → `adapters/repositories/memory.py` |
 | the price comes back up the same chain | | `QuoteResponse.cents` → `Order.total(PriceSpec)` → `RunResponse.total_cents` ends the workflow |
@@ -49,15 +49,36 @@ only cover the outside-an-invocation path — the SDK's context class is an
 ABC no `@ts.fake` may implement — so the call path is covered by the live
 run below.
 
-## The two addresses that cross the tree
+## The context owns its Restate address
 
-`WORKFLOW`/`RUN` and `ACTIONS`/`QUOTE` are declared in the gateway that
-sends to them and in `srv/restate/main.py`'s route table. A gateway cannot
-import `srv` (TB063) or `protocol` (TB066), so the SDK's typed path (which
-derives the names from the decorated handler object) is out of a gateway's
-reach; the names are the same kind of shared fact as a URL an HTTP gateway
-posts to. `srv/restate/test_main.py` boots the real host and reads
-`/discover`, which is where a drift would surface.
+The four names Restate is addressed by are declared once, in the component:
+`RestateAddress(workflow, run, actions, quote)` is a client DTO that
+`Ordering.__init__` constructs and publishes as `Ordering.address`. Both
+readers take it from there — the gateways are handed the two names each one
+calls (outbound), and `srv/restate/main.py` registers
+`restate.Workflow(built.ordering.address.workflow)` and
+`@workflow.main(name=built.ordering.address.run, ...)` (inbound). Nothing else
+in the tree spells them. `srv/restate/test_main.py` boots the real host, reads
+`/discover`, and asserts the discovered manifest against the address the
+component published.
+
+**This diverges from `srv.md` rule 5 — the route table is the host's — and does
+so on purpose.** A route table is an app-level decision because the callers are
+outside the app. Here the context is its own caller: the address is an
+agreement between this context's gateway and this context's handler, and the
+host only speaks it to the SDK at registration. Mounting this context beside
+others would still leave the host owning the transport, but not this name.
+
+Two placement facts shape the DTO. It is a `ts.Response` on the client module,
+not a `ts.Record`: `ts.Record` is a protocol kind from `tesser.srv`, while a
+client module imports only `tesser.context` (TB050/TB062) and holds only
+requests, responses, and clients (TB052). And the gateways take the two names
+as parameters rather than the whole DTO, because only a handler imports its own
+context's client (TB060) — the same rule that keeps the SDK's typed path (which
+derives the names from the decorated handler object) out of a gateway's reach.
+Nothing in tessercheck yet says what a component may publish beside `client`
+and `close`; `address` sits in that gap, as `orchestrator` and `actions`
+already do.
 
 ## Errors across the engine
 
@@ -71,8 +92,8 @@ propagates as-is and Restate retries the invocation.
 
 ## The gateway holds the SDK's client, and nothing sits between
 
-`RestateOrderWorkflow` takes a `restate.RestateClient` and calls
-`generic_send` on it. The component builds the real one —
+`RestateOrderWorkflow` takes a `restate.RestateClient`, plus the service and
+handler names the component addressed it with, and calls `generic_send` on it. The component builds the real one —
 `restate.client.Client(httpx.AsyncClient(base_url=cfg.ingress))`, which is
 all `restate.create_client` does under its context manager — and closes it.
 Because an httpx client's connections belong to the loop that opened them,

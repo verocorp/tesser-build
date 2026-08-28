@@ -12,6 +12,6 @@ import tesser.errors as errors
 class TestRestateOrderActions:
 
     def test_a_quote_outside_an_invocation_is_an_infra_error(self) -> None:
-        actions = restate_actions.RestateOrderActions()
+        actions = restate_actions.RestateOrderActions("OrderingActions", "quote")
         with pytest.raises(errors.InfraError):
             asyncio.run(actions.quote(order_actions.QuoteRequest(sku="widget")))

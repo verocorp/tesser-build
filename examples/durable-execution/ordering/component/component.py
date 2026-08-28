@@ -19,11 +19,17 @@ class Ordering(ts.Component):
     def __init__(self, cfg: config.Config) -> None:
         self._catalog = memory.MemoryCatalogRepository()
         self._http = httpx.AsyncClient(base_url=cfg.ingress)
+        at = client.RestateAddress(
+            workflow="Ordering", run="run", actions="OrderingActions", quote="quote"
+        )
+        self.address: client.RestateAddress = at
         self.client: client.Client = order_service.OrderService(
-            restate_workflow.RestateOrderWorkflow(restate.client.Client(self._http))
+            restate_workflow.RestateOrderWorkflow(
+                restate.client.Client(self._http), at.workflow, at.run
+            )
         )
         self.orchestrator: client.Orchestrator = order_orchestrator.OrderOrchestrator(
-            restate_actions.RestateOrderActions()
+            restate_actions.RestateOrderActions(at.actions, at.quote)
         )
         self.actions: client.Actions = order_actions.OrderActions(self._catalog)
 
