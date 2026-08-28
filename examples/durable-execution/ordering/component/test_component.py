@@ -12,7 +12,6 @@ class TestOrdering:
         quoted = wired.actions.quote(client.QuoteRequest(sku="widget"))
         assert quoted.cents == 250
 
-    def test_the_component_publishes_the_restate_address_it_wired_its_gateways_with(self) -> None:
+    def test_the_component_publishes_the_restate_definitions_it_wired(self) -> None:
         wired = component.Ordering(config.Config(config.Spec(ingress="http://localhost:8080")))
-        assert (wired.address.workflow, wired.address.run) == ("Ordering", "run")
-        assert (wired.address.actions, wired.address.quote) == ("OrderingActions", "quote")
+        assert [d.name for d in wired.handlers.definitions()] == ["Ordering", "OrderingActions"]

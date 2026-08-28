@@ -16,7 +16,7 @@ import app.loader as loader
 
 class TestHttpHost:
 
-    def test_the_mounted_restate_endpoint_discovers_the_address_the_context_owns(self) -> None:
+    def test_the_mounted_restate_endpoint_discovers_what_the_context_declared(self) -> None:
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))
             port = probe.getsockname()[1]
@@ -45,13 +45,13 @@ class TestHttpHost:
         os.environ.update(RESTATE_INGRESS="http://localhost:8080")
         built = loader.load()
         try:
-            at = built.ordering.address
+            declared = {d.name: sorted(d.handlers) for d in built.ordering.handlers.definitions()}
         finally:
             asyncio.run(built.close())
         services = manifest["services"]
         assert isinstance(services, list)
-        assert {(s["name"], s["ty"]) for s in services} == {(at.workflow, "WORKFLOW"), (at.actions, "SERVICE")}
-        assert {h["name"] for s in services for h in s["handlers"]} == {at.run, at.quote}
+        assert {s["name"] for s in services} == set(declared)
+        assert {s["name"]: sorted(h["name"] for h in s["handlers"]) for s in services} == declared
 
     def test_the_orders_route_answers_by_the_failure_it_meets(self) -> None:
         with socket.socket() as probe:

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import json
+import typing
 
-import pytest
+import restate
 import tesser.testing as ts
 
 import ordering.adapters.handlers.restate as restate_handlers
@@ -12,46 +12,34 @@ import protocol.durable as durable
 
 
 @ts.fake
-class FakeOrchestrator(client.Orchestrator):
-
-    def __init__(self) -> None:
-        self.ran: list[client.RunRequest] = []
-
-    async def run(self, request: client.RunRequest) -> client.RunResponse:
-        self.ran.append(request)
-        return client.RunResponse(order_id=request.order_id, total_cents=750)
-
-
-class TestWorkflowHandler:
-
-    def test_running_answers_the_total_for_the_keyed_order(self) -> None:
-        handler = restate_handlers.WorkflowHandler(FakeOrchestrator())
-        request = durable.WorkflowRequest(key="o1", body=b'{"sku": "widget", "quantity": 3}')
-        response = asyncio.run(handler.run(request))
-        assert json.loads(response.body) == {"order_id": "o1", "total_cents": 750}
-
-    def test_the_workflow_key_is_the_order_id(self) -> None:
-        fake = FakeOrchestrator()
-        request = durable.WorkflowRequest(key="o9", body=b'{"sku": "widget", "quantity": 3}')
-        asyncio.run(restate_handlers.WorkflowHandler(fake).run(request))
-        assert [(r.order_id, r.sku, r.quantity) for r in fake.ran] == [("o9", "widget", 3)]
-
-    def test_a_body_without_a_sku_is_a_bad_invocation(self) -> None:
-        handler = restate_handlers.WorkflowHandler(FakeOrchestrator())
-        with pytest.raises(durable.BadInvocation):
-            asyncio.run(handler.run(durable.WorkflowRequest(key="o1", body=b'{"quantity": 3}')))
-
-
-@ts.fake
 class FakeActions(client.Actions):
 
+    def __init__(self) -> None:
+        self.quoted: list[client.QuoteRequest] = []
+
     def quote(self, request: client.QuoteRequest) -> client.QuoteResponse:
+        self.quoted.append(request)
         return client.QuoteResponse(cents=250)
 
 
-class TestActionHandler:
+class TestRestateHandlers:
 
-    def test_quoting_answers_the_cents(self) -> None:
-        handler = restate_handlers.ActionHandler(FakeActions())
-        response = handler.quote(durable.ActionRequest(body=b'{"sku": "widget"}'))
-        assert json.loads(response.body) == {"cents": 250}
+    def test_it_declares_one_workflow_and_one_service(self) -> None:
+        handlers = restate_handlers.RestateHandlers(FakeActions())
+        assert [d.name for d in handlers.definitions()] == ["Ordering", "OrderingActions"]
+
+    def test_each_definition_carries_the_handler_named_for_its_function(self) -> None:
+        handlers = restate_handlers.RestateHandlers(FakeActions())
+        assert [sorted(d.handlers) for d in handlers.definitions()] == [["run"], ["quote"]]
+
+    def test_the_quote_handler_answers_the_cents_the_actions_gave_it(self) -> None:
+        fake = FakeActions()
+        handlers = restate_handlers.RestateHandlers(fake)
+
+        async def call() -> durable.QuoteResponse:
+            return await handlers.quote(
+                typing.cast(restate.Context, None), durable.QuoteRequest(sku="widget")
+            )
+
+        assert asyncio.run(call()) == durable.QuoteResponse(cents=250)
+        assert [q.sku for q in fake.quoted] == ["widget"]

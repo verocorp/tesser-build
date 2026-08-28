@@ -7,17 +7,17 @@ The chain, top to bottom, with where each link lives:
 | an HTTP host takes `POST /orders` | `srv/http/main.py` | `HttpHost`'s `APIRouter` → `ordering/adapters/handlers/http.py` `Handler.place` |
 | the initial application service | `ordering/application/order_service.py` | `OrderService.place` builds the `Order` aggregate |
 | it starts the workflow through a port | `ordering/application/ports/order_workflow.py` | `OrderWorkflow.start(StartRequest) -> StartResponse` |
-| the Restate SDK sends the workflow | `ordering/adapters/gateways/restate_workflow.py` | `RestateOrderWorkflow.start` → `client.generic_send(service, handler, body, key=order_id)` on the `RestateClient` and the two names the component handed it |
-| Restate's server calls the workflow handler | `srv/http/main.py` | the endpoint mounted at `/restate`: `@workflow.main()` → `ordering/adapters/handlers/restate.py` `WorkflowHandler.run` |
-| the orchestrator, an internal application service | `ordering/application/order_orchestrator.py` | `OrderOrchestrator.run` builds the `Order`, asks its actions for a quote |
-| it runs the action through a port | `ordering/application/ports/order_actions.py` | `OrderActions.quote(QuoteRequest) -> QuoteResponse` |
-| the Restate SDK calls the action durably | `ordering/adapters/gateways/restate_actions.py` | `RestateOrderActions.quote` → `ctx.generic_call(service, handler, body)` on `restate.extensions.current_context()` |
-| Restate's server calls the action handler | `srv/http/main.py` | the same mounted endpoint: `@actions.handler()` → `ActionHandler.quote` |
+| the Restate SDK sends the workflow | `ordering/adapters/gateways/restate_workflow.py` | `RestateOrderWorkflow.start` → `client.workflow_send(self._run, key=order_id, arg=RunRequest(...))` — the handler function itself, not a name |
+| Restate's server calls the workflow handler | `ordering/adapters/handlers/restate.py` | `RestateHandlers`'s `@workflow.main()` `run`, mounted at `/restate` by the host |
+| the orchestrator is built **inside the invocation** | `ordering/adapters/handlers/restate.py` | `run` constructs `RestateOrderActions(ctx, quote)` and `OrderOrchestrator(...)` per invocation, over this `ctx` |
+| the orchestrator runs the action through a port | `ordering/application/ports/order_actions.py` | `OrderOrchestrator.run` builds the `Order`, then `OrderActions.quote(QuoteRequest) -> QuoteResponse` |
+| the Restate SDK calls the action durably | `ordering/adapters/gateways/restate_actions.py` | `RestateOrderActions.quote` → `ctx.service_call(self._quote, QuoteRequest(sku))` on the ctx it was built with |
+| Restate's server calls the action handler | `ordering/adapters/handlers/restate.py` | the same `RestateHandlers`: `@service.handler()` `quote` |
 | the action, an internal application service with a repository lookup | `ordering/application/order_actions.py` | `OrderActions.quote` → `CatalogRepository.price` → `adapters/repositories/memory.py` |
 | the price comes back up the same chain | | `QuoteResponse.cents` → `Order.total(PriceSpec)` → `RunResponse.total_cents` ends the workflow |
 
 `POST /orders` answers `202` with the order id as soon as the workflow is
-accepted — `generic_send` is fire-and-forget, so the total is read back from
+accepted — `workflow_send` is fire-and-forget, so the total is read back from
 Restate, not from the response.
 
 Restate never touches the domain, and the application never touches
@@ -31,89 +31,141 @@ engine.
 ## What the engine is, in this anatomy
 
 - **Inbound, it is a host.** Restate's server calls the endpoint mounted at
-  `/restate`, which routes to handlers like any other host: one `Workflow`
-  and one `Service`, each with one named handler. `BytesSerde` on both sides
-  keeps the body opaque bytes so the handler owns content.
+  `/restate`, which routes to `RestateHandlers`: one `Workflow` and one
+  `Service`, each with one typed handler taking and returning a frozen
+  dataclass the SDK serializes.
 - **Outbound, it is a gateway over a port.** Starting the workflow is
   `RestateOrderWorkflow` over `OrderWorkflow`; running an action is
-  `RestateOrderActions` over `OrderActions`. Each is built once, at wiring
-  time, like any gateway.
+  `RestateOrderActions` over `OrderActions`.
 
-**The invocation context is the SDK's to provide.** A Restate handler is
-handed a `WorkflowContext`, and only calls made through it are journaled.
-The SDK sets that context into its own `ContextVar` when it enters a handler
-and exposes it as `restate.extensions.current_context()`, so a gateway that
-was wired once reads the current invocation's context at call time. Nothing
-in this tree binds, stores, or hands the context around: the host routes,
-the handler transforms, the gateway reads the ambient context. (The SDK's
-module docstring calls `extensions` internal; this example pins
-`restate_sdk>=1.0` and the srv test reads the host's `/restate/discover`
-manifest, which is where an SDK change would surface.) The gateway's sibling test can
-only cover the outside-an-invocation path — the SDK's context class is an
-ABC no `@ts.fake` may implement — so the call path is covered by the live
-run below.
+**Everything Restate is addressed by a function, not a name.** The gateways
+take the handler *function* and hand it to the SDK — `client.workflow_send(self._run, ...)`
+and `ctx.service_call(self._quote, ...)` — and the SDK reads the service name,
+the handler name, and both serdes off the decorated object
+(`handler_from_callable`). A rename is a rename; there is no string to keep in
+step, and no address DTO any more. `"Ordering"` and `"OrderingActions"` appear
+exactly once each, in the `restate.Workflow(...)` / `restate.Service(...)`
+constructor calls inside `RestateHandlers.__init__`.
 
-## The context owns its Restate address
+**The orchestrator is built inside the invocation.** A Restate handler is
+handed a `WorkflowContext`, and only calls made through it are journaled. So
+`run` constructs its own `RestateOrderActions(ctx, quote)` over *this* ctx and
+its own `OrderOrchestrator` over that gateway, per invocation. Neither is a
+component attribute: the component wires what outlives a request, and an
+invocation-scoped object does not. Nothing reads an ambient context, and
+nothing binds or stores one.
 
-The four names Restate is addressed by are declared once, in the component:
-`RestateAddress(workflow, run, actions, quote)` is a client DTO that
-`Ordering.__init__` constructs and publishes as `Ordering.address`. Both
-readers take it from there — the gateways are handed the two names each one
-calls (outbound), and `srv/http/main.py` registers
-`restate.Workflow(built.ordering.address.workflow)` and
-`@workflow.main(name=built.ordering.address.run, ...)` (inbound). Nothing else
-in the tree spells them. `srv/http/test_main.py` boots the real host, reads
-`/restate/discover`, and asserts the discovered manifest against the address
-the component published.
+## The context declares its Restate service, the host only mounts it
 
-**This diverges from `srv.md` rule 5 — the route table is the host's — and does
-so on purpose.** A route table is an app-level decision because the callers are
-outside the app. Here the context is its own caller: the address is an
-agreement between this context's gateway and this context's handler, and the
-host only speaks it to the SDK at registration. Mounting this context beside
-others would still leave the host owning the transport, but not this name.
+`RestateHandlers` is the Restate service module the Restate docs would have you
+write, except it is a class so its dependencies arrive by constructor instead
+of by module global. It builds the `Workflow` and the `Service`, decorates the
+two handlers as closures over the injected `client.Actions`, and hands the
+whole thing back through `definitions()`. The component builds it once; the
+host does `api.mount("/restate", restate.app(built.ordering.handlers.definitions()))`
+and knows nothing else about Restate.
 
-Two placement facts shape the DTO. It is a `ts.Response` on the client module,
-not a `ts.Record`: `ts.Record` is a protocol kind from `tesser.srv`, while a
-client module imports only `tesser.context` (TB050/TB062) and holds only
-requests, responses, and clients (TB052). And the gateways take the two names
-as parameters rather than the whole DTO, because only a handler imports its own
-context's client (TB060) — the same rule that keeps the SDK's typed path (which
-derives the names from the decorated handler object) out of a gateway's reach.
-Nothing in tessercheck yet says what a component may publish beside `client`
-and `close`; `address` sits in that gap, as `orchestrator` and `actions`
-already do.
+`srv/http/test_main.py` boots the real host, reads `/restate/discover`, and
+asserts the discovered manifest against what `definitions()` declares — so the
+manifest and the code cannot drift apart silently.
+
+**This still diverges from `srv.md` rule 5 — the route table is the host's.**
+The Restate names are declared in a context adapter, not at the app edge. The
+reason is the same as before: here the context is its own caller, and the names
+are an agreement between this context's gateway and this context's handler. On
+the typed path they are barely an agreement at all — the gateway holds the
+function, so the only reader of the string is the SDK.
+
+### What this shape costs, in rules
+
+Four tessercheck findings stand, deliberately, awaiting a ruling:
+
+- `ordering/adapters/handlers/restate.py` imports
+  `ordering.application.order_orchestrator` (**TB060**). An adapter may reach
+  `application.ports`, not an application service. But the orchestrator is
+  invocation-scoped, and the invocation only exists inside the handler, so the
+  handler is the only place that can construct it.
+- both gateways — and their sibling tests — import `protocol.durable`
+  (**TB066**, **TB070**). Only a handler may reach the app shell's `protocol`
+  package. But on the typed path the gateway and the handler must speak the
+  *same* Python types, and those types are the wire shapes.
+
+And the wire shapes themselves are plain `@dataclasses.dataclass(frozen=True)`
+records with no `ts.*` base (**TB050**, **TB052** ×4), because that is what the
+SDK can serialize. See below.
+
+## What the SDK needs from the wire types
+
+The typed path serializes the handler's declared argument and return types, so
+`protocol/durable.py` holds four frozen dataclasses and nothing else — no
+`BytesSerde`, no `json.dumps`, no hand-written `text()`/`integer()` accessors,
+no `BadInvocation`. The SDK parses the body, and a malformed one never reaches
+the handler.
+
+Two SDK facts this cost real time to find, both worth knowing before the
+Temporal mirror:
+
+- **Dataclass support is an optional extra.** `DefaultSerde` routes dataclasses
+  through `dacite`, which ships only with `restate_sdk[serde]`. Without it the
+  call raises `RuntimeError: Trying to deserialize into a @dataclass. Please
+  add the optional dependencies needed.` The requirement is pinned as
+  `restate_sdk[serde]>=1.0`.
+- **A handler's `DefaultSerde` is never told its type.**
+  `update_handler_io_with_input_type_hints` (`restate/handler.py`) swaps in a
+  dedicated serde for msgspec Structs and Pydantic models, but for a dataclass
+  it records the type hint and leaves `DefaultSerde()` with `type_hint = None`
+  — which falls through to `json.dumps(obj)` and raises `TypeError: Object of
+  type RunRequest is not JSON serializable`. The fix is to bind the serde
+  explicitly at the decorator:
+  `@self.service.handler(input_serde=restate.serde.DefaultSerde(durable.QuoteRequest), ...)`.
+  The client side needs no separate fix — `do_call` reads
+  `handler_from_callable(tpe).handler_io`, so binding it once on the handler
+  serves both directions, and that is also why the gateway sets no
+  content-type header any more.
+
+Discovery reports `contentType: "application/json"` for both handlers, up from
+`*/*` under `BytesSerde`. It does **not** carry a real JSON schema: the
+manifest's `jsonSchema: true` reads the same as it did before, and the SDK
+generates an actual schema only for msgspec and Pydantic types.
 
 ## Errors across the engine
 
-A `DomainError` or a `BadInvocation` in a handler becomes a
-`restate.TerminalError` with the kind's status — no retry. When the action
-handler raises it, the workflow's gateway receives it as a `TerminalError`
-from `generic_call` and raises it again as a `DomainError`, so the
-orchestrator and the workflow handler see a domain error, not an SDK one,
-and the workflow ends terminally with the action's message. Anything else
-propagates as-is and Restate retries the invocation.
+A `DomainError` in a handler becomes a `restate.TerminalError` with the kind's
+status — no retry. When the action handler raises it, the workflow's gateway
+receives it as a `TerminalError` from `service_call` and raises it again as a
+`DomainError`, so the orchestrator and the workflow handler see a domain error,
+not an SDK one, and the workflow ends terminally with the action's message.
+Anything else propagates as-is and Restate retries the invocation.
 
 ## The gateway holds the SDK's client, and nothing sits between
 
-`RestateOrderWorkflow` takes a `restate.RestateClient`, plus the service and
-handler names the component addressed it with, and calls `generic_send` on
-it. The component builds the real one —
+`RestateOrderWorkflow` takes a `restate.RestateClient`, plus the `run` handler
+function itself, and calls `workflow_send` on it. The component builds the real
+one —
 `restate.client.Client(httpx.AsyncClient(base_url=cfg.ingress))`, which is
 all `restate.create_client` does under its context manager — and closes it.
 Because an httpx client's connections belong to the loop that opened them,
 the app's lifecycle is async end to end: `Ordering.close` and `App.close`
 are `async`, and the host awaits them in the `finally` of the same loop it
 serves on. The sibling test builds the same real client over
-`httpx.MockTransport` and checks the URL the SDK forms
-(`/Ordering/o1/run/send`), the content-type, and the body.
+`httpx.MockTransport`, hands the gateway a real handler function decorated on a
+throwaway `restate.Workflow`, and checks the URL the SDK forms from it
+(`/Ordering/o1/run/send`) and the body.
+
+`RestateOrderActions` is the one thing whose real call path the suite cannot
+reach: it needs a live `restate.Context`, the SDK's context class is an ABC
+that no `@ts.fake` may implement (a fake must implement a port, a client, or a
+config repository), and the SDK's own `create_test_harness` wants Docker and
+`testcontainers`. Its sibling test covers both branches — the answer path and
+the `TerminalError` → `DomainError` mapping — over a stand-in defined inside
+each test, and the real journaled call is covered by the live run below.
 
 ## Async everywhere the SDK is
 
 The SDK is async on both sides, so the request path is `async`:
 `OrderWorkflow`, `OrderService`, `Client.place`, the HTTP handler,
-`OrderActions` (the port), `Orchestrator`, `WorkflowHandler`. The action
-service and its repository are sync — plain application code that runs
+`OrderActions` (the port), `OrderOrchestrator`, and both Restate handlers. The
+action service and its repository are sync — plain application code that runs
 inside the action handler. There is no `asyncio.run` on the request path at
 all: the one loop is hypercorn's, opened once by `HttpHost.run`.
 

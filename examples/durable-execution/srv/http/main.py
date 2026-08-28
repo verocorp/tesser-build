@@ -9,12 +9,9 @@ import hypercorn.asyncio
 import hypercorn.config
 import hypercorn.typing
 import restate
-import restate.serde
 
 import app.loader as loader
 import ordering.adapters.handlers.http as http_handlers
-import ordering.adapters.handlers.restate as restate_handlers
-import protocol.durable as durable
 import protocol.http as protocol_http
 import tesser.errors as errors
 
@@ -30,33 +27,6 @@ class HttpHost(ts.Host):
             built = loader.load()
             try:
                 orders = http_handlers.Handler(built.ordering.client)
-                workflow_handler = restate_handlers.WorkflowHandler(built.ordering.orchestrator)
-                action_handler = restate_handlers.ActionHandler(built.ordering.actions)
-                at = built.ordering.address
-                workflow = restate.Workflow(at.workflow)
-                actions = restate.Service(at.actions)
-                passthrough = restate.serde.BytesSerde()
-
-                @workflow.main(name=at.run, accept="*/*", input_serde=passthrough, output_serde=passthrough)
-                async def run_order(ctx: restate.WorkflowContext, body: bytes) -> bytes:
-                    try:
-                        response = await workflow_handler.run(durable.WorkflowRequest(key=ctx.key(), body=body))
-                    except durable.BadInvocation as e:
-                        raise restate.TerminalError(str(e), status_code=400) from e
-                    except errors.DomainError as e:
-                        raise restate.TerminalError(e.message, status_code=errors.status_for(e.kind)) from e
-                    return response.body
-
-                @actions.handler(name=at.quote, accept="*/*", input_serde=passthrough, output_serde=passthrough)
-                async def quote(ctx: restate.Context, body: bytes) -> bytes:
-                    try:
-                        response = action_handler.quote(durable.ActionRequest(body=body))
-                    except durable.BadInvocation as e:
-                        raise restate.TerminalError(str(e), status_code=400) from e
-                    except errors.DomainError as e:
-                        raise restate.TerminalError(e.message, status_code=errors.status_for(e.kind)) from e
-                    return response.body
-
                 router = fastapi.APIRouter()
 
                 @router.post("/orders")
@@ -73,7 +43,7 @@ class HttpHost(ts.Host):
 
                 api = fastapi.FastAPI()
                 api.include_router(router)
-                api.mount(_MOUNT, restate.app([workflow, actions]))
+                api.mount(_MOUNT, restate.app(built.ordering.handlers.definitions()))
 
                 config = hypercorn.config.Config()
                 config.bind = [argv[0] if argv else _BIND]

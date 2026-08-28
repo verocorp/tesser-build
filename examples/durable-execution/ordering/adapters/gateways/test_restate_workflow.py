@@ -5,10 +5,13 @@ import json
 
 import httpx
 import pytest
+import restate
 import restate.client
+import restate.serde
 
 import ordering.adapters.gateways.restate_workflow as restate_workflow
 import ordering.application.ports.order_workflow as order_workflow
+import protocol.durable as durable
 import tesser.errors as errors
 
 
@@ -21,25 +24,42 @@ class TestRestateOrderWorkflow:
             seen.append(request)
             return httpx.Response(202, json={"invocationId": "inv_1", "status": "Accepted"})
 
+        workflow = restate.Workflow("Ordering")
+
+        @workflow.main(
+            input_serde=restate.serde.DefaultSerde(durable.RunRequest),
+            output_serde=restate.serde.DefaultSerde(durable.RunResponse),
+        )
+        async def run(ctx: restate.WorkflowContext, request: durable.RunRequest) -> durable.RunResponse:
+            return durable.RunResponse(order_id=ctx.key(), total_cents=0)
+
         async def start() -> order_workflow.StartResponse:
             async with httpx.AsyncClient(base_url="http://ingress", transport=httpx.MockTransport(ingress)) as http:
-                workflows = restate_workflow.RestateOrderWorkflow(restate.client.Client(http), "Ordering", "run")
+                workflows = restate_workflow.RestateOrderWorkflow(restate.client.Client(http), run)
                 return await workflows.start(order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2))
 
         started = asyncio.run(start())
 
         assert started.order_id == "o1"
         assert seen[0].url.path == "/Ordering/o1/run/send"
-        assert seen[0].headers["content-type"] == "application/json"
         assert json.loads(seen[0].content) == {"sku": "widget", "quantity": 2}
 
     def test_a_refused_send_is_an_infra_error(self) -> None:
         def ingress(request: httpx.Request) -> httpx.Response:
             return httpx.Response(404, text="Not Found")
 
+        workflow = restate.Workflow("Ordering")
+
+        @workflow.main(
+            input_serde=restate.serde.DefaultSerde(durable.RunRequest),
+            output_serde=restate.serde.DefaultSerde(durable.RunResponse),
+        )
+        async def run(ctx: restate.WorkflowContext, request: durable.RunRequest) -> durable.RunResponse:
+            return durable.RunResponse(order_id=ctx.key(), total_cents=0)
+
         async def start() -> order_workflow.StartResponse:
             async with httpx.AsyncClient(base_url="http://ingress", transport=httpx.MockTransport(ingress)) as http:
-                workflows = restate_workflow.RestateOrderWorkflow(restate.client.Client(http), "Ordering", "run")
+                workflows = restate_workflow.RestateOrderWorkflow(restate.client.Client(http), run)
                 return await workflows.start(order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2))
 
         with pytest.raises(errors.InfraError):
@@ -49,9 +69,18 @@ class TestRestateOrderWorkflow:
         def ingress(request: httpx.Request) -> httpx.Response:
             raise httpx.ConnectError("connection refused")
 
+        workflow = restate.Workflow("Ordering")
+
+        @workflow.main(
+            input_serde=restate.serde.DefaultSerde(durable.RunRequest),
+            output_serde=restate.serde.DefaultSerde(durable.RunResponse),
+        )
+        async def run(ctx: restate.WorkflowContext, request: durable.RunRequest) -> durable.RunResponse:
+            return durable.RunResponse(order_id=ctx.key(), total_cents=0)
+
         async def start() -> order_workflow.StartResponse:
             async with httpx.AsyncClient(base_url="http://ingress", transport=httpx.MockTransport(ingress)) as http:
-                workflows = restate_workflow.RestateOrderWorkflow(restate.client.Client(http), "Ordering", "run")
+                workflows = restate_workflow.RestateOrderWorkflow(restate.client.Client(http), run)
                 return await workflows.start(order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2))
 
         with pytest.raises(errors.InfraError):
