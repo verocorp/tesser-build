@@ -5,6 +5,60 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.85.1] - 2026-08-29
+
+A cold review of the asyncpg wave (#139–#142) — a fresh agent with no prior
+context plus a codex challenge pass — reproduced two pool-lifecycle defects
+against live Postgres, found a DSN leak one file over from where #142 removed
+it, and ran a mutation sweep that six mutations survived. This fixes the
+confirmed items. Examples and their tests only; no convention, checker, or
+shipped interface changes.
+
+### Fixed
+- **Two concurrent `Database.open()` calls no longer orphan a pool.** Both
+  coroutines saw `_pool is None`, both created a pool, and the last assignment
+  won — the review measured four server backends surviving a "complete" close.
+  `open()` and `close()` now serialise on an `asyncio.Lock`, so exactly one
+  pool is ever created and a close cannot race an open.
+- **`Databases.open()` no longer leaks what it already opened.** A second DSN
+  that fails stranded the first pool. It now closes the databases it opened
+  before re-raising, so a host that does not wrap `open()` in `try/finally`
+  (`examples/asyncpg/tests/test_asyncpg.py` is exactly such a host) leaks
+  nothing.
+- **The raw DSN no longer reaches an uncaught error.** `acquire()`'s refusal
+  interpolated `self._dsn`, and nothing catches that `RuntimeError`, so it
+  reached stderr as a traceback carrying a production password. This is the
+  same leak #142 removed from the component; it survived in `pgdatabase`.
+- **`conftest.py`'s sibling-tree lookup ran one location fewer than it read
+  as.** `for _rel in ((".."), ("..", ".."), ...)` — the first element is a
+  *string*, so `*_rel` expands to `'.', '.'` and the first candidate resolves
+  to the tree's own directory, never the sibling. Fixed in `asyncpg`,
+  `minimal`, `ports`, and `durable-execution`; `errorspy`, `serdepy`, and
+  `tessercheck-py` already had `("..",)`.
+
+### Changed
+- **Four tests now fail the mutation that they name.** The bounded close from
+  #141 moves to `close_pool(pool, timeout)` over a `ClosablePool` protocol, so
+  a hand-written fake pool goes in through the interface rather than a runtime
+  patcher (which `testing.md` rule 1 forbids) — a pool that will not close in
+  time is terminated, one that closes alone is not. Both stores gain
+  `test_the_schema_outlives_a_first_transaction_that_rolls_back`, which asserts
+  from outside the store that the table survives a first transaction that rolls
+  back. `FakeCommittedWidgetStore` records every save so
+  `test_take_of_the_part_already_held_saves_nothing` can assert on it.
+  `BetaCheckGateway`'s fake client takes the answer it gives, so the `OK`
+  branch is tested and not only `REFUSED`.
+
+### Notes
+- Eleven mutations re-run against the fixed tree, all killed. `scripts/verify
+  asyncpg minimal ports durable-execution` green: tessercheck zero findings and
+  no suppressions on each tree, `mypy --strict` clean, and 75 / 34 / 49 / 45
+  tests passing against a real Postgres.
+- Left for a ruling rather than decided here: what `BetaCheck`'s verdict is for
+  (it is produced and discarded, against the outcome ruling), adapter-side
+  governance of a `ts.Store`, and the `InfraError` contract (no adapter raises
+  one, so `except errors.InfraError` in `srv/cli/main.py` is dead).
+
 ## [0.0.85.0] - 2026-08-29
 
 The application-service types. Three kinds now stand where one did, and
