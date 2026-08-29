@@ -58,7 +58,7 @@ class FakeUnavailableWidgetStore(widget_repository.WidgetStore):
 
 
 @ts.fake
-class FakeBetaCheck(beta_check.BetaCheck):
+class FakeOkBetaCheck(beta_check.BetaCheck):
 
     def __init__(self) -> None:
         self.checked: list[str] = []
@@ -68,28 +68,47 @@ class FakeBetaCheck(beta_check.BetaCheck):
         return beta_check.CheckResponse(verdict=beta_check.Verdict.OK)
 
 
+@ts.fake
+class FakeRefusedBetaCheck(beta_check.BetaCheck):
+
+    def __init__(self) -> None:
+        self.checked: list[str] = []
+
+    async def check(self, request: beta_check.CheckRequest) -> beta_check.CheckResponse:
+        self.checked.append(request.name)
+        return beta_check.CheckResponse(verdict=beta_check.Verdict.REFUSED)
+
+
 class TestAlphaServiceOverACommittedTransaction:
 
     async def test_a_new_part_is_taken_and_the_widget_saved_in_one_transaction(self) -> None:
         widget_store = FakeCommittedWidgetStore()
-        checks = FakeBetaCheck()
+        checks = FakeOkBetaCheck()
         added = await alpha_service.AlphaService(widget_store, checks).add(client.AddRequest(name="a", part="p"))
         assert added.name == "a"
         assert widget_store.part_by_name == {"a": "p"}
         assert widget_store.transactions == 1
         assert checks.checked == []
 
-    async def test_the_held_part_is_kept_and_the_widget_checked_outside_any_transaction(self) -> None:
+    async def test_a_held_part_cleared_by_beta_is_saved_in_its_own_transaction(self) -> None:
         widget_store = FakeCommittedWidgetStore()
-        checks = FakeBetaCheck()
+        checks = FakeOkBetaCheck()
         await alpha_service.AlphaService(widget_store, checks).add(client.AddRequest(name="a", part="a"))
+        assert checks.checked == ["a"]
+        assert widget_store.part_by_name == {"a": "a"}
+        assert widget_store.transactions == 1
+
+    async def test_a_held_part_refused_by_beta_is_dropped_and_opens_no_transaction(self) -> None:
+        widget_store = FakeCommittedWidgetStore()
+        checks = FakeRefusedBetaCheck()
+        await alpha_service.AlphaService(widget_store, checks).add(client.AddRequest(name="a", part="a"))
+        assert checks.checked == ["a"]
         assert widget_store.part_by_name == {}
         assert widget_store.transactions == 0
-        assert checks.checked == ["a"]
 
     async def test_take_loads_decides_and_saves_in_one_transaction(self) -> None:
         widget_store = FakeCommittedWidgetStore()
-        service = alpha_service.AlphaService(widget_store, FakeBetaCheck())
+        service = alpha_service.AlphaService(widget_store, FakeOkBetaCheck())
         await service.add(client.AddRequest(name="a", part="p"))
         taken = await service.take(client.TakeRequest(name="a", part="q"))
         assert taken.part == "q"
@@ -98,20 +117,20 @@ class TestAlphaServiceOverACommittedTransaction:
 
     async def test_take_of_the_part_already_held_saves_nothing(self) -> None:
         widget_store = FakeCommittedWidgetStore()
-        service = alpha_service.AlphaService(widget_store, FakeBetaCheck())
+        service = alpha_service.AlphaService(widget_store, FakeOkBetaCheck())
         await service.add(client.AddRequest(name="a", part="p"))
         taken = await service.take(client.TakeRequest(name="a", part="p"))
         assert taken.part == "p"
         assert widget_store.part_by_name == {"a": "p"}
 
     async def test_take_of_an_unknown_widget_is_not_found(self) -> None:
-        service = alpha_service.AlphaService(FakeCommittedWidgetStore(), FakeBetaCheck())
+        service = alpha_service.AlphaService(FakeCommittedWidgetStore(), FakeOkBetaCheck())
         with pytest.raises(errors.DomainError) as caught:
             await service.take(client.TakeRequest(name="x", part="q"))
         assert caught.value.kind is errors.Kind.NOT_FOUND
 
     async def test_find_reports_whether_the_store_holds_the_name(self) -> None:
-        service = alpha_service.AlphaService(FakeCommittedWidgetStore(), FakeBetaCheck())
+        service = alpha_service.AlphaService(FakeCommittedWidgetStore(), FakeOkBetaCheck())
         await service.add(client.AddRequest(name="a", part="p"))
         found = await service.find(client.FindRequest(name="a"))
         missing = await service.find(client.FindRequest(name="x"))
@@ -122,26 +141,33 @@ class TestAlphaServiceOverACommittedTransaction:
 class TestAlphaServiceOverAFailedTransaction:
 
     async def test_add_surfaces_the_failure(self) -> None:
-        service = alpha_service.AlphaService(FakeUnavailableWidgetStore(), FakeBetaCheck())
+        service = alpha_service.AlphaService(FakeUnavailableWidgetStore(), FakeOkBetaCheck())
         with pytest.raises(errors.InfraError):
             await service.add(client.AddRequest(name="a", part="p"))
 
     async def test_take_surfaces_the_failure(self) -> None:
-        service = alpha_service.AlphaService(FakeUnavailableWidgetStore(), FakeBetaCheck())
+        service = alpha_service.AlphaService(FakeUnavailableWidgetStore(), FakeOkBetaCheck())
         with pytest.raises(errors.InfraError):
             await service.take(client.TakeRequest(name="a", part="q"))
 
     async def test_find_surfaces_the_failure(self) -> None:
-        service = alpha_service.AlphaService(FakeUnavailableWidgetStore(), FakeBetaCheck())
+        service = alpha_service.AlphaService(FakeUnavailableWidgetStore(), FakeOkBetaCheck())
         with pytest.raises(errors.InfraError):
             await service.find(client.FindRequest(name="a"))
 
-    async def test_a_held_part_still_reaches_beta_because_it_opens_no_transaction(self) -> None:
-        checks = FakeBetaCheck()
+    async def test_a_held_part_refused_by_beta_answers_because_it_opens_no_transaction(self) -> None:
+        checks = FakeRefusedBetaCheck()
         added = await alpha_service.AlphaService(FakeUnavailableWidgetStore(), checks).add(
             client.AddRequest(name="a", part="a")
         )
         assert added.name == "a"
+        assert checks.checked == ["a"]
+
+    async def test_a_held_part_cleared_by_beta_surfaces_the_failure_of_the_save(self) -> None:
+        checks = FakeOkBetaCheck()
+        service = alpha_service.AlphaService(FakeUnavailableWidgetStore(), checks)
+        with pytest.raises(errors.InfraError):
+            await service.add(client.AddRequest(name="a", part="a"))
         assert checks.checked == ["a"]
 
 
@@ -178,6 +204,10 @@ class TestAlphaServiceMappers:
     def test_a_widget_maps_to_a_check_request(self) -> None:
         built = widget.Widget(alpha_service.MapToWidgetSpec(client.AddRequest(name="a", part="p")))
         assert alpha_service.MapToCheckRequest(built).name == "a"
+
+    def test_a_check_response_maps_to_a_clearance_spec_carrying_its_verdict(self) -> None:
+        answer = beta_check.CheckResponse(verdict=beta_check.Verdict.REFUSED)
+        assert alpha_service.MapToClearanceSpec(answer).verdict == "refused"
 
     def test_a_widget_maps_to_an_add_response(self) -> None:
         built = widget.Widget(alpha_service.MapToWidgetSpec(client.AddRequest(name="a", part="p")))
