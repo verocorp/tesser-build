@@ -124,9 +124,9 @@ run_minimal() {
 }
 
 # The durable-execution example: one context whose workflow runs on Restate.
-# A CLI host places an order and starts the workflow through a port; the
-# Restate host serves the workflow and the action it calls, both through
-# handlers; the engine never touches the domain.
+# One FastAPI host serves POST /orders and mounts the Restate endpoint at
+# /restate; the workflow and the action it calls are both handlers, and the
+# engine never touches the domain.
 run_durable_execution() {
   cd "$ROOT/examples/durable-execution" || return 1
   step "tessercheck (zero findings over the whole tree)"
@@ -134,7 +134,10 @@ run_durable_execution() {
   step "mypy --strict"
   MYPYPATH=.:../../tesser-py mypy --strict protocol ordering app srv tests conftest.py || return 1
   step "pytest"
-  pytest -q || return 1
+  # The app reads its own environment through the config repository, so the
+  # runner supplies one — the same job a deploy does. Tests never inject it.
+  RESTATE_INGRESS=http://localhost:8080 \
+    pytest -q || return 1
 }
 
 run_serdepy() {

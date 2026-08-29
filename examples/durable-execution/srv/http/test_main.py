@@ -42,7 +42,6 @@ class TestHttpHost:
             except subprocess.TimeoutExpired:
                 host.kill()
                 host.wait()
-        os.environ.update(RESTATE_INGRESS="http://localhost:8080")
         built = loader.load()
         try:
             declared = {d.name: sorted(d.handlers) for d in built.ordering.handlers.definitions()}
