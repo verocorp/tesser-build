@@ -139,18 +139,23 @@ Anything else propagates as-is and Restate retries the invocation.
 
 ## The gateway holds the SDK's client, and nothing sits between
 
-`RestateOrderWorkflow` takes a `restate.RestateClient`, plus the `run` handler
-function itself, and calls `workflow_send` on it. The component builds the real
-one —
-`restate.client.Client(httpx.AsyncClient(base_url=cfg.ingress))`, which is
-all `restate.create_client` does under its context manager — and closes it.
-Because an httpx client's connections belong to the loop that opened them,
-the app's lifecycle is async end to end: `Ordering.close` and `App.close`
-are `async`, and the host awaits them in the `finally` of the same loop it
-serves on. The sibling test builds the same real client over
-`httpx.MockTransport`, hands the gateway a real handler function decorated on a
-throwaway `restate.Workflow`, and checks the URL the SDK forms from it
-(`/Ordering/o1/run/send`) and the body.
+`RestateOrderWorkflow` takes the ingress URL and the `run` handler function
+itself, and opens its own client per send:
+`async with httpx.AsyncClient(base_url=self._ingress)` around
+`restate.client.Client(http).workflow_send(...)`, which is all
+`restate.create_client` does under its context manager. **Nothing async
+outlives a request**, so nothing has to be closed on the loop that opened it —
+`Ordering.close` and `App.close` are plain sync methods, and every caller is
+`app = loader.load()` … `finally: app.close()`, with no `asyncio.run` in
+sight. The cost is honest and stated: no connection pooling across sends.
+The sibling test builds the same real client over
+a real socket listening on `127.0.0.1:0`, hands the gateway a real handler
+function decorated on a throwaway `restate.Workflow`, and checks the request
+line the SDK forms from it (`POST /Ordering/o1/run/send`) and the JSON body.
+A transport cannot be injected through a base URL any more, and inventing a
+constructor parameter only tests would pass is worse than talking to a real
+socket — so the test talks to a real socket, and the unreachable case just
+points at a closed port.
 
 `RestateOrderActions` is the one thing whose real call path the suite cannot
 reach: it needs a live `restate.Context`, the SDK's context class is an ABC

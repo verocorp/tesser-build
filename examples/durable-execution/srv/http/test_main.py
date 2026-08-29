@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import signal
@@ -42,11 +41,11 @@ class TestHttpHost:
             except subprocess.TimeoutExpired:
                 host.kill()
                 host.wait()
-        built = loader.load()
+        app = loader.load()
         try:
-            declared = {d.name: sorted(d.handlers) for d in built.ordering.handlers.definitions()}
+            declared = {d.name: sorted(d.handlers) for d in app.ordering.handlers.definitions()}
         finally:
-            asyncio.run(built.close())
+            app.close()
         services = manifest["services"]
         assert isinstance(services, list)
         assert {s["name"] for s in services} == set(declared)

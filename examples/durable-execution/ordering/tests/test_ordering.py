@@ -20,4 +20,8 @@ class TestOrderingContext:
                 typing.cast(restate.Context, None), durable.QuoteRequest(sku="gadget")
             )
 
-        assert asyncio.run(call()) == durable.QuoteResponse(cents=1000)
+        try:
+            quoted = asyncio.run(call())
+        finally:
+            wired.close()
+        assert quoted == durable.QuoteResponse(cents=1000)

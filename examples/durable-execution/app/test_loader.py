@@ -20,5 +20,9 @@ class FakeConfigRepository(config_repository.ConfigRepository):
 class TestAppLoader:
 
     def test_the_loader_builds_an_app_from_its_repository(self) -> None:
-        built = loader.AppLoader(FakeConfigRepository()).load()
-        assert built.ordering.actions.quote(ordering_client.QuoteRequest(sku="gadget")).cents == 1000
+        app = loader.AppLoader(FakeConfigRepository()).load()
+        try:
+            quoted = app.ordering.actions.quote(ordering_client.QuoteRequest(sku="gadget"))
+        finally:
+            app.close()
+        assert quoted.cents == 1000
