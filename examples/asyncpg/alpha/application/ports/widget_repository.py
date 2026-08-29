@@ -58,6 +58,6 @@ class WidgetRepository(ts.Port, typing.Protocol):
     async def find_widget(self, request: FindWidgetRequest) -> FindWidgetResponse: ...
 
 
-class WidgetStore(ts.Port, typing.Protocol):  # tesser:debt TB052
+class WidgetStore(ts.Store, typing.Protocol):
 
-    def transaction(self) -> typing.AsyncContextManager[WidgetRepository]: ...  # tesser:debt TB081
+    def transaction(self) -> typing.AsyncContextManager[WidgetRepository]: ...

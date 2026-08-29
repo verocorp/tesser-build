@@ -602,6 +602,43 @@ gateway, a vendor client — is a `ts.Port` `Protocol` in the context's
 package's `__init__.py` is empty (TB042). **One module, one port**, plus the
 `ts.Request`/`ts.Response` DTOs that port speaks and nothing else (TB052).
 
+**A transaction boundary is a `ts.Store`.** When a use case must read, decide,
+and write inside one transaction, the port splits in two and both live in the
+one module: a long-lived `ts.Store` and the short-lived, connection-bound
+`ts.Port` it yields. The store declares exactly one method, `transaction()`,
+taking nothing and returning `typing.AsyncContextManager` of the port declared
+beside it (TB081); a ports module holds at most one store, and a store without
+its port is a finding (TB052). A service may depend on a store as well as on a
+port (TB081). The store is the only place a ports module may name
+`typing.AsyncContextManager` — `contextlib` stays out of a ports module
+(TB067), so the implementations, not the declaration, carry
+`@contextlib.asynccontextmanager`.
+
+```python
+# alpha/application/ports/widget_repository.py (verified impl: examples/asyncpg/)
+class WidgetRepository(ts.Port, typing.Protocol):
+
+    async def save_widget(self, request: SaveWidgetRequest) -> SaveWidgetResponse: ...
+
+    async def load_widget(self, request: LoadWidgetRequest) -> LoadWidgetResponse: ...
+
+
+class WidgetStore(ts.Store, typing.Protocol):
+
+    def transaction(self) -> typing.AsyncContextManager[WidgetRepository]: ...
+```
+
+The service writes the boundary and never the mechanics:
+
+```python
+async with self._widget_store.transaction() as widgets_repo:
+    loaded = await widgets_repo.load_widget(MapToLoadWidgetRequest(sought))
+```
+
+One transaction per service method, and nothing crosses a context while one is
+open — a gateway call inside an open transaction deadlocks against its own
+pool. Not checked; a rule you keep.
+
 ```python
 # campaign/application/ports/campaign_repository.py (verified impl: examples/errorspy/)
 from __future__ import annotations
