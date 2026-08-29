@@ -180,7 +180,9 @@
       "title": "Gateway: repository",
       "skill": "repositories.md",
       "py_example": [
-        "examples/python-app/campaign/adapters/gateways"
+        "examples/python-app/campaign/adapters/gateways",
+        "examples/asyncpg/alpha/adapters/repositories",
+        "examples/asyncpg/beta/adapters/repositories"
       ],
       "go_example": [
         "examples/ddd",

@@ -3,6 +3,7 @@
   "cmd": "ungated",
   "docs": "ungated",
   "examples": "ungated",
+  "examples/asyncpg": "app",
   "examples/catalog": "ungated",
   "examples/ddd": "ungated",
   "examples/durable-execution": "app",
