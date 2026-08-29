@@ -8,19 +8,20 @@ import alpha.application.alpha_service as alpha_service
 import alpha.application.ports.beta_check as beta_check
 import alpha.client.client as client
 import alpha.component.config as config
+import pgdatabase.database as pgdatabase
 import tesser.errors as errors
 
 
 class Alpha(ts.Component):
 
-    def __init__(self, cfg: config.Config, checks: beta_check.BetaCheck) -> None:
+    def __init__(self, cfg: config.Config, database: pgdatabase.Database | None, checks: beta_check.BetaCheck) -> None:
         self._widgets: memory.MemoryWidgetRepository | postgres.PostgresWidgetRepository
-        if cfg.storage == "memory":
+        if cfg.database is None:
             self._widgets = memory.MemoryWidgetRepository()
-        elif cfg.storage.startswith(("postgres://", "postgresql://")):
-            self._widgets = postgres.PostgresWidgetRepository(cfg.storage)
+        elif database is None:
+            raise errors.invalid("missing_database", f"alpha storage {cfg.storage!r} names a database the app did not build")
         else:
-            raise errors.invalid("unknown_backend", f"alpha storage {cfg.storage!r} not supported")
+            self._widgets = postgres.PostgresWidgetRepository(database)
         self.client: client.Client = alpha_service.AlphaService(self._widgets, checks)
 
     async def close(self) -> None:

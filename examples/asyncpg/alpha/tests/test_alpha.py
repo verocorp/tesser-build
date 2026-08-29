@@ -19,7 +19,7 @@ class FakeBetaCheck(beta_check.BetaCheck):
 class TestAlphaContext:
 
     async def test_a_cli_add_reaches_the_wired_service(self) -> None:
-        wired = component.Alpha(config.Config(config.Spec(storage="memory")), FakeBetaCheck())
+        wired = component.Alpha(config.Config(config.Spec(storage="memory")), None, FakeBetaCheck())
         response = await cli.Handler(wired.client).add(protocol_cli.CliRequest(args=("a", "p")))
         await wired.close()
         assert response.line.text == "a"

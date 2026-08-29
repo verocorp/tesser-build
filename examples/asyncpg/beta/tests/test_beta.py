@@ -8,7 +8,7 @@ import beta.component.config as config
 class TestBetaContext:
 
     async def test_an_unknown_key_is_not_held(self) -> None:
-        wired = component.Beta(config.Config(config.Spec(storage="memory")))
+        wired = component.Beta(config.Config(config.Spec(storage="memory")), None)
         checked = await wired.client.check(client.CheckRequest(key="x"))
         await wired.close()
         assert checked.held == "no"

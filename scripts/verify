@@ -159,7 +159,7 @@ run_asyncpg() {
   step "tessercheck (zero findings over the whole tree)"
   tessercheck_tree "$PWD" || return 1
   step "mypy --strict"
-  MYPYPATH=.:../../tesser-py mypy --strict kernel shared protocol alpha beta app srv tests conftest.py || return 1
+  MYPYPATH=.:../../tesser-py mypy --strict kernel shared protocol alpha beta app srv tests pgdatabase conftest.py || return 1
   step "pytest (against Postgres at ALPHA_STORAGE / BETA_STORAGE)"
   ALPHA_STORAGE="${ALPHA_STORAGE:-postgres://tesser@localhost:5434/tesser}" \
   BETA_STORAGE="${BETA_STORAGE:-postgres://tesser@localhost:5434/tesser}" \
