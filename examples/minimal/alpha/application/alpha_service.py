@@ -7,6 +7,7 @@ import tesser.application as ts
 import alpha.application.ports.beta_check as beta_check
 import alpha.application.ports.widget_repository as widget_repository
 import alpha.client.client as client
+import alpha.domain.clearance as clearance
 import alpha.domain.widget as widget
 
 
@@ -26,6 +27,12 @@ class MapToCheckRequest(ts.Mapper, beta_check.CheckRequest):
 
     def __init__(self, added: widget.Widget) -> None:
         super().__init__(name=str(added.identity))
+
+
+class MapToClearanceSpec(ts.Mapper, clearance.ClearanceSpec):
+
+    def __init__(self, answer: beta_check.CheckResponse) -> None:
+        super().__init__(verdict=answer.verdict.value)
 
 
 class MapToSaveRequest(ts.Mapper, widget_repository.SaveRequest):
@@ -53,7 +60,15 @@ class AlphaService(ts.ApplicationService):
             case widget.Taken.TAKEN:
                 self._widgets.save(MapToSaveRequest(added))
             case widget.Taken.HELD:
-                self._checks.check(MapToCheckRequest(added))
+                answer = self._checks.check(MapToCheckRequest(added))
+                cleared = clearance.Clearance(MapToClearanceSpec(answer))
+                match cleared.settle():
+                    case clearance.Settled.KEPT:
+                        self._widgets.save(MapToSaveRequest(added))
+                    case clearance.Settled.DROPPED:
+                        pass
+                    case _ as never:
+                        typing.assert_never(never)
             case _ as never:
                 typing.assert_never(never)
         return MapToAddResponse(added)

@@ -20,7 +20,7 @@ class FakeWidgetRepository(widget_repository.WidgetRepository):
 
 
 @ts.fake
-class FakeBetaCheck(beta_check.BetaCheck):
+class FakeOkBetaCheck(beta_check.BetaCheck):
 
     def __init__(self) -> None:
         self.checked: list[str] = []
@@ -28,6 +28,17 @@ class FakeBetaCheck(beta_check.BetaCheck):
     def check(self, request: beta_check.CheckRequest) -> beta_check.CheckResponse:
         self.checked.append(request.name)
         return beta_check.CheckResponse(verdict=beta_check.Verdict.OK)
+
+
+@ts.fake
+class FakeRefusedBetaCheck(beta_check.BetaCheck):
+
+    def __init__(self) -> None:
+        self.checked: list[str] = []
+
+    def check(self, request: beta_check.CheckRequest) -> beta_check.CheckResponse:
+        self.checked.append(request.name)
+        return beta_check.CheckResponse(verdict=beta_check.Verdict.REFUSED)
 
 
 @ts.helper
@@ -38,20 +49,27 @@ def add_request(name: str = "a", part: str = "p") -> client.AddRequest:
 class TestAlphaService:
 
     def test_add_answers_the_added_name(self) -> None:
-        service = alpha_service.AlphaService(FakeWidgetRepository(), FakeBetaCheck())
+        service = alpha_service.AlphaService(FakeWidgetRepository(), FakeOkBetaCheck())
         added = service.add(add_request())
         assert added.name == "a"
 
     def test_a_new_part_is_taken_and_the_widget_saved(self) -> None:
         widgets = FakeWidgetRepository()
-        checks = FakeBetaCheck()
+        checks = FakeOkBetaCheck()
         alpha_service.AlphaService(widgets, checks).add(add_request(name="a", part="p"))
         assert widgets.saved == ["a"]
         assert checks.checked == []
 
-    def test_the_held_part_is_kept_and_the_widget_checked(self) -> None:
+    def test_a_held_part_cleared_by_beta_is_kept_and_the_widget_saved(self) -> None:
         widgets = FakeWidgetRepository()
-        checks = FakeBetaCheck()
+        checks = FakeOkBetaCheck()
         alpha_service.AlphaService(widgets, checks).add(add_request(name="a", part="a"))
-        assert widgets.saved == []
         assert checks.checked == ["a"]
+        assert widgets.saved == ["a"]
+
+    def test_a_held_part_refused_by_beta_is_dropped_and_nothing_saved(self) -> None:
+        widgets = FakeWidgetRepository()
+        checks = FakeRefusedBetaCheck()
+        alpha_service.AlphaService(widgets, checks).add(add_request(name="a", part="a"))
+        assert checks.checked == ["a"]
+        assert widgets.saved == []
