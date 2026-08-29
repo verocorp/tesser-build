@@ -5,6 +5,46 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.85.0] - 2026-08-29
+
+The application-service types. Three kinds now stand where one did, and
+the analyzer tells them apart by scope, reach, and what each may depend on,
+not by body shape (`docs/design-app-service-types.md`):
+
+- **An orchestrator** (`ts.Orchestrator`, in `application/orchestrators/`)
+  is the body of a workflow on a durable-execution engine. It is built per
+  invocation by a job, takes exactly one **job context** plus its action
+  ports, stores nothing else, and threads the job context as the leading
+  argument of every action-port call. It is never on the public `Client`.
+- **A class of actions** (`ts.Actions`, beside the services) takes exactly
+  one port and each public method calls it exactly once, because an action
+  is the engine's retry unit. It is reachable only through an
+  **application client** (`tesser.application.Client`, in
+  `application/client/`, one protocol per module speaking the DTOs of
+  exactly one ports module) that only a job may import.
+- **A job** (`ts.Job`, in `adapters/jobs/`) is where the engine hands work
+  back. A handler calls the context client; a job calls an application
+  client or constructs an orchestrator. Reach is now carried by the adapter
+  kind package (`handlers/`, `gateways/`, `repositories/`, `jobs/`), every
+  adapters module lives in one and holds the kind its package names, and a
+  component publishes exactly `client` and `jobs`.
+- **A job context** (`ts.JobContext`, one class named from
+  `tesser.application`, `tesser.adapters`, and `tesser.testing`) is the
+  engine-neutral protocol for what a step may do inside an invocation —
+  `call(step, request)` today. A job wraps the engine's context in its own
+  implementation per invocation; a gateway is built once by the component
+  and never stores one.
+- Messages are declared once, on the port; both ends of the engine speak
+  the port's own `ts.Request`/`ts.Response`, so there are no wire types.
+
+`examples/minimal` carries one exemplar of every new kind;
+`examples/durable-execution` is reworked to the shape and verified live
+through a Restate server. Four repositories that sat in `gateways/` in
+`errorspy`, `ports`, and `python-app` moved to `repositories/`, where the
+new kind-package rule found them. `skills/tesser-build` renders the kinds
+(skill-version 58). Considered and passed over: reading the Restate SDK's
+ambient `current_context()` (its module is documented as internal).
+
 ## [0.0.84.0] - 2026-08-26
 
 Control flow comes back as an **outcome**. A transition the caller must act on

@@ -1,27 +1,21 @@
 from __future__ import annotations
 
 import asyncio
-import typing
 
-import restate
+import pytest
 
-import ordering.adapters.gateways.restate_actions as restate_actions
+import ordering.client.client as client
 import ordering.component.component as component
 import ordering.component.config as config
+import tesser.errors as errors
 
 
 class TestOrderingContext:
 
-    def test_the_quote_handler_quotes_through_the_wired_actions(self) -> None:
-        wired = component.Ordering(config.Config(config.Spec(ingress="http://localhost:8080")))
-
-        async def call() -> restate_actions.QuoteResponse:
-            return await wired.handlers.quote(
-                typing.cast(restate.Context, None), restate_actions.QuoteRequest(sku="gadget")
-            )
-
+    def test_placing_an_order_with_no_ingress_is_an_infra_error(self) -> None:
+        wired = component.Ordering(config.Config(config.Spec(ingress="http://127.0.0.1:9")))
         try:
-            quoted = asyncio.run(call())
+            with pytest.raises(errors.InfraError):
+                asyncio.run(wired.client.place(client.PlaceRequest(order_id="o1", sku="widget", quantity=2)))
         finally:
             wired.close()
-        assert quoted == restate_actions.QuoteResponse(cents=1000)

@@ -43,7 +43,7 @@ class TestHttpHost:
                 host.wait()
         app = loader.load()
         try:
-            declared = {d.name: sorted(d.handlers) for d in app.ordering.handlers.definitions()}
+            declared = {d.name: sorted(d.handlers) for job in app.ordering.jobs for d in job.definitions()}
         finally:
             app.close()
         services = manifest["services"]

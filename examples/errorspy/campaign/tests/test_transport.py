@@ -4,7 +4,7 @@ import json
 
 import tesser.testing as ts
 
-import campaign.adapters.gateways.repo_storage as repo_storage
+import campaign.adapters.repositories.repo_storage as repo_storage
 import campaign.adapters.handlers.http as handlers
 import campaign.application.service as service
 import storage

@@ -4,7 +4,7 @@ import json
 import pytest
 
 import campaign.adapters.gateways.campaign_identity as campaign_identity
-import campaign.adapters.gateways.repo_memory as repo_memory
+import campaign.adapters.repositories.repo_memory as repo_memory
 import campaign.adapters.handlers.http as http
 import campaign.application.service as service
 import tesser.testing as ts

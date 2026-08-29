@@ -5,7 +5,6 @@ import tesser.testing as ts
 import app.config as config
 import app.config_repository as config_repository
 import app.loader as loader
-import ordering.client.client as ordering_client
 import ordering.component.config as ordering_config
 
 
@@ -22,7 +21,7 @@ class TestAppLoader:
     def test_the_loader_builds_an_app_from_its_repository(self) -> None:
         app = loader.AppLoader(FakeConfigRepository()).load()
         try:
-            quoted = app.ordering.actions.quote(ordering_client.QuoteRequest(sku="gadget"))
+            declared = [sorted(d.handlers) for job in app.ordering.jobs for d in job.definitions()]
         finally:
             app.close()
-        assert quoted.cents == 1000
+        assert declared == [["quote"], ["run"]]

@@ -6,7 +6,7 @@ import pytest
 import tesser.testing as ts
 
 import campaign.adapters.gateways.campaign_identity as campaign_identity
-import campaign.adapters.gateways.repo_memory as repo_memory
+import campaign.adapters.repositories.repo_memory as repo_memory
 import campaign.adapters.handlers.http as http
 import campaign.application.ports.campaign_repository as campaign_repository
 import campaign.application.ports.target_policy as target_policy

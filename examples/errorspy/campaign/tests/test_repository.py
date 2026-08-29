@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-import campaign.adapters.gateways.repo_storage as repo_storage
+import campaign.adapters.repositories.repo_storage as repo_storage
 import campaign.application.ports.campaign_repository as campaign_repository
 import campaign.application.service as service
 import campaign.application.views as views

@@ -68,3 +68,5 @@ forbidden_modules =
     tesser.domain
     tesser.application
     tesser.context
+ignore_imports =
+    tesser.adapters -> tesser.application.job_context

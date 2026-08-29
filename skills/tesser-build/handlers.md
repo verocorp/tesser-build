@@ -24,6 +24,13 @@ Yes → handler.
 - An **application service** (`application-services.md`) — the use-case
   coordinator the handler calls *through the `Client`*; it never parses wire
   formats.
+- A **job** (`adapters/jobs/`, `ts.Job`) — where a durable-execution engine
+  hands work back to the context. It looks like a handler (something calls
+  in), but what sits behind it is internal: a job calls an application
+  client (a class of actions) or constructs an orchestrator, never the
+  context `Client`. The package is chosen by what the code reaches, not by
+  who calls it — a LiveKit tool call that reaches the `Client` is a handler
+  (`python.md#orchestrators-actions-jobs`).
 
 ## Rules
 
