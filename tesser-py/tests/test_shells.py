@@ -59,6 +59,16 @@ def test_srv_port_is_a_distinct_kind_from_the_application_port() -> None:
     assert tesser.application.Port not in _ServeThings.__mro__
 
 
+def test_application_client_is_a_distinct_kind_from_the_context_client() -> None:
+    class _RunThings(tesser.application.Client, typing.Protocol):
+        def run(self, request: object) -> object: ...
+
+    application_client: object = tesser.application.Client
+    assert application_client is not tesser.context.Client
+    assert getattr(_RunThings, "_is_protocol", False)
+    assert tesser.context.Client not in _RunThings.__mro__
+
+
 def test_srv_records_are_distinct_kinds_from_the_context_dtos() -> None:
     class WireAsk(tesser.srv.Request):
         pass
@@ -119,5 +129,16 @@ def test_shells_classify_subclasses() -> None:
     class WireReply(tesser.srv.Response):
         pass
 
-    for cls in (Root, RootSpec, Service, Repo, Ask, Reply, Wire, Inbound, Server, WireAsk, WireReply):
+    class Flow(tesser.application.Orchestrator):
+        pass
+
+    class Steps(tesser.application.Actions):
+        pass
+
+    class Work(tesser.adapters.Job):
+        pass
+
+    for cls in (
+        Root, RootSpec, Service, Repo, Ask, Reply, Wire, Inbound, Server, WireAsk, WireReply, Flow, Steps, Work
+    ):
         assert cls()
