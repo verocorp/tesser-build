@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import tesser.testing as ts
 
-import ordering.application.order_actions as order_actions
+import ordering.application.order_actions as actions
 import ordering.application.ports.catalog_repository as catalog_repository
-import ordering.client.client as client
+import ordering.application.ports.quoting as quoting
 
 
 @ts.fake
@@ -21,11 +21,12 @@ class FakeCatalogRepository(catalog_repository.CatalogRepository):
 class TestOrderActions:
 
     def test_quoting_answers_the_catalog_price(self) -> None:
-        actions = order_actions.OrderActions(FakeCatalogRepository())
-        quoted = actions.quote(client.QuoteRequest(sku="widget"))
+        quoted = actions.OrderActions(FakeCatalogRepository()).quote(
+            quoting.QuoteRequest(sku="widget")
+        )
         assert quoted.cents == 250
 
-    def test_quoting_looks_the_sku_up(self) -> None:
+    def test_quoting_looks_the_sku_up_once(self) -> None:
         catalog = FakeCatalogRepository()
-        order_actions.OrderActions(catalog).quote(client.QuoteRequest(sku="gadget"))
+        actions.OrderActions(catalog).quote(quoting.QuoteRequest(sku="gadget"))
         assert catalog.priced == ["gadget"]

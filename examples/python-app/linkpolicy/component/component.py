@@ -3,7 +3,7 @@ from __future__ import annotations
 import tesser.component as ts
 
 import tesser.errors as errors
-import linkpolicy.adapters.gateways.repo_memory as repo_memory
+import linkpolicy.adapters.repositories.repo_memory as repo_memory
 import linkpolicy.application.service as service
 import linkpolicy.client.client as client
 import linkpolicy.component.config as config

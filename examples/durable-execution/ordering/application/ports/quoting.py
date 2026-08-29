@@ -17,6 +17,6 @@ class QuoteResponse(ts.Response):
         self.cents = cents
 
 
-class OrderActions(ts.Port, typing.Protocol):
+class Quoting(ts.Port, typing.Protocol):
 
-    async def quote(self, request: QuoteRequest) -> QuoteResponse: ...
+    async def quote(self, job: ts.JobContext, request: QuoteRequest) -> QuoteResponse: ...

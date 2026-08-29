@@ -14,6 +14,9 @@ def test_every_place_is_earned_by_a_checked_tree_or_is_a_finding() -> None:
         ("shop.tests.util", False, "context-tests-stray"),
         ("shop.application.ports.test_x", False, "ports-stray"),
         ("shop.application.ports", False, "ports-file"),
+        ("shop.application.client.test_x", False, "app-client-stray"),
+        ("shop.application.client", False, "app-client-file"),
+        ("shop.application.orchestrators", False, "orchestrators-file"),
         ("shop.domain", False, "role-file"),
         ("kernel", False, "kernel-file"),
     )

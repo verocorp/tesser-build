@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import typing
 
-import catalog.adapters.gateways.repo_memory as repo_memory
+import catalog.adapters.repositories.repo_memory as repo_memory
 import catalog.application.ports.item_repository as item_repository
 
 

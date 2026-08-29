@@ -4,7 +4,7 @@ import typing
 
 import pytest
 
-import campaign.adapters.gateways.repo_storage as repo_storage
+import campaign.adapters.repositories.repo_storage as repo_storage
 import campaign.application.ports.campaign_repository as campaign_repository
 import tesser.errors as errors
 import storage

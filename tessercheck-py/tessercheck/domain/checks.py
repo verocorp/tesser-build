@@ -14,6 +14,10 @@ TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.application", "Port"): "port",
     ("tesser.application", "Request"): "port_request",
     ("tesser.application", "Response"): "port_response",
+    ("tesser.application", "Client"): "actions_client",
+    ("tesser.application", "Orchestrator"): "orchestrator",
+    ("tesser.application", "Actions"): "actions",
+    ("tesser.application", "JobContext"): "job_context",
     ("tesser.context", "Request"): "request",
     ("tesser.context", "Response"): "response",
     ("tesser.context", "Client"): "client",
@@ -25,6 +29,9 @@ TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.adapters", "Repository"): "repository",
     ("tesser.adapters", "Gateway"): "gateway",
     ("tesser.adapters", "Handler"): "handler",
+    ("tesser.adapters", "Job"): "job",
+    ("tesser.adapters", "JobContext"): "job_context",
+    ("tesser.testing", "JobContext"): "job_context",
     ("tesser.component", "Component"): "component",
     ("tesser.component", "Config"): "component_config",
     ("tesser.component", "Spec"): "component_spec",
@@ -71,6 +78,47 @@ PORTS_IMPORT_PATH: typing.Final[str] = "application.ports"
 
 PORTS_KINDS: typing.Final[frozenset[str]] = frozenset({"port", "port_request", "port_response"})
 
+APPLICATION_CLIENT_PACKAGE: typing.Final[str] = "client"
+
+APPLICATION_CLIENT_HOME: typing.Final[str] = "application/client"
+
+APPLICATION_CLIENT_IMPORT: typing.Final[str] = "application.client"
+
+ORCHESTRATORS_PACKAGE: typing.Final[str] = "orchestrators"
+
+ORCHESTRATORS_HOME: typing.Final[str] = "application/orchestrators"
+
+ORCHESTRATORS_IMPORT: typing.Final[str] = "application.orchestrators"
+
+PACKAGE_HOMES: typing.Final[frozenset[str]] = frozenset(
+    {PORTS_HOME, APPLICATION_CLIENT_HOME, ORCHESTRATORS_HOME}
+)
+
+JOB_ONLY_IMPORTS: typing.Final[tuple[str, ...]] = (
+    APPLICATION_CLIENT_IMPORT,
+    ORCHESTRATORS_IMPORT,
+)
+
+ADAPTER_BLOCKS: typing.Final[frozenset[str]] = frozenset(
+    {"handler", "gateway", "repository", "job", "job_context"}
+)
+
+ADAPTER_KIND_PACKAGES: typing.Final[dict[str, frozenset[str]]] = {
+    "handlers": frozenset({"handler"}),
+    "gateways": frozenset({"gateway"}),
+    "repositories": frozenset({"repository"}),
+    "jobs": frozenset({"job", "job_context"}),
+}
+
+ADAPTER_KIND_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
+    "handlers": ("client",),
+    "gateways": (PORTS_IMPORT_PATH,),
+    "repositories": (PORTS_IMPORT_PATH,),
+    "jobs": (APPLICATION_CLIENT_IMPORT, ORCHESTRATORS_IMPORT, PORTS_IMPORT_PATH),
+}
+
+HOST_KINDS: typing.Final[frozenset[str]] = frozenset({"handler", "job"})
+
 APP_PACKAGES: typing.Final[tuple[str, ...]] = ("srv", "app")
 
 APP_KINDS: typing.Final[frozenset[str]] = frozenset(
@@ -89,6 +137,9 @@ KIND_ROLE: typing.Final[dict[str, str]] = {
     "spec": "domain",
     "service": "application",
     "mapper": "application",
+    "actions": "application",
+    "orchestrator": ORCHESTRATORS_HOME,
+    "actions_client": APPLICATION_CLIENT_HOME,
     "port": PORTS_HOME,
     "port_request": PORTS_HOME,
     "port_response": PORTS_HOME,
@@ -98,13 +149,15 @@ KIND_ROLE: typing.Final[dict[str, str]] = {
     "repository": "adapters",
     "gateway": "adapters",
     "handler": "adapters",
+    "job": "adapters",
+    "job_context": "adapters",
     "component": "component",
     "component_config": "component",
     "component_spec": "component",
 }
 
 KIND_HOME: typing.Final[dict[str, str]] = {
-    block: (f"the {role} package" if role == PORTS_HOME else f"{role}.py")
+    block: (f"the {role} package" if role in PACKAGE_HOMES else f"{role}.py")
     for block, role in KIND_ROLE.items()
 }
 
@@ -116,6 +169,9 @@ KIND_NAME: typing.Final[dict[str, str]] = {
     "spec": "a spec",
     "service": "a service",
     "mapper": "a mapper",
+    "actions": "a class of actions",
+    "orchestrator": "an orchestrator",
+    "actions_client": "an application client",
     "port": "a port",
     "port_request": "a port request DTO",
     "port_response": "a port response DTO",
@@ -125,6 +181,8 @@ KIND_NAME: typing.Final[dict[str, str]] = {
     "repository": "a repository adapter",
     "gateway": "a gateway adapter",
     "handler": "an inbound handler",
+    "job": "a job",
+    "job_context": "a job context",
     "component": "a component",
     "component_config": "a component config",
     "component_spec": "a component config spec",
@@ -253,6 +311,7 @@ DECLARATION_BLOCKS: typing.Final[frozenset[str]] = frozenset(
         "request",
         "response",
         "client",
+        "actions_client",
         "port",
         "port_request",
         "port_response",
@@ -281,7 +340,7 @@ DATA_BLOCKS: typing.Final[frozenset[str]] = frozenset(
 )
 
 PAIRED_PLACES: typing.Final[frozenset[str]] = frozenset(
-    {"role", "kernel", "shell-srv", "shell-app", "protocol"}
+    {"role", "kernel", "shell-srv", "shell-app", "protocol", ORCHESTRATORS_PACKAGE}
 )
 
 NORM_IMPORTS: typing.Final[dict[str, frozenset[str]]] = {
@@ -318,6 +377,8 @@ TEST_TIER_HOME: typing.Final[dict[str, tuple[str, str | None]]] = {
     "handlers": ("adapters", "handlers"),
     "gateways": ("adapters", "gateways"),
     "repositories": ("adapters", "repositories"),
+    "jobs": ("adapters", "jobs"),
+    ORCHESTRATORS_PACKAGE: ("application", ORCHESTRATORS_PACKAGE),
 }
 
 TEST_TIER_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
@@ -328,6 +389,9 @@ TEST_TIER_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "handlers": ("client",),
     "gateways": SAME_CONTEXT_IMPORTS["adapters"],
     "repositories": SAME_CONTEXT_IMPORTS["adapters"],
+    "jobs": ADAPTER_KIND_REACH["jobs"],
+    ORCHESTRATORS_PACKAGE: SAME_CONTEXT_IMPORTS["application"]
+    + (ORCHESTRATORS_IMPORT, PORTS_IMPORT_PATH),
     TESTS_ROLE: ROLES + (TESTS_ROLE,),
 }
 
@@ -337,7 +401,9 @@ TEST_TIER_FOREIGN: typing.Final[dict[str, tuple[str, ...]]] = {
     TESTS_ROLE: ("application", "client"),
 }
 
-ADAPTER_TEST_TIERS: typing.Final[frozenset[str]] = frozenset({"handlers", "gateways", "repositories"})
+ADAPTER_TEST_TIERS: typing.Final[frozenset[str]] = frozenset(
+    {"handlers", "gateways", "repositories", "jobs"}
+)
 
 SRV_TIER: typing.Final[str] = "srv"
 
@@ -366,6 +432,8 @@ TEST_TIER_SHELL: typing.Final[dict[str, frozenset[str]]] = {
     "handlers": frozenset({"protocol"}),
     "gateways": frozenset(),
     "repositories": frozenset(),
+    "jobs": frozenset(),
+    ORCHESTRATORS_PACKAGE: frozenset(),
     TESTS_ROLE: frozenset({"protocol"}),
 }
 
@@ -374,6 +442,8 @@ PRIMITIVES: typing.Final[frozenset[str]] = frozenset({"str", "int", "float", "bo
 MAPPER_PREFIX: typing.Final[str] = "MapTo"
 
 PORT_DTO_PRIMITIVES: typing.Final[frozenset[str]] = PRIMITIVES - frozenset({"bool"})
+
+JOB_CONTEXT_BLOCK: typing.Final[str] = "job_context"
 
 ENUM_BASES: typing.Final[frozenset[str]] = frozenset({"Enum"})
 
@@ -1202,6 +1272,17 @@ class Codebase(ts.AggregateRoot):
             if len(parts) >= 2 and parts[1] in ROLES:
                 named.add(parts[0])
         contexts = frozenset(named)
+        spoken: set[str] = set()
+        for module in self._modules:
+            if self._locate(  # tesser:debt TB051
+                module.name(), module.is_package(), contexts, self._export
+            ) in ("app-client", "app-client-file"):
+                names_ports = self._spoken_ports_module(module)  # tesser:debt TB051
+                if names_ports is not None:
+                    spoken.add(names_ports)
+        self._action_ports: frozenset[tuple[str, str]] = frozenset(
+            key for key, block in blocks.items() if block == "port" and key[0] in spoken
+        )
         self._domain_enums = frozenset(
             (module.name(), stmt.name)
             for module in self._modules
@@ -1285,7 +1366,7 @@ class Codebase(ts.AggregateRoot):
                 elif block == "entity":
                     found.extend(self._constructor_violations(module, cls, blocks, "an entity"))  # tesser:debt TB051
                 elif block == "component":
-                    found.extend(self._component_violations(module, cls))  # tesser:debt TB051
+                    found.extend(self._component_violations(module, cls, blocks))  # tesser:debt TB051
                 elif block == "component_config":
                     found.extend(self._component_config_violations(module, cls, blocks))  # tesser:debt TB051
                 elif block == "app_config":
@@ -1344,12 +1425,23 @@ class Codebase(ts.AggregateRoot):
                                 "a client method",
                                 "TB081",
                                 blocks,
+                                "a client method takes exactly one ts.Request",
                             )
                         )
                 elif block in ("repository", "gateway", "handler"):
-                    found.extend(self._record_signature_violations(module, cls, blocks, "an adapter"))  # tesser:debt TB051
+                    found.extend(
+                        self._record_signature_violations(  # tesser:debt TB051
+                            module, cls, blocks, "an adapter", block != "handler"
+                        )
+                    )
+                    if block == "gateway":
+                        found.extend(self._gateway_violations(module, cls, blocks))  # tesser:debt TB051
                 elif block == "port":
-                    found.extend(self._record_signature_violations(module, cls, blocks, "a port"))  # tesser:debt TB051
+                    found.extend(
+                        self._record_signature_violations(  # tesser:debt TB051
+                            module, cls, blocks, "a port", True
+                        )
+                    )
                     if self._locate(  # tesser:debt TB051
                         module.name(), module.is_package(), contexts, self._export
                     ) in (
@@ -1374,7 +1466,7 @@ class Codebase(ts.AggregateRoot):
                         if item.name == "__init__":
                             found.extend(
                                 self._dependency_violations(  # tesser:debt TB051
-                                    module, where, item.lineno, item, blocks
+                                    module, where, item.lineno, item, blocks, "a service"
                                 )
                             )
                             continue
@@ -1391,6 +1483,7 @@ class Codebase(ts.AggregateRoot):
                                 "a service method",
                                 "TB081",
                                 blocks,
+                                "a service method takes exactly one ts.Request",
                             )
                         )
                         found.extend(
@@ -1398,6 +1491,14 @@ class Codebase(ts.AggregateRoot):
                         )
                 elif block == "mapper":
                     found.extend(self._mapper_violations(module, cls, blocks))  # tesser:debt TB051
+                elif block == "actions":
+                    found.extend(self._actions_violations(module, cls, blocks))  # tesser:debt TB051
+                elif block == "orchestrator":
+                    found.extend(self._orchestrator_violations(module, cls, blocks))  # tesser:debt TB051
+                elif block == "actions_client" and self._locate(  # tesser:debt TB051
+                    module.name(), module.is_package(), contexts, self._export
+                ) in ("app-client", "app-client-file"):
+                    found.extend(self._actions_client_violations(module, cls, blocks))  # tesser:debt TB051
         found.extend(self._pairing_violations(contexts, blocks))  # tesser:debt TB051
         found.extend(self._unused_import_violations())  # tesser:debt TB051
         kept: list[Violation] = []
@@ -1531,22 +1632,29 @@ class Codebase(ts.AggregateRoot):
         "ports-file",
         "ports",
         "ports-stray",
+        "app-client-init",
+        "app-client-file",
+        "app-client",
+        "app-client-stray",
+        "orchestrators-init",
+        "orchestrators-file",
+        "orchestrators",
         "context-stray",
     ]:
         parts = name.split(".")
         basename = parts[-1]
-        if (
-            len(parts) >= 4
-            and parts[0] in contexts
-            and parts[1] == PORTS_PARENT_ROLE
-            and parts[2] == PORTS_PACKAGE
-            and (
-                basename == "conftest"
-                or basename.startswith("test_")
-                or basename.startswith(EVAL_PREFIX)
-            )
-        ):
+        reserved = (
+            basename == "conftest"
+            or basename.startswith("test_")
+            or basename.startswith(EVAL_PREFIX)
+        )
+        inside_application = (
+            len(parts) >= 4 and parts[0] in contexts and parts[1] == PORTS_PARENT_ROLE
+        )
+        if inside_application and parts[2] == PORTS_PACKAGE and reserved:
             return "ports-stray"
+        if inside_application and parts[2] == APPLICATION_CLIENT_PACKAGE and reserved:
+            return "app-client-stray"
         if basename == "conftest":
             return "conftest-root" if len(parts) == 1 else "conftest"
         if basename.startswith("test_"):
@@ -1580,6 +1688,22 @@ class Codebase(ts.AggregateRoot):
                 if is_package:
                     return "ports-init"
                 return "ports-file" if len(parts) == 3 else "ports"
+            if (
+                parts[1] == PORTS_PARENT_ROLE
+                and len(parts) >= 3
+                and parts[2] == APPLICATION_CLIENT_PACKAGE
+            ):
+                if is_package:
+                    return "app-client-init"
+                return "app-client-file" if len(parts) == 3 else "app-client"
+            if (
+                parts[1] == PORTS_PARENT_ROLE
+                and len(parts) >= 3
+                and parts[2] == ORCHESTRATORS_PACKAGE
+            ):
+                if is_package:
+                    return "orchestrators-init"
+                return "orchestrators-file" if len(parts) == 3 else "orchestrators"
             if is_package:
                 return "role-init"
             return "role-file" if len(parts) == 2 else "role"
@@ -1623,6 +1747,12 @@ class Codebase(ts.AggregateRoot):
                     if len(tier_parts) >= 4 and tier_parts[2] in ADAPTER_TEST_TIERS
                     else (tier_parts[0], STRAY_TIER)
                 )
+            elif (
+                tier_parts[1] == PORTS_PARENT_ROLE
+                and len(tier_parts) >= 4
+                and tier_parts[2] == ORCHESTRATORS_PACKAGE
+            ):
+                placement = (tier_parts[0], ORCHESTRATORS_PACKAGE)
             else:
                 placement = (tier_parts[0], tier_parts[1])
             if placement is None or placement[1] == STRAY_TIER:
@@ -1713,6 +1843,46 @@ class Codebase(ts.AggregateRoot):
             ) + self._ports_module_violations(module, blocks)  # tesser:debt TB051
         if place == "ports":
             return self._ports_module_violations(module, blocks)  # tesser:debt TB051
+        if place == "app-client-stray":
+            return (
+                Violation(ViolationSpec(
+                    module.path(),
+                    1,
+                    "TB041",
+                    f"{module.name()} is not an application client module; an application "
+                    "client package holds only client protocols, and test_/eval_/conftest "
+                    "are reserved names, because a fake here would be an implementation "
+                    "a job may import",
+                )),
+            )
+        if place == "app-client-init":
+            return self._package_init_violations(module, "an application client package")  # tesser:debt TB051
+        if place == "app-client-file":
+            return (
+                Violation(ViolationSpec(
+                    module.path(),
+                    1,
+                    "TB041",
+                    f"{module.name()} is an application client module; "
+                    "the application client is a package, never a module",
+                )),
+            ) + self._application_client_module_violations(module, blocks)  # tesser:debt TB051
+        if place == "app-client":
+            return self._application_client_module_violations(module, blocks)  # tesser:debt TB051
+        if place == "orchestrators-init":
+            return self._package_init_violations(module, "an orchestrators package")  # tesser:debt TB051
+        if place == "orchestrators-file":
+            return (
+                Violation(ViolationSpec(
+                    module.path(),
+                    1,
+                    "TB041",
+                    f"{module.name()} is an orchestrators module; "
+                    "orchestrators is a package, never a module",
+                )),
+            ) + self._orchestrators_module_violations(module, parts[0], contexts, blocks)  # tesser:debt TB051
+        if place == "orchestrators":
+            return self._orchestrators_module_violations(module, parts[0], contexts, blocks)  # tesser:debt TB051
         if place == "role-init":
             return self._role_init_violations(module)  # tesser:debt TB051
         if place == "role-file":
@@ -4104,6 +4274,273 @@ class Codebase(ts.AggregateRoot):
             for stmt in module.body()
         )
 
+    def _package_init_violations(self, module: Module, subject: str) -> tuple[Violation, ...]:
+        return tuple(
+            Violation(ViolationSpec(
+                module.path(),
+                stmt.lineno,
+                "TB042",
+                f"{module.name()} __init__ declares code; {subject} __init__ is empty",
+            ))
+            for stmt in module.body()
+        )
+
+    def _spoken_ports_module(self, module: Module) -> str | None:
+        tops = frozenset(each.name().split(".")[0] for each in self._modules)
+        spoken = [
+            str(edge._target)
+            for edge in module.import_edges()
+            if str(edge._target).split(".")[0] in tops
+            and str(edge._target).split(".")[1:3] == [PORTS_PARENT_ROLE, PORTS_PACKAGE]
+        ]
+        return spoken[0] if len(spoken) == 1 else None
+
+    def _application_client_module_violations(
+        self,
+        module: Module,
+        blocks: dict[tuple[str, str], str],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        found.extend(self._stray_import_violations(module))  # tesser:debt TB051
+        found.extend(
+            self._tesser_import_violations(  # tesser:debt TB051
+                module,
+                "application client",
+                ROLE_TESSER_PACKAGE[PORTS_PARENT_ROLE],
+                "an application client module imports only tesser.application",
+                "an application client module imports tesser.application exactly once, as ts",
+                "an application client module imports tesser.application exactly once, as ts",
+            )
+        )
+        tops = frozenset(each.name().split(".")[0] for each in self._modules)
+        spoken = 0
+        for edge in module.import_edges():
+            target = str(edge._target)
+            lineno = int(edge._lineno)
+            pieces = target.split(".")
+            if pieces[0] == TESSER:
+                continue
+            if pieces[0] in tops:
+                if pieces[1:3] == [PORTS_PARENT_ROLE, PORTS_PACKAGE] and len(pieces) >= 4:
+                    spoken += 1
+                    if spoken > 1:
+                        found.append(
+                            Violation(ViolationSpec(
+                                module.path(),
+                                lineno,
+                                "TB067",
+                                f"{module.name()} imports a second ports module {target}; "
+                                "an application client module speaks the DTOs of exactly "
+                                "one ports module",
+                            ))
+                        )
+                    else:
+                        found.extend(self._form_violations(module, edge))  # tesser:debt TB051
+                    continue
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        lineno,
+                        "TB067",
+                        f"{module.name()} imports {target}; an application client module "
+                        "speaks the DTOs of exactly one ports module",
+                    ))
+                )
+            elif target not in PORTS_STDLIB and pieces[0] not in PORTS_STDLIB:
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        lineno,
+                        "TB067",
+                        f"{module.name()} imports {target}; an application client module "
+                        "imports only tesser.application, one ports module, and the pure stdlib",
+                    ))
+                )
+        if spoken == 0 and module.class_defs():
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    1,
+                    "TB067",
+                    f"{module.name()} imports no ports module; an application client "
+                    "module speaks the DTOs of exactly one ports module",
+                ))
+            )
+        for stmt in module.body():
+            if isinstance(stmt, (ast.Import, ast.ImportFrom, ast.ClassDef)):
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    stmt.lineno,
+                    "TB051",
+                    f"{module.name()} has a loose module-level statement; "
+                    "an application client module holds only imports and classes",
+                ))
+            )
+        protocols: list[ast.ClassDef] = []
+        for stmt in module.class_defs():
+            where = f"{module.name()}.{stmt.name}"
+            block = blocks.get((module.name(), stmt.name))
+            if block == "actions_client":
+                protocols.append(stmt)
+            elif block is None:
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        stmt.lineno,
+                        "TB052",
+                        f"{where} declares no ts.* base; an application client module "
+                        "declares exactly one ts.Client protocol and nothing else",
+                    ))
+                )
+            else:
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        stmt.lineno,
+                        "TB052",
+                        f"{where} is {KIND_NAME[block]}; an application client module "
+                        "declares exactly one ts.Client protocol and nothing else",
+                    ))
+                )
+            for inner in self._nested_class_defs(stmt.body):
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        inner.lineno,
+                        "TB052",
+                        f"{where}.{inner.name} is a nested class; an application client "
+                        "module declares its protocol at module level",
+                    ))
+                )
+            found.extend(self._import_time_violations(module, stmt))  # tesser:debt TB051
+        if len(protocols) != 1 and module.class_defs():
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    protocols[1].lineno if len(protocols) > 1 else 1,
+                    "TB052",
+                    f"{module.name()} declares {len(protocols)} client protocols; an "
+                    "application client module declares exactly one ts.Client protocol "
+                    "and nothing else",
+                ))
+            )
+        return tuple(found)
+
+    def _import_time_violations(
+        self, module: Module, stmt: ast.ClassDef
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        where = f"{module.name()}.{stmt.name}"
+        members = [
+            item
+            for item in stmt.body
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+        computed: list[ast.expr] = list(stmt.bases)
+        for item in members:
+            computed.extend(
+                arg.annotation
+                for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
+                if arg.annotation is not None
+            )
+            if item.returns is not None:
+                computed.append(item.returns)
+            computed.extend(item.args.defaults)
+            computed.extend(value for value in item.args.kw_defaults if value is not None)
+        runs = (
+            bool(stmt.decorator_list)
+            or bool(stmt.keywords)
+            or any(item.decorator_list for item in members)
+            or any(
+                isinstance(inner, (ast.Call, ast.Lambda, ast.Await, ast.NamedExpr))
+                or isinstance(
+                    inner, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+                )
+                for node in computed
+                for inner in ast.walk(node)
+            )
+        )
+        if runs:
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    stmt.lineno,
+                    "TB051",
+                    f"{where} runs an expression at import; an application client module "
+                    "holds no expression that runs at import, because a job imports it",
+                ))
+            )
+        for held in stmt.body:
+            if isinstance(held, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Pass)):
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    held.lineno,
+                    "TB051",
+                    f"{where} carries a class-level statement; an application client "
+                    "module declares calls and nothing else",
+                ))
+            )
+        return tuple(found)
+
+    def _orchestrators_module_violations(
+        self,
+        module: Module,
+        context: str,
+        contexts: frozenset[str],
+        blocks: dict[tuple[str, str], str],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        found.extend(
+            self._role_module_violations(  # tesser:debt TB051
+                module,
+                PORTS_PARENT_ROLE,
+                blocks,
+                frozenset({"orchestrator", "port_response"}),
+            )
+        )
+        found.extend(
+            self._import_violations(  # tesser:debt TB051
+                module, context, PORTS_PARENT_ROLE, contexts, blocks
+            )
+        )
+        held = [
+            cls
+            for cls in module.class_defs()
+            if blocks.get((module.name(), cls.name)) == "orchestrator"
+        ]
+        responses = [
+            cls
+            for cls in module.class_defs()
+            if blocks.get((module.name(), cls.name)) == "port_response"
+        ]
+        if len(held) != 1 and module.class_defs():
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    held[1].lineno if len(held) > 1 else 1,
+                    "TB052",
+                    f"{module.name()} declares {len(held)} orchestrators; an orchestrators "
+                    "module declares exactly one orchestrator, its mappers, and at most "
+                    "its own response",
+                ))
+            )
+        if len(responses) > 1:
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    responses[1].lineno,
+                    "TB052",
+                    f"{module.name()} declares {len(responses)} responses; an orchestrators "
+                    "module declares exactly one orchestrator, its mappers, and at most "
+                    "its own response",
+                ))
+            )
+        return tuple(found)
+
     @staticmethod
     def _enum_base(module: Module, stmt: ast.ClassDef) -> str | None:
         for base in stmt.bases:
@@ -4542,6 +4979,9 @@ class Codebase(ts.AggregateRoot):
                     "a port method",
                     "TB081",
                     blocks,
+                    "a port method takes one ts.Request, led by a ts.JobContext when an "
+                    "orchestrator calls it",
+                    True,
                 )
             )
             found.extend(self._port_annotation_violations(module, where, item, blocks))  # tesser:debt TB051
@@ -4562,6 +5002,8 @@ class Codebase(ts.AggregateRoot):
                     if arg.arg != "self"
                 ])] + [fn.returns]:
             if isinstance(node, ast.Name) and node.id in declared:
+                continue
+            if self._names_job_context(module, node, blocks):  # tesser:debt TB051
                 continue
             found.append(
                 Violation(ViolationSpec(
@@ -4628,8 +5070,22 @@ class Codebase(ts.AggregateRoot):
         module: Module,
         role: str,
         blocks: dict[tuple[str, str], str],
+        extra: frozenset[str] = frozenset(),
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
+        parts = module.name().split(".")
+        kind_package = parts[2] if len(parts) >= 4 else None
+        if role == "adapters" and kind_package not in ADAPTER_KIND_PACKAGES:
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    1,
+                    "TB041",
+                    f"{module.name()} is not in an adapter kind package; an adapters "
+                    "module lives in handlers, gateways, repositories, or jobs, because "
+                    "placement is what carries an adapter's reach",
+                ))
+            )
         for stmt in module.body():
             if isinstance(stmt, ast.ClassDef):
                 block = blocks.get((module.name(), stmt.name))
@@ -4703,7 +5159,7 @@ class Codebase(ts.AggregateRoot):
                             "a host lives in srv and a protocol kind in a protocol module, never a context",
                         ))
                     )
-                elif KIND_ROLE[block] != role:
+                elif KIND_ROLE[block] != role and block not in extra:
                     found.append(
                         Violation(ViolationSpec(
                             module.path(),
@@ -4727,7 +5183,7 @@ class Codebase(ts.AggregateRoot):
         if role == "adapters":
             kinds = {
                 blocks.get((module.name(), cls.name)) for cls in module.class_defs()
-            } & {"handler", "gateway", "repository"}
+            } & ADAPTER_BLOCKS
             if len(kinds) > 1:
                 found.append(
                     Violation(ViolationSpec(
@@ -4735,6 +5191,23 @@ class Codebase(ts.AggregateRoot):
                         1,
                         "TB052",
                         f"{module.name()} mixes adapter kinds; an adapters module holds one adapter kind",
+                    ))
+                )
+            expected = ADAPTER_KIND_PACKAGES.get(kind_package or "", frozenset())
+            for cls in module.class_defs():
+                block = blocks.get((module.name(), cls.name))
+                if block is None or block not in ADAPTER_BLOCKS or block in expected:
+                    continue
+                if not expected:
+                    continue
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        cls.lineno,
+                        "TB052",
+                        f"{module.name()}.{cls.name} is {KIND_NAME[block]}, and its "
+                        "package names another kind; an adapters module holds the kind "
+                        "of its kind package, because the package is what carries its reach",
                     ))
                 )
         return tuple(found)
@@ -4749,9 +5222,9 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         found.extend(self._stray_import_violations(module))  # tesser:debt TB051
-        holds_handler = (module is not None and any(
-                    blocks.get((module.name(), cls.name)) == ("handler") for cls in module.class_defs()
-                ))
+        own = module.name().split(".")
+        kind_package = own[2] if len(own) >= 4 and own[1] == "adapters" else None
+        kind_reach = ADAPTER_KIND_REACH.get(kind_package or "")
         holds_gateway = (module is not None and any(
                     blocks.get((module.name(), cls.name)) == ("gateway") for cls in module.class_defs()
                 ))
@@ -4827,25 +5300,46 @@ class Codebase(ts.AggregateRoot):
             elif pieces[0] in contexts:
                 tail = pieces[1] if len(pieces) > 1 else ""
                 denied: list[Violation] = []
-                if pieces[0] == context:
-                    if role == "adapters" and tail == "client":
-                        if not holds_handler:
-                            denied.append(
-                                Violation(ViolationSpec(
-                                    module.path(),
-                                    lineno,
-                                    "TB060",
-                                    f"{module.name()} imports {target}; "
-                                    "only a handler imports its own context's client",
-                                ))
-                            )
-                    elif not (
+                inner = ".".join(pieces[1:])
+                job_only = any(
+                    inner == entry or inner.startswith(f"{entry}.")
+                    for entry in JOB_ONLY_IMPORTS
+                )
+                if pieces[0] == context and job_only and kind_package != "jobs":
+                    denied.append(
+                        Violation(ViolationSpec(
+                            module.path(),
+                            lineno,
+                            "TB060",
+                            f"{module.name()} imports {target}; only a job imports the "
+                            "application client and the orchestrators, because an action "
+                            "is reachable only through the engine",
+                        ))
+                    )
+                elif pieces[0] == context and role == "adapters" and kind_reach is not None:
+                    if not any(
+                        inner == allowed or inner.startswith(f"{allowed}.")
+                        for allowed in kind_reach + (f"adapters.{kind_package}",)
+                    ):
+                        denied.append(
+                            Violation(ViolationSpec(
+                                module.path(),
+                                lineno,
+                                "TB060",
+                                f"{module.name()} imports {target}; an adapters kind "
+                                "package reaches only what its kind reaches — a handler "
+                                "the context client, a job the application client, the "
+                                "orchestrators, and the ports, a gateway or a repository "
+                                "the ports",
+                            ))
+                        )
+                elif pieces[0] == context:
+                    if not (
                         len(pieces) >= 2
                         and (
                             pieces[1] == role
                             or any(
-                                ".".join(pieces[1:]) == allowed
-                                or ".".join(pieces[1:]).startswith(f"{allowed}.")
+                                inner == allowed or inner.startswith(f"{allowed}.")
                                 for allowed in SAME_CONTEXT_IMPORTS[role]
                             )
                         )
@@ -4947,7 +5441,7 @@ class Codebase(ts.AggregateRoot):
                 if package == "srv" and not (
                     tail == "adapters"
                     and (imported is not None and any(
-                                blocks.get((imported.name(), cls.name)) == ("handler") for cls in imported.class_defs()
+                                blocks.get((imported.name(), cls.name)) in HOST_KINDS for cls in imported.class_defs()
                             ))
                 ):
                     denied.append(
@@ -4956,7 +5450,7 @@ class Codebase(ts.AggregateRoot):
                             lineno,
                             "TB063",
                             f"{module.name()} imports {target}; "
-                            "a host reaches a context only through its handlers",
+                            "a host reaches a context only through its handlers and its jobs",
                         ))
                     )
                 elif package == "app" and tail not in ("component", "client", "adapters"):
@@ -5040,8 +5534,8 @@ class Codebase(ts.AggregateRoot):
                     1,
                     "TB070",
                     f"{module.name()} resolves to no test tier; "
-                    "a sibling test lives in a role package or an adapter kind package "
-                    "(handlers, gateways, repositories)",
+                    "a sibling test lives in a role package, an adapter kind package "
+                    "(handlers, gateways, repositories, jobs), or the orchestrators package",
                 )),
             )
         found.extend(self._shell_reach_violations(module, tier))  # tesser:debt TB051
@@ -5091,7 +5585,7 @@ class Codebase(ts.AggregateRoot):
                 pieces = target.split(".")
                 if pieces[0] not in contexts:
                     continue
-                if len(pieces) >= 3 and pieces[1] == "adapters" and pieces[2] == "handlers":
+                if len(pieces) >= 3 and pieces[1] == "adapters" and pieces[2] in ("handlers", "jobs"):
                     continue
                 found.append(
                     Violation(ViolationSpec(
@@ -5099,7 +5593,7 @@ class Codebase(ts.AggregateRoot):
                         lineno,
                         "TB070",
                         f"{module.name()} imports {target}, but a test placed in "
-                        "srv reaches a context only through its handlers; "
+                        "srv reaches a context only through its handlers and its jobs; "
                         "a test reaches only what its placement allows",
                     ))
                 )
@@ -5167,7 +5661,28 @@ class Codebase(ts.AggregateRoot):
                 )
                 if not allowed and home is not None and tail == home[0]:
                     allowed = home[1] is None or (len(pieces) >= 3 and pieces[2] == home[1])
-                if not allowed:
+                at_home = (
+                    home is not None
+                    and home[1] is not None
+                    and tail == home[0]
+                    and len(pieces) >= 3
+                    and pieces[2] == home[1]
+                )
+                if allowed and tier != "jobs" and not at_home and any(
+                    inner == entry or inner.startswith(f"{entry}.")
+                    for entry in JOB_ONLY_IMPORTS
+                ):
+                    found.append(
+                        Violation(ViolationSpec(
+                            module.path(),
+                            lineno,
+                            "TB070",
+                            f"{module.name()} imports {target}, but only a test placed in "
+                            "jobs reaches the application client and the orchestrators; "
+                            "a test reaches only what its placement allows",
+                        ))
+                    )
+                elif not allowed:
                     found.append(
                         Violation(ViolationSpec(
                             module.path(),
@@ -5263,6 +5778,12 @@ class Codebase(ts.AggregateRoot):
                 if len(tier_parts) >= 4 and tier_parts[2] in ADAPTER_TEST_TIERS
                 else (tier_parts[0], STRAY_TIER)
             )
+        elif (
+            tier_parts[1] == PORTS_PARENT_ROLE
+            and len(tier_parts) >= 4
+            and tier_parts[2] == ORCHESTRATORS_PACKAGE
+        ):
+            placement = (tier_parts[0], ORCHESTRATORS_PACKAGE)
         else:
             placement = (tier_parts[0], tier_parts[1])
         if placement is None:
@@ -5354,7 +5875,15 @@ class Codebase(ts.AggregateRoot):
                         ))
                     )
                 elif not any(
-                    blocks.get(key) in ("port", "client", "protocol_port", "config_repository")
+                    blocks.get(key)
+                    in (
+                        "port",
+                        "client",
+                        "actions_client",
+                        "job_context",
+                        "protocol_port",
+                        "config_repository",
+                    )
                     for key in (module._resolve(base) for base in stmt.bases)
                     if key is not None
                 ):
@@ -5446,10 +5975,14 @@ class Codebase(ts.AggregateRoot):
         line: int,
         fn: ast.FunctionDef | ast.AsyncFunctionDef,
         blocks: dict[tuple[str, str], str],
+        subject: str = "a service",
+        context_ok: bool = False,
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for arg in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs:
             if arg.arg == "self":
+                continue
+            if context_ok and self._names_job_context(module, arg.annotation, blocks):  # tesser:debt TB051
                 continue
             port_key = module._resolve(arg.annotation) if arg.annotation is not None else None
             if (blocks.get(port_key) if port_key is not None else None) != "port":
@@ -5459,7 +5992,7 @@ class Codebase(ts.AggregateRoot):
                         line,
                         "TB081",
                         f"{where} parameter {arg.arg!r} is not a ts.Port; "
-                        "a service depends only on ports",
+                        f"{subject} depends only on ports",
                     ))
                 )
         return tuple(found)
@@ -5470,12 +6003,40 @@ class Codebase(ts.AggregateRoot):
         cls: ast.ClassDef,
         blocks: dict[tuple[str, str], str],
         subject: str,
+        leading_context: bool = False,
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for item in cls.body:
             if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             where = f"{module.name()}.{cls.name}.{item.name}"
+            taken = [
+                arg
+                for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
+                if arg.arg != "self"
+            ]
+            for arg in taken[1:] if leading_context else taken:
+                if self._names_job_context(module, arg.annotation, blocks):  # tesser:debt TB051
+                    found.append(
+                        Violation(ViolationSpec(
+                            module.path(),
+                            item.lineno,
+                            "TB081",
+                            f"{where} parameter {arg.arg!r} is a ts.JobContext; a job "
+                            "context is threaded as the leading parameter of an action "
+                            "port call and nowhere else",
+                        ))
+                    )
+            if self._names_job_context(module, item.returns, blocks):  # tesser:debt TB051
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        item.lineno,
+                        "TB081",
+                        f"{where} returns a ts.JobContext; a job context is threaded as "
+                        "the leading parameter of an action port call and nowhere else",
+                    ))
+                )
             annotations = [
                 arg.annotation for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
             ]
@@ -6122,9 +6683,19 @@ class Codebase(ts.AggregateRoot):
                 isinstance(holder, ast.Attribute)
                 and isinstance(holder.value, ast.Name)
                 and holder.value.id == "self"
-                and holder.attr.startswith("_")
             ):
                 continue
+            for passed in list(node.args) + [keyword.value for keyword in node.keywords]:
+                if isinstance(passed, ast.Name) and passed.id == request:
+                    found.append(
+                        Violation(ViolationSpec(
+                            module.path(),
+                            passed.lineno,
+                            "TB082",
+                            f"{where} sends its request itself straight to a port; "
+                            "a value crossing into a port has passed through a domain type",
+                        ))
+                    )
             for inner in ast.walk(node):
                 if not isinstance(inner, ast.Attribute):
                     continue
@@ -6144,19 +6715,551 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _component_violations(self, module: Module, cls: ast.ClassDef) -> tuple[Violation, ...]:
+    def _component_violations(
+        self, module: Module, cls: ast.ClassDef, blocks: dict[tuple[str, str], str]
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        if not any(
+            isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "close"
+            for item in cls.body
+        ):
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    cls.lineno,
+                    "TB081",
+                    f"{module.name()}.{cls.name} defines no close; "
+                    "a component releases what it constructed",
+                ))
+            )
+        annotated: dict[str, ast.expr] = {}
         for item in cls.body:
-            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "close":
-                return ()
+            if (
+                isinstance(item, ast.AnnAssign)
+                and isinstance(item.target, ast.Name)
+                and item.annotation is not None
+            ):
+                annotated[item.target.id] = item.annotation
+        for node in ast.walk(cls):
+            if isinstance(node, ast.AnnAssign):
+                targets: list[ast.expr] = [node.target]
+            elif isinstance(node, (ast.Assign, ast.AugAssign)):
+                targets = list(node.targets) if isinstance(node, ast.Assign) else [node.target]
+            else:
+                continue
+            for target in targets:
+                if not (
+                    isinstance(target, ast.Attribute)
+                    and isinstance(target.value, ast.Name)
+                    and target.value.id == "self"
+                ):
+                    continue
+                published = target.attr
+                if published.startswith("_"):
+                    continue
+                if isinstance(node, ast.AnnAssign) and node.annotation is not None:
+                    annotated[published] = node.annotation
+                if published not in ("client", "jobs"):
+                    found.append(
+                        Violation(ViolationSpec(
+                            module.path(),
+                            node.lineno,
+                            "TB081",
+                            f"{module.name()}.{cls.name} publishes {published}; "
+                            "a component publishes only its client and its jobs",
+                        ))
+                    )
+                    continue
+                expected = "client" if published == "client" else "job"
+                annotation = annotated.get(published)
+                key = module._resolve(annotation) if annotation is not None else None
+                named = (blocks.get(key) if key is not None else None) == expected
+                if not named and expected == "job" and annotation is not None:
+                    named = self._names_jobs(module, annotation, blocks)  # tesser:debt TB051
+                if not named:
+                    found.append(
+                        Violation(ViolationSpec(
+                            module.path(),
+                            node.lineno,
+                            "TB081",
+                            f"{module.name()}.{cls.name} publishes {published} untyped; "
+                            "a component publishes only its client and its jobs",
+                        ))
+                    )
+        return tuple(found)
+
+    @staticmethod
+    def _port_attributes(
+        module: Module,
+        init: ast.FunctionDef | ast.AsyncFunctionDef | None,
+        blocks: dict[tuple[str, str], str],
+        kind: str = "port",
+    ) -> frozenset[str]:
+        if init is None:
+            return frozenset()
+        ports = {
+            arg.arg
+            for arg in init.args.posonlyargs + init.args.args + init.args.kwonlyargs
+            if arg.arg != "self"
+            and arg.annotation is not None
+            and blocks.get(module._resolve(arg.annotation) or ("", "")) == kind
+        }
+        held: set[str] = set()
+        for node in ast.walk(init):
+            if isinstance(node, ast.AnnAssign):
+                targets: list[ast.expr] = [node.target]
+                value = node.value
+            elif isinstance(node, ast.Assign):
+                targets = list(node.targets)
+                value = node.value
+            else:
+                continue
+            if not (isinstance(value, ast.Name) and value.id in ports):
+                continue
+            for target in targets:
+                if (
+                    isinstance(target, ast.Attribute)
+                    and isinstance(target.value, ast.Name)
+                    and target.value.id == "self"
+                ):
+                    held.add(target.attr)
+        return frozenset(held)
+
+    def _names_job_context(
+        self,
+        module: Module,
+        node: ast.expr | None,
+        blocks: dict[tuple[str, str], str],
+    ) -> bool:
+        unquoted = self._unquoted(node)  # tesser:debt TB051
+        if unquoted is None:
+            return False
+        key = module._resolve(unquoted)
+        return key is not None and blocks.get(key) == JOB_CONTEXT_BLOCK
+
+    @staticmethod
+    def _init_of(cls: ast.ClassDef) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
+        return next(
+            (
+                item
+                for item in cls.body
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and item.name == "__init__"
+            ),
+            None,
+        )
+
+    def _port_call_violations(
+        self,
+        module: Module,
+        where: str,
+        fn: ast.FunctionDef | ast.AsyncFunctionDef,
+        held: frozenset[str],
+    ) -> tuple[Violation, ...]:
+        calls = [
+            node
+            for node in ast.walk(fn)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Attribute)
+            and isinstance(node.func.value.value, ast.Name)
+            and node.func.value.value.id == "self"
+            and node.func.value.attr in held
+        ]
+        if len(calls) == 1:
+            return ()
         return (
             Violation(ViolationSpec(
                 module.path(),
-                cls.lineno,
-                "TB081",
-                f"{module.name()}.{cls.name} defines no close; "
-                "a component releases what it constructed",
+                fn.lineno,
+                "TB082",
+                f"{where} makes {len(calls)} calls on its port; "
+                "an action makes exactly one call on its port",
             )),
         )
+
+    def _actions_violations(
+        self,
+        module: Module,
+        cls: ast.ClassDef,
+        blocks: dict[tuple[str, str], str],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        init = self._init_of(cls)  # tesser:debt TB051
+        held = self._port_attributes(module, init, blocks)  # tesser:debt TB051
+        methods = [
+            item
+            for item in cls.body
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+        method_names = frozenset(method.name for method in methods)
+        if init is None:
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    cls.lineno,
+                    "TB081",
+                    f"{module.name()}.{cls.name} defines no __init__; "
+                    "a class of actions takes exactly one port",
+                ))
+            )
+        else:
+            params = [
+                arg
+                for arg in init.args.posonlyargs + init.args.args + init.args.kwonlyargs
+                if arg.arg != "self"
+            ]
+            if len(params) != 1:
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        init.lineno,
+                        "TB081",
+                        f"{module.name()}.{cls.name}.__init__ takes {len(params)} parameters; "
+                        "a class of actions takes exactly one port",
+                    ))
+                )
+            found.extend(
+                self._dependency_violations(  # tesser:debt TB051
+                    module,
+                    f"{module.name()}.{cls.name}.__init__",
+                    init.lineno,
+                    init,
+                    blocks,
+                    "a class of actions",
+                )
+            )
+        for item in methods:
+            where = f"{module.name()}.{cls.name}.{item.name}"
+            found.extend(
+                self._delegation_violations(module, method_names, where, item)  # tesser:debt TB051
+            )
+            if item.name.startswith("_"):
+                continue
+            found.extend(
+                self._signature_violations(  # tesser:debt TB051
+                    module,
+                    where,
+                    item.lineno,
+                    item,
+                    "port_request",
+                    "port_response",
+                    "an actions method",
+                    "TB081",
+                    blocks,
+                    "an actions method takes exactly one ts.Request",
+                )
+            )
+            found.extend(self._body_violations(module, where, item, blocks))  # tesser:debt TB051
+            found.extend(self._port_call_violations(module, where, item, held))  # tesser:debt TB051
+        return tuple(found)
+
+    def _orchestrator_violations(
+        self,
+        module: Module,
+        cls: ast.ClassDef,
+        blocks: dict[tuple[str, str], str],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        init = self._init_of(cls)  # tesser:debt TB051
+        ports = self._port_attributes(module, init, blocks)  # tesser:debt TB051
+        contexts = self._port_attributes(module, init, blocks, JOB_CONTEXT_BLOCK)  # tesser:debt TB051
+        held = ports | contexts
+        methods = [
+            item
+            for item in cls.body
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+        method_names = frozenset(method.name for method in methods)
+        if init is None:
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    cls.lineno,
+                    "TB081",
+                    f"{module.name()}.{cls.name} defines no __init__; "
+                    "an orchestrator depends only on action ports — a port an "
+                    "application client speaks",
+                ))
+            )
+        else:
+            where = f"{module.name()}.{cls.name}.__init__"
+            found.extend(
+                self._dependency_violations(  # tesser:debt TB051
+                    module, where, init.lineno, init, blocks, "an orchestrator", True
+                )
+            )
+            taken = [
+                arg
+                for arg in init.args.posonlyargs + init.args.args + init.args.kwonlyargs
+                if arg.arg != "self"
+                and self._names_job_context(module, arg.annotation, blocks)  # tesser:debt TB051
+            ]
+            if len(taken) != 1:
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        init.lineno,
+                        "TB081",
+                        f"{where} takes {len(taken)} job contexts; "
+                        "an orchestrator takes exactly one job context and its action ports",
+                    ))
+                )
+            for arg in init.args.posonlyargs + init.args.args + init.args.kwonlyargs:
+                if arg.arg == "self" or arg.annotation is None:
+                    continue
+                key = module._resolve(arg.annotation)
+                if blocks.get(key or ("", "")) != "port":
+                    continue
+                if key in self._action_ports:
+                    continue
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        init.lineno,
+                        "TB081",
+                        f"{where} parameter {arg.arg!r} is a port no application client "
+                        "speaks; an orchestrator depends only on action ports — a port "
+                        "an application client speaks",
+                    ))
+                )
+        for node in ast.walk(cls):
+            if isinstance(node, ast.AnnAssign):
+                targets: list[ast.expr] = [node.target]
+            elif isinstance(node, ast.Assign):
+                targets = list(node.targets)
+            elif isinstance(node, ast.AugAssign):
+                targets = [node.target]
+            else:
+                continue
+            for target in targets:
+                if not (
+                    isinstance(target, ast.Attribute)
+                    and isinstance(target.value, ast.Name)
+                    and target.value.id == "self"
+                ):
+                    continue
+                if target.attr in held:
+                    continue
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        node.lineno,
+                        "TB081",
+                        f"{module.name()}.{cls.name} keeps {target.attr}; "
+                        "an orchestrator stores only its job context and its action ports",
+                    ))
+                )
+        for item in methods:
+            where = f"{module.name()}.{cls.name}.{item.name}"
+            found.extend(
+                self._delegation_violations(module, method_names, where, item)  # tesser:debt TB051
+            )
+            if item.name == "__init__" or item.name.startswith("_"):
+                continue
+            found.extend(
+                self._signature_violations(  # tesser:debt TB051
+                    module,
+                    where,
+                    item.lineno,
+                    item,
+                    "port_request",
+                    "port_response",
+                    "an orchestrator method",
+                    "TB081",
+                    blocks,
+                    "an orchestrator method takes exactly one ts.Request",
+                )
+            )
+            found.extend(self._body_violations(module, where, item, blocks))  # tesser:debt TB051
+            found.extend(self._thread_violations(module, where, item, ports, contexts))  # tesser:debt TB051
+        return tuple(found)
+
+    def _names_jobs(
+        self,
+        module: Module,
+        node: ast.expr,
+        blocks: dict[tuple[str, str], str],
+    ) -> bool:
+        unquoted = self._unquoted(node)  # tesser:debt TB051
+        if not isinstance(unquoted, ast.Subscript):
+            return False
+        if Codebase._annotation_head(unquoted) != "tuple":
+            return False
+        inner = (
+            list(unquoted.slice.elts)
+            if isinstance(unquoted.slice, ast.Tuple)
+            else [unquoted.slice]
+        )
+        named = [
+            element
+            for element in inner
+            if not (isinstance(element, ast.Constant) and element.value is Ellipsis)
+        ]
+        return bool(named) and all(
+            blocks.get(module._resolve(element) or ("", "")) == "job" for element in named
+        )
+
+    def _gateway_violations(
+        self,
+        module: Module,
+        cls: ast.ClassDef,
+        blocks: dict[tuple[str, str], str],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for item in cls.body:
+            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            handed = {
+                arg.arg
+                for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
+                if arg.arg != "self"
+                and self._names_job_context(module, arg.annotation, blocks)  # tesser:debt TB051
+            }
+            if not handed:
+                continue
+            for node in ast.walk(item):
+                if isinstance(node, ast.AnnAssign):
+                    targets: list[ast.expr] = [node.target]
+                    value = node.value
+                elif isinstance(node, ast.Assign):
+                    targets = list(node.targets)
+                    value = node.value
+                else:
+                    continue
+                if not (isinstance(value, ast.Name) and value.id in handed):
+                    continue
+                for target in targets:
+                    if not (
+                        isinstance(target, ast.Attribute)
+                        and isinstance(target.value, ast.Name)
+                        and target.value.id == "self"
+                    ):
+                        continue
+                    found.append(
+                        Violation(ViolationSpec(
+                            module.path(),
+                            node.lineno,
+                            "TB081",
+                            f"{module.name()}.{cls.name} keeps {target.attr}, a job "
+                            "context; a gateway is built once and never holds an "
+                            "invocation's job context",
+                        ))
+                    )
+        return tuple(found)
+
+    def _thread_violations(
+        self,
+        module: Module,
+        where: str,
+        fn: ast.FunctionDef | ast.AsyncFunctionDef,
+        ports: frozenset[str],
+        contexts: frozenset[str],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for node in ast.walk(fn):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Attribute)
+                and isinstance(node.func.value.value, ast.Name)
+                and node.func.value.value.id == "self"
+                and node.func.value.attr in ports
+            ):
+                continue
+            leading = node.args[0] if node.args else None
+            if (
+                isinstance(leading, ast.Attribute)
+                and isinstance(leading.value, ast.Name)
+                and leading.value.id == "self"
+                and leading.attr in contexts
+            ):
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    node.lineno,
+                    "TB082",
+                    f"{where} calls {node.func.value.attr} without its job context first; "
+                    "an orchestrator threads its job context into every action port call",
+                ))
+            )
+        return tuple(found)
+
+    def _actions_client_violations(
+        self,
+        module: Module,
+        cls: ast.ClassDef,
+        blocks: dict[tuple[str, str], str],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        spoken = self._spoken_ports_module(module)  # tesser:debt TB051
+        for item in cls.body:
+            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            where = f"{module.name()}.{cls.name}.{item.name}"
+            if not all(
+                isinstance(stmt, ast.Pass)
+                or (
+                    isinstance(stmt, ast.Expr)
+                    and isinstance(stmt.value, ast.Constant)
+                    and stmt.value.value is Ellipsis
+                )
+                for stmt in item.body
+            ):
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        item.lineno,
+                        "TB051",
+                        f"{where} carries a body; an application client method declares "
+                        "a shape and never a body, because a job imports it for the shape",
+                    ))
+                )
+            if item.name.startswith("_") and item.name != "__call__":
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        item.lineno,
+                        "TB081",
+                        f"{where} is not a call a job may make; an application client "
+                        "declares only its public calls and __call__",
+                    ))
+                )
+                continue
+            found.extend(
+                self._signature_violations(  # tesser:debt TB051
+                    module,
+                    where,
+                    item.lineno,
+                    item,
+                    "port_request",
+                    "port_response",
+                    "an application client method",
+                    "TB081",
+                    blocks,
+                    "an application client method takes exactly one ts.Request",
+                )
+            )
+            for node in [arg.annotation for arg in ([
+                        arg
+                        for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
+                        if arg.arg != "self"
+                    ])] + [item.returns]:
+                key = module._resolve(node) if node is not None else None
+                if key is not None and spoken is not None and key[0] == spoken:
+                    continue
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        item.lineno,
+                        "TB081",
+                        f"{where} names a shape its ports module does not declare; an "
+                        "application client speaks the requests and responses of the "
+                        "ports module it imports",
+                    ))
+                )
+        return tuple(found)
 
     def _constructor_violations(
         self,
@@ -6185,7 +7288,16 @@ class Codebase(ts.AggregateRoot):
             )
         where = f"{module.name()}.{cls.name}.__init__"
         return self._signature_violations(  # tesser:debt TB051
-            module, where, init.lineno, init, "spec", None, "a domain constructor", "TB080", blocks
+            module,
+            where,
+            init.lineno,
+            init,
+            "spec",
+            None,
+            "a domain constructor",
+            "TB080",
+            blocks,
+            "a domain constructor takes exactly one ts.Spec",
         )
 
     def _app_config_violations(
@@ -6211,7 +7323,16 @@ class Codebase(ts.AggregateRoot):
             )
         where = f"{module.name()}.{cls.name}.__init__"
         return self._signature_violations(  # tesser:debt TB051
-            module, where, init.lineno, init, "app_spec", None, "a config constructor", "TB080", blocks
+            module,
+            where,
+            init.lineno,
+            init,
+            "app_spec",
+            None,
+            "a config constructor",
+            "TB080",
+            blocks,
+            "a config constructor takes exactly one ts.Spec",
         )
 
     def _component_config_violations(
@@ -6246,6 +7367,7 @@ class Codebase(ts.AggregateRoot):
             "a config constructor",
             "TB080",
             blocks,
+            "a config constructor takes exactly one ts.Spec",
         )
 
     def _signature_violations(
@@ -6259,6 +7381,8 @@ class Codebase(ts.AggregateRoot):
         subject: str,
         code: str,
         blocks: dict[tuple[str, str], str],
+        taking: str = "",
+        leading_context: bool = False,
     ) -> tuple[Violation, ...]:
         expected = TS_NAME_BY_BLOCK[param_block]
         found: list[Violation] = []
@@ -6267,13 +7391,39 @@ class Codebase(ts.AggregateRoot):
                     for arg in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs
                     if arg.arg != "self"
                 ])
+        if leading_context and params and self._names_job_context(  # tesser:debt TB051
+            module, params[0].annotation, blocks
+        ):
+            params = params[1:]
+        for arg in params:
+            if self._names_job_context(module, arg.annotation, blocks):  # tesser:debt TB051
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        line,
+                        "TB081",
+                        f"{where} parameter {arg.arg!r} is a ts.JobContext; a job context "
+                        "is threaded as the leading parameter of an action port call and "
+                        "nowhere else",
+                    ))
+                )
+        if self._names_job_context(module, fn.returns, blocks):  # tesser:debt TB051
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    line,
+                    "TB081",
+                    f"{where} returns a ts.JobContext; a job context is threaded as the "
+                    "leading parameter of an action port call and nowhere else",
+                ))
+            )
         if fn.args.vararg is not None or fn.args.kwarg is not None:
             found.append(
                 Violation(ViolationSpec(
                     module.path(),
                     line,
                     code,
-                    f"{where} uses *args/**kwargs; {subject} takes exactly one {expected}",
+                    f"{where} uses *args/**kwargs; {taking}",
                 ))
             )
         if len(params) != 1:
@@ -6282,7 +7432,7 @@ class Codebase(ts.AggregateRoot):
                     module.path(),
                     line,
                     code,
-                    f"{where} takes {len(params)} parameters; {subject} takes exactly one {expected}",
+                    f"{where} takes {len(params)} parameters; {taking}",
                 ))
             )
         for arg in params:
@@ -6294,8 +7444,7 @@ class Codebase(ts.AggregateRoot):
                         module.path(),
                         line,
                         code,
-                        f"{where} parameter {arg.arg!r} is not a {expected}; "
-                        f"{subject} takes exactly one {expected}",
+                        f"{where} parameter {arg.arg!r} is not a {expected}; {taking}",
                     ))
                 )
         returns_key = module._resolve(fn.returns) if fn.returns is not None else None

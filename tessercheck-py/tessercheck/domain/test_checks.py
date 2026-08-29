@@ -141,6 +141,21 @@ def test_locate_is_the_single_routing_decision() -> None:
         ("shop.application.ports.test_repo", False, "ports-stray"),
         ("shop.application.ports.conftest", False, "ports-stray"),
         ("shop.application.ports.eval_repo", False, "ports-stray"),
+        ("shop.application.client", True, "app-client-init"),
+        ("shop.application.client", False, "app-client-file"),
+        ("shop.application.client.actions", False, "app-client"),
+        ("shop.application.client.sub.deep", False, "app-client"),
+        ("shop.application.client.__main__", False, "app-client"),
+        ("shop.application.client.test_actions", False, "app-client-stray"),
+        ("shop.application.client.conftest", False, "app-client-stray"),
+        ("shop.application.client.eval_actions", False, "app-client-stray"),
+        ("shop.application.orchestrators", True, "orchestrators-init"),
+        ("shop.application.orchestrators", False, "orchestrators-file"),
+        ("shop.application.orchestrators.flow", False, "orchestrators"),
+        ("shop.application.orchestrators.sub.deep", False, "orchestrators"),
+        ("shop.application.orchestrators.__main__", False, "orchestrators"),
+        ("shop.application.orchestrators.test_flow", False, "test"),
+        ("shop.application.orchestrators.conftest", False, "conftest"),
         ("shop.adapters.gateways.__main__", False, "role"),
         ("shop.adapters.conftest", False, "conftest"),
         ("shop.adapters.conftest", True, "conftest"),
@@ -2028,8 +2043,8 @@ def test_only_a_handler_imports_its_own_client() -> None:
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "shop/adapters/gateways.py",
-                "shop.adapters.gateways",
+                "shop/adapters/handlers/http.py",
+                "shop.adapters.handlers.http",
                 "import tesser.adapters as ts\n"
                 "import shop.client.client as shop_client\n"
                 "class HttpHandler(ts.Handler):\n"
@@ -2047,20 +2062,25 @@ def test_only_a_handler_imports_its_own_client() -> None:
                 False,
             ),
             (
-                "two/adapters/gateways.py",
-                "two.adapters.gateways",
+                "two/adapters/gateways/sneaky.py",
+                "two.adapters.gateways.sneaky",
                 "import tesser.adapters as ts\n"
-                "import two.client.client\n"
+                "import two.client.client as two_client\n"
                 "class SneakyGateway(ts.Gateway):\n"
                 "    pass\n",
                 False,
             ),
         ))).violations()
                )
-    assert not any("shop.adapters.gateways" in f and "imports shop.client.client" in f for f in findings)
+    assert not any(
+        "shop.adapters.handlers.http" in f and "imports shop.client.client" in f
+        for f in findings
+    )
     assert any(
-        "two.adapters.gateways" in f and "imports two.client.client" in f
-        and "only a handler imports its own context's client" in f
+        "two.adapters.gateways.sneaky" in f and "imports two.client.client" in f
+        and "an adapters kind package reaches only what its kind reaches — a handler "
+        "the context client, a job the application client, the orchestrators, and "
+        "the ports, a gateway or a repository the ports" in f
         for f in findings
     )
 
@@ -3647,8 +3667,8 @@ def test_any_role_but_client_may_import_tesser_errors_as_a_module() -> None:
                 False,
             ),
             (
-                "shop/adapters/gateways.py",
-                "shop.adapters.gateways",
+                "shop/adapters/gateways/memory.py",
+                "shop.adapters.gateways.memory",
                 "import tesser.adapters as ts\n"
                 "import tesser.errors as errors\n"
                 "class MemoryGateway(ts.Gateway):\n"
@@ -3657,8 +3677,8 @@ def test_any_role_but_client_may_import_tesser_errors_as_a_module() -> None:
                 False,
             ),
             (
-                "shop/adapters/test_gateways.py",
-                "shop.adapters.test_gateways",
+                "shop/adapters/gateways/test_memory.py",
+                "shop.adapters.gateways.test_memory",
                 "def test_gateways_exists() -> None:\n"
                 "    assert True\n",
                 False,
@@ -3878,7 +3898,7 @@ def test_a_srv_test_reaches_a_context_only_through_its_handlers() -> None:
                )
     assert any(
         "srv.test_router imports shop.application.service, but a test placed in "
-        "srv reaches a context only through its handlers; "
+        "srv reaches a context only through its handlers and its jobs; "
         "a test reaches only what its placement allows" in f
         for f in findings
     )
@@ -4175,14 +4195,14 @@ def test_a_test_that_resolves_to_no_tier_is_itself_a_finding() -> None:
                )
     assert any(
         "shop.adapters.test_flat resolves to no test tier; "
-        "a sibling test lives in a role package or an adapter kind package "
-        "(handlers, gateways, repositories)" in f
+        "a sibling test lives in a role package, an adapter kind package "
+        "(handlers, gateways, repositories, jobs), or the orchestrators package" in f
         for f in findings
     )
     assert any(
         "shop.adapters.blobs.test_blob resolves to no test tier; "
-        "a sibling test lives in a role package or an adapter kind package "
-        "(handlers, gateways, repositories)" in f
+        "a sibling test lives in a role package, an adapter kind package "
+        "(handlers, gateways, repositories, jobs), or the orchestrators package" in f
         for f in findings
     )
 
@@ -4418,8 +4438,8 @@ def test_an_unplaced_test_module_is_still_governed() -> None:
                )
     assert any(
         "weird.test_nested resolves to no test tier; "
-        "a sibling test lives in a role package or an adapter kind package "
-        "(handlers, gateways, repositories)" in f
+        "a sibling test lives in a role package, an adapter kind package "
+        "(handlers, gateways, repositories, jobs), or the orchestrators package" in f
         for f in findings
     )
     assert any("test_solo resolves to no test tier" in f for f in findings)
@@ -6000,7 +6020,8 @@ def test_a_port_method_speaks_one_request_and_one_response() -> None:
                )
     assert any(
         "shop.application.ports.sink.Sink.save parameter 'text' is not a ts.Request; "
-        "a port method takes exactly one ts.Request" in f
+        "a port method takes one ts.Request, led by a ts.JobContext when an "
+        "orchestrator calls it" in f
         for f in findings
     )
     assert any(
@@ -6010,7 +6031,8 @@ def test_a_port_method_speaks_one_request_and_one_response() -> None:
     )
     assert any(
         "shop.application.ports.sink.Sink.both takes 2 parameters; "
-        "a port method takes exactly one ts.Request" in f
+        "a port method takes one ts.Request, led by a ts.JobContext when an "
+        "orchestrator calls it" in f
         for f in findings
     )
 
@@ -6047,8 +6069,9 @@ def test_an_adapter_reaches_application_only_through_ports() -> None:
                )
     assert any(
         "shop.adapters.gateways.memory imports shop.application.service; "
-        "the same-context matrix is a role to itself, application to domain and client, "
-        "adapters to application/ports, component to application, adapters, and client" in f
+        "an adapters kind package reaches only what its kind reaches — a handler "
+        "the context client, a job the application client, the orchestrators, and "
+        "the ports, a gateway or a repository the ports" in f
         for f in findings
     )
     assert not any("imports shop.application.ports.sink;" in f for f in findings)
@@ -6359,7 +6382,8 @@ def test_a_port_method_shape_survives_async_and_dunder_call() -> None:
                )
     assert any(
         "shop.application.ports.sink.Sink.fetch takes 2 parameters; "
-        "a port method takes exactly one ts.Request" in f
+        "a port method takes one ts.Request, led by a ts.JobContext when an "
+        "orchestrator calls it" in f
         for f in findings
     ), f"async def bypassed the port shape rule: {findings}"
     assert any(
@@ -10544,3 +10568,1295 @@ def test_an_outcome_is_neither_kept_nor_reached_into_nor_widened() -> None:
     )
     assert not any("driver.py:5" in f and "TB084" in f and "driver.py:54" not in f for f in findings)
     assert len(tb084) == 16
+
+
+@ts.helper
+def _kinds_spec(
+    sources: tuple[tuple[str, str, str | None, bool], ...] = (),
+    base: tuple[tuple[str, str, str | None, bool], ...] = (
+        (
+            "shop/domain/thing.py",
+            "shop.domain.thing",
+            "import tesser.domain as ts\n"
+            "import tesser.serialization as serialization\n"
+            "class Name(ts.ValueObject):\n"
+            "    _value: str\n"
+            "    def __init__(self, value: str) -> None:\n"
+            "        object.__setattr__(self, '_value', value)\n"
+            "    def __str__(self) -> str:\n"
+            "        return serialization.canonical_str(self._value)\n",
+            False,
+        ),
+        (
+            "shop/domain/test_thing.py",
+            "shop.domain.test_thing",
+            "def test_thing_exists() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+        (
+            "shop/client/client.py",
+            "shop.client.client",
+            "import typing\n"
+            "import tesser.context as ts\n"
+            "class AskRequest(ts.Request):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n"
+            "class AskResponse(ts.Response):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n"
+            "class Client(ts.Client, typing.Protocol):\n"
+            "    def ask(self, request: AskRequest) -> AskResponse: ...\n",
+            False,
+        ),
+        ("shop/application/ports/__init__.py", "shop.application.ports", "", True),
+        (
+            "shop/application/ports/quotes.py",
+            "shop.application.ports.quotes",
+            "import typing\n"
+            "import tesser.application as ts\n"
+            "class QuoteRequest(ts.Request):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n"
+            "class QuoteResponse(ts.Response):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n"
+            "class Quotes(ts.Port, typing.Protocol):\n"
+            "    async def quote(self, job: ts.JobContext, request: QuoteRequest)"
+            " -> QuoteResponse: ...\n",
+            False,
+        ),
+        (
+            "shop/application/ports/catalog.py",
+            "shop.application.ports.catalog",
+            "import typing\n"
+            "import tesser.application as ts\n"
+            "class LookupRequest(ts.Request):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n"
+            "class LookupResponse(ts.Response):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n"
+            "class Catalog(ts.Port, typing.Protocol):\n"
+            "    def lookup(self, request: LookupRequest) -> LookupResponse: ...\n",
+            False,
+        ),
+        ("shop/application/client/__init__.py", "shop.application.client", "", True),
+        (
+            "shop/application/client/quotes.py",
+            "shop.application.client.quotes",
+            "import typing\n"
+            "import tesser.application as ts\n"
+            "import shop.application.ports.quotes as quotes\n"
+            "class Client(ts.Client, typing.Protocol):\n"
+            "    def quote(self, request: quotes.QuoteRequest) -> quotes.QuoteResponse: ...\n",
+            False,
+        ),
+        (
+            "shop/application/quotes.py",
+            "shop.application.quotes",
+            "import tesser.application as ts\n"
+            "import shop.application.ports.catalog as catalog\n"
+            "import shop.application.ports.quotes as quotes\n"
+            "import shop.domain.thing as thing\n"
+            "class MapToLookupRequest(ts.Mapper, catalog.LookupRequest):\n"
+            "    def __init__(self, named: thing.Name) -> None:\n"
+            "        super().__init__(text=str(named))\n"
+            "class MapToQuoteResponse(ts.Mapper, quotes.QuoteResponse):\n"
+            "    def __init__(self, named: thing.Name) -> None:\n"
+            "        super().__init__(text=str(named))\n"
+            "class Quotes(ts.Actions):\n"
+            "    def __init__(self, listing: catalog.Catalog) -> None:\n"
+            "        self._listing = listing\n"
+            "    def quote(self, request: quotes.QuoteRequest) -> quotes.QuoteResponse:\n"
+            "        named = thing.Name(request.text)\n"
+            "        self._listing.lookup(MapToLookupRequest(named))\n"
+            "        return MapToQuoteResponse(named)\n",
+            False,
+        ),
+        (
+            "shop/application/test_quotes.py",
+            "shop.application.test_quotes",
+            "def test_quotes_exists() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+        (
+            "shop/application/service.py",
+            "shop.application.service",
+            "import tesser.application as ts\n"
+            "import shop.client.client as client\n"
+            "class AskService(ts.ApplicationService):\n"
+            "    def ask(self, request: client.AskRequest) -> client.AskResponse:\n"
+            "        return client.AskResponse(text=request.text)\n",
+            False,
+        ),
+        (
+            "shop/application/test_service.py",
+            "shop.application.test_service",
+            "def test_service_exists() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+        (
+            "shop/application/orchestrators/__init__.py",
+            "shop.application.orchestrators",
+            "",
+            True,
+        ),
+        (
+            "shop/application/orchestrators/flow.py",
+            "shop.application.orchestrators.flow",
+            "import tesser.application as ts\n"
+            "import shop.application.ports.quotes as quotes\n"
+            "import shop.domain.thing as thing\n"
+            "class FlowResponse(ts.Response):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n"
+            "class MapToQuoteRequest(ts.Mapper, quotes.QuoteRequest):\n"
+            "    def __init__(self, named: thing.Name) -> None:\n"
+            "        super().__init__(text=str(named))\n"
+            "class MapToFlowResponse(ts.Mapper, FlowResponse):\n"
+            "    def __init__(self, quoted: quotes.QuoteResponse) -> None:\n"
+            "        super().__init__(text=quoted.text)\n"
+            "class Flow(ts.Orchestrator):\n"
+            "    def __init__(self, job: ts.JobContext, quoting: quotes.Quotes) -> None:\n"
+            "        self._job = job\n"
+            "        self._quoting = quoting\n"
+            "    async def run(self, request: quotes.QuoteRequest) -> FlowResponse:\n"
+            "        named = thing.Name(request.text)\n"
+            "        quoted = await self._quoting.quote(self._job, MapToQuoteRequest(named))\n"
+            "        return MapToFlowResponse(quoted)\n",
+            False,
+        ),
+        (
+            "shop/application/orchestrators/test_flow.py",
+            "shop.application.orchestrators.test_flow",
+            "import tesser.testing as ts\n"
+            "import shop.application.orchestrators.flow as flow\n"
+            "@ts.fake\n"
+            "class FakeJobContext(ts.JobContext):\n"
+            "    async def call[I, O](self, step, request) -> O:\n"
+            "        return await step(None, request)\n"
+            "def test_flow_exists() -> None:\n"
+            "    assert flow.Flow is not None\n",
+            False,
+        ),
+        ("shop/adapters/__init__.py", "shop.adapters", "", True),
+        ("shop/adapters/gateways/__init__.py", "shop.adapters.gateways", "", True),
+        (
+            "shop/adapters/gateways/quotes.py",
+            "shop.adapters.gateways.quotes",
+            "import tesser.adapters as ts\n"
+            "import shop.application.ports.quotes as quotes\n"
+            "class QuoteGateway(ts.Gateway):\n"
+            "    async def quote(self, job: ts.JobContext, request: quotes.QuoteRequest)"
+            " -> quotes.QuoteResponse:\n"
+            "        return quotes.QuoteResponse(text=request.text)\n",
+            False,
+        ),
+        (
+            "shop/adapters/gateways/test_quotes.py",
+            "shop.adapters.gateways.test_quotes",
+            "def test_quotes_exists() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+        (
+            "shop/adapters/gateways/catalog.py",
+            "shop.adapters.gateways.catalog",
+            "import tesser.adapters as ts\n"
+            "import shop.application.ports.catalog as catalog\n"
+            "class CatalogGateway(ts.Gateway):\n"
+            "    def lookup(self, request: catalog.LookupRequest) -> catalog.LookupResponse:\n"
+            "        return catalog.LookupResponse(text=request.text)\n",
+            False,
+        ),
+        (
+            "shop/adapters/gateways/test_catalog.py",
+            "shop.adapters.gateways.test_catalog",
+            "def test_catalog_exists() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+        ("shop/adapters/handlers/__init__.py", "shop.adapters.handlers", "", True),
+        (
+            "shop/adapters/handlers/http.py",
+            "shop.adapters.handlers.http",
+            "import tesser.adapters as ts\n"
+            "import shop.client.client as client\n"
+            "class Handler(ts.Handler):\n"
+            "    def __init__(self, inner: client.Client) -> None:\n"
+            "        self._inner = inner\n",
+            False,
+        ),
+        (
+            "shop/adapters/handlers/test_http.py",
+            "shop.adapters.handlers.test_http",
+            "def test_http_exists() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+        ("shop/adapters/jobs/__init__.py", "shop.adapters.jobs", "", True),
+        (
+            "shop/adapters/jobs/engine.py",
+            "shop.adapters.jobs.engine",
+            "import tesser.adapters as ts\n"
+            "import shop.adapters.jobs.context as context\n"
+            "import shop.application.client.quotes as quotes_client\n"
+            "import shop.application.orchestrators.flow as flow\n"
+            "import shop.application.ports.quotes as quotes\n"
+            "class EngineJob(ts.Job):\n"
+            "    def __init__(self, actions: quotes_client.Client, quoting: quotes.Quotes) -> None:\n"
+            "        self._actions = actions\n"
+            "        self._quoting = quoting\n"
+            "    def quote(self, request: quotes.QuoteRequest) -> quotes.QuoteResponse:\n"
+            "        return self._actions.quote(request)\n"
+            "    async def run(self, inner: object, request: quotes.QuoteRequest)"
+            " -> flow.FlowResponse:\n"
+            "        return await flow.Flow(context.EngineJobContext(inner), self._quoting)"
+            ".run(request)\n",
+            False,
+        ),
+        (
+            "shop/adapters/jobs/test_engine.py",
+            "shop.adapters.jobs.test_engine",
+            "def test_engine_exists() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+        (
+            "shop/adapters/jobs/context.py",
+            "shop.adapters.jobs.context",
+            "import tesser.adapters as ts\n"
+            "class EngineJobContext(ts.JobContext):\n"
+            "    def __init__(self, inner: object) -> None:\n"
+            "        self._inner = inner\n"
+            "    async def call(self, step: object, request: object) -> object:\n"
+            "        return request\n",
+            False,
+        ),
+        (
+            "shop/adapters/jobs/test_context.py",
+            "shop.adapters.jobs.test_context",
+            "def test_context_exists() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+        (
+            "shop/component/component.py",
+            "shop.component.component",
+            "import tesser.component as ts\n"
+            "import shop.adapters.gateways.catalog as catalog_gateway\n"
+            "import shop.adapters.gateways.quotes as quote_gateway\n"
+            "import shop.adapters.jobs.engine as engine\n"
+            "import shop.application.quotes as quote_actions\n"
+            "import shop.application.service as service\n"
+            "import shop.client.client as client\n"
+            "class Shop(ts.Component):\n"
+            "    def __init__(self) -> None:\n"
+            "        self._quotes = quote_gateway.QuoteGateway()\n"
+            "        self._listing = catalog_gateway.CatalogGateway()\n"
+            "        self._actions = quote_actions.Quotes(self._listing)\n"
+            "        self.client: client.Client = service.AskService()\n"
+            "        self.jobs: tuple[engine.EngineJob, ...] = (\n"
+            "            engine.EngineJob(self._actions, self._quotes),\n"
+            "        )\n"
+            "    def close(self) -> None:\n"
+            "        return None\n",
+            False,
+        ),
+        (
+            "shop/component/test_component.py",
+            "shop.component.test_component",
+            "def test_component_exists() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+        (
+            "srv/main.py",
+            "srv.main",
+            "import tesser.srv as ts\n"
+            "import shop.adapters.handlers.http as http\n"
+            "import shop.adapters.jobs.engine as engine\n"
+            "class Host(ts.Host):\n"
+            "    def run(self, argv: list[str]) -> int:\n"
+            "        return 0\n",
+            False,
+        ),
+        (
+            "srv/test_main.py",
+            "srv.test_main",
+            "def test_main_exists() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+    ),
+) -> checks.CodebaseSpec:
+    return checks.CodebaseSpec(
+        sources=base + sources,
+        declared="app",
+        nested=(),
+        symlinked=(),
+        exports=(),
+        imports=(),
+        stdlib=(),
+        pure_stdlib=(),
+    )
+
+
+def test_the_application_kinds_stand_clean_together() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec()).violations()
+    )
+    assert findings == (), findings
+
+
+def test_a_reserved_name_inside_the_application_client_is_a_stray() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/client/test_quotes.py",
+                "shop.application.client.test_quotes",
+                "def test_x() -> None:\n    assert True\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.client.test_quotes is not an application client module; "
+        "an application client package holds only client protocols, and "
+        "test_/eval_/conftest are reserved names, because a fake here would be an "
+        "implementation a job may import" in f
+        for f in findings
+    )
+
+
+def test_the_application_client_and_the_orchestrators_are_packages_never_modules() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(base=(), sources=(
+            (
+                "shop/application/client.py",
+                "shop.application.client",
+                "import tesser.application as ts\n",
+                False,
+            ),
+            (
+                "shop/application/orchestrators.py",
+                "shop.application.orchestrators",
+                "import tesser.application as ts\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.client is an application client module; "
+        "the application client is a package, never a module" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.orchestrators is an orchestrators module; "
+        "orchestrators is a package, never a module" in f
+        for f in findings
+    )
+
+
+def test_the_new_application_packages_carry_empty_inits() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(base=(), sources=(
+            (
+                "shop/application/client/__init__.py",
+                "shop.application.client",
+                "X = 1\n",
+                True,
+            ),
+            (
+                "shop/application/orchestrators/__init__.py",
+                "shop.application.orchestrators",
+                "X = 1\n",
+                True,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.client __init__ declares code; "
+        "an application client package __init__ is empty" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.orchestrators __init__ declares code; "
+        "an orchestrators package __init__ is empty" in f
+        for f in findings
+    )
+
+
+def test_an_application_client_module_imports_tesser_application_once_as_ts() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/client/twice.py",
+                "shop.application.client.twice",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import tesser.application as again\n"
+                "import tesser.domain as domain\n"
+                "import shop.application.ports.quotes as quotes\n"
+                "class Client(ts.Client, typing.Protocol):\n"
+                "    def quote(self, request: quotes.QuoteRequest) -> quotes.QuoteResponse: ...\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.client.twice imports tesser.application again; "
+        "an application client module imports tesser.application exactly once, as ts" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.client.twice imports tesser.domain; "
+        "an application client module imports only tesser.application" in f
+        for f in findings
+    )
+
+
+def test_an_application_client_module_speaks_one_ports_module() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/ports/other.py",
+                "shop.application.ports.other",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class OtherRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class OtherResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Other(ts.Port, typing.Protocol):\n"
+                "    def other(self, request: OtherRequest) -> OtherResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/application/client/two_ports.py",
+                "shop.application.client.two_ports",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.application.ports.quotes as quotes\n"
+                "import shop.application.ports.other as other\n"
+                "class Client(ts.Client, typing.Protocol):\n"
+                "    def quote(self, request: quotes.QuoteRequest) -> quotes.QuoteResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/application/client/reaching.py",
+                "shop.application.client.reaching",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.domain.thing as thing\n"
+                "class Client(ts.Client, typing.Protocol):\n"
+                "    def quote(self, request: thing.Name) -> thing.Name: ...\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.client.two_ports imports a second ports module "
+        "shop.application.ports.other; an application client module speaks the "
+        "DTOs of exactly one ports module" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.client.reaching imports shop.domain.thing; an application "
+        "client module speaks the DTOs of exactly one ports module" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.client.reaching imports no ports module; an application "
+        "client module speaks the DTOs of exactly one ports module" in f
+        for f in findings
+    )
+
+
+def test_an_application_client_module_holds_only_imports_and_one_protocol() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/client/loose.py",
+                "shop.application.client.loose",
+                "import os\n"
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.application.ports.quotes as quotes\n"
+                "TABLE = {}\n"
+                "@typing.runtime_checkable\n"
+                "class Client(ts.Client, typing.Protocol):\n"
+                "    LIMIT: int = 3\n"
+                "    class Inner:\n"
+                "        pass\n"
+                "    def quote(self, request: quotes.QuoteRequest) -> quotes.QuoteResponse: ...\n"
+                "class Second(ts.Client, typing.Protocol):\n"
+                "    def quote(self, request: quotes.QuoteRequest) -> quotes.QuoteResponse: ...\n"
+                "class Bare:\n"
+                "    pass\n"
+                "class Mapped(ts.Mapper, quotes.QuoteRequest):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        super().__init__(text=text)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.client.loose has a loose module-level statement; "
+        "an application client module holds only imports and classes" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.client.loose imports os; an application client module "
+        "imports only tesser.application, one ports module, and the pure stdlib" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.client.loose declares 2 client protocols; an "
+        "application client module declares exactly one ts.Client protocol "
+        "and nothing else" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.client.loose.Bare declares no ts.* base; an application "
+        "client module declares exactly one ts.Client protocol and nothing else" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.client.loose.Mapped is a mapper; an application "
+        "client module declares exactly one ts.Client protocol and nothing else" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.client.loose.Client.Inner is a nested class; an "
+        "application client module declares its protocol at module level" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.client.loose.Client runs an expression at import; an "
+        "application client module holds no expression that runs at import, "
+        "because a job imports it" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.client.loose.Client carries a class-level statement; "
+        "an application client module declares calls and nothing else" in f
+        for f in findings
+    )
+
+
+def test_an_application_client_declares_shapes_its_ports_module_owns() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/client/wide.py",
+                "shop.application.client.wide",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.application.ports.quotes as quotes\n"
+                "class Client(ts.Client, typing.Protocol):\n"
+                "    def quote(self, request: quotes.QuoteRequest) -> quotes.QuoteResponse:\n"
+                "        return quotes.QuoteResponse(text=request.text)\n"
+                "    def _hidden(self, request: quotes.QuoteRequest) -> quotes.QuoteResponse: ...\n"
+                "    def wide(self, a: quotes.QuoteRequest, b: quotes.QuoteRequest)"
+                " -> quotes.QuoteResponse: ...\n"
+                "    def odd(self, request: quotes.QuoteRequest) -> int: ...\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.client.wide.Client.quote carries a body; an application "
+        "client method declares a shape and never a body, because a job imports "
+        "it for the shape" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.client.wide.Client._hidden is not a call a job may make; "
+        "an application client declares only its public calls and __call__" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.client.wide.Client.odd names a shape its ports module "
+        "does not declare; an application client speaks the requests and "
+        "responses of the ports module it imports" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.client.wide.Client.wide takes 2 parameters; an "
+        "application client method takes exactly one ts.Request" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.client.wide.Client.odd does not return a ts.Response; "
+        "an application client method returns a ts.Response" in f
+        for f in findings
+    )
+
+
+def test_an_orchestrators_module_holds_one_orchestrator_and_at_most_one_response() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/orchestrators/crowded.py",
+                "shop.application.orchestrators.crowded",
+                "import tesser.application as ts\n"
+                "import shop.application.ports.quotes as quotes\n"
+                "class FirstResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class SecondResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class First(ts.Orchestrator):\n"
+                "    def __init__(self, quoting: quotes.Quotes) -> None:\n"
+                "        self._quoting = quoting\n"
+                "class Second(ts.Orchestrator):\n"
+                "    def __init__(self, quoting: quotes.Quotes) -> None:\n"
+                "        self._quoting = quoting\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.orchestrators.crowded declares 2 orchestrators; an "
+        "orchestrators module declares exactly one orchestrator, its mappers, "
+        "and at most its own response" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.orchestrators.crowded declares 2 responses; an "
+        "orchestrators module declares exactly one orchestrator, its mappers, "
+        "and at most its own response" in f
+        for f in findings
+    )
+
+
+def test_an_adapters_module_lives_in_the_kind_package_it_names() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/loose.py",
+                "shop.adapters.loose",
+                "import tesser.adapters as ts\n"
+                "class LooseGateway(ts.Gateway):\n"
+                "    pass\n",
+                False,
+            ),
+            (
+                "shop/adapters/gateways/repo.py",
+                "shop.adapters.gateways.repo",
+                "import tesser.adapters as ts\n"
+                "class MemoryRepository(ts.Repository):\n"
+                "    pass\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.adapters.loose is not in an adapter kind package; an adapters "
+        "module lives in handlers, gateways, repositories, or jobs, because "
+        "placement is what carries an adapter's reach" in f
+        for f in findings
+    )
+    assert any(
+        "shop.adapters.gateways.repo.MemoryRepository is a repository adapter, "
+        "and its package names another kind; an adapters module holds the kind "
+        "of its kind package, because the package is what carries its reach" in f
+        for f in findings
+    )
+
+
+def test_only_a_job_reaches_the_application_client_and_the_orchestrators() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/peeker.py",
+                "shop.application.peeker",
+                "import tesser.application as ts\n"
+                "import shop.application.client.quotes as quotes_client\n"
+                "import shop.application.orchestrators.flow as flow\n"
+                "class Peek(ts.ApplicationService):\n"
+                "    pass\n",
+                False,
+            ),
+            (
+                "shop/component/peek.py",
+                "shop.component.peek",
+                "import tesser.component as ts\n"
+                "import shop.application.orchestrators.flow as flow\n"
+                "class Peek(ts.Component):\n"
+                "    def close(self) -> None:\n"
+                "        return None\n",
+                False,
+            ),
+            (
+                "shop/adapters/handlers/peek.py",
+                "shop.adapters.handlers.peek",
+                "import tesser.adapters as ts\n"
+                "import shop.application.client.quotes as quotes_client\n"
+                "import shop.adapters.jobs.engine as engine\n"
+                "class PeekHandler(ts.Handler):\n"
+                "    pass\n",
+                False,
+            ),
+            (
+                "shop/adapters/gateways/peek.py",
+                "shop.adapters.gateways.peek",
+                "import tesser.adapters as ts\n"
+                "import shop.adapters.jobs.engine as engine\n"
+                "class PeekGateway(ts.Gateway):\n"
+                "    pass\n",
+                False,
+            ),
+            (
+                "shop/adapters/jobs/test_reach.py",
+                "shop.adapters.jobs.test_reach",
+                "import shop.client.client as client\n"
+                "def test_x() -> None:\n    assert True\n",
+                False,
+            ),
+            (
+                "shop/application/test_peek.py",
+                "shop.application.test_peek",
+                "import shop.application.client.quotes as quotes_client\n"
+                "def test_x() -> None:\n    assert True\n",
+                False,
+            ),
+            (
+                "shop/tests/__init__.py",
+                "shop.tests",
+                "",
+                True,
+            ),
+            (
+                "shop/tests/test_peek.py",
+                "shop.tests.test_peek",
+                "import shop.application.orchestrators.flow as flow\n"
+                "def test_x() -> None:\n    assert True\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.peeker imports shop.application.client.quotes; only a "
+        "job imports the application client and the orchestrators, because an "
+        "action is reachable only through the engine" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.peeker imports shop.application.orchestrators.flow; "
+        "only a job imports the application client and the orchestrators" in f
+        for f in findings
+    )
+    assert any(
+        "shop.component.peek imports shop.application.orchestrators.flow; only a "
+        "job imports the application client and the orchestrators" in f
+        for f in findings
+    )
+    assert any(
+        "shop.adapters.handlers.peek imports shop.application.client.quotes; only "
+        "a job imports the application client and the orchestrators" in f
+        for f in findings
+    )
+    assert any(
+        "shop.adapters.handlers.peek imports shop.adapters.jobs.engine; an "
+        "adapters kind package reaches only what its kind reaches" in f
+        for f in findings
+    )
+    assert any(
+        "shop.adapters.gateways.peek imports shop.adapters.jobs.engine; an "
+        "adapters kind package reaches only what its kind reaches" in f
+        for f in findings
+    )
+    assert any(
+        "shop.adapters.jobs.test_reach imports shop.client.client, but a test "
+        "placed in jobs reaches only" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.test_peek imports shop.application.client.quotes, but "
+        "only a test placed in jobs reaches the application client and the "
+        "orchestrators; a test reaches only what its placement allows" in f
+        for f in findings
+    )
+    assert any(
+        "shop.tests.test_peek imports shop.application.orchestrators.flow, but "
+        "only a test placed in jobs reaches the application client and the "
+        "orchestrators; a test reaches only what its placement allows" in f
+        for f in findings
+    )
+    assert not any(
+        "shop.application.orchestrators.test_flow" in f and "TB070" in f
+        for f in findings
+    )
+
+
+def test_a_host_reaches_a_context_through_its_handlers_and_its_jobs() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "srv/wide.py",
+                "srv.wide",
+                "import tesser.srv as ts\n"
+                "import shop.application.service as service\n"
+                "class WideHost(ts.Host):\n"
+                "    def run(self, argv: list[str]) -> int:\n"
+                "        return 0\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "srv.wide imports shop.application.service; "
+        "a host reaches a context only through its handlers and its jobs" in f
+        for f in findings
+    )
+    assert not any(
+        "srv.main imports shop.adapters.jobs.engine; "
+        "a host reaches a context only through its handlers and its jobs" in f
+        for f in findings
+    )
+
+
+def test_a_class_of_actions_takes_exactly_one_port_and_calls_it_once() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/ports/other.py",
+                "shop.application.ports.other",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class OtherRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class OtherResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Other(ts.Port, typing.Protocol):\n"
+                "    def other(self, request: OtherRequest) -> OtherResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/application/twice_actions.py",
+                "shop.application.twice_actions",
+                "import tesser.application as ts\n"
+                "import shop.application.ports.other as other\n"
+                "import shop.application.ports.quotes as quotes\n"
+                "class Twice(ts.Actions):\n"
+                "    def __init__(self, quoting: quotes.Quotes, second: other.Other) -> None:\n"
+                "        self._quoting = quoting\n"
+                "        self._second = second\n"
+                "    def quote(self, request: quotes.QuoteRequest) -> quotes.QuoteResponse:\n"
+                "        self._quoting.quote(request)\n"
+                "        return self._quoting.quote(request)\n",
+                False,
+            ),
+            (
+                "shop/application/plain_actions.py",
+                "shop.application.plain_actions",
+                "import tesser.application as ts\n"
+                "import shop.application.ports.quotes as quotes\n"
+                "class Plain(ts.Actions):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self._text = text\n"
+                "    def quote(self, a: quotes.QuoteRequest, b: quotes.QuoteRequest) -> int:\n"
+                "        return 0\n",
+                False,
+            ),
+            (
+                "shop/application/bare_actions.py",
+                "shop.application.bare_actions",
+                "import tesser.application as ts\n"
+                "class Bare(ts.Actions):\n"
+                "    pass\n",
+                False,
+            ),
+            (
+                "shop/application/public_actions.py",
+                "shop.application.public_actions",
+                "import tesser.application as ts\n"
+                "import shop.application.ports.quotes as quotes\n"
+                "class Public(ts.Actions):\n"
+                "    def __init__(self, quoting: quotes.Quotes) -> None:\n"
+                "        self.quoting = quoting\n"
+                "    def quote(self, request: quotes.QuoteRequest) -> quotes.QuoteResponse:\n"
+                "        return self.quoting.quote(request)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.twice_actions.Twice.__init__ takes 2 parameters; "
+        "a class of actions takes exactly one port" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.bare_actions.Bare defines no __init__; "
+        "a class of actions takes exactly one port" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.twice_actions.Twice.quote makes 2 calls on its port; "
+        "an action makes exactly one call on its port" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.twice_actions.Twice.quote sends its request itself "
+        "straight to a port; a value crossing into a port has passed through "
+        "a domain type" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.plain_actions.Plain.__init__ parameter 'text' is not a "
+        "ts.Port; a class of actions depends only on ports" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.plain_actions.Plain.quote takes 2 parameters; "
+        "an actions method takes exactly one ts.Request" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.plain_actions.Plain.quote does not return a ts.Response; "
+        "an actions method returns a ts.Response" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.public_actions.Public.quote sends its request itself "
+        "straight to a port; a value crossing into a port has passed through "
+        "a domain type" in f
+        for f in findings
+    )
+
+
+def test_an_orchestrator_takes_action_ports_and_stores_only_them() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/ports/widgets.py",
+                "shop.application.ports.widgets",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class SaveRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class SaveResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Widgets(ts.Port, typing.Protocol):\n"
+                "    def save(self, request: SaveRequest) -> SaveResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/application/orchestrators/bad.py",
+                "shop.application.orchestrators.bad",
+                "import tesser.application as ts\n"
+                "import shop.application.ports.widgets as widgets\n"
+                "class Bad(ts.Orchestrator):\n"
+                "    def __init__(self, saving: widgets.Widgets, text: str) -> None:\n"
+                "        self._saving = saving\n"
+                "        self._state = text\n"
+                "    def run(self, a: widgets.SaveRequest, b: widgets.SaveRequest) -> int:\n"
+                "        return 0\n",
+                False,
+            ),
+            (
+                "shop/application/orchestrators/bare.py",
+                "shop.application.orchestrators.bare",
+                "import tesser.application as ts\n"
+                "class Bare(ts.Orchestrator):\n"
+                "    pass\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.orchestrators.bad.Bad.__init__ parameter 'saving' is a "
+        "port no application client speaks; an orchestrator depends only on "
+        "action ports — a port an application client speaks" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.orchestrators.bare.Bare defines no __init__; an "
+        "orchestrator depends only on action ports — a port an application "
+        "client speaks" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.orchestrators.bad.Bad.__init__ parameter 'text' is not "
+        "a ts.Port; an orchestrator depends only on ports" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.orchestrators.bad.Bad keeps _state; "
+        "an orchestrator stores only its job context and its action ports" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.orchestrators.bad.Bad.run takes 2 parameters; "
+        "an orchestrator method takes exactly one ts.Request" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.orchestrators.bad.Bad.run does not return a ts.Response; "
+        "an orchestrator method returns a ts.Response" in f
+        for f in findings
+    )
+
+
+def test_a_component_publishes_only_its_client_and_its_jobs() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/component/bad.py",
+                "shop.component.bad",
+                "import tesser.component as ts\n"
+                "class Bad(ts.Component):\n"
+                "    def __init__(self) -> None:\n"
+                "        self.extra = 1\n"
+                "        self.client = 2\n"
+                "    def close(self) -> None:\n"
+                "        return None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.component.bad.Bad publishes extra; "
+        "a component publishes only its client and its jobs" in f
+        for f in findings
+    )
+    assert any(
+        "shop.component.bad.Bad publishes client untyped; "
+        "a component publishes only its client and its jobs" in f
+        for f in findings
+    )
+
+
+def test_an_orchestrator_takes_and_threads_exactly_one_job_context() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/orchestrators/bare.py",
+                "shop.application.orchestrators.bare",
+                "import tesser.application as ts\n"
+                "import shop.application.ports.quotes as quotes\n"
+                "class Bare(ts.Orchestrator):\n"
+                "    def __init__(self, quoting: quotes.Quotes) -> None:\n"
+                "        self._quoting = quoting\n"
+                "    async def run(self, request: quotes.QuoteRequest)"
+                " -> quotes.QuoteResponse:\n"
+                "        return await self._quoting.quote(request)\n",
+                False,
+            ),
+            (
+                "shop/application/orchestrators/twice.py",
+                "shop.application.orchestrators.twice",
+                "import tesser.application as ts\n"
+                "import shop.application.ports.quotes as quotes\n"
+                "class Twice(ts.Orchestrator):\n"
+                "    def __init__(\n"
+                "        self, job: ts.JobContext, other: ts.JobContext, quoting: quotes.Quotes\n"
+                "    ) -> None:\n"
+                "        self._job = job\n"
+                "        self._other = other\n"
+                "        self._quoting = quoting\n"
+                "        self._state = 1\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.orchestrators.bare.Bare.__init__ takes 0 job contexts; "
+        "an orchestrator takes exactly one job context and its action ports" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.orchestrators.twice.Twice.__init__ takes 2 job contexts; "
+        "an orchestrator takes exactly one job context and its action ports" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.orchestrators.bare.Bare.run calls _quoting without its "
+        "job context first; an orchestrator threads its job context into every "
+        "action port call" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.orchestrators.twice.Twice keeps _state; an orchestrator "
+        "stores only its job context and its action ports" in f
+        for f in findings
+    )
+    assert not any(
+        "shop.application.orchestrators.twice.Twice keeps _job;" in f for f in findings
+    )
+
+
+def test_a_job_context_is_led_with_or_it_is_a_finding() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/ports/trailing.py",
+                "shop.application.ports.trailing",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class SendRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class SendResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Trailing(ts.Port, typing.Protocol):\n"
+                "    async def send(self, request: SendRequest, job: ts.JobContext)"
+                " -> SendResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/adapters/gateways/trailing.py",
+                "shop.adapters.gateways.trailing",
+                "import tesser.adapters as ts\n"
+                "import shop.application.ports.trailing as trailing\n"
+                "class TrailingGateway(ts.Gateway):\n"
+                "    async def send(self, request: trailing.SendRequest, job: ts.JobContext)"
+                " -> trailing.SendResponse:\n"
+                "        return trailing.SendResponse(text=request.text)\n"
+                "    def handed(self, job: ts.JobContext) -> ts.JobContext:\n"
+                "        return job\n",
+                False,
+            ),
+            (
+                "shop/adapters/handlers/leading.py",
+                "shop.adapters.handlers.leading",
+                "import tesser.adapters as ts\n"
+                "class LeadingHandler(ts.Handler):\n"
+                "    def serve(self, job: ts.JobContext, body: str) -> str:\n"
+                "        return body\n",
+                False,
+            ),
+            (
+                "shop/application/leaking.py",
+                "shop.application.leaking",
+                "import tesser.application as ts\n"
+                "import shop.client.client as client\n"
+                "class LeakService(ts.ApplicationService):\n"
+                "    def ask(self, job: ts.JobContext, request: client.AskRequest)"
+                " -> client.AskResponse:\n"
+                "        return client.AskResponse(text=request.text)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.ports.trailing.Trailing.send parameter 'job' is a "
+        "ts.JobContext; a job context is threaded as the leading parameter of an "
+        "action port call and nowhere else" in f
+        for f in findings
+    )
+    assert any(
+        "shop.adapters.gateways.trailing.TrailingGateway.send parameter 'job' is a "
+        "ts.JobContext; a job context is threaded as the leading parameter of an "
+        "action port call and nowhere else" in f
+        for f in findings
+    )
+    assert any(
+        "shop.adapters.gateways.trailing.TrailingGateway.handed returns a "
+        "ts.JobContext; a job context is threaded as the leading parameter of an "
+        "action port call and nowhere else" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.leaking.LeakService.ask parameter 'job' is a ts.JobContext; "
+        "a job context is threaded as the leading parameter of an action port call "
+        "and nowhere else" in f
+        for f in findings
+    )
+    assert any(
+        "shop.adapters.handlers.leading.LeadingHandler.serve parameter 'job' is a "
+        "ts.JobContext; a job context is threaded as the leading parameter of an "
+        "action port call and nowhere else" in f
+        for f in findings
+    )
+    assert not any(
+        "shop.adapters.gateways.quotes.QuoteGateway.quote parameter 'job'" in f
+        for f in findings
+    )
+
+
+def test_a_gateway_never_holds_an_invocations_job_context() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/gateways/holding.py",
+                "shop.adapters.gateways.holding",
+                "import tesser.adapters as ts\n"
+                "import shop.application.ports.quotes as quotes\n"
+                "class HoldingGateway(ts.Gateway):\n"
+                "    def __init__(self, job: ts.JobContext) -> None:\n"
+                "        self._job = job\n"
+                "    async def quote(self, job: ts.JobContext, request: quotes.QuoteRequest)"
+                " -> quotes.QuoteResponse:\n"
+                "        return quotes.QuoteResponse(text=request.text)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.adapters.gateways.holding.HoldingGateway keeps _job, a job context; "
+        "a gateway is built once and never holds an invocation's job context" in f
+        for f in findings
+    )
+    assert not any(
+        "HoldingGateway.quote parameter 'job' is a ts.JobContext" in f for f in findings
+    )
+
+
+def test_a_component_publishes_its_jobs_as_one_job_or_a_tuple_of_them() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/component/mixed.py",
+                "shop.component.mixed",
+                "import tesser.component as ts\n"
+                "import shop.adapters.jobs.engine as engine\n"
+                "import shop.client.client as client\n"
+                "class Mixed(ts.Component):\n"
+                "    def __init__(self) -> None:\n"
+                "        self.client: client.Client = None\n"
+                "        self.jobs: tuple[engine.EngineJob, client.Client] = ()\n"
+                "    def close(self) -> None:\n"
+                "        return None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.component.mixed.Mixed publishes jobs untyped; "
+        "a component publishes only its client and its jobs" in f
+        for f in findings
+    )
+    assert not any("shop.component.component.Shop publishes jobs" in f for f in findings)

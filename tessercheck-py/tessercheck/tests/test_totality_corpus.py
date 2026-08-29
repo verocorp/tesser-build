@@ -34,6 +34,13 @@ def test_no_module_shape_is_silent(tmp_path: pathlib.Path) -> None:
         ("shop/application/ports/__main__.py", "import shop.domain.thing\n"),
         ("shop/application/ports/sub/deep.py", "import shop.domain.thing\n"),
         ("shop/application/ports/test_support.py", test_bait),
+        ("shop/application/client/actions.py", "import shop.domain.thing\n"),
+        ("shop/application/client/__main__.py", "import shop.domain.thing\n"),
+        ("shop/application/client/test_actions.py", test_bait),
+        ("shop/application/client.py", "import shop.domain.thing\n"),
+        ("shop/application/orchestrators/flow.py", "import shop.adapters.gateways.thing\n"),
+        ("shop/application/orchestrators/__main__.py", "import shop.adapters.gateways.thing\n"),
+        ("shop/application/orchestrators.py", "import shop.adapters.gateways.thing\n"),
         ("shop/tests/__main__.py", bait),
         ("app/conftest.py", bait),
         ("shop/adapters/conftest.py", bait),
@@ -89,6 +96,8 @@ def test_no_module_shape_is_silent(tmp_path: pathlib.Path) -> None:
             "role-file",
             "ports-init",
             "kernel-init",
+            "app-client-init",
+            "orchestrators-init",
         }
     )
     uncovered = returned - package_only - covered
