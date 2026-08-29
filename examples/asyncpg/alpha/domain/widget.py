@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import enum
+import typing
 
 import tesser.domain as ts
 
+import alpha.domain.clearance as clearance
 import kernel.identity as identity
 import shared.label as label
 import tesser.errors as errors
@@ -44,6 +46,16 @@ class Taken(ts.Outcome):
     HELD = enum.auto()
 
 
+class Cleared(ts.Outcome):
+    KEPT = enum.auto()
+    RELEASED = enum.auto()
+
+
+_CLEARED: typing.Final[clearance.Clearance] = clearance.Clearance(
+    clearance.ClearanceSpec(verdict="ok")
+)
+
+
 class WidgetSpec(ts.Spec):
 
     def __init__(self, name: str, part: PartSpec) -> None:
@@ -72,3 +84,9 @@ class Widget(ts.AggregateRoot):
             return Taken.HELD
         self._part = part
         return Taken.TAKEN
+
+    def clear(self, spec: clearance.ClearanceSpec) -> Cleared:
+        cleared = clearance.Clearance(spec)
+        if cleared == _CLEARED:
+            return Cleared.KEPT
+        return Cleared.RELEASED

@@ -92,12 +92,11 @@ class AlphaService(ts.ApplicationService):
                     await widgets_repo.save_widget(MapToSaveWidgetRequest(added))
             case widget.Taken.HELD:
                 answer = await self._checks.check(MapToCheckRequest(added))
-                cleared = clearance.Clearance(MapToClearanceSpec(answer))
-                match cleared.settle():
-                    case clearance.Settled.KEPT:
+                match added.clear(MapToClearanceSpec(answer)):
+                    case widget.Cleared.KEPT:
                         async with self._widget_store.transaction() as widgets_repo:
                             await widgets_repo.save_widget(MapToSaveWidgetRequest(added))
-                    case clearance.Settled.DROPPED:
+                    case widget.Cleared.RELEASED:
                         pass
                     case _ as never:
                         typing.assert_never(never)

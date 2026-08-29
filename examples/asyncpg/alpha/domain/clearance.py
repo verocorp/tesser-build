@@ -1,16 +1,9 @@
 from __future__ import annotations
 
-import enum
-
 import tesser.domain as ts
 
 import tesser.errors as errors
 import tesser.serialization as serialization
-
-
-class Settled(ts.Outcome):
-    KEPT = enum.auto()
-    DROPPED = enum.auto()
 
 
 class ClearanceSpec(ts.Spec):
@@ -30,8 +23,3 @@ class Clearance(ts.ValueObject):
 
     def __str__(self) -> str:
         return serialization.canonical_str(self._verdict)
-
-    def settle(self) -> Settled:
-        if self._verdict == "ok":
-            return Settled.KEPT
-        return Settled.DROPPED
