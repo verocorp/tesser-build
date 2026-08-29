@@ -770,7 +770,7 @@ translation) — what differs is scope, reach, and what each may depend on.
 # ordering/application/client/order_actions.py (verified impl: examples/durable-execution/)
 class Client(ts.Client, typing.Protocol):
 
-    def quote(self, request: order_actions.QuoteRequest) -> order_actions.QuoteResponse: ...
+    def quote(self, request: quoting.QuoteRequest) -> quoting.QuoteResponse: ...
 
 
 # ordering/application/order_actions.py (verified impl: examples/durable-execution/)
@@ -779,7 +779,7 @@ class OrderActions(ts.Actions):
     def __init__(self, catalog: catalog_repository.CatalogRepository) -> None:
         self._catalog = catalog
 
-    def quote(self, request: order_actions.QuoteRequest) -> order_actions.QuoteResponse:
+    def quote(self, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
         quoted_sku = order.Sku(request.sku)
         priced = self._catalog.price(MapToPriceRequest(quoted_sku))
         return MapToQuoteResponse(priced)
@@ -795,12 +795,12 @@ class RunResponse(ts.Response):
 
 class OrderOrchestrator(ts.Orchestrator):
 
-    def __init__(self, actions: order_actions.OrderActions) -> None:
-        self._actions = actions
+    def __init__(self, quotes: quoting.Quoting) -> None:
+        self._quotes = quotes
 
     async def run(self, request: order_workflow.StartRequest) -> RunResponse:
         running = order.Order(MapToOrderSpec(request))
-        quoted = await self._actions.quote(MapToQuoteRequest(running))
+        quoted = await self._quotes.quote(MapToQuoteRequest(running))
         total = running.total(MapToPriceSpec(quoted))
         return MapToRunResponse(running, total)
 
@@ -813,13 +813,13 @@ class RestateJobs(ts.Job):
         self.service = restate.Service("OrderingActions")
 
         @self.service.handler(...)
-        async def quote(ctx: restate.Context, request: order_actions.QuoteRequest) -> order_actions.QuoteResponse:
+        async def quote(ctx: restate.Context, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
             return actions.quote(request)
 
         @self.workflow.main(...)
         async def run(ctx: restate.WorkflowContext, request: order_workflow.StartRequest) -> order_orchestrator.RunResponse:
             orchestrator = order_orchestrator.OrderOrchestrator(
-                restate_actions.RestateOrderActions(ctx, quote)
+                restate_quoting.RestateQuoting(ctx, quote)
             )
             return await orchestrator.run(request)
 

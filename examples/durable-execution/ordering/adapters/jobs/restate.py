@@ -3,30 +3,30 @@ from __future__ import annotations
 import tesser.adapters as ts
 import restate
 
-import ordering.adapters.gateways.restate_actions as restate_actions
+import ordering.adapters.gateways.restate_quoting as restate_quoting
 import ordering.adapters.gateways.restate_workflow as restate_workflow
 import ordering.application.client.order_actions as order_actions_client
 import ordering.application.orchestrators.order_orchestrator as order_orchestrator
-import ordering.application.ports.order_actions as order_actions
+import ordering.application.ports.quoting as quoting
 import ordering.application.ports.order_workflow as order_workflow
 import tesser.errors as errors
 
 
 class RestateJobs(ts.Job):
 
-    def __init__(self, actions: order_actions_client.Client) -> None:
+    def __init__(self, actions_client: order_actions_client.Client) -> None:
         self.workflow = restate.Workflow("Ordering")
         self.service = restate.Service("OrderingActions")
 
         @self.service.handler(
-            input_serde=restate_workflow.RecordSerde(order_actions.QuoteRequest),
-            output_serde=restate_workflow.RecordSerde(order_actions.QuoteResponse),
+            input_serde=restate_workflow.RecordSerde(quoting.QuoteRequest),
+            output_serde=restate_workflow.RecordSerde(quoting.QuoteResponse),
         )
         async def quote(
-            ctx: restate.Context, request: order_actions.QuoteRequest
-        ) -> order_actions.QuoteResponse:
+            ctx: restate.Context, request: quoting.QuoteRequest
+        ) -> quoting.QuoteResponse:
             try:
-                return actions.quote(request)
+                return actions_client.quote(request)
             except errors.DomainError as e:
                 raise restate.TerminalError(e.message, status_code=errors.status_for(e.kind)) from e
 
@@ -38,7 +38,7 @@ class RestateJobs(ts.Job):
             ctx: restate.WorkflowContext, request: order_workflow.StartRequest
         ) -> order_orchestrator.RunResponse:
             orchestrator = order_orchestrator.OrderOrchestrator(
-                restate_actions.RestateOrderActions(ctx, quote)
+                restate_quoting.RestateQuoting(ctx, quote)
             )
             try:
                 return await orchestrator.run(request)

@@ -56,8 +56,8 @@ a `ts.Client` is what the application exposes so an adapter can call it.
 Import rows and fakes both key on that, so one protocol object may not serve
 both directions.
 
-- Outbound (orchestrator → engine): a port. `application/ports/order_actions.py`
-  declares `OrderActions(ts.Port)`, implemented by the engine gateway.
+- Outbound (orchestrator → engine): a port. `application/ports/quoting.py`
+  declares `Quoting(ts.Port)`, implemented by the engine gateway.
 - Inbound (job → action): a client protocol, **`tesser.application.Client`**
   — a new class in the application package, not a reuse of
   `tesser.context.Client`. Same word, different package, the way

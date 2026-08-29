@@ -9,9 +9,9 @@ The chain, top to bottom, with where each link lives:
 | it starts the workflow through a port | `ordering/application/ports/order_workflow.py` | `OrderWorkflow.start(StartRequest) -> StartResponse` |
 | the Restate SDK sends the workflow | `ordering/adapters/gateways/restate_workflow.py` | `RestateOrderWorkflow.start` → `client.workflow_send(self._run, key=order_id, arg=request)` — the handler function itself, not a name, and the port's own `StartRequest` as the body |
 | Restate's server calls the workflow job | `ordering/adapters/jobs/restate.py` | `RestateJobs`'s `@workflow.main()` `run`, mounted at `/restate` by the host |
-| the orchestrator is built **inside the invocation** | `ordering/adapters/jobs/restate.py` | `run` constructs `RestateOrderActions(ctx, quote)` and `OrderOrchestrator(...)` per invocation, over this `ctx` |
-| the orchestrator runs the action through a port | `ordering/application/ports/order_actions.py` | `OrderOrchestrator.run` (`application/orchestrators/`) builds the `Order`, then `OrderActions.quote(QuoteRequest) -> QuoteResponse` |
-| the Restate SDK calls the action durably | `ordering/adapters/gateways/restate_actions.py` | `RestateOrderActions.quote` → `ctx.service_call(self._quote, request)` on the ctx it was built with |
+| the orchestrator is built **inside the invocation** | `ordering/adapters/jobs/restate.py` | `run` constructs `RestateQuoting(ctx, quote)` and `OrderOrchestrator(...)` per invocation, over this `ctx` |
+| the orchestrator runs the action through a port | `ordering/application/ports/quoting.py` | `OrderOrchestrator.run` (`application/orchestrators/`) builds the `Order`, then `Quoting.quote(QuoteRequest) -> QuoteResponse` |
+| the Restate SDK calls the action durably | `ordering/adapters/gateways/restate_quoting.py` | `RestateQuoting.quote` → `ctx.service_call(self._quote, request)` on the ctx it was built with |
 | Restate's server calls the action job | `ordering/adapters/jobs/restate.py` | the same `RestateJobs`: `@service.handler()` `quote`, relaying to the application client |
 | the action, a class of actions with one repository lookup | `ordering/application/order_actions.py` | `OrderActions.quote` → `CatalogRepository.price` → `adapters/repositories/memory.py`, behind `application/client/order_actions.py` |
 | the price comes back up the same chain | | `QuoteResponse.cents` → `Order.total(PriceSpec)` → `RunResponse.total_cents` ends the workflow |
@@ -21,7 +21,7 @@ accepted — `workflow_send` is fire-and-forget, so the total is read back from
 Restate, not from the response.
 
 Restate never touches the domain, and the application never touches
-Restate. `OrderOrchestrator` depends on the `OrderActions` port and nothing
+Restate. `OrderOrchestrator` depends on the `Quoting` port and nothing
 else; `OrderActions` (the class of actions) depends on the
 `CatalogRepository` port and nothing else. Both are plain application code.
 What makes the orchestrator's call to its actions durable is which
@@ -38,7 +38,7 @@ This tree is the worked example for `docs/design-app-service-types.md`:
   `OrderWorkflow` port.
 - `OrderOrchestrator(ts.Orchestrator)` in `application/orchestrators/` —
   not a service. Built per invocation by the job, over a gateway holding that
-  invocation's ctx; depends on the `OrderActions` port only (an action port:
+  invocation's ctx; depends on the `Quoting` port only (an action port:
   one an application client speaks); stores nothing but that port; takes the
   workflow port's own `StartRequest` and returns its own `RunResponse`.
 - `OrderActions(ts.Actions)` beside the services — a class of actions over
@@ -61,7 +61,7 @@ gateway per invocation too.
   request and response — no wire types.
 - **Outbound, it is a gateway over a port.** Starting the workflow is
   `RestateOrderWorkflow` over `OrderWorkflow`; running an action is
-  `RestateOrderActions` over `OrderActions`.
+  `RestateQuoting` over `OrderActions`.
 
 **Everything Restate is addressed by a function, not a name.** The gateways
 take the handler *function* and hand it to the SDK — `client.workflow_send(self._run, ...)`
@@ -74,7 +74,7 @@ constructor calls inside `RestateJobs.__init__`.
 
 **The orchestrator is built inside the invocation.** A Restate handler is
 handed a `WorkflowContext`, and only calls made through it are journaled. So
-`run` constructs its own `RestateOrderActions(ctx, quote)` over *this* ctx and
+`run` constructs its own `RestateQuoting(ctx, quote)` over *this* ctx and
 its own `OrderOrchestrator` over that gateway, per invocation. Neither is a
 component attribute: the component wires what outlives a request, and an
 invocation-scoped object does not. Nothing reads an ambient context, and
@@ -115,7 +115,7 @@ kind yet. The engine's serde is an ABC, so it cannot be duck-typed away.
 There are no wire types. The engine is a relay, so the send side and the
 receive side of one message are not independent boundaries: `RunRequest`
 *is* `order_workflow.StartRequest`, and the action's `QuoteRequest` /
-`QuoteResponse` are the `OrderActions` port's own. The gateway sends the
+`QuoteResponse` are the `Quoting` port's own. The gateway sends the
 port's DTO, the job receives it, and `application/client/order_actions.py`
 speaks the same two shapes to the job. Each message exists exactly once, as a
 `ts.Request` / `ts.Response` in a ports module; the one exception is the
@@ -181,7 +181,7 @@ constructor parameter only tests would pass is worse than talking to a real
 socket — so the test talks to a real socket, and the unreachable case just
 points at a closed port.
 
-`RestateOrderActions` is the one thing whose real call path the suite cannot
+`RestateQuoting` is the one thing whose real call path the suite cannot
 reach: it needs a live `restate.Context`, the SDK's context class is an ABC
 that no `@ts.fake` may implement (a fake must implement a port, a client, or a
 config repository), and the SDK's own `create_test_harness` wants Docker and

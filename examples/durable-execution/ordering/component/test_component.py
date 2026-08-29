@@ -5,7 +5,7 @@ import typing
 
 import restate
 
-import ordering.application.ports.order_actions as order_actions
+import ordering.application.ports.quoting as quoting
 import ordering.component.component as component
 import ordering.component.config as config
 
@@ -17,7 +17,7 @@ class TestOrdering:
         try:
             quoted = asyncio.run(
                 wired.jobs.quote(
-                    typing.cast(restate.Context, None), order_actions.QuoteRequest(sku="widget")
+                    typing.cast(restate.Context, None), quoting.QuoteRequest(sku="widget")
                 )
             )
         finally:

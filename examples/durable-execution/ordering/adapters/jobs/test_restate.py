@@ -8,14 +8,14 @@ import restate
 
 import ordering.adapters.jobs.restate as restate_jobs
 import ordering.application.client.order_actions as order_actions_client
-import ordering.application.ports.order_actions as order_actions
+import ordering.application.ports.quoting as quoting
 
 
 @ts.fake
 class FakeActions(order_actions_client.Client):
 
-    def quote(self, request: order_actions.QuoteRequest) -> order_actions.QuoteResponse:
-        return order_actions.QuoteResponse(cents=250)
+    def quote(self, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
+        return quoting.QuoteResponse(cents=250)
 
 
 class TestRestateJobs:
@@ -31,6 +31,6 @@ class TestRestateJobs:
     def test_the_quote_job_relays_to_the_actions_it_was_given(self) -> None:
         jobs = restate_jobs.RestateJobs(FakeActions())
         quoted = asyncio.run(
-            jobs.quote(typing.cast(restate.Context, None), order_actions.QuoteRequest(sku="gadget"))
+            jobs.quote(typing.cast(restate.Context, None), quoting.QuoteRequest(sku="gadget"))
         )
         assert quoted.cents == 250

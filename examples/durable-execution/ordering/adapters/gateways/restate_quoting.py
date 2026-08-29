@@ -4,21 +4,21 @@ import tesser.adapters as ts
 import restate
 import restate.context
 
-import ordering.application.ports.order_actions as order_actions
+import ordering.application.ports.quoting as quoting
 import tesser.errors as errors
 
 
-class RestateOrderActions(ts.Gateway):
+class RestateQuoting(ts.Gateway):
 
     def __init__(
         self,
         ctx: restate.Context,
-        quote: restate.context.HandlerType[order_actions.QuoteRequest, order_actions.QuoteResponse],
+        quote: restate.context.HandlerType[quoting.QuoteRequest, quoting.QuoteResponse],
     ) -> None:
         self._ctx = ctx
         self._quote = quote
 
-    async def quote(self, request: order_actions.QuoteRequest) -> order_actions.QuoteResponse:
+    async def quote(self, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
         try:
             return await self._ctx.service_call(self._quote, request)
         except restate.TerminalError as e:
