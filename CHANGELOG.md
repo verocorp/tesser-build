@@ -5,6 +5,106 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.88.0] - 2026-08-29
+
+The prose catches up to the code, and two guards so it stops drifting. Every
+item comes from a cold review run against main tip `628e4a8`: the whole-repo
+coherence review, the app-service wave review (#138 / #143), and the asyncpg
+wave review (#139–#142). No check changes what it flags; what changes is what
+the repo *says*, plus one generator fix and one rule string that promised more
+than it enforced.
+
+### Added
+- **`rationale/coverage.md` gets a Python totality guard.** The Go half of
+  `coverage_test.go` keys off `internal/analyzers.All`; the Python check set had
+  nothing at all — the file contained zero `TB0` references. That is how **15
+  shipped codes** reached v0.0.85.0 with no row and nothing noticed: `TB040`,
+  `TB043`, `TB044`, `TB045`, `TB053`, `TB061`–`TB066`, `TB069`, `TB070`,
+  `TB074`, `TB090`. `TestCoverageMatrix_PythonChecksHaveRows` reads the shipped
+  codes out of `tessercheck-py/RULES.md` — generated from the violation call
+  sites and drift-gated, so it cannot claim a code the analyzer does not ship —
+  and fails on a code with no row. Same "claimed by *some* row" bar as
+  `roadmap/generate.py`'s totality check: deliberately weak, but it forbids the
+  silent gap. Rows for all 15 added, each naming the real clause and the real
+  doc, and saying "a named gap" where none exists (`TB069`, `TB090`).
+- `rationale/coverage.md` also gains a **store (`ts.Store`) row** in the
+  skill-materializations matrix — the transaction-boundary convention shipped in
+  #142 with no row anywhere in the matrix.
+- `skills/tesser-build/repositories.md` gains **rule 6** for the
+  store/repository split, pointing at `docs/design-asyncpg-repositories.md`.
+
+### Fixed
+- **`RULES.md` printed one owner for a rule that has several.** `rulebook.render`
+  conflict-checks `codes[clause]` but wrote `applies[clause]` once on first sight
+  and never re-checked it, so a clause emitted from two `APPLIES_TO` owners
+  silently showed only the first. Five rows were lying — `TB081`'s job-context
+  rule has **nine** owners, not one; `TB050`'s aliased-module rule has eight;
+  `TB015`, `TB051`, and `TB041` each had a second owner going unnamed. Owners
+  now join with ` · ` like the `Fires when` column, the generated header says so,
+  and `RULES.md` is regenerated.
+- **A rule string read as a requirement and shipped as a permission.** "a port
+  method takes one `ts.Request`, led by a `ts.JobContext` when an orchestrator
+  calls it" — but `leading_context=True` is passed unconditionally for every port
+  method, so any port *may* lead with a job context whether or not an
+  orchestrator calls it, and a port an orchestrator does call is not *required*
+  to declare one. Reworded to what is enforced: "which a leading `ts.JobContext`
+  may precede".
+- **Counts and lists that had gone stale.** `README.md`'s "43 shipped codes" is
+  44; its `TB070–TB073` is `TB070–TB074`; `CLAUDE.md`'s five gated example trees
+  are eight `examples/*` `app` rows plus `layout`, `tesser-py`, and
+  `tessercheck-py`, for eleven; `scripts/verify` called the durable-execution
+  workflow and its action "handlers" when they are **jobs** (the point of the
+  wave); and `scripts/verify` plus the `asyncpg-example` CI job comment both
+  still described "an in-memory and an asyncpg repository selected by the storage
+  coordinate" when #142 deleted the memory backend — it is Postgres-only behind a
+  store.
+- **`rationale/coverage.md`'s jobs reach row still listed `gateways`,** which
+  #143's final commit withdrew; `ADAPTER_KIND_REACH["jobs"]` is application
+  client / orchestrators / ports.
+
+### Changed
+- **Skill docs** (`skill-version` 60 → 61). `python.md`'s host mount said a
+  component's `jobs` "is a tuple" — the shipped rule allows one job *or* a tuple,
+  and `examples/minimal` publishes a single job, so the prescribed expression
+  would not run against the exemplar the same section points at. `python.md` also
+  said the transaction boundary is "a decision for the consuming codebase, not
+  this skill", which `ts.Store` inverts (with the matching delta in
+  `application-services.md` rule 4). `SKILL.md`'s routing line omitted the job
+  context. `map.md` still nested *repository* under gateways ("the gateway to
+  persistence") while the enforced-layout paragraph five lines below got it right
+  — exactly the confusion that let four repositories sit in `gateways/`
+  unnoticed; repositories are now their own outbound kind and the section heading
+  names all four (the explicit anchor is unchanged, so every route still
+  resolves). `repositories.md` called `adapters/gateways/` "the older home" for
+  repositories, which `TB052` makes a finding — the doc described illegal code as
+  tolerated.
+- **Design records.** `docs/design-app-service-types.md`'s "Not yet ruled" #2 is
+  struck through with its verification: it is implemented.
+  `docs/design-python-domain-detection.md` gets a **supersession banner** — it
+  was the only doc presenting an inference-based classifier ("frozen dataclass +
+  value equality ⇒ value object") as the live design, five amendments deep with
+  no banner, while the analyzer has classified by declared `ts.*` base since
+  v0.0.15.0. An agent picking it up would build the wrong thing. The banner names
+  the live description and says plainly there is no successor record in `docs/`.
+
+### Notes
+- `TODOS.md` records the 2026-08-29 maintainer ruling that **anything needing a
+  decision goes through a domain object** — never a service, a mapper, or a port
+  DTO. A port response is mapped to a spec; the spec constructs or is passed into
+  a domain object whose method returns an outcome; the service matches that. This
+  resolves the **TB082 × TB084 conflict** the coherence review proved by probe (a
+  service could branch on a port answer in exactly one legal shape — a class
+  pattern closed with a bare `case _:` — which is precisely the non-exhaustive
+  shape TB084 forbids), by removing the premise rather than the conflict. The
+  TB082 re-cut and the three services that dodge the bind today are recorded, not
+  built.
+- Deliberately out of scope, each with a reason recorded: the `wiring` →
+  `component` and `bootstrap` → `app` rename (~53 sites, its own wave),
+  `repositories.md`'s title and registry key (touches the generated ROADMAP), and
+  `repositories.md`'s "no analyzer backs this in v2" (now only half false).
+- `scripts/verify` green across all 11 trees; `go test ./...` ok with `go vet`
+  and `gofmt -l .` clean; `roadmap/generate.py --check` up to date, suite 32
+  passed.
 ## [0.0.87.0] - 2026-08-29
 
 Four confirmed analyzer defects from the cold-review wave over #131–#143, plus
