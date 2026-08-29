@@ -8,6 +8,7 @@ import threading
 import pytest
 import restate
 
+import ordering.adapters.gateways.restate_serde as restate_serde
 import ordering.adapters.gateways.restate_workflow as restate_workflow
 import ordering.application.ports.order_workflow as order_workflow
 import tesser.errors as errors
@@ -19,13 +20,13 @@ class TestRestateOrderWorkflow:
         workflow = restate.Workflow("Ordering")
 
         @workflow.main(
-            input_serde=restate_workflow.RecordSerde(restate_workflow.RunRequest),
-            output_serde=restate_workflow.RecordSerde(restate_workflow.RunResponse),
+            input_serde=restate_serde.RecordSerde(order_workflow.StartRequest),
+            output_serde=restate_serde.RecordSerde(order_workflow.StartResponse),
         )
         async def run(
-            ctx: restate.WorkflowContext, request: restate_workflow.RunRequest
-        ) -> restate_workflow.RunResponse:
-            return restate_workflow.RunResponse(order_id=ctx.key(), total_cents=0)
+            ctx: restate.WorkflowContext, request: order_workflow.StartRequest
+        ) -> order_workflow.StartResponse:
+            return order_workflow.StartResponse(order_id=ctx.key())
 
         listener = socket.socket()
         listener.bind(("127.0.0.1", 0))
@@ -70,19 +71,19 @@ class TestRestateOrderWorkflow:
 
         assert started.order_id == "o1"
         assert seen[0].split(b"\r\n")[0] == b"POST /Ordering/o1/run/send HTTP/1.1"
-        assert json.loads(seen[1]) == {"sku": "widget", "quantity": 2}
+        assert json.loads(seen[1]) == {"order_id": "o1", "sku": "widget", "quantity": 2}
 
     def test_a_refused_send_is_an_infra_error(self) -> None:
         workflow = restate.Workflow("Ordering")
 
         @workflow.main(
-            input_serde=restate_workflow.RecordSerde(restate_workflow.RunRequest),
-            output_serde=restate_workflow.RecordSerde(restate_workflow.RunResponse),
+            input_serde=restate_serde.RecordSerde(order_workflow.StartRequest),
+            output_serde=restate_serde.RecordSerde(order_workflow.StartResponse),
         )
         async def run(
-            ctx: restate.WorkflowContext, request: restate_workflow.RunRequest
-        ) -> restate_workflow.RunResponse:
-            return restate_workflow.RunResponse(order_id=ctx.key(), total_cents=0)
+            ctx: restate.WorkflowContext, request: order_workflow.StartRequest
+        ) -> order_workflow.StartResponse:
+            return order_workflow.StartResponse(order_id=ctx.key())
 
         listener = socket.socket()
         listener.bind(("127.0.0.1", 0))
@@ -113,13 +114,13 @@ class TestRestateOrderWorkflow:
         workflow = restate.Workflow("Ordering")
 
         @workflow.main(
-            input_serde=restate_workflow.RecordSerde(restate_workflow.RunRequest),
-            output_serde=restate_workflow.RecordSerde(restate_workflow.RunResponse),
+            input_serde=restate_serde.RecordSerde(order_workflow.StartRequest),
+            output_serde=restate_serde.RecordSerde(order_workflow.StartResponse),
         )
         async def run(
-            ctx: restate.WorkflowContext, request: restate_workflow.RunRequest
-        ) -> restate_workflow.RunResponse:
-            return restate_workflow.RunResponse(order_id=ctx.key(), total_cents=0)
+            ctx: restate.WorkflowContext, request: order_workflow.StartRequest
+        ) -> order_workflow.StartResponse:
+            return order_workflow.StartResponse(order_id=ctx.key())
 
         with socket.socket() as closed:
             closed.bind(("127.0.0.1", 0))
@@ -131,17 +132,3 @@ class TestRestateOrderWorkflow:
 
         with pytest.raises(errors.InfraError):
             asyncio.run(start())
-
-
-class TestRecordSerde:
-
-    def test_it_round_trips_a_record_through_json(self) -> None:
-        serde = restate_workflow.RecordSerde(restate_workflow.RunRequest)
-        raw = serde.serialize(restate_workflow.RunRequest(sku="widget", quantity=2))
-        assert json.loads(raw) == {"sku": "widget", "quantity": 2}
-        assert serde.deserialize(raw) == restate_workflow.RunRequest(sku="widget", quantity=2)
-
-    def test_an_empty_body_is_no_record(self) -> None:
-        serde = restate_workflow.RecordSerde(restate_workflow.RunResponse)
-        assert serde.serialize(None) == b""
-        assert serde.deserialize(b"") is None

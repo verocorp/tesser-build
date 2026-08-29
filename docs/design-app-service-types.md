@@ -1,7 +1,10 @@
 # Application-service types — orchestrators, actions, jobs
 
-Status: DRAFT rulings, 2026-08-29, amended the same day after a codex
-challenge review (15 findings; the ones taken are marked "codex #n" below).
+Status: RULED and BUILT, 2026-08-29 — tesser-py kinds, tessercheck rules,
+the `examples/minimal` exemplar, and the `examples/durable-execution` rework
+(live-verified through a Restate server) all land in the same PR. Amended
+after a codex challenge review (15 findings; the ones taken are marked
+"codex #n" below) and once more by the rework (the jobs → gateways row).
 Carved from the durable-execution example (PR #138,
 `examples/durable-execution`) after the 2026-08-25 (flow/Temporal chain) and
 2026-08-27/28 (Restate build) sessions. The example is to be reworked to
@@ -120,8 +123,11 @@ in the ports module, and both ends import it.
   is bound at the handler decorators; the gateway reads it off the handler
   function, so it needs nothing. `protocol/durable.py` is deleted: it
   carried `sku`, `quantity`, `cents` — one context's vocabulary — and
-  `protocol/` is context-generic (TB064). The serde class lives in the jobs
-  module.
+  `protocol/` is context-generic (TB064). The serde class lives in
+  `adapters/gateways/restate_serde.py` (gateway tests and the job both reach
+  it) and carries the wave's one remaining `tesser:debt TB052`: every context
+  class must declare a `ts.*` base, `restate.serde.Serde` is an ABC, and no
+  adapter serde kind exists yet — recorded in `TODOS.md`.
   What that serde has to be (codex #9): type-directed and recursive, not
   "JSON of `__init__` fields". Port DTO fields may be primitives, nested
   DTOs, tuples, and `enum.Enum` members (TB080); Optional and bool are
@@ -183,8 +189,11 @@ Rails/Celery reading where `jobs/` holds the code that runs when dequeued.
    - `handlers` → `client`. Not `jobs`, not `application.client`, not
      `application.orchestrators`.
    - `jobs` → `application.client` + `application.orchestrators` (to
-     construct) + `application.ports` (the message DTOs). Not the context's
-     `client`.
+     construct) + `application.ports` (the message DTOs) + `adapters.gateways`
+     (to construct the engine gateway per invocation — it needs the
+     invocation's ctx, which only the job holds; `minimal` did not expose
+     this because its component hands the job a ready gateway, the Restate
+     tree did). Not the context's `client`.
    - `gateways`, `repositories` → `application.ports` (unchanged). Not
      `jobs`, not `handlers`.
    - a kind package may still import itself (a gateway may import a sibling

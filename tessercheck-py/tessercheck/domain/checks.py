@@ -111,7 +111,7 @@ ADAPTER_KIND_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "handlers": ("client",),
     "gateways": (PORTS_IMPORT_PATH,),
     "repositories": (PORTS_IMPORT_PATH,),
-    "jobs": (APPLICATION_CLIENT_IMPORT, ORCHESTRATORS_IMPORT, PORTS_IMPORT_PATH),
+    "jobs": (APPLICATION_CLIENT_IMPORT, ORCHESTRATORS_IMPORT, PORTS_IMPORT_PATH, "adapters.gateways"),
 }
 
 HOST_KINDS: typing.Final[frozenset[str]] = frozenset({"handler", "job"})
@@ -5305,8 +5305,8 @@ class Codebase(ts.AggregateRoot):
                                 f"{module.name()} imports {target}; an adapters kind "
                                 "package reaches only what its kind reaches — a handler "
                                 "the context client, a job the application client, the "
-                                "orchestrators, and the ports, a gateway or a repository "
-                                "the ports",
+                                "orchestrators, the ports, and the gateways it builds per "
+                                "invocation, a gateway or a repository the ports",
                             ))
                         )
                 elif pieces[0] == context:

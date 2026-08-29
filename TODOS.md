@@ -1908,8 +1908,8 @@ change; each waits for a real need.
 ## Rulings surfaced by the durable-execution example (2026-08-29, PR #138, `examples/durable-execution/`)
 
 Building a Restate workflow on the typed handler-function path put pressure on
-three rules. Each is marked in the tree where it lands (six `tesser:debt`
-markers), and each needs a rule, not a fix.
+three rules. Two were ruled by the app-service-types wave
+(`docs/design-app-service-types.md`); one `tesser:debt` marker remains.
 
 - [ ] **No `@dataclass` decorator anywhere in a tree.** The decorator rewrites
   `__init__`, `__eq__`, and `__setattr__` after `__init_subclass__` has already
@@ -1923,22 +1923,23 @@ markers), and each needs a rule, not a fix.
   A check that no `@dataclass` appears in a checked tree closes the bypass at
   the decorator rather than at `Record`.
 
-- [ ] **An engine adapter's wire shapes and serde have no home.** Talking to a
-  durable-execution engine means declaring the types that cross its wire and,
-  where the SDK cannot serialize them itself, a serde. Both belong beside the
-  adapter that speaks them — a gateway and a handler must name the *same*
-  Python type, and `protocol` is out of a gateway's reach (TB066). So
-  `restate_workflow.py` carries `RunRequest`, `RunResponse`, and a generic
-  `RecordSerde`, and `restate_actions.py` carries `QuoteRequest` and
-  `QuoteResponse`, all five marked `tesser:debt TB052` because an adapters
-  module admits no such kind. Ruling: name the kind (an adapter record and an
-  adapter serde?), admit it in `adapters` (TB052), and drop the markers. Shares
-  a shape with the adapter-side-mapper ruling above.
+- [ ] **An engine adapter's serde has no home.** The wire shapes are gone
+  (ruled: a message is declared once, on the port, and both ends of the
+  engine speak the port's own `ts.Request`/`ts.Response`), but where the SDK
+  cannot serialize a `ts.Request` itself the tree brings a serde, and
+  `restate.serde.Serde` is an ABC, so it is a class with no `ts.*` base.
+  `ordering/adapters/gateways/restate_serde.py` carries the one remaining
+  `tesser:debt TB052`. Ruling: name the kind (an adapter serde?), admit it
+  in `adapters` (TB052), and drop the marker. Shares a shape with the
+  adapter-side-mapper ruling above. Related and also unruled: payload
+  versioning on a durable leg (a field added to a port DTO changes the bytes
+  an in-flight journal holds) — until ruled, port DTOs on a durable leg are
+  append-only.
 
-- [ ] **The orchestrator and its actions are not application services**
-  (*in progress, separate worktree*). A Restate workflow handler builds its
-  orchestrator per invocation, over the invocation's own context, so
-  `ordering/adapters/handlers/restate.py` imports
-  `ordering.application.order_orchestrator` — `tesser:debt TB060`, since an
-  adapter reaches `application.ports` and nothing else. Chris is cutting the
-  kinds in a separate worktree; the marker comes out with that ruling.
+- [x] **The orchestrator and its actions are not application services**
+  — ruled and shipped by the app-service-types wave: `ts.Orchestrator` in
+  `application/orchestrators/`, `ts.Actions` beside the services, a
+  `tesser.application.Client` protocol in `application/client/`, and the
+  `adapters/jobs/` kind (`ts.Job`) that constructs the orchestrator per
+  invocation. The `TB060` marker is gone; `RestateJobs` replaces
+  `RestateHandlers`.

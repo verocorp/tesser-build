@@ -18,19 +18,19 @@ class TestRestateOrderActions:
 
         @service.handler()
         async def quote(
-            ctx: restate.Context, request: restate_actions.QuoteRequest
-        ) -> restate_actions.QuoteResponse:
-            return restate_actions.QuoteResponse(cents=250)
+            ctx: restate.Context, request: order_actions.QuoteRequest
+        ) -> order_actions.QuoteResponse:
+            return order_actions.QuoteResponse(cents=250)
 
         class Answering:
             async def service_call(
                 self,
                 tpe: restate.context.HandlerType[
-                    restate_actions.QuoteRequest, restate_actions.QuoteResponse
+                    order_actions.QuoteRequest, order_actions.QuoteResponse
                 ],
-                arg: restate_actions.QuoteRequest,
-            ) -> restate_actions.QuoteResponse:
-                return restate_actions.QuoteResponse(cents=250)
+                arg: order_actions.QuoteRequest,
+            ) -> order_actions.QuoteResponse:
+                return order_actions.QuoteResponse(cents=250)
 
         gateway = restate_actions.RestateOrderActions(
             typing.cast(restate.Context, Answering()), quote
@@ -43,18 +43,18 @@ class TestRestateOrderActions:
 
         @service.handler()
         async def quote(
-            ctx: restate.Context, request: restate_actions.QuoteRequest
-        ) -> restate_actions.QuoteResponse:
-            return restate_actions.QuoteResponse(cents=250)
+            ctx: restate.Context, request: order_actions.QuoteRequest
+        ) -> order_actions.QuoteResponse:
+            return order_actions.QuoteResponse(cents=250)
 
         class Refusing:
             async def service_call(
                 self,
                 tpe: restate.context.HandlerType[
-                    restate_actions.QuoteRequest, restate_actions.QuoteResponse
+                    order_actions.QuoteRequest, order_actions.QuoteResponse
                 ],
-                arg: restate_actions.QuoteRequest,
-            ) -> restate_actions.QuoteResponse:
+                arg: order_actions.QuoteRequest,
+            ) -> order_actions.QuoteResponse:
                 raise restate.TerminalError("no price for sku 'nope'", status_code=404)
 
         gateway = restate_actions.RestateOrderActions(

@@ -2079,8 +2079,9 @@ def test_only_a_handler_imports_its_own_client() -> None:
     assert any(
         "two.adapters.gateways.sneaky" in f and "imports two.client.client" in f
         and "an adapters kind package reaches only what its kind reaches — a handler "
-        "the context client, a job the application client, the orchestrators, and "
-        "the ports, a gateway or a repository the ports" in f
+        "the context client, a job the application client, the orchestrators, the "
+        "ports, and the gateways it builds per invocation, a gateway or a repository "
+        "the ports" in f
         for f in findings
     )
 
@@ -6068,8 +6069,9 @@ def test_an_adapter_reaches_application_only_through_ports() -> None:
     assert any(
         "shop.adapters.gateways.memory imports shop.application.service; "
         "an adapters kind package reaches only what its kind reaches — a handler "
-        "the context client, a job the application client, the orchestrators, and "
-        "the ports, a gateway or a repository the ports" in f
+        "the context client, a job the application client, the orchestrators, the "
+        "ports, and the gateways it builds per invocation, a gateway or a repository "
+        "the ports" in f
         for f in findings
     )
     assert not any("imports shop.application.ports.sink;" in f for f in findings)
