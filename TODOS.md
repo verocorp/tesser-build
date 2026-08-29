@@ -1904,3 +1904,41 @@ change; each waits for a real need.
     client is an anecdote; two is a category worth naming.
   - **Depends on:** T4c landing (the inline), and TB032's marker mechanism existing (for
     option 2).
+
+## Rulings surfaced by the durable-execution example (2026-08-29, PR #138, `examples/durable-execution/`)
+
+Building a Restate workflow on the typed handler-function path put pressure on
+three rules. Each is marked in the tree where it lands (six `tesser:debt`
+markers), and each needs a rule, not a fix.
+
+- [ ] **No `@dataclass` decorator anywhere in a tree.** The decorator rewrites
+  `__init__`, `__eq__`, and `__setattr__` after `__init_subclass__` has already
+  run, so a `ts.Record` subclass wearing `@dataclass(frozen=True)` passes every
+  check while silently replacing the contract `Record` exists to enforce —
+  verified, and deliberately not used. The repro is the SDK pressure in this
+  example: `restate.serde.DefaultSerde` serializes msgspec Structs, Pydantic
+  models, and dataclasses, and nothing else, so "just make it a dataclass" is
+  the path of least resistance for anyone wiring an engine. The tree now writes
+  its wire shapes as plain classes with an explicit `__init__` and `__eq__`.
+  A check that no `@dataclass` appears in a checked tree closes the bypass at
+  the decorator rather than at `Record`.
+
+- [ ] **An engine adapter's wire shapes and serde have no home.** Talking to a
+  durable-execution engine means declaring the types that cross its wire and,
+  where the SDK cannot serialize them itself, a serde. Both belong beside the
+  adapter that speaks them — a gateway and a handler must name the *same*
+  Python type, and `protocol` is out of a gateway's reach (TB066). So
+  `restate_workflow.py` carries `RunRequest`, `RunResponse`, and a generic
+  `RecordSerde`, and `restate_actions.py` carries `QuoteRequest` and
+  `QuoteResponse`, all five marked `tesser:debt TB052` because an adapters
+  module admits no such kind. Ruling: name the kind (an adapter record and an
+  adapter serde?), admit it in `adapters` (TB052), and drop the markers. Shares
+  a shape with the adapter-side-mapper ruling above.
+
+- [ ] **The orchestrator and its actions are not application services**
+  (*in progress, separate worktree*). A Restate workflow handler builds its
+  orchestrator per invocation, over the invocation's own context, so
+  `ordering/adapters/handlers/restate.py` imports
+  `ordering.application.order_orchestrator` — `tesser:debt TB060`, since an
+  adapter reaches `application.ports` and nothing else. Chris is cutting the
+  kinds in a separate worktree; the marker comes out with that ruling.

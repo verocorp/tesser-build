@@ -123,6 +123,23 @@ run_minimal() {
   pytest -q || return 1
 }
 
+# The durable-execution example: one context whose workflow runs on Restate.
+# One FastAPI host serves POST /orders and mounts the Restate endpoint at
+# /restate; the workflow and the action it calls are both handlers, and the
+# engine never touches the domain.
+run_durable_execution() {
+  cd "$ROOT/examples/durable-execution" || return 1
+  step "tessercheck (zero findings over the whole tree)"
+  tessercheck_tree "$PWD" || return 1
+  step "mypy --strict"
+  MYPYPATH=.:../../tesser-py mypy --strict protocol ordering app srv tests conftest.py || return 1
+  step "pytest"
+  # The app reads its own environment through the config repository, so the
+  # runner supplies one — the same job a deploy does. Tests never inject it.
+  RESTATE_INGRESS=http://localhost:8080 \
+    pytest -q || return 1
+}
+
 # The minimal tree with a real database behind it: the same two contexts, each
 # with an in-memory and an asyncpg repository selected by the storage
 # coordinate, an async client/service/port chain, and an e2e that bootstraps
@@ -246,6 +263,7 @@ run_tree() {
     llmport)        run_llmport ;;
     python-app)     run_python_app ;;
     minimal)        run_minimal ;;
+    durable-execution) run_durable_execution ;;
     asyncpg)        run_asyncpg ;;
     serdepy)        run_serdepy ;;
     ports)          run_ports ;;
