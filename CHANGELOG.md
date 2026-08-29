@@ -5,6 +5,73 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.87.0] - 2026-08-29
+
+Four confirmed analyzer defects from the cold-review wave over #131–#143, plus
+one the codex review of this change found in its own fix. Each was reproduced
+live against the shipped analyzer before the fix and re-run after it. No example
+tree needed editing.
+
+### Fixed
+- **One extra character turned off the comments norm.** `DIRECTIVE` had no
+  boundary after `tesser:debt`, so `# tesser:debts …` and `# tesser:debtfile …`
+  were exempt from **TB020** *and* failed to parse as a debt marker, so
+  **TB090** never saw them — the norm governing every module in every tree, off,
+  with nothing left for the debt ledger to catch. The regex now spells the
+  marker with the parser's own grammar, `tesser:debt(-file)?(?![\w-])`, so
+  `# tesser:debt` and `# tesser:debt-file` stay directives while
+  `# tesser:debts`, `# tesser:debtfile`, and `# tesser:debt-filed` are ordinary
+  comments. `noqa`, `pragma`, and `type:` keep the unbounded prefix — they are
+  third-party spellings this repo does not define. The pre-change grep for
+  near-miss markers was clean, so the tightening cost zero edits.
+- **A repository could keep an invocation's job context.** The held-context
+  check was dispatched only for `block == "gateway"` while the line above it
+  passed `leading_context = block != "handler"`, granting repositories the same
+  leading-`ts.JobContext` permission with nothing then stopping one from holding
+  it. A repository is built once by the component exactly like a gateway, so the
+  rule's own rationale applies verbatim. It is now dispatched on the same
+  `block != "handler"` condition, the method is named `_held_context_violations`
+  for what it checks, and its rule text reads "an adapter is built once and
+  never holds an invocation's job context".
+- **A store's `transaction()` accepted an `AsyncContextManager` of any class
+  beside it.** The check confirmed only that the yielded name was declared in
+  the module, never that it was a port — so
+  `transaction() -> typing.AsyncContextManager[SaveWidgetRequest]`, yielding a
+  request DTO, passed, while `RULES.md`, `python.md`, and
+  `docs/design-asyncpg-repositories.md` all said otherwise. It now consults the
+  kind table for `"port"`. `examples/asyncpg` was already conformant.
+- **A mapper could `return` before `super().__init__`.** The TB080 clause
+  counted top-level `super().__init__` statements and flagged one nested in a
+  branch; neither saw an early `return` above it, so `MapToX(added)` handed the
+  port an object whose fields do not exist — while the rule string claimed "so
+  the target is always initialized". The clause was added rather than the
+  wording weakened: a `return` anywhere in a mapper's `__init__` is a finding.
+- **That new clause then over-fired on a nested scope.** It walked the whole
+  `__init__` subtree with `ast.walk`, so a `return` inside a local helper
+  function or a nested class method read as the constructor returning early.
+  `_own_scope_returns` now collects returns lexically in the constructor's own
+  scope, pruning `FunctionDef`, `AsyncFunctionDef`, `Lambda`, and `ClassDef`
+  children; a `return` inside an `if` or a `with` is still the constructor's own
+  and still fires. Found by the cold codex review of this change — its one
+  finding.
+
+### Changed
+- `skills/tesser-build/python.md` now says a gateway **and every repository** is
+  built once and never stores an invocation's context, naming TB081, which
+  matches the widened dispatch above. `skill-version` 59 → 60.
+- `tessercheck-py/RULES.md` regenerated from the implementation
+  (`python3 -m srv.cli.rules`).
+
+### Notes
+- Five new tests in `tessercheck-py/tessercheck/domain/test_checks.py`, one per
+  defect, each named for the shape it locks. 416 tests pass, up from 412.
+- Two `TODOS.md` entries close as **no longer reproducing**, verified by
+  re-running both repros over `examples/minimal`: a marker inside a
+  `@dataclass` argument, and one inside a string default argument —
+  `checks.py` reads comments through `tokenize`, so a string is not a comment.
+- `scripts/verify` green across all 11 trees; `roadmap/generate.py --check` up
+  to date with its 32-test suite passing; `go test ./...`, `go vet ./...`, and
+  `gofmt -l .` clean.
 ## [0.0.86.0] - 2026-08-29
 
 The `ts.Outcome` runtime gate holds two shapes it used to let through. A cold
