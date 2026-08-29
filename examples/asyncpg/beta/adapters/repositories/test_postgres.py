@@ -46,3 +46,21 @@ class TestPostgresKeyStore:
             missing = await keys_repo.has_key(key_repository.HasKeyRequest(key="k"))
         await database.close()
         assert missing.held is key_repository.Held.NO
+
+    async def test_the_schema_outlives_a_first_transaction_that_rolls_back(self) -> None:
+        dsn = os.environ["BETA_STORAGE"]
+        connection = await asyncpg.connect(dsn)
+        await connection.execute("DROP TABLE IF EXISTS keys")
+        await connection.close()
+        database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
+        await database.open()
+        key_store = postgres.PostgresKeyStore(database)
+        with pytest.raises(RuntimeError):
+            async with key_store.transaction() as keys_repo:
+                await keys_repo.put_key(key_repository.PutKeyRequest(key="k"))
+                raise RuntimeError("abort")
+        await database.close()
+        connection = await asyncpg.connect(dsn)
+        table = await connection.fetchval("SELECT to_regclass('keys') IS NOT NULL")
+        await connection.close()
+        assert table is True

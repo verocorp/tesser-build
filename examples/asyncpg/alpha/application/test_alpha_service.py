@@ -18,10 +18,12 @@ import tesser.errors as errors
 @ts.fake
 class FakeWidgetRepository(widget_repository.WidgetRepository):
 
-    def __init__(self, part_by_name: dict[str, str]) -> None:
+    def __init__(self, part_by_name: dict[str, str], saved: list[str]) -> None:
         self._part_by_name = part_by_name
+        self._saved = saved
 
     async def save_widget(self, request: widget_repository.SaveWidgetRequest) -> widget_repository.SaveWidgetResponse:
+        self._saved.append(request.name)
         self._part_by_name[request.name] = request.part
         return widget_repository.SaveWidgetResponse(name=request.name)
 
@@ -40,12 +42,13 @@ class FakeCommittedWidgetStore(widget_repository.WidgetStore):
 
     def __init__(self) -> None:
         self.part_by_name: dict[str, str] = {}
+        self.saved: list[str] = []
         self.transactions = 0
 
     @contextlib.asynccontextmanager
     async def transaction(self) -> typing.AsyncIterator[widget_repository.WidgetRepository]:
         self.transactions += 1
-        yield FakeWidgetRepository(self.part_by_name)
+        yield FakeWidgetRepository(self.part_by_name, self.saved)
 
 
 @ts.fake
@@ -54,7 +57,7 @@ class FakeUnavailableWidgetStore(widget_repository.WidgetStore):
     @contextlib.asynccontextmanager
     async def transaction(self) -> typing.AsyncIterator[widget_repository.WidgetRepository]:
         raise errors.InfraError("widget store unavailable")
-        yield FakeWidgetRepository({})
+        yield FakeWidgetRepository({}, [])
 
 
 @ts.fake
@@ -103,6 +106,7 @@ class TestAlphaServiceOverACommittedTransaction:
         taken = await service.take(client.TakeRequest(name="a", part="p"))
         assert taken.part == "p"
         assert widget_store.part_by_name == {"a": "p"}
+        assert widget_store.saved == ["a"]
 
     async def test_take_of_an_unknown_widget_is_not_found(self) -> None:
         service = alpha_service.AlphaService(FakeCommittedWidgetStore(), FakeBetaCheck())

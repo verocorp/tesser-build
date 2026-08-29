@@ -29,6 +29,20 @@ class DatabaseRequest:
         return self._dsn
 
 
+class ClosablePool(typing.Protocol):
+
+    async def close(self) -> None: ...
+
+    def terminate(self) -> None: ...
+
+
+async def close_pool(pool: ClosablePool, timeout: float) -> None:
+    try:
+        await asyncio.wait_for(pool.close(), timeout=timeout)
+    except TimeoutError:
+        pool.terminate()
+
+
 class Database:
 
     def __init__(self, request: DatabaseRequest, min_size: int = 1, max_size: int = 4) -> None:
@@ -36,16 +50,18 @@ class Database:
         self._min_size = min_size
         self._max_size = max_size
         self._pool: asyncpg.Pool[asyncpg.Record] | None = None
+        self._opening = asyncio.Lock()
 
     async def open(self) -> None:
-        if self._pool is not None:
-            return
-        self._pool = await asyncpg.create_pool(self._dsn, min_size=self._min_size, max_size=self._max_size)
+        async with self._opening:
+            if self._pool is not None:
+                return
+            self._pool = await asyncpg.create_pool(self._dsn, min_size=self._min_size, max_size=self._max_size)
 
     @contextlib.asynccontextmanager
     async def acquire(self) -> typing.AsyncIterator[asyncpg.pool.PoolConnectionProxy[asyncpg.Record]]:
         if self._pool is None:
-            raise RuntimeError(f"database {self._dsn!r} is not open; the app opens its databases before serving")
+            raise RuntimeError("the database is not open; the app opens its databases before serving")
         async with self._pool.acquire() as connection:
             yield connection
 
@@ -54,10 +70,7 @@ class Database:
         self._pool = None
         if pool is None:
             return
-        try:
-            await asyncio.wait_for(pool.close(), timeout=_CLOSE_TIMEOUT_SECONDS)
-        except TimeoutError:
-            pool.terminate()
+        await close_pool(pool, _CLOSE_TIMEOUT_SECONDS)
 
 
 class Databases:
@@ -75,8 +88,15 @@ class Databases:
         return len(self._by_request)
 
     async def open(self) -> None:
-        for database in self._by_request.values():
-            await database.open()
+        opened: list[Database] = []
+        try:
+            for database in self._by_request.values():
+                await database.open()
+                opened.append(database)
+        except BaseException:
+            for database in opened:
+                await database.close()
+            raise
 
     async def close(self) -> None:
         for database in self._by_request.values():
