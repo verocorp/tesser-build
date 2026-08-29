@@ -2,6 +2,36 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Repository tests and the pool: two questions from the asyncpg review (2026-08-29, Chris)
+
+- [ ] **What may a repository test set up for itself?** Chris's expectation
+  is that a repository test reaches Postgres only through the app loader —
+  the same path the host takes — so the test exercises the wiring it will
+  ship with and has no private configuration of its own. Today every
+  sibling repository test in `examples/asyncpg` reads
+  `os.environ["ALPHA_STORAGE"]` and constructs
+  `pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))` by hand
+  (`alpha/adapters/repositories/test_postgres.py:18-22,38-42,52-56,71-75`,
+  same in `beta/`), and `pgdatabase/test_database.py` builds pools with
+  its own `min_size`/`max_size`. Open: is "loader only" the rule, or does a
+  sibling test legitimately own its pool sizing? Whichever way it goes, the
+  answer belongs in `testing.md`'s tier table (root = loader + real
+  Postgres; `*/tests/` = integration; sibling = ?) and as a TB070-family
+  clause — a repository test module may import the app loader and nothing
+  else that opens a connection.
+- [ ] **The pool lock fixes the example, not an implementer.** #144's
+  `asyncio.Lock` around `Database.open()`/`close()` lives in
+  `examples/asyncpg/pgdatabase/database.py`, which nothing in `tesser-py`
+  ships. An implementer who copies the shape gets the fix; one who writes
+  their own does not, and no static check can see "open and close on a
+  resource owner are serialised". The implementer-facing move is the one
+  `ts.Store` made: a shipped runtime kind in `tesser-py` (a database /
+  resource owner with the open-once, close-once, compensate-on-partial-open
+  lifecycle built in) that the example then uses rather than defines. Rule
+  on whether that kind is wanted before building it; if not, this stays an
+  example-only fix and the rule is "an app owns its pools through a kind
+  that serialises its lifecycle", stated in `python.md` and unchecked.
+
 ## Decisions go through a domain object (2026-08-29, Chris ruling)
 
 **The ruling.** Anything that needs a decision goes through a domain object;
