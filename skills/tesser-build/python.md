@@ -810,10 +810,11 @@ translation) — what differs is scope, reach, and what each may depend on.
   application client or constructs an orchestrator** — wrapping the
   invocation's engine context as its own `ts.JobContext` implementation
   (`RestateJobContext(ctx)`, also in `adapters/jobs/`) first. Every gateway
-  is built once by the component and **never stores an invocation's
-  context**; an action-port method takes the job context as its leading
-  parameter and the gateway does `job.call(self._quote, request)`. Jobs
-  carry placement and import rules only for now.
+  and every repository is built once by the component and **never stores an
+  invocation's context** (TB081); an action-port method takes the job context
+  as its leading parameter and the gateway does
+  `job.call(self._quote, request)`. Jobs carry placement and import rules
+  only for now.
 
 ```python
 # ordering/application/client/order_actions.py (verified impl: examples/durable-execution/)

@@ -146,7 +146,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Codebase._actions_client_violations": "application client protocol method",
     "Codebase._port_call_violations": "public actions method",
     "Codebase._thread_violations": "public orchestrator method",
-    "Codebase._gateway_violations": "gateway class",
+    "Codebase._held_context_violations": "repository or gateway class",
     "Codebase._port_annotation_violations": "port protocol method",
     "Codebase._store_violations": "store protocol method",
     "Codebase._store_return_violations": "store protocol method",

@@ -274,7 +274,7 @@ DEBT_FILE_MARKER: typing.Final[str] = "tesser:debt-file"
 CODE_SHAPE: typing.Final[re.Pattern[str]] = re.compile(r"TB[0-9]{3}\Z")
 
 DIRECTIVE: typing.Final[re.Pattern[str]] = re.compile(
-    r"^#\s*(!|type:|noqa|tesser:debt|pragma|fmt:|isort:|ruff:)"
+    r"^#\s*(!|type:|noqa|tesser:debt(-file)?(?![\w-])|pragma|fmt:|isort:|ruff:)"
 )
 
 CODING_DECL: typing.Final[re.Pattern[str]] = re.compile(r"^#.*?coding[:=]\s*[-\w.]+")
@@ -1441,8 +1441,8 @@ class Codebase(ts.AggregateRoot):
                             module, cls, blocks, "an adapter", block != "handler"
                         )
                     )
-                    if block == "gateway":
-                        found.extend(self._gateway_violations(module, cls, blocks))  # tesser:debt TB051
+                    if block != "handler":
+                        found.extend(self._held_context_violations(module, cls, blocks))  # tesser:debt TB051
                 elif block == "port":
                     found.extend(
                         self._record_signature_violations(  # tesser:debt TB051
@@ -1463,7 +1463,7 @@ class Codebase(ts.AggregateRoot):
                         "ports",
                         "ports-file",
                     ):
-                        found.extend(self._store_violations(module, cls))  # tesser:debt TB051
+                        found.extend(self._store_violations(module, cls, blocks))  # tesser:debt TB051
                 elif block == "service":
                     methods = [
                         item
@@ -5029,9 +5029,14 @@ class Codebase(ts.AggregateRoot):
         self,
         module: Module,
         cls: ast.ClassDef,
+        blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        declared = {stmt.name for stmt in module.class_defs()}
+        ports = {
+            stmt.name
+            for stmt in module.class_defs()
+            if blocks.get((module.name(), stmt.name)) == "port"
+        }
         methods = [
             item
             for item in cls.body
@@ -5084,7 +5089,7 @@ class Codebase(ts.AggregateRoot):
                         "takes none, because the transaction is the only thing it opens",
                     ))
                 )
-            found.extend(self._store_return_violations(module, where, item, declared))  # tesser:debt TB051
+            found.extend(self._store_return_violations(module, where, item, ports))  # tesser:debt TB051
         if not any(item.name == STORE_METHOD for item in methods):
             found.append(
                 Violation(ViolationSpec(
@@ -5103,7 +5108,7 @@ class Codebase(ts.AggregateRoot):
         module: Module,
         where: str,
         fn: ast.FunctionDef | ast.AsyncFunctionDef,
-        declared: set[str],
+        ports: set[str],
     ) -> tuple[Violation, ...]:
         node = fn.returns
         if (
@@ -5111,7 +5116,7 @@ class Codebase(ts.AggregateRoot):
             and isinstance(node.value, ast.Attribute)
             and node.value.attr == STORE_RETURN
             and isinstance(node.slice, ast.Name)
-            and node.slice.id in declared
+            and node.slice.id in ports
         ):
             return ()
         return (
@@ -6648,6 +6653,17 @@ class Codebase(ts.AggregateRoot):
                 and isinstance(stmt.value.func.value.func, ast.Name)
                 and stmt.value.func.value.func.id == "super"
             )
+            for node in ast.walk(init):
+                if isinstance(node, ast.Return):
+                    found.append(
+                        Violation(ViolationSpec(
+                            module.path(),
+                            node.lineno,
+                            "TB080",
+                            f"{where}.__init__ returns; a mapper's constructor runs to its "
+                            "super().__init__, so the target is always initialized",
+                        ))
+                    )
             selves = {"self"}
             grew = True
             while grew:
@@ -7239,7 +7255,7 @@ class Codebase(ts.AggregateRoot):
             blocks.get(module._resolve(element) or ("", "")) == "job" for element in named
         )
 
-    def _gateway_violations(
+    def _held_context_violations(
         self,
         module: Module,
         cls: ast.ClassDef,
@@ -7281,7 +7297,7 @@ class Codebase(ts.AggregateRoot):
                             node.lineno,
                             "TB081",
                             f"{module.name()}.{cls.name} keeps {target.attr}, a job "
-                            "context; a gateway is built once and never holds an "
+                            "context; an adapter is built once and never holds an "
                             "invocation's job context",
                         ))
                     )
