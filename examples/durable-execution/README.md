@@ -32,8 +32,8 @@ engine.
 
 - **Inbound, it is a host.** Restate's server calls the endpoint mounted at
   `/restate`, which routes to `RestateHandlers`: one `Workflow` and one
-  `Service`, each with one typed handler taking and returning a frozen
-  dataclass the SDK serializes.
+  `Service`, each with one typed handler taking and returning a record
+  declared beside the gateway that speaks it.
 - **Outbound, it is a gateway over a port.** Starting the workflow is
   `RestateOrderWorkflow` over `OrderWorkflow`; running an action is
   `RestateOrderActions` over `OrderActions`.
@@ -62,7 +62,7 @@ write, except it is a class so its dependencies arrive by constructor instead
 of by module global. It builds the `Workflow` and the `Service`, decorates the
 two handlers as closures over the injected `client.Actions`, and hands the
 whole thing back through `definitions()`. The component builds it once; the
-host does `api.mount("/restate", restate.app(built.ordering.handlers.definitions()))`
+host does `api.mount("/restate", restate.app(app.ordering.handlers.definitions()))`
 and knows nothing else about Restate.
 
 `srv/http/test_main.py` boots the real host, reads `/restate/discover`, and
@@ -78,55 +78,54 @@ function, so the only reader of the string is the SDK.
 
 ### What this shape costs, in rules
 
-Four tessercheck findings stand, deliberately, awaiting a ruling:
+Six `tesser:debt` markers, each waiting on a rule rather than a fix — the whole
+list is in the repo's `TODOS.md`:
 
 - `ordering/adapters/handlers/restate.py` imports
-  `ordering.application.order_orchestrator` (**TB060**). An adapter may reach
-  `application.ports`, not an application service. But the orchestrator is
+  `ordering.application.order_orchestrator` (**TB060**). An adapter reaches
+  `application.ports` and nothing else. But the orchestrator is
   invocation-scoped, and the invocation only exists inside the handler, so the
-  handler is the only place that can construct it.
-- both gateways — and their sibling tests — import `protocol.durable`
-  (**TB066**, **TB070**). Only a handler may reach the app shell's `protocol`
-  package. But on the typed path the gateway and the handler must speak the
-  *same* Python types, and those types are the wire shapes.
+  handler is the only place that can build it. The kinds are being cut in a
+  separate worktree.
+- the five wire-shape and serde classes carry no `ts.*` base (**TB052**), because
+  an adapters module admits no such kind yet. See below for why they live where
+  they do.
 
-And the wire shapes themselves are plain `@dataclasses.dataclass(frozen=True)`
-records with no `ts.*` base (**TB050**, **TB052** ×4), because that is what the
-SDK can serialize. See below.
+## The wire shapes live beside the adapter that speaks them
 
-## What the SDK needs from the wire types
+`RunRequest` and `RunResponse` are declared in
+`ordering/adapters/gateways/restate_workflow.py`; `QuoteRequest` and
+`QuoteResponse` in `restate_actions.py`. Each pair sits next to the gateway
+that sends it, and the handler imports both gateway modules — because on the
+typed path the sender and the receiver must name the *same* Python type, and a
+gateway cannot reach the app shell's `protocol` package (TB066). They are
+plain classes: an `__init__` that stores its fields and an `__eq__` that
+compares type and `__dict__`. There is no `@dataclass` anywhere in the tree,
+and that is deliberate — see `TODOS.md`.
 
-The typed path serializes the handler's declared argument and return types, so
-`protocol/durable.py` holds four frozen dataclasses and nothing else — no
-`BytesSerde`, no `json.dumps`, no hand-written `text()`/`integer()` accessors,
-no `BadInvocation`. The SDK parses the body, and a malformed one never reaches
-the handler.
+Which means the SDK cannot serialize them, so the tree brings its own serde.
+`restate.serde.DefaultSerde` handles msgspec Structs, Pydantic models, and
+dataclasses; anything else falls through to `json.dumps(obj)` — a `TypeError`
+on the way out, and a plain `dict` on the way in.
+`RecordSerde[T](restate.serde.Serde[T])` is twelve lines over `vars(obj)` and
+`self._kind(**json.loads(buf))`, bound at each decorator:
 
-Two SDK facts this cost real time to find, both worth knowing before the
-Temporal mirror:
+```python
+@self.workflow.main(
+    input_serde=restate_workflow.RecordSerde(restate_workflow.RunRequest),
+    output_serde=restate_workflow.RecordSerde(restate_workflow.RunResponse),
+)
+```
 
-- **Dataclass support is an optional extra.** `DefaultSerde` routes dataclasses
-  through `dacite`, which ships only with `restate_sdk[serde]`. Without it the
-  call raises `RuntimeError: Trying to deserialize into a @dataclass. Please
-  add the optional dependencies needed.` The requirement is pinned as
-  `restate_sdk[serde]>=1.0`.
-- **A handler's `DefaultSerde` is never told its type.**
-  `update_handler_io_with_input_type_hints` (`restate/handler.py`) swaps in a
-  dedicated serde for msgspec Structs and Pydantic models, but for a dataclass
-  it records the type hint and leaves `DefaultSerde()` with `type_hint = None`
-  — which falls through to `json.dumps(obj)` and raises `TypeError: Object of
-  type RunRequest is not JSON serializable`. The fix is to bind the serde
-  explicitly at the decorator:
-  `@self.service.handler(input_serde=restate.serde.DefaultSerde(durable.QuoteRequest), ...)`.
-  The client side needs no separate fix — `do_call` reads
-  `handler_from_callable(tpe).handler_io`, so binding it once on the handler
-  serves both directions, and that is also why the gateway sets no
-  content-type header any more.
+Binding it on the handler is enough for both directions: the ingress client
+reads `handler_from_callable(tpe).handler_io` for its serde and its
+content-type, so the gateway sets no headers of its own. Nothing hand-parses a
+body any more — no `BytesSerde`, no `text()`/`integer()` accessors — and a
+malformed body never reaches a handler.
 
-Discovery reports `contentType: "application/json"` for both handlers, up from
-`*/*` under `BytesSerde`. It does **not** carry a real JSON schema: the
-manifest's `jsonSchema: true` reads the same as it did before, and the SDK
-generates an actual schema only for msgspec and Pydantic types.
+Discovery reports `contentType: "application/json"` for both handlers. It does
+**not** carry a real JSON schema; the SDK generates one only for msgspec and
+Pydantic types.
 
 ## Errors across the engine
 
