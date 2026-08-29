@@ -133,6 +133,17 @@ class TestDatabase:
         assert opened == baseline + 2
         assert settled == baseline
 
+    async def test_a_close_that_races_an_open_closes_the_pool_that_open_built(self) -> None:
+        dsn = os.environ["ALPHA_STORAGE"]
+        db = database.Database(database.DatabaseRequest(dsn), min_size=2, max_size=2)
+        baseline = await backends(dsn)
+        await asyncio.gather(db.open(), db.close())
+        settled = await backends_settling_to(dsn, baseline)
+        with pytest.raises(RuntimeError):
+            async with db.acquire():
+                pass
+        assert settled == baseline
+
     async def test_open_fails_at_open_when_the_database_is_unreachable(self) -> None:
         db = database.Database(database.DatabaseRequest("postgres://nobody@127.0.0.1:1/none"))
         with pytest.raises(OSError):

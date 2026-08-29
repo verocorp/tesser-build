@@ -50,10 +50,10 @@ class Database:
         self._min_size = min_size
         self._max_size = max_size
         self._pool: asyncpg.Pool[asyncpg.Record] | None = None
-        self._opening = asyncio.Lock()
+        self._lifecycle = asyncio.Lock()
 
     async def open(self) -> None:
-        async with self._opening:
+        async with self._lifecycle:
             if self._pool is not None:
                 return
             self._pool = await asyncpg.create_pool(self._dsn, min_size=self._min_size, max_size=self._max_size)
@@ -66,11 +66,12 @@ class Database:
             yield connection
 
     async def close(self) -> None:
-        pool = self._pool
-        self._pool = None
-        if pool is None:
-            return
-        await close_pool(pool, _CLOSE_TIMEOUT_SECONDS)
+        async with self._lifecycle:
+            pool = self._pool
+            self._pool = None
+            if pool is None:
+                return
+            await close_pool(pool, _CLOSE_TIMEOUT_SECONDS)
 
 
 class Databases:
