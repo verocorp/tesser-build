@@ -7,5 +7,5 @@ import alpha.application.ports.quoting as quoting
 
 class WidgetQuoteGateway(ts.Gateway):
 
-    def quote(self, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
+    def quote(self, job: ts.JobContext, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
         return quoting.QuoteResponse(name=request.name)

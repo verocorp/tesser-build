@@ -4,7 +4,8 @@ Status: RULED and BUILT, 2026-08-29 — tesser-py kinds, tessercheck rules,
 the `examples/minimal` exemplar, and the `examples/durable-execution` rework
 (live-verified through a Restate server) all land in the same PR. Amended
 after a codex challenge review (15 findings; the ones taken are marked
-"codex #n" below) and once more by the rework (the jobs → gateways row).
+"codex #n" below), once more by the rework (a jobs → gateways row, since
+withdrawn), and finally by the job-context ruling (below).
 Carved from the durable-execution example (PR #138,
 `examples/durable-execution`) after the 2026-08-25 (flow/Temporal chain) and
 2026-08-27/28 (Restate build) sessions. The example is to be reworked to
@@ -15,7 +16,7 @@ match; the rules follow the example.
 | kind | base | public? | constructed | depends on | reached through |
 |---|---|---|---|---|---|
 | application service | `ts.ApplicationService` | yes, on `client.Client` | component, once | ports | a handler |
-| orchestrator | `ts.Orchestrator` (new), in `application/orchestrators/` | no | a job, per invocation, over a gateway holding that invocation's engine ctx | action ports only — never a repository, never the workflow-start port, never a foreign client | the job that built it; nothing else holds one |
+| orchestrator | `ts.Orchestrator` (new), in `application/orchestrators/` | no | a job, per invocation, with that invocation's `ts.JobContext` | exactly one `ts.JobContext` plus action ports — never a repository, never the workflow-start port, never a foreign client | the job that built it; nothing else holds one |
 | action | `ts.Actions` (new) — a class of actions | no | component, once | exactly one `ts.Port` in `__init__`; each public method calls it exactly once (a class of actions shares one dependency; a second port is a second class) | a job, via an actions protocol |
 
 All three keep the four-step body and the TB081/TB082 rules unchanged: one
@@ -124,8 +125,10 @@ in the ports module, and both ends import it.
   function, so it needs nothing. `protocol/durable.py` is deleted: it
   carried `sku`, `quantity`, `cents` — one context's vocabulary — and
   `protocol/` is context-generic (TB064). The serde class lives in
-  `adapters/gateways/restate_workflow.py`, the send-side gateway (its own test and the job both reach
-  it) and carries the wave's one remaining `tesser:debt TB052`: every context
+  `adapters/jobs/restate.py`, beside the decorators that bind it (the
+  workflow gateway's sibling test decorates its throwaway handler over a
+  serde stand-in defined inside the test, since a gateway test cannot reach
+  `jobs/`) and carries the wave's one remaining `tesser:debt TB052`: every context
   class must declare a `ts.*` base, `restate.serde.Serde` is an ABC, and no
   adapter serde kind exists yet — recorded in `TODOS.md`.
   What that serde has to be (codex #9): type-directed and recursive, not
@@ -182,6 +185,51 @@ engine-neutral, covers the workflow entry and the action handlers equally
 (every invocation the server hands us is one job), and matches the
 Rails/Celery reading where `jobs/` holds the code that runs when dequeued.
 
+## The job context — how the invocation reaches the application
+
+Something per invocation has to hold the engine's context (Restate's
+`WorkflowContext`; on Temporal there is no object, the `workflow.*` API is
+ambient). The question is which kind holds it. Surveyed `~/workspace/flow`
+(2026-08-29): seven orchestrators in three regimes — ctx per method (bill,
+delivery, settlement, order-plan), ctx stored in the constructor (order,
+invoicegroup), ctx hidden behind an executor port (widgets only); the order
+workflow mixes the first two inside one workflow, and its two phase ports
+disagree (`BillingPhasePort.Run(ctx, ...)` vs `OpenPhasePort.OpenOrder(input)`
+with the adapter storing the ctx). flow's `CLAUDE.md` names the widgets shape
+as the intent; only the scaffold context obeys it.
+
+**Ruled (option 2 of two):** one regime.
+
+- `tesser.application.JobContext` is a protocol (re-exported unchanged as
+  `tesser.adapters.JobContext` and `tesser.testing.JobContext`, so `ts.JobContext`
+  is one class from every placement): what a step may do inside an
+  invocation, engine-neutral. Today: `call[I, O](step: Callable[[Any, I],
+  Awaitable[O]], request: I) -> O` — the SDK's `HandlerType` spelled in
+  stdlib types, and Temporal's `execute_activity(fn, arg)` shape. `sleep`,
+  `wait_for`, `send` are the next members when an orchestrator needs them.
+- A job builds its context's implementation per invocation
+  (`RestateJobContext(ctx)`, its own kind, in `adapters/jobs/`) and hands
+  it to the orchestrator's constructor together with the action ports.
+- The orchestrator stores exactly one job context and its action ports, and
+  threads the job context as the **leading parameter of every action-port
+  call**: `self._quotes.quote(self._job, request)`. An action port's method
+  is `(ts.JobContext, one ts.Request) -> ts.Response` — the Go leading-`ctx`
+  convention, and flow's `BillingPhasePort` one, applied everywhere.
+- A gateway is built once by the component (holding the engine's handler
+  function) and **never stores an invocation's context**; it receives the
+  job context per call and does `job.call(self._quote, request)`. flow's
+  `OpenPhaseAdapter` (stores the ctx) is the shape this forbids.
+- Rejected: option 1, the gateway built per invocation by the job (needed a
+  `jobs → gateways` row and, once an orchestrator needs a timer or a signal,
+  two copies of one handle); and reading the SDK's ambient
+  `restate.extensions.current_context()` — it exists and is set on every
+  handler entry, but its module is documented as "internal extensions apis"
+  and no documented handler code uses it.
+- Cost paid: the workflow job needs the action handler *function* before it
+  can build its gateway, so the Restate side is two job classes
+  (`RestateActionJobs`, `RestateWorkflowJobs` — Restate's own Service /
+  Workflow split) and a component publishes `jobs` as a tuple.
+
 ## Import rows that change
 
 1. TB060 same-context matrix, with the `adapters` role split by kind
@@ -189,11 +237,10 @@ Rails/Celery reading where `jobs/` holds the code that runs when dequeued.
    - `handlers` → `client`. Not `jobs`, not `application.client`, not
      `application.orchestrators`.
    - `jobs` → `application.client` + `application.orchestrators` (to
-     construct) + `application.ports` (the message DTOs) + `adapters.gateways`
-     (to construct the engine gateway per invocation — it needs the
-     invocation's ctx, which only the job holds; `minimal` did not expose
-     this because its component hands the job a ready gateway, the Restate
-     tree did). Not the context's `client`.
+     construct) + `application.ports` (the message DTOs). Not the context's
+     `client`. (A `jobs → adapters.gateways` row existed briefly, while the
+     Restate gateway was built per invocation over the ctx; the job-context
+     ruling below removed the need.)
    - `gateways`, `repositories` → `application.ports` (unchanged). Not
      `jobs`, not `handlers`.
    - a kind package may still import itself (a gateway may import a sibling

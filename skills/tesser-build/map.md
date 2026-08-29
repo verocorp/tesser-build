@@ -76,7 +76,7 @@ context's behalf. Two types, split by direction — **inbound needs a server
   from the context's `Client`: HTTP, CLI, event-consumer. → `handlers.md`
 - **Jobs (inbound, engine)** — where a durable-execution engine hands work
   back: a job calls an application client (a class of actions) or constructs
-  an orchestrator and its engine gateway per invocation. A handler calls the
+  an orchestrator over the invocation's job context. A handler calls the
   context client; a job never does. → `python.md#orchestrators-actions-jobs`
 - **Gateways (outbound)** — satisfy a port the context owns, by reaching
   something outside it. The port and its DTOs live in the context's

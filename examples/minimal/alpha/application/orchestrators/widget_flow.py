@@ -26,10 +26,11 @@ class MapToFlowResponse(ts.Mapper, FlowResponse):
 
 class WidgetFlow(ts.Orchestrator):
 
-    def __init__(self, quotes: quoting.Quoting) -> None:
+    def __init__(self, job: ts.JobContext, quotes: quoting.Quoting) -> None:
+        self._job = job
         self._quotes = quotes
 
     def run(self, request: quoting.QuoteRequest) -> FlowResponse:
         named = widget.Name(request.name)
-        quoted = self._quotes.quote(MapToQuoteRequest(named))
+        quoted = self._quotes.quote(self._job, MapToQuoteRequest(named))
         return MapToFlowResponse(quoted)

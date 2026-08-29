@@ -14,10 +14,10 @@ class TestWiredApp:
     def test_the_loaded_app_declares_the_restate_definitions_the_host_mounts(self) -> None:
         app = loader.load()
         try:
-            declared = [d.name for d in app.ordering.jobs.definitions()]
+            declared = [d.name for job in app.ordering.jobs for d in job.definitions()]
         finally:
             app.close()
-        assert declared == ["Ordering", "OrderingActions"]
+        assert declared == ["OrderingActions", "Ordering"]
 
     def test_placing_an_order_with_no_ingress_is_an_infra_error(self) -> None:
         app = loader.load()

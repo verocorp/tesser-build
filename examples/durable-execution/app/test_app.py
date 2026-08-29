@@ -11,7 +11,7 @@ class TestApp:
         spec = config.Spec(ordering_config.Config(ordering_config.Spec("http://localhost:8080")))
         built = app.App(config.Config(spec))
         try:
-            declared = [d.name for d in built.ordering.jobs.definitions()]
+            declared = [d.name for job in built.ordering.jobs for d in job.definitions()]
         finally:
             built.close()
-        assert declared == ["Ordering", "OrderingActions"]
+        assert declared == ["OrderingActions", "Ordering"]

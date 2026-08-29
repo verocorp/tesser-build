@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import typing
 
 import tesser.testing as ts
@@ -18,19 +19,45 @@ class FakeActions(order_actions_client.Client):
         return quoting.QuoteResponse(cents=250)
 
 
-class TestRestateJobs:
+@ts.fake
+class FakeQuoting(quoting.Quoting):
 
-    def test_it_declares_one_workflow_and_one_service(self) -> None:
-        jobs = restate_jobs.RestateJobs(FakeActions())
-        assert [d.name for d in jobs.definitions()] == ["Ordering", "OrderingActions"]
+    async def quote(self, job: ts.JobContext, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
+        return quoting.QuoteResponse(cents=250)
 
-    def test_each_definition_carries_the_handler_named_for_its_function(self) -> None:
-        jobs = restate_jobs.RestateJobs(FakeActions())
-        assert [sorted(d.handlers) for d in jobs.definitions()] == [["run"], ["quote"]]
+
+class TestRestateActionJobs:
+
+    def test_it_declares_the_actions_service_with_its_one_handler(self) -> None:
+        jobs = restate_jobs.RestateActionJobs(FakeActions())
+        assert [(d.name, sorted(d.handlers)) for d in jobs.definitions()] == [("OrderingActions", ["quote"])]
 
     def test_the_quote_job_relays_to_the_actions_it_was_given(self) -> None:
-        jobs = restate_jobs.RestateJobs(FakeActions())
+        jobs = restate_jobs.RestateActionJobs(FakeActions())
         quoted = asyncio.run(
             jobs.quote(typing.cast(restate.Context, None), quoting.QuoteRequest(sku="gadget"))
         )
         assert quoted.cents == 250
+
+
+class TestRestateWorkflowJobs:
+
+    def test_it_declares_the_workflow_with_its_run_handler(self) -> None:
+        jobs = restate_jobs.RestateWorkflowJobs(FakeQuoting())
+        assert [(d.name, sorted(d.handlers)) for d in jobs.definitions()] == [("Ordering", ["run"])]
+
+
+class TestRecordSerde:
+
+    def test_it_round_trips_a_record_through_json(self) -> None:
+        serde = restate_jobs.RecordSerde(quoting.QuoteRequest)
+        raw = serde.serialize(quoting.QuoteRequest(sku="widget"))
+        assert json.loads(raw) == {"sku": "widget"}
+        back = serde.deserialize(raw)
+        assert back is not None
+        assert vars(back) == {"sku": "widget"}
+
+    def test_an_empty_body_is_no_record(self) -> None:
+        serde = restate_jobs.RecordSerde(quoting.QuoteResponse)
+        assert serde.serialize(None) == b""
+        assert serde.deserialize(b"") is None

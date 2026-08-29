@@ -8,11 +8,11 @@ The chain, top to bottom, with where each link lives:
 | the initial application service | `ordering/application/order_service.py` | `OrderService.place` builds the `Order` aggregate |
 | it starts the workflow through a port | `ordering/application/ports/order_workflow.py` | `OrderWorkflow.start(StartRequest) -> StartResponse` |
 | the Restate SDK sends the workflow | `ordering/adapters/gateways/restate_workflow.py` | `RestateOrderWorkflow.start` → `client.workflow_send(self._run, key=order_id, arg=request)` — the handler function itself, not a name, and the port's own `StartRequest` as the body |
-| Restate's server calls the workflow job | `ordering/adapters/jobs/restate.py` | `RestateJobs`'s `@workflow.main()` `run`, mounted at `/restate` by the host |
-| the orchestrator is built **inside the invocation** | `ordering/adapters/jobs/restate.py` | `run` constructs `RestateQuoting(ctx, quote)` and `OrderOrchestrator(...)` per invocation, over this `ctx` |
-| the orchestrator runs the action through a port | `ordering/application/ports/quoting.py` | `OrderOrchestrator.run` (`application/orchestrators/`) builds the `Order`, then `Quoting.quote(QuoteRequest) -> QuoteResponse` |
-| the Restate SDK calls the action durably | `ordering/adapters/gateways/restate_quoting.py` | `RestateQuoting.quote` → `ctx.service_call(self._quote, request)` on the ctx it was built with |
-| Restate's server calls the action job | `ordering/adapters/jobs/restate.py` | the same `RestateJobs`: `@service.handler()` `quote`, relaying to the application client |
+| Restate's server calls the workflow job | `ordering/adapters/jobs/restate.py` | `RestateWorkflowJobs`'s `@workflow.main()` `run`, mounted at `/restate` by the host |
+| the orchestrator is built **inside the invocation** | `ordering/adapters/jobs/restate.py` | `run` wraps this invocation's `ctx` as `RestateJobContext(ctx)` (`jobs/restate_context.py`) and constructs `OrderOrchestrator(job, quotes)` over it |
+| the orchestrator runs the action through a port | `ordering/application/ports/quoting.py` | `OrderOrchestrator.run` (`application/orchestrators/`) builds the `Order`, then `Quoting.quote(job, QuoteRequest) -> QuoteResponse` — the job context threaded as the leading argument |
+| the Restate SDK calls the action durably | `ordering/adapters/gateways/restate_quoting.py` | `RestateQuoting.quote(job, request)` → `job.call(self._quote, request)` → `ctx.service_call`; the gateway was built once by the component and holds only the handler function |
+| Restate's server calls the action job | `ordering/adapters/jobs/restate.py` | `RestateActionJobs`: `@service.handler()` `quote`, relaying to the application client |
 | the action, a class of actions with one repository lookup | `ordering/application/order_actions.py` | `OrderActions.quote` → `CatalogRepository.price` → `adapters/repositories/memory.py`, behind `application/client/order_actions.py` |
 | the price comes back up the same chain | | `QuoteResponse.cents` → `Order.total(PriceSpec)` → `RunResponse.total_cents` ends the workflow |
 
@@ -37,9 +37,11 @@ This tree is the worked example for `docs/design-app-service-types.md`:
   (validates at the door) and starts the workflow through the
   `OrderWorkflow` port.
 - `OrderOrchestrator(ts.Orchestrator)` in `application/orchestrators/` —
-  not a service. Built per invocation by the job, over a gateway holding that
-  invocation's ctx; depends on the `Quoting` port only (an action port:
-  one an application client speaks); stores nothing but that port; takes the
+  not a service. Built per invocation by the job with that invocation's
+  **job context** (`ts.JobContext`, the engine-neutral protocol for what a
+  step may do inside an invocation) and its action ports (`Quoting`: a port
+  an application client speaks); stores nothing but those; threads the job
+  context as the leading argument of every action-port call; takes the
   workflow port's own `StartRequest` and returns its own `RunResponse`.
 - `OrderActions(ts.Actions)` beside the services — a class of actions over
   exactly one port (`CatalogRepository`), each method making exactly one call
@@ -47,21 +49,25 @@ This tree is the worked example for `docs/design-app-service-types.md`:
   `application/client/order_actions.py`, a `tesser.application.Client`
   protocol that only a job may import.
 
-And the adapter kind that ties them to the engine: `RestateJobs(ts.Job)` in
-`adapters/jobs/`. A handler calls the context client; a job calls an
-application client or constructs an orchestrator — and, because the
-orchestrator's durable route needs the invocation's ctx, builds the engine
-gateway per invocation too.
+And the adapter kind that ties them to the engine: the two jobs in
+`adapters/jobs/restate.py` — `RestateActionJobs(ts.Job)` declaring the
+`OrderingActions` service over the application client, and
+`RestateWorkflowJobs(ts.Job)` declaring the `Ordering` workflow over the
+`Quoting` port — plus `RestateJobContext(ts.JobContext)` in
+`jobs/restate_context.py`, the one per-invocation object the workflow job
+builds. A handler calls the context client; a job calls an application
+client or constructs an orchestrator. Every gateway is built once by the
+component; none holds an invocation's context.
 
 ## What the engine is, in this anatomy
 
 - **Inbound, it is a host.** Restate's server calls the endpoint mounted at
-  `/restate`, which routes to `RestateJobs`: one `Workflow` and one
+  `/restate`, which routes to the two jobs: one `Workflow` and one
   `Service`, each with one typed handler taking and returning the port's own
   request and response — no wire types.
 - **Outbound, it is a gateway over a port.** Starting the workflow is
   `RestateOrderWorkflow` over `OrderWorkflow`; running an action is
-  `RestateQuoting` over `OrderActions`.
+  `RestateQuoting` over `Quoting`.
 
 **Everything Restate is addressed by a function, not a name.** The gateways
 take the handler *function* and hand it to the SDK — `client.workflow_send(self._run, ...)`
@@ -70,27 +76,40 @@ the handler name, and both serdes off the decorated object
 (`handler_from_callable`). A rename is a rename; there is no string to keep in
 step, and no address DTO any more. `"Ordering"` and `"OrderingActions"` appear
 exactly once each, in the `restate.Workflow(...)` / `restate.Service(...)`
-constructor calls inside `RestateJobs.__init__`.
+constructor calls, one in each job's `__init__`.
 
-**The orchestrator is built inside the invocation.** A Restate handler is
-handed a `WorkflowContext`, and only calls made through it are journaled. So
-`run` constructs its own `RestateQuoting(ctx, quote)` over *this* ctx and
-its own `OrderOrchestrator` over that gateway, per invocation. Neither is a
-component attribute: the component wires what outlives a request, and an
-invocation-scoped object does not. Nothing reads an ambient context, and
-nothing binds or stores one.
+**The invocation's context enters the application as a job context.** A
+Restate handler is handed a `WorkflowContext`, and only calls made through it
+are journaled. `run` wraps *this* ctx as `RestateJobContext(ctx)` — the
+Restate implementation of `ts.JobContext`, whose one method today is
+`call(step, request)` → `ctx.service_call(step, request)` — and constructs
+its own `OrderOrchestrator(job, quotes)` over it, per invocation. The
+orchestrator threads the job context as the leading argument of every
+action-port call, and the gateway on the other side of that call
+(`RestateQuoting`, built once by the component, holding only the `quote`
+handler function) does `job.call(self._quote, request)`. So the ctx travels
+by parameter, the way Restate's own examples thread it and the way Go
+threads `ctx` — never stored by a gateway, never read from an ambient
+variable. (The SDK does keep the invocation in a `ContextVar`,
+`restate.extensions.current_context()`, but its module docstring says
+"internal extensions apis" and no documented handler code reads it; a
+convention example does not build on an internal name.) On Temporal the same
+`JobContext` is implemented over `workflow.execute_activity`, and the
+orchestrator is unchanged.
 
 ## The context declares its Restate service, the host only mounts it
 
-`RestateJobs` is the Restate service module the Restate docs would have you
-write, except it is a class so its dependencies arrive by constructor instead
-of by module global. It builds the `Workflow` and the `Service`, decorates the
-two handlers as closures over the injected application client, and hands the
-whole thing back through `definitions()`. The component builds it once and
-publishes it as `jobs` — the only thing a component publishes besides
-`client`; the host does
-`api.mount("/restate", restate.app(app.ordering.jobs.definitions()))` and
-knows nothing else about Restate.
+`RestateActionJobs` and `RestateWorkflowJobs` are the Restate service
+modules the Restate docs would have you write, except they are classes so
+their dependencies arrive by constructor instead of by module global. They
+are two classes rather than one because the workflow's gateway needs the
+action handler *function* before the workflow job can exist: the component
+builds `RestateActionJobs(actions)`, then `RestateQuoting(action_jobs.quote)`,
+then `RestateWorkflowJobs(quoting)` — Restate's own Service / Workflow split,
+in dependency order. The component publishes both as `jobs` — the only thing
+a component publishes besides `client`; the host does
+`api.mount("/restate", restate.app([d for job in app.ordering.jobs for d in job.definitions()]))`
+and knows nothing else about Restate.
 
 `srv/http/test_main.py` boots the real host, reads `/restate/discover`, and
 asserts the discovered manifest against what `definitions()` declares — so the
@@ -106,7 +125,7 @@ function, so the only reader of the string is the SDK.
 ### What this shape costs, in rules
 
 One `tesser:debt` marker, waiting on a rule rather than a fix — recorded in the
-repo's `TODOS.md`: `RecordSerde` in `ordering/adapters/gateways/restate_workflow.py`
+repo's `TODOS.md`: `RecordSerde` in `ordering/adapters/jobs/restate.py`
 carries no `ts.*` base (**TB052**), because an adapters module admits no serde
 kind yet. The engine's serde is an ABC, so it cannot be duck-typed away.
 
@@ -127,7 +146,7 @@ The SDK cannot serialize a `ts.Request` on its own —
 dataclasses; anything else falls through to `json.dumps(obj)` — so the tree
 brings its own serde. `RecordSerde[T](restate.serde.Serde[T])` is twelve
 lines over `vars(obj)` and `self._kind(**json.loads(buf))`, bound at each
-decorator in the job:
+decorator in the job, where it lives:
 
 ```python
 @self.workflow.main(

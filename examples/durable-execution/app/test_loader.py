@@ -21,7 +21,7 @@ class TestAppLoader:
     def test_the_loader_builds_an_app_from_its_repository(self) -> None:
         app = loader.AppLoader(FakeConfigRepository()).load()
         try:
-            declared = [sorted(d.handlers) for d in app.ordering.jobs.definitions()]
+            declared = [sorted(d.handlers) for job in app.ordering.jobs for d in job.definitions()]
         finally:
             app.close()
-        assert declared == [["run"], ["quote"]]
+        assert declared == [["quote"], ["run"]]

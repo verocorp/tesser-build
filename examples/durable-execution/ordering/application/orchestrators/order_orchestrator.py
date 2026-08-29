@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import tesser.application as ts
 
-import ordering.application.ports.quoting as quoting
 import ordering.application.ports.order_workflow as order_workflow
+import ordering.application.ports.quoting as quoting
 import ordering.domain.order as order
 
 
@@ -40,11 +40,12 @@ class MapToRunResponse(ts.Mapper, RunResponse):
 
 class OrderOrchestrator(ts.Orchestrator):
 
-    def __init__(self, quotes: quoting.Quoting) -> None:
+    def __init__(self, job: ts.JobContext, quotes: quoting.Quoting) -> None:
+        self._job = job
         self._quotes = quotes
 
     async def run(self, request: order_workflow.StartRequest) -> RunResponse:
         running = order.Order(MapToOrderSpec(request))
-        quoted = await self._quotes.quote(MapToQuoteRequest(running))
+        quoted = await self._quotes.quote(self._job, MapToQuoteRequest(running))
         total = running.total(MapToPriceSpec(quoted))
         return MapToRunResponse(running, total)

@@ -7,6 +7,7 @@ import threading
 
 import pytest
 import restate
+import restate.serde
 
 import ordering.adapters.gateways.restate_workflow as restate_workflow
 import ordering.application.ports.order_workflow as order_workflow
@@ -16,12 +17,16 @@ import tesser.errors as errors
 class TestRestateOrderWorkflow:
 
     def test_starting_sends_the_order_to_the_workflow_keyed_by_its_id(self) -> None:
+        class Body(restate.serde.Serde[order_workflow.StartRequest]):
+            def serialize(self, obj: order_workflow.StartRequest | None) -> bytes:
+                return b"" if obj is None else json.dumps(vars(obj)).encode()
+
+            def deserialize(self, buf: bytes) -> order_workflow.StartRequest | None:
+                return None if not buf else order_workflow.StartRequest(**json.loads(buf))
+
         workflow = restate.Workflow("Ordering")
 
-        @workflow.main(
-            input_serde=restate_workflow.RecordSerde(order_workflow.StartRequest),
-            output_serde=restate_workflow.RecordSerde(order_workflow.StartResponse),
-        )
+        @workflow.main(input_serde=Body())
         async def run(
             ctx: restate.WorkflowContext, request: order_workflow.StartRequest
         ) -> order_workflow.StartResponse:
@@ -73,12 +78,16 @@ class TestRestateOrderWorkflow:
         assert json.loads(seen[1]) == {"order_id": "o1", "sku": "widget", "quantity": 2}
 
     def test_a_refused_send_is_an_infra_error(self) -> None:
+        class Body(restate.serde.Serde[order_workflow.StartRequest]):
+            def serialize(self, obj: order_workflow.StartRequest | None) -> bytes:
+                return b"" if obj is None else json.dumps(vars(obj)).encode()
+
+            def deserialize(self, buf: bytes) -> order_workflow.StartRequest | None:
+                return None if not buf else order_workflow.StartRequest(**json.loads(buf))
+
         workflow = restate.Workflow("Ordering")
 
-        @workflow.main(
-            input_serde=restate_workflow.RecordSerde(order_workflow.StartRequest),
-            output_serde=restate_workflow.RecordSerde(order_workflow.StartResponse),
-        )
+        @workflow.main(input_serde=Body())
         async def run(
             ctx: restate.WorkflowContext, request: order_workflow.StartRequest
         ) -> order_workflow.StartResponse:
@@ -110,12 +119,16 @@ class TestRestateOrderWorkflow:
             listener.close()
 
     def test_an_unreachable_ingress_is_an_infra_error(self) -> None:
+        class Body(restate.serde.Serde[order_workflow.StartRequest]):
+            def serialize(self, obj: order_workflow.StartRequest | None) -> bytes:
+                return b"" if obj is None else json.dumps(vars(obj)).encode()
+
+            def deserialize(self, buf: bytes) -> order_workflow.StartRequest | None:
+                return None if not buf else order_workflow.StartRequest(**json.loads(buf))
+
         workflow = restate.Workflow("Ordering")
 
-        @workflow.main(
-            input_serde=restate_workflow.RecordSerde(order_workflow.StartRequest),
-            output_serde=restate_workflow.RecordSerde(order_workflow.StartResponse),
-        )
+        @workflow.main(input_serde=Body())
         async def run(
             ctx: restate.WorkflowContext, request: order_workflow.StartRequest
         ) -> order_workflow.StartResponse:
@@ -131,19 +144,3 @@ class TestRestateOrderWorkflow:
 
         with pytest.raises(errors.InfraError):
             asyncio.run(start())
-
-
-class TestRecordSerde:
-
-    def test_it_round_trips_a_record_through_json(self) -> None:
-        serde = restate_workflow.RecordSerde(order_workflow.StartRequest)
-        raw = serde.serialize(order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2))
-        assert json.loads(raw) == {"order_id": "o1", "sku": "widget", "quantity": 2}
-        back = serde.deserialize(raw)
-        assert back is not None
-        assert vars(back) == {"order_id": "o1", "sku": "widget", "quantity": 2}
-
-    def test_an_empty_body_is_no_record(self) -> None:
-        serde = restate_workflow.RecordSerde(order_workflow.StartResponse)
-        assert serde.serialize(None) == b""
-        assert serde.deserialize(b"") is None

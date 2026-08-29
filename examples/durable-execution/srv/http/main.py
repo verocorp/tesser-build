@@ -42,7 +42,7 @@ class HttpHost(ts.Host):
 
             api = fastapi.FastAPI()
             api.include_router(router)
-            api.mount(_MOUNT, restate.app(app.ordering.jobs.definitions()))
+            api.mount(_MOUNT, restate.app([d for job in app.ordering.jobs for d in job.definitions()]))
 
             config = hypercorn.config.Config()
             config.bind = [argv[0] if argv else _BIND]

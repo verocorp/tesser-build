@@ -17,7 +17,7 @@ class FakeActionsClient(widget_actions_client.Client):
 @ts.fake
 class FakeQuoting(quoting.Quoting):
 
-    def quote(self, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
+    def quote(self, job: ts.JobContext, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
         return quoting.QuoteResponse(name=request.name)
 
 

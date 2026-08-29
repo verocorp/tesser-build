@@ -17,6 +17,7 @@ TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.application", "Client"): "actions_client",
     ("tesser.application", "Orchestrator"): "orchestrator",
     ("tesser.application", "Actions"): "actions",
+    ("tesser.application", "JobContext"): "job_context",
     ("tesser.context", "Request"): "request",
     ("tesser.context", "Response"): "response",
     ("tesser.context", "Client"): "client",
@@ -29,6 +30,8 @@ TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.adapters", "Gateway"): "gateway",
     ("tesser.adapters", "Handler"): "handler",
     ("tesser.adapters", "Job"): "job",
+    ("tesser.adapters", "JobContext"): "job_context",
+    ("tesser.testing", "JobContext"): "job_context",
     ("tesser.component", "Component"): "component",
     ("tesser.component", "Config"): "component_config",
     ("tesser.component", "Spec"): "component_spec",
@@ -97,21 +100,21 @@ JOB_ONLY_IMPORTS: typing.Final[tuple[str, ...]] = (
 )
 
 ADAPTER_BLOCKS: typing.Final[frozenset[str]] = frozenset(
-    {"handler", "gateway", "repository", "job"}
+    {"handler", "gateway", "repository", "job", "job_context"}
 )
 
-ADAPTER_KIND_PACKAGES: typing.Final[dict[str, str]] = {
-    "handlers": "handler",
-    "gateways": "gateway",
-    "repositories": "repository",
-    "jobs": "job",
+ADAPTER_KIND_PACKAGES: typing.Final[dict[str, frozenset[str]]] = {
+    "handlers": frozenset({"handler"}),
+    "gateways": frozenset({"gateway"}),
+    "repositories": frozenset({"repository"}),
+    "jobs": frozenset({"job", "job_context"}),
 }
 
 ADAPTER_KIND_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "handlers": ("client",),
     "gateways": (PORTS_IMPORT_PATH,),
     "repositories": (PORTS_IMPORT_PATH,),
-    "jobs": (APPLICATION_CLIENT_IMPORT, ORCHESTRATORS_IMPORT, PORTS_IMPORT_PATH, "adapters.gateways"),
+    "jobs": (APPLICATION_CLIENT_IMPORT, ORCHESTRATORS_IMPORT, PORTS_IMPORT_PATH),
 }
 
 HOST_KINDS: typing.Final[frozenset[str]] = frozenset({"handler", "job"})
@@ -147,6 +150,7 @@ KIND_ROLE: typing.Final[dict[str, str]] = {
     "gateway": "adapters",
     "handler": "adapters",
     "job": "adapters",
+    "job_context": "adapters",
     "component": "component",
     "component_config": "component",
     "component_spec": "component",
@@ -178,6 +182,7 @@ KIND_NAME: typing.Final[dict[str, str]] = {
     "gateway": "a gateway adapter",
     "handler": "an inbound handler",
     "job": "a job",
+    "job_context": "a job context",
     "component": "a component",
     "component_config": "a component config",
     "component_spec": "a component config spec",
@@ -437,6 +442,8 @@ PRIMITIVES: typing.Final[frozenset[str]] = frozenset({"str", "int", "float", "bo
 MAPPER_PREFIX: typing.Final[str] = "MapTo"
 
 PORT_DTO_PRIMITIVES: typing.Final[frozenset[str]] = PRIMITIVES - frozenset({"bool"})
+
+JOB_CONTEXT_BLOCK: typing.Final[str] = "job_context"
 
 ENUM_BASES: typing.Final[frozenset[str]] = frozenset({"Enum"})
 
@@ -1418,12 +1425,23 @@ class Codebase(ts.AggregateRoot):
                                 "a client method",
                                 "TB081",
                                 blocks,
+                                "a client method takes exactly one ts.Request",
                             )
                         )
                 elif block in ("repository", "gateway", "handler"):
-                    found.extend(self._record_signature_violations(module, cls, blocks, "an adapter"))  # tesser:debt TB051
+                    found.extend(
+                        self._record_signature_violations(  # tesser:debt TB051
+                            module, cls, blocks, "an adapter", block != "handler"
+                        )
+                    )
+                    if block == "gateway":
+                        found.extend(self._gateway_violations(module, cls, blocks))  # tesser:debt TB051
                 elif block == "port":
-                    found.extend(self._record_signature_violations(module, cls, blocks, "a port"))  # tesser:debt TB051
+                    found.extend(
+                        self._record_signature_violations(  # tesser:debt TB051
+                            module, cls, blocks, "a port", True
+                        )
+                    )
                     if self._locate(  # tesser:debt TB051
                         module.name(), module.is_package(), contexts, self._export
                     ) in (
@@ -1465,6 +1483,7 @@ class Codebase(ts.AggregateRoot):
                                 "a service method",
                                 "TB081",
                                 blocks,
+                                "a service method takes exactly one ts.Request",
                             )
                         )
                         found.extend(
@@ -4960,6 +4979,9 @@ class Codebase(ts.AggregateRoot):
                     "a port method",
                     "TB081",
                     blocks,
+                    "a port method takes one ts.Request, led by a ts.JobContext when an "
+                    "orchestrator calls it",
+                    True,
                 )
             )
             found.extend(self._port_annotation_violations(module, where, item, blocks))  # tesser:debt TB051
@@ -4980,6 +5002,8 @@ class Codebase(ts.AggregateRoot):
                     if arg.arg != "self"
                 ])] + [fn.returns]:
             if isinstance(node, ast.Name) and node.id in declared:
+                continue
+            if self._names_job_context(module, node, blocks):  # tesser:debt TB051
                 continue
             found.append(
                 Violation(ViolationSpec(
@@ -5169,12 +5193,12 @@ class Codebase(ts.AggregateRoot):
                         f"{module.name()} mixes adapter kinds; an adapters module holds one adapter kind",
                     ))
                 )
-            expected = ADAPTER_KIND_PACKAGES.get(kind_package or "")
+            expected = ADAPTER_KIND_PACKAGES.get(kind_package or "", frozenset())
             for cls in module.class_defs():
                 block = blocks.get((module.name(), cls.name))
-                if block is None or block not in ADAPTER_BLOCKS or block == expected:
+                if block is None or block not in ADAPTER_BLOCKS or block in expected:
                     continue
-                if expected is None:
+                if not expected:
                     continue
                 found.append(
                     Violation(ViolationSpec(
@@ -5305,8 +5329,8 @@ class Codebase(ts.AggregateRoot):
                                 f"{module.name()} imports {target}; an adapters kind "
                                 "package reaches only what its kind reaches — a handler "
                                 "the context client, a job the application client, the "
-                                "orchestrators, the ports, and the gateways it builds per "
-                                "invocation, a gateway or a repository the ports",
+                                "orchestrators, and the ports, a gateway or a repository "
+                                "the ports",
                             ))
                         )
                 elif pieces[0] == context:
@@ -5852,7 +5876,14 @@ class Codebase(ts.AggregateRoot):
                     )
                 elif not any(
                     blocks.get(key)
-                    in ("port", "client", "actions_client", "protocol_port", "config_repository")
+                    in (
+                        "port",
+                        "client",
+                        "actions_client",
+                        "job_context",
+                        "protocol_port",
+                        "config_repository",
+                    )
                     for key in (module._resolve(base) for base in stmt.bases)
                     if key is not None
                 ):
@@ -5945,10 +5976,13 @@ class Codebase(ts.AggregateRoot):
         fn: ast.FunctionDef | ast.AsyncFunctionDef,
         blocks: dict[tuple[str, str], str],
         subject: str = "a service",
+        context_ok: bool = False,
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for arg in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs:
             if arg.arg == "self":
+                continue
+            if context_ok and self._names_job_context(module, arg.annotation, blocks):  # tesser:debt TB051
                 continue
             port_key = module._resolve(arg.annotation) if arg.annotation is not None else None
             if (blocks.get(port_key) if port_key is not None else None) != "port":
@@ -5969,12 +6003,40 @@ class Codebase(ts.AggregateRoot):
         cls: ast.ClassDef,
         blocks: dict[tuple[str, str], str],
         subject: str,
+        leading_context: bool = False,
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for item in cls.body:
             if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             where = f"{module.name()}.{cls.name}.{item.name}"
+            taken = [
+                arg
+                for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
+                if arg.arg != "self"
+            ]
+            for arg in taken[1:] if leading_context else taken:
+                if self._names_job_context(module, arg.annotation, blocks):  # tesser:debt TB051
+                    found.append(
+                        Violation(ViolationSpec(
+                            module.path(),
+                            item.lineno,
+                            "TB081",
+                            f"{where} parameter {arg.arg!r} is a ts.JobContext; a job "
+                            "context is threaded as the leading parameter of an action "
+                            "port call and nowhere else",
+                        ))
+                    )
+            if self._names_job_context(module, item.returns, blocks):  # tesser:debt TB051
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        item.lineno,
+                        "TB081",
+                        f"{where} returns a ts.JobContext; a job context is threaded as "
+                        "the leading parameter of an action port call and nowhere else",
+                    ))
+                )
             annotations = [
                 arg.annotation for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
             ]
@@ -6711,7 +6773,10 @@ class Codebase(ts.AggregateRoot):
                 expected = "client" if published == "client" else "job"
                 annotation = annotated.get(published)
                 key = module._resolve(annotation) if annotation is not None else None
-                if (blocks.get(key) if key is not None else None) != expected:
+                named = (blocks.get(key) if key is not None else None) == expected
+                if not named and expected == "job" and annotation is not None:
+                    named = self._names_jobs(module, annotation, blocks)  # tesser:debt TB051
+                if not named:
                     found.append(
                         Violation(ViolationSpec(
                             module.path(),
@@ -6728,6 +6793,7 @@ class Codebase(ts.AggregateRoot):
         module: Module,
         init: ast.FunctionDef | ast.AsyncFunctionDef | None,
         blocks: dict[tuple[str, str], str],
+        kind: str = "port",
     ) -> frozenset[str]:
         if init is None:
             return frozenset()
@@ -6736,7 +6802,7 @@ class Codebase(ts.AggregateRoot):
             for arg in init.args.posonlyargs + init.args.args + init.args.kwonlyargs
             if arg.arg != "self"
             and arg.annotation is not None
-            and blocks.get(module._resolve(arg.annotation) or ("", "")) == "port"
+            and blocks.get(module._resolve(arg.annotation) or ("", "")) == kind
         }
         held: set[str] = set()
         for node in ast.walk(init):
@@ -6758,6 +6824,18 @@ class Codebase(ts.AggregateRoot):
                 ):
                     held.add(target.attr)
         return frozenset(held)
+
+    def _names_job_context(
+        self,
+        module: Module,
+        node: ast.expr | None,
+        blocks: dict[tuple[str, str], str],
+    ) -> bool:
+        unquoted = self._unquoted(node)  # tesser:debt TB051
+        if unquoted is None:
+            return False
+        key = module._resolve(unquoted)
+        return key is not None and blocks.get(key) == JOB_CONTEXT_BLOCK
 
     @staticmethod
     def _init_of(cls: ast.ClassDef) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
@@ -6869,6 +6947,7 @@ class Codebase(ts.AggregateRoot):
                     "an actions method",
                     "TB081",
                     blocks,
+                    "an actions method takes exactly one ts.Request",
                 )
             )
             found.extend(self._body_violations(module, where, item, blocks))  # tesser:debt TB051
@@ -6883,7 +6962,9 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         init = self._init_of(cls)  # tesser:debt TB051
-        held = self._port_attributes(module, init, blocks)  # tesser:debt TB051
+        ports = self._port_attributes(module, init, blocks)  # tesser:debt TB051
+        contexts = self._port_attributes(module, init, blocks, JOB_CONTEXT_BLOCK)  # tesser:debt TB051
+        held = ports | contexts
         methods = [
             item
             for item in cls.body
@@ -6905,9 +6986,25 @@ class Codebase(ts.AggregateRoot):
             where = f"{module.name()}.{cls.name}.__init__"
             found.extend(
                 self._dependency_violations(  # tesser:debt TB051
-                    module, where, init.lineno, init, blocks, "an orchestrator"
+                    module, where, init.lineno, init, blocks, "an orchestrator", True
                 )
             )
+            taken = [
+                arg
+                for arg in init.args.posonlyargs + init.args.args + init.args.kwonlyargs
+                if arg.arg != "self"
+                and self._names_job_context(module, arg.annotation, blocks)  # tesser:debt TB051
+            ]
+            if len(taken) != 1:
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        init.lineno,
+                        "TB081",
+                        f"{where} takes {len(taken)} job contexts; "
+                        "an orchestrator takes exactly one job context and its action ports",
+                    ))
+                )
             for arg in init.args.posonlyargs + init.args.args + init.args.kwonlyargs:
                 if arg.arg == "self" or arg.annotation is None:
                     continue
@@ -6950,7 +7047,7 @@ class Codebase(ts.AggregateRoot):
                         node.lineno,
                         "TB081",
                         f"{module.name()}.{cls.name} keeps {target.attr}; "
-                        "an orchestrator stores only its action ports",
+                        "an orchestrator stores only its job context and its action ports",
                     ))
                 )
         for item in methods:
@@ -6971,9 +7068,122 @@ class Codebase(ts.AggregateRoot):
                     "an orchestrator method",
                     "TB081",
                     blocks,
+                    "an orchestrator method takes exactly one ts.Request",
                 )
             )
             found.extend(self._body_violations(module, where, item, blocks))  # tesser:debt TB051
+            found.extend(self._thread_violations(module, where, item, ports, contexts))  # tesser:debt TB051
+        return tuple(found)
+
+    def _names_jobs(
+        self,
+        module: Module,
+        node: ast.expr,
+        blocks: dict[tuple[str, str], str],
+    ) -> bool:
+        unquoted = self._unquoted(node)  # tesser:debt TB051
+        if not isinstance(unquoted, ast.Subscript):
+            return False
+        if Codebase._annotation_head(unquoted) != "tuple":
+            return False
+        inner = (
+            list(unquoted.slice.elts)
+            if isinstance(unquoted.slice, ast.Tuple)
+            else [unquoted.slice]
+        )
+        named = [
+            element
+            for element in inner
+            if not (isinstance(element, ast.Constant) and element.value is Ellipsis)
+        ]
+        return bool(named) and all(
+            blocks.get(module._resolve(element) or ("", "")) == "job" for element in named
+        )
+
+    def _gateway_violations(
+        self,
+        module: Module,
+        cls: ast.ClassDef,
+        blocks: dict[tuple[str, str], str],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for item in cls.body:
+            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            handed = {
+                arg.arg
+                for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
+                if arg.arg != "self"
+                and self._names_job_context(module, arg.annotation, blocks)  # tesser:debt TB051
+            }
+            if not handed:
+                continue
+            for node in ast.walk(item):
+                if isinstance(node, ast.AnnAssign):
+                    targets: list[ast.expr] = [node.target]
+                    value = node.value
+                elif isinstance(node, ast.Assign):
+                    targets = list(node.targets)
+                    value = node.value
+                else:
+                    continue
+                if not (isinstance(value, ast.Name) and value.id in handed):
+                    continue
+                for target in targets:
+                    if not (
+                        isinstance(target, ast.Attribute)
+                        and isinstance(target.value, ast.Name)
+                        and target.value.id == "self"
+                    ):
+                        continue
+                    found.append(
+                        Violation(ViolationSpec(
+                            module.path(),
+                            node.lineno,
+                            "TB081",
+                            f"{module.name()}.{cls.name} keeps {target.attr}, a job "
+                            "context; a gateway is built once and never holds an "
+                            "invocation's job context",
+                        ))
+                    )
+        return tuple(found)
+
+    def _thread_violations(
+        self,
+        module: Module,
+        where: str,
+        fn: ast.FunctionDef | ast.AsyncFunctionDef,
+        ports: frozenset[str],
+        contexts: frozenset[str],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for node in ast.walk(fn):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Attribute)
+                and isinstance(node.func.value.value, ast.Name)
+                and node.func.value.value.id == "self"
+                and node.func.value.attr in ports
+            ):
+                continue
+            leading = node.args[0] if node.args else None
+            if (
+                isinstance(leading, ast.Attribute)
+                and isinstance(leading.value, ast.Name)
+                and leading.value.id == "self"
+                and leading.attr in contexts
+            ):
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    node.lineno,
+                    "TB082",
+                    f"{where} calls {node.func.value.attr} without its job context first; "
+                    "an orchestrator threads its job context into every action port call",
+                ))
+            )
         return tuple(found)
 
     def _actions_client_violations(
@@ -7028,6 +7238,7 @@ class Codebase(ts.AggregateRoot):
                     "an application client method",
                     "TB081",
                     blocks,
+                    "an application client method takes exactly one ts.Request",
                 )
             )
             for node in [arg.annotation for arg in ([
@@ -7077,7 +7288,16 @@ class Codebase(ts.AggregateRoot):
             )
         where = f"{module.name()}.{cls.name}.__init__"
         return self._signature_violations(  # tesser:debt TB051
-            module, where, init.lineno, init, "spec", None, "a domain constructor", "TB080", blocks
+            module,
+            where,
+            init.lineno,
+            init,
+            "spec",
+            None,
+            "a domain constructor",
+            "TB080",
+            blocks,
+            "a domain constructor takes exactly one ts.Spec",
         )
 
     def _app_config_violations(
@@ -7103,7 +7323,16 @@ class Codebase(ts.AggregateRoot):
             )
         where = f"{module.name()}.{cls.name}.__init__"
         return self._signature_violations(  # tesser:debt TB051
-            module, where, init.lineno, init, "app_spec", None, "a config constructor", "TB080", blocks
+            module,
+            where,
+            init.lineno,
+            init,
+            "app_spec",
+            None,
+            "a config constructor",
+            "TB080",
+            blocks,
+            "a config constructor takes exactly one ts.Spec",
         )
 
     def _component_config_violations(
@@ -7138,6 +7367,7 @@ class Codebase(ts.AggregateRoot):
             "a config constructor",
             "TB080",
             blocks,
+            "a config constructor takes exactly one ts.Spec",
         )
 
     def _signature_violations(
@@ -7151,6 +7381,8 @@ class Codebase(ts.AggregateRoot):
         subject: str,
         code: str,
         blocks: dict[tuple[str, str], str],
+        taking: str = "",
+        leading_context: bool = False,
     ) -> tuple[Violation, ...]:
         expected = TS_NAME_BY_BLOCK[param_block]
         found: list[Violation] = []
@@ -7159,13 +7391,39 @@ class Codebase(ts.AggregateRoot):
                     for arg in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs
                     if arg.arg != "self"
                 ])
+        if leading_context and params and self._names_job_context(  # tesser:debt TB051
+            module, params[0].annotation, blocks
+        ):
+            params = params[1:]
+        for arg in params:
+            if self._names_job_context(module, arg.annotation, blocks):  # tesser:debt TB051
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        line,
+                        "TB081",
+                        f"{where} parameter {arg.arg!r} is a ts.JobContext; a job context "
+                        "is threaded as the leading parameter of an action port call and "
+                        "nowhere else",
+                    ))
+                )
+        if self._names_job_context(module, fn.returns, blocks):  # tesser:debt TB051
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    line,
+                    "TB081",
+                    f"{where} returns a ts.JobContext; a job context is threaded as the "
+                    "leading parameter of an action port call and nowhere else",
+                ))
+            )
         if fn.args.vararg is not None or fn.args.kwarg is not None:
             found.append(
                 Violation(ViolationSpec(
                     module.path(),
                     line,
                     code,
-                    f"{where} uses *args/**kwargs; {subject} takes exactly one {expected}",
+                    f"{where} uses *args/**kwargs; {taking}",
                 ))
             )
         if len(params) != 1:
@@ -7174,7 +7432,7 @@ class Codebase(ts.AggregateRoot):
                     module.path(),
                     line,
                     code,
-                    f"{where} takes {len(params)} parameters; {subject} takes exactly one {expected}",
+                    f"{where} takes {len(params)} parameters; {taking}",
                 ))
             )
         for arg in params:
@@ -7186,8 +7444,7 @@ class Codebase(ts.AggregateRoot):
                         module.path(),
                         line,
                         code,
-                        f"{where} parameter {arg.arg!r} is not a {expected}; "
-                        f"{subject} takes exactly one {expected}",
+                        f"{where} parameter {arg.arg!r} is not a {expected}; {taking}",
                     ))
                 )
         returns_key = module._resolve(fn.returns) if fn.returns is not None else None

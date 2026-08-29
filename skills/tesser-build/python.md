@@ -742,12 +742,16 @@ the engine calls back into. The rules and the why are
 translation) — what differs is scope, reach, and what each may depend on.
 
 - **An orchestrator** (`ts.Orchestrator`, in `application/orchestrators/`,
-  one per module) is built **per invocation by a job**, over a gateway that
-  holds that invocation's engine context. It depends on **action ports
-  only** — a port some application client speaks (below) — never a
-  repository, never the workflow-start port; it stores nothing but those
-  ports, because everything it does between journaled calls re-runs on
-  replay. It takes the workflow port's own request and returns a response it
+  one per module) is built **per invocation by a job**, with that
+  invocation's **job context** — `ts.JobContext`, the engine-neutral
+  protocol for what a step may do inside an invocation (`call(step,
+  request)` today; `sleep`, `wait_for`, `send` when an orchestrator needs
+  them). It depends on exactly one job context plus **action ports** — a port
+  some application client speaks (below) — never a repository, never the
+  workflow-start port; it stores nothing but those, because everything it
+  does between journaled calls re-runs on replay. It threads the job context
+  as the **leading argument of every action-port call**, the way Go threads
+  `ctx`. It takes the workflow port's own request and returns a response it
   declares itself (the one `ts.Response` allowed outside a ports module).
 - **A class of actions** (`ts.Actions`, beside the services) takes **exactly
   one port** in `__init__` and each public method calls it **exactly once**:
@@ -762,9 +766,13 @@ translation) — what differs is scope, reach, and what each may depend on.
   speaks its DTOs; only a job may import it.
 - **A job** (`ts.Job`, in `adapters/jobs/`) is where the engine hands work
   back to us. A handler calls the context client; **a job calls an
-  application client or constructs an orchestrator** — and builds the
-  engine gateway per invocation, since the durable route needs the ctx only
-  the job holds. Jobs carry placement and import rules only for now.
+  application client or constructs an orchestrator** — wrapping the
+  invocation's engine context as its own `ts.JobContext` implementation
+  (`RestateJobContext(ctx)`, also in `adapters/jobs/`) first. Every gateway
+  is built once by the component and **never stores an invocation's
+  context**; an action-port method takes the job context as its leading
+  parameter and the gateway does `job.call(self._quote, request)`. Jobs
+  carry placement and import rules only for now.
 
 ```python
 # ordering/application/client/order_actions.py (verified impl: examples/durable-execution/)
@@ -785,6 +793,12 @@ class OrderActions(ts.Actions):
         return MapToQuoteResponse(priced)
 
 
+# ordering/application/ports/quoting.py (verified impl: examples/durable-execution/)
+class Quoting(ts.Port, typing.Protocol):
+
+    async def quote(self, job: ts.JobContext, request: QuoteRequest) -> QuoteResponse: ...
+
+
 # ordering/application/orchestrators/order_orchestrator.py (verified impl: examples/durable-execution/)
 class RunResponse(ts.Response):
 
@@ -795,36 +809,63 @@ class RunResponse(ts.Response):
 
 class OrderOrchestrator(ts.Orchestrator):
 
-    def __init__(self, quotes: quoting.Quoting) -> None:
+    def __init__(self, job: ts.JobContext, quotes: quoting.Quoting) -> None:
+        self._job = job
         self._quotes = quotes
 
     async def run(self, request: order_workflow.StartRequest) -> RunResponse:
         running = order.Order(MapToOrderSpec(request))
-        quoted = await self._quotes.quote(MapToQuoteRequest(running))
+        quoted = await self._quotes.quote(self._job, MapToQuoteRequest(running))
         total = running.total(MapToPriceSpec(quoted))
         return MapToRunResponse(running, total)
 
 
+# ordering/adapters/gateways/restate_quoting.py (verified impl: examples/durable-execution/)
+class RestateQuoting(ts.Gateway):                       # built once; holds the handler function only
+
+    def __init__(self, quote: abc.Callable[[typing.Any, quoting.QuoteRequest], abc.Awaitable[quoting.QuoteResponse]]) -> None:
+        self._quote = quote
+
+    async def quote(self, job: ts.JobContext, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
+        return await job.call(self._quote, request)
+
+
+# ordering/adapters/jobs/restate_context.py (verified impl: examples/durable-execution/)
+class RestateJobContext(ts.JobContext):                 # the one per-invocation object
+
+    def __init__(self, ctx: restate.Context) -> None:
+        self._ctx = ctx
+
+    async def call[I, O](self, step: abc.Callable[[typing.Any, I], abc.Awaitable[O]], request: I) -> O:
+        return await self._ctx.service_call(step, request)
+
+
 # ordering/adapters/jobs/restate.py (verified impl: examples/durable-execution/)
-class RestateJobs(ts.Job):
+class RestateActionJobs(ts.Job):
 
     def __init__(self, actions: order_actions_client.Client) -> None:
-        self.workflow = restate.Workflow("Ordering")
         self.service = restate.Service("OrderingActions")
 
         @self.service.handler(...)
         async def quote(ctx: restate.Context, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
             return actions.quote(request)
 
+        self.quote = quote
+
+
+class RestateWorkflowJobs(ts.Job):
+
+    def __init__(self, quotes: quoting.Quoting) -> None:
+        self.workflow = restate.Workflow("Ordering")
+
         @self.workflow.main(...)
         async def run(ctx: restate.WorkflowContext, request: order_workflow.StartRequest) -> order_orchestrator.RunResponse:
             orchestrator = order_orchestrator.OrderOrchestrator(
-                restate_quoting.RestateQuoting(ctx, quote)
+                restate_context.RestateJobContext(ctx), quotes
             )
             return await orchestrator.run(request)
 
         self.run = run
-        self.quote = quote
 
 
 # ordering/component/component.py (verified impl: examples/durable-execution/)
@@ -833,9 +874,11 @@ class Ordering(ts.Component):
     def __init__(self, cfg: config.Config) -> None:
         self._catalog = memory.MemoryCatalogRepository()
         self._actions = order_actions.OrderActions(self._catalog)
-        self.jobs: restate_jobs.RestateJobs = restate_jobs.RestateJobs(self._actions)
+        action_jobs = restate_jobs.RestateActionJobs(self._actions)
+        workflow_jobs = restate_jobs.RestateWorkflowJobs(restate_quoting.RestateQuoting(action_jobs.quote))
+        self.jobs: tuple[restate_jobs.RestateActionJobs, restate_jobs.RestateWorkflowJobs] = (action_jobs, workflow_jobs)
         self.client: client.Client = order_service.OrderService(
-            restate_workflow.RestateOrderWorkflow(cfg.ingress, self.jobs.run)
+            restate_workflow.RestateOrderWorkflow(cfg.ingress, workflow_jobs.run)
         )
 ```
 
@@ -850,7 +893,7 @@ class Ordering(ts.Component):
   `app.<context>.jobs.definitions()` and knows nothing else about the engine.
 - **Reach is carried by the adapter kind package** (TB060): `handlers/` →
   the context client; `jobs/` → `application.client`,
-  `application.orchestrators`, `application.ports`, and `adapters.gateways`;
+  `application.orchestrators`, `application.ports`;
   `gateways/` and `repositories/` → `application.ports`; a kind imports only
   its own kind. Every adapters module lives in one of the four kind
   packages and holds the kind its package names (TB041/TB052).
