@@ -5,6 +5,7 @@ import typing
 import pytest
 
 import tesser.domain as ts
+import tesser.domain.outcome as outcome
 
 
 class Advance(ts.Outcome):
@@ -229,3 +230,16 @@ def test_a_well_formed_outcome_survives_the_gate() -> None:
 
     assert [route(member) for member in Settle] == ["paid", "refused", "retry"]
     assert len({Settle.PAID, Settle.REFUSED, Settle.RETRY}) == 3
+
+
+def test_the_gate_reads_an_allowlist_no_class_body_can_widen() -> None:
+    assert isinstance(outcome._GENERATED, frozenset)
+
+    with pytest.raises(TypeError, match=r"Widened defines 'is_done'"):
+
+        class Widened(ts.Outcome):
+            DONE = enum.auto()
+
+            @property
+            def is_done(self) -> bool:
+                return True

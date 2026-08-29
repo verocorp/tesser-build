@@ -5,7 +5,7 @@ class _Auto(int):
     pass
 
 
-_GENERATED: set[str] = set()
+_GENERATED: frozenset[str] = frozenset()
 
 
 class Outcome(enum.Enum):
@@ -23,10 +23,11 @@ class Outcome(enum.Enum):
         raise TypeError(f"{type(self).__name__} is matched, never read: an outcome carries no name")
 
     def __init_subclass__(cls, **kwargs: object) -> None:
+        global _GENERATED
         super().__init_subclass__(**kwargs)
         members = cls.__dict__.get("_member_map_", {})
         if not _GENERATED:
-            _GENERATED.update(frozenset(cls.__dict__) - frozenset(members))
+            _GENERATED = frozenset(cls.__dict__) - frozenset(members)
             return
         if type(cls) is not enum.EnumMeta:
             raise TypeError(
