@@ -16,14 +16,12 @@ class Alpha(ts.Component):
 
     def __init__(self, cfg: config.Config, database: pgdatabase.Database | None, checks: beta_check.BetaCheck) -> None:
         self._widgets: memory.MemoryWidgetRepository | postgres.PostgresWidgetRepository
-        if cfg.storage == "memory":
+        if cfg.database is None:
             self._widgets = memory.MemoryWidgetRepository()
-        elif cfg.storage.startswith(("postgres://", "postgresql://")):
-            if database is None:
-                raise errors.invalid("missing_database", f"alpha storage {cfg.storage!r} names a database the app did not build")
-            self._widgets = postgres.PostgresWidgetRepository(database)
+        elif database is None:
+            raise errors.invalid("missing_database", f"alpha storage {cfg.storage!r} names a database the app did not build")
         else:
-            raise errors.invalid("unknown_backend", f"alpha storage {cfg.storage!r} not supported")
+            self._widgets = postgres.PostgresWidgetRepository(database)
         self.client: client.Client = alpha_service.AlphaService(self._widgets, checks)
 
     async def close(self) -> None:

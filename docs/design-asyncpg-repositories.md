@@ -23,12 +23,21 @@ after each increment's example is right, not before.
   it after the components. The app derives which pools it owns from the
   components' config coordinates (dedupe the DSNs); there is no "ask each
   component what it needs" round trip, because the config is the requirement.
-- `App.__init__` is synchronous and `asyncpg.create_pool` must be awaited, so
-  the app does not hold a pool — it holds a **database**: a small object,
-  constructed synchronously from a DSN, that creates the pool on its first
-  `acquire()` inside the running loop and closes it in `close()`. One database
-  per distinct DSN; the pool is created at most once, inside the loop that
-  serves requests, and the app never awaits during construction.
+- `App.__init__` is synchronous and `asyncpg.create_pool` returns a pool that
+  refuses `acquire()` until it is awaited, so the app does not hold a pool —
+  it holds **databases**, opened in an explicit async step before the first
+  request. The lifecycle is construct → `start()` → serve → `close()`:
+  `App(cfg)` builds everything without awaiting; `await app.start()` opens
+  every database (the pool is created there, and an unreachable database
+  fails *here*, at startup, not on the first request); `acquire()` on a
+  database that is not open is refused. No lazy initialisation.
+- Each component's `Config` derives a `DatabaseRequest` value object from its
+  storage coordinate (`None` for `"memory"`; a non-Postgres coordinate is
+  refused at config construction). The app builds one `Databases` object from
+  the components' requests — one `Database` per distinct request — and hands
+  each component `databases.database(cfg.<context>.database)` directly. The
+  app never loops and never touches a primitive; `Databases.open()` and
+  `Databases.close()` do the iterating.
 - The component receives the database it needs and constructs its store from
   it. The component's `close()` releases nothing it didn't build.
 - Closing is bounded: `Pool.close()` waits for acquired connections, so the
@@ -137,14 +146,18 @@ the component.
 The app owns the databases; components receive them; repositories take a
 database instead of a DSN.
 
-- `app/app.py`: dedupe the DSN coordinates across `cfg.alpha.storage` and
-  `cfg.beta.storage`; one database per distinct DSN, constructed synchronously
-  before the components and closed after them in `close()` (bounded, as
-  above). The pool inside it is created on first `acquire()`.
+- `app/app.py`: `Databases(cfg.alpha.database, cfg.beta.database)` — one
+  database per distinct request — built before the components; each component
+  is handed its own database directly; `start()` opens them all; `close()`
+  closes the components, then the databases (bounded, as above).
+- `alpha/component/config.py`, `beta/component/config.py`: `Config` derives
+  `database: DatabaseRequest | None` from the storage coordinate.
 - `alpha/component/component.py`, `beta/component/component.py`: take the
-  database as decided above; `"memory"` builds the memory repository, a
-  database builds the Postgres one; the component's `close()` releases
-  nothing.
+  database as decided above; no request builds the memory repository, a
+  database builds the Postgres one, a request with no database is refused;
+  the component's `close()` releases nothing.
+- `srv/cli/main.py` and every root-tier test: `built = loader.load()`, then
+  `await built.start()`, then use, then `await built.close()`.
 - `PostgresWidgetRepository(database)`, `PostgresKeyRepository(database)`:
   drop the DSN and the lazy pool-init; each method does
   `async with self._database.acquire() as connection, connection.transaction():`

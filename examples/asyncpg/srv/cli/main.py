@@ -17,6 +17,7 @@ class CliHost(ts.Host):
         async def serve() -> int:
             built = loader.load()
             try:
+                await built.start()
                 handler = cli.Handler(built.alpha.client)
                 try:
                     response = await handler.add(protocol_cli.CliRequest(args=tuple(argv)))

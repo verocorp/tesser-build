@@ -8,10 +8,27 @@ import pytest
 import pgdatabase.database as database
 
 
+class TestDatabaseRequest:
+
+    def test_two_requests_for_one_dsn_are_equal(self) -> None:
+        assert database.DatabaseRequest("postgres://a@b/c") == database.DatabaseRequest("postgres://a@b/c")
+
+    def test_a_non_postgres_dsn_is_refused(self) -> None:
+        with pytest.raises(ValueError):
+            database.DatabaseRequest("memory")
+
+
 class TestDatabase:
 
-    async def test_the_pool_is_created_on_first_acquire_and_reused(self) -> None:
-        db = database.Database(os.environ["ALPHA_STORAGE"])
+    async def test_acquire_before_open_is_refused(self) -> None:
+        db = database.Database(database.DatabaseRequest("postgres://nobody@nowhere/none"))
+        with pytest.raises(RuntimeError):
+            async with db.acquire():
+                pass
+
+    async def test_open_connects_and_acquire_reuses_the_pool(self) -> None:
+        db = database.Database(database.DatabaseRequest(os.environ["ALPHA_STORAGE"]))
+        await db.open()
         async with db.acquire() as first:
             first_pid = await first.fetchval("SELECT pg_backend_pid()")
         async with db.acquire() as second:
@@ -19,32 +36,30 @@ class TestDatabase:
         await db.close()
         assert first_pid == second_pid
 
-    async def test_concurrent_first_acquires_create_one_pool(self) -> None:
-        db = database.Database(os.environ["ALPHA_STORAGE"], min_size=1, max_size=2)
-
-        async def one() -> int:
-            async with db.acquire() as connection:
-                pid: int = await connection.fetchval("SELECT pg_backend_pid()")
-                await asyncio.sleep(0.05)
-                return pid
-
-        pids = await asyncio.gather(one(), one(), one())
-        await db.close()
-        assert len(set(pids)) <= 2
-
-    async def test_close_before_any_acquire_is_a_no_op(self) -> None:
-        db = database.Database("postgres://nobody@nowhere/none")
-        await db.close()
-
-    async def test_close_is_idempotent(self) -> None:
-        db = database.Database(os.environ["ALPHA_STORAGE"])
+    async def test_open_is_idempotent(self) -> None:
+        db = database.Database(database.DatabaseRequest(os.environ["ALPHA_STORAGE"]))
+        await db.open()
+        await db.open()
         async with db.acquire() as connection:
-            await connection.fetchval("SELECT 1")
+            value = await connection.fetchval("SELECT 1")
+        await db.close()
+        assert value == 1
+
+    async def test_open_fails_at_open_when_the_database_is_unreachable(self) -> None:
+        db = database.Database(database.DatabaseRequest("postgres://nobody@127.0.0.1:1/none"))
+        with pytest.raises(OSError):
+            await db.open()
+
+    async def test_close_before_open_is_a_no_op_and_close_is_idempotent(self) -> None:
+        db = database.Database(database.DatabaseRequest(os.environ["ALPHA_STORAGE"]))
+        await db.close()
+        await db.open()
         await db.close()
         await db.close()
 
     async def test_a_cancelled_query_releases_its_connection(self) -> None:
-        db = database.Database(os.environ["ALPHA_STORAGE"], min_size=1, max_size=1)
+        db = database.Database(database.DatabaseRequest(os.environ["ALPHA_STORAGE"]), min_size=1, max_size=1)
+        await db.open()
 
         async def slow() -> None:
             async with db.acquire() as connection:
@@ -59,4 +74,30 @@ class TestDatabase:
             async with db.acquire() as connection:
                 value = await connection.fetchval("SELECT 1")
         await db.close()
+        assert value == 1
+
+
+class TestDatabases:
+
+    def test_one_database_per_distinct_request_and_none_for_no_request(self) -> None:
+        shared = database.DatabaseRequest("postgres://a@b/one")
+        other = database.DatabaseRequest("postgres://a@b/two")
+        databases = database.Databases(shared, None, database.DatabaseRequest("postgres://a@b/one"), other)
+        assert len(databases) == 2
+        assert databases.database(shared) is databases.database(database.DatabaseRequest("postgres://a@b/one"))
+        assert databases.database(other) is not databases.database(shared)
+        assert databases.database(None) is None
+
+    async def test_open_and_close_reach_every_database(self) -> None:
+        request = database.DatabaseRequest(os.environ["ALPHA_STORAGE"])
+        databases = database.Databases(request)
+        await databases.open()
+        db = databases.database(request)
+        assert db is not None
+        async with db.acquire() as connection:
+            value = await connection.fetchval("SELECT 1")
+        await databases.close()
+        with pytest.raises(RuntimeError):
+            async with db.acquire():
+                pass
         assert value == 1

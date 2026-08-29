@@ -15,7 +15,8 @@ class TestPostgresWidgetRepository:
         dsn = os.environ["ALPHA_STORAGE"]
         connection = await asyncpg.connect(dsn)
         await connection.execute("DROP TABLE IF EXISTS widgets")
-        database = pgdatabase.Database(dsn)
+        database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
+        await database.open()
         widgets = postgres.PostgresWidgetRepository(database)
         saved = await widgets.save(widget_repository.SaveRequest(name="a"))
         await widgets.save(widget_repository.SaveRequest(name="a"))
@@ -31,7 +32,8 @@ class TestPostgresWidgetRepository:
         assert missing.found is widget_repository.Found.NO
 
     async def test_close_releases_nothing_because_the_database_is_not_its_own(self) -> None:
-        database = pgdatabase.Database(os.environ["ALPHA_STORAGE"])
+        database = pgdatabase.Database(pgdatabase.DatabaseRequest(os.environ["ALPHA_STORAGE"]))
+        await database.open()
         widgets = postgres.PostgresWidgetRepository(database)
         await widgets.close()
         found = await widgets.find(widget_repository.FindRequest(name="x"))

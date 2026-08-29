@@ -15,15 +15,17 @@ class TestApp:
     async def test_the_app_wires_alpha_through_beta(self) -> None:
         spec = config.Spec(alpha_config.Config(alpha_config.Spec("memory")), beta_config.Config(beta_config.Spec("memory")))
         built = app.App(config.Config(spec))
+        await built.start()
         added = await built.alpha.client.add(alpha_client.AddRequest(name="a", part="p"))
         await built.close()
         assert added.name == "a"
-        assert built.databases == ()
+        assert len(built.databases) == 0
 
     async def test_two_contexts_on_one_dsn_share_one_database(self) -> None:
         dsn = os.environ["ALPHA_STORAGE"]
         spec = config.Spec(alpha_config.Config(alpha_config.Spec(dsn)), beta_config.Config(beta_config.Spec(dsn)))
         built = app.App(config.Config(spec))
+        await built.start()
         await built.beta.client.hold(beta_client.HoldRequest(key="shared"))
         await built.alpha.client.add(alpha_client.AddRequest(name="shared", part="p"))
         await built.close()

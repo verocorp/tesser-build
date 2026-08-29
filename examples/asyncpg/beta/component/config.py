@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import tesser.component as ts
 
+import pgdatabase.database as pgdatabase
+
 
 class Spec(ts.Spec):
 
@@ -13,3 +15,6 @@ class Config(ts.Config):
 
     def __init__(self, spec: Spec) -> None:
         self.storage = spec.storage
+        self.database: pgdatabase.DatabaseRequest | None = (
+            None if spec.storage == "memory" else pgdatabase.DatabaseRequest(spec.storage)
+        )

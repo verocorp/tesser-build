@@ -13,20 +13,18 @@ import app.config as config
 class App(ts.App):
 
     def __init__(self, cfg: config.Config) -> None:
-        databases: dict[str, pgdatabase.Database] = {}
-        for coordinate in (cfg.alpha.storage, cfg.beta.storage):
-            if coordinate.startswith(("postgres://", "postgresql://")) and coordinate not in databases:
-                databases[coordinate] = pgdatabase.Database(coordinate)
-        self.databases = tuple(databases.values())
-        beta = beta_component.Beta(cfg.beta, databases.get(cfg.beta.storage))
+        self.databases = pgdatabase.Databases(cfg.alpha.database, cfg.beta.database)
+        beta = beta_component.Beta(cfg.beta, self.databases.database(cfg.beta.database))
         alpha = alpha_component.Alpha(
-            cfg.alpha, databases.get(cfg.alpha.storage), beta_check.BetaCheckGateway(beta.client)
+            cfg.alpha, self.databases.database(cfg.alpha.database), beta_check.BetaCheckGateway(beta.client)
         )
         self.beta = beta
         self.alpha = alpha
 
+    async def start(self) -> None:
+        await self.databases.open()
+
     async def close(self) -> None:
         await self.alpha.close()
         await self.beta.close()
-        for database in self.databases:
-            await database.close()
+        await self.databases.close()

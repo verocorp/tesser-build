@@ -19,16 +19,12 @@ class TestBeta:
         assert checked.held == "yes"
 
     async def test_a_postgres_coordinate_wires_over_the_given_database_without_connecting(self) -> None:
-        dsn = "postgresql://nobody@nowhere/none"
-        wired = component.Beta(config.Config(config.Spec(storage=dsn)), pgdatabase.Database(dsn))
+        cfg = config.Config(config.Spec(storage="postgresql://nobody@nowhere/none"))
+        assert cfg.database is not None
+        wired = component.Beta(cfg, pgdatabase.Database(cfg.database))
         await wired.close()
 
     def test_a_postgres_coordinate_without_a_database_is_refused(self) -> None:
         with pytest.raises(errors.DomainError) as caught:
             component.Beta(config.Config(config.Spec(storage="postgresql://nobody@nowhere/none")), None)
         assert caught.value.code == "missing_database"
-
-    def test_an_unknown_coordinate_is_refused(self) -> None:
-        with pytest.raises(errors.DomainError) as caught:
-            component.Beta(config.Config(config.Spec(storage="sqlite")), None)
-        assert caught.value.code == "unknown_backend"

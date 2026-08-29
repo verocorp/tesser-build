@@ -1,11 +1,22 @@
 from __future__ import annotations
 
+import pytest
+
 import alpha.component.config as config
+import pgdatabase.database as pgdatabase
 
 
 class TestConfig:
 
-    def test_a_config_carries_its_spec(self) -> None:
-        spec = config.Spec(storage="memory")
-        cfg = config.Config(spec)
-        assert cfg.storage == spec.storage
+    def test_the_memory_coordinate_requests_no_database(self) -> None:
+        cfg = config.Config(config.Spec(storage="memory"))
+        assert cfg.storage == "memory"
+        assert cfg.database is None
+
+    def test_a_postgres_coordinate_requests_that_database(self) -> None:
+        cfg = config.Config(config.Spec(storage="postgres://a@b/c"))
+        assert cfg.database == pgdatabase.DatabaseRequest("postgres://a@b/c")
+
+    def test_an_unknown_coordinate_is_refused(self) -> None:
+        with pytest.raises(ValueError):
+            config.Config(config.Spec(storage="sqlite"))

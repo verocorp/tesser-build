@@ -9,6 +9,7 @@ class TestLoadedApp:
 
     async def test_the_loaded_app_writes_and_reads_both_contexts(self) -> None:
         built = loader.load()
+        await built.start()
         held = await built.beta.client.hold(beta_client.HoldRequest(key="e2e-held"))
         checked = await built.beta.client.check(beta_client.CheckRequest(key="e2e-held"))
         unheld = await built.beta.client.check(beta_client.CheckRequest(key="e2e-never-held"))

@@ -28,16 +28,12 @@ class TestAlpha:
         assert added.name == "a"
 
     async def test_a_postgres_coordinate_wires_over_the_given_database_without_connecting(self) -> None:
-        dsn = "postgres://nobody@nowhere/none"
-        wired = component.Alpha(config.Config(config.Spec(storage=dsn)), pgdatabase.Database(dsn), FakeBetaCheck())
+        cfg = config.Config(config.Spec(storage="postgres://nobody@nowhere/none"))
+        assert cfg.database is not None
+        wired = component.Alpha(cfg, pgdatabase.Database(cfg.database), FakeBetaCheck())
         await wired.close()
 
     def test_a_postgres_coordinate_without_a_database_is_refused(self) -> None:
         with pytest.raises(errors.DomainError) as caught:
             component.Alpha(config.Config(config.Spec(storage="postgres://nobody@nowhere/none")), None, FakeBetaCheck())
         assert caught.value.code == "missing_database"
-
-    def test_an_unknown_coordinate_is_refused(self) -> None:
-        with pytest.raises(errors.DomainError) as caught:
-            component.Alpha(config.Config(config.Spec(storage="")), None, FakeBetaCheck())
-        assert caught.value.code == "unknown_backend"
