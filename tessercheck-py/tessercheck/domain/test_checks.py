@@ -6270,8 +6270,8 @@ def test_a_port_method_speaks_one_request_and_one_response() -> None:
                )
     assert any(
         "shop.application.ports.sink.Sink.save parameter 'text' is not a ts.Request; "
-        "a port method takes one ts.Request, led by a ts.JobContext when an "
-        "orchestrator calls it" in f
+        "a port method takes one ts.Request, which a leading ts.JobContext "
+        "may precede" in f
         for f in findings
     )
     assert any(
@@ -6281,8 +6281,8 @@ def test_a_port_method_speaks_one_request_and_one_response() -> None:
     )
     assert any(
         "shop.application.ports.sink.Sink.both takes 2 parameters; "
-        "a port method takes one ts.Request, led by a ts.JobContext when an "
-        "orchestrator calls it" in f
+        "a port method takes one ts.Request, which a leading ts.JobContext "
+        "may precede" in f
         for f in findings
     )
 
@@ -6632,8 +6632,8 @@ def test_a_port_method_shape_survives_async_and_dunder_call() -> None:
                )
     assert any(
         "shop.application.ports.sink.Sink.fetch takes 2 parameters; "
-        "a port method takes one ts.Request, led by a ts.JobContext when an "
-        "orchestrator calls it" in f
+        "a port method takes one ts.Request, which a leading ts.JobContext "
+        "may precede" in f
         for f in findings
     ), f"async def bypassed the port shape rule: {findings}"
     assert any(

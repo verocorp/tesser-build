@@ -1,5 +1,30 @@
 # Design — Python domain-type detection (the identity-taxonomy classifier)
 
+> **Superseded on the classification question (2026-08-02 reframe, shipped from
+> v0.0.15.0 on).** Everything below reasons about **inferring** a class's
+> stereotype from its structure — "frozen dataclass + value equality ⇒ value
+> object", `__eq__ = None` ⇒ aggregate, a two-pass whole-tree classifier that
+> ratifies heuristics. **The analyzer stopped inferring.** Classification is
+> now *declared*: a class subclasses a `ts.*` shell from `tesser-py`
+> (`ts.ValueObject`, `ts.Entity`, `ts.AggregateRoot`, `ts.Spec`, …), the shell
+> carries the runtime contract, and tessercheck verifies each class against
+> the block it declared — the declare-then-verify engine described in
+> [`tessercheck-py/README.md`](../tessercheck-py/README.md), with the shipped
+> rule set in [`tessercheck-py/RULES.md`](../tessercheck-py/RULES.md) and the
+> checker-by-checker map in
+> [`rationale/coverage.md`](../rationale/coverage.md) ("Python enforcement").
+> There is no successor *design record* in `docs/` — the implementation and its
+> generated rulebook are the record. The identity taxonomy this doc introduced
+> did ship (as `TB010`–`TB012`), and the reasoning about *what* distinguishes a
+> value object from an entity still reads true; the detection mechanism it
+> specifies does not. Several in-place amendments below were themselves
+> superseded within a day (the "Amended 2026-08-23" block in §3 says a value
+> object's constructor takes primitives and child specs; v0.0.81.0 the next
+> day re-cut that to **one primitive or exactly one spec**), `TB003` no longer
+> exists, and the paths it cites
+> under `examples/python` were deleted 2026-08-12. **Do not build from this
+> file.** Kept as the record of how the taxonomy was derived.
+
 **Status:** design, not built. This supersedes ddd-vet-py v1's "operate on
 dataclasses generically" approach (`design-python-analyzer.md`) with a
 **whole-tree, type-aware classifier** that identifies each domain class as
