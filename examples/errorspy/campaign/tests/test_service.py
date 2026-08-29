@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-import campaign.adapters.gateways.repo_storage as repo_storage
+import campaign.adapters.repositories.repo_storage as repo_storage
 import campaign.application.service as service
 import campaign.client.client as client
 import tesser.errors as errors

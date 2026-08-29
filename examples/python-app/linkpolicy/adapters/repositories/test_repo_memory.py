@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-import linkpolicy.adapters.gateways.repo_memory as repo_memory
+import linkpolicy.adapters.repositories.repo_memory as repo_memory
 import linkpolicy.application.ports.verdict_repository as verdict_repository
 import tesser.errors as errors
 
