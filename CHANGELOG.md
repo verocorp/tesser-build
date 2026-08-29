@@ -5,6 +5,67 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.86.0] - 2026-08-29
+
+The `ts.Outcome` runtime gate holds two shapes it used to let through. A cold
+review of the rules wave (#131 / #132 / #133, reviewed at main `628e4a8`,
+findings F5 and F6) and an independent codex challenge pass over the same range
+each reproduced them; every repro below was run, not reasoned about. The static
+`TB084` already caught the first, so the exposure was a tree that does not run
+tessercheck — which is the reason the runtime base exists at all.
+
+### Fixed
+- **A descriptor can no longer hide behavior on an outcome.** The attribute gate
+  skipped anything that was not callable and not a `property` / `classmethod` /
+  `staticmethod`, so a `functools.cached_property` (or a hand-written `__get__`)
+  got through: `A.ONE.is_one` returned `True` — exactly the `is_*` method the
+  outcome ruling names as the rejected alternative, reintroduced through a
+  descriptor kind the gate did not know about. The gate is now **allow-only** —
+  a name in the class body is either a member or one of the enum machinery names
+  the base itself needs, and everything else raises. That also closes class data
+  (`_cache = {}`), a bare annotation (`attempts: int`), and `__slots__`.
+- **A forged `_Auto` can no longer collapse two members into one.**
+  `_generate_next_value_` is reachable through the exported base, and
+  `DONE = ts.Outcome._generate_next_value_("DONE", 1, 0, [])` twice produced a
+  class where `list(Forged)` was one member, `Forged.DONE is Forged.CONTINUE`
+  was `True`, the `case` arm for `CONTINUE` was unreachable, and `assert_never`
+  still type-checked — the exhaustiveness guarantee the whole design rests on,
+  gone with no error anywhere. An **alias is now rejected outright**: every name
+  in `_member_map_` must be in `_member_names_`, whatever produced it. Proving
+  `auto()` provenance is not feasible (the generator has to stay reachable, and
+  a value it mints is indistinguishable from `enum.auto()`'s) and, with aliasing
+  rejected, is no longer needed — the forged path can now only build a
+  well-formed closed set of distinct members.
+- **The machinery allowlist is captured during the probe's own
+  `__init_subclass__`,** not after class creation. CPython *deletes* `_boundary_`
+  from a non-Flag enum once the class is built (`enum.py:683`), so reading
+  `__dict__` afterwards produced an allowlist missing a name every real subclass
+  carries at gate time — under the inverted gate that would have rejected every
+  well-formed outcome. Caught by the tests, not by reading.
+
+### Changed
+- `domain-return.md` and `python.md` each carried a sentence listing what the
+  runtime base rejects; both described the weaker guarantee. Both now say what
+  it actually rejects, and both name the one exception — `_ignore_` and
+  `_order_`, which enum strips before the base sees the class, so `TB084`
+  reports them instead. The list is the guarantee, not a universal.
+  `skill-version` 58 → 59.
+
+### Notes
+- Four hand-written tests in `tesser-py/tesser/domain/test_outcome.py` (no
+  mocking library, per `testing.md`): the two descriptor shapes, `__slots__` and
+  a bare annotation, the forged-alias repro with a negative control that a
+  well-formed outcome's members stay distinct, and a three-member outcome routed
+  through an exhaustive `match` closed by `typing.assert_never` — which
+  `scripts/verify tesser-py` type-checks under `mypy --strict`, so that control
+  is a real type-check and not only a runtime assertion.
+- `scripts/verify` green across all 11 trees, including both trees that define a
+  `ts.Outcome` (`minimal` and `asyncpg`); `go test ./...` green;
+  `roadmap/generate.py --check` up to date.
+- Analyzer-side items the same review raised are not here — TB082's "branches
+  only by matching an outcome" gap, the unconstrained `ts.Mapper.__init__` body,
+  the early `return` before `super().__init__`, and the static `.value`/`.name`
+  gap. They need rulings, not fixes.
 ## [0.0.85.1] - 2026-08-29
 
 A cold review of the asyncpg wave (#139–#142) — a fresh agent with no prior

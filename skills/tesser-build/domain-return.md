@@ -162,10 +162,15 @@ rather than oversight: reflection through a *local* (`vars(outcome)`,
 object's transition (`self._last = other.advance()`) — both need type
 inference the walk does not have; the runtime's raising `.value`/`.name`
 covers the path anyone would actually type. The runtime
-base (`tesser.domain.Outcome`) raises at class definition for a method (any name, dunders included), a
-valued member, a mixed-in or intermediate base, or a custom metaclass — and
-`.value`/`.name` raise on every member — so the shape holds, and there is
-nothing to read, even where the analyzer does not run.
+base (`tesser.domain.Outcome`) raises at class definition for a method or a
+descriptor of any name (a `functools.cached_property`, dunders included),
+class data, an annotation, a valued member, a member repeating another
+member's value (an alias makes a `case` arm unreachable), a mixed-in or
+intermediate base, or a custom metaclass — and `.value`/`.name` raise on
+every member — so the shape holds, and there is nothing to read, even where
+the analyzer does not run; `_ignore_` and `_order_` are the exception,
+because enum strips what they name before the base sees the class, and TB084
+reports them instead.
 
 There is no Go analyzer yet — a named gap, tracked in `TODOS.md`.
 
