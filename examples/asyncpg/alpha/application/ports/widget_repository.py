@@ -11,25 +11,39 @@ class Found(enum.Enum):
     NO = "no"
 
 
-class SaveRequest(ts.Request):
+class SaveWidgetRequest(ts.Request):
+
+    def __init__(self, name: str, part: str) -> None:
+        self.name = name
+        self.part = part
+
+
+class SaveWidgetResponse(ts.Response):
 
     def __init__(self, name: str) -> None:
         self.name = name
 
 
-class SaveResponse(ts.Response):
+class LoadWidgetRequest(ts.Request):
 
     def __init__(self, name: str) -> None:
         self.name = name
 
 
-class FindRequest(ts.Request):
+class LoadWidgetResponse(ts.Response):
+
+    def __init__(self, name: str, part: str) -> None:
+        self.name = name
+        self.part = part
+
+
+class FindWidgetRequest(ts.Request):
 
     def __init__(self, name: str) -> None:
         self.name = name
 
 
-class FindResponse(ts.Response):
+class FindWidgetResponse(ts.Response):
 
     def __init__(self, found: Found) -> None:
         self.found = found
@@ -37,6 +51,13 @@ class FindResponse(ts.Response):
 
 class WidgetRepository(ts.Port, typing.Protocol):
 
-    async def save(self, request: SaveRequest) -> SaveResponse: ...
+    async def save_widget(self, request: SaveWidgetRequest) -> SaveWidgetResponse: ...
 
-    async def find(self, request: FindRequest) -> FindResponse: ...
+    async def load_widget(self, request: LoadWidgetRequest) -> LoadWidgetResponse: ...
+
+    async def find_widget(self, request: FindWidgetRequest) -> FindWidgetResponse: ...
+
+
+class WidgetStore(ts.Port, typing.Protocol):  # tesser:debt TB052
+
+    def transaction(self) -> typing.AsyncContextManager[WidgetRepository]: ...  # tesser:debt TB081

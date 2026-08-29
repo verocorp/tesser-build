@@ -21,15 +21,17 @@ class MapToPutKeyRequest(ts.Mapper, key_repository.PutKeyRequest):
 
 class BetaService(ts.ApplicationService):
 
-    def __init__(self, keys: key_repository.KeyRepository) -> None:
-        self._keys = keys
+    def __init__(self, key_store: key_repository.KeyStore) -> None:
+        self._key_store = key_store
 
     async def check(self, request: client.CheckRequest) -> client.CheckResponse:
         checked_key = key.Key(request.key)
-        answer = await self._keys.has(MapToHasKeyRequest(checked_key))
+        async with self._key_store.transaction() as keys:
+            answer = await keys.has_key(MapToHasKeyRequest(checked_key))
         return client.CheckResponse(held=answer.held.value)
 
     async def hold(self, request: client.HoldRequest) -> client.HoldResponse:
         held_key = key.Key(request.key)
-        put = await self._keys.put(MapToPutKeyRequest(held_key))
+        async with self._key_store.transaction() as keys:
+            put = await keys.put_key(MapToPutKeyRequest(held_key))
         return client.HoldResponse(key=put.key)

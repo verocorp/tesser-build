@@ -37,6 +37,11 @@ class PutKeyResponse(ts.Response):
 
 class KeyRepository(ts.Port, typing.Protocol):
 
-    async def has(self, request: HasKeyRequest) -> HasKeyResponse: ...
+    async def has_key(self, request: HasKeyRequest) -> HasKeyResponse: ...
 
-    async def put(self, request: PutKeyRequest) -> PutKeyResponse: ...
+    async def put_key(self, request: PutKeyRequest) -> PutKeyResponse: ...
+
+
+class KeyStore(ts.Port, typing.Protocol):  # tesser:debt TB052
+
+    def transaction(self) -> typing.AsyncContextManager[KeyRepository]: ...  # tesser:debt TB081

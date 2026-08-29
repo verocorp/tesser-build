@@ -18,6 +18,7 @@ class TestLoadedApp:
         missing = await app.alpha.client.find(alpha_client.FindRequest(name="e2e-never-added"))
         kept = await app.alpha.client.add(alpha_client.AddRequest(name="e2e-held", part="e2e-held"))
         unsaved = await app.alpha.client.find(alpha_client.FindRequest(name="e2e-held"))
+        retaken = await app.alpha.client.take(alpha_client.TakeRequest(name="e2e-taken", part="q"))
         await app.close()
         assert held.key == "e2e-held"
         assert checked.held == "yes"
@@ -27,3 +28,4 @@ class TestLoadedApp:
         assert missing.found == "no"
         assert kept.name == "e2e-held"
         assert unsaved.found == "no"
+        assert retaken.part == "q"

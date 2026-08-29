@@ -185,7 +185,9 @@ services open the transaction.
   request and response records for each.
 - `alpha/adapters/repositories/postgres.py`: `PostgresWidgetStore(database)`
   and `PostgresWidgetRepository(connection)`; the store runs the schema
-  statement once on first use.
+  statement once on first use — **on the connection, before the transaction
+  opens**. Inside the transaction it is rolled back with everything else, and
+  the store's "schema ready" flag then lies; the rollback test caught this.
 - `alpha/adapters/repositories/memory.py`: `MemoryWidgetStore()` with the lock
   and snapshot rollback, and `MemoryWidgetRepository(part_by_name)`.
 - `alpha/application/alpha_service.py`: holds the store; every use case opens
@@ -197,6 +199,12 @@ services open the transaction.
   waits (Postgres) or blocks on the lock (memory); a memory transaction that
   raises restores exactly the state before it opened, with another
   transaction's commit in between preserved.
+
+Built; the store ports carry `# tesser:debt TB052` and `# tesser:debt TB081`
+at the two lines below until the rulings land. Two rules that fired were
+simply obeyed: a ports module imports `typing.AsyncContextManager`, not
+`contextlib` (TB067, the pure-stdlib allowlist), and a test module holds no
+pytest fixture (TB071) — the Postgres store tests inline their setup.
 
 Rulings this forces — all in the ports and service rules, none in the app:
 
