@@ -19,7 +19,7 @@ def test_report_reads_both_components_in_process() -> None:
         )
         rows = built.reports.client.links_by_verdict(reports_client.LinksByVerdictRequest()).links
         assert {r.slug for r in rows} == {"a", "b"}
-        assert all(r.allowed and r.reason == "ok" for r in rows)
+        assert all(r.decision == "allowed" and r.reason == "ok" for r in rows)
     finally:
         built.close()
 

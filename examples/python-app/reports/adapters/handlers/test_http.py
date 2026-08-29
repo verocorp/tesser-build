@@ -29,7 +29,7 @@ class FakeReportsClient(client.Client):
 
 def test_a_report_comes_back_as_a_json_object_of_link_rows() -> None:
     reports = FakeReportsClient(
-        client.LinkVerdictView("spring-sale", "https://a.example/s", False, "host blocked")
+        client.LinkVerdictView("spring-sale", "https://a.example/s", "denied", "host blocked")
     )
 
     resp = http.Handler(reports).links_by_verdict(
@@ -42,7 +42,7 @@ def test_a_report_comes_back_as_a_json_object_of_link_rows() -> None:
             {
                 "slug": "spring-sale",
                 "target_url": "https://a.example/s",
-                "allowed": False,
+                "decision": "denied",
                 "reason": "host blocked",
             }
         ]
@@ -51,8 +51,8 @@ def test_a_report_comes_back_as_a_json_object_of_link_rows() -> None:
 
 def test_every_row_the_client_serves_reaches_the_body_in_order() -> None:
     reports = FakeReportsClient(
-        client.LinkVerdictView("denied-one", "https://a.example/d", False, "host blocked"),
-        client.LinkVerdictView("allowed-one", "https://a.example/a", True, "on the allowlist"),
+        client.LinkVerdictView("denied-one", "https://a.example/d", "denied", "host blocked"),
+        client.LinkVerdictView("allowed-one", "https://a.example/a", "allowed", "on the allowlist"),
     )
 
     resp = http.Handler(reports).links_by_verdict(

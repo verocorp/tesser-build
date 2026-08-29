@@ -55,8 +55,8 @@ def test_a_link_is_reported_with_the_verdict_recorded_for_its_target() -> None:
         client.LinksByVerdictRequest()
     )
 
-    assert [(view.slug, view.allowed, view.reason) for view in resp.links] == [
-        ("spring-sale", False, "host blocked")
+    assert [(view.slug, view.decision, view.reason) for view in resp.links] == [
+        ("spring-sale", "denied", "host blocked")
     ]
 
 
@@ -71,7 +71,7 @@ def test_a_link_with_no_recorded_verdict_is_still_reported() -> None:
     )
 
     assert [view.slug for view in resp.links] == ["spring-sale"]
-    assert resp.links[0].allowed is True
+    assert resp.links[0].decision == "allowed"
     assert resp.links[0].reason == "no verdict recorded"
 
 
@@ -162,8 +162,8 @@ def test_an_allowed_verdict_member_is_reported_as_an_allowed_link() -> None:
         client.LinksByVerdictRequest()
     )
 
-    assert [(view.slug, view.allowed, view.reason) for view in resp.links] == [
-        ("spring-sale", True, "on the allowlist")
+    assert [(view.slug, view.decision, view.reason) for view in resp.links] == [
+        ("spring-sale", "allowed", "on the allowlist")
     ]
 
 

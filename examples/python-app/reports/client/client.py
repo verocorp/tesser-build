@@ -13,10 +13,10 @@ class LinksByVerdictRequest(ts.Request):
 
 class LinkVerdictView(ts.Response):
 
-    def __init__(self, slug: str, target_url: str, allowed: bool, reason: str) -> None:
+    def __init__(self, slug: str, target_url: str, decision: str, reason: str) -> None:
         self.slug = slug
         self.target_url = target_url
-        self.allowed = allowed
+        self.decision = decision
         self.reason = reason
 
 
