@@ -26,8 +26,8 @@ after each increment's example is right, not before.
 - `App.__init__` is synchronous and `asyncpg.create_pool` returns a pool that
   refuses `acquire()` until it is awaited, so the app does not hold a pool —
   it holds **databases**, opened in an explicit async step before the first
-  request. The lifecycle is construct → `start()` → serve → `close()`:
-  `App(cfg)` builds everything without awaiting; `await app.start()` opens
+  request. The lifecycle is construct → `open()` → serve → `close()`:
+  `App(cfg)` builds everything without awaiting; `await app.open()` opens
   every database (the pool is created there, and an unreachable database
   fails *here*, at startup, not on the first request); `acquire()` on a
   database that is not open is refused. No lazy initialisation.
@@ -148,7 +148,7 @@ database instead of a DSN.
 
 - `app/app.py`: `Databases(cfg.alpha.database, cfg.beta.database)` — one
   database per distinct request — built before the components; each component
-  is handed its own database directly; `start()` opens them all; `close()`
+  is handed its own database directly; `open()` opens them all; `close()`
   closes the components, then the databases (bounded, as above).
 - `alpha/component/config.py`, `beta/component/config.py`: `Config` derives
   `database: DatabaseRequest | None` from the storage coordinate.
@@ -156,8 +156,8 @@ database instead of a DSN.
   database as decided above; no request builds the memory repository, a
   database builds the Postgres one, a request with no database is refused;
   the component's `close()` releases nothing.
-- `srv/cli/main.py` and every root-tier test: `built = loader.load()`, then
-  `await built.start()`, then use, then `await built.close()`.
+- `srv/cli/main.py` and every root-tier test: `app = loader.load()`, then
+  `await app.open()`, then use, then `await app.close()`.
 - `PostgresWidgetRepository(database)`, `PostgresKeyRepository(database)`:
   drop the DSN and the lazy pool-init; each method does
   `async with self._database.acquire() as connection, connection.transaction():`

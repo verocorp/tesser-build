@@ -15,10 +15,10 @@ class CliHost(ts.Host):
 
     def run(self, argv: list[str]) -> int:
         async def serve() -> int:
-            built = loader.load()
+            app = loader.load()
             try:
-                await built.start()
-                handler = cli.Handler(built.alpha.client)
+                await app.open()
+                handler = cli.Handler(app.alpha.client)
                 try:
                     response = await handler.add(protocol_cli.CliRequest(args=tuple(argv)))
                 except protocol_cli.UsageError as e:
@@ -32,7 +32,7 @@ class CliHost(ts.Host):
                 sys.stdout.write(response.line.text + "\n")
                 return response.exit_code
             finally:
-                await built.close()
+                await app.close()
 
         return asyncio.run(serve())
 

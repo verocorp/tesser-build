@@ -21,7 +21,7 @@ class App(ts.App):
         self.beta = beta
         self.alpha = alpha
 
-    async def start(self) -> None:
+    async def open(self) -> None:
         await self.databases.open()
 
     async def close(self) -> None:

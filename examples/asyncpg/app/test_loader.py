@@ -21,8 +21,8 @@ class FakeConfigRepository(config_repository.ConfigRepository):
 class TestAppLoader:
 
     async def test_the_loader_builds_an_app_from_its_repository(self) -> None:
-        built = loader.AppLoader(FakeConfigRepository()).load()
-        await built.start()
-        added = await built.alpha.client.add(alpha_client.AddRequest(name="a", part="p"))
-        await built.close()
+        app = loader.AppLoader(FakeConfigRepository()).load()
+        await app.open()
+        added = await app.alpha.client.add(alpha_client.AddRequest(name="a", part="p"))
+        await app.close()
         assert added.name == "a"
