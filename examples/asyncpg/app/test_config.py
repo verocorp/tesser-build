@@ -8,6 +8,9 @@ import beta.component.config as beta_config
 class TestConfig:
 
     def test_a_config_carries_each_component_config(self) -> None:
-        spec = config.Spec(alpha_config.Config(alpha_config.Spec("memory")), beta_config.Config(beta_config.Spec("memory")))
+        spec = config.Spec(
+            alpha_config.Config(alpha_config.Spec("postgres://a@b/alpha")),
+            beta_config.Config(beta_config.Spec("postgres://a@b/beta")),
+        )
         cfg = config.Config(spec)
         assert cfg.beta is spec.beta

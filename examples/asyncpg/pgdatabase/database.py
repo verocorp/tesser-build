@@ -62,15 +62,13 @@ class Database:
 
 class Databases:
 
-    def __init__(self, *requests: DatabaseRequest | None) -> None:
+    def __init__(self, *requests: DatabaseRequest) -> None:
         self._by_request: dict[DatabaseRequest, Database] = {}
         for request in requests:
-            if request is not None and request not in self._by_request:
+            if request not in self._by_request:
                 self._by_request[request] = Database(request)
 
-    def database(self, request: DatabaseRequest | None) -> Database | None:
-        if request is None:
-            return None
+    def database(self, request: DatabaseRequest) -> Database:
         return self._by_request[request]
 
     def __len__(self) -> int:

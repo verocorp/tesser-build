@@ -32,8 +32,8 @@ after each increment's example is right, not before.
   fails *here*, at startup, not on the first request); `acquire()` on a
   database that is not open is refused. No lazy initialisation.
 - Each component's `Config` derives a `DatabaseRequest` value object from its
-  storage coordinate (`None` for `"memory"`; a non-Postgres coordinate is
-  refused at config construction). The app builds one `Databases` object from
+  storage coordinate; a non-Postgres coordinate is refused at config
+  construction. The app builds one `Databases` object from
   the components' requests — one `Database` per distinct request — and hands
   each component `databases.database(cfg.<context>.database)` directly. The
   app never loops and never touches a primitive; `Databases.open()` and
@@ -42,9 +42,11 @@ after each increment's example is right, not before.
   it. The component's `close()` releases nothing it didn't build.
 - Closing is bounded: `Pool.close()` waits for acquired connections, so the
   database's `close()` wraps it in a timeout and falls back to
-  `Pool.terminate()`. A request cancelled inside an open `transaction()` rolls
-  back and releases its connection (asyncpg's context managers do this; the
-  release is shielded), and that path is tested.
+  `Pool.terminate()`. A request cancelled inside an open `transaction()` should
+  roll back and release its connection (asyncpg's context managers do this; the
+  release is shielded). Only the pool-level case is tested
+  (`pgdatabase/test_database.py`, a cancelled `acquire()` + query); no test
+  cancels inside a store `transaction()`.
 - Schema ownership moves with the pool: today each repository runs its
   `CREATE TABLE IF NOT EXISTS` when it creates its pool. After the split, the
   **store** runs it, once, on first use. Migrations proper stay out of scope.
@@ -82,10 +84,8 @@ after each increment's example is right, not before.
   the store. A lone read opens a trivial transaction. One shape.
 - Adapters: `PostgresWidgetStore(database)` acquires a connection, opens a
   transaction, yields `PostgresWidgetRepository(connection)`; commit on exit,
-  rollback on exception. `MemoryWidgetStore()` holds an `asyncio.Lock` for
-  the length of a transaction and snapshots its dict inside it, restoring on
-  exception — the lock is what makes the snapshot correct when two
-  transactions interleave, and it serialises the way `FOR UPDATE` does.
+  rollback on exception. There is one adapter per port: this tree is a
+  Postgres example, so the store a test runs against is the real one.
 
 ### Rejected
 
@@ -188,17 +188,19 @@ services open the transaction.
   statement once on first use — **on the connection, before the transaction
   opens**. Inside the transaction it is rolled back with everything else, and
   the store's "schema ready" flag then lies; the rollback test caught this.
-- `alpha/adapters/repositories/memory.py`: `MemoryWidgetStore()` with the lock
-  and snapshot rollback, and `MemoryWidgetRepository(part_by_name)`.
 - `alpha/application/alpha_service.py`: holds the store; every use case opens
   `async with self._widget_store.transaction() as widgets_repo:`, and
   `add`'s `HELD` arm calls `beta_check` **after** the transaction closes.
 - Same for `beta` (`KeyStore` / `KeyRepository`).
-- Fakes in tests implement the store and yield a fake repository.
+- Test placement carries the tier. A sibling test beside an implementation
+  fakes only what it must, and never the store: `test_alpha_service.py` covers
+  the module's mappers, and the service's behaviour over a store belongs to
+  `alpha/tests/`. A context `tests/` package is an integration test — it wires
+  its own component over a real `Database` and fakes only the peer context.
+  The root `tests/` package drives the whole app through `loader.load()`.
 - Tests added: a second `transaction()` on the same store while one is open
-  waits (Postgres) or blocks on the lock (memory); a memory transaction that
-  raises restores exactly the state before it opened, with another
-  transaction's commit in between preserved.
+  waits on the row lock; a transaction that raises leaves the prior commit
+  intact.
 
 Built; the store ports carry `# tesser:debt TB052` and `# tesser:debt TB081`
 at the two lines below until the rulings land. Two rules that fired were
