@@ -1,28 +1,45 @@
 # Application-service types — orchestrators, actions, jobs
 
-Status: DRAFT rulings, 2026-08-29. Carved from the durable-execution example
-(PR #138, `examples/durable-execution`) after the 2026-08-25 (flow/Temporal
-chain) and 2026-08-27/28 (Restate build) sessions. The example is to be
-reworked to match; the rules follow the example.
+Status: DRAFT rulings, 2026-08-29, amended the same day after a codex
+challenge review (15 findings; the ones taken are marked "codex #n" below).
+Carved from the durable-execution example (PR #138,
+`examples/durable-execution`) after the 2026-08-25 (flow/Temporal chain) and
+2026-08-27/28 (Restate build) sessions. The example is to be reworked to
+match; the rules follow the example.
 
 ## The three application kinds
 
 | kind | base | public? | constructed | depends on | reached through |
 |---|---|---|---|---|---|
 | application service | `ts.ApplicationService` | yes, on `client.Client` | component, once | ports | a handler |
-| orchestrator | `ts.Orchestrator` (new) | no | a job, per invocation, over a gateway holding that invocation's engine ctx | action ports only — never a repository, never the workflow-start port, never a foreign client | the job that built it; nothing else holds one |
+| orchestrator | `ts.Orchestrator` (new), in `application/orchestrators/` | no | a job, per invocation, over a gateway holding that invocation's engine ctx | action ports only — never a repository, never the workflow-start port, never a foreign client | the job that built it; nothing else holds one |
 | action | `ts.Action` (new) | no | component, once | exactly one `ts.Port` in `__init__`; each public method calls it exactly once (a class of actions shares one dependency; a second port is a second class) | a job, via an actions protocol |
 
 All three keep the four-step body and the TB081/TB082 rules unchanged: one
 `ts.Request` in, one `ts.Response` out, `match` only, no delegation chain.
 What distinguishes them is scope, reach, and dependencies, not body shape.
 
-Orchestrator extras: deterministic between journaled calls, so its stdlib
-allowlist is the domain's minus `time`/`random`/`uuid`/`os`; it may call
-several actions (sequencing them is its job); it is async because the
-gateway awaits the engine. Everything it does between journaled calls
-re-executes on replay, which is the mechanical reason it holds actions and
-not repositories.
+Orchestrator extras: it may call several actions (sequencing them is its
+job); it is async because the gateway awaits the engine. Everything it does
+between journaled calls re-executes on replay, which is the mechanical
+reason it holds actions and not repositories. Two rules that follow:
+
+- Its `__init__` stores only its action ports; no other attribute is ever
+  assigned, in `__init__` or in a method (codex #12 — "constructed per
+  invocation" is not by itself a state rule; a `self._state` written between
+  journaled calls diverges on replay). Same shape as the mapper's
+  stores-nothing rule.
+- Its stdlib allowlist is the application role's existing one,
+  `{__future__, typing}` (`CORE_STDLIB["application"]`), unchanged. An
+  earlier draft widened it to the domain's set minus `time`/`random`/
+  `uuid`/`os`; that was wrong in direction — the domain set includes
+  `datetime` — and unnecessary, because the application allowlist is already
+  deterministic by construction (codex #8).
+
+Orchestrators live in their own package, `application/orchestrators/`, one
+per module, so the import row "only a job imports an orchestrator" names a
+package rather than a class the analyzer would have to find by base (codex
+#4).
 
 The initial service stays an ordinary application service whose one port
 happens to be the workflow-start port. It does the once-only,
@@ -44,6 +61,12 @@ both directions.
   foreign context (TB061), and an action must be reachable only through the
   engine. The concrete `OrderActions(ts.Action)` lives in `application/`
   beside the services and implements it.
+  An actions module is **not a leaf**: it imports exactly one ports module,
+  for the DTOs it speaks, and nothing else from the tree. The rest of the
+  ports-module discipline applies (one protocol per module, nothing runs at
+  import, no decorators, no class-level statements). An earlier draft said
+  "the ports-module discipline" without the carve-out, which contradicted
+  the DTO rule below (codex #1).
 - `application/client.py` was considered and rejected: it collides with the
   `client` role name, with the `import ordering.client.client as client`
   alias every handler already uses, and with the reach the word names.
@@ -64,12 +87,32 @@ in the ports module, and both ends import it.
 - The actions protocol speaks the port's `QuoteRequest`/`QuoteResponse`;
   `client.QuoteRequest` goes away. New line: an actions module speaks the
   DTOs of exactly one ports module.
+- Because the action's request *is* the port's request type, TB082's
+  "a value crossing into a port has passed through a domain type" must also
+  catch the whole request object passed straight to the port, not only a
+  field pulled off it (codex #2 found the hole). #138's action already passes
+  through a domain type (`order.Sku(request.sku)`), so the rule is a check
+  to add, not a change to the shape.
 - No wire types. A custom `restate.serde.Serde` over `ts.Request`/`ts.Response`
-  (JSON of `__init__` fields) is bound at the handler decorators; the gateway
-  reads it off the handler function, so it needs nothing. `protocol/durable.py`
-  is deleted: it carried `sku`, `quantity`, `cents` — one context's
-  vocabulary — and `protocol/` is context-generic (TB064). The serde class
-  lives in the jobs module.
+  is bound at the handler decorators; the gateway reads it off the handler
+  function, so it needs nothing. `protocol/durable.py` is deleted: it
+  carried `sku`, `quantity`, `cents` — one context's vocabulary — and
+  `protocol/` is context-generic (TB064). The serde class lives in the jobs
+  module.
+  What that serde has to be (codex #9): type-directed and recursive, not
+  "JSON of `__init__` fields". Port DTO fields may be primitives, nested
+  DTOs, tuples, and `enum.Enum` members (TB080); Optional and bool are
+  already banned on port DTOs. Each of those needs an encoding and a
+  decoding keyed on the annotation.
+  What it does not yet have (codex #10, **deferred, named**): a payload
+  versioning policy. A field added to a port DTO changes the bytes an
+  in-flight journal already holds; replay then constructs the DTO from JSON
+  that lacks the field. Whether the serde tolerates absent fields, the DTO
+  carries a version, or a DTO change is a new message, is a durable-execution
+  rule this wave does not make. Until it does, a port DTO on a durable leg
+  is append-only in the example.
+  On Temporal the serde is a data converter bound at client/worker creation,
+  not at a decorator (codex #7). The kinds survive; the binding site moves.
 - `client.py` shrinks back to one `Client` and its DTOs.
 
 ## Adapters — split by reach, not by transport
@@ -81,7 +124,18 @@ orchestrator. `RestateHandlers` (both `run` and `quote`) moves there.
 The split exists because a role-level rule cannot tell an HTTP handler from
 a Restate handler, and an HTTP handler that may import an action can call it
 in-process — the bypass "not on the public Client" exists to close. Placement
-is how the analyzer carries every other reach distinction.
+is how the analyzer carries every other reach distinction — but only once
+the adapters role stops importing itself freely. Today TB060 lets any role
+import itself (`checks.py`, `pieces[1] == role`), so `handlers/http.py` may
+import `adapters/jobs/*` and the package alone closes nothing (codex #3).
+The `adapters` role therefore gets per-kind rows, below. The analyzer
+already keys one row on whether a module holds a handler (`holds_handler`),
+so per-kind rows extend an existing mechanism.
+
+On Temporal the job is the worker registration: it holds the concrete
+action the component built and registers a decorated closure over it as
+the activity, the same shape `RestateHandlers` has (codex #6). No new
+construction path is needed.
 
 Gateways do not split: an engine gateway, a cross-context gateway, and a
 vendor gateway all have the same row (→ ports).
@@ -101,21 +155,41 @@ Rails/Celery reading where `jobs/` holds the code that runs when dequeued.
 
 ## Import rows that change
 
-1. TB060 same-context matrix: `jobs` → `application.actions` + the
-   orchestrator module (to construct it) + `application.ports` (the message
-   DTOs). `handlers` stays → `client`. Nothing else may import `actions/` or
-   an orchestrator module.
+1. TB060 same-context matrix, with the `adapters` role split by kind
+   package (codex #3):
+   - `handlers` → `client`. Not `jobs`, not `application.actions`, not
+     `application.orchestrators`.
+   - `jobs` → `application.actions` + `application.orchestrators` (to
+     construct) + `application.ports` (the message DTOs). Not `client`.
+   - `gateways`, `repositories` → `application.ports` (unchanged). Not
+     `jobs`, not `handlers`.
+   - a kind package may still import itself (a gateway may import a sibling
+     gateway module); "a role imports itself" narrows to "a kind imports
+     itself" inside `adapters`.
+   Nothing outside `jobs` may import `application.actions` or
+   `application.orchestrators`.
 2. TB063 host reach: handlers and jobs (the host mounts `definitions()`).
 3. TB052 one-adapter-kind list: add `ts.Job`.
-4. TB052/TB041: `application/actions/` is a recognized application package
-   with the ports-module discipline (one protocol per module, leaf-ish,
-   nothing runs at import).
-5. New: an action has one port in `__init__` and one port call per public
-   method; an orchestrator depends on action ports only, has the restricted
-   stdlib, is constructed only in a job, and is held by nothing; nothing
-   assigned to a `ts.Client`-typed attribute is an `Action` or an
-   `Orchestrator`.
-6. TB070 test placement follows the packages automatically.
+4. TB052/TB041: `application/actions/` and `application/orchestrators/` are
+   recognized application packages. `actions/` has the ports-module
+   discipline minus the leaf rule: one `ts.Actions` protocol per module,
+   nothing runs at import, and it imports exactly one ports module.
+   `orchestrators/` holds one `ts.Orchestrator` per module.
+5. New body rules: an action has one port in `__init__` and one port call
+   per public method; an orchestrator depends on action ports only, keeps
+   the application stdlib allowlist, stores only its action ports, is
+   constructed only in a job, and is held by nothing.
+6. New component rule (codex #11 — a `ts.Client`-typed-attribute check is
+   porous when the attribute can be untyped or `object`): a component
+   publishes exactly `client`, typed as its `ts.Client`, and — when it has
+   jobs — `jobs`, typed as its `ts.Job`; every other attribute is private.
+   This closes the component-attribute gap the durable-execution memory
+   carries as open.
+7. TB070 test placement: add `jobs` to `TEST_TIER_HOME`, `TEST_TIER_REACH`
+   (the `jobs` row from item 1), and `ADAPTER_TEST_TIERS`; add
+   `orchestrators` and `actions` sibling tests with their packages' reach.
+   These are literal tables in `checks.py`, so nothing follows
+   automatically (codex #5).
 
 ## Deliberately out of scope for this wave
 
@@ -129,13 +203,24 @@ Rails/Celery reading where `jobs/` holds the code that runs when dequeued.
   by deployment URI, so contexts likely want separate mounts.
 - The engine-neutral runtime port (`run`/`sleep`/`wait_for`/`send`): not
   built; if it comes, it is the one non-action port an orchestrator may take.
+- Retries, timeouts, heartbeats, idempotency keys, and activity options
+  belong to the engine gateway — the durable route's concern — and never to
+  the port DTO (codex #14/#15). Stated so they do not drift into the message.
+- Payload versioning on a durable leg: deferred, named above under Messages.
 - PR #138's host calls `app.close()` synchronously while the component's
   `close` is async: a bug to fix in the rework, not a rule.
 
 ## Not yet ruled
 
-- Placement of the orchestrator module: beside the services in
-  `application/`, or `application/orchestrators/`. The import row is easier
-  to state as a package.
 - Whether the actions protocol and the concrete action share a name
   (`OrderActions` in two modules) or the protocol gets its own.
+- Whether TB081's one-request check accepts a `tesser.application.Request`
+  on an action's public method where a service's takes a
+  `tesser.context.Request` (codex #2, unverified against `checks.py`).
+
+## Codex findings not taken
+
+- #13 (the handler/job rule is not a partition): a queue consumer that calls
+  the client is a handler by the rule; the discomfort is naming, not reach.
+- #14 beyond discovery-schema coupling: engine metadata lives on the gateway
+  (see out of scope), so it does not force churn in the port DTO.
