@@ -61,8 +61,8 @@ after each increment's example is right, not before.
 - The service holds the store and writes the boundary, never the mechanics:
 
   ```python
-  async with self._widget_store.transaction() as widget_repository:
-      load_widget_response = await widget_repository.load_widget(MapToLoadWidgetRequest(request))
+  async with self._widget_store.transaction() as widgets_repo:
+      load_widget_response = await widgets_repo.load_widget(MapToLoadWidgetRequest(request))
   ```
 
 - A transaction is scoped to one store, so one aggregate per transaction —
@@ -191,7 +191,7 @@ services open the transaction.
 - `alpha/adapters/repositories/memory.py`: `MemoryWidgetStore()` with the lock
   and snapshot rollback, and `MemoryWidgetRepository(part_by_name)`.
 - `alpha/application/alpha_service.py`: holds the store; every use case opens
-  `async with self._widget_store.transaction() as widget_repository:`, and
+  `async with self._widget_store.transaction() as widgets_repo:`, and
   `add`'s `HELD` arm calls `beta_check` **after** the transaction closes.
 - Same for `beta` (`KeyStore` / `KeyRepository`).
 - Fakes in tests implement the store and yield a fake repository.

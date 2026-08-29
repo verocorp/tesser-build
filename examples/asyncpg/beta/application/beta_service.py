@@ -26,12 +26,12 @@ class BetaService(ts.ApplicationService):
 
     async def check(self, request: client.CheckRequest) -> client.CheckResponse:
         checked_key = key.Key(request.key)
-        async with self._key_store.transaction() as keys:
-            answer = await keys.has_key(MapToHasKeyRequest(checked_key))
+        async with self._key_store.transaction() as keys_repo:
+            answer = await keys_repo.has_key(MapToHasKeyRequest(checked_key))
         return client.CheckResponse(held=answer.held.value)
 
     async def hold(self, request: client.HoldRequest) -> client.HoldResponse:
         held_key = key.Key(request.key)
-        async with self._key_store.transaction() as keys:
-            put = await keys.put_key(MapToPutKeyRequest(held_key))
+        async with self._key_store.transaction() as keys_repo:
+            put = await keys_repo.put_key(MapToPutKeyRequest(held_key))
         return client.HoldResponse(key=put.key)

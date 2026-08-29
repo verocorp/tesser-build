@@ -81,8 +81,8 @@ class AlphaService(ts.ApplicationService):
         taken = added.take(MapToPartSpec(request))
         match taken:
             case widget.Taken.TAKEN:
-                async with self._widget_store.transaction() as widgets:
-                    await widgets.save_widget(MapToSaveWidgetRequest(added))
+                async with self._widget_store.transaction() as widgets_repo:
+                    await widgets_repo.save_widget(MapToSaveWidgetRequest(added))
             case widget.Taken.HELD:
                 await self._checks.check(MapToCheckRequest(added))
             case _ as never:
@@ -91,13 +91,13 @@ class AlphaService(ts.ApplicationService):
 
     async def take(self, request: client.TakeRequest) -> client.TakeResponse:
         sought = widget.Name(request.name)
-        async with self._widget_store.transaction() as widgets:
-            loaded = await widgets.load_widget(MapToLoadWidgetRequest(sought))
+        async with self._widget_store.transaction() as widgets_repo:
+            loaded = await widgets_repo.load_widget(MapToLoadWidgetRequest(sought))
             taking_widget = widget.Widget(MapToLoadedWidgetSpec(loaded))
             taken = taking_widget.take(MapToTakenPartSpec(request))
             match taken:
                 case widget.Taken.TAKEN:
-                    await widgets.save_widget(MapToSaveWidgetRequest(taking_widget))
+                    await widgets_repo.save_widget(MapToSaveWidgetRequest(taking_widget))
                 case widget.Taken.HELD:
                     pass
                 case _ as never:
@@ -106,6 +106,6 @@ class AlphaService(ts.ApplicationService):
 
     async def find(self, request: client.FindRequest) -> client.FindResponse:
         sought = widget.Name(request.name)
-        async with self._widget_store.transaction() as widgets:
-            answer = await widgets.find_widget(MapToFindWidgetRequest(sought))
+        async with self._widget_store.transaction() as widgets_repo:
+            answer = await widgets_repo.find_widget(MapToFindWidgetRequest(sought))
         return client.FindResponse(found=answer.found.value)
