@@ -731,6 +731,135 @@ repo's silent-site metric in `docs/design-application-ports.md` — the enum is 
 union-free one that scores **zero** silent sites; a `found: bool` flag and a
 0-or-1 tuple each leave the reader silently wrong.
 
+## Orchestrators, actions, and jobs {#orchestrators-actions-jobs}
+
+A workflow on a durable-execution engine (Restate, Temporal) adds two
+application kinds that are **not** application services, and one adapter kind
+the engine calls back into. The rules and the why are
+`docs/design-app-service-types.md`; the verified impl is
+`examples/durable-execution/`. All three keep the service body rules above
+(one `ts.Request` in, one `ts.Response` out, `match` only, mappers for every
+translation) — what differs is scope, reach, and what each may depend on.
+
+- **An orchestrator** (`ts.Orchestrator`, in `application/orchestrators/`,
+  one per module) is built **per invocation by a job**, over a gateway that
+  holds that invocation's engine context. It depends on **action ports
+  only** — a port some application client speaks (below) — never a
+  repository, never the workflow-start port; it stores nothing but those
+  ports, because everything it does between journaled calls re-runs on
+  replay. It takes the workflow port's own request and returns a response it
+  declares itself (the one `ts.Response` allowed outside a ports module).
+- **A class of actions** (`ts.Actions`, beside the services) takes **exactly
+  one port** in `__init__` and each public method calls it **exactly once**:
+  an action is the engine's retry unit, and one side effect per unit is what
+  keeps a retry safe. It speaks the port DTOs of the port an orchestrator
+  calls it through, and it is **not on the public `Client`**.
+- **An application client** (`tesser.application.Client`, in
+  `application/client/`, one protocol per module named for the actions it
+  fronts) is how a job reaches a class of actions — the inbound twin of a
+  port. Same word as the context client, different package, exactly as
+  `Request`/`Response` already are. It imports exactly one ports module and
+  speaks its DTOs; only a job may import it.
+- **A job** (`ts.Job`, in `adapters/jobs/`) is where the engine hands work
+  back to us. A handler calls the context client; **a job calls an
+  application client or constructs an orchestrator** — and builds the
+  engine gateway per invocation, since the durable route needs the ctx only
+  the job holds. Jobs carry placement and import rules only for now.
+
+```python
+# ordering/application/client/order_actions.py (verified impl: examples/durable-execution/)
+class Client(ts.Client, typing.Protocol):
+
+    def quote(self, request: order_actions.QuoteRequest) -> order_actions.QuoteResponse: ...
+
+
+# ordering/application/order_actions.py (verified impl: examples/durable-execution/)
+class OrderActions(ts.Actions):
+
+    def __init__(self, catalog: catalog_repository.CatalogRepository) -> None:
+        self._catalog = catalog
+
+    def quote(self, request: order_actions.QuoteRequest) -> order_actions.QuoteResponse:
+        quoted_sku = order.Sku(request.sku)
+        priced = self._catalog.price(MapToPriceRequest(quoted_sku))
+        return MapToQuoteResponse(priced)
+
+
+# ordering/application/orchestrators/order_orchestrator.py (verified impl: examples/durable-execution/)
+class RunResponse(ts.Response):
+
+    def __init__(self, order_id: str, total_cents: int) -> None:
+        self.order_id = order_id
+        self.total_cents = total_cents
+
+
+class OrderOrchestrator(ts.Orchestrator):
+
+    def __init__(self, actions: order_actions.OrderActions) -> None:
+        self._actions = actions
+
+    async def run(self, request: order_workflow.StartRequest) -> RunResponse:
+        running = order.Order(MapToOrderSpec(request))
+        quoted = await self._actions.quote(MapToQuoteRequest(running))
+        total = running.total(MapToPriceSpec(quoted))
+        return MapToRunResponse(running, total)
+
+
+# ordering/adapters/jobs/restate.py (verified impl: examples/durable-execution/)
+class RestateJobs(ts.Job):
+
+    def __init__(self, actions: order_actions_client.Client) -> None:
+        self.workflow = restate.Workflow("Ordering")
+        self.service = restate.Service("OrderingActions")
+
+        @self.service.handler(...)
+        async def quote(ctx: restate.Context, request: order_actions.QuoteRequest) -> order_actions.QuoteResponse:
+            return actions.quote(request)
+
+        @self.workflow.main(...)
+        async def run(ctx: restate.WorkflowContext, request: order_workflow.StartRequest) -> order_orchestrator.RunResponse:
+            orchestrator = order_orchestrator.OrderOrchestrator(
+                restate_actions.RestateOrderActions(ctx, quote)
+            )
+            return await orchestrator.run(request)
+
+        self.run = run
+        self.quote = quote
+
+
+# ordering/component/component.py (verified impl: examples/durable-execution/)
+class Ordering(ts.Component):
+
+    def __init__(self, cfg: config.Config) -> None:
+        self._catalog = memory.MemoryCatalogRepository()
+        self._actions = order_actions.OrderActions(self._catalog)
+        self.jobs: restate_jobs.RestateJobs = restate_jobs.RestateJobs(self._actions)
+        self.client: client.Client = order_service.OrderService(
+            restate_workflow.RestateOrderWorkflow(cfg.ingress, self.jobs.run)
+        )
+```
+
+- **Messages are declared once, on the port.** The engine is a relay, so the
+  send side and the receive side of one message are not independent: the
+  gateway sends the port's `ts.Request`, the job receives it, and the
+  application client speaks the same shape. No wire types; where the SDK
+  cannot serialize a `ts.Request` itself, the edge brings a serde (the one
+  class in the tree with no `ts.*` base — a named gap, `TODOS.md`).
+- **A component publishes exactly `client` and `jobs`**, each typed; every
+  other attribute is private (TB081). The host mounts
+  `app.<context>.jobs.definitions()` and knows nothing else about the engine.
+- **Reach is carried by the adapter kind package** (TB060): `handlers/` →
+  the context client; `jobs/` → `application.client`,
+  `application.orchestrators`, `application.ports`, and `adapters.gateways`;
+  `gateways/` and `repositories/` → `application.ports`; a kind imports only
+  its own kind. Every adapters module lives in one of the four kind
+  packages and holds the kind its package names (TB041/TB052).
+- **Not yet ruled:** payload versioning on a durable leg (a field added to a
+  port DTO changes the bytes an in-flight journal holds — port DTOs on a
+  durable leg are append-only until it is); the Temporal mirror binds its
+  serde at the client/worker rather than at a decorator, and the kinds are
+  expected to survive it unchanged.
+
 ## Repositories
 
 The port is declared in `application/ports/` (**Application ports**, above), as a `ts.Port`
@@ -741,7 +870,7 @@ in — as a request DTO — reconstructed aggregate out, no business logic
 (`serialization.md` rules 6-8).
 
 ```python
-# campaign/adapters/gateways/repo_storage.py (verified impl: examples/errorspy/)
+# campaign/adapters/repositories/repo_storage.py (verified impl: examples/errorspy/)
 import tesser.adapters as ts
 
 import campaign.application.ports.campaign_repository as campaign_repository

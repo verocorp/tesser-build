@@ -74,6 +74,10 @@ context's behalf. Two types, split by direction — **inbound needs a server
 
 - **Handlers (inbound)** — translate one delivery mechanism's wire format to and
   from the context's `Client`: HTTP, CLI, event-consumer. → `handlers.md`
+- **Jobs (inbound, engine)** — where a durable-execution engine hands work
+  back: a job calls an application client (a class of actions) or constructs
+  an orchestrator and its engine gateway per invocation. A handler calls the
+  context client; a job never does. → `python.md#orchestrators-actions-jobs`
 - **Gateways (outbound)** — satisfy a port the context owns, by reaching
   something outside it. The port and its DTOs live in the context's
   `application/ports/`; the gateway imports that ports module and **nothing
@@ -86,11 +90,12 @@ context's behalf. Two types, split by direction — **inbound needs a server
     don't invent a convention. Anti-corruption is a *purpose* a gateway can
     have, not a separate role: it is built as port + adapter like any other.
 
-Recommended (not enforced) layout: `adapters/handlers`, `adapters/gateways`,
-and `adapters/repositories` as the adapter kind dirs, each implementation
-module named for its backing (`file_repository.py`, `repo_memory.py`) — a
-sibling test is only placeable inside a kind dir, so a flat module in
-`adapters/` has no legal home for its test. **Events are not a new role**: publish = an outbound
+Enforced layout (TB041/TB052): `adapters/handlers`, `adapters/gateways`,
+`adapters/repositories`, and `adapters/jobs` are the adapter kind packages;
+every adapters module lives in one and holds the kind its package names,
+because the package is what carries the module's reach (TB060). Each
+implementation module is named for its backing (`file_repository.py`,
+`repo_memory.py`). **Events are not a new role**: publish = an outbound
 gateway over an `EventPublisher` port; consume = an inbound handler plus a
 worker host (`srv/wrk`). (The event shape is reasoned by symmetry with the
 well-evidenced HTTP path — the prior art is thin here; treat it as the default

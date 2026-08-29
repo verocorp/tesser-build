@@ -72,7 +72,16 @@ spec initializes its own object and does nothing else — read anywhere but
 the `__init__` of the object that takes it, or kept on an object, is a
 finding; a mapper is its target — `ts.Mapper` plus the spec or DTO it maps
 to, one `super().__init__`, nothing stored, no other method (`TB080`);
-`skills/tesser-build/value-objects.md`, `skills/tesser-build/python.md`).
+`skills/tesser-build/value-objects.md`, `skills/tesser-build/python.md`), and
+the application-service types (an orchestrator, `ts.Orchestrator` in
+`application/orchestrators/`, is built per invocation by a job and depends
+on action ports only; a class of actions, `ts.Actions`, has exactly one port
+and one call on it per method and is reachable only through a
+`tesser.application.Client` in `application/client/`; a job, `ts.Job` in
+`adapters/jobs/`, is the adapter kind the engine calls back into; reach is
+carried by the adapter kind package and a component publishes exactly
+`client` and `jobs` — `TB041`/`TB052`/`TB060`/`TB081`/`TB082`;
+`docs/design-app-service-types.md`, `skills/tesser-build/python.md`).
 The full check list with per-code rules is `tessercheck-py/RULES.md`; which
 convention has a doc, an example, and a checker is `roadmap/ROADMAP.md`.
 
