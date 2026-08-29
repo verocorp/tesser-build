@@ -470,11 +470,13 @@ class Widget(ts.AggregateRoot):
 
 - **`ts.Outcome` directly and alone, undecorated, members only, every member
   `enum.auto()`** (TB084) — no mixin, no intermediate base. The runtime base
-  raises at class definition for a method (any name, dunders included), a
-  valued member, a mixed-in or intermediate base, or a custom metaclass, and
-  `.value`/`.name` raise on every member; the analyzer reports the same shapes
-  and flags `_value_`/`_name_`. An outcome is matched, never read, never
-  serialized.
+  raises at class definition for anything in the body but the members: a
+  method or a descriptor of any name (a `functools.cached_property`, dunders
+  included), class data, an annotation, a valued member, a member repeating
+  another member's value (an alias makes a `case` arm unreachable), a mixed-in
+  or intermediate base, or a custom metaclass; and `.value`/`.name` raise on
+  every member. The analyzer reports the same shapes and flags
+  `_value_`/`_name_`. An outcome is matched, never read, never serialized.
 - **Returned by a transition, read by a `match`.** A member is named in
   exactly two places: the `return` that produces it and the `case` that
   consumes it. `is Taken.HELD` / `== Taken.HELD` anywhere else is TB084, and

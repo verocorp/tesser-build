@@ -1,4 +1,5 @@
 import enum
+import functools
 import typing
 
 import pytest
@@ -158,3 +159,73 @@ def test_an_outcome_hides_no_behavior_in_the_enum_slots() -> None:
                 return count + 1
 
             DONE = enum.auto()
+
+
+def test_an_outcome_hides_no_behavior_behind_a_descriptor() -> None:
+    with pytest.raises(TypeError, match=r"Cached defines 'is_done'"):
+
+        class Cached(ts.Outcome):
+            DONE = enum.auto()
+
+            @functools.cached_property
+            def is_done(self) -> bool:
+                return self is Cached.DONE
+
+    class Answering:
+        def __get__(self, instance: object, owner: type | None = None) -> bool:
+            return True
+
+    with pytest.raises(TypeError, match=r"Described defines 'is_done'"):
+
+        class Described(ts.Outcome):
+            DONE = enum.auto()
+
+            is_done = Answering()
+
+
+def test_an_outcome_carries_nothing_but_its_members() -> None:
+    with pytest.raises(TypeError, match=r"Slotted defines '__slots__'"):
+
+        class Slotted(ts.Outcome):
+            __slots__ = ()
+
+            DONE = enum.auto()
+
+    with pytest.raises(TypeError, match=r"Annotated defines '__annotations__'"):
+
+        class Annotated(ts.Outcome):
+            DONE = enum.auto()
+
+            attempts: int
+
+
+def test_an_outcome_member_is_never_an_alias() -> None:
+    with pytest.raises(TypeError, match=r"Forged.CONTINUE repeats Forged.DONE"):
+
+        class Forged(ts.Outcome):
+            DONE = ts.Outcome._generate_next_value_("DONE", 1, 0, [])
+            CONTINUE = ts.Outcome._generate_next_value_("CONTINUE", 1, 0, [])
+
+    assert len({Advance.CONTINUE, Advance.DONE}) == 2
+    assert list(Advance) == [Advance.CONTINUE, Advance.DONE]
+
+
+def test_a_well_formed_outcome_survives_the_gate() -> None:
+    class Settle(ts.Outcome):
+        PAID = enum.auto()
+        REFUSED = enum.auto()
+        RETRY = enum.auto()
+
+    def route(outcome: Settle) -> str:
+        match outcome:
+            case Settle.PAID:
+                return "paid"
+            case Settle.REFUSED:
+                return "refused"
+            case Settle.RETRY:
+                return "retry"
+            case _ as never:
+                typing.assert_never(never)
+
+    assert [route(member) for member in Settle] == ["paid", "refused", "retry"]
+    assert len({Settle.PAID, Settle.REFUSED, Settle.RETRY}) == 3

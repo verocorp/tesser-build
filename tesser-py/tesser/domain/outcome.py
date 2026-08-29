@@ -5,7 +5,7 @@ class _Auto(int):
     pass
 
 
-_GENERATED: frozenset[str] = frozenset()
+_GENERATED: set[str] = set()
 
 
 class Outcome(enum.Enum):
@@ -24,7 +24,9 @@ class Outcome(enum.Enum):
 
     def __init_subclass__(cls, **kwargs: object) -> None:
         super().__init_subclass__(**kwargs)
+        members = cls.__dict__.get("_member_map_", {})
         if not _GENERATED:
+            _GENERATED.update(frozenset(cls.__dict__) - frozenset(members))
             return
         if type(cls) is not enum.EnumMeta:
             raise TypeError(
@@ -51,11 +53,8 @@ class Outcome(enum.Enum):
                 f"{cls.__name__} defines '_generate_next_value_': an outcome is a closed set "
                 "of names and nothing else — behavior belongs on the object that returns it"
             )
-        members = cls.__dict__.get("_member_map_", {})
-        for name, attribute in cls.__dict__.items():
+        for name in cls.__dict__:
             if name in members or name in _GENERATED:
-                continue
-            if not (callable(attribute) or isinstance(attribute, (property, classmethod, staticmethod))):
                 continue
             raise TypeError(
                 f"{cls.__name__} defines {name!r}: an outcome is a closed set of names "
@@ -67,10 +66,15 @@ class Outcome(enum.Enum):
                     f"{cls.__name__}.{member._name_} carries a value: an outcome member "  # tesser:debt TB084
                     "is enum.auto(), because an outcome is matched, never serialized"
                 )
+        names = cls.__dict__.get("_member_names_", [])
+        for name, member in members.items():
+            if name not in names:
+                raise TypeError(
+                    f"{cls.__name__}.{name} repeats {cls.__name__}.{member._name_}: an outcome "  # tesser:debt TB084
+                    "member is a name of its own, because two names for one member make a "
+                    "case arm unreachable and exhaustiveness a lie"
+                )
 
 
 class _Probe(Outcome):
     ONE = enum.auto()
-
-
-_GENERATED = frozenset(_Probe.__dict__) - frozenset({"ONE"})
