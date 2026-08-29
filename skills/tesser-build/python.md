@@ -932,9 +932,10 @@ class Ordering(ts.Component):
   cannot serialize a `ts.Request` itself, the edge brings a serde (the one
   class in the tree with no `ts.*` base — a named gap, `TODOS.md`).
 - **A component publishes exactly `client` and `jobs`**, each typed; every
-  other attribute is private (TB081). `jobs` is a tuple, so the host mounts
-  the definitions of each — `[d for job in app.<context>.jobs for d in
-  job.definitions()]` — and knows nothing else about the engine.
+  other attribute is private (TB081). `jobs` is one job or a tuple of them;
+  where it is a tuple the host mounts the definitions of each — `[d for job in
+  app.<context>.jobs for d in job.definitions()]` — and knows nothing else
+  about the engine.
 - **Reach is carried by the adapter kind package** (TB060): `handlers/` →
   the context client; `jobs/` → `application.client`,
   `application.orchestrators`, `application.ports`;
