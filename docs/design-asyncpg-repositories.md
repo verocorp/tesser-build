@@ -153,6 +153,14 @@ database instead of a DSN.
 - Ports, services, clients, tests above the adapter tier: untouched.
 - Tests added: two contexts on one DSN share one pool; the app closes the pool
   once; a request cancelled mid-query releases its connection.
+- **Where `Database` lives is an open gap.** Shared infrastructure has no
+  governed home in a tree: every module belongs to a context, kernel, srv,
+  app, tests, or protocol (TB040); an app module holds only app kinds
+  (TB052); a kernel holds only domain kinds. The example puts it in
+  `pgdatabase/` under `skip pgdatabase` — the same stand-in `minimal` used for
+  `memoryclient` — meaning "this would be an installed package." The real
+  choices are to ship it in `tesser-py` (a `tesser.adapters.Database` every
+  asyncpg tree imports) or to keep treating it as third-party code. Not ruled.
 
 ### Increment 3 — store / repository split
 
