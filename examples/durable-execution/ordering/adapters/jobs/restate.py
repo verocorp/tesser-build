@@ -4,7 +4,7 @@ import tesser.adapters as ts
 import restate
 
 import ordering.adapters.gateways.restate_actions as restate_actions
-import ordering.adapters.gateways.restate_serde as restate_serde
+import ordering.adapters.gateways.restate_workflow as restate_workflow
 import ordering.application.client.order_actions as order_actions_client
 import ordering.application.orchestrators.order_orchestrator as order_orchestrator
 import ordering.application.ports.order_actions as order_actions
@@ -19,8 +19,8 @@ class RestateJobs(ts.Job):
         self.service = restate.Service("OrderingActions")
 
         @self.service.handler(
-            input_serde=restate_serde.RecordSerde(order_actions.QuoteRequest),
-            output_serde=restate_serde.RecordSerde(order_actions.QuoteResponse),
+            input_serde=restate_workflow.RecordSerde(order_actions.QuoteRequest),
+            output_serde=restate_workflow.RecordSerde(order_actions.QuoteResponse),
         )
         async def quote(
             ctx: restate.Context, request: order_actions.QuoteRequest
@@ -31,8 +31,8 @@ class RestateJobs(ts.Job):
                 raise restate.TerminalError(e.message, status_code=errors.status_for(e.kind)) from e
 
         @self.workflow.main(
-            input_serde=restate_serde.RecordSerde(order_workflow.StartRequest),
-            output_serde=restate_serde.RecordSerde(order_orchestrator.RunResponse),
+            input_serde=restate_workflow.RecordSerde(order_workflow.StartRequest),
+            output_serde=restate_workflow.RecordSerde(order_orchestrator.RunResponse),
         )
         async def run(
             ctx: restate.WorkflowContext, request: order_workflow.StartRequest

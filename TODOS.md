@@ -1928,7 +1928,7 @@ three rules. Two were ruled by the app-service-types wave
   engine speak the port's own `ts.Request`/`ts.Response`), but where the SDK
   cannot serialize a `ts.Request` itself the tree brings a serde, and
   `restate.serde.Serde` is an ABC, so it is a class with no `ts.*` base.
-  `ordering/adapters/gateways/restate_serde.py` carries the one remaining
+  `ordering/adapters/gateways/restate_workflow.py` carries the one remaining
   `tesser:debt TB052`. Ruling: name the kind (an adapter serde?), admit it
   in `adapters` (TB052), and drop the marker. Shares a shape with the
   adapter-side-mapper ruling above. Related and also unruled: payload

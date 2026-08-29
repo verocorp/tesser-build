@@ -106,7 +106,7 @@ function, so the only reader of the string is the SDK.
 ### What this shape costs, in rules
 
 One `tesser:debt` marker, waiting on a rule rather than a fix — recorded in the
-repo's `TODOS.md`: `RecordSerde` in `ordering/adapters/gateways/restate_serde.py`
+repo's `TODOS.md`: `RecordSerde` in `ordering/adapters/gateways/restate_workflow.py`
 carries no `ts.*` base (**TB052**), because an adapters module admits no serde
 kind yet. The engine's serde is an ABC, so it cannot be duck-typed away.
 
@@ -131,8 +131,8 @@ decorator in the job:
 
 ```python
 @self.workflow.main(
-    input_serde=restate_serde.RecordSerde(order_workflow.StartRequest),
-    output_serde=restate_serde.RecordSerde(order_orchestrator.RunResponse),
+    input_serde=restate_workflow.RecordSerde(order_workflow.StartRequest),
+    output_serde=restate_workflow.RecordSerde(order_orchestrator.RunResponse),
 )
 ```
 

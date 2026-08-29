@@ -124,7 +124,7 @@ in the ports module, and both ends import it.
   function, so it needs nothing. `protocol/durable.py` is deleted: it
   carried `sku`, `quantity`, `cents` — one context's vocabulary — and
   `protocol/` is context-generic (TB064). The serde class lives in
-  `adapters/gateways/restate_serde.py` (gateway tests and the job both reach
+  `adapters/gateways/restate_workflow.py`, the send-side gateway (its own test and the job both reach
   it) and carries the wave's one remaining `tesser:debt TB052`: every context
   class must declare a `ts.*` base, `restate.serde.Serde` is an ABC, and no
   adapter serde kind exists yet — recorded in `TODOS.md`.
