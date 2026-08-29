@@ -4257,6 +4257,19 @@ class Codebase(ts.AggregateRoot):
         return tuple(found)
 
     @classmethod
+    def _own_scope_returns(cls, node: ast.AST) -> list[ast.Return]:
+        found: list[ast.Return] = []
+        for child in ast.iter_child_nodes(node):
+            if isinstance(
+                child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
+            ):
+                continue
+            if isinstance(child, ast.Return):
+                found.append(child)
+            found.extend(cls._own_scope_returns(child))
+        return found
+
+    @classmethod
     def _nested_class_defs(cls, body: list[ast.stmt]) -> list[ast.ClassDef]:
         found: list[ast.ClassDef] = []
         for stmt in body:
@@ -6653,17 +6666,16 @@ class Codebase(ts.AggregateRoot):
                 and isinstance(stmt.value.func.value.func, ast.Name)
                 and stmt.value.func.value.func.id == "super"
             )
-            for node in ast.walk(init):
-                if isinstance(node, ast.Return):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            node.lineno,
-                            "TB080",
-                            f"{where}.__init__ returns; a mapper's constructor runs to its "
-                            "super().__init__, so the target is always initialized",
-                        ))
-                    )
+            for returned in self._own_scope_returns(init):
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        returned.lineno,
+                        "TB080",
+                        f"{where}.__init__ returns; a mapper's constructor runs to its "
+                        "super().__init__, so the target is always initialized",
+                    ))
+                )
             selves = {"self"}
             grew = True
             while grew:

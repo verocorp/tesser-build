@@ -1025,6 +1025,35 @@ def test_a_mapper_never_returns_before_it_initializes_its_target() -> None:
     )
 
 
+def test_a_return_inside_a_nested_scope_is_not_the_mappers_own_return() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/application/nestedfn.py",
+                "shop.application.nestedfn",
+                "import tesser.application as ts\n"
+                "import shop.client.client as client\n"
+                "import shop.domain.thing as thing\n"
+                "class MapToAskResponseNested(ts.Mapper, client.AskResponse):\n"
+                "    def __init__(self, named: thing.Name) -> None:\n"
+                "        def spelled() -> str:\n"
+                "            return str(named)\n"
+                "        super().__init__(text=spelled())\n",
+                False,
+            ),
+            (
+                "shop/application/test_nestedfn.py",
+                "shop.application.test_nestedfn",
+                "def test_nestedfn_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any("__init__ returns" in f for f in findings)
+
+
 def test_a_conformant_mapper_passes_every_shape_rule() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
