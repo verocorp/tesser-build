@@ -13,7 +13,7 @@ match; the rules follow the example.
 |---|---|---|---|---|---|
 | application service | `ts.ApplicationService` | yes, on `client.Client` | component, once | ports | a handler |
 | orchestrator | `ts.Orchestrator` (new), in `application/orchestrators/` | no | a job, per invocation, over a gateway holding that invocation's engine ctx | action ports only — never a repository, never the workflow-start port, never a foreign client | the job that built it; nothing else holds one |
-| action | `ts.Action` (new) | no | component, once | exactly one `ts.Port` in `__init__`; each public method calls it exactly once (a class of actions shares one dependency; a second port is a second class) | a job, via an actions protocol |
+| action | `ts.Actions` (new) — a class of actions | no | component, once | exactly one `ts.Port` in `__init__`; each public method calls it exactly once (a class of actions shares one dependency; a second port is a second class) | a job, via an actions protocol |
 
 All three keep the four-step body and the TB081/TB082 rules unchanged: one
 `ts.Request` in, one `ts.Response` out, `match` only, no delegation chain.
@@ -55,21 +55,44 @@ both directions.
 
 - Outbound (orchestrator → engine): a port. `application/ports/order_actions.py`
   declares `OrderActions(ts.Port)`, implemented by the engine gateway.
-- Inbound (job → action): a new client-kind protocol, `ts.Actions`, in a new
-  package `application/actions/` — one protocol per module, the inbound twin
-  of `ports/`. It cannot live on `client.py`: anything there is reachable by a
-  foreign context (TB061), and an action must be reachable only through the
-  engine. The concrete `OrderActions(ts.Action)` lives in `application/`
-  beside the services and implements it.
-  An actions module is **not a leaf**: it imports exactly one ports module,
-  for the DTOs it speaks, and nothing else from the tree. The rest of the
-  ports-module discipline applies (one protocol per module, nothing runs at
-  import, no decorators, no class-level statements). An earlier draft said
-  "the ports-module discipline" without the carve-out, which contradicted
-  the DTO rule below (codex #1).
-- `application/client.py` was considered and rejected: it collides with the
-  `client` role name, with the `import ordering.client.client as client`
-  alias every handler already uses, and with the reach the word names.
+- Inbound (job → action): a client protocol, **`tesser.application.Client`**
+  — a new class in the application package, not a reuse of
+  `tesser.context.Client`. Same word, different package, the way
+  `tesser.application.Request` and `tesser.context.Request` already coexist:
+  an application module imports `tesser.application as ts` (TB050), so
+  `ts.Client` there resolves to the application one and the totality check
+  classifies by resolved base. It lives in a new package
+  **`application/client/`**, the application-level mirror of the context's
+  `client/` — one protocol per module, the module named for the actions it
+  fronts. It cannot live on the context's `client.py`: anything there is
+  reachable by a foreign context (TB061), and an action must be reachable
+  only through the engine; `application/client/` is unreachable from outside
+  by the existing row. The concrete `OrderActions(ts.Actions)` lives in
+  `application/` beside the services.
+  Naming follows the context-level client, not the repository: the protocol
+  is `Client`, the impl is the plain noun, and there is no qualifier —
+  a client fronts the one impl so outsiders depend on the protocol, not the
+  impl, exactly as `client.Client` fronts `AlphaService`.
+
+  ```
+  application/client/order_actions.py    class Client(ts.Client, typing.Protocol)
+  application/order_actions.py           class OrderActions(ts.Actions)
+  ```
+
+  A job reads `actions: order_actions.Client`, as a handler reads
+  `client.Client`. The two modules share a basename; no module imports both
+  (jobs import the protocol, the component imports the impl, and the
+  component's actions attribute is private under the publishes-only rule
+  below, so it needs no protocol annotation).
+  An application client module is **not a leaf**: it imports exactly one
+  ports module, for the DTOs it speaks, and nothing else from the tree. The
+  rest of the ports-module discipline applies (one protocol per module,
+  nothing runs at import, no decorators, no class-level statements). An
+  earlier draft said "the ports-module discipline" without the carve-out,
+  which contradicted the DTO rule below (codex #1).
+- A single `application/client.py` module was considered and rejected: one
+  protocol per module needs a package, and a bare module collides with the
+  `import ordering.client.client as client` alias every handler uses.
 - The orchestrator has no inbound protocol. Only the job calls it, and the
   job constructs it concretely.
 
@@ -157,23 +180,25 @@ Rails/Celery reading where `jobs/` holds the code that runs when dequeued.
 
 1. TB060 same-context matrix, with the `adapters` role split by kind
    package (codex #3):
-   - `handlers` → `client`. Not `jobs`, not `application.actions`, not
+   - `handlers` → `client`. Not `jobs`, not `application.client`, not
      `application.orchestrators`.
-   - `jobs` → `application.actions` + `application.orchestrators` (to
-     construct) + `application.ports` (the message DTOs). Not `client`.
+   - `jobs` → `application.client` + `application.orchestrators` (to
+     construct) + `application.ports` (the message DTOs). Not the context's
+     `client`.
    - `gateways`, `repositories` → `application.ports` (unchanged). Not
      `jobs`, not `handlers`.
    - a kind package may still import itself (a gateway may import a sibling
      gateway module); "a role imports itself" narrows to "a kind imports
      itself" inside `adapters`.
-   Nothing outside `jobs` may import `application.actions` or
+   Nothing outside `jobs` may import `application.client` or
    `application.orchestrators`.
 2. TB063 host reach: handlers and jobs (the host mounts `definitions()`).
 3. TB052 one-adapter-kind list: add `ts.Job`.
-4. TB052/TB041: `application/actions/` and `application/orchestrators/` are
-   recognized application packages. `actions/` has the ports-module
-   discipline minus the leaf rule: one `ts.Actions` protocol per module,
-   nothing runs at import, and it imports exactly one ports module.
+4. TB052/TB041: `application/client/` and `application/orchestrators/` are
+   recognized application packages. `application/client/` has the
+   ports-module discipline minus the leaf rule: one
+   `tesser.application.Client` protocol per module, nothing runs at import,
+   and it imports exactly one ports module.
    `orchestrators/` holds one `ts.Orchestrator` per module.
 5. New body rules: an action has one port in `__init__` and one port call
    per public method; an orchestrator depends on action ports only, keeps
@@ -212,8 +237,6 @@ Rails/Celery reading where `jobs/` holds the code that runs when dequeued.
 
 ## Not yet ruled
 
-- Whether the actions protocol and the concrete action share a name
-  (`OrderActions` in two modules) or the protocol gets its own.
 - Whether TB081's one-request check accepts a `tesser.application.Request`
   on an action's public method where a service's takes a
   `tesser.context.Request` (codex #2, unverified against `checks.py`).
