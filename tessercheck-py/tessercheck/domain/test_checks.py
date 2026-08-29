@@ -1487,7 +1487,7 @@ def test_service_dependencies_must_be_ports() -> None:
                )
     assert any(
         "NeedyService.__init__" in f
-        and "parameter 'db' is not a ts.Port; a service depends only on ports" in f
+        and "parameter 'db' is not a ts.Port or a ts.Store; a service depends only on ports and the stores that yield them" in f
         for f in findings
     )
 
@@ -5951,6 +5951,120 @@ def test_a_ports_module_declares_exactly_one_port() -> None:
     assert any(
         "shop.application.ports.none declares no port; a ports module "
         "declares exactly one port, so no two ports can share a request or a response" in f
+        for f in findings
+    )
+
+
+def test_a_ports_module_declares_at_most_one_store_beside_its_port() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
+                "",
+                True,
+            ),
+            (
+                "shop/application/ports/two_stores.py",
+                "shop.application.ports.two_stores",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class Held(ts.Port, typing.Protocol):\n"
+                "    pass\n"
+                "class First(ts.Store, typing.Protocol):\n"
+                "    def transaction(self) -> typing.AsyncContextManager[Held]: ...\n"
+                "class Second(ts.Store, typing.Protocol):\n"
+                "    def transaction(self) -> typing.AsyncContextManager[Held]: ...\n",
+                False,
+            ),
+            (
+                "shop/application/ports/lone_store.py",
+                "shop.application.ports.lone_store",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class Lone(ts.Store, typing.Protocol):\n"
+                "    def transaction(self) -> typing.AsyncContextManager[Lone]: ...\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "shop.application.ports.two_stores declares 2 stores; a ports module "
+        "declares at most one store, which yields the one port beside it" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.ports.lone_store declares a store and no port; "
+        "a store yields the repository its transaction binds, declared in its own ports module" in f
+        for f in findings
+    )
+
+
+def test_a_store_declares_exactly_one_transaction_that_yields_its_port() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
+                "",
+                True,
+            ),
+            (
+                "shop/application/ports/wrong.py",
+                "shop.application.ports.wrong",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class Held(ts.Port, typing.Protocol):\n"
+                "    pass\n"
+                "class Wrong(ts.Store, typing.Protocol):\n"
+                "    def commit(self) -> typing.AsyncContextManager[Held]: ...\n",
+                False,
+            ),
+            (
+                "shop/application/ports/parameterised.py",
+                "shop.application.ports.parameterised",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class Held(ts.Port, typing.Protocol):\n"
+                "    pass\n"
+                "class Parameterised(ts.Store, typing.Protocol):\n"
+                "    def transaction(self, name: str) -> typing.AsyncContextManager[Held]: ...\n",
+                False,
+            ),
+            (
+                "shop/application/ports/bare.py",
+                "shop.application.ports.bare",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class Held(ts.Port, typing.Protocol):\n"
+                "    pass\n"
+                "class Bare(ts.Store, typing.Protocol):\n"
+                "    def transaction(self) -> None: ...\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "shop.application.ports.wrong.Wrong.commit is not transaction; a store declares exactly one "
+        "method, which opens a transaction and yields the repository bound to it" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.ports.wrong.Wrong declares no transaction; a store declares exactly one "
+        "method, which opens a transaction and yields the repository bound to it" in f
+        for f in findings
+    )
+    assert any(
+        "Parameterised.transaction takes 1 parameters; a store's transaction "
+        "takes none, because the transaction is the only thing it opens" in f
+        for f in findings
+    )
+    assert any(
+        "Bare.transaction does not return an AsyncContextManager of a port declared beside it; "
+        "a store's transaction hands back the repository bound to it, which is the one port "
+        "its own module declares" in f
         for f in findings
     )
 
@@ -11527,7 +11641,7 @@ def test_a_class_of_actions_takes_exactly_one_port_and_calls_it_once() -> None:
     )
     assert any(
         "shop.application.plain_actions.Plain.__init__ parameter 'text' is not a "
-        "ts.Port; a class of actions depends only on ports" in f
+        "ts.Port or a ts.Store; a class of actions depends only on ports and the stores that yield them" in f
         for f in findings
     )
     assert any(
@@ -11604,7 +11718,7 @@ def test_an_orchestrator_takes_action_ports_and_stores_only_them() -> None:
     )
     assert any(
         "shop.application.orchestrators.bad.Bad.__init__ parameter 'text' is not "
-        "a ts.Port; an orchestrator depends only on ports" in f
+        "a ts.Port or a ts.Store; an orchestrator depends only on ports and the stores that yield them" in f
         for f in findings
     )
     assert any(

@@ -18,6 +18,20 @@ class AddResponse(ts.Response):
         self.name = name
 
 
+class TakeRequest(ts.Request):
+
+    def __init__(self, name: str, part: str) -> None:
+        self.name = name
+        self.part = part
+
+
+class TakeResponse(ts.Response):
+
+    def __init__(self, name: str, part: str) -> None:
+        self.name = name
+        self.part = part
+
+
 class FindRequest(ts.Request):
 
     def __init__(self, name: str) -> None:
@@ -33,5 +47,7 @@ class FindResponse(ts.Response):
 class Client(ts.Client, typing.Protocol):
 
     async def add(self, request: AddRequest) -> AddResponse: ...
+
+    async def take(self, request: TakeRequest) -> TakeResponse: ...
 
     async def find(self, request: FindRequest) -> FindResponse: ...

@@ -2,6 +2,26 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Every exported class carries tests (2026-08-29, Chris ruling)
+
+- [ ] **Every exported class everywhere should have tests, and every
+  application service in particular.** Surfaced by `examples/asyncpg` PR #142:
+  moving the service's behaviour to the context `tests/` tier left
+  `alpha_service.py` covered only by mapper tests, and deleting `take`'s
+  `save_widget` call passed the whole 53-test suite. `TB074` already requires a
+  sibling test *file* per implementation module; nothing requires that file to
+  test the module's classes, so a file of mapper tests satisfies it while the
+  service goes unexercised. Open: what "tested" means mechanically (a
+  `Test<Class>` class per exported class? at least one test naming it?), and
+  whether it is checkable without false positives on re-exports and protocols.
+- [ ] **A service's transaction outcomes are what its sibling test fakes.**
+  Ruled alongside the above: a sibling test never fakes the store to
+  reimplement storage — it fakes the *transaction result*. Two fakes, a
+  committed one and an unavailable one; they implement no rollback. Rendered in
+  `examples/asyncpg/{alpha,beta}/application/test_*_service.py` as
+  `FakeCommitted*Store` / `FakeUnavailable*Store`. Not yet in `testing.md`, and
+  no checker.
+
 ## Follow-ons from the outcome ruling (2026-08-26, v0.0.84.0)
 
 - [ ] **A conditional expression in a service is a branch TB082 does not

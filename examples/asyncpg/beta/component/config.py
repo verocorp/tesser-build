@@ -15,6 +15,4 @@ class Config(ts.Config):
 
     def __init__(self, spec: Spec) -> None:
         self.storage = spec.storage
-        self.database: pgdatabase.DatabaseRequest | None = (
-            None if spec.storage == "memory" else pgdatabase.DatabaseRequest(spec.storage)
-        )
+        self.database = pgdatabase.DatabaseRequest(spec.storage)

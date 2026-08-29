@@ -1,39 +1,56 @@
 from __future__ import annotations
 
+import contextlib
 import typing
+
+import asyncpg
 
 import tesser.adapters as ts
 
 import alpha.application.ports.widget_repository as widget_repository
 import pgdatabase.database as pgdatabase
+import tesser.errors as errors
 
-_SCHEMA: typing.Final[str] = "CREATE TABLE IF NOT EXISTS widgets (name text PRIMARY KEY)"
-_SAVE: typing.Final[str] = "INSERT INTO widgets (name) VALUES ($1) ON CONFLICT (name) DO NOTHING"
+_SCHEMA: typing.Final[str] = "CREATE TABLE IF NOT EXISTS widgets (name text PRIMARY KEY, part text NOT NULL)"
+_SAVE: typing.Final[str] = (
+    "INSERT INTO widgets (name, part) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET part = EXCLUDED.part"
+)
+_LOAD_FOR_UPDATE: typing.Final[str] = "SELECT name, part FROM widgets WHERE name = $1 FOR UPDATE"
 _FIND: typing.Final[str] = "SELECT 1 FROM widgets WHERE name = $1"
 
 
 class PostgresWidgetRepository(ts.Repository):
 
+    def __init__(self, connection: asyncpg.pool.PoolConnectionProxy[asyncpg.Record]) -> None:
+        self._connection = connection
+
+    async def save_widget(self, request: widget_repository.SaveWidgetRequest) -> widget_repository.SaveWidgetResponse:
+        await self._connection.execute(_SAVE, request.name, request.part)
+        return widget_repository.SaveWidgetResponse(name=request.name)
+
+    async def load_widget(self, request: widget_repository.LoadWidgetRequest) -> widget_repository.LoadWidgetResponse:
+        row = await self._connection.fetchrow(_LOAD_FOR_UPDATE, request.name)
+        if row is None:
+            raise errors.not_found("unknown_widget", f"no widget {request.name!r}")
+        return widget_repository.LoadWidgetResponse(name=row["name"], part=row["part"])
+
+    async def find_widget(self, request: widget_repository.FindWidgetRequest) -> widget_repository.FindWidgetResponse:
+        row = await self._connection.fetchrow(_FIND, request.name)
+        found = widget_repository.Found.NO if row is None else widget_repository.Found.YES
+        return widget_repository.FindWidgetResponse(found=found)
+
+
+class PostgresWidgetStore(ts.Repository):
+
     def __init__(self, database: pgdatabase.Database) -> None:
         self._database = database
         self._schema_ready = False
 
-    async def save(self, request: widget_repository.SaveRequest) -> widget_repository.SaveResponse:
-        async with self._database.acquire() as connection, connection.transaction():
+    @contextlib.asynccontextmanager
+    async def transaction(self) -> typing.AsyncIterator[widget_repository.WidgetRepository]:
+        async with self._database.acquire() as connection:
             if not self._schema_ready:
                 await connection.execute(_SCHEMA)
                 self._schema_ready = True
-            await connection.execute(_SAVE, request.name)
-        return widget_repository.SaveResponse(name=request.name)
-
-    async def find(self, request: widget_repository.FindRequest) -> widget_repository.FindResponse:
-        async with self._database.acquire() as connection, connection.transaction():
-            if not self._schema_ready:
-                await connection.execute(_SCHEMA)
-                self._schema_ready = True
-            row = await connection.fetchrow(_FIND, request.name)
-        found = widget_repository.Found.NO if row is None else widget_repository.Found.YES
-        return widget_repository.FindResponse(found=found)
-
-    async def close(self) -> None:
-        return None
+            async with connection.transaction():
+                yield PostgresWidgetRepository(connection)

@@ -8,13 +8,9 @@ import pgdatabase.database as pgdatabase
 
 class TestConfig:
 
-    def test_the_memory_coordinate_requests_no_database(self) -> None:
-        cfg = config.Config(config.Spec(storage="memory"))
-        assert cfg.storage == "memory"
-        assert cfg.database is None
-
     def test_a_postgres_coordinate_requests_that_database(self) -> None:
         cfg = config.Config(config.Spec(storage="postgres://a@b/c"))
+        assert cfg.storage == "postgres://a@b/c"
         assert cfg.database == pgdatabase.DatabaseRequest("postgres://a@b/c")
 
     def test_an_unknown_coordinate_is_refused(self) -> None:

@@ -12,6 +12,7 @@ TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.application", "ApplicationService"): "service",
     ("tesser.application", "Mapper"): "mapper",
     ("tesser.application", "Port"): "port",
+    ("tesser.application", "Store"): "store",
     ("tesser.application", "Request"): "port_request",
     ("tesser.application", "Response"): "port_response",
     ("tesser.application", "Client"): "actions_client",
@@ -68,6 +69,10 @@ TS_NAME_BY_BLOCK: typing.Final[dict[str, str]] = {
 
 ROLES: typing.Final[tuple[str, ...]] = ("domain", "application", "client", "adapters", "component")
 
+STORE_METHOD: typing.Final[str] = "transaction"
+
+STORE_RETURN: typing.Final[str] = "AsyncContextManager"
+
 PORTS_PACKAGE: typing.Final[str] = "ports"
 
 PORTS_PARENT_ROLE: typing.Final[str] = "application"
@@ -76,7 +81,7 @@ PORTS_HOME: typing.Final[str] = "application/ports"
 
 PORTS_IMPORT_PATH: typing.Final[str] = "application.ports"
 
-PORTS_KINDS: typing.Final[frozenset[str]] = frozenset({"port", "port_request", "port_response"})
+PORTS_KINDS: typing.Final[frozenset[str]] = frozenset({"port", "store", "port_request", "port_response"})
 
 APPLICATION_CLIENT_PACKAGE: typing.Final[str] = "client"
 
@@ -141,6 +146,7 @@ KIND_ROLE: typing.Final[dict[str, str]] = {
     "orchestrator": ORCHESTRATORS_HOME,
     "actions_client": APPLICATION_CLIENT_HOME,
     "port": PORTS_HOME,
+    "store": PORTS_HOME,
     "port_request": PORTS_HOME,
     "port_response": PORTS_HOME,
     "request": "client",
@@ -173,6 +179,7 @@ KIND_NAME: typing.Final[dict[str, str]] = {
     "orchestrator": "an orchestrator",
     "actions_client": "an application client",
     "port": "a port",
+    "store": "a store",
     "port_request": "a port request DTO",
     "port_response": "a port response DTO",
     "request": "a request DTO",
@@ -1449,6 +1456,14 @@ class Codebase(ts.AggregateRoot):
                         "ports-file",
                     ):
                         found.extend(self._port_violations(module, cls, blocks))  # tesser:debt TB051
+                elif block == "store":
+                    if self._locate(  # tesser:debt TB051
+                        module.name(), module.is_package(), contexts, self._export
+                    ) in (
+                        "ports",
+                        "ports-file",
+                    ):
+                        found.extend(self._store_violations(module, cls))  # tesser:debt TB051
                 elif block == "service":
                     methods = [
                         item
@@ -4785,6 +4800,7 @@ class Codebase(ts.AggregateRoot):
                     ))
                 )
         ports: list[ast.ClassDef] = []
+        stores: list[ast.ClassDef] = []
         for stmt in self._nested_class_defs(list(module.body())):
             block = blocks.get((module.name(), stmt.name))
             where = f"{module.name()}.{stmt.name}"
@@ -4834,6 +4850,8 @@ class Codebase(ts.AggregateRoot):
                 )
             elif block == "port":
                 ports.append(stmt)
+            elif block == "store":
+                stores.append(stmt)
             if block in ("port_request", "port_response") and any(
                 blocks.get((module.name(), base.id)) in ("port_request", "port_response")
                 for base in stmt.bases
@@ -4858,7 +4876,27 @@ class Codebase(ts.AggregateRoot):
                     "declares exactly one port, so no two ports can share a request or a response",
                 ))
             )
-        if not ports and self._nested_class_defs(list(module.body())):
+        if len(stores) > 1:
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    stores[1].lineno,
+                    "TB052",
+                    f"{module.name()} declares {len(stores)} stores; a ports module "
+                    "declares at most one store, which yields the one port beside it",
+                ))
+            )
+        if stores and not ports:
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    stores[0].lineno,
+                    "TB052",
+                    f"{module.name()} declares a store and no port; a store yields the "
+                    "repository its transaction binds, declared in its own ports module",
+                ))
+            )
+        if not ports and not stores and self._nested_class_defs(list(module.body())):
             found.append(
                 Violation(ViolationSpec(
                     module.path(),
@@ -4986,6 +5024,106 @@ class Codebase(ts.AggregateRoot):
             )
             found.extend(self._port_annotation_violations(module, where, item, blocks))  # tesser:debt TB051
         return tuple(found)
+
+    def _store_violations(
+        self,
+        module: Module,
+        cls: ast.ClassDef,
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        declared = {stmt.name for stmt in module.class_defs()}
+        methods = [
+            item
+            for item in cls.body
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+        for item in methods:
+            where = f"{module.name()}.{cls.name}.{item.name}"
+            if not all(
+                isinstance(stmt, ast.Pass)
+                or (
+                    isinstance(stmt, ast.Expr)
+                    and isinstance(stmt.value, ast.Constant)
+                    and stmt.value.value is Ellipsis
+                )
+                for stmt in item.body
+            ):
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        item.lineno,
+                        "TB051",
+                        f"{where} carries a body; a port method declares a shape and "
+                        "never a body, because a ports module holds no logic to import",
+                    ))
+                )
+            if item.name != STORE_METHOD:
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        item.lineno,
+                        "TB081",
+                        f"{where} is not transaction; a store declares exactly one "
+                        "method, which opens a transaction and yields the repository "
+                        "bound to it",
+                    ))
+                )
+                continue
+            params = [
+                arg
+                for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
+                if arg.arg != "self"
+            ]
+            if params:
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        item.lineno,
+                        "TB081",
+                        f"{where} takes {len(params)} parameters; a store's transaction "
+                        "takes none, because the transaction is the only thing it opens",
+                    ))
+                )
+            found.extend(self._store_return_violations(module, where, item, declared))  # tesser:debt TB051
+        if not any(item.name == STORE_METHOD for item in methods):
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    cls.lineno,
+                    "TB081",
+                    f"{module.name()}.{cls.name} declares no transaction; a store "
+                    "declares exactly one method, which opens a transaction and yields "
+                    "the repository bound to it",
+                ))
+            )
+        return tuple(found)
+
+    @staticmethod
+    def _store_return_violations(
+        module: Module,
+        where: str,
+        fn: ast.FunctionDef | ast.AsyncFunctionDef,
+        declared: set[str],
+    ) -> tuple[Violation, ...]:
+        node = fn.returns
+        if (
+            isinstance(node, ast.Subscript)
+            and isinstance(node.value, ast.Attribute)
+            and node.value.attr == STORE_RETURN
+            and isinstance(node.slice, ast.Name)
+            and node.slice.id in declared
+        ):
+            return ()
+        return (
+            Violation(ViolationSpec(
+                module.path(),
+                fn.lineno,
+                "TB081",
+                f"{where} does not return an AsyncContextManager of a port declared "
+                "beside it; a store's transaction hands back the repository bound to "
+                "it, which is the one port its own module declares",
+            )),
+        )
 
     def _port_annotation_violations(
         self,
@@ -5878,6 +6016,7 @@ class Codebase(ts.AggregateRoot):
                     blocks.get(key)
                     in (
                         "port",
+                        "store",
                         "client",
                         "actions_client",
                         "job_context",
@@ -5892,8 +6031,8 @@ class Codebase(ts.AggregateRoot):
                             module.path(),
                             stmt.lineno,
                             "TB072",
-                            f"{where} implements no application port, protocol port, client, "
-                            "or config repository; a fake implements the contract it doubles",
+                            f"{where} implements no application port, store, protocol port, "
+                            "client, or config repository; a fake implements the contract it doubles",
                         ))
                     )
             else:
@@ -5985,14 +6124,14 @@ class Codebase(ts.AggregateRoot):
             if context_ok and self._names_job_context(module, arg.annotation, blocks):  # tesser:debt TB051
                 continue
             port_key = module._resolve(arg.annotation) if arg.annotation is not None else None
-            if (blocks.get(port_key) if port_key is not None else None) != "port":
+            if (blocks.get(port_key) if port_key is not None else None) not in ("port", "store"):
                 found.append(
                     Violation(ViolationSpec(
                         module.path(),
                         line,
                         "TB081",
-                        f"{where} parameter {arg.arg!r} is not a ts.Port; "
-                        f"{subject} depends only on ports",
+                        f"{where} parameter {arg.arg!r} is not a ts.Port or a ts.Store; "
+                        f"{subject} depends only on ports and the stores that yield them",
                     ))
                 )
         return tuple(found)

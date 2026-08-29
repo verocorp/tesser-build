@@ -79,14 +79,13 @@ class TestDatabase:
 
 class TestDatabases:
 
-    def test_one_database_per_distinct_request_and_none_for_no_request(self) -> None:
+    def test_one_database_per_distinct_request(self) -> None:
         shared = database.DatabaseRequest("postgres://a@b/one")
         other = database.DatabaseRequest("postgres://a@b/two")
-        databases = database.Databases(shared, None, database.DatabaseRequest("postgres://a@b/one"), other)
+        databases = database.Databases(shared, database.DatabaseRequest("postgres://a@b/one"), other)
         assert len(databases) == 2
         assert databases.database(shared) is databases.database(database.DatabaseRequest("postgres://a@b/one"))
         assert databases.database(other) is not databases.database(shared)
-        assert databases.database(None) is None
 
     async def test_open_and_close_reach_every_database(self) -> None:
         request = database.DatabaseRequest(os.environ["ALPHA_STORAGE"])
