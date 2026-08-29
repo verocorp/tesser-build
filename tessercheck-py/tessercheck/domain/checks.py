@@ -5030,8 +5030,8 @@ class Codebase(ts.AggregateRoot):
                     "a port method",
                     "TB081",
                     blocks,
-                    "a port method takes one ts.Request, led by a ts.JobContext when an "
-                    "orchestrator calls it",
+                    "a port method takes one ts.Request, which a leading ts.JobContext "
+                    "may precede",
                     True,
                 )
             )

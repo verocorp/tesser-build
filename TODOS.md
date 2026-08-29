@@ -2,6 +2,87 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Repository tests and the pool: two questions from the asyncpg review (2026-08-29, Chris)
+
+- [ ] **What may a repository test set up for itself?** Chris's expectation
+  is that a repository test reaches Postgres only through the app loader —
+  the same path the host takes — so the test exercises the wiring it will
+  ship with and has no private configuration of its own. Today every
+  sibling repository test in `examples/asyncpg` reads
+  `os.environ["ALPHA_STORAGE"]` and constructs
+  `pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))` by hand
+  (`alpha/adapters/repositories/test_postgres.py:18-22,38-42,52-56,71-75`,
+  same in `beta/`), and `pgdatabase/test_database.py` builds pools with
+  its own `min_size`/`max_size`. Open: is "loader only" the rule, or does a
+  sibling test legitimately own its pool sizing? Whichever way it goes, the
+  answer belongs in `testing.md`'s tier table (root = loader + real
+  Postgres; `*/tests/` = integration; sibling = ?) and as a TB070-family
+  clause — a repository test module may import the app loader and nothing
+  else that opens a connection.
+- [ ] **The pool lock fixes the example, not an implementer.** #144's
+  `asyncio.Lock` around `Database.open()`/`close()` lives in
+  `examples/asyncpg/pgdatabase/database.py`, which nothing in `tesser-py`
+  ships. An implementer who copies the shape gets the fix; one who writes
+  their own does not, and no static check can see "open and close on a
+  resource owner are serialised". The implementer-facing move is the one
+  `ts.Store` made: a shipped runtime kind in `tesser-py` (a database /
+  resource owner with the open-once, close-once, compensate-on-partial-open
+  lifecycle built in) that the example then uses rather than defines. Rule
+  on whether that kind is wanted before building it; if not, this stays an
+  example-only fix and the rule is "an app owns its pools through a kind
+  that serialises its lifecycle", stated in `python.md` and unchecked.
+
+## Decisions go through a domain object (2026-08-29, Chris ruling)
+
+**The ruling.** Anything that needs a decision goes through a domain object;
+decisions are never made in anything else — not a service, a mapper, or a port
+DTO. When a port returns a result, the port response is mapped to a spec; the
+spec either constructs a new domain object with a method that must be invoked
+to return an outcome, or is passed into an existing domain object in the
+service method, whose method returns the outcome. The service matches that
+`ts.Outcome` (TB084 shape).
+
+**What it resolves.** The TB082 × TB084 conflict the coherence review proved by
+probe: today a service can branch on a port answer in exactly one legal shape —
+a class pattern over the whole response closed with a bare `case _:` — which is
+precisely the non-exhaustive shape TB084 forbids for a domain outcome (`a match
+on an outcome ends in case _ as never: assert_never(never)`, RULES.md). So a
+member added to a port enum is silently swallowed in every service and mypy
+cannot see it. The ruling removes the conflict by removing the premise: a
+service never branches on a port answer at all — it branches on an outcome a
+domain object returned.
+
+The dodge is visible in the trees today. Both exemplars avoid the bind only by
+discarding the port response: `examples/minimal/alpha/application/alpha_service.py`
+calls `self._checks.check(...)` and drops the answer, and
+`examples/asyncpg/alpha/application/alpha_service.py:87` does the same with the
+`BetaCheck` verdict.
+
+**Open work under it (none of it is in PR #147 — that PR records the ruling
+only):**
+
+- [ ] **Re-cut TB082.** A `match` subject in a service method must be a call to
+  a *domain object's* method, and its arms must be outcome members; a
+  comparison, a conditional expression (`x if c else y`), a comprehension `if`,
+  and a boolean operator in a service body all become findings. This subsumes
+  the open conditional-expression item under "Follow-ons from the outcome
+  ruling" below — same ruling, wider node set — and retires the current
+  subject rule ("a match subject is not a single call"), which is what forces
+  the illegal shape.
+- [ ] **Rewrite the services that dodge it.**
+  `examples/minimal/alpha/application/alpha_service.py` (discards the port
+  answer), `examples/asyncpg/alpha/application/alpha_service.py:87` (discards
+  the `BetaCheck` verdict), and
+  `examples/python-app/reports/application/service.py:27,38` (compares a port
+  DTO's enum down to a bool at `:27`, then branches with a conditional
+  expression at `:38`). Each needs the
+  response → spec → domain object → outcome chain the ruling describes, so the
+  rewrites are also the fixtures the re-cut is tested against.
+- [ ] **Where the mapping lives.** The ruling says the port response is mapped
+  to a spec. A mapper *is* its target (TB080), so `MapTo<X>Spec(response)` is
+  the shape; confirm nothing in TB083's owner-binding rule blocks a service
+  from building that spec and handing it whole into the domain object.
+
 ## Every exported class carries tests (2026-08-29, Chris ruling)
 
 - [ ] **Every exported class everywhere should have tests, and every

@@ -125,8 +125,8 @@ run_minimal() {
 
 # The durable-execution example: one context whose workflow runs on Restate.
 # One FastAPI host serves POST /orders and mounts the Restate endpoint at
-# /restate; the workflow and the action it calls are both handlers, and the
-# engine never touches the domain.
+# /restate; the workflow and the action it calls are both jobs (ts.Job in
+# adapters/jobs/), and the engine never touches the domain.
 run_durable_execution() {
   cd "$ROOT/examples/durable-execution" || return 1
   step "tessercheck (zero findings over the whole tree)"
@@ -141,8 +141,9 @@ run_durable_execution() {
 }
 
 # The minimal tree with a real database behind it: the same two contexts, each
-# with an in-memory and an asyncpg repository selected by the storage
-# coordinate, an async client/service/port chain, and an e2e that bootstraps
+# with an asyncpg repository behind a store that owns the transaction — it is
+# Postgres-only, there is no memory backend to fall back to — an async
+# client/service/port chain, and an e2e that bootstraps
 # through the app loader alone. The app reads its own environment through
 # the config repository, so the runner supplies it — the same job a deploy
 # does. Tests never inject it. The gate needs a reachable Postgres at that

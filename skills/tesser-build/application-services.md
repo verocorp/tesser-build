@@ -73,8 +73,8 @@ myself?* Yes → application service.
    coordination, not wiring.
 4. **One transaction boundary per use case.** The service decides *where* the
    unit of work begins and ends; it does not decide *what* is valid inside it.
-   (In Python this is the session/unit-of-work lifetime — a consumer-specific
-   decision; see `python.md#application-services`.)
+   (In Python the boundary is a `ts.Store` the service opens once per method;
+   see `repositories.md#rules` rule 6 and `python.md#ports`.)
 
 ## Shape
 

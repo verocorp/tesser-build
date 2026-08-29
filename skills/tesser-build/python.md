@@ -592,11 +592,12 @@ class CampaignService(ts.ApplicationService):
   on the way to persistence and rebuilds it from the response's
   `CampaignRecord` on the way back. The service never hands a domain object
   across a port, and the port module never learns a domain type exists.
-- **Transaction / session boundary is consumer-specific.** Where the unit of
-  work opens and commits — a SQLAlchemy `Session`, an async transaction, a
-  FastAPI dependency — is a decision for the consuming codebase, not this
-  skill. Wrap the use case in one unit of work; do **not** invent an ORM
-  lifecycle here.
+- **The transaction boundary is a `ts.Store`** (**Application ports**, below).
+  The service opens exactly one per method — `async with
+  self._widget_store.transaction() as widgets_repo:` — and writes nothing of
+  the mechanics; the driver's connection and commit live in the adapter behind
+  the store. One unit of work per use case; do **not** invent an ORM lifecycle
+  here.
 
 ## Application ports {#ports}
 
@@ -931,8 +932,10 @@ class Ordering(ts.Component):
   cannot serialize a `ts.Request` itself, the edge brings a serde (the one
   class in the tree with no `ts.*` base — a named gap, `TODOS.md`).
 - **A component publishes exactly `client` and `jobs`**, each typed; every
-  other attribute is private (TB081). The host mounts
-  `app.<context>.jobs.definitions()` and knows nothing else about the engine.
+  other attribute is private (TB081). `jobs` is one job or a tuple of them;
+  where it is a tuple the host mounts the definitions of each — `[d for job in
+  app.<context>.jobs for d in job.definitions()]` — and knows nothing else
+  about the engine.
 - **Reach is carried by the adapter kind package** (TB060): `handlers/` →
   the context client; `jobs/` → `application.client`,
   `application.orchestrators`, `application.ports`;

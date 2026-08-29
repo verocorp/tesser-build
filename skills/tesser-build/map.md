@@ -38,7 +38,7 @@ prescribed):
 |---|---|---|
 | **domain** | VOs / entities / aggregates | `value-objects.md`, `entities.md`, `aggregates.md`, `domain-services.md` |
 | **application** | use-case services (Convert → Delegate → Persist → Respond); no business logic — plus the **outbound ports the context owns**, in an `application/ports/` package (one port per module, with the request/response DTOs it speaks), and the domain ↔ port-DTO mapping | `application-services.md`, `repositories.md` |
-| **adapters** | inbound `handlers` + outbound `gateways` (taxonomy below) | `handlers.md`, `repositories.md`, `gateway-cross-context.md` |
+| **adapters** | inbound `handlers` and `jobs` + outbound `gateways` and `repositories` — four kind packages (taxonomy below) | `handlers.md`, `repositories.md`, `gateway-cross-context.md`, `python.md#orchestrators-actions-jobs` |
 | **component** | the context's own construction + its `Config` | `component.md` |
 
 The context's **`client` role is its public interface**: the `Client` interface +
@@ -66,11 +66,12 @@ split stands on private fields + constructor-only construction; Go's
 `internal/` or Python's `_internal` + import-linter are optional hardening over
 it, not the boundary itself.
 
-## Adapters: handlers and gateways {#adapters}
+## Adapters: handlers, jobs, gateways, repositories {#adapters}
 
 **Adapters** is the umbrella: everything that touches the outside world on a
-context's behalf. Two types, split by direction — **inbound needs a server
-(something calls *in*); outbound doesn't (it calls out).**
+context's behalf. Four kinds, split by direction — **inbound needs a server
+(something calls *in*); outbound doesn't (it calls out)** — and each kind is
+its own package, because the package is what carries the module's reach.
 
 - **Handlers (inbound)** — translate one delivery mechanism's wire format to and
   from the context's `Client`: HTTP, CLI, event-consumer. → `handlers.md`
@@ -79,16 +80,19 @@ context's behalf. Two types, split by direction — **inbound needs a server
   an orchestrator over the invocation's job context. A handler calls the
   context client; a job never does. → `python.md#orchestrators-actions-jobs`
 - **Gateways (outbound)** — satisfy a port the context owns, by reaching
-  something outside it. The port and its DTOs live in the context's
-  `application/ports/`; the gateway imports that ports module and **nothing
-  else** from the context:
-  - **repository** — the gateway to persistence → `repositories.md`
+  something outside it that is **not** its own storage. The port and its DTOs
+  live in the context's `application/ports/`; the gateway imports that ports
+  module and **nothing else** from the context:
   - **cross-context** — the gateway to a peer context's `Client` →
     `gateway-cross-context.md`
   - **vendor/ACL** — the gateway to a model you *don't* own (a third-party SDK
     or schema). **No file and no verified impl exists yet** — note the gap,
     don't invent a convention. Anti-corruption is a *purpose* a gateway can
     have, not a separate role: it is built as port + adapter like any other.
+- **Repositories (outbound, persistence)** — the same port-and-adapter shape
+  aimed at the context's own storage, but its own adapter kind package: a
+  `ts.Repository` lives in `adapters/repositories/`, never in
+  `adapters/gateways/` (TB052). → `repositories.md`
 
 Enforced layout (TB041/TB052): `adapters/handlers`, `adapters/gateways`,
 `adapters/repositories`, and `adapters/jobs` are the adapter kind packages;

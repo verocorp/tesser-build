@@ -3,9 +3,10 @@
 Generated from the implementation by the rulebook — never hand-edit.
 `python3 -m srv.cli.rules --check` fails when this file drifts from the
 code; regenerate with `python3 -m srv.cli.rules`. One row per rule: the
-normative clause every violation message ends
-with. ⟨…⟩ marks a value filled in per violation. Fixture coverage is
-exact: a test covers a rule when an assert literal contains the clause.
+normative clause every violation message ends with. ⟨…⟩ marks a value
+filled in per violation. A rule emitted from more than one owner lists
+every owner in Applies to, joined by ·. Fixture coverage is exact: a
+test covers a rule when an assert literal contains the clause.
 
 ## tessercheck rules (from the violation messages in tessercheck/domain/checks.py)
 
@@ -51,7 +52,7 @@ exact: a test covers a rule when an assert literal contains the clause.
 | TB041 | a tests package holds only test modules and conftest | tests package module | is neither a test module nor conftest · __init__ declares code | domain/checks.py:2313,2323 | test_tests_package_totality_is_flagged |
 | TB042 | a context tests __init__ is empty | context tests `__init__` | __init__ declares code | domain/checks.py:2334 | test_a_context_tier_test_reaches_its_whole_context_and_a_neighbours_application |
 | TB042 | a role __init__ only re-exports from its own role | role package `__init__` | __init__ declares code · imports ⟨import⟩ | domain/checks.py:2348,2361 | test_role_init_only_reexports_its_own_role, test_relative_imports_resolve_against_the_package |
-| TB041 | the tesser distribution holds only the namespaces its consumers import | tesser distribution `__init__` | is not a consumer namespace | domain/checks.py:2382,2422 | test_the_distribution_holds_only_consumer_namespaces, test_a_stray_subpackage_in_the_distribution_is_a_finding |
+| TB041 | the tesser distribution holds only the namespaces its consumers import | tesser distribution `__init__` · tesser distribution module | is not a consumer namespace | domain/checks.py:2382,2422 | test_the_distribution_holds_only_consumer_namespaces, test_a_stray_subpackage_in_the_distribution_is_a_finding |
 | TB042 | a tesser __init__ only re-exports from the distribution | tesser distribution `__init__` | __init__ declares code · imports ⟨import⟩ | domain/checks.py:2393,2406 | test_a_tesser_init_only_reexports_from_the_distribution |
 | TB062 | a shell module imports only the tesser distribution and the shell stdlib | tesser distribution module | imports ⟨import⟩ | domain/checks.py:2437 | test_a_shell_module_stays_on_the_shell_stdlib |
 | TB042 | a kernel __init__ only re-exports from its own kernel | kernel `__init__` | __init__ declares code · imports ⟨import⟩ | domain/checks.py:2452,2465 | test_a_kernel_init_only_reexports_from_its_own_kernel, test_a_kernel_init_rejects_a_near_miss_package |
@@ -61,7 +62,7 @@ exact: a test covers a rule when an assert literal contains the clause.
 | TB042 | a srv or app __init__ is empty | srv / app `__init__` | __init__ declares code | domain/checks.py:2573 | test_srv_and_app_tesser_form_modes |
 | TB050 | a kernel module imports tesser.domain exactly once, as ts | kernel module | never imports ⟨package⟩ · imports ⟨import⟩ again · imports names from ⟨import⟩ · imports ⟨import⟩ without the ts alias | domain/checks.py:2624,2635,2644,2653 | test_kernel_tesser_import_rules |
 | TB050 | a kernel module imports only tesser.domain | kernel module | imports ⟨import⟩ | domain/checks.py:2615 | test_kernel_tesser_import_rules |
-| TB050 | a norm module is imported as an aliased module — a bare import binds the whole tesser package, and the ts alias belongs to the placement's own package | kernel module | imports ⟨import⟩ without an alias | domain/checks.py:2601 | test_a_norm_module_is_imported_as_a_module_where_its_placement_allows |
+| TB050 | a norm module is imported as an aliased module — a bare import binds the whole tesser package, and the ts alias belongs to the placement's own package | kernel module · app module · srv module · protocol module · application client module · ports module · context role module · test module | imports ⟨import⟩ without an alias | domain/checks.py:2601 | test_a_norm_module_is_imported_as_a_module_where_its_placement_allows |
 | TB050 | an app module imports tesser.app exactly once, as ts | app module | never imports tesser.app · imports ⟨import⟩ again · imports names from ⟨import⟩ · imports ⟨import⟩ without the ts alias | domain/checks.py:2624,2635,2644,2653 | test_srv_and_app_statement_totality |
 | TB050 | an app module's tesser imports are tesser.app, and tesser.errors | app module | imports ⟨import⟩ | domain/checks.py:2615 | test_srv_and_app_tesser_form_modes |
 | TB050 | a srv module imports tesser.srv exactly once, as ts | srv module | never imports tesser.srv · imports ⟨import⟩ again · imports names from ⟨import⟩ · imports ⟨import⟩ without the ts alias | domain/checks.py:2624,2635,2644,2653 | test_srv_and_app_tesser_form_modes |
@@ -109,7 +110,7 @@ exact: a test covers a rule when an assert literal contains the clause.
 | TB016 | bool and complex are not value-object material — model the raw value or reach for an enum | value object class | field ⟨field⟩ is a ⟨scalar⟩ | domain/checks.py:3683 | test_composition_norms |
 | TB016 | a compound backs itself with child value objects | value object class | field ⟨field⟩ is a bare primitive | domain/checks.py:3696 | test_composition_norms |
 | TB017 | a value object has one construction path — its own __init__ | value object class | is a second construction path | domain/checks.py:3762 | test_a_value_object_has_one_construction_path |
-| TB015 | a structured domain object has no primitive exit — decompose through leaf components | value object conversion dunder | is a primitive exit | domain/checks.py:3827,3842 | test_exit_norms_leaf_and_structured |
+| TB015 | a structured domain object has no primitive exit — decompose through leaf components | value object conversion dunder · entity or aggregate conversion dunder | is a primitive exit | domain/checks.py:3827,3842 | test_exit_norms_leaf_and_structured |
 | TB015 | a leaf defines exactly its backing type's conversion dunder | value object conversion dunder | is a mismatched exit | domain/checks.py:3806 | test_exit_norms_leaf_and_structured |
 | TB018 | a canonical exit is a one-line delegation to its canonical_* policy | value object conversion dunder | hand-rolls its exit | domain/checks.py:3816 | test_exit_norms_leaf_and_structured |
 | TB011 | an accessor returns a defensive copy, never the backing store | entity or aggregate accessor | hands back its backing collection | domain/checks.py:3880 | test_an_accessor_never_hands_back_the_backing_collection |
@@ -156,7 +157,7 @@ exact: a test covers a rule when an assert literal contains the clause.
 | TB052 | a ports enum is an enum.Enum, because a str- or int-backed member compares equal to a raw literal and reopens the typo the enum closes | ports module | is an enum.⟨enum⟩ | domain/checks.py:4824 | test_a_ports_enum_is_a_plain_enum |
 | TB052 | only a port and the requests and responses it speaks live in a ports module | ports module | is ⟨kind⟩ | domain/checks.py:4856 | test_a_ports_module_holds_only_port_kinds |
 | TB052 | a ports enum subclasses enum.Enum alone, because a str- or int-backed member compares equal to a raw literal and reopens the typo the enum closes | ports module | mixes another base into its enum | domain/checks.py:4835 | test_a_ports_enum_subclasses_enum_alone |
-| TB051 | a port method declares a shape and never a body, because a ports module holds no logic to import | port protocol method | carries a body | domain/checks.py:5002,5070 | test_a_port_method_declares_a_shape_and_never_a_body |
+| TB051 | a port method declares a shape and never a body, because a ports module holds no logic to import | port protocol method · store protocol method | carries a body | domain/checks.py:5002,5070 | test_a_port_method_declares_a_shape_and_never_a_body |
 | TB081 | a port declares only its public calls and __call__, because a private name is not private to anyone implementing or holding the port | port protocol method | is not a call an implementer provides | domain/checks.py:5012 | test_a_port_declares_only_the_calls_an_implementer_provides |
 | TB081 | a store declares exactly one method, which opens a transaction and yields the repository bound to it | store protocol method | declares no transaction · is not transaction | domain/checks.py:5080,5108 | test_a_store_declares_exactly_one_transaction_that_yields_its_port |
 | TB081 | a store's transaction takes none, because the transaction is the only thing it opens | store protocol method | takes ⟨count⟩ parameters | domain/checks.py:5097 | test_a_store_declares_exactly_one_transaction_that_yields_its_port |
@@ -201,7 +202,7 @@ exact: a test covers a rule when an assert literal contains the clause.
 | TB081 | a class of actions depends only on ports and the stores that yield them | actions `__init__` | parameter ⟨name⟩ is not a ts.Port or a ts.Store | domain/checks.py:6147 | test_a_class_of_actions_takes_exactly_one_port_and_calls_it_once |
 | TB081 | an orchestrator depends only on ports and the stores that yield them | orchestrator `__init__` | parameter ⟨name⟩ is not a ts.Port or a ts.Store | domain/checks.py:6147 | test_an_orchestrator_takes_action_ports_and_stores_only_them |
 | TB081 | a service depends only on ports and the stores that yield them | service `__init__` | parameter ⟨name⟩ is not a ts.Port or a ts.Store | domain/checks.py:6147 | test_service_dependencies_must_be_ports |
-| TB081 | a job context is threaded as the leading parameter of an action port call and nowhere else | repository or gateway method | returns a ts.JobContext · parameter ⟨name⟩ is a ts.JobContext | domain/checks.py:6178,6189,7568,7579 | test_a_job_context_is_led_with_or_it_is_a_finding |
+| TB081 | a job context is threaded as the leading parameter of an action port call and nowhere else | repository or gateway method · port protocol method · aggregate or entity `__init__` · config `__init__` · public actions method · public orchestrator method · application client protocol method · client protocol method · public service method | returns a ts.JobContext · parameter ⟨name⟩ is a ts.JobContext | domain/checks.py:6178,6189,7568,7579 | test_a_job_context_is_led_with_or_it_is_a_finding |
 | TB081 | an adapter speaks records, never domain objects | repository or gateway method | carries ⟨kind⟩ in its signature | domain/checks.py:6211 | test_records_never_carry_domain_objects, test_relative_imports_resolve_against_the_package |
 | TB081 | a port speaks records, never domain objects | port protocol method | carries ⟨kind⟩ in its signature | domain/checks.py:6211 | test_records_never_carry_domain_objects |
 | TB080 | a value object constructs in its own __init__ | value object `__init__` | defines no __init__ | domain/checks.py:6238 | test_domain_field_rules_are_flagged |
@@ -255,7 +256,7 @@ exact: a test covers a rule when an assert literal contains the clause.
 | TB080 | a config constructs from exactly one ts.Spec | config class | defines no __init__ | domain/checks.py:7483,7518 | test_a_config_constructs_from_exactly_one_spec |
 | TB080 | a domain constructor takes exactly one ts.Spec | aggregate or entity `__init__` | uses *args/**kwargs · takes ⟨count⟩ parameters · parameter ⟨name⟩ is not a ts.Spec | domain/checks.py:7589,7598,7610 | test_aggregate_constructor_violations_are_flagged |
 | TB080 | a config constructor takes exactly one ts.Spec | config `__init__` | uses *args/**kwargs · takes ⟨count⟩ parameters · parameter ⟨name⟩ is not a ts.Spec | domain/checks.py:7589,7598,7610 | test_a_config_constructs_from_exactly_one_spec |
-| TB081 | a port method takes one ts.Request, led by a ts.JobContext when an orchestrator calls it | port protocol method | uses *args/**kwargs · takes ⟨count⟩ parameters · parameter ⟨name⟩ is not a ts.Request | domain/checks.py:7589,7598,7610 | test_a_port_method_speaks_one_request_and_one_response, test_a_port_method_shape_survives_async_and_dunder_call |
+| TB081 | a port method takes one ts.Request, which a leading ts.JobContext may precede | port protocol method | uses *args/**kwargs · takes ⟨count⟩ parameters · parameter ⟨name⟩ is not a ts.Request | domain/checks.py:7589,7598,7610 | test_a_port_method_speaks_one_request_and_one_response, test_a_port_method_shape_survives_async_and_dunder_call |
 | TB081 | a port method returns a ts.Response | port protocol method | does not return a ts.Response | domain/checks.py:7622 | test_a_port_method_speaks_one_request_and_one_response |
 | TB081 | an actions method takes exactly one ts.Request | public actions method | uses *args/**kwargs · takes ⟨count⟩ parameters · parameter ⟨name⟩ is not a ts.Request | domain/checks.py:7589,7598,7610 | test_a_class_of_actions_takes_exactly_one_port_and_calls_it_once |
 | TB081 | an actions method returns a ts.Response | public actions method | does not return a ts.Response | domain/checks.py:7622 | test_a_class_of_actions_takes_exactly_one_port_and_calls_it_once |

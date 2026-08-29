@@ -55,6 +55,50 @@ func TestCoverageMatrix_NoSilentGaps(t *testing.T) {
 	}
 }
 
+// TestCoverageMatrix_PythonChecksHaveRows is the Python half of the same
+// no-silent-gaps contract. The Go half above keys off internal/analyzers.All;
+// the Python check set has no Go registry to key off, so this reads the shipped
+// codes out of tessercheck-py/RULES.md — which is GENERATED from the violation
+// call sites and drift-gated by `python3 -m srv.cli.rules --check` in
+// scripts/verify, so it cannot claim a code the analyzer does not ship.
+//
+// The bar is the same as roadmap/generate.py's totality check: a code is
+// claimed when SOME row names it. That is deliberately weak — a code that gains
+// new meaning in a later wave stays claimed by its old row — but it forbids the
+// silent gap this guard exists for: a code shipping with no row at all, which
+// is how TB040/TB043/TB044/TB045/TB053/TB061-TB066/TB069/TB070/TB074/TB090 all
+// reached v0.0.85.0 unrowed.
+func TestCoverageMatrix_PythonChecksHaveRows(t *testing.T) {
+	matrix, err := os.ReadFile("coverage.md")
+	if err != nil {
+		t.Fatalf("read coverage.md: %v", err)
+	}
+	rules, err := os.ReadFile(filepath.Join("..", "tessercheck-py", "RULES.md"))
+	if err != nil {
+		t.Fatalf("read tessercheck-py/RULES.md: %v", err)
+	}
+
+	codeRe := regexp.MustCompile(`(?m)^\| (TB[0-9]+) \|`)
+	seen := map[string]bool{}
+	var codes []string
+	for _, m := range codeRe.FindAllStringSubmatch(string(rules), -1) {
+		if !seen[m[1]] {
+			seen[m[1]] = true
+			codes = append(codes, m[1])
+		}
+	}
+	if len(codes) == 0 {
+		t.Fatal("extracted zero check codes from tessercheck-py/RULES.md — refusing an empty guard")
+	}
+
+	content := string(matrix)
+	for _, code := range codes {
+		if !strings.Contains(content, code) {
+			t.Errorf("Python check %s has no row in coverage.md (silent gap)", code)
+		}
+	}
+}
+
 // TestSkillMaterializationAnchors is the structural half of the skill-matrix
 // contract (design v2, H6): every `file.md#anchor` the skill-materializations
 // table names must resolve to a real heading in that file under skills/tesser-build/. It

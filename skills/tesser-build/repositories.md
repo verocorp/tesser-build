@@ -4,14 +4,15 @@
 
 A repository is the **persistence boundary** for an aggregate: it maps the
 aggregate to and from storage and hides how that storage works (Evans,
-*Domain-Driven Design*, ch. 6; Vernon, *IDDD*, ch. 12). In the anatomy it is a
-**gateway type** — an outbound adapter behind a port the context owns
-(`map.md#adapters`); its sibling is the cross-context gateway
+*Domain-Driven Design*, ch. 6; Vernon, *IDDD*, ch. 12). In the anatomy it is an
+**outbound adapter** behind a port the context owns, in its own adapter kind
+package (`map.md#adapters`); its sibling is the cross-context gateway
 (`gateway-cross-context.md`), which reaches a peer context instead of storage.
 The interface (the port) is declared in the context's `application/ports/`
 package — one port per module, with the request/response DTOs it speaks; the
-concrete implementations live in the context's `adapters/repositories/` (or
-`adapters/gateways/` where a tree keeps the older home), each module named
+concrete implementations live in the context's `adapters/repositories/`, its
+own adapter kind package with its own reach — a `ts.Repository` in
+`adapters/gateways/` is a `TB052` finding — each module named
 for its backing (`file_repository.py`, `repo_memory.py`), and import that
 ports module and nothing else of the context. It has exactly two jobs
 — **save** an aggregate (decompose it into rows/documents) and **retrieve** one
@@ -71,6 +72,16 @@ deciding any domain rule?* Yes → repository.
    reconstructed on the application side of the port. Same rule underneath
    (no raw storage types, no leaked persistence vocabulary); different
    carrier.
+6. **A transaction boundary is a store, not a repository method.** When a use
+   case must read, decide, and write inside one transaction, the port splits in
+   two inside the one ports module: a long-lived **store** that declares only
+   `transaction()`, and the short-lived, connection-bound **repository** that
+   transaction yields. The service writes the boundary (`with
+   store.transaction() as repo:`) and never the mechanics; the repository keeps
+   rules 1-4 unchanged. This replaces the earlier "the unit-of-work lifetime is
+   a decision for the consuming codebase" position, which left the boundary
+   unmodeled. Mechanics and the enforced shape: `python.md#ports`; the
+   reasoning is `docs/design-asyncpg-repositories.md`.
 
 ## The read side — draw the line explicitly
 
