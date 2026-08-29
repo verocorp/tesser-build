@@ -19,12 +19,26 @@ after each increment's example is right, not before.
 
 ### Pool ownership
 
-- One `asyncpg.Pool` per distinct database, created by the **app** before the
-  components and closed after them. The app derives which pools to create from
-  the components' config coordinates (dedupe the DSNs); there is no "ask each
+- One `asyncpg.Pool` per distinct database, owned by the **app** and closed by
+  it after the components. The app derives which pools it owns from the
+  components' config coordinates (dedupe the DSNs); there is no "ask each
   component what it needs" round trip, because the config is the requirement.
-- The component receives the pool it needs and constructs its store from it.
-  The component's `close()` releases nothing it didn't build.
+- `App.__init__` is synchronous and `asyncpg.create_pool` must be awaited, so
+  the app does not hold a pool — it holds a **database**: a small object,
+  constructed synchronously from a DSN, that creates the pool on its first
+  `acquire()` inside the running loop and closes it in `close()`. One database
+  per distinct DSN; the pool is created at most once, inside the loop that
+  serves requests, and the app never awaits during construction.
+- The component receives the database it needs and constructs its store from
+  it. The component's `close()` releases nothing it didn't build.
+- Closing is bounded: `Pool.close()` waits for acquired connections, so the
+  database's `close()` wraps it in a timeout and falls back to
+  `Pool.terminate()`. A request cancelled inside an open `transaction()` rolls
+  back and releases its connection (asyncpg's context managers do this; the
+  release is shielded), and that path is tested.
+- Schema ownership moves with the pool: today each repository runs its
+  `CREATE TABLE IF NOT EXISTS` when it creates its pool. After the split, the
+  **store** runs it, once, on first use. Migrations proper stay out of scope.
 
 ### Store / transaction / repository
 
@@ -43,15 +57,26 @@ after each increment's example is right, not before.
   ```
 
 - A transaction is scoped to one store, so one aggregate per transaction —
-  Vernon's rule (IDDD ch. 10) enforced by the types. Two repositories in one
-  transaction is unwritable; if two rows must change atomically they are one
-  aggregate and one repository decomposes it (`repositories.md` rule 1).
+  Vernon's rule (IDDD ch. 10). The types make a transaction that spans two
+  stores unwritable; if two rows must change atomically they are one aggregate
+  and one repository decomposes it (`repositories.md` rule 1). The types do
+  **not** stop a service method from opening two transactions in sequence, or
+  nesting them; that is a checker rule (below), not a type.
+- **One `transaction()` per service method, and nothing crosses a context
+  while it is open.** A cross-context gateway call inside an open transaction
+  is a deadlock: alpha holds a connection and a row lock, calls beta, beta
+  needs a connection from the same deduped pool. With a pool of one it hangs;
+  under load it exhausts the pool. So the service loads and decides inside the
+  transaction, and calls out after it closes — or before it opens. This is a
+  rule, not an open question.
 - Every access goes through `transaction()`; there are no direct methods on
   the store. A lone read opens a trivial transaction. One shape.
-- Adapters: `PostgresWidgetStore(pool)` acquires a connection, opens a
+- Adapters: `PostgresWidgetStore(database)` acquires a connection, opens a
   transaction, yields `PostgresWidgetRepository(connection)`; commit on exit,
-  rollback on exception. `MemoryWidgetStore()` snapshots its dict and restores
-  on exception, so the memory backend has real rollback.
+  rollback on exception. `MemoryWidgetStore()` holds an `asyncio.Lock` for
+  the length of a transaction and snapshots its dict inside it, restoring on
+  exception — the lock is what makes the snapshot correct when two
+  transactions interleave, and it serialises the way `FOR UPDATE` does.
 
 ### Rejected
 
@@ -81,35 +106,53 @@ after each increment's example is right, not before.
 
 ## The plan
 
-`#139` is increment 1 and is merged. Increments 2 and 3 are independent of
-each other; this order keeps each PR's rulings separate.
+`#139` is increment 1 and is merged. Increment 3 depends on increment 2: the
+store is constructed from the database the app owns, so the database has to
+exist first. The order also keeps each PR's rulings separate.
+
+### Ruling required before increment 2
+
+The database as a component constructor parameter collides with two things the
+skill says today: `component.md` rule 2 (a component constructs from one
+`Config`) and `app.md`'s lifecycle section ("nothing travels — a release
+contract that has to be passed is the sign that ownership is unclear"). This
+is decided before increment 2 is built, not during. The candidates:
+
+- **Injected infrastructure.** The database is a constructor parameter beside
+  the config, like an injected peer port; the app owns its `close()`; the
+  component never closes it. Smallest change; amends both rules.
+- **A database component.** `Database(cfg)` is its own `ts.Component` kind,
+  built first and closed last by the app, injected like `beta.client` is
+  today. Keeps "a component releases what it constructed" exact; adds a
+  component kind that is not a bounded context, and moves the DSN out of the
+  context's config into an app-level `databases` table with the context naming
+  which one it uses.
+
+Either way, the app is choosing *which database* a context gets, not *which
+implementation* — the coordinate still selects memory versus Postgres inside
+the component.
 
 ### Increment 2 — pool ownership
 
-The app creates pools from config, components receive them, repositories take
-a pool instead of a DSN.
+The app owns the databases; components receive them; repositories take a
+database instead of a DSN.
 
 - `app/app.py`: dedupe the DSN coordinates across `cfg.alpha.storage` and
-  `cfg.beta.storage`; one `asyncpg.create_pool` per distinct DSN, created before
-  the components (lazily, on first use inside the running loop, since `App` is
-  constructed synchronously), closed after them in `close()`.
-- `alpha/component/component.py`, `beta/component/component.py`: take the pool
-  as a constructor parameter; `"memory"` builds the memory repository, a pool
-  builds the Postgres one; the component's `close()` releases nothing.
-- `PostgresWidgetRepository(pool)`, `PostgresKeyRepository(pool)`: drop the DSN
-  and the lazy pool-init; each method does
-  `async with self._pool.acquire() as connection, connection.transaction():`
-  around its own query.
+  `cfg.beta.storage`; one database per distinct DSN, constructed synchronously
+  before the components and closed after them in `close()` (bounded, as
+  above). The pool inside it is created on first `acquire()`.
+- `alpha/component/component.py`, `beta/component/component.py`: take the
+  database as decided above; `"memory"` builds the memory repository, a
+  database builds the Postgres one; the component's `close()` releases
+  nothing.
+- `PostgresWidgetRepository(database)`, `PostgresKeyRepository(database)`:
+  drop the DSN and the lazy pool-init; each method does
+  `async with self._database.acquire() as connection, connection.transaction():`
+  around its own query. `CREATE TABLE IF NOT EXISTS` runs once per repository
+  on first use, until increment 3 moves it to the store.
 - Ports, services, clients, tests above the adapter tier: untouched.
-
-Ruling this forces:
-
-- The pool as a component constructor parameter versus `app.md`'s "nothing
-  travels — a release contract that has to be passed is the sign that ownership
-  is unclear." The candidates are injected infrastructure (the pool is a
-  parameter, like an injected peer port, and the app owns its close) or a
-  database component (`Database(cfg)` owning the pool, built first and closed
-  last, injected like `beta.client` is today).
+- Tests added: two contexts on one DSN share one pool; the app closes the pool
+  once; a request cancelled mid-query releases its connection.
 
 ### Increment 3 — store / repository split
 
@@ -119,28 +162,38 @@ services open the transaction.
 - `alpha/application/ports/widget_repository.py`: `WidgetStore` with
   `transaction()`; `WidgetRepository` with `load_widget` / `save_widget`; the
   request and response records for each.
-- `alpha/adapters/repositories/postgres.py`: `PostgresWidgetStore(pool)` and
-  `PostgresWidgetRepository(connection)`.
-- `alpha/adapters/repositories/memory.py`: `MemoryWidgetStore()` with snapshot
-  rollback and `MemoryWidgetRepository(part_by_name)`.
+- `alpha/adapters/repositories/postgres.py`: `PostgresWidgetStore(database)`
+  and `PostgresWidgetRepository(connection)`; the store runs the schema
+  statement once on first use.
+- `alpha/adapters/repositories/memory.py`: `MemoryWidgetStore()` with the lock
+  and snapshot rollback, and `MemoryWidgetRepository(part_by_name)`.
 - `alpha/application/alpha_service.py`: holds the store; every use case opens
-  `async with self._widget_store.transaction() as widget_repository:`.
+  `async with self._widget_store.transaction() as widget_repository:`, and
+  `add`'s `HELD` arm calls `beta_check` **after** the transaction closes.
 - Same for `beta` (`KeyStore` / `KeyRepository`).
 - Fakes in tests implement the store and yield a fake repository.
+- Tests added: a second `transaction()` on the same store while one is open
+  waits (Postgres) or blocks on the lock (memory); a memory transaction that
+  raises restores exactly the state before it opened, with another
+  transaction's commit in between preserved.
 
-Rulings this forces:
+Rulings this forces — all in the ports and service rules, none in the app:
 
-- **TB052 one port per module** now sees a store and its repository in one
-  module. Candidate: "one port and its transaction kind."
-- **TB081 port-method shape**: `transaction()` takes no `ts.Request` and
-  returns a context manager, not a `ts.Response`. Candidate: a new `ts.Store`
-  kind so the checker sees it, rather than a carve-out by method name.
+- **A `ts.Store` kind.** `transaction()` takes no `ts.Request` and returns a
+  context manager, not a `ts.Response`, so TB081's port-method shape cannot
+  admit it by accident. A named kind lets the checker see: a store declares
+  exactly `transaction()`; the thing it yields is a repository port; a service
+  may depend on a store (TB081's "depends only on ports" widens to "ports and
+  stores"); and the request/response records stay in the same leaf module
+  without breaking TB067.
+- **TB052 one port per module** becomes "one store and the repository it
+  yields, or one port."
+- **One `transaction()` per service method**, and no gateway or client call
+  inside it — the deadlock rule above, checked in the service body the way
+  TB082 checks branching.
 - **Parameter names shadowing the ports module**: `widget_repository` the
   instance versus `widget_repository` the module. Settle once (alias the
   module, or name the parameter for its kind) rather than per file.
-- **A cross-context call inside an open transaction**: `alpha.add`'s `HELD`
-  arm calls `beta_check` while a row lock is held. Either that is allowed and
-  visible on the page, or the service loads, decides, closes, then calls out.
 
 ## Sources
 
