@@ -6131,6 +6131,69 @@ def test_reader_findings_are_never_inline_suppressible() -> None:
     assert not any("TB090" in f for f in findings)
 
 
+@ts.helper
+def _universe_spec(
+    sources: tuple[tuple[str, str, str | None, bool], ...] = (),
+    base: tuple[tuple[str, str, str | None, bool], ...] = (
+        ("mall/__init__.py", "mall", "", True),
+        ("mall/domain/__init__.py", "mall.domain", "", True),
+        (
+            "mall/domain/thing.py",
+            "mall.domain.thing",
+            "import tesser.domain as ts\n",
+            False,
+        ),
+        (
+            "mall/domain/test_thing.py",
+            "mall.domain.test_thing",
+            "def test_thing() -> None:\n    assert True\n",
+            False,
+        ),
+        ("shop/__init__.py", "shop", "", True),
+    ),
+) -> checks.CodebaseSpec:
+    return _spec(sources=sources, base=base)
+
+
+def test_a_stub_names_no_context_for_the_modules_that_parsed() -> None:
+    alone = tuple(
+                f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                for v in checks.Codebase(_universe_spec()).violations()
+            )
+    stub = tuple(
+               f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+               for v in checks.Codebase(_universe_spec(sources=(
+                   ("shop/domain/money.pyi", "shop.domain.money", "class Money: pass\n", False),
+               ))).violations()
+           )
+    assert any(
+        "shop/__init__.py:1: TB040" in f and "belongs to no governed package" in f
+        for f in alone
+    )
+    assert any(
+        "shop/domain/money.pyi:1: TB043" in f and "is a stub" in f for f in stub
+    )
+    assert tuple(f for f in stub if "TB043" not in f) == alone
+
+
+def test_a_module_that_does_not_parse_names_no_context() -> None:
+    alone = tuple(
+                f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                for v in checks.Codebase(_universe_spec()).violations()
+            )
+    broken = tuple(
+                 f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                 for v in checks.Codebase(_universe_spec(sources=(
+                     ("shop/domain/money.py", "shop.domain.money", "def (:\n", False),
+                 ))).violations()
+             )
+    assert any(
+        "shop/domain/money.py:1: TB043" in f and "every checked module parses" in f
+        for f in broken
+    )
+    assert tuple(f for f in broken if "TB043" not in f) == alone
+
+
 def test_ports_is_a_package_never_a_module() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
