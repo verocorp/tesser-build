@@ -57,6 +57,26 @@ services rewritten to that shape rather than against a sketch.
 - **One decision is one finding.** A comparison inside an `if` test, or inside
   a comprehension's filter, reported twice; it now reports once, as the branch
   it sits in.
+- **What `__call__` and a wrapped annotation still hid.** A `ts.Client`'s
+  `__call__` skipped the signature rules the exemption above was meant to
+  close, and a value object's `__call__` returning the backing field slipped
+  past `TB010`'s accessor-leak clause; both now read a public `__call__` like
+  any other method. `bool(...)`, `any(...)`, and `all(...)` join `TB082` as
+  decisions a service spells for itself. A client DTO's bare bool is read
+  through the wrappers — `'bool'`, `bool | None`, `typing.Optional[bool]`,
+  `typing.Annotated[bool, ...]` — the same unwrapping the container and
+  allowed-annotation checks already do. And an unannotated *return* on a public
+  domain method is a `TB019` finding of its own, so the caller-side `TB082`
+  has a partner finding at the cause rather than only blaming the service.
+- **Where the rules were reading too much or too little.** `operator.add` and
+  `operator.itemgetter` no longer report as "calls a comparison" — only the
+  module's comparison and truth functions do. An awaited subject
+  (`match await widget.decide():`, or a local bound to one) resolves like the
+  synchronous form, and an outcome-returning method a domain object *inherits*
+  resolves as well as one it declares. A conditional expression over a
+  comparison reports once, not twice. And a comprehension's target is its own
+  scope in Python 3, so it no longer poisons an outer domain local of the same
+  name — the fixture that asserted the opposite asserted a bug.
 - **A quoted container annotation is still a container** (`TB019`), and the
   container vocabulary is now built from the mutable-collection set, so the
   `typing`-spelled names (`typing.List[int]`, `typing.Dict[...]`) get the

@@ -95,6 +95,42 @@ deciding with an extra step, not an exemption.
   example-only fix and the rule is "an app owns its pools through a kind
   that serialises its lifecycle", stated in `python.md` and unchecked.
 
+## Three asyncpg store findings left standing (2026-08-29, ship review cycle 2)
+
+Found by the cycle-2 reviewers, recorded rather than fixed — none is a
+regression from this wave, and each wants a ruling before code moves.
+
+- [ ] **`_schema_ready` is unsynchronised.** `PostgresWidgetStore.transaction`
+  and `PostgresKeyStore.transaction`
+  (`examples/asyncpg/alpha/adapters/repositories/postgres.py:73-80`,
+  `beta/adapters/repositories/postgres.py:41-46`) read and set a plain bool,
+  so two concurrent first `transaction()` calls both see `False` and both run
+  the DDL. `CREATE TABLE IF NOT EXISTS` is not concurrency-safe against
+  itself — two sessions can race to the same catalog insert and one gets a
+  duplicate-key error — so the window is real, not merely wasteful. The same
+  `asyncio.Lock` shape `Database.open()` took would close it; whether the
+  example fixes it or a shipped `ts.Store` lifecycle does is the open
+  question above.
+
+- [ ] **`AddResponse.part` always equals the request's part on the add path.**
+  Nothing in `examples/asyncpg` can distinguish the widget's own part from
+  the part that was asked for, because the add path echoes the request rather
+  than reading the stored row back. A test that asserts `response.part` is
+  therefore asserting its own input. Either the add path reads the row it
+  wrote (and the response carries the widget), or the response drops the
+  field.
+
+- [ ] **A concurrent first writer that aborts: two readings.** One reviewer
+  read the add path as able to report a spurious conflict — first writer
+  inserts, second writer's `ON CONFLICT DO NOTHING` returns no row, first
+  writer's transaction then aborts, and the second caller is told the widget
+  exists when the committed table holds nothing. The same reviewer then
+  argued the second writer blocks on the first's row lock until it resolves,
+  so the case cannot arise. Both readings are recorded because the resolution
+  decides whether `add_widget` needs a retry or a different conflict test;
+  Postgres's documented behaviour under `READ COMMITTED` is the thing to
+  check first.
+
 ## Decisions go through a domain object (2026-08-29, Chris ruling)
 
 **The ruling.** Anything that needs a decision goes through a domain object;
