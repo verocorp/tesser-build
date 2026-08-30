@@ -958,7 +958,8 @@ def test_mapper_shape_rules_are_flagged() -> None:
     )
     assert any("MapToRowRequestSly parameter 'name' is a primitive" in f for f in findings)
     assert any("MapToRowRequestSly parameter 'tags' is a primitive" in f for f in findings)
-    assert any("MapToRowRequestSly parameter 'n' is a primitive" in f for f in findings)
+    assert not any("MapToRowRequestSly parameter 'n' is a primitive" in f for f in findings)
+    assert any("TB021" in f and "quotes 'int | None'" in f for f in findings)
     assert any("MapToRowRequestSly stores 'setattr'" in f for f in findings)
     assert any("sloppy.py:35: TB080 shop.application.sloppy.MapToRowRequestSly stores 'label'" in f for f in findings)
     assert any("sloppy.py:36: TB080 shop.application.sloppy.MapToRowRequestSly stores 'rows'" in f for f in findings)
@@ -2079,12 +2080,21 @@ def test_construction_containers_discriminate_specs_from_value_objects() -> None
         for f in findings
     )
     assert not any("parameter 'children'" in f for f in findings)
-    assert not any("parameter 'child'" in f for f in findings)
-    assert not any("parameter 'kids'" in f for f in findings)
+    assert any(
+        "ForwardSpec.__init__" in f and "parameter 'child' is not allowed" in f
+        for f in findings
+    )
+    assert any(
+        "ForwardSpec.__init__" in f and "parameter 'kids' is not allowed" in f
+        for f in findings
+    )
     assert any(
         "ForwardSpec.__init__" in f and "parameter 'bad' is not allowed" in f
         for f in findings
     )
+    assert any("TB021" in f and "quotes 'TagSpec | None'" in f for f in findings)
+    assert any("TB021" in f and "quotes tuple['ForwardSpec', ...]" in f for f in findings)
+    assert any("TB021" in f and "quotes 'Tag'" in f for f in findings)
 
 
 def test_edge_records_reject_an_empty_target() -> None:
@@ -5516,7 +5526,7 @@ def test_a_value_object_mutable_collection_field_is_flagged() -> None:
     assert not any("_names" in f and "TB002" in f for f in findings)
 
 
-def test_mutable_set_and_quoted_annotations_are_still_mutable_collections() -> None:
+def test_a_mutable_set_is_a_mutable_collection_and_a_quoted_field_is_a_quoting_finding() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
@@ -5536,7 +5546,14 @@ def test_mutable_set_and_quoted_annotations_are_still_mutable_collections() -> N
         ))).violations()
                )
     assert any("field _mset is a mutable collection" in f for f in findings)
-    assert any("field _quoted is a mutable collection" in f for f in findings)
+    assert not any("field _quoted is a mutable collection" in f for f in findings)
+    assert any(
+        "holder.py:5: TB021 shop.domain.holder quotes 'list[str]'; "
+        "an annotation is written unquoted — a quoted type is a string the analyzer "
+        "cannot read, and from __future__ import annotations is what defers a name "
+        "the module has not defined yet" in f
+        for f in findings
+    )
 
 
 def test_a_value_object_hides_its_representation() -> None:
@@ -5837,8 +5854,13 @@ def test_review_pins_for_the_shape_norms() -> None:
     assert any("SelfDoor.parse is a second construction path" in f for f in findings)
     assert any("SelfDoor.bare_door is a second construction path" in f for f in findings)
     assert not any("SelfDoor.kind" in f for f in findings)
+    assert not any("Quoted.label" in f and "TB019" in f for f in findings)
     assert any(
-        "Quoted.label returns str" in f and "TB019" in f for f in findings
+        "pins.py:26: TB021 shop.domain.pins quotes 'str'" in f for f in findings
+    )
+    assert any(
+        "pins.py:18: TB021 shop.domain.pins quotes type['SelfDoor']" in f
+        for f in findings
     )
     assert not any("Marked" in f for f in findings)
 
@@ -10402,8 +10424,6 @@ def test_a_spec_is_tracked_through_aliases_stores_and_shadows() -> None:
     assert tb083 == (
         "shop/adapters/keeper.py:8: TB083 shop.adapters.keeper.Keeper.__init__ keeps the spec 'tag.TagSpec'; "
         "a spec is never kept, it initializes its own object and is done",
-        "shop/adapters/keeper.py:9: TB083 shop.adapters.keeper.Keeper.__init__ keeps the spec '_quoted'; "
-        "a spec is never kept, it initializes its own object and is done",
         "shop/adapters/keeper.py:10: TB083 shop.adapters.keeper.Keeper.__init__ keeps the spec 'spec'; "
         "a spec is never kept, it initializes its own object and is done",
         "shop/adapters/keeper.py:11: TB083 shop.adapters.keeper.Keeper.__init__ keeps the spec 'spec'; "
@@ -10411,8 +10431,6 @@ def test_a_spec_is_tracked_through_aliases_stores_and_shadows() -> None:
         "shop/adapters/keeper.py:12: TB083 shop.adapters.keeper.Keeper.__init__ keeps the spec 'spec'; "
         "a spec is never kept, it initializes its own object and is done",
         "shop/adapters/keeper.py:16: TB083 shop.adapters.keeper.Keeper.aliased reads 'value' of the spec 'again'; "
-        "a spec is only read where it initializes its own object",
-        "shop/adapters/keeper.py:18: TB083 shop.adapters.keeper.Keeper.quoted reads 'value' of the spec 'spec'; "
         "a spec is only read where it initializes its own object",
         "shop/adapters/keeper.py:20: TB083 shop.adapters.keeper.Keeper.optional reads 'value' of the spec 'spec'; "
         "a spec is only read where it initializes its own object",
@@ -10422,6 +10440,16 @@ def test_a_spec_is_tracked_through_aliases_stores_and_shadows() -> None:
         "a spec is only read where it initializes its own object",
         "shop/adapters/keeper.py:24: TB083 shop.adapters.keeper.Keeper.iterated reads 'items' of the spec 'spec'; "
         "a spec is only read where it initializes its own object",
+    )
+    assert tuple(f for f in findings if " TB021 " in f) == (
+        "shop/adapters/keeper.py:4: TB021 shop.adapters.keeper quotes 'tag.TagSpec'; "
+        "an annotation is written unquoted — a quoted type is a string the analyzer "
+        "cannot read, and from __future__ import annotations is what defers a name "
+        "the module has not defined yet",
+        "shop/adapters/keeper.py:17: TB021 shop.adapters.keeper quotes 'tag.TagSpec'; "
+        "an annotation is written unquoted — a quoted type is a string the analyzer "
+        "cannot read, and from __future__ import annotations is what defers a name "
+        "the module has not defined yet",
     )
 
 
@@ -10620,7 +10648,13 @@ def test_a_spec_constructs_exactly_one_object_and_a_value_object_takes_it_exactl
         "shop/domain/pair.py:17: TB080 shop.domain.pair.Maybe.__init__ parameter 'spec' is not allowed; "
         "a value object constructs from one primitive or one spec, never value objects"
     ) in findings
-    assert not any("Quoted" in f and " TB080 " in f for f in findings)
+    assert (
+        "shop/domain/pair.py:20: TB080 shop.domain.pair.Quoted.__init__ parameter 'spec' "
+        "is not a ts.Spec; a domain constructor takes exactly one ts.Spec"
+    ) in findings
+    assert any(
+        "pair.py:20: TB021 shop.domain.pair quotes 'PairSpec'" in f for f in findings
+    )
 
 
 def test_a_second_taker_a_tuple_target_keep_and_a_test_module_maker_name_are_handled() -> None:
@@ -11222,7 +11256,8 @@ def test_an_outcome_is_neither_kept_nor_reached_into_nor_widened() -> None:
     assert not any("Base" in f and "TB084" in f for f in findings)
     assert not any("Board" in f and "TB084" in f for f in findings)
     assert not any("_clock" in f for f in findings)
-    assert any("run.py:33: TB084 shop.domain.run.quoted takes an outcome" in f for f in findings)
+    assert not any("shop.domain.run.quoted takes an outcome" in f for f in findings)
+    assert any("run.py:33: TB021 shop.domain.run quotes 'Advance'" in f for f in findings)
     assert any("run.py:37: TB084 shop.domain.run keeps an outcome on self._kept" in f for f in findings)
     assert any("run.py:38: TB084 shop.domain.run keeps an outcome on self._boxed" in f for f in findings)
     assert any("run.py:39: TB084 shop.domain.run keeps an outcome on self._first" in f for f in findings)
@@ -11240,7 +11275,7 @@ def test_an_outcome_is_neither_kept_nor_reached_into_nor_widened() -> None:
         for f in findings
     )
     assert not any("driver.py:5" in f and "TB084" in f and "driver.py:54" not in f for f in findings)
-    assert len(tb084) == 16
+    assert len(tb084) == 15
 
 
 @ts.helper
@@ -12664,7 +12699,7 @@ def test_a_job_context_is_led_with_or_it_is_a_finding() -> None:
     )
 
 
-def test_a_quoted_job_context_return_is_still_a_finding() -> None:
+def test_a_quoted_return_is_the_quoting_finding_and_resolves_to_nothing() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in checks.Codebase(_kinds_spec(sources=(
@@ -12680,11 +12715,59 @@ def test_a_quoted_job_context_return_is_still_a_finding() -> None:
         ))).violations()
     )
     assert any(
+        "quoted.py:3: TB021 shop.adapters.gateways.quoted quotes 'ts.JobContext'; "
+        "an annotation is written unquoted — a quoted type is a string the analyzer "
+        "cannot read, and from __future__ import annotations is what defers a name "
+        "the module has not defined yet" in f
+        for f in findings
+    )
+    assert not any(
         "shop.adapters.gateways.quoted.QuotedGateway.handed returns a "
+        "ts.JobContext" in f
+        for f in findings
+    )
+
+
+def test_an_unquoted_return_still_draws_the_job_context_finding() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/gateways/handed.py",
+                "shop.adapters.gateways.handed",
+                "import tesser.adapters as ts\n"
+                "class HandedGateway(ts.Gateway):\n"
+                "    def handed(self, job: ts.JobContext) -> ts.JobContext:\n"
+                "        return job\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.adapters.gateways.handed.HandedGateway.handed returns a "
         "ts.JobContext; a job context is threaded as the leading parameter of an "
         "action port call and nowhere else" in f
         for f in findings
     )
+
+
+def test_a_literal_string_in_an_annotation_is_data_not_a_quoted_type() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/gateways/graded.py",
+                "shop.adapters.gateways.graded",
+                "import typing\n"
+                "import tesser.adapters as ts\n"
+                "class GradedGateway(ts.Gateway):\n"
+                "    def graded(self, grade: typing.Literal['a', 'b']) -> None:\n"
+                "        return None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert not any("TB021" in f for f in findings)
 
 
 def test_a_gateway_never_holds_an_invocations_job_context() -> None:
@@ -13007,11 +13090,13 @@ def test_a_domain_method_takes_one_primitive_spec_or_domain_object() -> None:
         "type the domain has not named" in f
         for f in findings
     )
+    assert not any("Order.restock parameter 'lines' is a container" in f for f in findings)
     assert any(
-        "Order.restock parameter 'lines' is a container; a domain object's method takes one "
-        "primitive, one spec, or one domain object, because a collection handed in is a "
-        "type the domain has not named" in f
+        "Order.restock parameter 'lines' is not a primitive, a spec, or a domain object" in f
         for f in findings
+    )
+    assert any(
+        "TB021 shop.domain.order quotes 'tuple[Line, ...]'" in f for f in findings
     )
     for optional in ("refill", "reload"):
         assert any(
@@ -13681,10 +13766,17 @@ def test_a_match_subject_names_a_method_whose_annotation_is_itself_an_outcome() 
             "a service method matches the outcome a domain object handed back" in f
             for f in findings
         ), (wrapped, findings)
-    for named in ("declared", "quotedly"):
-        assert not any(
-            f"HeadedService.{named}" in f and " TB082 " in f for f in findings
-        ), (named, findings)
+    assert not any(
+        "HeadedService.declared" in f and " TB082 " in f for f in findings
+    ), findings
+    assert any(
+        "HeadedService.quotedly match subject is not a call on a domain object; "
+        "a service method matches the outcome a domain object handed back" in f
+        for f in findings
+    ), findings
+    assert any(
+        "answer.py:14: TB021 shop.domain.answer quotes 'Reply'" in f for f in findings
+    ), findings
 
 
 def test_an_override_replaces_the_outcome_answer_it_inherits() -> None:
@@ -14028,7 +14120,6 @@ def test_a_client_dto_bool_is_read_through_the_annotations_that_wrap_it() -> Non
         ))).violations()
                )
     for wrapped in (
-        "QuotedResponse",
         "UnionResponse",
         "OptionalResponse",
         "AnnotatedResponse",
@@ -14039,11 +14130,20 @@ def test_a_client_dto_bool_is_read_through_the_annotations_that_wrap_it() -> Non
             in f
             for f in findings
         ), (wrapped, findings)
+    assert not any(
+        "QuotedResponse.__init__ field 'allowed' is a bool" in f for f in findings
+    ), findings
     for plain in ("PlainResponse", "QuotedTextResponse"):
         assert not any(f"{plain}.__init__ field 'text' is a bool" in f for f in findings), (
             plain,
             findings,
         )
+    assert any("client.py:7: TB021" in f and "quotes 'bool'" in f for f in findings)
+    assert any("client.py:22: TB021" in f and "quotes 'str'" in f for f in findings)
+    assert any(
+        "client.py:16: TB021" in f and "quotes typing.Annotated[bool, 'why']" in f
+        for f in findings
+    )
 
 
 def test_a_domain_method_names_what_it_hands_back() -> None:
