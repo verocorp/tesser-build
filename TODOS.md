@@ -319,13 +319,13 @@ Two things the burn-down left behind, deliberately:
   11 gated trees run 5.5s against main's 3.7s, and the scaling exponent
   matches main. What remains is the decomposition's per-class object graph
   (`ClassDecl`/`Body`/`AnnotationPolicy` allocate more per module than
-  main's one class did) and one O(modules²) term main has too: the
-  whole-tree `frozenset(each.name().split(".")[0] for each in
-  self._modules)` rebuilt inside the per-module dispatch loop
-  (`checks.py` kernel-tops intersection; main had 15 sites of the same
-  pattern) — ~9% of runtime at 800 synthetic modules and the reason the
-  residual slope is 1.45 on the last doubling rather than ~1.0. Hoist it
-  when a consumer tree makes 2× on seconds matter. The earlier per-call
+  main's one class did). The O(modules²) term this bullet used to name —
+  the whole-tree `frozenset(each.name().split(".")[0] for each in
+  self._modules)` rebuilt inside the per-module dispatch loop, ~9% of
+  runtime at 800 synthetic modules — is gone with ruling item 2's fix
+  (v0.0.95.0): the kernel-tops intersection is computed once in
+  `__init__`. Net cost is a wash, because the filter pass now parses each
+  source once before `Module` parses it again. The earlier per-call
   scan list stands for that pass: `Names.__contains__` scans a tuple;
   `Method.__init__`'s self-alias fixpoint re-walks the body per pass;
   `Body.__init__` and `ClassDecl.__init__` walk the same subtree three to
@@ -350,10 +350,11 @@ Two things the burn-down left behind, deliberately:
   `rulebook.py`'s direct literal-argument binding block has had zero hits
   since `77aa2fb` moved every site onto `XSpec(...)`.
 - [ ] **Three divergences from main the ship's adversarial review measured
-  — items 1 and 2 are rulings; item 3 resolved in-wave with no ruling
-  needed.** A differential run (main's `checks.py` and this one over the
-  same tree) is byte-identical on all eleven gated trees; 1 and 2 show
-  only on inputs no tree has.
+  — item 1 is still an open ruling; item 2 was ruled 2026-08-30 and fixed
+  in v0.0.95.0; item 3 resolved in-wave with no ruling needed.** A
+  differential run (main's `checks.py` and this one over the same tree) is
+  byte-identical on all eleven gated trees; 1 and 2 showed only on inputs
+  no tree has.
   1. *Quoted annotations now resolve.* `Annotation` unquotes a string
      annotation before resolving it; main's `_resolve` never did, so
      `def _spec() -> "CampaignSpec":` fired `TB073` on main (unresolved →
@@ -367,20 +368,22 @@ Two things the burn-down left behind, deliberately:
      emitting spurious findings on quoted code and this is the fix; if no,
      `Annotation.primary(unquote=...)` should default to the old
      behaviour. Either way the rule should say which.
-  2. *`contexts`/`tops` are computed over every source, parsed or not.*
-     `Codebase.__init__` derives them from `spec.sources` (a `.pyi`, a
-     duplicate name, a file that fails to parse all count) and freezes them
-     into each `Placement`; main computed them in `violations()` over the
-     modules that parsed. A `gamma/domain/broken.pyi` beside nothing else
-     under `gamma` flips `gamma/other.py` from `TB040` (no governed
-     package) to `TB041` (not a context module), so a whole check family
-     changes. `violations()` still recomputes `contexts` from parsed
-     modules for the `Registry`, so `module.place()` and
-     `registry.contexts()` can disagree in one run. Fix: build the
-     placement inputs from the parsed modules (a second `Module`
-     construction, or `Placement` built after the parse) — a behaviour
-     choice because it decides whether an unparseable file governs its
-     siblings.
+  2. *`contexts`/`tops` were computed over every source, parsed or not —
+     RULED and fixed in v0.0.95.0.* Chris, 2026-08-30: parsed modules are
+     the universe. A file that never becomes a `Module` names no context
+     and no top, so an unparseable file does not govern its siblings.
+     `Codebase.__init__` now filters and parses first, derives `tops` and
+     `contexts` from the survivors, and then builds the `Module` objects;
+     `violations()` reads those stored values rather than recomputing its
+     own set, so `module.place()` and `registry.contexts()` are one set by
+     construction. The four repros (a stub, a duplicate name, a non-UTF-8
+     file, a `SyntaxError` file, each the only role-bearing file under its
+     top) went from DIFFERENT to SAME against the pre-decomposition
+     `checks.py`, and two pinning tests in `test_checks.py`
+     (`test_a_stub_names_no_context_for_the_modules_that_parsed`,
+     `test_a_module_that_does_not_parse_names_no_context`) lock it. The
+     same fix covers the per-class audit's item 10 (`Module._spoken`
+     derived from the wide `tops`), which had no repro.
   3. *The run was quadratic in tree size — RESOLVED, no ruling needed.*
      The cause was a rule interaction, not a breach: TB080 makes
      whole-tree facts cross every construction boundary as primitives,

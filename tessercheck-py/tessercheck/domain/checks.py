@@ -9748,19 +9748,11 @@ class CodebaseSpec(ts.Spec):
 class Codebase(ts.AggregateRoot):
 
     def __init__(self, spec: CodebaseSpec) -> None:
-        modules: list[Module] = []
         broken: list[Violation] = []
         paths_by_name: dict[str, list[str]] = {}
         for path, name, _, _ in spec.sources:
             paths_by_name.setdefault(name, []).append(path)
-        tops = tuple(sorted({name.split(".")[0] for _, name, _, _ in spec.sources}))
-        export = spec.exports[0] if len(spec.exports) == 1 else None
-        kernel_tops = (frozenset({KERNEL_PACKAGE}) | (frozenset({export}) if export is not None else frozenset())) & frozenset(tops)
-        contexts = tuple(sorted({
-            name.split(".")[0]
-            for _, name, _, _ in spec.sources
-            if name.split(".")[0] not in kernel_tops and len(name.split(".")) >= 2 and name.split(".")[1] in ROLES
-        }))
+        parsed: list[tuple[str, str, str, bool]] = []
         for path, name, source, is_package in spec.sources:
             if path.endswith(STUB_SUFFIX):
                 broken.append(
@@ -9796,9 +9788,7 @@ class Codebase(ts.AggregateRoot):
                 )
                 continue
             try:
-                modules.append(
-                    Module(ModuleSpec(path=path, name=name, source=source, is_package=is_package, tops=tops, contexts=contexts, export=export))
-                )
+                ast.parse(source)
             except SyntaxError as error:
                 broken.append(
                     Violation(ViolationSpec(
@@ -9808,8 +9798,23 @@ class Codebase(ts.AggregateRoot):
                         f"{name} does not parse ({error.msg}); every checked module parses",
                     ))
                 )
-        self._modules = tuple(modules)
+                continue
+            parsed.append((path, name, source, is_package))
+        tops = tuple(sorted({name.split(".")[0] for _, name, _, _ in parsed}))
+        export = spec.exports[0] if len(spec.exports) == 1 else None
+        kernel_tops = (frozenset({KERNEL_PACKAGE}) | (frozenset({export}) if export is not None else frozenset())) & frozenset(tops)
+        contexts = tuple(sorted({
+            name.split(".")[0]
+            for _, name, _, _ in parsed
+            if name.split(".")[0] not in kernel_tops and len(name.split(".")) >= 2 and name.split(".")[1] in ROLES
+        }))
+        self._modules = tuple(
+            Module(ModuleSpec(path=path, name=name, source=source, is_package=is_package, tops=tops, contexts=contexts, export=export))
+            for path, name, source, is_package in parsed
+        )
         self._broken = tuple(broken)
+        self._tops = tops
+        self._contexts = contexts
         self._tree = Declaration(DeclarationSpec(
             spec.declared,
             spec.exports,
@@ -9914,17 +9919,6 @@ class Codebase(ts.AggregateRoot):
         self._outcome_methods = frozenset(
             (key[0], key[1], name) for key, names in answered.items() for name in names
         )
-        named: set[str] = set()
-        for module in self._modules:
-            parts = module.name().split(".")
-            if parts[0] in ((
-                        frozenset({KERNEL_PACKAGE})
-                        | (frozenset({self._export}) if self._export is not None else frozenset())
-                    ) & frozenset(each.name().split(".")[0] for each in self._modules)):
-                continue
-            if len(parts) >= 2 and parts[1] in ROLES:
-                named.add(parts[0])
-        contexts = frozenset(named)
         spoken: set[str] = set()
         for module in self._modules:
             if str(module.place()) in ("app-client", "app-client-file"):
@@ -9947,8 +9941,8 @@ class Codebase(ts.AggregateRoot):
         domain_enum_rows = tuple((module_name, class_name) for module_name, class_name in sorted(self._domain_enums))
         outcome_method_rows = tuple(f"{module_name}|{class_name}|{method_name}" for module_name, class_name, method_name in sorted(self._outcome_methods))
         action_port_rows = tuple((module_name, class_name) for module_name, class_name in sorted(self._action_ports))
-        context_rows = tuple(sorted(contexts))
-        top_rows = tuple(sorted({each.name().split(".")[0] for each in self._modules}))
+        context_rows = self._contexts
+        top_rows = self._tops
         module_name_rows = tuple(sorted(each.name() for each in self._modules))
         package_name_rows = tuple(sorted(each.name() for each in self._modules if each.is_package()))
         mapper_target_rows = tuple(
