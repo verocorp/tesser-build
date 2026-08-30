@@ -12706,6 +12706,17 @@ def test_a_service_decision_is_read_through_the_binding_forms_that_hide_its_subj
                 "            case _ as never:\n"
                 "                typing.assert_never(never)\n"
                 "        return AskResponse(text='')\n"
+                "    def harvested(self, request: AskRequest) -> AskResponse:\n"
+                "        asked = answer.Answer(answer.AnswerSpec(text=request.text))\n"
+                "        asked = tuple(each for each in ())\n"
+                "        match asked.decide():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n"
                 "    def caught(self, request: AskRequest) -> AskResponse:\n"
                 "        asked = answer.Answer(answer.AnswerSpec(text=request.text))\n"
                 "        try:\n"
@@ -12755,7 +12766,7 @@ def test_a_service_decision_is_read_through_the_binding_forms_that_hide_its_subj
             ),
         ))).violations()
                )
-    for hidden in ("looped", "managed", "comprehended", "imported", "caught", "captured"):
+    for hidden in ("looped", "managed", "harvested", "imported", "caught", "captured"):
         assert any(
             f"BindingService.{hidden} match subject is not a call on a domain object" in f
             for f in findings
@@ -12764,6 +12775,7 @@ def test_a_service_decision_is_read_through_the_binding_forms_that_hide_its_subj
         "BindingService.walrus",
         "BindingService.declared",
         "BindingService.predeclared",
+        "BindingService.comprehended",
     ):
         assert not any(bound in f for f in findings), (bound, findings)
 
@@ -13062,3 +13074,341 @@ def test_a_client_dto_field_is_never_a_bare_bool() -> None:
         "field is never a bare bool — a closed set crosses as its canonical string" in f
         for f in findings
     ), findings
+
+
+def test_a_client_call_takes_the_signature_rules_of_a_client_method() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/calling.py",
+                "shop.calling",
+                "from typing import Protocol\n"
+                "import tesser.context as tc\n"
+                "class CallingClient(tc.Client, Protocol):\n"
+                "    def __call__(self, a: str, b: str) -> str: ...\n"
+                "    def _quiet(self, a: str, b: str) -> str: ...\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "CallingClient.__call__" in f
+        and "parameter 'a' is not a ts.Request; a client method takes exactly one ts.Request"
+        in f
+        for f in findings
+    ), findings
+    assert any(
+        "CallingClient.__call__" in f
+        and "does not return a ts.Response; a client method returns a ts.Response" in f
+        for f in findings
+    ), findings
+    assert not any("CallingClient._quiet" in f for f in findings), findings
+
+
+def test_a_value_object_call_that_hands_back_the_primitive_is_a_leak() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/dialled.py",
+                "shop.domain.dialled",
+                "import tesser.domain as ts\n"
+                "class Dialled(ts.ValueObject):\n"
+                "    _v: str\n"
+                "    def __init__(self, value: str) -> None:\n"
+                "        object.__setattr__(self, '_v', value)\n"
+                "    def __call__(self) -> str:\n"
+                "        return self._v\n"
+                "    def _quiet(self) -> str:\n"
+                "        return self._v\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "TB010" in f and "Dialled.__call__ passes the raw primitive through; "
+        "a value object's accessor returns a value object — "
+        "the canonical exit is the only primitive exit" in f
+        for f in findings
+    ), findings
+    assert not any("Dialled._quiet passes the raw primitive" in f for f in findings), findings
+
+
+def test_a_service_that_asks_a_truth_builtin_is_deciding_for_itself() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(stdlib=("operator",), sources=(
+            (
+                "shop/truthy.py",
+                "shop.truthy",
+                "import operator\n"
+                "import tesser.application as ts\n"
+                "from shop.client.client import AskRequest, AskResponse\n"
+                "class TruthyService(ts.ApplicationService):\n"
+                "    def booled(self, request: AskRequest) -> AskResponse:\n"
+                "        kept = bool(request.text)\n"
+                "        return AskResponse(text='')\n"
+                "    def anyed(self, request: AskRequest) -> AskResponse:\n"
+                "        kept = any(request.text)\n"
+                "        return AskResponse(text='')\n"
+                "    def alled(self, request: AskRequest) -> AskResponse:\n"
+                "        kept = all(request.text)\n"
+                "        return AskResponse(text='')\n"
+                "    def added(self, request: AskRequest) -> AskResponse:\n"
+                "        kept = operator.add(1, 2)\n"
+                "        return AskResponse(text='')\n"
+                "    def picked(self, request: AskRequest) -> AskResponse:\n"
+                "        kept = operator.itemgetter(0)\n"
+                "        return AskResponse(text='')\n",
+                False,
+            ),
+        ))).violations()
+               )
+    for asking in ("booled", "anyed", "alled"):
+        assert any(
+            f"TruthyService.{asking} asks a builtin whether values are true; a service "
+            "method branches only by matching an outcome, because bool, any, and all read "
+            "a truth the domain never handed out" in f
+            for f in findings
+        ), (asking, findings)
+    for arithmetic in ("added", "picked"):
+        assert not any(
+            f"TruthyService.{arithmetic} calls a comparison" in f
+            or f"TruthyService.{arithmetic} asks a builtin" in f
+            for f in findings
+        ), (arithmetic, findings)
+
+
+def test_a_client_dto_bool_is_read_through_the_annotations_that_wrap_it() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "gate/client/client.py",
+                "gate.client.client",
+                "import typing\n"
+                "import tesser.context as ts\n"
+                "class WrapRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class QuotedResponse(ts.Response):\n"
+                "    def __init__(self, allowed: 'bool') -> None:\n"
+                "        self.allowed = allowed\n"
+                "class UnionResponse(ts.Response):\n"
+                "    def __init__(self, allowed: bool | None) -> None:\n"
+                "        self.allowed = allowed\n"
+                "class OptionalResponse(ts.Response):\n"
+                "    def __init__(self, allowed: typing.Optional[bool]) -> None:\n"
+                "        self.allowed = allowed\n"
+                "class AnnotatedResponse(ts.Response):\n"
+                "    def __init__(self, allowed: typing.Annotated[bool, 'why']) -> None:\n"
+                "        self.allowed = allowed\n"
+                "class PlainResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class QuotedTextResponse(ts.Response):\n"
+                "    def __init__(self, text: 'str') -> None:\n"
+                "        self.text = text\n",
+                False,
+            ),
+        ))).violations()
+               )
+    for wrapped in (
+        "QuotedResponse",
+        "UnionResponse",
+        "OptionalResponse",
+        "AnnotatedResponse",
+    ):
+        assert any(
+            f"gate.client.client.{wrapped}.__init__ field 'allowed' is a bool; a client "
+            "DTO field is never a bare bool — a closed set crosses as its canonical string"
+            in f
+            for f in findings
+        ), (wrapped, findings)
+    for plain in ("PlainResponse", "QuotedTextResponse"):
+        assert not any(f"{plain}.__init__ field 'text' is a bool" in f for f in findings), (
+            plain,
+            findings,
+        )
+
+
+def test_a_domain_method_names_what_it_hands_back() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/mute.py",
+                "shop.domain.mute",
+                "import tesser.domain as ts\n"
+                "class MuteSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Mute(ts.AggregateRoot):\n"
+                "    def __init__(self, spec: MuteSpec) -> None:\n"
+                "        self.text = spec.text\n"
+                "    def unnamed(self):\n"
+                "        return self.text\n"
+                "    def named(self) -> str:\n"
+                "        return self.text\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "TB019" in f and "shop.domain.mute.Mute.unnamed return is unannotated; a domain "
+        "object's method names what it hands back, because a caller reading an unnamed "
+        "return is guessing at the answer the object gave" in f
+        for f in findings
+    ), findings
+    assert not any("Mute.named return is unannotated" in f for f in findings), findings
+    assert not any("Mute.__init__ return is unannotated" in f for f in findings), findings
+
+
+def test_a_service_reads_an_outcome_a_domain_object_inherits() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/answer.py",
+                "shop.domain.answer",
+                "import tesser.domain as ts\n"
+                "class Reply(ts.Outcome):\n"
+                "    YES = 'yes'\n"
+                "    NO = 'no'\n"
+                "class AnswerSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Answer(ts.AggregateRoot):\n"
+                "    def __init__(self, spec: AnswerSpec) -> None:\n"
+                "        self.text = spec.text\n"
+                "    def decide(self) -> Reply:\n"
+                "        return Reply.YES\n"
+                "class LoudAnswer(Answer):\n"
+                "    def shout(self) -> str:\n"
+                "        return self.text\n",
+                False,
+            ),
+            (
+                "shop/domain/test_answer.py",
+                "shop.domain.test_answer",
+                "def test_answer_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "shop/inheriting.py",
+                "shop.inheriting",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.domain.answer as answer\n"
+                "from shop.client.client import AskRequest, AskResponse\n"
+                "class InheritingService(ts.ApplicationService):\n"
+                "    def inherited(self, request: AskRequest) -> AskResponse:\n"
+                "        asked = answer.LoudAnswer(answer.AnswerSpec(text=request.text))\n"
+                "        match asked.decide():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any(
+        "InheritingService.inherited match subject is not a call on a domain object" in f
+        for f in findings
+    ), findings
+
+
+def test_a_service_reads_an_outcome_it_awaited() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/answer.py",
+                "shop.domain.answer",
+                "import tesser.domain as ts\n"
+                "class Reply(ts.Outcome):\n"
+                "    YES = 'yes'\n"
+                "    NO = 'no'\n"
+                "class AnswerSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Answer(ts.AggregateRoot):\n"
+                "    def __init__(self, spec: AnswerSpec) -> None:\n"
+                "        self.text = spec.text\n"
+                "    async def decide(self) -> Reply:\n"
+                "        return Reply.YES\n",
+                False,
+            ),
+            (
+                "shop/domain/test_answer.py",
+                "shop.domain.test_answer",
+                "def test_answer_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "shop/awaiting.py",
+                "shop.awaiting",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.domain.answer as answer\n"
+                "from shop.client.client import AskRequest, AskResponse\n"
+                "class AwaitingService(ts.ApplicationService):\n"
+                "    async def straight(self, request: AskRequest) -> AskResponse:\n"
+                "        asked = answer.Answer(answer.AnswerSpec(text=request.text))\n"
+                "        match await asked.decide():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n"
+                "    async def named(self, request: AskRequest) -> AskResponse:\n"
+                "        asked = answer.Answer(answer.AnswerSpec(text=request.text))\n"
+                "        replied = await asked.decide()\n"
+                "        match replied:\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n",
+                False,
+            ),
+        ))).violations()
+               )
+    for awaited in ("straight", "named"):
+        assert not any(
+            f"AwaitingService.{awaited} match subject is not a call on a domain object" in f
+            for f in findings
+        ), (awaited, findings)
+
+
+def test_a_conditional_expression_over_a_comparison_is_one_decision() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/choosing.py",
+                "shop.choosing",
+                "import tesser.application as ts\n"
+                "from shop.client.client import AskRequest, AskResponse\n"
+                "class ChoosingService(ts.ApplicationService):\n"
+                "    def chose(self, request: AskRequest) -> AskResponse:\n"
+                "        kept = 'a' if request.text == 'x' else 'b'\n"
+                "        return AskResponse(text=kept)\n",
+                False,
+            ),
+        ))).violations()
+               )
+    chose = tuple(f for f in findings if "ChoosingService.chose" in f and " TB082 " in f)
+    assert len(chose) == 1, chose
+    assert "chooses with a conditional expression" in chose[0], chose
