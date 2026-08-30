@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import typing
+
 import tesser.application as ts
 
 import scheduling.application.ports.booking_repository as booking_repository
@@ -21,13 +23,21 @@ class BookingService(ts.ApplicationService):
         booking_id = domain.BookingID(request.booking_id)
         booking_id_text = str(booking_id)
         found = self._repository.find(booking_repository.FindBookingRequest(booking_id=booking_id_text))
-        booking = views.began(found)
+        booking = domain.Booking(views.MapToBegunBookingSpec(found_booking=found))
         stored_step = booking.step()
         stored_step_text = str(stored_step)
         stored_offered = booking.offered()
         offered_slots = tuple(str(slot) for slot in stored_offered)
         self._repository.save(views.MapToSaveBookingRequest(booking, booking_id))
-        begin_reply = views.begin_reply(found)
+        resumption = domain.Resumption(views.MapToResumptionSpec(found_booking=found))
+        begin_reply = ""
+        match resumption.resumed():
+            case domain.Resumed.RESUMED:
+                begin_reply = "continue the booking"
+            case domain.Resumed.STARTED:
+                begin_reply = "ask the caller for their name"
+            case _ as unreachable:
+                typing.assert_never(unreachable)
         return client.BookingStateResponse(
             step=stored_step_text, offered_slots=offered_slots, reply=begin_reply
         )
@@ -77,8 +87,14 @@ class BookingService(ts.ApplicationService):
         customer_name = booking.name()
         slot, name = str(chosen_slot), str(customer_name)
         reserved = self._directory.reserve(slot_directory.ReserveSlotRequest(slot=slot, name=name))
-        confirm_reply = views.confirm_reply(reserved, booking)
-        booking.settle(domain.Reoffers(views.MapToReoffersSpec(reserved_slot=reserved)))
+        confirm_reply = ""
+        match booking.settle(domain.Reoffers(views.MapToReoffersSpec(reserved_slot=reserved))):
+            case domain.Settled.BOOKED:
+                confirm_reply = f"booked {slot} for {name}"
+            case domain.Settled.REOFFERED:
+                confirm_reply = f"{slot} was just taken; offer the caller the updated slots"
+            case _ as unreachable:
+                typing.assert_never(unreachable)
         stored_step = booking.step()
         stored_step_text = str(stored_step)
         stored_offered = booking.offered()

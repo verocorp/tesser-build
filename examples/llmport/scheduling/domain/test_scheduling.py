@@ -232,8 +232,9 @@ def test_settling_with_no_reoffer_leaves_the_booking_booked() -> None:
         domain.BookingSpec(step="booked", name="Ada", chosen="mon-9am", offered=("mon-9am",))
     )
 
-    booking.settle(domain.Reoffers(domain.ReoffersSpec(offered=())))
+    settled = booking.settle(domain.Reoffers(domain.ReoffersSpec(offered=())))
 
+    assert settled is domain.Settled.BOOKED
     assert str(booking.step()) == "booked"
     assert str(booking.chosen()) == "mon-9am"
 
@@ -243,8 +244,9 @@ def test_settling_with_a_reoffer_sends_the_booking_back_to_choosing() -> None:
         domain.BookingSpec(step="booked", name="Ada", chosen="mon-9am", offered=("mon-9am",))
     )
 
-    booking.settle(domain.Reoffers(domain.ReoffersSpec(offered=(("tue-2pm",),))))
+    settled = booking.settle(domain.Reoffers(domain.ReoffersSpec(offered=(("tue-2pm",),))))
 
+    assert settled is domain.Settled.REOFFERED
     assert str(booking.step()) == "choose_slot"
     assert booking.chosen() is None
     assert tuple(str(slot) for slot in booking.offered()) == ("tue-2pm",)
@@ -392,3 +394,29 @@ def test_a_naming_is_equal_when_it_names_the_same_customer_and_offer() -> None:
 
     assert one == same
     assert one != other
+
+
+def test_a_stored_booking_resumes() -> None:
+    resumption = domain.Resumption(domain.ResumptionSpec(presence="present"))
+
+    assert resumption.resumed() is domain.Resumed.RESUMED
+
+
+def test_a_booking_the_repository_does_not_hold_starts() -> None:
+    resumption = domain.Resumption(domain.ResumptionSpec(presence="absent"))
+
+    assert resumption.resumed() is domain.Resumed.STARTED
+
+
+def test_a_presence_outside_the_closed_set_is_rejected() -> None:
+    with pytest.raises(ValueError, match="is not a presence"):
+        domain.Resumption(domain.ResumptionSpec(presence="maybe"))
+
+
+def test_resumption_equality() -> None:
+    assert domain.Resumption(domain.ResumptionSpec(presence="present")) == domain.Resumption(
+        domain.ResumptionSpec(presence="present")
+    )
+    assert domain.Resumption(domain.ResumptionSpec(presence="present")) != domain.Resumption(
+        domain.ResumptionSpec(presence="absent")
+    )
