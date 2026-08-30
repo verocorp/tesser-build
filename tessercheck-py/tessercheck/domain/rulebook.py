@@ -148,7 +148,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Codebase._actions_client_violations": "application client protocol method",
     "Codebase._port_call_violations": "public actions method",
     "Codebase._thread_violations": "public orchestrator method",
-    "Codebase._gateway_violations": "gateway class",
+    "Codebase._held_context_violations": "repository or gateway class",
     "Codebase._port_annotation_violations": "port protocol method",
     "Codebase._store_violations": "store protocol method",
     "Codebase._store_return_violations": "store protocol method",
@@ -320,7 +320,7 @@ def render(  # tesser:debt TB051
         raise RuntimeError("TS_NAME_BY_BLOCK not found in checks.py")
     order: list[str] = []
     codes: dict[str, str] = {}
-    applies: dict[str, str] = {}
+    applies: dict[str, list[str]] = {}
     shapes: dict[str, list[str]] = {}
     linenos: dict[str, list[int]] = {}
     for cls in (n for n in tree.body if isinstance(n, ast.ClassDef)):
@@ -466,7 +466,7 @@ def render(  # tesser:debt TB051
                     if clause not in codes:
                         order.append(clause)
                         codes[clause] = code
-                        applies[clause] = APPLIES_TO[key]
+                        applies[clause] = []
                         shapes[clause] = []
                         linenos[clause] = []
                     if codes[clause] != code:
@@ -474,6 +474,8 @@ def render(  # tesser:debt TB051
                             f"checks.py:{call.lineno}: clause {clause!r} carries code {code}, "
                             f"but an earlier site carries {codes[clause]}; one clause has one code"
                         )
+                    if APPLIES_TO[key] not in applies[clause]:
+                        applies[clause].append(APPLIES_TO[key])
                     if shape not in shapes[clause]:
                         shapes[clause].append(shape)
                     if call.lineno not in linenos[clause]:
@@ -484,9 +486,10 @@ def render(  # tesser:debt TB051
         "Generated from the implementation by the rulebook — never hand-edit.",
         "`python3 -m srv.cli.rules --check` fails when this file drifts from the",
         "code; regenerate with `python3 -m srv.cli.rules`. One row per rule: the",
-        "normative clause every violation message ends",
-        "with. ⟨…⟩ marks a value filled in per violation. Fixture coverage is",
-        "exact: a test covers a rule when an assert literal contains the clause.",
+        "normative clause every violation message ends with. ⟨…⟩ marks a value",
+        "filled in per violation. A rule emitted from more than one owner lists",
+        "every owner in Applies to, joined by ·. Fixture coverage is exact: a",
+        "test covers a rule when an assert literal contains the clause.",
         "",
         "## tessercheck rules (from the violation messages in tessercheck/domain/checks.py)",
         "",
@@ -498,7 +501,7 @@ def render(  # tesser:debt TB051
             RuleRowSpec(
                 clause,
                 codes[clause],
-                applies[clause],
+                " · ".join(applies[clause]),
                 tuple(shapes[clause]),
                 tuple(linenos[clause]),
             )

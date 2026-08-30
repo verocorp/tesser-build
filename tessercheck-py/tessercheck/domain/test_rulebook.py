@@ -66,6 +66,20 @@ def test_one_clause_carries_one_code() -> None:
         rulebook.render(checks_text, (), "")
 
 
+def test_a_clause_emitted_by_two_owners_renders_both() -> None:
+    checks_text = (
+        "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
+        "class Codebase:\n"
+        "    def __init__(self) -> None:\n"
+        "        Violation(ViolationSpec('p', 1, 'TB040', 'a head; one shared clause'))\n"
+        "    def violations(self) -> None:\n"
+        "        Violation(ViolationSpec('p', 2, 'TB040', 'b head; one shared clause'))\n"
+    )
+    rendered = rulebook.render(checks_text, (), "")
+    assert "| one shared clause | checked source file · debt marker |" in rendered
+
+
 def test_a_message_without_a_normative_clause_is_rejected() -> None:
     checks_text = (
         "TS_NAME_BY_BLOCK: dict = {}\n"

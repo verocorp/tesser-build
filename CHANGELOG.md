@@ -5,6 +5,288 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.88.0] - 2026-08-29
+
+The prose catches up to the code, and two guards so it stops drifting. Every
+item comes from a cold review run against main tip `628e4a8`: the whole-repo
+coherence review, the app-service wave review (#138 / #143), and the asyncpg
+wave review (#139–#142). No check changes what it flags; what changes is what
+the repo *says*, plus one generator fix and one rule string that promised more
+than it enforced.
+
+### Added
+- **`rationale/coverage.md` gets a Python totality guard.** The Go half of
+  `coverage_test.go` keys off `internal/analyzers.All`; the Python check set had
+  nothing at all — the file contained zero `TB0` references. That is how **15
+  shipped codes** reached v0.0.85.0 with no row and nothing noticed: `TB040`,
+  `TB043`, `TB044`, `TB045`, `TB053`, `TB061`–`TB066`, `TB069`, `TB070`,
+  `TB074`, `TB090`. `TestCoverageMatrix_PythonChecksHaveRows` reads the shipped
+  codes out of `tessercheck-py/RULES.md` — generated from the violation call
+  sites and drift-gated, so it cannot claim a code the analyzer does not ship —
+  and fails on a code with no row. Same "claimed by *some* row" bar as
+  `roadmap/generate.py`'s totality check: deliberately weak, but it forbids the
+  silent gap. Rows for all 15 added, each naming the real clause and the real
+  doc, and saying "a named gap" where none exists (`TB069`, `TB090`).
+- `rationale/coverage.md` also gains a **store (`ts.Store`) row** in the
+  skill-materializations matrix — the transaction-boundary convention shipped in
+  #142 with no row anywhere in the matrix.
+- `skills/tesser-build/repositories.md` gains **rule 6** for the
+  store/repository split, pointing at `docs/design-asyncpg-repositories.md`.
+
+### Fixed
+- **`RULES.md` printed one owner for a rule that has several.** `rulebook.render`
+  conflict-checks `codes[clause]` but wrote `applies[clause]` once on first sight
+  and never re-checked it, so a clause emitted from two `APPLIES_TO` owners
+  silently showed only the first. Five rows were lying — `TB081`'s job-context
+  rule has **nine** owners, not one; `TB050`'s aliased-module rule has eight;
+  `TB015`, `TB051`, and `TB041` each had a second owner going unnamed. Owners
+  now join with ` · ` like the `Fires when` column, the generated header says so,
+  and `RULES.md` is regenerated.
+- **A rule string read as a requirement and shipped as a permission.** "a port
+  method takes one `ts.Request`, led by a `ts.JobContext` when an orchestrator
+  calls it" — but `leading_context=True` is passed unconditionally for every port
+  method, so any port *may* lead with a job context whether or not an
+  orchestrator calls it, and a port an orchestrator does call is not *required*
+  to declare one. Reworded to what is enforced: "which a leading `ts.JobContext`
+  may precede".
+- **Counts and lists that had gone stale.** `README.md`'s "43 shipped codes" is
+  44; its `TB070–TB073` is `TB070–TB074`; `CLAUDE.md`'s five gated example trees
+  are eight `examples/*` `app` rows plus `layout`, `tesser-py`, and
+  `tessercheck-py`, for eleven; `scripts/verify` called the durable-execution
+  workflow and its action "handlers" when they are **jobs** (the point of the
+  wave); and `scripts/verify` plus the `asyncpg-example` CI job comment both
+  still described "an in-memory and an asyncpg repository selected by the storage
+  coordinate" when #142 deleted the memory backend — it is Postgres-only behind a
+  store.
+- **`rationale/coverage.md`'s jobs reach row still listed `gateways`,** which
+  #143's final commit withdrew; `ADAPTER_KIND_REACH["jobs"]` is application
+  client / orchestrators / ports.
+
+### Changed
+- **Skill docs** (`skill-version` 60 → 61). `python.md`'s host mount said a
+  component's `jobs` "is a tuple" — the shipped rule allows one job *or* a tuple,
+  and `examples/minimal` publishes a single job, so the prescribed expression
+  would not run against the exemplar the same section points at. `python.md` also
+  said the transaction boundary is "a decision for the consuming codebase, not
+  this skill", which `ts.Store` inverts (with the matching delta in
+  `application-services.md` rule 4). `SKILL.md`'s routing line omitted the job
+  context. `map.md` still nested *repository* under gateways ("the gateway to
+  persistence") while the enforced-layout paragraph five lines below got it right
+  — exactly the confusion that let four repositories sit in `gateways/`
+  unnoticed; repositories are now their own outbound kind and the section heading
+  names all four (the explicit anchor is unchanged, so every route still
+  resolves). `repositories.md` called `adapters/gateways/` "the older home" for
+  repositories, which `TB052` makes a finding — the doc described illegal code as
+  tolerated.
+- **Design records.** `docs/design-app-service-types.md`'s "Not yet ruled" #2 is
+  struck through with its verification: it is implemented.
+  `docs/design-python-domain-detection.md` gets a **supersession banner** — it
+  was the only doc presenting an inference-based classifier ("frozen dataclass +
+  value equality ⇒ value object") as the live design, five amendments deep with
+  no banner, while the analyzer has classified by declared `ts.*` base since
+  v0.0.15.0. An agent picking it up would build the wrong thing. The banner names
+  the live description and says plainly there is no successor record in `docs/`.
+
+### Notes
+- `TODOS.md` records the 2026-08-29 maintainer ruling that **anything needing a
+  decision goes through a domain object** — never a service, a mapper, or a port
+  DTO. A port response is mapped to a spec; the spec constructs or is passed into
+  a domain object whose method returns an outcome; the service matches that. This
+  resolves the **TB082 × TB084 conflict** the coherence review proved by probe (a
+  service could branch on a port answer in exactly one legal shape — a class
+  pattern closed with a bare `case _:` — which is precisely the non-exhaustive
+  shape TB084 forbids), by removing the premise rather than the conflict. The
+  TB082 re-cut and the three services that dodge the bind today are recorded, not
+  built.
+- Deliberately out of scope, each with a reason recorded: the `wiring` →
+  `component` and `bootstrap` → `app` rename (~53 sites, its own wave),
+  `repositories.md`'s title and registry key (touches the generated ROADMAP), and
+  `repositories.md`'s "no analyzer backs this in v2" (now only half false).
+- `scripts/verify` green across all 11 trees; `go test ./...` ok with `go vet`
+  and `gofmt -l .` clean; `roadmap/generate.py --check` up to date, suite 32
+  passed.
+## [0.0.87.0] - 2026-08-29
+
+Four confirmed analyzer defects from the cold-review wave over #131–#143, plus
+one the codex review of this change found in its own fix. Each was reproduced
+live against the shipped analyzer before the fix and re-run after it. No example
+tree needed editing.
+
+### Fixed
+- **One extra character turned off the comments norm.** `DIRECTIVE` had no
+  boundary after `tesser:debt`, so `# tesser:debts …` and `# tesser:debtfile …`
+  were exempt from **TB020** *and* failed to parse as a debt marker, so
+  **TB090** never saw them — the norm governing every module in every tree, off,
+  with nothing left for the debt ledger to catch. The regex now spells the
+  marker with the parser's own grammar, `tesser:debt(-file)?(?![\w-])`, so
+  `# tesser:debt` and `# tesser:debt-file` stay directives while
+  `# tesser:debts`, `# tesser:debtfile`, and `# tesser:debt-filed` are ordinary
+  comments. `noqa`, `pragma`, and `type:` keep the unbounded prefix — they are
+  third-party spellings this repo does not define. The pre-change grep for
+  near-miss markers was clean, so the tightening cost zero edits.
+- **A repository could keep an invocation's job context.** The held-context
+  check was dispatched only for `block == "gateway"` while the line above it
+  passed `leading_context = block != "handler"`, granting repositories the same
+  leading-`ts.JobContext` permission with nothing then stopping one from holding
+  it. A repository is built once by the component exactly like a gateway, so the
+  rule's own rationale applies verbatim. It is now dispatched on the same
+  `block != "handler"` condition, the method is named `_held_context_violations`
+  for what it checks, and its rule text reads "an adapter is built once and
+  never holds an invocation's job context".
+- **A store's `transaction()` accepted an `AsyncContextManager` of any class
+  beside it.** The check confirmed only that the yielded name was declared in
+  the module, never that it was a port — so
+  `transaction() -> typing.AsyncContextManager[SaveWidgetRequest]`, yielding a
+  request DTO, passed, while `RULES.md`, `python.md`, and
+  `docs/design-asyncpg-repositories.md` all said otherwise. It now consults the
+  kind table for `"port"`. `examples/asyncpg` was already conformant.
+- **A mapper could `return` before `super().__init__`.** The TB080 clause
+  counted top-level `super().__init__` statements and flagged one nested in a
+  branch; neither saw an early `return` above it, so `MapToX(added)` handed the
+  port an object whose fields do not exist — while the rule string claimed "so
+  the target is always initialized". The clause was added rather than the
+  wording weakened: a `return` anywhere in a mapper's `__init__` is a finding.
+- **That new clause then over-fired on a nested scope.** It walked the whole
+  `__init__` subtree with `ast.walk`, so a `return` inside a local helper
+  function or a nested class method read as the constructor returning early.
+  `_own_scope_returns` now collects returns lexically in the constructor's own
+  scope, pruning `FunctionDef`, `AsyncFunctionDef`, `Lambda`, and `ClassDef`
+  children; a `return` inside an `if` or a `with` is still the constructor's own
+  and still fires. Found by the cold codex review of this change — its one
+  finding.
+
+### Changed
+- `skills/tesser-build/python.md` now says a gateway **and every repository** is
+  built once and never stores an invocation's context, naming TB081, which
+  matches the widened dispatch above. `skill-version` 59 → 60.
+- `tessercheck-py/RULES.md` regenerated from the implementation
+  (`python3 -m srv.cli.rules`).
+
+### Notes
+- Five new tests in `tessercheck-py/tessercheck/domain/test_checks.py`, one per
+  defect, each named for the shape it locks. 416 tests pass, up from 412.
+- Two `TODOS.md` entries close as **no longer reproducing**, verified by
+  re-running both repros over `examples/minimal`: a marker inside a
+  `@dataclass` argument, and one inside a string default argument —
+  `checks.py` reads comments through `tokenize`, so a string is not a comment.
+- `scripts/verify` green across all 11 trees; `roadmap/generate.py --check` up
+  to date with its 32-test suite passing; `go test ./...`, `go vet ./...`, and
+  `gofmt -l .` clean.
+## [0.0.86.0] - 2026-08-29
+
+The `ts.Outcome` runtime gate holds two shapes it used to let through. A cold
+review of the rules wave (#131 / #132 / #133, reviewed at main `628e4a8`,
+findings F5 and F6) and an independent codex challenge pass over the same range
+each reproduced them; every repro below was run, not reasoned about. The static
+`TB084` already caught the first, so the exposure was a tree that does not run
+tessercheck — which is the reason the runtime base exists at all.
+
+### Fixed
+- **A descriptor can no longer hide behavior on an outcome.** The attribute gate
+  skipped anything that was not callable and not a `property` / `classmethod` /
+  `staticmethod`, so a `functools.cached_property` (or a hand-written `__get__`)
+  got through: `A.ONE.is_one` returned `True` — exactly the `is_*` method the
+  outcome ruling names as the rejected alternative, reintroduced through a
+  descriptor kind the gate did not know about. The gate is now **allow-only** —
+  a name in the class body is either a member or one of the enum machinery names
+  the base itself needs, and everything else raises. That also closes class data
+  (`_cache = {}`), a bare annotation (`attempts: int`), and `__slots__`.
+- **A forged `_Auto` can no longer collapse two members into one.**
+  `_generate_next_value_` is reachable through the exported base, and
+  `DONE = ts.Outcome._generate_next_value_("DONE", 1, 0, [])` twice produced a
+  class where `list(Forged)` was one member, `Forged.DONE is Forged.CONTINUE`
+  was `True`, the `case` arm for `CONTINUE` was unreachable, and `assert_never`
+  still type-checked — the exhaustiveness guarantee the whole design rests on,
+  gone with no error anywhere. An **alias is now rejected outright**: every name
+  in `_member_map_` must be in `_member_names_`, whatever produced it. Proving
+  `auto()` provenance is not feasible (the generator has to stay reachable, and
+  a value it mints is indistinguishable from `enum.auto()`'s) and, with aliasing
+  rejected, is no longer needed — the forged path can now only build a
+  well-formed closed set of distinct members.
+- **The machinery allowlist is captured during the probe's own
+  `__init_subclass__`,** not after class creation. CPython *deletes* `_boundary_`
+  from a non-Flag enum once the class is built (`enum.py:683`), so reading
+  `__dict__` afterwards produced an allowlist missing a name every real subclass
+  carries at gate time — under the inverted gate that would have rejected every
+  well-formed outcome. Caught by the tests, not by reading.
+
+### Changed
+- `domain-return.md` and `python.md` each carried a sentence listing what the
+  runtime base rejects; both described the weaker guarantee. Both now say what
+  it actually rejects, and both name the one exception — `_ignore_` and
+  `_order_`, which enum strips before the base sees the class, so `TB084`
+  reports them instead. The list is the guarantee, not a universal.
+  `skill-version` 58 → 59.
+
+### Notes
+- Four hand-written tests in `tesser-py/tesser/domain/test_outcome.py` (no
+  mocking library, per `testing.md`): the two descriptor shapes, `__slots__` and
+  a bare annotation, the forged-alias repro with a negative control that a
+  well-formed outcome's members stay distinct, and a three-member outcome routed
+  through an exhaustive `match` closed by `typing.assert_never` — which
+  `scripts/verify tesser-py` type-checks under `mypy --strict`, so that control
+  is a real type-check and not only a runtime assertion.
+- `scripts/verify` green across all 11 trees, including both trees that define a
+  `ts.Outcome` (`minimal` and `asyncpg`); `go test ./...` green;
+  `roadmap/generate.py --check` up to date.
+- Analyzer-side items the same review raised are not here — TB082's "branches
+  only by matching an outcome" gap, the unconstrained `ts.Mapper.__init__` body,
+  the early `return` before `super().__init__`, and the static `.value`/`.name`
+  gap. They need rulings, not fixes.
+## [0.0.85.1] - 2026-08-29
+
+A cold review of the asyncpg wave (#139–#142) — a fresh agent with no prior
+context plus a codex challenge pass — reproduced two pool-lifecycle defects
+against live Postgres, found a DSN leak one file over from where #142 removed
+it, and ran a mutation sweep that six mutations survived. This fixes the
+confirmed items. Examples and their tests only; no convention, checker, or
+shipped interface changes.
+
+### Fixed
+- **Two concurrent `Database.open()` calls no longer orphan a pool.** Both
+  coroutines saw `_pool is None`, both created a pool, and the last assignment
+  won — the review measured four server backends surviving a "complete" close.
+  `open()` and `close()` now serialise on an `asyncio.Lock`, so exactly one
+  pool is ever created and a close cannot race an open.
+- **`Databases.open()` no longer leaks what it already opened.** A second DSN
+  that fails stranded the first pool. It now closes the databases it opened
+  before re-raising, so a host that does not wrap `open()` in `try/finally`
+  (`examples/asyncpg/tests/test_asyncpg.py` is exactly such a host) leaks
+  nothing.
+- **The raw DSN no longer reaches an uncaught error.** `acquire()`'s refusal
+  interpolated `self._dsn`, and nothing catches that `RuntimeError`, so it
+  reached stderr as a traceback carrying a production password. This is the
+  same leak #142 removed from the component; it survived in `pgdatabase`.
+- **`conftest.py`'s sibling-tree lookup ran one location fewer than it read
+  as.** `for _rel in ((".."), ("..", ".."), ...)` — the first element is a
+  *string*, so `*_rel` expands to `'.', '.'` and the first candidate resolves
+  to the tree's own directory, never the sibling. Fixed in `asyncpg`,
+  `minimal`, `ports`, and `durable-execution`; `errorspy`, `serdepy`, and
+  `tessercheck-py` already had `("..",)`.
+
+### Changed
+- **Four tests now fail the mutation that they name.** The bounded close from
+  #141 moves to `close_pool(pool, timeout)` over a `ClosablePool` protocol, so
+  a hand-written fake pool goes in through the interface rather than a runtime
+  patcher (which `testing.md` rule 1 forbids) — a pool that will not close in
+  time is terminated, one that closes alone is not. Both stores gain
+  `test_the_schema_outlives_a_first_transaction_that_rolls_back`, which asserts
+  from outside the store that the table survives a first transaction that rolls
+  back. `FakeCommittedWidgetStore` records every save so
+  `test_take_of_the_part_already_held_saves_nothing` can assert on it.
+  `BetaCheckGateway`'s fake client takes the answer it gives, so the `OK`
+  branch is tested and not only `REFUSED`.
+
+### Notes
+- Eleven mutations re-run against the fixed tree, all killed. `scripts/verify
+  asyncpg minimal ports durable-execution` green: tessercheck zero findings and
+  no suppressions on each tree, `mypy --strict` clean, and 75 / 34 / 49 / 45
+  tests passing against a real Postgres.
+- Left for a ruling rather than decided here: what `BetaCheck`'s verdict is for
+  (it is produced and discarded, against the outcome ruling), adapter-side
+  governance of a `ts.Store`, and the `InfraError` contract (no adapter raises
+  one, so `except errors.InfraError` in `srv/cli/main.py` is dead).
+
 ## [0.0.85.0] - 2026-08-29
 
 The application-service types. Three kinds now stand where one did, and

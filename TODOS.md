@@ -2,6 +2,87 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Repository tests and the pool: two questions from the asyncpg review (2026-08-29, Chris)
+
+- [ ] **What may a repository test set up for itself?** Chris's expectation
+  is that a repository test reaches Postgres only through the app loader —
+  the same path the host takes — so the test exercises the wiring it will
+  ship with and has no private configuration of its own. Today every
+  sibling repository test in `examples/asyncpg` reads
+  `os.environ["ALPHA_STORAGE"]` and constructs
+  `pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))` by hand
+  (`alpha/adapters/repositories/test_postgres.py:18-22,38-42,52-56,71-75`,
+  same in `beta/`), and `pgdatabase/test_database.py` builds pools with
+  its own `min_size`/`max_size`. Open: is "loader only" the rule, or does a
+  sibling test legitimately own its pool sizing? Whichever way it goes, the
+  answer belongs in `testing.md`'s tier table (root = loader + real
+  Postgres; `*/tests/` = integration; sibling = ?) and as a TB070-family
+  clause — a repository test module may import the app loader and nothing
+  else that opens a connection.
+- [ ] **The pool lock fixes the example, not an implementer.** #144's
+  `asyncio.Lock` around `Database.open()`/`close()` lives in
+  `examples/asyncpg/pgdatabase/database.py`, which nothing in `tesser-py`
+  ships. An implementer who copies the shape gets the fix; one who writes
+  their own does not, and no static check can see "open and close on a
+  resource owner are serialised". The implementer-facing move is the one
+  `ts.Store` made: a shipped runtime kind in `tesser-py` (a database /
+  resource owner with the open-once, close-once, compensate-on-partial-open
+  lifecycle built in) that the example then uses rather than defines. Rule
+  on whether that kind is wanted before building it; if not, this stays an
+  example-only fix and the rule is "an app owns its pools through a kind
+  that serialises its lifecycle", stated in `python.md` and unchecked.
+
+## Decisions go through a domain object (2026-08-29, Chris ruling)
+
+**The ruling.** Anything that needs a decision goes through a domain object;
+decisions are never made in anything else — not a service, a mapper, or a port
+DTO. When a port returns a result, the port response is mapped to a spec; the
+spec either constructs a new domain object with a method that must be invoked
+to return an outcome, or is passed into an existing domain object in the
+service method, whose method returns the outcome. The service matches that
+`ts.Outcome` (TB084 shape).
+
+**What it resolves.** The TB082 × TB084 conflict the coherence review proved by
+probe: today a service can branch on a port answer in exactly one legal shape —
+a class pattern over the whole response closed with a bare `case _:` — which is
+precisely the non-exhaustive shape TB084 forbids for a domain outcome (`a match
+on an outcome ends in case _ as never: assert_never(never)`, RULES.md). So a
+member added to a port enum is silently swallowed in every service and mypy
+cannot see it. The ruling removes the conflict by removing the premise: a
+service never branches on a port answer at all — it branches on an outcome a
+domain object returned.
+
+The dodge is visible in the trees today. Both exemplars avoid the bind only by
+discarding the port response: `examples/minimal/alpha/application/alpha_service.py`
+calls `self._checks.check(...)` and drops the answer, and
+`examples/asyncpg/alpha/application/alpha_service.py:87` does the same with the
+`BetaCheck` verdict.
+
+**Open work under it (none of it is in PR #147 — that PR records the ruling
+only):**
+
+- [ ] **Re-cut TB082.** A `match` subject in a service method must be a call to
+  a *domain object's* method, and its arms must be outcome members; a
+  comparison, a conditional expression (`x if c else y`), a comprehension `if`,
+  and a boolean operator in a service body all become findings. This subsumes
+  the open conditional-expression item under "Follow-ons from the outcome
+  ruling" below — same ruling, wider node set — and retires the current
+  subject rule ("a match subject is not a single call"), which is what forces
+  the illegal shape.
+- [ ] **Rewrite the services that dodge it.**
+  `examples/minimal/alpha/application/alpha_service.py` (discards the port
+  answer), `examples/asyncpg/alpha/application/alpha_service.py:87` (discards
+  the `BetaCheck` verdict), and
+  `examples/python-app/reports/application/service.py:27,38` (compares a port
+  DTO's enum down to a bool at `:27`, then branches with a conditional
+  expression at `:38`). Each needs the
+  response → spec → domain object → outcome chain the ruling describes, so the
+  rewrites are also the fixtures the re-cut is tested against.
+- [ ] **Where the mapping lives.** The ruling says the port response is mapped
+  to a spec. A mapper *is* its target (TB080), so `MapTo<X>Spec(response)` is
+  the shape; confirm nothing in TB083's owner-binding rule blocks a service
+  from building that spec and handing it whole into the domain object.
+
 ## Every exported class carries tests (2026-08-29, Chris ruling)
 
 - [ ] **Every exported class everywhere should have tests, and every
@@ -602,14 +683,17 @@ wait for a ruling:
   `for`/`with` target.) What remains: a nested function assigning to `self`
   inside `__init__` is walked and caught, a lambda is not a statement and
   cannot be.
-- [ ] **"Always initialized" is a reachability claim the check does not make.**
-  The `super().__init__` clause (`checks.py:5957`) only proves the call is a
-  top-level `ast.Expr` of `__init__.body`; a `return` earlier in that body
-  still leaves the target uninitialized and reports nothing. The rule string
-  says "so the target is always initialized" — and `RULES.md`, being
-  generated from it, repeats the overclaim. Either weaken the wording to what
-  it checks (the call is a statement, not nested in a branch) or add the
-  early-return clause. Found by the v0.0.83.0 cross-model doc review.
+- [x] **"Always initialized" is a reachability claim the check does not make —
+  RESOLVED (analyzer review-fix wave, post-v0.0.85.0).** The early-return
+  clause was added rather than the wording weakened: a `return` anywhere in a
+  mapper's `__init__` is now a TB080 finding ("a mapper's constructor runs to
+  its `super().__init__`, so the target is always initialized",
+  `checks.py:_mapper_violations`), so the claim the rule string makes is the
+  claim the check makes. Covered by
+  `test_a_mapper_never_returns_before_it_initializes_its_target`. The stale
+  `checks.py:5957` citation this entry carried was three renumberings old.
+  Found by the v0.0.83.0 cross-model doc review; repro confirmed by the
+  rules-wave review.
 - [ ] **Base order reclassifies a mapper out of the rule.** Block assignment
   takes the first base that resolves, so `class MapToXSpec(XSpec, ts.Mapper)`
   is a spec, not a mapper, and no mapper clause runs. Contained today only by
@@ -1527,8 +1611,15 @@ wait for a ruling:
     separately from `field_type_names`; if not, delete the field, and if so,
     unquote the annotation before the `Subscript` test in the same change.
 
-- [ ] **Suppression is a substring scan on the OLD checkers — now with a
-  verified repro** (2026-07-21; proven 2026-07-26)
+- [x] **Suppression is a substring scan on the OLD checkers — RESOLVED
+  (verified no longer reproduces, analyzer review-fix wave, post-v0.0.85.0).**
+  The rewritten `checks.py` reads comments through `tokenize` in
+  `Module.__init__`, so a marker that appears only inside a string literal is
+  not a comment and suppresses nothing. Re-run of both directions of the
+  original repro over `examples/minimal`: `SMUGGLED = "# tesser:debt TB051"`
+  still reports the TB051 it names, and the old checkers this entry named
+  (`checks.py:_suppressed`, `comments_check.suppressed`) no longer exist.
+  Original entry (2026-07-21; proven 2026-07-26):
   - **Confirmed by running it, both directions:**
     - `@dataclass(repr=("# tesser:debt"))` silences **TB001**
       (control fires TB001; spoofed returns nothing).
@@ -1546,10 +1637,23 @@ wait for a ruling:
     not a privilege boundary. That is why it is not a P1 — but it IS the kind of
     thing that makes a `grep -c 'tesser:debt'` audit lie.
 
-- [ ] **`DIRECTIVE` matches the marker word as a bare prefix, so a near-miss
-  marker is a free TB020 exemption** (resurfaced by the Codex adversarial pass
-  during the v0.0.70.0 sentinel rename; **pre-existing — verified identical on
-  the pre-rename tree**, so the rename preserved it rather than introducing it)
+- [x] **`DIRECTIVE` matches the marker word as a bare prefix, so a near-miss
+  marker is a free TB020 exemption — RESOLVED (analyzer review-fix wave,
+  post-v0.0.85.0).** `DIRECTIVE` now spells the debt marker with the same
+  grammar the parser uses —
+  `tesser:debt(-file)?(?![\w-])` — so `# tesser:debts`, `# tesser:debtfile`,
+  and `# tesser:debt-filed` are ordinary comments and report TB020, while
+  `# tesser:debt` and `# tesser:debt-file` stay directives. Taken on the
+  "share the parser's classification" side of the trade this entry framed;
+  the unbounded-prefix property still holds for `noqa`, `pragma`, and `type:`,
+  which are third-party spellings this repo does not define. The pre-change
+  grep for near-miss markers in Python source was clean, so the tightening
+  cost zero example edits. Covered by
+  `test_a_near_miss_marker_word_is_an_ordinary_comment` (asserts TB020 fires
+  and no TB090 is registered). Original entry (resurfaced by the Codex
+  adversarial pass during the v0.0.70.0 sentinel rename; **pre-existing —
+  verified identical on the pre-rename tree**, so the rename preserved it
+  rather than introducing it):
   - **Not new — this is comments norm v0's "prose may ride an exempt directive
     prefix", accepted by ruling on 2026-07-19 as a known-by-design limit.** What
     is new is the repro and the measurement below, which is what turns an
@@ -1600,8 +1704,15 @@ wait for a ruling:
     "rooted at pytest" or "records the exemption somewhere", since those give
     different designs.
 
-- [ ] **Suppression is a substring scan, and TB017/TB018 give it a natural
-  surface** (2026-07-21, wave C2 review)
+- [x] **Suppression is a substring scan, and TB017/TB018 give it a natural
+  surface — RESOLVED (verified no longer reproduces, analyzer review-fix wave,
+  post-v0.0.85.0).** The fix this entry asked for shipped with the analyzer
+  rewrite: suppressed lines come from `tokenize` COMMENT tokens
+  (`Module.__init__`), and the line table is the tokenizer's, not
+  `str.splitlines()`. Re-run of the repro over `examples/minimal`: a method
+  whose signature carries `raw: str = "# tesser:debt TB010"` reports the same
+  TB010 as the control with a plain default. Original entry (2026-07-21,
+  wave C2 review):
   - **What:** `# tesser:debt` is resolved by scanning the raw source
     line for the marker text, so a *string literal* containing it suppresses a
     real violation with no directive present. TB017 and TB018 suppress on the

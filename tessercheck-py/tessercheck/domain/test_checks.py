@@ -991,6 +991,69 @@ def test_mapper_shape_rules_are_flagged() -> None:
     assert any("nested.py:12: TB080 shop.application.nested.MapToAskResponseLater stores 'vars'" in f for f in findings)
     assert any("nested.py:13: TB080 shop.application.nested.MapToAskResponseLater stores '__dict__'" in f for f in findings)
 
+def test_a_mapper_never_returns_before_it_initializes_its_target() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/application/early.py",
+                "shop.application.early",
+                "import tesser.application as ts\n"
+                "import shop.client.client as client\n"
+                "import shop.domain.thing as thing\n"
+                "class MapToAskResponseEarly(ts.Mapper, client.AskResponse):\n"
+                "    def __init__(self, named: thing.Name) -> None:\n"
+                "        if str(named) == 'skip':\n"
+                "            return\n"
+                "        super().__init__(text=str(named))\n",
+                False,
+            ),
+            (
+                "shop/application/test_early.py",
+                "shop.application.test_early",
+                "def test_early_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "shop/application/early.py:7: TB080 shop.application.early.MapToAskResponseEarly."
+        "__init__ returns; a mapper's constructor runs to its super().__init__, so the "
+        "target is always initialized" in f
+        for f in findings
+    )
+
+
+def test_a_return_inside_a_nested_scope_is_not_the_mappers_own_return() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/application/nestedfn.py",
+                "shop.application.nestedfn",
+                "import tesser.application as ts\n"
+                "import shop.client.client as client\n"
+                "import shop.domain.thing as thing\n"
+                "class MapToAskResponseNested(ts.Mapper, client.AskResponse):\n"
+                "    def __init__(self, named: thing.Name) -> None:\n"
+                "        def spelled() -> str:\n"
+                "            return str(named)\n"
+                "        super().__init__(text=spelled())\n",
+                False,
+            ),
+            (
+                "shop/application/test_nestedfn.py",
+                "shop.application.test_nestedfn",
+                "def test_nestedfn_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any("__init__ returns" in f for f in findings)
+
+
 def test_a_conformant_mapper_passes_every_shape_rule() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
@@ -5630,6 +5693,24 @@ def test_a_typo_or_junk_token_makes_the_marker_inert() -> None:
     assert any("bracket.py:1: TB090" in f for f in findings)
 
 
+def test_a_near_miss_marker_word_is_an_ordinary_comment() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            ("stray.py", "stray", "import os  # tesser:debts TB040\n", False),
+            ("loose.py", "loose", "import os  # tesser:debtfile TB040\n", False),
+            ("dashed.py", "dashed", "import os  # tesser:debt-filed TB040\n", False),
+        ))).violations()
+               )
+    assert any("stray.py:1: TB020" in f for f in findings)
+    assert any("loose.py:1: TB020" in f for f in findings)
+    assert any("dashed.py:1: TB020" in f for f in findings)
+    assert not any("TB090" in f for f in findings)
+    assert any("stray belongs to no governed package" in f for f in findings)
+    assert any("loose belongs to no governed package" in f for f in findings)
+    assert any("dashed belongs to no governed package" in f for f in findings)
+
+
 def test_a_bare_line_debt_marker_is_line_scoped() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
@@ -6069,6 +6150,61 @@ def test_a_store_declares_exactly_one_transaction_that_yields_its_port() -> None
     )
 
 
+def test_a_store_transaction_yields_a_port_and_not_any_class_beside_it() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
+                "",
+                True,
+            ),
+            (
+                "shop/application/ports/records.py",
+                "shop.application.ports.records",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class SaveRequest(ts.Request):\n"
+                "    def __init__(self, name: str) -> None:\n"
+                "        self.name = name\n"
+                "class SaveResponse(ts.Response):\n"
+                "    def __init__(self, name: str) -> None:\n"
+                "        self.name = name\n"
+                "class Held(ts.Port, typing.Protocol):\n"
+                "    async def save(self, request: SaveRequest) -> SaveResponse: ...\n"
+                "class Records(ts.Store, typing.Protocol):\n"
+                "    def transaction(self) -> typing.AsyncContextManager[SaveRequest]: ...\n",
+                False,
+            ),
+            (
+                "shop/application/ports/bound.py",
+                "shop.application.ports.bound",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class SaveRequest(ts.Request):\n"
+                "    def __init__(self, name: str) -> None:\n"
+                "        self.name = name\n"
+                "class SaveResponse(ts.Response):\n"
+                "    def __init__(self, name: str) -> None:\n"
+                "        self.name = name\n"
+                "class Held(ts.Port, typing.Protocol):\n"
+                "    async def save(self, request: SaveRequest) -> SaveResponse: ...\n"
+                "class Bound(ts.Store, typing.Protocol):\n"
+                "    def transaction(self) -> typing.AsyncContextManager[Held]: ...\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "shop.application.ports.records.Records.transaction does not return an "
+        "AsyncContextManager of a port declared beside it; a store's transaction hands "
+        "back the repository bound to it, which is the one port its own module declares" in f
+        for f in findings
+    )
+    assert not any("shop.application.ports.bound.Bound.transaction" in f for f in findings)
+
+
 def test_a_ports_module_holds_only_port_kinds() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
@@ -6134,8 +6270,8 @@ def test_a_port_method_speaks_one_request_and_one_response() -> None:
                )
     assert any(
         "shop.application.ports.sink.Sink.save parameter 'text' is not a ts.Request; "
-        "a port method takes one ts.Request, led by a ts.JobContext when an "
-        "orchestrator calls it" in f
+        "a port method takes one ts.Request, which a leading ts.JobContext "
+        "may precede" in f
         for f in findings
     )
     assert any(
@@ -6145,8 +6281,8 @@ def test_a_port_method_speaks_one_request_and_one_response() -> None:
     )
     assert any(
         "shop.application.ports.sink.Sink.both takes 2 parameters; "
-        "a port method takes one ts.Request, led by a ts.JobContext when an "
-        "orchestrator calls it" in f
+        "a port method takes one ts.Request, which a leading ts.JobContext "
+        "may precede" in f
         for f in findings
     )
 
@@ -6496,8 +6632,8 @@ def test_a_port_method_shape_survives_async_and_dunder_call() -> None:
                )
     assert any(
         "shop.application.ports.sink.Sink.fetch takes 2 parameters; "
-        "a port method takes one ts.Request, led by a ts.JobContext when an "
-        "orchestrator calls it" in f
+        "a port method takes one ts.Request, which a leading ts.JobContext "
+        "may precede" in f
         for f in findings
     ), f"async def bypassed the port shape rule: {findings}"
     assert any(
@@ -11942,11 +12078,36 @@ def test_a_gateway_never_holds_an_invocations_job_context() -> None:
     )
     assert any(
         "shop.adapters.gateways.holding.HoldingGateway keeps _job, a job context; "
-        "a gateway is built once and never holds an invocation's job context" in f
+        "an adapter is built once and never holds an invocation's job context" in f
         for f in findings
     )
     assert not any(
         "HoldingGateway.quote parameter 'job' is a ts.JobContext" in f for f in findings
+    )
+
+
+def test_a_repository_never_holds_an_invocations_job_context() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/repositories/holding.py",
+                "shop.adapters.repositories.holding",
+                "import tesser.adapters as ts\n"
+                "import shop.application.ports.quotes as quotes\n"
+                "class HoldingRepository(ts.Repository):\n"
+                "    async def quote(self, job: ts.JobContext, request: quotes.QuoteRequest)"
+                " -> quotes.QuoteResponse:\n"
+                "        self._job = job\n"
+                "        return quotes.QuoteResponse(text=request.text)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.adapters.repositories.holding.HoldingRepository keeps _job, a job context; "
+        "an adapter is built once and never holds an invocation's job context" in f
+        for f in findings
     )
 
 

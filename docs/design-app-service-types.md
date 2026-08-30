@@ -293,9 +293,14 @@ as the intent; only the scaffold context obeys it.
 
 ## Not yet ruled
 
-- Whether TB081's one-request check accepts a `tesser.application.Request`
+- ~~Whether TB081's one-request check accepts a `tesser.application.Request`
   on an action's public method where a service's takes a
-  `tesser.context.Request` (codex #2, unverified against `checks.py`).
+  `tesser.context.Request` (codex #2, unverified against `checks.py`).~~
+  **Ruled by the implementation, verified 2026-08-29:** it does.
+  `_actions_violations` passes `param_block="port_request"`
+  (`checks.py:7079-7090`), and `("tesser.application", "Request")` is that
+  block (`checks.py:16`) — so an action's public method takes a
+  `tesser.application.Request`, the same DTO its one port speaks.
 
 ## Codex findings not taken
 

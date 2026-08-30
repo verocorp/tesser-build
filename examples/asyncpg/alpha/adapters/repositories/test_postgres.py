@@ -85,6 +85,24 @@ class TestPostgresWidgetStore:
         await database.close()
         assert loaded.part == "p"
 
+    async def test_the_schema_outlives_a_first_transaction_that_rolls_back(self) -> None:
+        dsn = os.environ["ALPHA_STORAGE"]
+        connection = await asyncpg.connect(dsn)
+        await connection.execute("DROP TABLE IF EXISTS widgets")
+        await connection.close()
+        database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
+        await database.open()
+        widget_store = postgres.PostgresWidgetStore(database)
+        with pytest.raises(RuntimeError):
+            async with widget_store.transaction() as widgets_repo:
+                await widgets_repo.save_widget(widget_repository.SaveWidgetRequest(name="a", part="p"))
+                raise RuntimeError("abort")
+        await database.close()
+        connection = await asyncpg.connect(dsn)
+        table = await connection.fetchval("SELECT to_regclass('widgets') IS NOT NULL")
+        await connection.close()
+        assert table is True
+
     async def test_a_load_holds_the_row_until_the_transaction_ends(self) -> None:
         dsn = os.environ["ALPHA_STORAGE"]
         connection = await asyncpg.connect(dsn)

@@ -470,11 +470,15 @@ class Widget(ts.AggregateRoot):
 
 - **`ts.Outcome` directly and alone, undecorated, members only, every member
   `enum.auto()`** (TB084) — no mixin, no intermediate base. The runtime base
-  raises at class definition for a method (any name, dunders included), a
-  valued member, a mixed-in or intermediate base, or a custom metaclass, and
-  `.value`/`.name` raise on every member; the analyzer reports the same shapes
-  and flags `_value_`/`_name_`. An outcome is matched, never read, never
-  serialized.
+  raises at class definition for a method or a descriptor of any name (a
+  `functools.cached_property`, dunders included), class data, an annotation, a
+  valued member, a member repeating another member's value (an alias makes a
+  `case` arm unreachable), a mixed-in or intermediate base, or a custom
+  metaclass, and `.value`/`.name` raise on every member; `_ignore_` and
+  `_order_` are the exception, because enum strips what they name before the
+  base sees the class, and TB084 reports them instead. The analyzer reports
+  the same shapes and flags `_value_`/`_name_`. An outcome is matched, never
+  read, never serialized.
 - **Returned by a transition, read by a `match`.** A member is named in
   exactly two places: the `return` that produces it and the `case` that
   consumes it. `is Taken.HELD` / `== Taken.HELD` anywhere else is TB084, and
@@ -588,11 +592,12 @@ class CampaignService(ts.ApplicationService):
   on the way to persistence and rebuilds it from the response's
   `CampaignRecord` on the way back. The service never hands a domain object
   across a port, and the port module never learns a domain type exists.
-- **Transaction / session boundary is consumer-specific.** Where the unit of
-  work opens and commits — a SQLAlchemy `Session`, an async transaction, a
-  FastAPI dependency — is a decision for the consuming codebase, not this
-  skill. Wrap the use case in one unit of work; do **not** invent an ORM
-  lifecycle here.
+- **The transaction boundary is a `ts.Store`** (**Application ports**, below).
+  The service opens exactly one per method — `async with
+  self._widget_store.transaction() as widgets_repo:` — and writes nothing of
+  the mechanics; the driver's connection and commit live in the adapter behind
+  the store. One unit of work per use case; do **not** invent an ORM lifecycle
+  here.
 
 ## Application ports {#ports}
 
@@ -806,10 +811,11 @@ translation) — what differs is scope, reach, and what each may depend on.
   application client or constructs an orchestrator** — wrapping the
   invocation's engine context as its own `ts.JobContext` implementation
   (`RestateJobContext(ctx)`, also in `adapters/jobs/`) first. Every gateway
-  is built once by the component and **never stores an invocation's
-  context**; an action-port method takes the job context as its leading
-  parameter and the gateway does `job.call(self._quote, request)`. Jobs
-  carry placement and import rules only for now.
+  and every repository is built once by the component and **never stores an
+  invocation's context** (TB081); an action-port method takes the job context
+  as its leading parameter and the gateway does
+  `job.call(self._quote, request)`. Jobs carry placement and import rules
+  only for now.
 
 ```python
 # ordering/application/client/order_actions.py (verified impl: examples/durable-execution/)
@@ -926,8 +932,10 @@ class Ordering(ts.Component):
   cannot serialize a `ts.Request` itself, the edge brings a serde (the one
   class in the tree with no `ts.*` base — a named gap, `TODOS.md`).
 - **A component publishes exactly `client` and `jobs`**, each typed; every
-  other attribute is private (TB081). The host mounts
-  `app.<context>.jobs.definitions()` and knows nothing else about the engine.
+  other attribute is private (TB081). `jobs` is one job or a tuple of them;
+  where it is a tuple the host mounts the definitions of each — `[d for job in
+  app.<context>.jobs for d in job.definitions()]` — and knows nothing else
+  about the engine.
 - **Reach is carried by the adapter kind package** (TB060): `handlers/` →
   the context client; `jobs/` → `application.client`,
   `application.orchestrators`, `application.ports`;
