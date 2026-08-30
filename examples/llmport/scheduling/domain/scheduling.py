@@ -179,9 +179,9 @@ class Booking(ts.AggregateRoot):
         return self._offered
 
     def provide_name(self, spec: NamingSpec) -> None:
-        naming = Naming(spec)
         if str(self._step) != COLLECT_NAME:
             raise ValueError(f"not available at step {self._step}")
+        naming = Naming(spec)
         self._name = naming.name
         self._offered = naming.offer.slots
         self._step = Step(CHOOSE_SLOT)
@@ -198,9 +198,9 @@ class Booking(ts.AggregateRoot):
         self._step = Step(CONFIRM)
 
     def reoffer(self, spec: OfferSpec) -> None:
-        offer = Offer(spec)
         if str(self._step) != CONFIRM:
             raise ValueError(f"not available at step {self._step}")
+        offer = Offer(spec)
         self._offered = offer.slots
         self._chosen = None
         self._step = Step(CHOOSE_SLOT)
