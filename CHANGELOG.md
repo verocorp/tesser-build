@@ -5,6 +5,35 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.90.0] - 2026-08-30
+
+Five of the fifteen `TB073` debt markers in the test modules excused
+functions that were never helpers under `testing.md` rule 9 — a helper holds
+the values a test does not care about; it does not call the code under test
+or wire it. `_read(root)` invoked the real `FilesystemRepoReader`,
+`_handler(down=)` wired handler → service → repository over `FakeStorage`,
+and `_valid_create()` / `_create_body()` returned a JSON string. The debt was
+not a rule that fit badly; it was arrangement hidden behind a name.
+
+### Changed
+- **`layout/repo/adapters/repositories/test_file_repository.py`** — every
+  test constructs the reader and issues the `ReadRepoRequest` itself; the
+  `_read` helper and its marker are gone.
+- **`examples/errorspy/campaign/tests/test_transport.py` and `test_e2e.py`**
+  — every test builds its own `handlers.Handler(...)` over a fresh
+  `FakeStorage()` and writes the JSON body it sends, so the arrangement is
+  visible at the claim. `_handler`, `_valid_create`, `_create_body` and
+  their four markers are gone, along with the now-unused `tesser.testing`
+  import. `FakeStorage(down=False)` collapses to `FakeStorage()` — the
+  default was already up.
+
+The remaining ten markers (the seven `_repo` fixture-tree builders in
+`layout/`, `_texts` in `layout/repo/domain/test_rules.py`, and the four
+undeclared comparison projections in
+`examples/python-app/campaign/tests/test_serialization_edges.py`) are the
+subject of a separate ruling: they are a fixture shape and a projection
+shape, neither of which the helper rule describes.
+
 ## [0.0.89.1] - 2026-08-30
 
 Every `ts.Outcome` subclass raised at class definition on a current CPython
