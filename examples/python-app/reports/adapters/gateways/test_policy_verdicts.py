@@ -107,7 +107,7 @@ def test_a_verdict_decision_outside_the_recorded_set_is_refused() -> None:
         linkpolicy_client.VerdictView("https://a.example/s", "maybe", "unsure")
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(errors.InfraError):
         policy_verdicts.PolicyVerdictGateway(verdicts).verdicts(
             verdict_source.ListVerdictsRequest()
         )

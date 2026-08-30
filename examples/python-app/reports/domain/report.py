@@ -104,6 +104,7 @@ class LinkVerdict(ts.ValueObject):
     _reason: values.Reason
 
 
+_ALLOWED: typing.Final[values.Decision] = values.Decision("allowed")
 _UNRECORDED_DECISION: typing.Final[values.Decision] = values.Decision("allowed")
 _UNRECORDED_REASON: typing.Final[values.Reason] = values.Reason("no verdict recorded")
 
@@ -140,7 +141,7 @@ class LinkVerdicts(ts.ValueObject):
                     )
                 )
             )
-        rows.sort(key=lambda row: (row.decision == _UNRECORDED_DECISION, str(row.slug)))
+        rows.sort(key=lambda row: (row.decision == _ALLOWED, str(row.slug)))
         object.__setattr__(self, "_rows", tuple(rows))
 
     @property
