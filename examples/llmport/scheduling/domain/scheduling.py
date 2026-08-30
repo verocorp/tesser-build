@@ -68,6 +68,51 @@ class BookingID(ts.ValueObject):
         return serialization.canonical_str(self._value)
 
 
+class OfferSpec(ts.Spec):
+
+    def __init__(self, labels: tuple[str, ...]) -> None:
+        self.labels = labels
+
+
+class Offer(ts.ValueObject):
+
+    _slots: tuple[Slot, ...]
+
+    def __init__(self, spec: OfferSpec) -> None:
+        if not spec.labels:
+            raise ValueError("no slots are available")
+        object.__setattr__(self, "_slots", tuple(Slot(label) for label in spec.labels))
+
+    @property
+    def slots(self) -> tuple[Slot, ...]:
+        return self._slots
+
+
+class NamingSpec(ts.Spec):
+
+    def __init__(self, name: str, offered: OfferSpec) -> None:
+        self.name = name
+        self.offered = offered
+
+
+class Naming(ts.ValueObject):
+
+    _name: CustomerName
+    _offer: Offer
+
+    def __init__(self, spec: NamingSpec) -> None:
+        object.__setattr__(self, "_name", CustomerName(spec.name))
+        object.__setattr__(self, "_offer", Offer(spec.offered))
+
+    @property
+    def name(self) -> CustomerName:
+        return self._name
+
+    @property
+    def offer(self) -> Offer:
+        return self._offer
+
+
 class ReoffersSpec(ts.Spec):
 
     def __init__(self, offered: tuple[tuple[str, ...], ...]) -> None:
@@ -133,13 +178,12 @@ class Booking(ts.AggregateRoot):
     def offered(self) -> tuple[Slot, ...]:
         return self._offered
 
-    def provide_name(self, name: CustomerName, offered: tuple[Slot, ...]) -> None:
+    def provide_name(self, spec: NamingSpec) -> None:
+        naming = Naming(spec)
         if str(self._step) != COLLECT_NAME:
             raise ValueError(f"not available at step {self._step}")
-        if not offered:
-            raise ValueError("no slots are available")
-        self._name = name
-        self._offered = offered
+        self._name = naming.name
+        self._offered = naming.offer.slots
         self._step = Step(CHOOSE_SLOT)
 
     def choose_slot(self, slot: Slot) -> None:
@@ -153,12 +197,11 @@ class Booking(ts.AggregateRoot):
         self._chosen = slot
         self._step = Step(CONFIRM)
 
-    def reoffer(self, offered: tuple[Slot, ...]) -> None:
+    def reoffer(self, spec: OfferSpec) -> None:
+        offer = Offer(spec)
         if str(self._step) != CONFIRM:
             raise ValueError(f"not available at step {self._step}")
-        if not offered:
-            raise ValueError("no slots are available")
-        self._offered = offered
+        self._offered = offer.slots
         self._chosen = None
         self._step = Step(CHOOSE_SLOT)
 

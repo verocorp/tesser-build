@@ -58,7 +58,9 @@ def test_the_booking_walks_its_steps() -> None:
     assert str(booking.step()) == "collect_name"
 
     booking.provide_name(
-        domain.CustomerName("Ada"), (domain.Slot("mon-9am"), domain.Slot("tue-2pm"))
+        domain.NamingSpec(
+            name="Ada", offered=domain.OfferSpec(labels=("mon-9am", "tue-2pm"))
+        )
     )
     assert str(booking.step()) == "choose_slot"
 
@@ -87,7 +89,9 @@ def test_an_unoffered_slot_is_rejected_naming_the_offered() -> None:
         domain.BookingSpec(step="collect_name", name="", chosen="", offered=())
     )
     booking.provide_name(
-        domain.CustomerName("Ada"), (domain.Slot("mon-9am"), domain.Slot("tue-2pm"))
+        domain.NamingSpec(
+            name="Ada", offered=domain.OfferSpec(labels=("mon-9am", "tue-2pm"))
+        )
     )
 
     with pytest.raises(ValueError) as excinfo:
@@ -103,7 +107,9 @@ def test_rechoosing_at_confirm_overwrites_the_choice() -> None:
         domain.BookingSpec(step="collect_name", name="", chosen="", offered=())
     )
     booking.provide_name(
-        domain.CustomerName("Ada"), (domain.Slot("mon-9am"), domain.Slot("tue-2pm"))
+        domain.NamingSpec(
+            name="Ada", offered=domain.OfferSpec(labels=("mon-9am", "tue-2pm"))
+        )
     )
     booking.choose_slot(domain.Slot("mon-9am"))
 
@@ -128,10 +134,12 @@ def test_reoffer_replaces_slots_and_returns_to_choosing() -> None:
     booking = domain.Booking(
         domain.BookingSpec(step="collect_name", name="", chosen="", offered=())
     )
-    booking.provide_name(domain.CustomerName("Ada"), (domain.Slot("mon-9am"),))
+    booking.provide_name(
+        domain.NamingSpec(name="Ada", offered=domain.OfferSpec(labels=("mon-9am",)))
+    )
     booking.choose_slot(domain.Slot("mon-9am"))
 
-    booking.reoffer((domain.Slot("tue-2pm"),))
+    booking.reoffer(domain.OfferSpec(labels=("tue-2pm",)))
 
     assert str(booking.step()) == "choose_slot"
     assert tuple(str(s) for s in booking.offered()) == ("tue-2pm",)
@@ -149,7 +157,9 @@ def test_provide_name_with_no_slots_available_is_rejected() -> None:
     )
 
     with pytest.raises(ValueError) as excinfo:
-        booking.provide_name(domain.CustomerName("Ada"), ())
+        booking.provide_name(
+            domain.NamingSpec(name="Ada", offered=domain.OfferSpec(labels=()))
+        )
 
     assert "no slots are available" in str(excinfo.value)
     assert str(booking.step()) == "collect_name"
@@ -159,11 +169,13 @@ def test_reoffer_with_no_slots_available_is_rejected() -> None:
     booking = domain.Booking(
         domain.BookingSpec(step="collect_name", name="", chosen="", offered=())
     )
-    booking.provide_name(domain.CustomerName("Ada"), (domain.Slot("mon-9am"),))
+    booking.provide_name(
+        domain.NamingSpec(name="Ada", offered=domain.OfferSpec(labels=("mon-9am",)))
+    )
     booking.choose_slot(domain.Slot("mon-9am"))
 
     with pytest.raises(ValueError) as excinfo:
-        booking.reoffer(())
+        booking.reoffer(domain.OfferSpec(labels=()))
 
     assert "no slots are available" in str(excinfo.value)
     assert str(booking.step()) == "confirm"
@@ -277,3 +289,41 @@ def test_reoffers_are_equal_when_they_offer_the_same_slots() -> None:
     assert one == same
     assert one != other
     assert len({one, same, other}) == 2
+
+
+def test_an_offer_turns_every_label_into_a_slot() -> None:
+    offer = domain.Offer(domain.OfferSpec(labels=("mon-9am", "tue-2pm")))
+
+    assert tuple(str(slot) for slot in offer.slots) == ("mon-9am", "tue-2pm")
+
+
+def test_an_offer_of_nothing_is_rejected() -> None:
+    with pytest.raises(ValueError) as excinfo:
+        domain.Offer(domain.OfferSpec(labels=()))
+
+    assert "no slots are available" in str(excinfo.value)
+
+
+def test_an_offer_is_equal_when_it_offers_the_same_slots() -> None:
+    one = domain.Offer(domain.OfferSpec(labels=("mon-9am",)))
+    same = domain.Offer(domain.OfferSpec(labels=("mon-9am",)))
+    other = domain.Offer(domain.OfferSpec(labels=("tue-2pm",)))
+
+    assert one == same
+    assert one != other
+
+
+def test_a_naming_carries_the_name_and_the_offer_it_was_built_from() -> None:
+    naming = domain.Naming(
+        domain.NamingSpec(name="Ada", offered=domain.OfferSpec(labels=("mon-9am",)))
+    )
+
+    assert str(naming.name) == "Ada"
+    assert tuple(str(slot) for slot in naming.offer.slots) == ("mon-9am",)
+
+
+def test_a_naming_with_a_blank_name_is_rejected() -> None:
+    with pytest.raises(ValueError):
+        domain.Naming(
+            domain.NamingSpec(name="  ", offered=domain.OfferSpec(labels=("mon-9am",)))
+        )

@@ -95,7 +95,7 @@ class TestPostgresWidgetStore:
         widget_store = postgres.PostgresWidgetStore(database)
         with pytest.raises(RuntimeError):
             async with widget_store.transaction() as widgets_repo:
-                await widgets_repo.save_widget(widget_repository.SaveWidgetRequest(name="a", part="p"))
+                await widgets_repo.save_widget(widget_repository.SaveWidgetRequest(name="a", part="p", standing="kept"))
                 raise RuntimeError("abort")
         await database.close()
         connection = await asyncpg.connect(dsn)
