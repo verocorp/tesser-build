@@ -5,6 +5,80 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.89.2] - 2026-08-30
+
+`ts.Record` stopped rejecting a class-level default on CPython 3.14 — the gap
+v0.0.89.1 found and named while adding the 3.13 matrix arm. Under PEP 649 a
+class body no longer executes its annotations: the compiler leaves an
+`__annotate_func__` in the class namespace, and `__annotations__` is
+materialized lazily, on first read, by the `type.__annotations__` descriptor.
+`Record.__init_subclass__` read the namespace directly —
+`base.__dict__.get("__annotations__", {})` — so on 3.14 it saw an empty
+mapping, found no fields, and let `status: int = 200` through.
+`Record.__init__` read the same annotations through `getattr` and was never
+affected, which is the whole shape of the defect: one contract, two readers,
+and only one of them survived the change.
+
+### Fixed
+- **One reader for a record's own annotations.** `_own_annotations` is the
+  single way `Record` asks a class what it declared, and both the class-level
+  default gate and the declared-field list go through it. It reads through the
+  attribute — `getattr(cls, "__annotations__", {})` — which returns a class's
+  own annotations and nothing inherited on every supported version, and which
+  on 3.14 is what runs `__annotate_func__`. The gate now sees exactly the
+  fields `__init__` will accept, by construction rather than by coincidence.
+  The `{}` default stays load-bearing: `object` carries no `__annotations__`
+  on 3.12, 3.13, or 3.14, and the field walk crosses it.
+- The two tests that caught this — a record field carrying a class-level
+  default, and an annotated mixin smuggling one in — are unchanged and pass on
+  all three versions. They were the report, so they stay the proof.
+
+### Added
+- Three tests over the annotation reader, none of them version-conditional: a
+  string annotation (`status: "int" = 200`) is still read as a field and still
+  refused a default, a string-annotated `ClassVar` is still not a field and
+  keeps its class-level value, and a `typing.Final` does the same. String
+  annotations are what a `from __future__ import annotations` consumer
+  produces, so the reader is pinned against the representation as well as the
+  storage.
+
+### Changed
+- The `tesser-py` matrix is `3.12`, `3.13`, `3.14`. Every other job stays on
+  `3.12`.
+- `.gitignore` ignores `.venv*/`, not just `.venv/`. Verifying a three-version
+  matrix locally means three environments side by side, and the second one
+  should not show up as an untracked directory.
+
+### Notes
+- Every other class-creation-time gate in `tesser-py` was audited for the same
+  exposure, and `ts.Record` was the only one that reads annotations.
+  `ts.ValueObject` and `ts.Entity` read `__slots__` and dunder names out of
+  `cls.__dict__` — real namespace entries PEP 649 does not move. `ts.Outcome`
+  reads `enum`'s member tables, and v0.0.89.1 already covered the annotation
+  case there: its totality loop rejects `__annotate_func__` exactly as it
+  rejected `__annotations__`, because an outcome carries members and nothing
+  else. The `inspect.signature` reads in the `python-app` and `serdepy` tests
+  look at parameter names, not annotations.
+- `annotationlib.get_annotations(cls, format=FORWARDREF)` was the other
+  candidate and was rejected on evidence: its values are `ForwardRef` objects
+  whose `str()` reads `ForwardRef('ClassVar[int]', ...)`, which the
+  `ClassVar`/`Final` test would classify as a field. `STRING` format does work,
+  but `annotationlib` exists only on 3.14, so it buys a conditional import and
+  a *different* annotation representation per version — where reading through
+  the attribute gives one representation everywhere. The `ts.Outcome` fix names
+  a namespace key because its check is "nothing but members is here"; `Record`
+  needs the annotations themselves, so it reads them the way Python offers
+  them.
+- `scripts/verify` green across all 11 trees on 3.14.5 — not only the tree the
+  matrix touches — and green for `tesser-py` and `tessercheck-py` on 3.12.13
+  and 3.13.12. `go test ./...`, `go vet ./...`, and `gofmt -l .` clean;
+  `roadmap/generate.py --check` up to date. No rule, doc, or skill text
+  changed — `skill-version` stays 62.
+- Unchanged on every version, and left alone here: a subclass can still give an
+  *inherited* field a class-level default (`class Child(Parent): status = 500`),
+  because the gate pairs each base's own annotations with that same base's
+  namespace. That is a pre-existing gap in the same contract, not a 3.14 one.
+
 ## [0.0.89.1] - 2026-08-30
 
 Every `ts.Outcome` subclass raised at class definition on a current CPython

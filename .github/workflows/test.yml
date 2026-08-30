@@ -244,15 +244,18 @@ jobs:
     # whatever interpreter they have, not on the one this repo pins. Issue #149
     # was a ts.Outcome gate that read a namespace CPython 3.13 writes to during
     # class creation and 3.12 does not — every outcome raised at import on a
-    # current 3.13 while a 3.12-only matrix stayed green. '3.13' resolves to the
-    # newest patch the runner has, which is the point: this arm is here to see
-    # an interpreter change before a consumer does.
+    # current 3.13 while a 3.12-only matrix stayed green. The 3.14 arm caught
+    # the same shape one base over: PEP 649 leaves __annotate_func__ where a
+    # class body used to leave __annotations__, so ts.Record's class-level
+    # default gate read an empty mapping and stopped rejecting. Each version
+    # resolves to the newest patch the runner has, which is the point: this
+    # arm is here to see an interpreter change before a consumer does.
     name: tesser-py runtime library on ${{ matrix.python-version }} (mypy --strict + pytest)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.12', '3.13']
+        python-version: ['3.12', '3.13', '3.14']
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
