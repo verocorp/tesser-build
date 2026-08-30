@@ -323,13 +323,41 @@ Two things the burn-down left behind, deliberately:
   table constructor stops sorting; one `AnnotationPolicy` per class taking
   its slot as the argument; or a ruling that a tree-level value object may
   be passed whole to a constructor. The last is the honest one and is the
-  same question as the foreign-type ruling above.
+  same question as the foreign-type ruling above. The ship review's
+  performance pass named the scans that compound it: `Registry.modules_under`
+  and `KindTable.blocks_in` walk every module name / every class symbol per
+  call (called per import edge in `kernel_import`, `role`, and `app_import`
+  checks); `Method.__init__`'s self-alias fixpoint re-walks the body per
+  pass; `Names.__contains__` scans a tuple; `Body.__init__` and
+  `ClassDecl.__init__` walk the same subtree three to four times. A sorted
+  prefix range (bisect) for `modules_under`, a by-module index for
+  `blocks_in`, and one walk per constructor are the mechanical fixes.
 - [ ] **Equality tests for the new value objects** (convention rule 2, not
-  machine-enforced): `Annotation`, `Names`, `Symbols`, `KindTable`,
-  `Scope`, `Registry`, `Signature`, `Slot`, `Fact`, `Body`, `Placement`,
-  `Declaration`, `SpecReader`, `EnumShape`, and the policy classes. The
-  load-bearing one is `Annotation` — two parses of one annotation must be
-  equal, and the whole design rests on that.
+  machine-enforced): `Annotation` and `Names` have them (v0.0.93.0);
+  `Symbols`, `KindTable`, `Scope`, `Registry`, `Signature`, `Slot`, `Fact`,
+  `Body`, `Placement`, `Declaration`, `SpecReader`, `EnumShape`, and the
+  policy classes do not. `Method.identity` and `ClassDecl.identity` are
+  never read, so entity equality is unexercised too.
+- [ ] **Shape leftovers the review named and this wave did not take.**
+  `Codebase` still reaches `module._resolve(node)` at four sites where
+  `module.scope().resolve(...)` is the public path — give `Module` a public
+  `resolve` or route through `Scope`, then delete `Module._resolve`.
+  `ClassDecl.__init__` re-implements `EnumShape.__init__`'s member
+  classification instead of building an `EnumShape`. `ImportEdge`, `Debt`,
+  `Comment`, and `TesserImport` publish nothing, so `Module` and `Codebase`
+  read their private fields at ~55 sites. `rulebook.HOLE_NAMES` carries
+  `"node.name"` twice (⟨class⟩ then ⟨function⟩; the second wins, so the
+  `TB051` sibling-reach row renders ⟨function⟩ where it means ⟨class⟩ —
+  fixing it changes a rendered row, so it waits for a rules change).
+  `rulebook.py`'s direct literal-argument binding block has had zero hits
+  since `77aa2fb` moved every site onto `XSpec(...)`.
+- [ ] **A deep annotation crashes the run.** `Annotation.__init__`'s
+  closures recurse over `|` chains and nested subscripts with no depth
+  bound; `x: int | int | ...` a few thousand deep parses but raises
+  `RecursionError` out of `ClassDecl.__init__`, past the `SyntaxError` guard
+  that turns a bad file into a `TB043` finding. Carried forward from the
+  pre-refactor helpers, not new. Catch it beside `SyntaxError` or walk
+  iteratively.
 - [ ] **The seven `TB080` markers** (`Annotation`, `FieldSpec`, `ParamSpec`,
   `MethodSpec`, `ClassDeclSpec`, `BodySpec`, `EnumShapeSpec`) are the
   foreign-type ruling's whole footprint — see the section below.

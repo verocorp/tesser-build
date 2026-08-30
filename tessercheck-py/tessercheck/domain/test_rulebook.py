@@ -267,3 +267,39 @@ def test_render_without_the_protocol_package_constant_is_rejected() -> None:
     )
     with pytest.raises(RuntimeError, match="PROTOCOL_PACKAGE"):
         rulebook.Rulebook(rulebook.RulebookSpec(checks_text))
+
+
+def test_an_empty_string_binding_drops_the_row() -> None:
+    checks_text = (
+        "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
+        "class ThingSpec:\n"
+        "    def __init__(self, where: str = '') -> None:\n"
+        "        self.where = where\n"
+        "class Module:\n"
+        "    def __init__(self, spec: ThingSpec) -> None:\n"
+        "        pass\n"
+        "    def stray_violations(self) -> None:\n"
+        "        Violation(ViolationSpec('p', 1, 'TB040', f'{where} is wrong; the dropped tail'))\n"
+        "        Violation(ViolationSpec('p', 1, 'TB041', 'a head; the kept tail'))\n"
+        "THING = ThingSpec()\n"
+    )
+    rendered = str(rulebook.Rulebook(rulebook.RulebookSpec(checks_text)))
+    assert "the dropped tail" not in rendered
+    assert "the kept tail" in rendered
+
+
+def test_a_spec_without_an_init_binds_nothing_and_does_not_crash() -> None:
+    checks_text = (
+        "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
+        "class EmptySpec:\n"
+        "    pass\n"
+        "class Module:\n"
+        "    def __init__(self, spec: EmptySpec) -> None:\n"
+        "        pass\n"
+        "    def stray_violations(self) -> None:\n"
+        "        Violation(ViolationSpec('p', 1, 'TB040', 'a shape; the rendered tail'))\n"
+    )
+    rendered = str(rulebook.Rulebook(rulebook.RulebookSpec(checks_text)))
+    assert "the rendered tail" in rendered

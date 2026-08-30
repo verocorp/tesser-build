@@ -13802,3 +13802,18 @@ def test_names_equality() -> None:
     assert one - checks.Names(("b",)) == checks.Names(("a",))
     assert one & checks.Names(("b", "c")) == checks.Names(("b",))
     assert one | checks.Names(("c",)) == checks.Names(("c", "b", "a"))
+
+
+def test_kind_table_equality_and_lookup() -> None:
+    entries = (
+        ("shop.domain.money", "Money", "valueobject"),
+        ("shop.domain.order", "Order", "aggregate"),
+        ("shop.domain.aaa", "Aaa", "spec"),
+    )
+    table = checks.KindTable(checks.KindTableSpec(entries))
+    assert table == checks.KindTable(checks.KindTableSpec(tuple(reversed(entries))))
+    assert str(table.block_of(checks.Symbol(checks.SymbolSpec("shop.domain.order", "Order")))) == "aggregate"
+    assert str(table.block_of(checks.Symbol(checks.SymbolSpec("shop.domain.aaa", "Aaa")))) == "spec"
+    assert table.block_of(checks.Symbol(checks.SymbolSpec("shop.domain.zzz", "Zzz"))) is None
+    assert table.block_of(checks.Symbol(checks.SymbolSpec("shop.domain.money", "Other"))) is None
+    assert checks.KindTable(checks.KindTableSpec(())).block_of(checks.Symbol(checks.SymbolSpec("a", "B"))) is None

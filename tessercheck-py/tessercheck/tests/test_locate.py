@@ -65,6 +65,7 @@ def test_every_place_is_earned_by_a_checked_tree_or_is_a_finding() -> None:
         "reachable only from such a tree, so without one it is unearned"
     )
     tokens = conftest.returned_tokens(conftest.function_tree(checks.Placement.__init__))
+    assert tokens, "no placement tokens extracted from Placement.__init__; the totality below would pass on an empty set"
     unearned = tokens - exercised - finding_places
     assert unearned == frozenset(), (
         f"Placement can produce {sorted(unearned)}, but no checked tree contains such "

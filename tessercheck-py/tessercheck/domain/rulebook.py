@@ -350,24 +350,7 @@ class Rulebook(ts.ValueObject):
                         and isinstance(alias_node.value.slice, ast.Name)
                     ):
                         aliases[alias_node.targets[0].id] = alias_node.value.slice.id
-                params = [arg.arg for arg in method.args.args if arg.arg != "self"]
                 bindings: list[dict[str, str | None]] = []
-                for node in ast.walk(tree):
-                    if (
-                        isinstance(node, ast.Call)
-                        and isinstance(node.func, ast.Attribute)
-                        and node.func.attr == method.name
-                        and isinstance(node.func.value, ast.Name)
-                        and node.func.value.id == "self"
-                    ):
-                        bound_args: dict[str, str | None] = {}
-                        for name, arg in zip(params, node.args):
-                            if isinstance(arg, ast.Constant) and (
-                                arg.value is None or isinstance(arg.value, str)
-                            ):
-                                bound_args[name] = arg.value
-                        if bound_args not in bindings:
-                            bindings.append(bound_args)
                 spec_names: list[str] = []
                 for member in cls.body:
                     if isinstance(member, ast.FunctionDef) and member.name == "__init__":
