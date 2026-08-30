@@ -341,7 +341,7 @@ methods into domain objects that wrap Python syntax: `Annotation`, `Field`,
 `Method`, `ClassDecl`, `Scope`, `Names`, `Symbols`. Every one conforms to the
 rules as written except at one point: an `ast.*` node crossing a constructor
 or a spec field. A node is not a primitive and cannot decompose into one, so
-`TB080` fires on the four wrapper constructors that take one. Each carries
+`TB080` fires on the seven wrapper constructors that take one. Each carries
 `# tesser:debt TB080` — the debt names the unruled question at the one place
 the answer would change code, and it is bounded by the number of wrapper
 *types*, not call sites.
@@ -355,7 +355,8 @@ that object exposes it through nothing but its own methods.
   constructor parameter; spec field) admit types declared foreign per tree —
   a `.tesser-root` line following the `stdlib <module>` precedent. Evidence:
   the VO-family slice (this commit) — 40 findings on the first cut, 4 after
-  conforming to the existing vocabulary, all four the foreign parameter.
+  conforming to the existing vocabulary (seven once every wrapper existed),
+  all of them the foreign parameter.
 - [ ] **Build the exit half.** Nothing catches a wrapper that stores a raw
   node and hands it back: a probe VO with `_node: ast.expr` and
   `def node(self) -> ast.expr` passes the analyzer clean today, because

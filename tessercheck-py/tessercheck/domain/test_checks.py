@@ -82,7 +82,7 @@ def _spec(
     )
 
 
-def test_locate_is_the_single_routing_decision() -> None:
+def test_placement_is_the_single_routing_decision() -> None:
     contexts = frozenset({"shop", "two"})
     table = (
         ("solo", False, "root"),
@@ -180,7 +180,7 @@ def test_locate_is_the_single_routing_decision() -> None:
     for name, is_package, expected in table:
         got = str(checks.Placement(checks.PlacementSpec(name, is_package, tuple(sorted(contexts)))))
         assert got == expected, (
-            f"_locate({name!r}, is_package={is_package}) = {got!r}, expected {expected!r}"
+            f"Placement({name!r}, is_package={is_package}) = {got!r}, expected {expected!r}"
         )
     exported = (
         ("shells", True, "kernel-init"),
@@ -192,17 +192,17 @@ def test_locate_is_the_single_routing_decision() -> None:
     for name, is_package, expected in exported:
         got = str(checks.Placement(checks.PlacementSpec(name, is_package, tuple(sorted(contexts)), "shells")))
         assert got == expected, (
-            f"_locate({name!r}, is_package={is_package}, export='shells') = {got!r}, "
+            f"Placement({name!r}, is_package={is_package}, export='shells') = {got!r}, "
             f"expected {expected!r}"
         )
     assert str(checks.Placement(checks.PlacementSpec("shells.thing", False, tuple(sorted(contexts))))) == "root", (
         "an undeclared export directory must classify as it always did"
     )
-    locate_tree = ast.parse(
+    placement_tree = ast.parse(
         textwrap.dedent(inspect.getsource(checks.Placement.__init__))
     )
     locate = next(
-        node for node in locate_tree.body if isinstance(node, ast.FunctionDef)
+        node for node in placement_tree.body if isinstance(node, ast.FunctionDef)
     )
     returned = frozenset(
         value.value
@@ -213,18 +213,18 @@ def test_locate_is_the_single_routing_decision() -> None:
     )
     exercised = frozenset(expected for _, _, expected in table)
     assert returned == exercised, (
-        f"the classification table and _locate's return set drifted apart: "
+        f"the classification table and Placement's return set drifted apart: "
         f"unexercised tokens {sorted(returned - exercised)}, "
         f"stale table rows {sorted(exercised - returned)}"
     )
 
 
 def test_every_location_token_has_a_dispatch_arm() -> None:
-    locate_tree = ast.parse(
+    placement_tree = ast.parse(
         textwrap.dedent(inspect.getsource(checks.Placement.__init__))
     )
     locate = next(
-        node for node in locate_tree.body if isinstance(node, ast.FunctionDef)
+        node for node in placement_tree.body if isinstance(node, ast.FunctionDef)
     )
     tokens = frozenset(
         value.value
@@ -250,10 +250,10 @@ def test_every_location_token_has_a_dispatch_arm() -> None:
         and len(node.comparators) == 1
         and isinstance(node.comparators[0], ast.Constant)
     )
-    assert tokens, "no tokens extracted from _locate"
+    assert tokens, "no tokens extracted from Placement"
     unhandled = tokens - handled - {"context-stray"}
     assert unhandled == frozenset(), (
-        f"_locate can return tokens with no dispatch arm: {sorted(unhandled)} "
+        f"Placement can return tokens with no dispatch arm: {sorted(unhandled)} "
         "(context-stray is the dispatch's final return)"
     )
 
@@ -13782,3 +13782,23 @@ def test_a_conditional_expression_over_a_comparison_is_one_decision() -> None:
     chose = tuple(f for f in findings if "ChoosingService.chose" in f and " TB082 " in f)
     assert len(chose) == 1, chose
     assert "chooses with a conditional expression" in chose[0], chose
+
+
+def test_annotation_equality() -> None:
+    one = checks.Annotation(ast.parse("dict[str, int] | None", mode="eval").body)
+    same = checks.Annotation(ast.parse("(dict[str, int] | None)", mode="eval").body)
+    other = checks.Annotation(ast.parse("dict[str, str] | None", mode="eval").body)
+    assert one == same
+    assert hash(one) == hash(same)
+    assert one != other
+
+
+def test_names_equality() -> None:
+    one = checks.Names(("b", "a", "b"))
+    same = checks.Names(("a", "b"))
+    assert one == same
+    assert hash(one) == hash(same)
+    assert one != checks.Names(("a",))
+    assert one - checks.Names(("b",)) == checks.Names(("a",))
+    assert one & checks.Names(("b", "c")) == checks.Names(("b",))
+    assert one | checks.Names(("c",)) == checks.Names(("c", "b", "a"))

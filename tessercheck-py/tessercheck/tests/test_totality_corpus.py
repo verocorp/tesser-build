@@ -102,5 +102,5 @@ def test_no_module_shape_is_silent(tmp_path: pathlib.Path) -> None:
     )
     uncovered = returned - package_only - covered
     assert uncovered == frozenset(), (
-        f"_locate tokens with no corpus shape exercising them end-to-end: {sorted(uncovered)}"
+        f"Placement tokens with no corpus shape exercising them end-to-end: {sorted(uncovered)}"
     )

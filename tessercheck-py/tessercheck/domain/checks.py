@@ -160,10 +160,6 @@ APP_KINDS: typing.Final[frozenset[str]] = frozenset(
     {"app", "loader", "app_config", "app_spec", "config_repository"}
 )
 
-COMPONENT_KINDS: typing.Final[frozenset[str]] = frozenset(
-    {"component", "component_config", "component_spec"}
-)
-
 KIND_ROLE: typing.Final[dict[str, str]] = {
     "aggregate": "domain",
     "entity": "domain",
@@ -1608,7 +1604,6 @@ class EnumShape(ts.ValueObject):
 
 class Annotation(ts.ValueObject):
 
-    _dump: Text
     _source: Text
     _head: Text | None
     _container: Text | None
@@ -1902,7 +1897,6 @@ class Annotation(ts.ValueObject):
                 peel.extend(leaf.slice.elts if isinstance(leaf.slice, ast.Tuple) else [leaf.slice])
                 continue
             leaves = None
-        object.__setattr__(self, "_dump", Text(ast.dump(node)))
         object.__setattr__(self, "_source", Text(ast.unparse(node)))
         object.__setattr__(self, "_head", Text(head) if head else None)
         object.__setattr__(self, "_container", Text(container) if container else None)
@@ -4536,7 +4530,7 @@ class ClassDecl(ts.Entity):
                         "never a body, because a ports module holds no logic to import",
                     ))
                 )
-            if str(method.name()).startswith("_") and str(method.name()) != "__call__":
+            if str(method.name()).startswith("_") and str(method.name()) != PUBLIC_CALL:
                 found.append(
                     Violation(ViolationSpec(
                         str(self._path),
@@ -4660,7 +4654,7 @@ class ClassDecl(ts.Entity):
                         "a shape and never a body, because a job imports it for the shape",
                     ))
                 )
-            if str(method.name()).startswith("_") and str(method.name()) != "__call__":
+            if str(method.name()).startswith("_") and str(method.name()) != PUBLIC_CALL:
                 found.append(
                     Violation(ViolationSpec(
                         str(self._path),
@@ -8023,7 +8017,7 @@ class Module(ts.Entity):
                 )
         for stmt in nested_class_defs(list(self._body)):
             found.extend(decoration(stmt.name, stmt))
-            for keyword in stmt.keywords:
+            for _ in stmt.keywords:
                 found.append(
                     Violation(ViolationSpec(
                         path,
@@ -8037,7 +8031,7 @@ class Module(ts.Entity):
             for item in stmt.body:
                 if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     continue
-                for _ in getattr(item, "type_params", ()):
+                for _ in item.type_params:
                     found.append(
                         Violation(ViolationSpec(
                             path,
@@ -8064,7 +8058,7 @@ class Module(ts.Entity):
                             "import, and an annotation is evaluated like any other",
                         ))
                     )
-            for _ in getattr(stmt, "type_params", ()):
+            for _ in stmt.type_params:
                 found.append(
                     Violation(ViolationSpec(
                         path,
@@ -9260,9 +9254,6 @@ class Module(ts.Entity):
     def debts(self) -> tuple[Debt, ...]:
         return self._debts
 
-    def comments(self) -> tuple[Comment, ...]:
-        return self._comments
-
     def is_package(self) -> bool:
         return self._is_package
 
@@ -9275,26 +9266,8 @@ class Module(ts.Entity):
     def tesser_imports(self) -> tuple[TesserImport, ...]:
         return self._tesser_imports
 
-    def nested_tesser_imports(self) -> tuple[tuple[str, int], ...]:
-        return self._nested_tesser
-
-    def broken_relative_imports(self) -> tuple[tuple[str, int], ...]:
-        return self._broken_relatives
-
-    def function_names(self) -> frozenset[str]:
-        return self._functions
-
     def class_defs(self) -> tuple[ast.ClassDef, ...]:
         return self._class_defs
-
-    def calls(self) -> tuple[ast.Call, ...]:
-        return self._calls
-
-    def subscripts(self) -> tuple[ast.Subscript, ...]:
-        return self._subscripts
-
-    def assignments(self) -> tuple[ast.Assign | ast.AnnAssign, ...]:
-        return self._assignments
 
     def bound_names(self) -> tuple[tuple[str, str, str], ...]:
         return self._bound_names
@@ -9568,13 +9541,8 @@ class Codebase(ts.AggregateRoot):
             tuple(sorted(module.name() for module in self._modules)),
             tuple(sorted(module.name() for module in self._modules if module.is_package())),
         ))
-        self._declaration = spec.declared
-        self._nested = spec.nested
-        self._symlinked = spec.symlinked
-        self._exports = spec.exports
         self._export = spec.exports[0] if len(spec.exports) == 1 else None
         self._imports = spec.imports
-        self._stdlib = frozenset(spec.stdlib)
         self._pure_stdlib = spec.pure_stdlib
         self._used_imports: set[str] = set()
         self._used_pure_stdlib: set[str] = set()
@@ -10025,7 +9993,7 @@ class Codebase(ts.AggregateRoot):
                     ):
                         found.extend(decl.port_violations())
                         for signature in decl.signatures():
-                            if str(signature.name()).startswith("_") and str(signature.name()) != "__call__":
+                            if str(signature.name()).startswith("_") and str(signature.name()) != PUBLIC_CALL:
                                 continue
                             found.extend(PORT_METHOD.violations(signature))
                 elif block == "store":
@@ -10075,14 +10043,15 @@ class Codebase(ts.AggregateRoot):
                 elif block == "actions_client" and str(module.place()) in ("app-client", "app-client-file"):
                     found.extend(decl.actions_client_violations())
                     for signature in decl.signatures():
-                        if str(signature.name()).startswith("_") and str(signature.name()) != "__call__":
+                        if str(signature.name()).startswith("_") and str(signature.name()) != PUBLIC_CALL:
                             continue
                         found.extend(APP_CLIENT_METHOD.violations(signature))
         for module in self._modules:
             found.extend(module.pairing_violations(registry))
         for module in self._modules:
             place = str(module.place())
-            if place in ("role", "orchestrators", "orchestrators-file", "kernel"):
+            shell = place == "kernel" and self._export == TESSER and module.name().split(".")[0] == TESSER
+            if place in ("role", "orchestrators", "orchestrators-file", "kernel") and not shell:
                 self._used_imports.update(str(name) for name in module.declared_uses(Names(tuple(self._imports))))
                 if place == "kernel" or module.name().split(".")[1:2] == ["domain"]:
                     self._used_pure_stdlib.update(str(name) for name in module.declared_uses(Names(tuple(self._pure_stdlib))))
@@ -10122,14 +10091,4 @@ class Codebase(ts.AggregateRoot):
                         ))
                     )
         return tuple(kept)
-
-    def _names_a_domain_enum(self, module: Module, node: ast.expr | None) -> bool:
-        if node is None:
-            return False
-        for sub in ast.walk(node):
-            if isinstance(sub, (ast.Name, ast.Attribute)):
-                key = module._resolve(sub)
-                if key is not None and key in self._domain_enums:
-                    return True
-        return False
 
