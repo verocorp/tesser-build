@@ -14,7 +14,7 @@ import alpha.domain.widget as widget
 class MapToWidgetSpec(ts.Mapper, widget.WidgetSpec):
 
     def __init__(self, request: client.AddRequest) -> None:
-        super().__init__(name=request.name, part=widget.PartSpec(id=request.name))
+        super().__init__(name=request.name, part=widget.PartSpec(id=request.name), standing="kept")
 
 
 class MapToPartSpec(ts.Mapper, widget.PartSpec):
@@ -38,13 +38,13 @@ class MapToClearanceSpec(ts.Mapper, clearance.ClearanceSpec):
 class MapToSaveRequest(ts.Mapper, widget_repository.SaveRequest):
 
     def __init__(self, added: widget.Widget) -> None:
-        super().__init__(name=str(added.identity))
+        super().__init__(name=str(added.identity), standing=str(added.standing))
 
 
 class MapToAddResponse(ts.Mapper, client.AddResponse):
 
     def __init__(self, added: widget.Widget) -> None:
-        super().__init__(name=str(added.identity))
+        super().__init__(name=str(added.identity), standing=str(added.standing))
 
 
 class AlphaService(ts.ApplicationService):
@@ -55,20 +55,13 @@ class AlphaService(ts.ApplicationService):
 
     def add(self, request: client.AddRequest) -> client.AddResponse:
         added = widget.Widget(MapToWidgetSpec(request))
-        taken = added.take(MapToPartSpec(request))
-        match taken:
+        match added.take(MapToPartSpec(request)):
             case widget.Taken.TAKEN:
-                self._widgets.save(MapToSaveRequest(added))
+                pass
             case widget.Taken.HELD:
                 answer = self._checks.check(MapToCheckRequest(added))
-                cleared = clearance.Clearance(MapToClearanceSpec(answer))
-                match cleared.settle():
-                    case clearance.Settled.KEPT:
-                        self._widgets.save(MapToSaveRequest(added))
-                    case clearance.Settled.DROPPED:
-                        pass
-                    case _ as never:
-                        typing.assert_never(never)
+                added.clear(MapToClearanceSpec(answer))
             case _ as never:
                 typing.assert_never(never)
+        self._widgets.save(MapToSaveRequest(added))
         return MapToAddResponse(added)

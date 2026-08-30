@@ -11,7 +11,7 @@ import protocol.cli as protocol_cli
 class FakeClient(client.Client):
 
     def add(self, request: client.AddRequest) -> client.AddResponse:
-        return client.AddResponse(name=request.name)
+        return client.AddResponse(name=request.name, standing="kept")
 
 
 class TestHandler:

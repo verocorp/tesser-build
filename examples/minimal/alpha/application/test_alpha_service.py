@@ -13,9 +13,11 @@ class FakeWidgetRepository(widget_repository.WidgetRepository):
 
     def __init__(self) -> None:
         self.saved: list[str] = []
+        self.standing_by_name: dict[str, str] = {}
 
     def save(self, request: widget_repository.SaveRequest) -> widget_repository.SaveResponse:
         self.saved.append(request.name)
+        self.standing_by_name[request.name] = request.standing
         return widget_repository.SaveResponse(name=request.name)
 
 
@@ -53,23 +55,26 @@ class TestAlphaService:
         added = service.add(add_request())
         assert added.name == "a"
 
-    def test_a_new_part_is_taken_and_the_widget_saved(self) -> None:
+    def test_a_new_part_is_taken_and_the_widget_saved_kept(self) -> None:
         widgets = FakeWidgetRepository()
         checks = FakeOkBetaCheck()
-        alpha_service.AlphaService(widgets, checks).add(add_request(name="a", part="p"))
-        assert widgets.saved == ["a"]
+        added = alpha_service.AlphaService(widgets, checks).add(add_request(name="a", part="p"))
         assert checks.checked == []
+        assert added.standing == "kept"
+        assert widgets.standing_by_name == {"a": "kept"}
 
-    def test_a_held_part_cleared_by_beta_is_kept_and_the_widget_saved(self) -> None:
+    def test_a_held_part_cleared_by_beta_is_persisted_as_kept(self) -> None:
         widgets = FakeWidgetRepository()
         checks = FakeOkBetaCheck()
-        alpha_service.AlphaService(widgets, checks).add(add_request(name="a", part="a"))
+        added = alpha_service.AlphaService(widgets, checks).add(add_request(name="a", part="a"))
         assert checks.checked == ["a"]
-        assert widgets.saved == ["a"]
+        assert added.standing == "kept"
+        assert widgets.standing_by_name == {"a": "kept"}
 
-    def test_a_held_part_refused_by_beta_is_dropped_and_nothing_saved(self) -> None:
+    def test_a_held_part_refused_by_beta_is_persisted_as_released(self) -> None:
         widgets = FakeWidgetRepository()
         checks = FakeRefusedBetaCheck()
-        alpha_service.AlphaService(widgets, checks).add(add_request(name="a", part="a"))
+        added = alpha_service.AlphaService(widgets, checks).add(add_request(name="a", part="a"))
         assert checks.checked == ["a"]
-        assert widgets.saved == []
+        assert added.standing == "released"
+        assert widgets.standing_by_name == {"a": "released"}
