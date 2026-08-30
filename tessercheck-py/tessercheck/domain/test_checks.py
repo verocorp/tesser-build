@@ -234,7 +234,7 @@ def test_every_location_token_has_a_dispatch_arm() -> None:
         if isinstance(value, ast.Constant) and isinstance(value.value, str)
     )
     dispatch_tree = ast.parse(
-        textwrap.dedent(inspect.getsource(checks.Codebase._module_violations))
+        textwrap.dedent(inspect.getsource(checks.Codebase.violations))
     )
     dispatch = next(
         node for node in dispatch_tree.body if isinstance(node, ast.FunctionDef)

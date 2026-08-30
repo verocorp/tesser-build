@@ -1090,6 +1090,13 @@ class KindTable(ts.ValueObject):
         )
         object.__setattr__(self, "_blocks", tuple(Text(block) for _, _, block in ordered))
 
+    def blocks_in(self, module: Text) -> Names:
+        return Names(tuple(
+            str(block)
+            for symbol, block in zip(self._symbols, self._blocks)
+            if symbol.module() == module
+        ))
+
     def block_of(self, symbol: Symbol) -> Text | None:
         wanted = (str(symbol.module()), str(symbol.name()))
         index = bisect.bisect_left(
@@ -1108,11 +1115,25 @@ class RegistrySpec(ts.Spec):
         domain_enums: tuple[SymbolSpec, ...],
         outcome_methods: tuple[str, ...] = (),
         action_ports: tuple[SymbolSpec, ...] = (),
+        contexts: tuple[str, ...] = (),
+        export: str | None = None,
+        tops: tuple[str, ...] = (),
+        module_names: tuple[str, ...] = (),
+        declared_imports: tuple[str, ...] = (),
+        pure_stdlib: tuple[str, ...] = (),
+        mapper_targets: tuple[tuple[str, str, str, str], ...] = (),
     ) -> None:
         self.kinds = kinds
         self.domain_enums = domain_enums
         self.outcome_methods = outcome_methods
         self.action_ports = action_ports
+        self.contexts = contexts
+        self.export = export
+        self.tops = tops
+        self.module_names = module_names
+        self.declared_imports = declared_imports
+        self.pure_stdlib = pure_stdlib
+        self.mapper_targets = mapper_targets
 
 
 class Registry(ts.ValueObject):
@@ -1121,12 +1142,58 @@ class Registry(ts.ValueObject):
     _domain_enums: Symbols
     _outcome_methods: Names
     _action_ports: Symbols
+    _contexts: Names
+    _export: Text | None
+    _tops: Names
+    _module_names: Names
+    _declared_imports: Names
+    _pure_stdlib: Names
+    _mapper_targets: tuple[tuple[Symbol, Symbol], ...]
 
     def __init__(self, spec: RegistrySpec) -> None:
         object.__setattr__(self, "_kinds", KindTable(spec.kinds))
         object.__setattr__(self, "_domain_enums", Symbols(SymbolsSpec(spec.domain_enums)))
         object.__setattr__(self, "_outcome_methods", Names(spec.outcome_methods))
         object.__setattr__(self, "_action_ports", Symbols(SymbolsSpec(spec.action_ports)))
+        object.__setattr__(self, "_contexts", Names(spec.contexts))
+        object.__setattr__(self, "_export", Text(spec.export) if spec.export else None)
+        object.__setattr__(self, "_tops", Names(spec.tops))
+        object.__setattr__(self, "_module_names", Names(spec.module_names))
+        object.__setattr__(self, "_declared_imports", Names(spec.declared_imports))
+        object.__setattr__(self, "_pure_stdlib", Names(spec.pure_stdlib))
+        object.__setattr__(
+            self,
+            "_mapper_targets",
+            tuple(
+                (Symbol(SymbolSpec(module, name)), Symbol(SymbolSpec(target_module, target_name)))
+                for module, name, target_module, target_name in spec.mapper_targets
+            ),
+        )
+
+    def contexts(self) -> Names:
+        return self._contexts
+
+    def export(self) -> Text | None:
+        return self._export
+
+    def tops(self) -> Names:
+        return self._tops
+
+    def modules_under(self, target: Text) -> Names:
+        wanted = str(target)
+        return Names(tuple(name for name in self._module_names if name == wanted or name.startswith(wanted + ".")))
+
+    def declared_imports(self) -> Names:
+        return self._declared_imports
+
+    def pure_stdlib(self) -> Names:
+        return self._pure_stdlib
+
+    def mapper_target(self, mapper: Symbol) -> Symbol | None:
+        for source, target in self._mapper_targets:
+            if source == mapper:
+                return target
+        return None
 
     def kinds(self) -> KindTable:
         return self._kinds
@@ -1283,6 +1350,91 @@ class Scope(ts.ValueObject):
             if ref in self._classes:
                 found.append((str(self._module), ref))
         return Symbols(SymbolsSpec(tuple(SymbolSpec(module_name, name) for module_name, name in found)))
+
+
+class EnumShapeSpec(ts.Spec):
+
+    def __init__(self, node: ast.ClassDef, scope: ScopeSpec) -> None:  # tesser:debt TB080
+        self.node = node
+        self.scope = scope
+
+
+class EnumShape(ts.ValueObject):
+
+    _base: Text | None
+    _extras: tuple[Line, ...]
+    _mixed: Names
+    _decorated: Names
+
+    def __init__(self, spec: EnumShapeSpec) -> None:
+        node = spec.node
+        scope = Scope(spec.scope)
+        base_name: str | None = None
+        for base in node.bases:
+            if isinstance(base, ast.Attribute) and isinstance(base.value, ast.Name):
+                package = scope.package_of(Text(base.value.id))
+                if package is not None and str(package) == ENUM_MODULE:
+                    base_name = base.attr
+                    break
+            elif isinstance(base, ast.Name):
+                origin = scope.import_of(Text(base.id))
+                if origin is not None and str(origin.module()) == ENUM_MODULE:
+                    base_name = str(origin.name())
+                    break
+
+        def is_enum_auto(value: ast.expr) -> bool:
+            if not isinstance(value, ast.Call) or value.args or value.keywords:
+                return False
+            if isinstance(value.func, ast.Attribute) and isinstance(value.func.value, ast.Name):
+                package = scope.package_of(Text(value.func.value.id))
+                return package is not None and str(package) == ENUM_MODULE and value.func.attr == "auto"
+            if isinstance(value.func, ast.Name):
+                origin = scope.import_of(Text(value.func.id))
+                return origin is not None and str(origin.module()) == ENUM_MODULE and str(origin.name()) == "auto"
+            return False
+
+        extras: list[int] = []
+        for item in node.body:
+            if isinstance(item, ast.Pass):
+                continue
+            member_target: ast.expr | None = None
+            member_value: ast.expr | None = None
+            if isinstance(item, ast.AnnAssign):
+                member_target, member_value = item.target, item.value
+            elif isinstance(item, ast.Assign) and len(item.targets) == 1:
+                member_target, member_value = item.targets[0], item.value
+            is_member = (
+                isinstance(member_target, ast.Name)
+                and not member_target.id.startswith("_")
+                and not (isinstance(item, ast.AnnAssign) and not isinstance(item.annotation, ast.Name))
+                and (
+                    isinstance(member_value, ast.Constant)
+                    or (
+                        isinstance(member_value, ast.UnaryOp)
+                        and isinstance(member_value.operand, ast.Constant)
+                        and isinstance(member_value.operand.value, (int, float))
+                    )
+                    or (member_value is not None and is_enum_auto(member_value))
+                )
+            )
+            if not is_member:
+                extras.append(item.lineno)
+        object.__setattr__(self, "_base", Text(base_name) if base_name else None)
+        object.__setattr__(self, "_extras", tuple(Line(line) for line in extras))
+        object.__setattr__(self, "_mixed", Names(("mixed",) if len(node.bases) > 1 else ()))
+        object.__setattr__(self, "_decorated", Names(("decorated",) if node.decorator_list or node.keywords else ()))
+
+    def base(self) -> Text | None:
+        return self._base
+
+    def extras(self) -> tuple[Line, ...]:
+        return self._extras
+
+    def mixed(self) -> Names:
+        return self._mixed
+
+    def decorated(self) -> Names:
+        return self._decorated
 
 
 class Annotation(ts.ValueObject):
@@ -4376,6 +4528,40 @@ class Module(ts.Entity):
         ))
 
         self._placement = Placement(PlacementSpec(spec.name, spec.is_package, spec.contexts, spec.export))
+        tier_parts = self._name.split(".")
+        kernel_tops = (frozenset({KERNEL_PACKAGE}) | (frozenset({spec.export}) if spec.export is not None else frozenset())) & frozenset(spec.tops)
+        tier: tuple[str, str] | None
+        if tier_parts[0] in kernel_tops and len(tier_parts) >= 2:
+            tier = ("", KERNEL_TIER)
+        elif tier_parts[0] == "srv" and len(tier_parts) >= 2:
+            tier = ("", SRV_TIER)
+        elif tier_parts[0] == "app" and len(tier_parts) >= 2:
+            tier = ("", APP_TIER)
+        elif tier_parts[0] == PROTOCOL_PACKAGE and len(tier_parts) >= 2:
+            tier = ("", PROTOCOL_TIER)
+        elif tier_parts[0] == TESTS_ROLE and len(tier_parts) >= 2:
+            tier = ("", ROOT_TESTS_TIER)
+        elif len(tier_parts) < 3 or tier_parts[0] not in spec.contexts:
+            tier = None
+        elif tier_parts[1] == TESTS_ROLE:
+            tier = (tier_parts[0], TESTS_ROLE)
+        elif tier_parts[1] not in ROLES:
+            tier = (tier_parts[0], STRAY_TIER)
+        elif tier_parts[1] == "adapters":
+            tier = (
+                (tier_parts[0], tier_parts[2])
+                if len(tier_parts) >= 4 and tier_parts[2] in ADAPTER_TEST_TIERS
+                else (tier_parts[0], STRAY_TIER)
+            )
+        elif (
+            tier_parts[1] == PORTS_PARENT_ROLE
+            and len(tier_parts) >= 4
+            and tier_parts[2] == ORCHESTRATORS_PACKAGE
+        ):
+            tier = (tier_parts[0], ORCHESTRATORS_PACKAGE)
+        else:
+            tier = (tier_parts[0], tier_parts[1])
+        self._tier: tuple[str, str] | None = tier
 
     def place(self) -> Placement:
         return self._placement
@@ -5229,6 +5415,1944 @@ class Module(ts.Entity):
             found.extend(edge.member_form_violations())
         return tuple(found)
 
+    def test_tier(self) -> Text | None:
+        return Text(self._tier[1]) if self._tier is not None else None
+
+    def declared_uses(self, declared: Names) -> Names:
+        used: list[str] = []
+        for edge in self._edges:
+            target = str(edge._target)
+            for name in declared:
+                if target == name or target.startswith(name + "."):
+                    used.append(name)
+        return Names(tuple(used))
+
+    def stray_violations(self) -> tuple[Violation, ...]:
+        module_name = self._name
+        place = self._placement
+        if str(place) == "kernel-file":
+            return (
+                Violation(ViolationSpec(
+                    self._path,
+                    1,
+                    "TB041",
+                    f"{module_name} is a kernel module at the tree root; "
+                    "kernel is a package, never a module",
+                )),
+            )
+        if str(place) == "context-tests-stray":
+            return (
+                Violation(ViolationSpec(
+                    self._path,
+                    1,
+                    "TB041",
+                    f"{module_name} is neither a test module nor conftest; "
+                    "a context tests package holds only test modules and conftest",
+                )),
+            )
+        if str(place) == "ports-stray":
+            return (
+                Violation(ViolationSpec(
+                    self._path,
+                    1,
+                    "TB041",
+                    f"{module_name} is not a ports module; a ports package holds only "
+                    "ports modules, and test_/eval_/conftest are reserved names, because a "
+                    "fake here would be an implementation adapters may import",
+                )),
+            )
+        if str(place) == "ports-file":
+            return (
+                Violation(ViolationSpec(
+                    self._path,
+                    1,
+                    "TB041",
+                    f"{module_name} is a ports module; "
+                    "ports is a package, never a module",
+                )),
+            )
+        if str(place) == "app-client-stray":
+            return (
+                Violation(ViolationSpec(
+                    self._path,
+                    1,
+                    "TB041",
+                    f"{module_name} is not an application client module; an application "
+                    "client package holds only client protocols, and test_/eval_/conftest "
+                    "are reserved names, because a fake here would be an implementation "
+                    "a job may import",
+                )),
+            )
+        if str(place) == "app-client-file":
+            return (
+                Violation(ViolationSpec(
+                    self._path,
+                    1,
+                    "TB041",
+                    f"{module_name} is an application client module; "
+                    "the application client is a package, never a module",
+                )),
+            )
+        if str(place) == "orchestrators-file":
+            return (
+                Violation(ViolationSpec(
+                    self._path,
+                    1,
+                    "TB041",
+                    f"{module_name} is an orchestrators module; "
+                    "orchestrators is a package, never a module",
+                )),
+            )
+        if str(place) == "role-file":
+            return (
+                Violation(ViolationSpec(
+                    self._path,
+                    1,
+                    "TB041",
+                    f"{module_name} is a role module; a role is a package, never a module",
+                )),
+            )
+        if str(place) == "context-stray":
+            return (
+                Violation(ViolationSpec(
+                    self._path,
+                    1,
+                    "TB041",
+                    f"{module_name} is not a context module; "
+                    "a context holds only domain, application, client, adapters, component, and tests modules",
+                )),
+            )
+        return ()
+
+    def homeless_violations(self) -> tuple[Violation, ...]:
+        module_name = self._name
+        return (
+            Violation(ViolationSpec(
+                self._path,
+                1,
+                "TB040",
+                f"{module_name} belongs to no governed package; "
+                "every module belongs to a context, a kernel, srv, app, tests, "
+                "or the protocol package",
+            )),
+        )
+
+    def kernel_init_violations(self) -> tuple[Violation, ...]:
+        module_name = self._name
+        found: list[Violation] = []
+        for stmt in self._body:
+            if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        stmt.lineno,
+                        "TB042",
+                        f"{module_name} __init__ declares code; "
+                        "a kernel __init__ only re-exports from its own kernel",
+                    ))
+                )
+        for edge in self._edges:
+            target = str(edge._target)
+            lineno = int(edge._lineno)
+            if not target.startswith(module_name + "."):
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB042",
+                        f"{module_name} imports {target}; "
+                        "a kernel __init__ only re-exports from its own kernel",
+                    ))
+                )
+        return tuple(found)
+
+    def tesser_init_violations(self) -> tuple[Violation, ...]:
+        module_name = self._name
+        found: list[Violation] = []
+        parts = module_name.split(".")
+        if (
+            len(parts) >= 2
+            and not parts[1].startswith(DO_NOT_USE_PREFIX)
+            and parts[1] not in TESSER_NAMESPACES
+        ):
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    1,
+                    "TB041",
+                    f"{module_name} is not a consumer namespace; the tesser "
+                    "distribution holds only the namespaces its consumers import",
+                ))
+            )
+        for stmt in self._body:
+            if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        stmt.lineno,
+                        "TB042",
+                        f"{module_name} __init__ declares code; "
+                        "a tesser __init__ only re-exports from the distribution",
+                    ))
+                )
+        for edge in self._edges:
+            target = str(edge._target)
+            lineno = int(edge._lineno)
+            if not target.startswith(TESSER + "."):
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB042",
+                        f"{module_name} imports {target}; "
+                        "a tesser __init__ only re-exports from the distribution",
+                    ))
+                )
+        return tuple(found)
+
+    def tesser_shell_violations(self) -> tuple[Violation, ...]:
+        module_name = self._name
+        found: list[Violation] = []
+        parts = module_name.split(".")
+        if not parts[1].startswith(DO_NOT_USE_PREFIX) and parts[1] not in TESSER_NAMESPACES:
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    1,
+                    "TB041",
+                    f"{module_name} is not a consumer namespace; the tesser "
+                    "distribution holds only the namespaces its consumers import",
+                ))
+            )
+        for edge in self._edges:
+            target = str(edge._target)
+            lineno = int(edge._lineno)
+            head = target.split(".")[0]
+            if head == TESSER or head in TESSER_STDLIB:
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    lineno,
+                    "TB062",
+                    f"{module_name} imports {target}; a shell module imports "
+                    "only the tesser distribution and the shell stdlib",
+                ))
+            )
+        return tuple(found)
+
+    def role_init_violations(self) -> tuple[Violation, ...]:
+        module_name = self._name
+        found: list[Violation] = []
+        for stmt in self._body:
+            if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        stmt.lineno,
+                        "TB042",
+                        f"{module_name} __init__ declares code; "
+                        "a role __init__ only re-exports from its own role",
+                    ))
+                )
+        for edge in self._edges:
+            target = str(edge._target)
+            lineno = int(edge._lineno)
+            if not target.startswith(module_name + "."):
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB042",
+                        f"{module_name} imports {target}; "
+                        "a role __init__ only re-exports from its own role",
+                    ))
+                )
+            found.extend(edge.member_form_violations())
+            found.extend(edge.form_violations())
+        return tuple(found)
+
+    def conftest_leaf_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        facts = Registry(registry)
+        export = facts.export()
+        tops = frozenset(facts.tops())
+        if export is None or str(export) != TESSER:
+            tops = tops - {TESSER}
+        return tuple(
+            violation
+            for edge in self._edges
+            for violation in edge.member_form_violations()
+        ) + tuple(
+            Violation(ViolationSpec(
+                self._path,
+                lineno,
+                "TB065",
+                f"{module_name} imports {target}; "
+                "a conftest is a leaf that imports nothing from its tree",
+            ))
+            for target, lineno in (
+                (str(edge._target), int(edge._lineno))
+                for edge in self._edges
+                if str(edge._target).split(".")[0] in tops
+            )
+        )
+
+    def tests_package_violations(self) -> tuple[Violation, ...]:
+        module_name = self._name
+        if len(module_name.split(".")) == 1:
+            return tuple(
+                Violation(ViolationSpec(
+                    self._path,
+                    stmt.lineno,
+                    "TB041",
+                    f"{module_name} __init__ declares code; "
+                    "a tests package holds only test modules and conftest",
+                ))
+                for stmt in self._body
+            )
+        return (
+            Violation(ViolationSpec(
+                self._path,
+                1,
+                "TB041",
+                f"{module_name} is neither a test module nor conftest; "
+                "a tests package holds only test modules and conftest",
+            )),
+        )
+
+    def eval_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        contexts = frozenset(Registry(registry).contexts())
+        parts = module_name.split(".")
+        at_home = (
+            len(parts) >= 4
+            and parts[0] in contexts
+            and parts[1] == "adapters"
+            and EVAL_HOME in parts[2:-1]
+        )
+        if not at_home:
+            return (
+                Violation(ViolationSpec(
+                    self._path,
+                    1,
+                    "TB070",
+                    f"{module_name} is an eval outside a gateway; "
+                    "an eval lives only in a gateway, the one place a sampled real-model "
+                    "call is honest",
+                )),
+            )
+        return ()
+
+    def kernel_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        kinds = Registry(registry).kinds()
+        found: list[Violation] = []
+        for stmt in self._body:
+            if isinstance(stmt, ast.ClassDef):
+                named = kinds.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
+                block = str(named) if named is not None else None
+                where = f"{module_name}.{stmt.name}"
+                if block is None:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} declares no ts.* base; every kernel class declares its block",
+                        ))
+                    )
+                elif KIND_ROLE.get(block) != "domain":
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} is {KIND_NAME[block]}; a kernel holds only domain kinds — "
+                            "value objects, entities, aggregates, and specs",
+                        ))
+                    )
+        return tuple(found)
+
+    def kernel_import_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        facts = Registry(registry)
+        export = str(facts.export()) if facts.export() is not None else None
+        tops = frozenset(facts.tops())
+        kernel_tops = (frozenset({KERNEL_PACKAGE}) | (frozenset({export}) if export is not None else frozenset())) & tops
+        declared_imports = tuple(facts.declared_imports())
+        pure_stdlib = tuple(facts.pure_stdlib())
+        found: list[Violation] = []
+        own = frozenset({export}) if module_name.split(".")[0] == export else kernel_tops
+        for edge in self._edges:
+            target = str(edge._target)
+            lineno = int(edge._lineno)
+            pieces = target.split(".")
+            if pieces[0] == TESSER:
+                continue
+            if pieces[0] in own and facts.modules_under(Text(target)):
+                continue
+            if any(target == declared or target.startswith(declared + ".") for declared in declared_imports):
+                continue
+            head = pieces[0]
+            if target in CORE_STDLIB["domain"] or head in CORE_STDLIB["domain"]:
+                continue
+            if any(target == declared or target.startswith(declared + ".") for declared in pure_stdlib):
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    lineno,
+                    "TB062",
+                    f"{module_name} imports {target}; a kernel imports only its "
+                    "kernel, tesser.domain, declared kernels, and the pure stdlib",
+                ))
+            )
+        return tuple(found)
+
+    def srv_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        kinds = Registry(registry).kinds()
+        found: list[Violation] = []
+        for stmt in self._body:
+            if isinstance(stmt, ast.ClassDef):
+                named = kinds.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
+                block = str(named) if named is not None else None
+                where = f"{module_name}.{stmt.name}"
+                if block is None:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} declares no ts.* base; a srv class declares its block",
+                        ))
+                    )
+                elif block != "host":
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} is {KIND_NAME[block]}; only a host class lives in a srv module",
+                        ))
+                    )
+        return tuple(found)
+
+    def app_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        kinds = Registry(registry).kinds()
+        scope = self._scope
+        found: list[Violation] = []
+        for stmt in self._body:
+            if isinstance(stmt, ast.FunctionDef):
+                declared = False
+                for decorator in stmt.decorator_list:
+                    ref = Annotation(decorator).primary()
+                    symbol = scope.resolve(ref) if ref is not None else None
+                    if symbol is not None and TESSER_DECORATORS.get((str(symbol.module()), str(symbol.name()))) == "load":
+                        declared = True
+                if not declared:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            stmt.lineno,
+                            "TB051",
+                            f"{module_name}.{stmt.name} is an undeclared module function; "
+                            "an app function declares itself with @ts.load",
+                        ))
+                    )
+            if isinstance(stmt, ast.ClassDef):
+                named = kinds.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
+                block = str(named) if named is not None else None
+                where = f"{module_name}.{stmt.name}"
+                if block is None:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} declares no ts.* base; "
+                            "every app class declares its block",
+                        ))
+                    )
+                elif block not in APP_KINDS:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} is {KIND_NAME[block]}; only an app, an app loader, an app "
+                            "config, an app config spec, and a config repository live in an "
+                            "app module",
+                        ))
+                    )
+        return tuple(found)
+
+    def app_import_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        facts = Registry(registry)
+        kinds = facts.kinds()
+        contexts = frozenset(facts.contexts())
+        tops = frozenset(facts.tops())
+        package = module_name.split(".")[0]
+        found: list[Violation] = []
+        for edge in self._edges:
+            target = str(edge._target)
+            lineno = int(edge._lineno)
+            pieces = target.split(".")
+            tail = pieces[1] if len(pieces) > 1 else ""
+            if pieces[0] in contexts:
+                denied: list[Violation] = []
+                hosts = kinds.blocks_in(Text(target)) & Names(tuple(HOST_KINDS))
+                if package == "srv" and not (tail == "adapters" and hosts):
+                    denied.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            lineno,
+                            "TB063",
+                            f"{module_name} imports {target}; "
+                            "a host reaches a context only through its handlers and its jobs",
+                        ))
+                    )
+                elif package == "app" and tail not in ("component", "client", "adapters"):
+                    denied.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            lineno,
+                            "TB063",
+                            f"{module_name} imports {target}; an app builds from "
+                            "components, clients, and adapters, never domain or application",
+                        ))
+                    )
+                found.extend(denied)
+                if not denied:
+                    found.extend(edge.form_violations())
+            elif package == "app" and pieces[0] == "srv":
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB063",
+                        f"{module_name} imports {target}; the composition root never imports a host",
+                    ))
+                )
+            elif pieces[0] == TESTS_ROLE and pieces[0] in tops:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB066",
+                        f"{module_name} imports {target}; "
+                        "production code never imports the tests package",
+                    ))
+                )
+            elif package == "app" and pieces[0] == PROTOCOL_PACKAGE:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB066",
+                        f"{module_name} imports {target}; "
+                        "an app composes the application and never imports protocol",
+                    ))
+                )
+        return tuple(found)
+
+    def protocol_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        facts = Registry(registry)
+        kinds = facts.kinds()
+        contexts = frozenset(facts.contexts())
+        tops = frozenset(facts.tops())
+        found: list[Violation] = []
+        for edge in self._edges:
+            target = str(edge._target)
+            lineno = int(edge._lineno)
+            head = target.split(".")[0]
+            if head in contexts:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB064",
+                        f"{module_name} imports {target}; "
+                        "a protocol module is context-generic and imports no context",
+                    ))
+                )
+            elif head in APP_PACKAGES:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB064",
+                        f"{module_name} imports {target}; "
+                        "a protocol module never imports srv or app",
+                    ))
+                )
+            elif head != PROTOCOL_PACKAGE and head in tops:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB064",
+                        f"{module_name} imports {target}; "
+                        "a protocol module imports nothing else from its tree",
+                    ))
+                )
+        for stmt in self._body:
+            if isinstance(stmt, ast.ClassDef):
+                named = kinds.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
+                block = str(named) if named is not None else None
+                where = f"{module_name}.{stmt.name}"
+                if block is None:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} declares no ts.* base; a protocol class declares its block",
+                        ))
+                    )
+                elif block not in PROTOCOL_KINDS:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} is {KIND_NAME[block]}; only protocol ports, protocol records, "
+                            "protocol rejections, protocol requests, and protocol responses live in a protocol module",
+                        ))
+                    )
+        return tuple(found)
+
+    def role_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        kinds = Registry(registry).kinds()
+        parts = module_name.split(".")
+        role = parts[1]
+        extra = frozenset({"orchestrator", "port_response"}) if str(self._placement) in ("orchestrators", "orchestrators-file") else frozenset()
+        kind_package = parts[2] if len(parts) >= 4 else None
+        scope_spec = ScopeSpec(
+            self._name,
+            tuple(ImportSpec(local, target, original) for local, (target, original) in self._imported.items()),
+            tuple(AliasSpec(alias, package) for alias, package in self._package_aliases.items()),
+            tuple(self._classes),
+            tuple(sorted(self._functions)),
+            self._spoken,
+        )
+        found: list[Violation] = []
+        if role == "adapters" and kind_package not in ADAPTER_KIND_PACKAGES:
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    1,
+                    "TB041",
+                    f"{module_name} is not in an adapter kind package; an adapters "
+                    "module lives in handlers, gateways, repositories, or jobs, because "
+                    "placement is what carries an adapter's reach",
+                ))
+            )
+        for stmt in self._body:
+            if isinstance(stmt, ast.ClassDef):
+                named = kinds.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
+                block = str(named) if named is not None else None
+                where = f"{module_name}.{stmt.name}"
+                shape = EnumShape(EnumShapeSpec(stmt, scope_spec))
+                enum_base = str(shape.base()) if shape.base() is not None else None
+                if enum_base is not None and block is None and role == "domain":
+                    if enum_base not in ENUM_BASES:
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                stmt.lineno,
+                                "TB052",
+                                f"{where} is an enum.{enum_base}; a domain enum is an enum.Enum, "
+                                "because a str- or int-backed member compares equal to a raw literal "
+                                "and reopens the typo the enum closes",
+                            ))
+                        )
+                    elif shape.mixed():
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                stmt.lineno,
+                                "TB052",
+                                f"{where} mixes another base into its enum; a domain enum "
+                                "subclasses enum.Enum alone, because a str- or int-backed member "
+                                "compares equal to a raw literal and reopens the typo the enum closes",
+                            ))
+                        )
+                    else:
+                        if shape.decorated():
+                            found.append(
+                                Violation(ViolationSpec(
+                                    self._path,
+                                    stmt.lineno,
+                                    "TB051",
+                                    f"{where} is decorated or keyworded; "
+                                    "a domain enum is a bare class statement, "
+                                    "because a decorator or a metaclass rewrites "
+                                    "the primitive into a home for behavior",
+                                ))
+                            )
+                        for extra_line in shape.extras():
+                            found.append(
+                                Violation(ViolationSpec(
+                                    self._path,
+                                    int(extra_line),
+                                    "TB051",
+                                    f"{where} carries more than its members; "
+                                    "a domain enum is a closed set of names and nothing else, "
+                                    "because an enum is a primitive with a name, "
+                                    "not a home for behavior",
+                                ))
+                            )
+                    continue
+                if block is None:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} declares no ts.* base; every context class declares its block",
+                        ))
+                    )
+                elif block in SRV_KINDS:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} is {KIND_NAME[block]}; "
+                            "a host lives in srv and a protocol kind in a protocol module, never a context",
+                        ))
+                    )
+                elif KIND_ROLE[block] != role and block not in extra:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} is {KIND_NAME[block]}, whose home is {KIND_HOME[block]}; "
+                            "a kind lives only in its role module",
+                        ))
+                    )
+        if role == "adapters":
+            present = {
+                str(kinds.block_of(Symbol(SymbolSpec(module_name, cls.name))) or "")
+                for cls in self._class_defs
+            } & ADAPTER_BLOCKS
+            if len(present) > 1:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        1,
+                        "TB052",
+                        f"{module_name} mixes adapter kinds; an adapters module holds one adapter kind",
+                    ))
+                )
+            expected = ADAPTER_KIND_PACKAGES.get(kind_package or "", frozenset())
+            for cls in self._class_defs:
+                named = kinds.block_of(Symbol(SymbolSpec(module_name, cls.name)))
+                block = str(named) if named is not None else None
+                if block is None or block not in ADAPTER_BLOCKS or block in expected:
+                    continue
+                if not expected:
+                    continue
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        cls.lineno,
+                        "TB052",
+                        f"{module_name}.{cls.name} is {KIND_NAME[block]}, and its "
+                        "package names another kind; an adapters module holds the kind "
+                        "of its kind package, because the package is what carries its reach",
+                    ))
+                )
+        return tuple(found)
+
+    def import_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        facts = Registry(registry)
+        kinds = facts.kinds()
+        export = str(facts.export()) if facts.export() is not None else None
+        contexts = frozenset(facts.contexts())
+        tops = frozenset(facts.tops())
+        kernel_tops = (frozenset({KERNEL_PACKAGE}) | (frozenset({export}) if export is not None else frozenset())) & tops
+        declared_imports = tuple(facts.declared_imports())
+        pure_stdlib = tuple(facts.pure_stdlib())
+        own = module_name.split(".")
+        context = own[0]
+        role = own[1]
+        kind_package = own[2] if len(own) >= 4 and own[1] == "adapters" else None
+        kind_reach = ADAPTER_KIND_REACH.get(kind_package or "")
+        holds_gateway = any(
+            str(kinds.block_of(Symbol(SymbolSpec(module_name, cls.name))) or "") == "gateway"
+            for cls in self._class_defs
+        )
+        found: list[Violation] = []
+        for edge in self._edges:
+            target = str(edge._target)
+            lineno = int(edge._lineno)
+            pieces = target.split(".")
+            if pieces[0] == TESSER:
+                continue
+            elif pieces[0] in contexts:
+                tail = pieces[1] if len(pieces) > 1 else ""
+                denied: list[Violation] = []
+                inner = ".".join(pieces[1:])
+                job_only = any(
+                    inner == entry or inner.startswith(f"{entry}.")
+                    for entry in JOB_ONLY_IMPORTS
+                )
+                if pieces[0] == context and job_only and kind_package != "jobs":
+                    denied.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            lineno,
+                            "TB060",
+                            f"{module_name} imports {target}; only a job imports the "
+                            "application client and the orchestrators, because an action "
+                            "is reachable only through the engine",
+                        ))
+                    )
+                elif pieces[0] == context and role == "adapters" and kind_reach is not None:
+                    if not any(
+                        inner == allowed or inner.startswith(f"{allowed}.")
+                        for allowed in kind_reach + (f"adapters.{kind_package}",)
+                    ):
+                        denied.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                lineno,
+                                "TB060",
+                                f"{module_name} imports {target}; an adapters kind "
+                                "package reaches only what its kind reaches — a handler "
+                                "the context client, a job the application client, the "
+                                "orchestrators, and the ports, a gateway or a repository "
+                                "the ports",
+                            ))
+                        )
+                elif pieces[0] == context:
+                    if not (
+                        len(pieces) >= 2
+                        and (
+                            pieces[1] == role
+                            or any(
+                                inner == allowed or inner.startswith(f"{allowed}.")
+                                for allowed in SAME_CONTEXT_IMPORTS[role]
+                            )
+                        )
+                    ):
+                        denied.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                lineno,
+                                "TB060",
+                                f"{module_name} imports {target}; the same-context matrix is "
+                                "a role to itself, application to domain and client, adapters to "
+                                "application/ports, component to application, adapters, and client",
+                            ))
+                        )
+                elif tail != "client" or not (role == "component" or (role == "adapters" and holds_gateway)):
+                    denied.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            lineno,
+                            "TB061",
+                            f"{module_name} imports {target}; a context reaches another context "
+                            "only through its client, and only from gateways and components",
+                        ))
+                    )
+                found.extend(denied)
+                if not denied:
+                    found.extend(edge.form_violations())
+            elif pieces[0] in kernel_tops and facts.modules_under(Text(target)):
+                continue
+            else:
+                if any(target == declared or target.startswith(declared + ".") for declared in declared_imports):
+                    continue
+                pure = (
+                    target in CORE_STDLIB["domain"]
+                    or pieces[0] in CORE_STDLIB["domain"]
+                    or any(target == declared or target.startswith(declared + ".") for declared in pure_stdlib)
+                )
+                if role in CORE_STDLIB and not (
+                    pure
+                    if role == "domain"
+                    else (target in CORE_STDLIB[role] or pieces[0] in CORE_STDLIB[role])
+                ):
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            lineno,
+                            "TB062",
+                            f"{module_name} imports {target}; domain, client, and application "
+                            "import only their context, their kernels, their tesser package, "
+                            "and the pure stdlib",
+                        ))
+                    )
+                elif (
+                    pieces[0] in SHELL_PACKAGES
+                    and pieces[0] in tops
+                    and not (
+                        role == "adapters"
+                        and pieces[0] == PROTOCOL_PACKAGE
+                        and len(own) >= 3
+                        and own[2] == "handlers"
+                    )
+                ):
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            lineno,
+                            "TB066",
+                            f"{module_name} imports {target}; of the app shell a context "
+                            "imports only protocol, and only from its handlers",
+                        ))
+                    )
+        return tuple(found)
+
+    def orchestrators_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        kinds = Registry(registry).kinds()
+        found: list[Violation] = []
+        held = [
+            cls
+            for cls in self._class_defs
+            if str(kinds.block_of(Symbol(SymbolSpec(module_name, cls.name))) or "") == "orchestrator"
+        ]
+        responses = [
+            cls
+            for cls in self._class_defs
+            if str(kinds.block_of(Symbol(SymbolSpec(module_name, cls.name))) or "") == "port_response"
+        ]
+        if len(held) != 1 and self._class_defs:
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    held[1].lineno if len(held) > 1 else 1,
+                    "TB052",
+                    f"{module_name} declares {len(held)} orchestrators; an orchestrators "
+                    "module declares exactly one orchestrator, its mappers, and at most "
+                    "its own response",
+                ))
+            )
+        if len(responses) > 1:
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    responses[1].lineno,
+                    "TB052",
+                    f"{module_name} declares {len(responses)} responses; an orchestrators "
+                    "module declares exactly one orchestrator, its mappers, and at most "
+                    "its own response",
+                ))
+            )
+        return tuple(found)
+
+    def application_client_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        facts = Registry(registry)
+        kinds = facts.kinds()
+        tops = frozenset(facts.tops())
+        found: list[Violation] = []
+        spoken = 0
+        for edge in self._edges:
+            target = str(edge._target)
+            lineno = int(edge._lineno)
+            pieces = target.split(".")
+            if pieces[0] == TESSER:
+                continue
+            if pieces[0] in tops:
+                if pieces[1:3] == [PORTS_PARENT_ROLE, PORTS_PACKAGE] and len(pieces) >= 4:
+                    spoken += 1
+                    if spoken > 1:
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                lineno,
+                                "TB067",
+                                f"{module_name} imports a second ports module {target}; "
+                                "an application client module speaks the DTOs of exactly "
+                                "one ports module",
+                            ))
+                        )
+                    else:
+                        found.extend(edge.form_violations())
+                    continue
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB067",
+                        f"{module_name} imports {target}; an application client module "
+                        "speaks the DTOs of exactly one ports module",
+                    ))
+                )
+            elif target not in PORTS_STDLIB and pieces[0] not in PORTS_STDLIB:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB067",
+                        f"{module_name} imports {target}; an application client module "
+                        "imports only tesser.application, one ports module, and the pure stdlib",
+                    ))
+                )
+        if spoken == 0 and self._class_defs:
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    1,
+                    "TB067",
+                    f"{module_name} imports no ports module; an application client "
+                    "module speaks the DTOs of exactly one ports module",
+                ))
+            )
+        for stmt in self._body:
+            if isinstance(stmt, (ast.Import, ast.ImportFrom, ast.ClassDef)):
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    stmt.lineno,
+                    "TB051",
+                    f"{module_name} has a loose module-level statement; "
+                    "an application client module holds only imports and classes",
+                ))
+            )
+
+        def nested_class_defs(body: list[ast.stmt]) -> list[ast.ClassDef]:
+            inner: list[ast.ClassDef] = []
+            for item in body:
+                if isinstance(item, ast.ClassDef):
+                    inner.append(item)
+                    inner.extend(nested_class_defs(item.body))
+            return inner
+
+        protocols: list[ast.ClassDef] = []
+        for stmt in self._class_defs:
+            where = f"{module_name}.{stmt.name}"
+            named = kinds.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
+            block = str(named) if named is not None else None
+            if block == "actions_client":
+                protocols.append(stmt)
+            elif block is None:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        stmt.lineno,
+                        "TB052",
+                        f"{where} declares no ts.* base; an application client module "
+                        "declares exactly one ts.Client protocol and nothing else",
+                    ))
+                )
+            else:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        stmt.lineno,
+                        "TB052",
+                        f"{where} is {KIND_NAME[block]}; an application client module "
+                        "declares exactly one ts.Client protocol and nothing else",
+                    ))
+                )
+            for inner in nested_class_defs(stmt.body):
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        inner.lineno,
+                        "TB052",
+                        f"{where}.{inner.name} is a nested class; an application client "
+                        "module declares its protocol at module level",
+                    ))
+                )
+        if len(protocols) != 1 and self._class_defs:
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    protocols[1].lineno if len(protocols) > 1 else 1,
+                    "TB052",
+                    f"{module_name} declares {len(protocols)} client protocols; an "
+                    "application client module declares exactly one ts.Client protocol "
+                    "and nothing else",
+                ))
+            )
+        return tuple(found)
+
+    def application_client_class_violations(self) -> tuple[Violation, ...]:
+        module_name = self._name
+        found: list[Violation] = []
+        for stmt in self._class_defs:
+            where = f"{module_name}.{stmt.name}"
+            members = [
+                item
+                for item in stmt.body
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+            ]
+            computed: list[ast.expr] = list(stmt.bases)
+            for item in members:
+                computed.extend(
+                    arg.annotation
+                    for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
+                    if arg.annotation is not None
+                )
+                if item.returns is not None:
+                    computed.append(item.returns)
+                computed.extend(item.args.defaults)
+                computed.extend(value for value in item.args.kw_defaults if value is not None)
+            runs = (
+                bool(stmt.decorator_list)
+                or bool(stmt.keywords)
+                or any(item.decorator_list for item in members)
+                or any(
+                    isinstance(inner, (ast.Call, ast.Lambda, ast.Await, ast.NamedExpr))
+                    or isinstance(
+                        inner, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+                    )
+                    for node in computed
+                    for inner in ast.walk(node)
+                )
+            )
+            if runs:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        stmt.lineno,
+                        "TB051",
+                        f"{where} runs an expression at import; an application client module "
+                        "holds no expression that runs at import, because a job imports it",
+                    ))
+                )
+            for held in stmt.body:
+                if isinstance(held, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Pass)):
+                    continue
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        held.lineno,
+                        "TB051",
+                        f"{where} carries a class-level statement; an application client "
+                        "module declares calls and nothing else",
+                    ))
+                )
+        return tuple(found)
+
+    def ports_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        path = self._path
+        facts = Registry(registry)
+        kinds = facts.kinds()
+        tops = frozenset(facts.tops())
+        scope_spec = ScopeSpec(
+            self._name,
+            tuple(ImportSpec(local, target, original) for local, (target, original) in self._imported.items()),
+            tuple(AliasSpec(alias, package) for alias, package in self._package_aliases.items()),
+            tuple(self._classes),
+            tuple(sorted(self._functions)),
+            self._spoken,
+        )
+        found: list[Violation] = []
+
+        def block_named(class_name: str) -> str | None:
+            named = kinds.block_of(Symbol(SymbolSpec(module_name, class_name)))
+            return str(named) if named is not None else None
+
+        def nested_class_defs(body: list[ast.stmt]) -> list[ast.ClassDef]:
+            inner: list[ast.ClassDef] = []
+            for item in body:
+                if isinstance(item, ast.ClassDef):
+                    inner.append(item)
+                    inner.extend(nested_class_defs(item.body))
+            return inner
+
+        def computes(node: ast.expr | None) -> bool:
+            return node is not None and any(
+                isinstance(inner, (ast.Call, ast.Lambda, ast.Await, ast.NamedExpr))
+                or isinstance(inner, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp))
+                for inner in ast.walk(node)
+            )
+
+        def decoration(where: str, node: ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef) -> tuple[Violation, ...]:
+            return tuple(
+                Violation(ViolationSpec(
+                    path,
+                    node.lineno,
+                    "TB051",
+                    f"{module_name}.{where} is decorated; a ports module holds no "
+                    "decorator, because a decorator is a call that runs at import in the "
+                    "one application module adapters may import",
+                ))
+                for _ in node.decorator_list
+            )
+
+        def readable(node: ast.expr) -> bool:
+            if isinstance(node, ast.Constant):
+                return node.value is None or node.value is Ellipsis
+            if isinstance(node, ast.Name):
+                return True
+            if isinstance(node, ast.Attribute):
+                return readable(node.value)
+            if isinstance(node, ast.Subscript):
+                inner = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
+                return readable(node.value) and all(readable(element) for element in inner)
+            if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+                return readable(node.left) and readable(node.right)
+            return False
+
+        def unreadable(where: str, node: ast.AST) -> tuple[Violation, ...]:
+            return (
+                Violation(ViolationSpec(
+                    path,
+                    getattr(node, "lineno", 1),
+                    "TB069",
+                    f"{where} holds a {type(node).__name__}; a ports module holds only the "
+                    "shapes its rules can read, so anything else is a finding by default "
+                    "rather than a gap nobody enumerated",
+                )),
+            )
+
+        for edge in self._edges:
+            target = str(edge._target)
+            lineno = int(edge._lineno)
+            head = target.split(".")[0]
+            if head == TESSER:
+                continue
+            if head in tops:
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        lineno,
+                        "TB067",
+                        f"{module_name} imports {target}; a ports module is a leaf "
+                        "and imports nothing from its tree, its own siblings included",
+                    ))
+                )
+            elif target not in PORTS_STDLIB and head not in PORTS_STDLIB:
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        lineno,
+                        "TB067",
+                        f"{module_name} imports {target}; a ports module imports "
+                        "only tesser.application and the pure stdlib",
+                    ))
+                )
+        for stmt in self._body:
+            if not isinstance(stmt, ast.ClassDef):
+                continue
+            for inner in nested_class_defs(stmt.body):
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        inner.lineno,
+                        "TB052",
+                        f"{module_name}.{stmt.name}.{inner.name} is a nested class; "
+                        "a ports module declares its port and its DTOs at module level, "
+                        "where the one-port count can see them",
+                    ))
+                )
+        for stmt in nested_class_defs(list(self._body)):
+            found.extend(decoration(stmt.name, stmt))
+            for keyword in stmt.keywords:
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        stmt.lineno,
+                        "TB051",
+                        f"{module_name}.{stmt.name} carries a class keyword; a ports "
+                        "module holds no expression that runs at import, and a metaclass "
+                        "is logic every adapter imports",
+                    ))
+                )
+            for item in stmt.body:
+                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                for _ in getattr(item, "type_params", ()):
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            item.lineno,
+                            "TB051",
+                            f"{module_name}.{stmt.name}.{item.name} is generic; a ports "
+                            "module names concrete shapes, because a type parameter is a "
+                            "slot the shape rules cannot read and a bound is an expression",
+                        ))
+                    )
+                annotations = [
+                    arg.annotation
+                    for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
+                    if arg.arg != "self"
+                ] + [item.returns]
+                if any(computes(node) for node in annotations):
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            item.lineno,
+                            "TB051",
+                            f"{module_name}.{stmt.name}.{item.name} computes an "
+                            "annotation; a ports module holds no expression that runs at "
+                            "import, and an annotation is evaluated like any other",
+                        ))
+                    )
+            for _ in getattr(stmt, "type_params", ()):
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        stmt.lineno,
+                        "TB051",
+                        f"{module_name}.{stmt.name} is generic; a ports module names "
+                        "concrete shapes, because a type parameter is a slot the shape "
+                        "rules cannot read and a bound is an expression",
+                    ))
+                )
+            for base in stmt.bases:
+                if isinstance(base, (ast.Name, ast.Attribute, ast.Subscript)) and not computes(base):
+                    continue
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        stmt.lineno,
+                        "TB051",
+                        f"{module_name}.{stmt.name} computes a base; a ports module "
+                        "holds no expression that runs at import, and a base built by a "
+                        "call is logic every adapter imports",
+                    ))
+                )
+            for item in stmt.body:
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    found.extend(decoration(f"{stmt.name}.{item.name}", item))
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and any(
+                    not isinstance(default, ast.Constant)
+                    for default in item.args.defaults + [
+                        value for value in item.args.kw_defaults if value is not None
+                    ]
+                ):
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            item.lineno,
+                            "TB051",
+                            f"{module_name}.{stmt.name}.{item.name} carries a computed "
+                            "default; a ports module holds no expression that runs at "
+                            "import, because every adapter imports it",
+                        ))
+                    )
+            shape = EnumShape(EnumShapeSpec(stmt, scope_spec))
+            if shape.base() is not None:
+                for extra_line in shape.extras():
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            int(extra_line),
+                            "TB051",
+                            f"{module_name}.{stmt.name} carries more than its members; "
+                            "a ports enum is a closed set of names and nothing else, "
+                            "because a method or a decorator here is logic every "
+                            "adapter imports",
+                        ))
+                    )
+                continue
+            for item in stmt.body:
+                if isinstance(
+                    item, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Pass)
+                ):
+                    continue
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        item.lineno,
+                        "TB051",
+                        f"{module_name}.{stmt.name} carries a class-level statement; "
+                        "only an enum member is class-level data in a ports module, "
+                        "because anything else runs at import in the one application "
+                        "module adapters may import",
+                    ))
+                )
+        ports: list[ast.ClassDef] = []
+        stores: list[ast.ClassDef] = []
+        for stmt in nested_class_defs(list(self._body)):
+            block = block_named(stmt.name)
+            where = f"{module_name}.{stmt.name}"
+            shape = EnumShape(EnumShapeSpec(stmt, scope_spec))
+            enum_base = str(shape.base()) if shape.base() is not None else None
+            if enum_base is not None and block is None:
+                if enum_base not in ENUM_BASES:
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} is an enum.{enum_base}; a ports enum is an enum.Enum, "
+                            "because a str- or int-backed member compares equal to a raw literal "
+                            "and reopens the typo the enum closes",
+                        ))
+                    )
+                elif shape.mixed():
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} mixes another base into its enum; a ports enum "
+                            "subclasses enum.Enum alone, because a str- or int-backed member "
+                            "compares equal to a raw literal and reopens the typo the enum closes",
+                        ))
+                    )
+                continue
+            if block is None:
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        stmt.lineno,
+                        "TB052",
+                        f"{where} declares no ts.* base; a ports class declares its block",
+                    ))
+                )
+            elif block not in PORTS_KINDS:
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        stmt.lineno,
+                        "TB052",
+                        f"{where} is {KIND_NAME[block]}; only a port and the requests "
+                        "and responses it speaks live in a ports module",
+                    ))
+                )
+            elif block == "port":
+                ports.append(stmt)
+            elif block == "store":
+                stores.append(stmt)
+            if block in ("port_request", "port_response") and any(
+                block_named(base.id) in ("port_request", "port_response")
+                for base in stmt.bases
+                if isinstance(base, ast.Name)
+            ):
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        stmt.lineno,
+                        "TB052",
+                        f"{where} subclasses a port DTO; a port DTO is never subclassed, "
+                        "because a response hierarchy is a union mypy cannot check for exhaustiveness",
+                    ))
+                )
+        if len(ports) > 1:
+            found.append(
+                Violation(ViolationSpec(
+                    path,
+                    ports[1].lineno,
+                    "TB052",
+                    f"{module_name} declares {len(ports)} ports; a ports module "
+                    "declares exactly one port, so no two ports can share a request or a response",
+                ))
+            )
+        if len(stores) > 1:
+            found.append(
+                Violation(ViolationSpec(
+                    path,
+                    stores[1].lineno,
+                    "TB052",
+                    f"{module_name} declares {len(stores)} stores; a ports module "
+                    "declares at most one store, which yields the one port beside it",
+                ))
+            )
+        if stores and not ports:
+            found.append(
+                Violation(ViolationSpec(
+                    path,
+                    stores[0].lineno,
+                    "TB052",
+                    f"{module_name} declares a store and no port; a store yields the "
+                    "repository its transaction binds, declared in its own ports module",
+                ))
+            )
+        if not ports and not stores and nested_class_defs(list(self._body)):
+            found.append(
+                Violation(ViolationSpec(
+                    path,
+                    1,
+                    "TB052",
+                    f"{module_name} declares no port; a ports module "
+                    "declares exactly one port, so no two ports can share a request or a response",
+                ))
+            )
+        for stmt in self._body:
+            if isinstance(stmt, (ast.Import, ast.ImportFrom, ast.ClassDef)):
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    path,
+                    stmt.lineno,
+                    "TB051",
+                    f"{module_name} has a loose module-level statement; "
+                    "a ports module holds only imports and classes",
+                ))
+            )
+        for loose in self._body:
+            if isinstance(loose, (ast.Import, ast.ImportFrom, ast.ClassDef)):
+                continue
+            found.extend(unreadable(module_name, loose))
+        for holder in self._class_defs:
+            shape = EnumShape(EnumShapeSpec(holder, scope_spec))
+            enum_member = shape.base() is not None
+            enum_extras = frozenset(int(line) for line in shape.extras())
+            for base in holder.bases:
+                if not readable(base):
+                    found.extend(unreadable(f"{module_name}.{holder.name}", base))
+            for item in holder.body:
+                where = f"{module_name}.{holder.name}"
+                if isinstance(item, ast.Pass):
+                    continue
+                if enum_member:
+                    if item.lineno in enum_extras:
+                        found.extend(unreadable(where, item))
+                    continue
+                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    found.extend(unreadable(where, item))
+                    continue
+                shape_name = f"{where}.{item.name}"
+                for node in [
+                    arg.annotation
+                    for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
+                    if arg.arg != "self"
+                ] + [item.returns]:
+                    if node is not None and not readable(node):
+                        found.extend(unreadable(shape_name, node))
+                for body_stmt in item.body:
+                    if isinstance(
+                        body_stmt, (ast.Pass, ast.Return, ast.Assign, ast.AnnAssign)
+                    ):
+                        continue
+                    if (
+                        isinstance(body_stmt, ast.Expr)
+                        and isinstance(body_stmt.value, ast.Constant)
+                        and body_stmt.value.value is Ellipsis
+                    ):
+                        continue
+                    found.extend(unreadable(shape_name, body_stmt))
+        return tuple(found)
+
+    def test_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        facts = Registry(registry)
+        kinds = facts.kinds()
+        export = str(facts.export()) if facts.export() is not None else None
+        contexts = frozenset(facts.contexts())
+        scope = self._scope
+        found: list[Violation] = []
+        for edge in self._edges:
+            if str(edge._target).split(".")[0] in contexts:
+                found.extend(edge.form_violations())
+        if export != TESSER:
+            found.extend(TEST_TESSER_IMPORTS.violations(self))
+
+        def decorated_as(node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef, wanted: str) -> bool:
+            for decorator in node.decorator_list:
+                ref = Annotation(decorator).primary()
+                symbol = scope.resolve(ref) if ref is not None else None
+                if symbol is not None and TESSER_DECORATORS.get((str(symbol.module()), str(symbol.name()))) == wanted:
+                    return True
+            return False
+
+        for stmt in self._body:
+            if isinstance(stmt, (ast.Import, ast.ImportFrom)):
+                continue
+            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                where = f"{module_name}.{stmt.name}"
+                if stmt.name.startswith("test_"):
+                    continue
+                if decorated_as(stmt, "helper"):
+                    continue
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        stmt.lineno,
+                        "TB071",
+                        f"{where} is neither a test nor a declared helper; a test module holds "
+                        "tests, @ts.helper builders, and @ts.fake doubles",
+                    ))
+                )
+            elif isinstance(stmt, ast.ClassDef):
+                if export == TESSER:
+                    continue
+                where = f"{module_name}.{stmt.name}"
+                if not decorated_as(stmt, "fake"):
+                    if stmt.name.startswith("Test"):
+                        for item in stmt.body:
+                            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                                if not item.name.startswith("test_"):
+                                    found.append(
+                                        Violation(ViolationSpec(
+                                            self._path,
+                                            item.lineno,
+                                            "TB071",
+                                            f"{where}.{item.name} is not a test method; a test class holds only test methods",
+                                        ))
+                                    )
+                            elif isinstance(item, ast.ClassDef):
+                                found.append(
+                                    Violation(ViolationSpec(
+                                        self._path,
+                                        item.lineno,
+                                        "TB071",
+                                        f"{where}.{item.name} is a nested class; a test class holds test methods, never nested classes",
+                                    ))
+                                )
+                            else:
+                                found.append(
+                                    Violation(ViolationSpec(
+                                        self._path,
+                                        item.lineno,
+                                        "TB071",
+                                        f"{where} carries a loose statement in its body; a test class holds test methods, never loose statements",
+                                    ))
+                                )
+                        continue
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            stmt.lineno,
+                            "TB072",
+                            f"{where} is an undeclared class; a class in a test module is a Test-prefixed test class or declares itself with @ts.fake",
+                        ))
+                    )
+                else:
+                    doubles = False
+                    for base in stmt.bases:
+                        ref = Annotation(base).primary()
+                        symbol = scope.resolve(ref) if ref is not None else None
+                        block = kinds.block_of(symbol) if symbol is not None else None
+                        if block is not None and str(block) in (
+                            "port",
+                            "store",
+                            "client",
+                            "actions_client",
+                            "job_context",
+                            "protocol_port",
+                            "config_repository",
+                        ):
+                            doubles = True
+                    if not doubles:
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                stmt.lineno,
+                                "TB072",
+                                f"{where} implements no application port, store, protocol port, "
+                                "client, or config repository; a fake implements the contract it doubles",
+                            ))
+                        )
+            else:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        stmt.lineno,
+                        "TB071",
+                        f"{module_name} has a loose module-level statement; "
+                        "a test module holds only imports, tests, helpers, and fakes",
+                    ))
+                )
+        return tuple(found)
+
+    def helper_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        facts = Registry(registry)
+        kinds = facts.kinds()
+        scope = self._scope
+        scope_spec = ScopeSpec(
+            self._name,
+            tuple(ImportSpec(local, target, original) for local, (target, original) in self._imported.items()),
+            tuple(AliasSpec(alias, package) for alias, package in self._package_aliases.items()),
+            tuple(self._classes),
+            tuple(sorted(self._functions)),
+            self._spoken,
+        )
+        policy = AnnotationPolicy(AnnotationPolicySpec((), tuple(sorted(PRIMITIVES)), (), scope_spec, registry))
+        found: list[Violation] = []
+        for fn in self._body:
+            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) or fn.name.startswith("test_"):
+                continue
+            declared_helper = False
+            for decorator in fn.decorator_list:
+                ref = Annotation(decorator).primary()
+                symbol = scope.resolve(ref) if ref is not None else None
+                if symbol is not None and TESSER_DECORATORS.get((str(symbol.module()), str(symbol.name()))) == "helper":
+                    declared_helper = True
+            if not declared_helper:
+                continue
+            where = f"{module_name}.{fn.name}"
+            line = fn.lineno
+            params = fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs
+            for arg in params:
+                if arg.annotation is None or policy.disallowed(Annotation(arg.annotation)):
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            line,
+                            "TB073",
+                            f"{where} parameter {arg.arg!r} is not a primitive; "
+                            "a helper takes only defaulted primitives",
+                        ))
+                    )
+            positional = fn.args.posonlyargs + fn.args.args
+            undefaulted = positional[: len(positional) - len(fn.args.defaults)]
+            missing = [arg for arg in undefaulted] + [
+                arg for arg, default in zip(fn.args.kwonlyargs, fn.args.kw_defaults) if default is None
+            ]
+            for arg in missing:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        line,
+                        "TB073",
+                        f"{where} parameter {arg.arg!r} has no default; "
+                        "a helper takes only defaulted primitives",
+                    ))
+                )
+            returned_ref = Annotation(fn.returns).primary() if fn.returns is not None else None
+            helper_symbol = scope.resolve(returned_ref) if returned_ref is not None else None
+            helper_block = kinds.block_of(helper_symbol) if helper_symbol is not None else None
+            if helper_symbol is not None and helper_block is not None and str(helper_block) == "mapper":
+                helper_symbol = facts.mapper_target(helper_symbol)
+                helper_block = kinds.block_of(helper_symbol) if helper_symbol is not None else None
+            if helper_block is None or str(helper_block) not in DATA_BLOCKS:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        line,
+                        "TB073",
+                        f"{where} returns no construction data; a helper builds a spec or a DTO",
+                    ))
+                )
+            for node in ast.walk(fn):
+                if isinstance(node, (ast.If, ast.Match, ast.For, ast.While, ast.Try)):
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            node.lineno,
+                            "TB073",
+                            f"{where} has control flow; a helper only constructs",
+                        ))
+                    )
+        return tuple(found)
+
+    def placement_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        facts = Registry(registry)
+        contexts = frozenset(facts.contexts())
+        tops = frozenset(facts.tops())
+        placement = self._tier if self._tier is not None else ("", STRAY_TIER)
+        context, tier = placement
+        found: list[Violation] = []
+        if tier == STRAY_TIER:
+            return (
+                Violation(ViolationSpec(
+                    self._path,
+                    1,
+                    "TB070",
+                    f"{module_name} resolves to no test tier; "
+                    "a sibling test lives in a role package, an adapter kind package "
+                    "(handlers, gateways, repositories, jobs), or the orchestrators package",
+                )),
+            )
+        allowed_shell = TEST_TIER_SHELL[tier]
+        for edge in self._edges:
+            target = str(edge._target)
+            lineno = int(edge._lineno)
+            top = target.split(".")[0]
+            if top not in SHELL_PACKAGES or top not in tops or top in allowed_shell:
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    lineno,
+                    "TB070",
+                    f"{module_name} imports {target}, but a test placed in {tier} "
+                    "does not reach that package; "
+                    "a test reaches only what its placement allows",
+                ))
+            )
+        if tier == ROOT_TESTS_TIER:
+            for edge in self._edges:
+                target = str(edge._target)
+                lineno = int(edge._lineno)
+                pieces = target.split(".")
+                if pieces[0] not in contexts:
+                    continue
+                if len(pieces) >= 2 and pieces[1] in ("component", "client"):
+                    continue
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB070",
+                        f"{module_name} imports {target}, but a test placed in "
+                        "the root tests package reaches a context only through its "
+                        "component and client; "
+                        "a test reaches only what its placement allows",
+                    ))
+                )
+            return tuple(found)
+        if tier == KERNEL_TIER:
+            for edge in self._edges:
+                target = str(edge._target)
+                lineno = int(edge._lineno)
+                pieces = target.split(".")
+                if pieces[0] not in contexts:
+                    continue
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB070",
+                        f"{module_name} imports {target}, but a test placed in "
+                        "a kernel reaches no context; "
+                        "a test reaches only what its placement allows",
+                    ))
+                )
+            return tuple(found)
+        if tier == SRV_TIER:
+            for edge in self._edges:
+                target = str(edge._target)
+                lineno = int(edge._lineno)
+                pieces = target.split(".")
+                if pieces[0] not in contexts:
+                    continue
+                if len(pieces) >= 3 and pieces[1] == "adapters" and pieces[2] in ("handlers", "jobs"):
+                    continue
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB070",
+                        f"{module_name} imports {target}, but a test placed in "
+                        "srv reaches a context only through its handlers and its jobs; "
+                        "a test reaches only what its placement allows",
+                    ))
+                )
+            return tuple(found)
+        if tier == APP_TIER:
+            for edge in self._edges:
+                target = str(edge._target)
+                lineno = int(edge._lineno)
+                pieces = target.split(".")
+                if pieces[0] not in contexts:
+                    continue
+                if len(pieces) >= 2 and pieces[1] in ("component", "client", "adapters"):
+                    continue
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB070",
+                        f"{module_name} imports {target}, but a test placed in "
+                        "an app reaches a context only through its component, client, "
+                        "and adapters; "
+                        "a test reaches only what its placement allows",
+                    ))
+                )
+            return tuple(found)
+        if tier == PROTOCOL_TIER:
+            for edge in self._edges:
+                target = str(edge._target)
+                lineno = int(edge._lineno)
+                pieces = target.split(".")
+                if pieces[0] not in contexts:
+                    continue
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB070",
+                        f"{module_name} imports {target}, but a test placed in "
+                        "protocol reaches no context; "
+                        "a test reaches only what its placement allows",
+                    ))
+                )
+            return tuple(found)
+        reach = TEST_TIER_REACH[tier]
+        foreign = TEST_TIER_FOREIGN.get(tier, ())
+        home = TEST_TIER_HOME.get(tier)
+        if home is None:
+            own_roles = ", ".join(reach)
+        elif home[1] is None:
+            own_roles = ", ".join((home[0], *reach))
+        else:
+            own_roles = ", ".join((f"{home[0]}.{home[1]}", *reach))
+        foreign_roles = ", ".join(foreign)
+        for edge in self._edges:
+            target = str(edge._target)
+            lineno = int(edge._lineno)
+            pieces = target.split(".")
+            if pieces[0] == TESSER or pieces[0] not in contexts:
+                continue
+            tail = pieces[1] if len(pieces) > 1 else ""
+            if pieces[0] == context:
+                inner = ".".join(pieces[1:])
+                allowed = any(
+                    inner == entry or inner.startswith(f"{entry}.") for entry in reach
+                )
+                if not allowed and home is not None and tail == home[0]:
+                    allowed = home[1] is None or (len(pieces) >= 3 and pieces[2] == home[1])
+                at_home = (
+                    home is not None
+                    and home[1] is not None
+                    and tail == home[0]
+                    and len(pieces) >= 3
+                    and pieces[2] == home[1]
+                )
+                if allowed and tier != "jobs" and not at_home and any(
+                    inner == entry or inner.startswith(f"{entry}.")
+                    for entry in JOB_ONLY_IMPORTS
+                ):
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            lineno,
+                            "TB070",
+                            f"{module_name} imports {target}, but only a test placed in "
+                            "jobs reaches the application client and the orchestrators; "
+                            "a test reaches only what its placement allows",
+                        ))
+                    )
+                elif not allowed:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            lineno,
+                            "TB070",
+                            f"{module_name} imports {target}, but a test placed in "
+                            f"{tier} reaches only {own_roles} of its own context; "
+                            "a test reaches only what its placement allows",
+                        ))
+                    )
+            elif not foreign:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB070",
+                        f"{module_name} imports {target}, but a test placed in "
+                        f"{tier} reaches no neighbouring context; "
+                        "a test reaches only what its placement allows",
+                    ))
+                )
+            elif tail not in foreign:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB070",
+                        f"{module_name} imports {target}, but a test placed in "
+                        f"{tier} reaches only {foreign_roles} of a neighbouring context; "
+                        "a test reaches only what its placement allows",
+                    ))
+                )
+        return tuple(found)
+
     def class_decls(self, registry: RegistrySpec) -> tuple[ClassDecl, ...]:
         scope = ScopeSpec(
             self._name,
@@ -5452,6 +7576,14 @@ APPLICATION_CLIENT_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(Pac
 ORCHESTRATORS_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageInitPolicySpec("an orchestrators package"))
 
 
+ROLE_TESSER_IMPORTS: typing.Final[dict[str, TesserImportPolicy]] = {
+    "domain": DOMAIN_TESSER_IMPORTS,
+    "application": APPLICATION_TESSER_IMPORTS,
+    "adapters": ADAPTERS_TESSER_IMPORTS,
+    "component": COMPONENT_TESSER_IMPORTS,
+}
+
+
 class CodebaseSpec(ts.Spec):
 
     def __init__(
@@ -5669,6 +7801,15 @@ class Codebase(ts.AggregateRoot):
             tuple(SymbolSpec(module_name, class_name) for module_name, class_name in sorted(self._domain_enums)),
             tuple(f"{module_name}|{class_name}|{method_name}" for module_name, class_name, method_name in sorted(self._outcome_methods)),
             tuple(SymbolSpec(module_name, class_name) for module_name, class_name in sorted(self._action_ports)),
+            contexts=tuple(sorted(contexts)),
+            export=self._export,
+            tops=tuple(sorted({each.name().split(".")[0] for each in self._modules})),
+            module_names=tuple(sorted(each.name() for each in self._modules)),
+            declared_imports=tuple(self._imports),
+            pure_stdlib=tuple(self._pure_stdlib),
+            mapper_targets=tuple(
+                (source[0], source[1], target[0], target[1]) for source, target in sorted(self._mapper_target.items())
+            ),
         )
 
         def constructed(policy: SignaturePolicy, decl: ClassDecl) -> tuple[Violation, ...]:
@@ -5733,7 +7874,146 @@ class Codebase(ts.AggregateRoot):
             found.extend(module.string_equality_violations())
             found.extend(module.sibling_reference_violations())
             found.extend(module.dynamic_import_violations())
-            found.extend(self._module_violations(module, blocks, contexts))  # tesser:debt TB051
+            place = str(module.place())
+            parts = module.name().split(".")
+            tier = module.test_tier()
+            if place == "conftest-root":
+                found.extend(module.conftest_leaf_violations(registry))
+            elif place == "conftest":
+                if tier is None or str(tier) == STRAY_TIER:
+                    found.extend(module.conftest_leaf_violations(registry))
+                else:
+                    for edge in module.import_edges():
+                        found.extend(edge.member_form_violations())
+                    found.extend(module.placement_violations(registry))
+            elif place == "test":
+                found.extend(module.stray_import_violations())
+                found.extend(module.placement_violations(registry))
+                found.extend(module.test_violations(registry))
+                found.extend(module.helper_violations(registry))
+            elif place == "eval":
+                misplaced = module.eval_violations(registry)
+                if misplaced:
+                    found.extend(misplaced)
+                else:
+                    found.extend(module.stray_import_violations())
+                    found.extend(module.placement_violations(registry))
+                    found.extend(module.test_violations(registry))
+                    found.extend(module.helper_violations(registry))
+            elif place == "shell-init":
+                found.extend(SHELL_INIT.violations(module))
+            elif place == "shell-srv":
+                found.extend(module.stray_import_violations())
+                found.extend(SRV_TESSER_IMPORTS.violations(module))
+                found.extend(module.srv_violations(registry))
+                found.extend(SRV_FUNCTIONS.violations(module))
+                found.extend(SRV_STATEMENTS.violations(module))
+                found.extend(module.app_import_violations(registry))
+            elif place == "shell-app":
+                found.extend(module.stray_import_violations())
+                found.extend(APP_TESSER_IMPORTS.violations(module))
+                found.extend(module.app_violations(registry))
+                found.extend(APP_STATEMENTS.violations(module))
+                found.extend(module.app_import_violations(registry))
+            elif place == "root-tests":
+                found.extend(module.tests_package_violations())
+                if len(parts) > 1:
+                    found.extend(module.placement_violations(registry))
+            elif place == "protocol-init":
+                found.extend(PROTOCOL_INIT.violations(module))
+            elif place == "protocol":
+                found.extend(module.stray_import_violations())
+                found.extend(PROTOCOL_TESSER_IMPORTS.violations(module))
+                found.extend(module.protocol_violations(registry))
+                found.extend(PROTOCOL_FUNCTIONS.violations(module))
+                found.extend(PROTOCOL_STATEMENTS.violations(module))
+            elif place == "root":
+                found.extend(module.homeless_violations())
+            elif place == "kernel-init":
+                if self._export == TESSER and parts[0] == TESSER:
+                    found.extend(module.tesser_init_violations())
+                else:
+                    found.extend(module.kernel_init_violations())
+            elif place == "kernel-file":
+                found.extend(module.stray_violations())
+            elif place == "kernel":
+                if self._export == TESSER and parts[0] == TESSER:
+                    found.extend(module.stray_import_violations())
+                    found.extend(module.tesser_shell_violations())
+                else:
+                    found.extend(module.kernel_violations(registry))
+                    found.extend(KERNEL_FUNCTIONS.violations(module))
+                    found.extend(KERNEL_STATEMENTS.violations(module))
+                    found.extend(module.stray_import_violations())
+                    found.extend(KERNEL_TESSER_IMPORTS.violations(module))
+                    found.extend(module.kernel_import_violations(registry))
+            elif place == "context-init":
+                found.extend(CONTEXT_INIT.violations(module))
+            elif place == "context-tests-init":
+                found.extend(CONTEXT_TESTS_INIT.violations(module))
+            elif place == "context-tests-stray":
+                found.extend(module.stray_violations())
+                found.extend(module.placement_violations(registry))
+            elif place == "ports-stray":
+                found.extend(module.stray_violations())
+            elif place == "ports-init":
+                found.extend(PORTS_INIT.violations(module))
+            elif place == "ports-file":
+                found.extend(module.stray_violations())
+                found.extend(module.stray_import_violations())
+                found.extend(PORTS_TESSER_IMPORTS.violations(module))
+                found.extend(module.ports_violations(registry))
+            elif place == "ports":
+                found.extend(module.stray_import_violations())
+                found.extend(PORTS_TESSER_IMPORTS.violations(module))
+                found.extend(module.ports_violations(registry))
+            elif place == "app-client-stray":
+                found.extend(module.stray_violations())
+            elif place == "app-client-init":
+                found.extend(APPLICATION_CLIENT_INIT.violations(module))
+            elif place == "app-client-file":
+                found.extend(module.stray_violations())
+                found.extend(module.stray_import_violations())
+                found.extend(APPLICATION_CLIENT_TESSER_IMPORTS.violations(module))
+                found.extend(module.application_client_violations(registry))
+                found.extend(module.application_client_class_violations())
+            elif place == "app-client":
+                found.extend(module.stray_import_violations())
+                found.extend(APPLICATION_CLIENT_TESSER_IMPORTS.violations(module))
+                found.extend(module.application_client_violations(registry))
+                found.extend(module.application_client_class_violations())
+            elif place == "orchestrators-init":
+                found.extend(ORCHESTRATORS_INIT.violations(module))
+            elif place == "orchestrators-file":
+                found.extend(module.stray_violations())
+                found.extend(module.role_violations(registry))
+                found.extend(CONTEXT_FUNCTIONS.violations(module))
+                found.extend(CONTEXT_STATEMENTS.violations(module))
+                found.extend(module.stray_import_violations())
+                found.extend(ROLE_TESSER_IMPORTS.get(parts[1], CLIENT_TESSER_IMPORTS).violations(module))
+                found.extend(module.import_violations(registry))
+                found.extend(module.orchestrators_violations(registry))
+            elif place == "orchestrators":
+                found.extend(module.role_violations(registry))
+                found.extend(CONTEXT_FUNCTIONS.violations(module))
+                found.extend(CONTEXT_STATEMENTS.violations(module))
+                found.extend(module.stray_import_violations())
+                found.extend(ROLE_TESSER_IMPORTS.get(parts[1], CLIENT_TESSER_IMPORTS).violations(module))
+                found.extend(module.import_violations(registry))
+                found.extend(module.orchestrators_violations(registry))
+            elif place == "role-init":
+                found.extend(module.role_init_violations())
+            elif place == "role-file":
+                found.extend(module.stray_violations())
+            elif place == "role":
+                found.extend(module.role_violations(registry))
+                found.extend(CONTEXT_FUNCTIONS.violations(module))
+                found.extend(CONTEXT_STATEMENTS.violations(module))
+                found.extend(module.stray_import_violations())
+                found.extend(ROLE_TESSER_IMPORTS.get(parts[1], CLIENT_TESSER_IMPORTS).violations(module))
+                found.extend(module.import_violations(registry))
+            else:
+                found.extend(module.stray_violations())
             if str(module.place()) not in TEST_TIER:
                 found.extend(self._spec_use_violations(module, blocks))  # tesser:debt TB051
                 found.extend(self._spec_shared_violations(module))  # tesser:debt TB051
@@ -5843,6 +8123,12 @@ class Codebase(ts.AggregateRoot):
                             continue
                         found.extend(APP_CLIENT_METHOD.violations(signature))
         found.extend(self._pairing_violations(contexts, blocks))  # tesser:debt TB051
+        for module in self._modules:
+            place = str(module.place())
+            if place in ("role", "orchestrators", "orchestrators-file", "kernel"):
+                self._used_imports.update(str(name) for name in module.declared_uses(Names(tuple(self._imports))))
+                if place == "kernel" or module.name().split(".")[1:2] == ["domain"]:
+                    self._used_pure_stdlib.update(str(name) for name in module.declared_uses(Names(tuple(self._pure_stdlib))))
         found.extend(self._unused_import_violations())  # tesser:debt TB051
         kept: list[Violation] = []
         used: set[tuple[str, Line]] = set()
@@ -5943,205 +8229,6 @@ class Codebase(ts.AggregateRoot):
                         ))
                     )
         return tuple(found)
-
-    def _module_violations(
-        self,
-        module: Module,
-        blocks: dict[tuple[str, str], str],
-        contexts: frozenset[str],
-    ) -> tuple[Violation, ...]:
-        parts = module.name().split(".")
-        place = str(module.place())
-        if place == "conftest-root":
-            return self._conftest_leaf_violations(module)  # tesser:debt TB051
-        if place == "conftest":
-            tier_parts = module.name().split(".")
-            tier_tops = (
-                frozenset({KERNEL_PACKAGE})
-                | (frozenset({self._export}) if self._export is not None else frozenset())
-            ) & frozenset(each.name().split(".")[0] for each in self._modules)
-            if tier_parts[0] in tier_tops and len(tier_parts) >= 2:
-                placement: tuple[str, str] | None = ("", KERNEL_TIER)
-            elif tier_parts[0] == "srv" and len(tier_parts) >= 2:
-                placement = ("", SRV_TIER)
-            elif tier_parts[0] == "app" and len(tier_parts) >= 2:
-                placement = ("", APP_TIER)
-            elif tier_parts[0] == PROTOCOL_PACKAGE and len(tier_parts) >= 2:
-                placement = ("", PROTOCOL_TIER)
-            elif tier_parts[0] == TESTS_ROLE and len(tier_parts) >= 2:
-                placement = ("", ROOT_TESTS_TIER)
-            elif len(tier_parts) < 3 or tier_parts[0] not in contexts:
-                placement = None
-            elif tier_parts[1] == TESTS_ROLE:
-                placement = (tier_parts[0], TESTS_ROLE)
-            elif tier_parts[1] not in ROLES:
-                placement = (tier_parts[0], STRAY_TIER)
-            elif tier_parts[1] == "adapters":
-                placement = (
-                    (tier_parts[0], tier_parts[2])
-                    if len(tier_parts) >= 4 and tier_parts[2] in ADAPTER_TEST_TIERS
-                    else (tier_parts[0], STRAY_TIER)
-                )
-            elif (
-                tier_parts[1] == PORTS_PARENT_ROLE
-                and len(tier_parts) >= 4
-                and tier_parts[2] == ORCHESTRATORS_PACKAGE
-            ):
-                placement = (tier_parts[0], ORCHESTRATORS_PACKAGE)
-            else:
-                placement = (tier_parts[0], tier_parts[1])
-            if placement is None or placement[1] == STRAY_TIER:
-                return self._conftest_leaf_violations(module)  # tesser:debt TB051
-            return tuple(
-                violation
-                for edge in module.import_edges()
-                for violation in edge.member_form_violations()
-            ) + self._test_placement_violations(module, placement[0], placement[1], contexts)  # tesser:debt TB051
-        if place == "test":
-            return self._test_module_violations(module, blocks, contexts)  # tesser:debt TB051
-        if place == "eval":
-            return self._eval_module_violations(module, blocks, contexts)  # tesser:debt TB051
-        if place == "shell-init":
-            return SHELL_INIT.violations(module)
-        if place == "shell-srv":
-            return self._srv_module_violations(module, blocks) + self._app_import_violations(  # tesser:debt TB051
-                module, parts[0], contexts, blocks
-            )
-        if place == "shell-app":
-            return self._app_module_violations(module, blocks) + self._app_import_violations(  # tesser:debt TB051
-                module, parts[0], contexts, blocks
-            )
-        if place == "root-tests":
-            return self._tests_package_violations(module, contexts)  # tesser:debt TB051
-        if place == "protocol-init":
-            return PROTOCOL_INIT.violations(module)
-        if place == "protocol":
-            return self._protocol_module_violations(module, blocks, contexts)  # tesser:debt TB051
-        if place == "root":
-            return self._homeless_violations(module)  # tesser:debt TB051
-        if place == "kernel-init":
-            if self._export == TESSER and parts[0] == TESSER:
-                return self._tesser_init_violations(module)  # tesser:debt TB051
-            return self._kernel_init_violations(module)  # tesser:debt TB051
-        if place == "kernel-file":
-            return (
-                Violation(ViolationSpec(
-                    module.path(),
-                    1,
-                    "TB041",
-                    f"{module.name()} is a kernel module at the tree root; "
-                    "kernel is a package, never a module",
-                )),
-            )
-        if place == "kernel":
-            if self._export == TESSER and parts[0] == TESSER:
-                return self._tesser_shell_violations(module)  # tesser:debt TB051
-            return self._kernel_module_violations(module, blocks) + self._kernel_import_violations(  # tesser:debt TB051
-                module
-            )
-        if place == "context-init":
-            return CONTEXT_INIT.violations(module)
-        if place == "context-tests-init":
-            return CONTEXT_TESTS_INIT.violations(module)
-        if place == "context-tests-stray":
-            return (
-                Violation(ViolationSpec(
-                    module.path(),
-                    1,
-                    "TB041",
-                    f"{module.name()} is neither a test module nor conftest; "
-                    "a context tests package holds only test modules and conftest",
-                )),
-            ) + self._test_placement_violations(module, parts[0], TESTS_ROLE, contexts)  # tesser:debt TB051
-        if place == "ports-stray":
-            return (
-                Violation(ViolationSpec(
-                    module.path(),
-                    1,
-                    "TB041",
-                    f"{module.name()} is not a ports module; a ports package holds only "
-                    "ports modules, and test_/eval_/conftest are reserved names, because a "
-                    "fake here would be an implementation adapters may import",
-                )),
-            )
-        if place == "ports-init":
-            return PORTS_INIT.violations(module)
-        if place == "ports-file":
-            return (
-                Violation(ViolationSpec(
-                    module.path(),
-                    1,
-                    "TB041",
-                    f"{module.name()} is a ports module; "
-                    "ports is a package, never a module",
-                )),
-            ) + self._ports_module_violations(module, blocks)  # tesser:debt TB051
-        if place == "ports":
-            return self._ports_module_violations(module, blocks)  # tesser:debt TB051
-        if place == "app-client-stray":
-            return (
-                Violation(ViolationSpec(
-                    module.path(),
-                    1,
-                    "TB041",
-                    f"{module.name()} is not an application client module; an application "
-                    "client package holds only client protocols, and test_/eval_/conftest "
-                    "are reserved names, because a fake here would be an implementation "
-                    "a job may import",
-                )),
-            )
-        if place == "app-client-init":
-            return APPLICATION_CLIENT_INIT.violations(module)
-        if place == "app-client-file":
-            return (
-                Violation(ViolationSpec(
-                    module.path(),
-                    1,
-                    "TB041",
-                    f"{module.name()} is an application client module; "
-                    "the application client is a package, never a module",
-                )),
-            ) + self._application_client_module_violations(module, blocks)  # tesser:debt TB051
-        if place == "app-client":
-            return self._application_client_module_violations(module, blocks)  # tesser:debt TB051
-        if place == "orchestrators-init":
-            return ORCHESTRATORS_INIT.violations(module)
-        if place == "orchestrators-file":
-            return (
-                Violation(ViolationSpec(
-                    module.path(),
-                    1,
-                    "TB041",
-                    f"{module.name()} is an orchestrators module; "
-                    "orchestrators is a package, never a module",
-                )),
-            ) + self._orchestrators_module_violations(module, parts[0], contexts, blocks)  # tesser:debt TB051
-        if place == "orchestrators":
-            return self._orchestrators_module_violations(module, parts[0], contexts, blocks)  # tesser:debt TB051
-        if place == "role-init":
-            return self._role_init_violations(module)  # tesser:debt TB051
-        if place == "role-file":
-            return (
-                Violation(ViolationSpec(
-                    module.path(),
-                    1,
-                    "TB041",
-                    f"{module.name()} is a role module; a role is a package, never a module",
-                )),
-            )
-        if place == "role":
-            return self._role_module_violations(module, parts[1], blocks) + self._import_violations(  # tesser:debt TB051
-                module, parts[0], parts[1], contexts, blocks
-            )
-        return (
-            Violation(ViolationSpec(
-                module.path(),
-                1,
-                "TB041",
-                f"{module.name()} is not a context module; "
-                "a context holds only domain, application, client, adapters, component, and tests modules",
-            )),
-        )
 
     def _declaration_violations(self) -> tuple[Violation, ...]:
         found: list[Violation] = []
@@ -6350,286 +8437,6 @@ class Codebase(ts.AggregateRoot):
                         "pure stdlib, never repeats it",
                     ))
                 )
-        return tuple(found)
-
-    def _pure_domain_import(self, target: str) -> bool:
-        head = target.split(".")[0]
-        if target in CORE_STDLIB["domain"] or head in CORE_STDLIB["domain"]:
-            return True
-        for declared in self._pure_stdlib:
-            if target == declared or target.startswith(declared + "."):
-                self._used_pure_stdlib.add(declared)
-                return True
-        return False
-
-    def _homeless_violations(self, module: Module) -> tuple[Violation, ...]:
-        return (
-            Violation(ViolationSpec(
-                module.path(),
-                1,
-                "TB040",
-                f"{module.name()} belongs to no governed package; "
-                "every module belongs to a context, a kernel, srv, app, tests, "
-                "or the protocol package",
-            )),
-        )
-
-    def _conftest_leaf_violations(self, module: Module) -> tuple[Violation, ...]:
-        tops = (frozenset(each.name().split(".")[0] for each in self._modules))
-        if self._export != TESSER:
-            tops = tops - {TESSER}
-        return tuple(
-            violation
-            for edge in module.import_edges()
-            for violation in edge.member_form_violations()
-        ) + tuple(
-            Violation(ViolationSpec(
-                module.path(),
-                lineno,
-                "TB065",
-                f"{module.name()} imports {target}; "
-                "a conftest is a leaf that imports nothing from its tree",
-            ))
-            for target, lineno in (
-                (str(edge._target), int(edge._lineno))
-                for edge in module.import_edges()
-                if str(edge._target).split(".")[0] in tops
-            )
-        )
-
-    def _tests_package_violations(
-        self,
-        module: Module,
-        contexts: frozenset[str],
-    ) -> tuple[Violation, ...]:
-        if len(module.name().split(".")) == 1:
-            return tuple(
-                Violation(ViolationSpec(
-                    module.path(),
-                    stmt.lineno,
-                    "TB041",
-                    f"{module.name()} __init__ declares code; "
-                    "a tests package holds only test modules and conftest",
-                ))
-                for stmt in module.body()
-            )
-        return (
-            Violation(ViolationSpec(
-                module.path(),
-                1,
-                "TB041",
-                f"{module.name()} is neither a test module nor conftest; "
-                "a tests package holds only test modules and conftest",
-            )),
-        ) + self._test_placement_violations(module, "", ROOT_TESTS_TIER, contexts)  # tesser:debt TB051
-
-    def _role_init_violations(self, module: Module) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for stmt in module.body():
-            if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        stmt.lineno,
-                        "TB042",
-                        f"{module.name()} __init__ declares code; "
-                        "a role __init__ only re-exports from its own role",
-                    ))
-                )
-        for edge in module.import_edges():
-            target = str(edge._target)
-            lineno = int(edge._lineno)
-            if not target.startswith(module.name() + "."):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB042",
-                        f"{module.name()} imports {target}; "
-                        "a role __init__ only re-exports from its own role",
-                    ))
-                )
-            found.extend(edge.member_form_violations())
-            found.extend(edge.form_violations())
-        return tuple(found)
-
-    def _tesser_init_violations(self, module: Module) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        parts = module.name().split(".")
-        if (
-            len(parts) >= 2
-            and not parts[1].startswith(DO_NOT_USE_PREFIX)
-            and parts[1] not in TESSER_NAMESPACES
-        ):
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    1,
-                    "TB041",
-                    f"{module.name()} is not a consumer namespace; the tesser "
-                    "distribution holds only the namespaces its consumers import",
-                ))
-            )
-        for stmt in module.body():
-            if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        stmt.lineno,
-                        "TB042",
-                        f"{module.name()} __init__ declares code; "
-                        "a tesser __init__ only re-exports from the distribution",
-                    ))
-                )
-        for edge in module.import_edges():
-            target = str(edge._target)
-            lineno = int(edge._lineno)
-            if not target.startswith(TESSER + "."):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB042",
-                        f"{module.name()} imports {target}; "
-                        "a tesser __init__ only re-exports from the distribution",
-                    ))
-                )
-        return tuple(found)
-
-    def _tesser_shell_violations(self, module: Module) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        found.extend(module.stray_import_violations())
-        parts = module.name().split(".")
-        if not parts[1].startswith(DO_NOT_USE_PREFIX) and parts[1] not in TESSER_NAMESPACES:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    1,
-                    "TB041",
-                    f"{module.name()} is not a consumer namespace; the tesser "
-                    "distribution holds only the namespaces its consumers import",
-                ))
-            )
-        for edge in module.import_edges():
-            target = str(edge._target)
-            lineno = int(edge._lineno)
-            head = target.split(".")[0]
-            if head == TESSER or head in TESSER_STDLIB:
-                continue
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    lineno,
-                    "TB062",
-                    f"{module.name()} imports {target}; a shell module imports "
-                    "only the tesser distribution and the shell stdlib",
-                ))
-            )
-        return tuple(found)
-
-    def _kernel_init_violations(self, module: Module) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for stmt in module.body():
-            if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        stmt.lineno,
-                        "TB042",
-                        f"{module.name()} __init__ declares code; "
-                        "a kernel __init__ only re-exports from its own kernel",
-                    ))
-                )
-        for edge in module.import_edges():
-            target = str(edge._target)
-            lineno = int(edge._lineno)
-            if not target.startswith(module.name() + "."):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB042",
-                        f"{module.name()} imports {target}; "
-                        "a kernel __init__ only re-exports from its own kernel",
-                    ))
-                )
-        return tuple(found)
-
-    def _kernel_module_violations(
-        self,
-        module: Module,
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for stmt in module.body():
-            if isinstance(stmt, ast.ClassDef):
-                block = blocks.get((module.name(), stmt.name))
-                where = f"{module.name()}.{stmt.name}"
-                if block is None:
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            stmt.lineno,
-                            "TB052",
-                            f"{where} declares no ts.* base; every kernel class declares its block",
-                        ))
-                    )
-                elif KIND_ROLE.get(block) != "domain":
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            stmt.lineno,
-                            "TB052",
-                            f"{where} is {KIND_NAME[block]}; a kernel holds only domain kinds — "
-                            "value objects, entities, aggregates, and specs",
-                        ))
-                    )
-        found.extend(KERNEL_FUNCTIONS.violations(module))
-        found.extend(KERNEL_STATEMENTS.violations(module))
-        return tuple(found)
-
-    def _kernel_import_violations(self, module: Module) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        found.extend(module.stray_import_violations())
-        found.extend(KERNEL_TESSER_IMPORTS.violations(module))
-        own = (
-            frozenset({self._export})
-            if module.name().split(".")[0] == self._export
-            else ((
-                        frozenset({KERNEL_PACKAGE})
-                        | (frozenset({self._export}) if self._export is not None else frozenset())
-                    ) & frozenset(each.name().split(".")[0] for each in self._modules))
-        )
-        for edge in module.import_edges():
-            target = str(edge._target)
-            lineno = int(edge._lineno)
-            pieces = target.split(".")
-            if pieces[0] == TESSER:
-                continue
-            if pieces[0] in own and (any(
-                        module.name() == target or module.name().startswith(target + ".")
-                        for module in self._modules
-                    )):
-                continue
-            covered = False
-            for declared in self._imports:
-                if target == declared or target.startswith(declared + "."):
-                    self._used_imports.add(declared)
-                    covered = True
-                    break
-            if covered:
-                continue
-            if self._pure_domain_import(target):  # tesser:debt TB051
-                continue
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    lineno,
-                    "TB062",
-                    f"{module.name()} imports {target}; a kernel imports only its "
-                    "kernel, tesser.domain, declared kernels, and the pure stdlib",
-                ))
-            )
         return tuple(found)
 
     @staticmethod
@@ -7146,159 +8953,6 @@ class Codebase(ts.AggregateRoot):
             return Codebase._annotation_head(parsed.body)
         return None
 
-    def _app_module_violations(
-        self,
-        module: Module,
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        found.extend(module.stray_import_violations())
-        found.extend(APP_TESSER_IMPORTS.violations(module))
-        for stmt in module.body():
-            if isinstance(stmt, ast.FunctionDef) and not (any(
-                        key is not None and TESSER_DECORATORS.get(key) == ("load")
-                        for key in (module._resolve(decorator) for decorator in stmt.decorator_list)
-                    )):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        stmt.lineno,
-                        "TB051",
-                        f"{module.name()}.{stmt.name} is an undeclared module function; "
-                        "an app function declares itself with @ts.load",
-                    ))
-                )
-            if isinstance(stmt, ast.ClassDef):
-                block = blocks.get((module.name(), stmt.name))
-                where = f"{module.name()}.{stmt.name}"
-                if block is None:
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            stmt.lineno,
-                            "TB052",
-                            f"{where} declares no ts.* base; "
-                            "every app class declares its block",
-                        ))
-                    )
-                elif block not in APP_KINDS:
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            stmt.lineno,
-                            "TB052",
-                            f"{where} is {KIND_NAME[block]}; only an app, an app loader, an app "
-                            "config, an app config spec, and a config repository live in an "
-                            "app module",
-                        ))
-                    )
-        found.extend(APP_STATEMENTS.violations(module))
-        return tuple(found)
-
-    def _srv_module_violations(
-        self,
-        module: Module,
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        found.extend(module.stray_import_violations())
-        found.extend(SRV_TESSER_IMPORTS.violations(module))
-        for stmt in module.body():
-            if isinstance(stmt, ast.ClassDef):
-                block = blocks.get((module.name(), stmt.name))
-                where = f"{module.name()}.{stmt.name}"
-                if block is None:
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            stmt.lineno,
-                            "TB052",
-                            f"{where} declares no ts.* base; a srv class declares its block",
-                        ))
-                    )
-                elif block != "host":
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            stmt.lineno,
-                            "TB052",
-                            f"{where} is {KIND_NAME[block]}; only a host class lives in a srv module",
-                        ))
-                    )
-        found.extend(SRV_FUNCTIONS.violations(module))
-        found.extend(SRV_STATEMENTS.violations(module))
-        return tuple(found)
-
-    def _protocol_module_violations(
-        self,
-        module: Module,
-        blocks: dict[tuple[str, str], str],
-        contexts: frozenset[str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        found.extend(module.stray_import_violations())
-        found.extend(PROTOCOL_TESSER_IMPORTS.violations(module))
-        for edge in module.import_edges():
-            target = str(edge._target)
-            lineno = int(edge._lineno)
-            head = target.split(".")[0]
-            if head in contexts:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB064",
-                        f"{module.name()} imports {target}; "
-                        "a protocol module is context-generic and imports no context",
-                    ))
-                )
-            elif head in APP_PACKAGES:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB064",
-                        f"{module.name()} imports {target}; "
-                        "a protocol module never imports srv or app",
-                    ))
-                )
-            elif head != PROTOCOL_PACKAGE and head in (frozenset(each.name().split(".")[0] for each in self._modules)):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB064",
-                        f"{module.name()} imports {target}; "
-                        "a protocol module imports nothing else from its tree",
-                    ))
-                )
-        for stmt in module.body():
-            if isinstance(stmt, ast.ClassDef):
-                block = blocks.get((module.name(), stmt.name))
-                where = f"{module.name()}.{stmt.name}"
-                if block is None:
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            stmt.lineno,
-                            "TB052",
-                            f"{where} declares no ts.* base; a protocol class declares its block",
-                        ))
-                    )
-                elif block not in PROTOCOL_KINDS:
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            stmt.lineno,
-                            "TB052",
-                            f"{where} is {KIND_NAME[block]}; only protocol ports, protocol records, "
-                            "protocol rejections, protocol requests, and protocol responses live in a protocol module",
-                        ))
-                    )
-        found.extend(PROTOCOL_FUNCTIONS.violations(module))
-        found.extend(PROTOCOL_STATEMENTS.violations(module))
-        return tuple(found)
-
     @classmethod
     def _own_scope_returns(cls, node: ast.AST) -> list[ast.Return]:
         found: list[ast.Return] = []
@@ -7313,15 +8967,6 @@ class Codebase(ts.AggregateRoot):
         return found
 
     @classmethod
-    def _nested_class_defs(cls, body: list[ast.stmt]) -> list[ast.ClassDef]:
-        found: list[ast.ClassDef] = []
-        for stmt in body:
-            if isinstance(stmt, ast.ClassDef):
-                found.append(stmt)
-                found.extend(cls._nested_class_defs(stmt.body))
-        return found
-
-    @classmethod
     def _is_union(cls, node: ast.expr | None) -> bool:
         if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
             return True
@@ -7333,243 +8978,6 @@ class Codebase(ts.AggregateRoot):
         if isinstance(node, ast.Attribute):
             return node.attr in ("Optional", "Union")
         return False
-
-    def _application_client_module_violations(
-        self,
-        module: Module,
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        found.extend(module.stray_import_violations())
-        found.extend(APPLICATION_CLIENT_TESSER_IMPORTS.violations(module))
-        tops = frozenset(each.name().split(".")[0] for each in self._modules)
-        spoken = 0
-        for edge in module.import_edges():
-            target = str(edge._target)
-            lineno = int(edge._lineno)
-            pieces = target.split(".")
-            if pieces[0] == TESSER:
-                continue
-            if pieces[0] in tops:
-                if pieces[1:3] == [PORTS_PARENT_ROLE, PORTS_PACKAGE] and len(pieces) >= 4:
-                    spoken += 1
-                    if spoken > 1:
-                        found.append(
-                            Violation(ViolationSpec(
-                                module.path(),
-                                lineno,
-                                "TB067",
-                                f"{module.name()} imports a second ports module {target}; "
-                                "an application client module speaks the DTOs of exactly "
-                                "one ports module",
-                            ))
-                        )
-                    else:
-                        found.extend(edge.form_violations())
-                    continue
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB067",
-                        f"{module.name()} imports {target}; an application client module "
-                        "speaks the DTOs of exactly one ports module",
-                    ))
-                )
-            elif target not in PORTS_STDLIB and pieces[0] not in PORTS_STDLIB:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB067",
-                        f"{module.name()} imports {target}; an application client module "
-                        "imports only tesser.application, one ports module, and the pure stdlib",
-                    ))
-                )
-        if spoken == 0 and module.class_defs():
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    1,
-                    "TB067",
-                    f"{module.name()} imports no ports module; an application client "
-                    "module speaks the DTOs of exactly one ports module",
-                ))
-            )
-        for stmt in module.body():
-            if isinstance(stmt, (ast.Import, ast.ImportFrom, ast.ClassDef)):
-                continue
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    stmt.lineno,
-                    "TB051",
-                    f"{module.name()} has a loose module-level statement; "
-                    "an application client module holds only imports and classes",
-                ))
-            )
-        protocols: list[ast.ClassDef] = []
-        for stmt in module.class_defs():
-            where = f"{module.name()}.{stmt.name}"
-            block = blocks.get((module.name(), stmt.name))
-            if block == "actions_client":
-                protocols.append(stmt)
-            elif block is None:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        stmt.lineno,
-                        "TB052",
-                        f"{where} declares no ts.* base; an application client module "
-                        "declares exactly one ts.Client protocol and nothing else",
-                    ))
-                )
-            else:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        stmt.lineno,
-                        "TB052",
-                        f"{where} is {KIND_NAME[block]}; an application client module "
-                        "declares exactly one ts.Client protocol and nothing else",
-                    ))
-                )
-            for inner in self._nested_class_defs(stmt.body):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        inner.lineno,
-                        "TB052",
-                        f"{where}.{inner.name} is a nested class; an application client "
-                        "module declares its protocol at module level",
-                    ))
-                )
-            found.extend(self._import_time_violations(module, stmt))  # tesser:debt TB051
-        if len(protocols) != 1 and module.class_defs():
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    protocols[1].lineno if len(protocols) > 1 else 1,
-                    "TB052",
-                    f"{module.name()} declares {len(protocols)} client protocols; an "
-                    "application client module declares exactly one ts.Client protocol "
-                    "and nothing else",
-                ))
-            )
-        return tuple(found)
-
-    def _import_time_violations(
-        self, module: Module, stmt: ast.ClassDef
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        where = f"{module.name()}.{stmt.name}"
-        members = [
-            item
-            for item in stmt.body
-            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
-        ]
-        computed: list[ast.expr] = list(stmt.bases)
-        for item in members:
-            computed.extend(
-                arg.annotation
-                for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
-                if arg.annotation is not None
-            )
-            if item.returns is not None:
-                computed.append(item.returns)
-            computed.extend(item.args.defaults)
-            computed.extend(value for value in item.args.kw_defaults if value is not None)
-        runs = (
-            bool(stmt.decorator_list)
-            or bool(stmt.keywords)
-            or any(item.decorator_list for item in members)
-            or any(
-                isinstance(inner, (ast.Call, ast.Lambda, ast.Await, ast.NamedExpr))
-                or isinstance(
-                    inner, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
-                )
-                for node in computed
-                for inner in ast.walk(node)
-            )
-        )
-        if runs:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    stmt.lineno,
-                    "TB051",
-                    f"{where} runs an expression at import; an application client module "
-                    "holds no expression that runs at import, because a job imports it",
-                ))
-            )
-        for held in stmt.body:
-            if isinstance(held, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Pass)):
-                continue
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    held.lineno,
-                    "TB051",
-                    f"{where} carries a class-level statement; an application client "
-                    "module declares calls and nothing else",
-                ))
-            )
-        return tuple(found)
-
-    def _orchestrators_module_violations(
-        self,
-        module: Module,
-        context: str,
-        contexts: frozenset[str],
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        found.extend(
-            self._role_module_violations(  # tesser:debt TB051
-                module,
-                PORTS_PARENT_ROLE,
-                blocks,
-                frozenset({"orchestrator", "port_response"}),
-            )
-        )
-        found.extend(
-            self._import_violations(  # tesser:debt TB051
-                module, context, PORTS_PARENT_ROLE, contexts, blocks
-            )
-        )
-        held = [
-            cls
-            for cls in module.class_defs()
-            if blocks.get((module.name(), cls.name)) == "orchestrator"
-        ]
-        responses = [
-            cls
-            for cls in module.class_defs()
-            if blocks.get((module.name(), cls.name)) == "port_response"
-        ]
-        if len(held) != 1 and module.class_defs():
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    held[1].lineno if len(held) > 1 else 1,
-                    "TB052",
-                    f"{module.name()} declares {len(held)} orchestrators; an orchestrators "
-                    "module declares exactly one orchestrator, its mappers, and at most "
-                    "its own response",
-                ))
-            )
-        if len(responses) > 1:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    responses[1].lineno,
-                    "TB052",
-                    f"{module.name()} declares {len(responses)} responses; an orchestrators "
-                    "module declares exactly one orchestrator, its mappers, and at most "
-                    "its own response",
-                ))
-            )
-        return tuple(found)
 
     @staticmethod
     def _enum_base(module: Module, stmt: ast.ClassDef) -> str | None:
@@ -7592,1263 +9000,6 @@ class Codebase(ts.AggregateRoot):
                 if key is not None and key in self._domain_enums:
                     return True
         return False
-
-    @staticmethod
-    def _enum_extras(module: Module, stmt: ast.ClassDef) -> tuple[ast.stmt, ...]:
-        extras: list[ast.stmt] = []
-        for item in stmt.body:
-            if isinstance(item, ast.Pass):
-                continue
-            member_target: ast.expr | None = None
-            member_value: ast.expr | None = None
-            if isinstance(item, ast.AnnAssign):
-                member_target, member_value = item.target, item.value
-            elif isinstance(item, ast.Assign) and len(item.targets) == 1:
-                member_target, member_value = item.targets[0], item.value
-            is_member = (
-                isinstance(member_target, ast.Name)
-                and not member_target.id.startswith("_")
-                and not (
-                    isinstance(item, ast.AnnAssign)
-                    and not isinstance(item.annotation, ast.Name)
-                )
-                and (
-                    isinstance(member_value, ast.Constant)
-                    or (
-                        isinstance(member_value, ast.UnaryOp)
-                        and isinstance(member_value.operand, ast.Constant)
-                        and isinstance(member_value.operand.value, (int, float))
-                    )
-                    or (
-                        member_value is not None
-                        and Codebase._is_enum_auto(module, member_value)
-                    )
-                )
-            )
-            if not is_member:
-                extras.append(item)
-        return tuple(extras)
-
-    def _ports_module_violations(
-        self,
-        module: Module,
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        found.extend(module.stray_import_violations())
-        found.extend(PORTS_TESSER_IMPORTS.violations(module))
-        for edge in module.import_edges():
-            target = str(edge._target)
-            lineno = int(edge._lineno)
-            head = target.split(".")[0]
-            if head == TESSER:
-                continue
-            if head in (frozenset(each.name().split(".")[0] for each in self._modules)):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB067",
-                        f"{module.name()} imports {target}; a ports module is a leaf "
-                        "and imports nothing from its tree, its own siblings included",
-                    ))
-                )
-            elif target not in PORTS_STDLIB and head not in PORTS_STDLIB:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB067",
-                        f"{module.name()} imports {target}; a ports module imports "
-                        "only tesser.application and the pure stdlib",
-                    ))
-                )
-        for stmt in module.body():
-            if not isinstance(stmt, ast.ClassDef):
-                continue
-            for inner in self._nested_class_defs(stmt.body):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        inner.lineno,
-                        "TB052",
-                        f"{module.name()}.{stmt.name}.{inner.name} is a nested class; "
-                        "a ports module declares its port and its DTOs at module level, "
-                        "where the one-port count can see them",
-                    ))
-                )
-        for stmt in self._nested_class_defs(list(module.body())):
-            found.extend(self._decoration_violations(module, stmt.name, stmt))  # tesser:debt TB051
-            for keyword in stmt.keywords:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        stmt.lineno,
-                        "TB051",
-                        f"{module.name()}.{stmt.name} carries a class keyword; a ports "
-                        "module holds no expression that runs at import, and a metaclass "
-                        "is logic every adapter imports",
-                    ))
-                )
-            for item in stmt.body:
-                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    continue
-                for _ in getattr(item, "type_params", ()):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            item.lineno,
-                            "TB051",
-                            f"{module.name()}.{stmt.name}.{item.name} is generic; a ports "
-                            "module names concrete shapes, because a type parameter is a "
-                            "slot the shape rules cannot read and a bound is an expression",
-                        ))
-                    )
-                annotations = [arg.annotation for arg in ([
-                            arg
-                            for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
-                            if arg.arg != "self"
-                        ])] + [item.returns]
-                if any((node is not None and any(
-                            isinstance(inner, (ast.Call, ast.Lambda, ast.Await, ast.NamedExpr))
-                            or isinstance(inner, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp))
-                            for inner in ast.walk(node)
-                        )) for node in annotations):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            item.lineno,
-                            "TB051",
-                            f"{module.name()}.{stmt.name}.{item.name} computes an "
-                            "annotation; a ports module holds no expression that runs at "
-                            "import, and an annotation is evaluated like any other",
-                        ))
-                    )
-            for _ in getattr(stmt, "type_params", ()):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        stmt.lineno,
-                        "TB051",
-                        f"{module.name()}.{stmt.name} is generic; a ports module names "
-                        "concrete shapes, because a type parameter is a slot the shape "
-                        "rules cannot read and a bound is an expression",
-                    ))
-                )
-            for base in stmt.bases:
-                if isinstance(base, (ast.Name, ast.Attribute, ast.Subscript)) and not (
-                    (base is not None and any(
-                                isinstance(inner, (ast.Call, ast.Lambda, ast.Await, ast.NamedExpr))
-                                or isinstance(inner, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp))
-                                for inner in ast.walk(base)
-                            ))
-                ):
-                    continue
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        stmt.lineno,
-                        "TB051",
-                        f"{module.name()}.{stmt.name} computes a base; a ports module "
-                        "holds no expression that runs at import, and a base built by a "
-                        "call is logic every adapter imports",
-                    ))
-                )
-            for item in stmt.body:
-                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    found.extend(
-                        self._decoration_violations(module, f"{stmt.name}.{item.name}", item)  # tesser:debt TB051
-                    )
-                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and any(
-                    not isinstance(default, ast.Constant)
-                    for default in item.args.defaults + [
-                        value for value in item.args.kw_defaults if value is not None
-                    ]
-                ):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            item.lineno,
-                            "TB051",
-                            f"{module.name()}.{stmt.name}.{item.name} carries a computed "
-                            "default; a ports module holds no expression that runs at "
-                            "import, because every adapter imports it",
-                        ))
-                    )
-            if self._enum_base(module, stmt) is not None:  # tesser:debt TB051
-                for item in self._enum_extras(module, stmt):  # tesser:debt TB051
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            item.lineno,
-                            "TB051",
-                            f"{module.name()}.{stmt.name} carries more than its members; "
-                            "a ports enum is a closed set of names and nothing else, "
-                            "because a method or a decorator here is logic every "
-                            "adapter imports",
-                        ))
-                    )
-                continue
-            for item in stmt.body:
-                if isinstance(
-                    item, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Pass)
-                ):
-                    continue
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        item.lineno,
-                        "TB051",
-                        f"{module.name()}.{stmt.name} carries a class-level statement; "
-                        "only an enum member is class-level data in a ports module, "
-                        "because anything else runs at import in the one application "
-                        "module adapters may import",
-                    ))
-                )
-        ports: list[ast.ClassDef] = []
-        stores: list[ast.ClassDef] = []
-        for stmt in self._nested_class_defs(list(module.body())):
-            block = blocks.get((module.name(), stmt.name))
-            where = f"{module.name()}.{stmt.name}"
-            enum_base = self._enum_base(module, stmt)  # tesser:debt TB051
-            if enum_base is not None and block is None:
-                if enum_base not in ENUM_BASES:
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            stmt.lineno,
-                            "TB052",
-                            f"{where} is an enum.{enum_base}; a ports enum is an enum.Enum, "
-                            "because a str- or int-backed member compares equal to a raw literal "
-                            "and reopens the typo the enum closes",
-                        ))
-                    )
-                elif len(stmt.bases) > 1:
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            stmt.lineno,
-                            "TB052",
-                            f"{where} mixes another base into its enum; a ports enum "
-                            "subclasses enum.Enum alone, because a str- or int-backed member "
-                            "compares equal to a raw literal and reopens the typo the enum closes",
-                        ))
-                    )
-                continue
-            if block is None:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        stmt.lineno,
-                        "TB052",
-                        f"{where} declares no ts.* base; a ports class declares its block",
-                    ))
-                )
-            elif block not in PORTS_KINDS:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        stmt.lineno,
-                        "TB052",
-                        f"{where} is {KIND_NAME[block]}; only a port and the requests "
-                        "and responses it speaks live in a ports module",
-                    ))
-                )
-            elif block == "port":
-                ports.append(stmt)
-            elif block == "store":
-                stores.append(stmt)
-            if block in ("port_request", "port_response") and any(
-                blocks.get((module.name(), base.id)) in ("port_request", "port_response")
-                for base in stmt.bases
-                if isinstance(base, ast.Name)
-            ):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        stmt.lineno,
-                        "TB052",
-                        f"{where} subclasses a port DTO; a port DTO is never subclassed, "
-                        "because a response hierarchy is a union mypy cannot check for exhaustiveness",
-                    ))
-                )
-        if len(ports) > 1:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    ports[1].lineno,
-                    "TB052",
-                    f"{module.name()} declares {len(ports)} ports; a ports module "
-                    "declares exactly one port, so no two ports can share a request or a response",
-                ))
-            )
-        if len(stores) > 1:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    stores[1].lineno,
-                    "TB052",
-                    f"{module.name()} declares {len(stores)} stores; a ports module "
-                    "declares at most one store, which yields the one port beside it",
-                ))
-            )
-        if stores and not ports:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    stores[0].lineno,
-                    "TB052",
-                    f"{module.name()} declares a store and no port; a store yields the "
-                    "repository its transaction binds, declared in its own ports module",
-                ))
-            )
-        if not ports and not stores and self._nested_class_defs(list(module.body())):
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    1,
-                    "TB052",
-                    f"{module.name()} declares no port; a ports module "
-                    "declares exactly one port, so no two ports can share a request or a response",
-                ))
-            )
-        for stmt in module.body():
-            if isinstance(stmt, (ast.Import, ast.ImportFrom, ast.ClassDef)):
-                continue
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    stmt.lineno,
-                    "TB051",
-                    f"{module.name()} has a loose module-level statement; "
-                    "a ports module holds only imports and classes",
-                ))
-            )
-        for loose in module.body():
-            if isinstance(loose, (ast.Import, ast.ImportFrom, ast.ClassDef)):
-                continue
-            found.extend(self._unreadable(module, module.name(), loose))  # tesser:debt TB051
-        for holder in module.class_defs():
-            enum_member = self._enum_base(module, holder) is not None  # tesser:debt TB051
-            enum_extras = frozenset(map(id, self._enum_extras(module, holder)))  # tesser:debt TB051
-            for base in holder.bases:
-                if not self._is_readable_annotation(base):
-                    found.extend(
-                        self._unreadable(module, f"{module.name()}.{holder.name}", base)  # tesser:debt TB051
-                    )
-            for item in holder.body:
-                where = f"{module.name()}.{holder.name}"
-                if isinstance(item, ast.Pass):
-                    continue
-                if enum_member:
-                    if id(item) in enum_extras:
-                        found.extend(self._unreadable(module, where, item))  # tesser:debt TB051
-                    continue
-                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    found.extend(self._unreadable(module, where, item))  # tesser:debt TB051
-                    continue
-                shape = f"{where}.{item.name}"
-                for node in [arg.annotation for arg in ([
-                            arg
-                            for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
-                            if arg.arg != "self"
-                        ])] + [
-                    item.returns
-                ]:
-                    if node is not None and not self._is_readable_annotation(node):
-                        found.extend(self._unreadable(module, shape, node))  # tesser:debt TB051
-                for body_stmt in item.body:
-                    if isinstance(
-                        body_stmt, (ast.Pass, ast.Return, ast.Assign, ast.AnnAssign)
-                    ):
-                        continue
-                    if (
-                        isinstance(body_stmt, ast.Expr)
-                        and isinstance(body_stmt.value, ast.Constant)
-                        and body_stmt.value.value is Ellipsis
-                    ):
-                        continue
-                    found.extend(self._unreadable(module, shape, body_stmt))  # tesser:debt TB051
-        return tuple(found)
-
-    @staticmethod
-    def _decoration_violations(
-        module: Module, where: str, node: ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef
-    ) -> tuple[Violation, ...]:
-        return tuple(
-            Violation(ViolationSpec(
-                module.path(),
-                node.lineno,
-                "TB051",
-                f"{module.name()}.{where} is decorated; a ports module holds no "
-                "decorator, because a decorator is a call that runs at import in the "
-                "one application module adapters may import",
-            ))
-            for _ in node.decorator_list
-        )
-
-    @classmethod
-    def _is_readable_annotation(cls, node: ast.expr) -> bool:
-        if isinstance(node, ast.Constant):
-            return node.value is None or node.value is Ellipsis
-        if isinstance(node, ast.Name):
-            return True
-        if isinstance(node, ast.Attribute):
-            return cls._is_readable_annotation(node.value)
-        if isinstance(node, ast.Subscript):
-            inner = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
-            return cls._is_readable_annotation(node.value) and all(
-                cls._is_readable_annotation(element) for element in inner
-            )
-        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
-            return cls._is_readable_annotation(node.left) and cls._is_readable_annotation(
-                node.right
-            )
-        return False
-
-    @staticmethod
-    def _unreadable(module: Module, where: str, node: ast.AST) -> tuple[Violation, ...]:
-        return (
-            Violation(ViolationSpec(
-                module.path(),
-                getattr(node, "lineno", 1),
-                "TB069",
-                f"{where} holds a {type(node).__name__}; a ports module holds only the "
-                "shapes its rules can read, so anything else is a finding by default "
-                "rather than a gap nobody enumerated",
-            )),
-        )
-
-    def _role_module_violations(
-        self,
-        module: Module,
-        role: str,
-        blocks: dict[tuple[str, str], str],
-        extra: frozenset[str] = frozenset(),
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        parts = module.name().split(".")
-        kind_package = parts[2] if len(parts) >= 4 else None
-        if role == "adapters" and kind_package not in ADAPTER_KIND_PACKAGES:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    1,
-                    "TB041",
-                    f"{module.name()} is not in an adapter kind package; an adapters "
-                    "module lives in handlers, gateways, repositories, or jobs, because "
-                    "placement is what carries an adapter's reach",
-                ))
-            )
-        for stmt in module.body():
-            if isinstance(stmt, ast.ClassDef):
-                block = blocks.get((module.name(), stmt.name))
-                where = f"{module.name()}.{stmt.name}"
-                enum_base = self._enum_base(module, stmt)  # tesser:debt TB051
-                if enum_base is not None and block is None and role == "domain":
-                    if enum_base not in ENUM_BASES:
-                        found.append(
-                            Violation(ViolationSpec(
-                                module.path(),
-                                stmt.lineno,
-                                "TB052",
-                                f"{where} is an enum.{enum_base}; a domain enum is an enum.Enum, "
-                                "because a str- or int-backed member compares equal to a raw literal "
-                                "and reopens the typo the enum closes",
-                            ))
-                        )
-                    elif len(stmt.bases) > 1:
-                        found.append(
-                            Violation(ViolationSpec(
-                                module.path(),
-                                stmt.lineno,
-                                "TB052",
-                                f"{where} mixes another base into its enum; a domain enum "
-                                "subclasses enum.Enum alone, because a str- or int-backed member "
-                                "compares equal to a raw literal and reopens the typo the enum closes",
-                            ))
-                        )
-                    else:
-                        if stmt.decorator_list or stmt.keywords:
-                            found.append(
-                                Violation(ViolationSpec(
-                                    module.path(),
-                                    stmt.lineno,
-                                    "TB051",
-                                    f"{where} is decorated or keyworded; "
-                                    "a domain enum is a bare class statement, "
-                                    "because a decorator or a metaclass rewrites "
-                                    "the primitive into a home for behavior",
-                                ))
-                            )
-                        for item in self._enum_extras(module, stmt):  # tesser:debt TB051
-                            found.append(
-                                Violation(ViolationSpec(
-                                    module.path(),
-                                    item.lineno,
-                                    "TB051",
-                                    f"{where} carries more than its members; "
-                                    "a domain enum is a closed set of names and nothing else, "
-                                    "because an enum is a primitive with a name, "
-                                    "not a home for behavior",
-                                ))
-                            )
-                    continue
-                if block is None:
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            stmt.lineno,
-                            "TB052",
-                            f"{where} declares no ts.* base; every context class declares its block",
-                        ))
-                    )
-                elif block in SRV_KINDS:
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            stmt.lineno,
-                            "TB052",
-                            f"{where} is {KIND_NAME[block]}; "
-                            "a host lives in srv and a protocol kind in a protocol module, never a context",
-                        ))
-                    )
-                elif KIND_ROLE[block] != role and block not in extra:
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            stmt.lineno,
-                            "TB052",
-                            f"{where} is {KIND_NAME[block]}, whose home is {KIND_HOME[block]}; "
-                            "a kind lives only in its role module",
-                        ))
-                    )
-        found.extend(CONTEXT_FUNCTIONS.violations(module))
-        found.extend(CONTEXT_STATEMENTS.violations(module))
-        if role == "adapters":
-            kinds = {
-                blocks.get((module.name(), cls.name)) for cls in module.class_defs()
-            } & ADAPTER_BLOCKS
-            if len(kinds) > 1:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        1,
-                        "TB052",
-                        f"{module.name()} mixes adapter kinds; an adapters module holds one adapter kind",
-                    ))
-                )
-            expected = ADAPTER_KIND_PACKAGES.get(kind_package or "", frozenset())
-            for cls in module.class_defs():
-                block = blocks.get((module.name(), cls.name))
-                if block is None or block not in ADAPTER_BLOCKS or block in expected:
-                    continue
-                if not expected:
-                    continue
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        cls.lineno,
-                        "TB052",
-                        f"{module.name()}.{cls.name} is {KIND_NAME[block]}, and its "
-                        "package names another kind; an adapters module holds the kind "
-                        "of its kind package, because the package is what carries its reach",
-                    ))
-                )
-        return tuple(found)
-
-    def _import_violations(
-        self,
-        module: Module,
-        context: str,
-        role: str,
-        contexts: frozenset[str],
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        found.extend(module.stray_import_violations())
-        own = module.name().split(".")
-        kind_package = own[2] if len(own) >= 4 and own[1] == "adapters" else None
-        kind_reach = ADAPTER_KIND_REACH.get(kind_package or "")
-        holds_gateway = (module is not None and any(
-                    blocks.get((module.name(), cls.name)) == ("gateway") for cls in module.class_defs()
-                ))
-        if role == "domain":
-            found.extend(DOMAIN_TESSER_IMPORTS.violations(module))
-        elif role == "application":
-            found.extend(APPLICATION_TESSER_IMPORTS.violations(module))
-        elif role == "adapters":
-            found.extend(ADAPTERS_TESSER_IMPORTS.violations(module))
-        elif role == "component":
-            found.extend(COMPONENT_TESSER_IMPORTS.violations(module))
-        else:
-            found.extend(CLIENT_TESSER_IMPORTS.violations(module))
-        for edge in module.import_edges():
-            target = str(edge._target)
-            lineno = int(edge._lineno)
-            pieces = target.split(".")
-            if pieces[0] == TESSER:
-                continue
-            elif pieces[0] in contexts:
-                tail = pieces[1] if len(pieces) > 1 else ""
-                denied: list[Violation] = []
-                inner = ".".join(pieces[1:])
-                job_only = any(
-                    inner == entry or inner.startswith(f"{entry}.")
-                    for entry in JOB_ONLY_IMPORTS
-                )
-                if pieces[0] == context and job_only and kind_package != "jobs":
-                    denied.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            lineno,
-                            "TB060",
-                            f"{module.name()} imports {target}; only a job imports the "
-                            "application client and the orchestrators, because an action "
-                            "is reachable only through the engine",
-                        ))
-                    )
-                elif pieces[0] == context and role == "adapters" and kind_reach is not None:
-                    if not any(
-                        inner == allowed or inner.startswith(f"{allowed}.")
-                        for allowed in kind_reach + (f"adapters.{kind_package}",)
-                    ):
-                        denied.append(
-                            Violation(ViolationSpec(
-                                module.path(),
-                                lineno,
-                                "TB060",
-                                f"{module.name()} imports {target}; an adapters kind "
-                                "package reaches only what its kind reaches — a handler "
-                                "the context client, a job the application client, the "
-                                "orchestrators, and the ports, a gateway or a repository "
-                                "the ports",
-                            ))
-                        )
-                elif pieces[0] == context:
-                    if not (
-                        len(pieces) >= 2
-                        and (
-                            pieces[1] == role
-                            or any(
-                                inner == allowed or inner.startswith(f"{allowed}.")
-                                for allowed in SAME_CONTEXT_IMPORTS[role]
-                            )
-                        )
-                    ):
-                        denied.append(
-                            Violation(ViolationSpec(
-                                module.path(),
-                                lineno,
-                                "TB060",
-                                f"{module.name()} imports {target}; the same-context matrix is "
-                                "a role to itself, application to domain and client, adapters to "
-                                "application/ports, component to application, adapters, and client",
-                            ))
-                        )
-                elif tail != "client" or not (role == "component" or (role == "adapters" and holds_gateway)):
-                    denied.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            lineno,
-                            "TB061",
-                            f"{module.name()} imports {target}; a context reaches another context "
-                            "only through its client, and only from gateways and components",
-                        ))
-                    )
-                found.extend(denied)
-                if not denied:
-                    found.extend(edge.form_violations())
-            elif pieces[0] in ((
-                        frozenset({KERNEL_PACKAGE})
-                        | (frozenset({self._export}) if self._export is not None else frozenset())
-                    ) & frozenset(each.name().split(".")[0] for each in self._modules)) and (any(
-                        module.name() == target or module.name().startswith(target + ".")
-                        for module in self._modules
-                    )):
-                continue
-            else:
-                covered = False
-                for declared in self._imports:
-                    if target == declared or target.startswith(declared + "."):
-                        self._used_imports.add(declared)
-                        covered = True
-                        break
-                if covered:
-                    continue
-                if role in CORE_STDLIB and not (
-                    self._pure_domain_import(target)  # tesser:debt TB051
-                    if role == "domain"
-                    else (target in CORE_STDLIB[role] or pieces[0] in CORE_STDLIB[role])
-                ):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            lineno,
-                            "TB062",
-                            f"{module.name()} imports {target}; domain, client, and application "
-                            "import only their context, their kernels, their tesser package, "
-                            "and the pure stdlib",
-                        ))
-                    )
-                elif (
-                    pieces[0] in SHELL_PACKAGES
-                    and pieces[0] in (frozenset(each.name().split(".")[0] for each in self._modules))
-                    and not (
-                        role == "adapters"
-                        and pieces[0] == PROTOCOL_PACKAGE
-                        and len(module.name().split(".")) >= 3
-                        and module.name().split(".")[2] == "handlers"
-                    )
-                ):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            lineno,
-                            "TB066",
-                            f"{module.name()} imports {target}; of the app shell a context "
-                            "imports only protocol, and only from its handlers",
-                        ))
-                    )
-        return tuple(found)
-
-    def _app_import_violations(
-        self,
-        module: Module,
-        package: str,
-        contexts: frozenset[str],
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for edge in module.import_edges():
-            target = str(edge._target)
-            lineno = int(edge._lineno)
-            pieces = target.split(".")
-            tail = pieces[1] if len(pieces) > 1 else ""
-            if pieces[0] in contexts:
-                denied: list[Violation] = []
-                imported = next(
-                    (named for named in self._modules if named.name() == target), None
-                )
-                if package == "srv" and not (
-                    tail == "adapters"
-                    and (imported is not None and any(
-                                blocks.get((imported.name(), cls.name)) in HOST_KINDS for cls in imported.class_defs()
-                            ))
-                ):
-                    denied.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            lineno,
-                            "TB063",
-                            f"{module.name()} imports {target}; "
-                            "a host reaches a context only through its handlers and its jobs",
-                        ))
-                    )
-                elif package == "app" and tail not in ("component", "client", "adapters"):
-                    denied.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            lineno,
-                            "TB063",
-                            f"{module.name()} imports {target}; an app builds from "
-                            "components, clients, and adapters, never domain or application",
-                        ))
-                    )
-                found.extend(denied)
-                if not denied:
-                    found.extend(edge.form_violations())
-            elif package == "app" and pieces[0] == "srv":
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB063",
-                        f"{module.name()} imports {target}; the composition root never imports a host",
-                    ))
-                )
-            elif pieces[0] == TESTS_ROLE and pieces[0] in (frozenset(each.name().split(".")[0] for each in self._modules)):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB066",
-                        f"{module.name()} imports {target}; "
-                        "production code never imports the tests package",
-                    ))
-                )
-            elif package == "app" and pieces[0] == PROTOCOL_PACKAGE:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB066",
-                        f"{module.name()} imports {target}; "
-                        "an app composes the application and never imports protocol",
-                    ))
-                )
-        return tuple(found)
-
-    def _shell_reach_violations(self, module: Module, tier: str) -> tuple[Violation, ...]:
-        allowed = TEST_TIER_SHELL[tier]
-        tops = (frozenset(each.name().split(".")[0] for each in self._modules))
-        found: list[Violation] = []
-        for edge in module.import_edges():
-            target = str(edge._target)
-            lineno = int(edge._lineno)
-            top = target.split(".")[0]
-            if top not in SHELL_PACKAGES or top not in tops or top in allowed:
-                continue
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    lineno,
-                    "TB070",
-                    f"{module.name()} imports {target}, but a test placed in {tier} "
-                    "does not reach that package; "
-                    "a test reaches only what its placement allows",
-                ))
-            )
-        return tuple(found)
-
-    def _test_placement_violations(
-        self,
-        module: Module,
-        context: str,
-        tier: str,
-        contexts: frozenset[str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        if tier == STRAY_TIER:
-            return (
-                Violation(ViolationSpec(
-                    module.path(),
-                    1,
-                    "TB070",
-                    f"{module.name()} resolves to no test tier; "
-                    "a sibling test lives in a role package, an adapter kind package "
-                    "(handlers, gateways, repositories, jobs), or the orchestrators package",
-                )),
-            )
-        found.extend(self._shell_reach_violations(module, tier))  # tesser:debt TB051
-        if tier == ROOT_TESTS_TIER:
-            for edge in module.import_edges():
-                target = str(edge._target)
-                lineno = int(edge._lineno)
-                pieces = target.split(".")
-                if pieces[0] not in contexts:
-                    continue
-                if len(pieces) >= 2 and pieces[1] in ("component", "client"):
-                    continue
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB070",
-                        f"{module.name()} imports {target}, but a test placed in "
-                        "the root tests package reaches a context only through its "
-                        "component and client; "
-                        "a test reaches only what its placement allows",
-                    ))
-                )
-            return tuple(found)
-        if tier == KERNEL_TIER:
-            for edge in module.import_edges():
-                target = str(edge._target)
-                lineno = int(edge._lineno)
-                pieces = target.split(".")
-                if pieces[0] not in contexts:
-                    continue
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB070",
-                        f"{module.name()} imports {target}, but a test placed in "
-                        "a kernel reaches no context; "
-                        "a test reaches only what its placement allows",
-                    ))
-                )
-            return tuple(found)
-        if tier == SRV_TIER:
-            for edge in module.import_edges():
-                target = str(edge._target)
-                lineno = int(edge._lineno)
-                pieces = target.split(".")
-                if pieces[0] not in contexts:
-                    continue
-                if len(pieces) >= 3 and pieces[1] == "adapters" and pieces[2] in ("handlers", "jobs"):
-                    continue
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB070",
-                        f"{module.name()} imports {target}, but a test placed in "
-                        "srv reaches a context only through its handlers and its jobs; "
-                        "a test reaches only what its placement allows",
-                    ))
-                )
-            return tuple(found)
-        if tier == APP_TIER:
-            for edge in module.import_edges():
-                target = str(edge._target)
-                lineno = int(edge._lineno)
-                pieces = target.split(".")
-                if pieces[0] not in contexts:
-                    continue
-                if len(pieces) >= 2 and pieces[1] in ("component", "client", "adapters"):
-                    continue
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB070",
-                        f"{module.name()} imports {target}, but a test placed in "
-                        "an app reaches a context only through its component, client, "
-                        "and adapters; "
-                        "a test reaches only what its placement allows",
-                    ))
-                )
-            return tuple(found)
-        if tier == PROTOCOL_TIER:
-            for edge in module.import_edges():
-                target = str(edge._target)
-                lineno = int(edge._lineno)
-                pieces = target.split(".")
-                if pieces[0] not in contexts:
-                    continue
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB070",
-                        f"{module.name()} imports {target}, but a test placed in "
-                        "protocol reaches no context; "
-                        "a test reaches only what its placement allows",
-                    ))
-                )
-            return tuple(found)
-        reach = TEST_TIER_REACH[tier]
-        foreign = TEST_TIER_FOREIGN.get(tier, ())
-        home = TEST_TIER_HOME.get(tier)
-        if home is None:
-            own_roles = ", ".join(reach)
-        elif home[1] is None:
-            own_roles = ", ".join((home[0], *reach))
-        else:
-            own_roles = ", ".join((f"{home[0]}.{home[1]}", *reach))
-        foreign_roles = ", ".join(foreign)
-        for edge in module.import_edges():
-            target = str(edge._target)
-            lineno = int(edge._lineno)
-            pieces = target.split(".")
-            if pieces[0] == TESSER or pieces[0] not in contexts:
-                continue
-            tail = pieces[1] if len(pieces) > 1 else ""
-            if pieces[0] == context:
-                inner = ".".join(pieces[1:])
-                allowed = any(
-                    inner == entry or inner.startswith(f"{entry}.") for entry in reach
-                )
-                if not allowed and home is not None and tail == home[0]:
-                    allowed = home[1] is None or (len(pieces) >= 3 and pieces[2] == home[1])
-                at_home = (
-                    home is not None
-                    and home[1] is not None
-                    and tail == home[0]
-                    and len(pieces) >= 3
-                    and pieces[2] == home[1]
-                )
-                if allowed and tier != "jobs" and not at_home and any(
-                    inner == entry or inner.startswith(f"{entry}.")
-                    for entry in JOB_ONLY_IMPORTS
-                ):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            lineno,
-                            "TB070",
-                            f"{module.name()} imports {target}, but only a test placed in "
-                            "jobs reaches the application client and the orchestrators; "
-                            "a test reaches only what its placement allows",
-                        ))
-                    )
-                elif not allowed:
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            lineno,
-                            "TB070",
-                            f"{module.name()} imports {target}, but a test placed in "
-                            f"{tier} reaches only {own_roles} of its own context; "
-                            "a test reaches only what its placement allows",
-                        ))
-                    )
-            elif not foreign:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB070",
-                        f"{module.name()} imports {target}, but a test placed in "
-                        f"{tier} reaches no neighbouring context; "
-                        "a test reaches only what its placement allows",
-                    ))
-                )
-            elif tail not in foreign:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB070",
-                        f"{module.name()} imports {target}, but a test placed in "
-                        f"{tier} reaches only {foreign_roles} of a neighbouring context; "
-                        "a test reaches only what its placement allows",
-                    ))
-                )
-        return tuple(found)
-
-    def _eval_module_violations(
-        self,
-        module: Module,
-        blocks: dict[tuple[str, str], str],
-        contexts: frozenset[str],
-    ) -> tuple[Violation, ...]:
-        parts = module.name().split(".")
-        at_home = (
-            len(parts) >= 4
-            and parts[0] in contexts
-            and parts[1] == "adapters"
-            and EVAL_HOME in parts[2:-1]
-        )
-        if not at_home:
-            return (
-                Violation(ViolationSpec(
-                    module.path(),
-                    1,
-                    "TB070",
-                    f"{module.name()} is an eval outside a gateway; "
-                    "an eval lives only in a gateway, the one place a sampled real-model "
-                    "call is honest",
-                )),
-            )
-        return self._test_module_violations(module, blocks, contexts)  # tesser:debt TB051
-
-    def _test_module_violations(
-        self,
-        module: Module,
-        blocks: dict[tuple[str, str], str],
-        contexts: frozenset[str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        found.extend(module.stray_import_violations())
-        tier_parts = module.name().split(".")
-        tier_tops = (
-            frozenset({KERNEL_PACKAGE})
-            | (frozenset({self._export}) if self._export is not None else frozenset())
-        ) & frozenset(each.name().split(".")[0] for each in self._modules)
-        if tier_parts[0] in tier_tops and len(tier_parts) >= 2:
-            placement: tuple[str, str] | None = ("", KERNEL_TIER)
-        elif tier_parts[0] == "srv" and len(tier_parts) >= 2:
-            placement = ("", SRV_TIER)
-        elif tier_parts[0] == "app" and len(tier_parts) >= 2:
-            placement = ("", APP_TIER)
-        elif tier_parts[0] == PROTOCOL_PACKAGE and len(tier_parts) >= 2:
-            placement = ("", PROTOCOL_TIER)
-        elif tier_parts[0] == TESTS_ROLE and len(tier_parts) >= 2:
-            placement = ("", ROOT_TESTS_TIER)
-        elif len(tier_parts) < 3 or tier_parts[0] not in contexts:
-            placement = None
-        elif tier_parts[1] == TESTS_ROLE:
-            placement = (tier_parts[0], TESTS_ROLE)
-        elif tier_parts[1] not in ROLES:
-            placement = (tier_parts[0], STRAY_TIER)
-        elif tier_parts[1] == "adapters":
-            placement = (
-                (tier_parts[0], tier_parts[2])
-                if len(tier_parts) >= 4 and tier_parts[2] in ADAPTER_TEST_TIERS
-                else (tier_parts[0], STRAY_TIER)
-            )
-        elif (
-            tier_parts[1] == PORTS_PARENT_ROLE
-            and len(tier_parts) >= 4
-            and tier_parts[2] == ORCHESTRATORS_PACKAGE
-        ):
-            placement = (tier_parts[0], ORCHESTRATORS_PACKAGE)
-        else:
-            placement = (tier_parts[0], tier_parts[1])
-        if placement is None:
-            placement = ("", STRAY_TIER)
-        found.extend(self._test_placement_violations(module, placement[0], placement[1], contexts))  # tesser:debt TB051
-        for edge in module.import_edges():
-            if str(edge._target).split(".")[0] in contexts:
-                found.extend(edge.form_violations())
-        if self._export != TESSER:
-            found.extend(TEST_TESSER_IMPORTS.violations(module))
-        for stmt in module.body():
-            if isinstance(stmt, (ast.Import, ast.ImportFrom)):
-                continue
-            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                where = f"{module.name()}.{stmt.name}"
-                if stmt.name.startswith("test_"):
-                    continue
-                if (any(
-                            key is not None and TESSER_DECORATORS.get(key) == ("helper")
-                            for key in (module._resolve(decorator) for decorator in stmt.decorator_list)
-                        )):
-                    found.extend(self._helper_violations(module, where, stmt.lineno, stmt, blocks))  # tesser:debt TB051
-                    continue
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        stmt.lineno,
-                        "TB071",
-                        f"{where} is neither a test nor a declared helper; a test module holds "
-                        "tests, @ts.helper builders, and @ts.fake doubles",
-                    ))
-                )
-            elif isinstance(stmt, ast.ClassDef):
-                if self._export == TESSER:
-                    continue
-                where = f"{module.name()}.{stmt.name}"
-                if not (any(
-                            key is not None and TESSER_DECORATORS.get(key) == ("fake")
-                            for key in (module._resolve(decorator) for decorator in stmt.decorator_list)
-                        )):
-                    if stmt.name.startswith("Test"):
-                        for item in stmt.body:
-                            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                                if not item.name.startswith("test_"):
-                                    found.append(
-                                        Violation(ViolationSpec(
-                                            module.path(),
-                                            item.lineno,
-                                            "TB071",
-                                            f"{where}.{item.name} is not a test method; a test class holds only test methods",
-                                        ))
-                                    )
-                            elif isinstance(item, ast.ClassDef):
-                                found.append(
-                                    Violation(ViolationSpec(
-                                        module.path(),
-                                        item.lineno,
-                                        "TB071",
-                                        f"{where}.{item.name} is a nested class; a test class holds test methods, never nested classes",
-                                    ))
-                                )
-                            else:
-                                found.append(
-                                    Violation(ViolationSpec(
-                                        module.path(),
-                                        item.lineno,
-                                        "TB071",
-                                        f"{where} carries a loose statement in its body; a test class holds test methods, never loose statements",
-                                    ))
-                                )
-                        continue
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            stmt.lineno,
-                            "TB072",
-                            f"{where} is an undeclared class; a class in a test module is a Test-prefixed test class or declares itself with @ts.fake",
-                        ))
-                    )
-                elif not any(
-                    blocks.get(key)
-                    in (
-                        "port",
-                        "store",
-                        "client",
-                        "actions_client",
-                        "job_context",
-                        "protocol_port",
-                        "config_repository",
-                    )
-                    for key in (module._resolve(base) for base in stmt.bases)
-                    if key is not None
-                ):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            stmt.lineno,
-                            "TB072",
-                            f"{where} implements no application port, store, protocol port, "
-                            "client, or config repository; a fake implements the contract it doubles",
-                        ))
-                    )
-            else:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        stmt.lineno,
-                        "TB071",
-                        f"{module.name()} has a loose module-level statement; "
-                        "a test module holds only imports, tests, helpers, and fakes",
-                    ))
-                )
-        return tuple(found)
-
-    def _helper_violations(
-        self,
-        module: Module,
-        where: str,
-        line: int,
-        fn: ast.FunctionDef | ast.AsyncFunctionDef,
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        params = fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs
-        for arg in params:
-            if not self._allowed_annotation(module, arg.annotation, blocks, frozenset()):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        line,
-                        "TB073",
-                        f"{where} parameter {arg.arg!r} is not a primitive; "
-                        "a helper takes only defaulted primitives",
-                    ))
-                )
-        positional = fn.args.posonlyargs + fn.args.args
-        undefaulted = positional[: len(positional) - len(fn.args.defaults)]
-        missing = [arg for arg in undefaulted] + [
-            arg for arg, default in zip(fn.args.kwonlyargs, fn.args.kw_defaults) if default is None
-        ]
-        for arg in missing:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    line,
-                    "TB073",
-                    f"{where} parameter {arg.arg!r} has no default; "
-                    "a helper takes only defaulted primitives",
-                ))
-            )
-        helper_key = module._resolve(fn.returns) if fn.returns is not None else None
-        if helper_key is not None and blocks.get(helper_key) == "mapper":
-            helper_key = self._mapper_target.get(helper_key)
-        if (blocks.get(helper_key) if helper_key is not None else None) not in DATA_BLOCKS:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    line,
-                    "TB073",
-                    f"{where} returns no construction data; a helper builds a spec or a DTO",
-                ))
-            )
-        for node in ast.walk(fn):
-            if isinstance(node, (ast.If, ast.Match, ast.For, ast.While, ast.Try)):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        node.lineno,
-                        "TB073",
-                        f"{where} has control flow; a helper only constructs",
-                    ))
-                )
-        return tuple(found)
 
     def _valueobject_violations(
         self,
@@ -9469,20 +9620,6 @@ class Codebase(ts.AggregateRoot):
                 ))
             )
         return tuple(found)
-
-    @staticmethod
-    def _is_enum_auto(module: Module, value: ast.expr) -> bool:
-        if not isinstance(value, ast.Call) or value.args or value.keywords:
-            return False
-        if isinstance(value.func, ast.Attribute) and isinstance(value.func.value, ast.Name):
-            return (
-                module._package_aliases.get(value.func.value.id) == ENUM_MODULE
-                and value.func.attr == "auto"
-            )
-        if isinstance(value.func, ast.Name):
-            origin = module._imported.get(value.func.id)
-            return origin is not None and origin == (ENUM_MODULE, "auto")
-        return False
 
     @staticmethod
     def _returns_outcome(

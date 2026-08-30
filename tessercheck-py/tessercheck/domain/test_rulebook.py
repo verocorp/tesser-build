@@ -9,8 +9,8 @@ def test_a_violation_spec_carries_all_four_fields() -> None:
     checks_text = (
         "TS_NAME_BY_BLOCK: dict = {}\n"
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
-        "class Codebase:\n"
-        "    def _module_violations(self) -> None:\n"
+        "class Module:\n"
+        "    def stray_violations(self) -> None:\n"
         "        Violation(ViolationSpec('only-message; a clause'))\n"
     )
     with pytest.raises(RuntimeError, match="exactly the four"):
@@ -21,8 +21,8 @@ def test_a_violation_call_takes_one_violation_spec() -> None:
     checks_text = (
         "TS_NAME_BY_BLOCK: dict = {}\n"
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
-        "class Codebase:\n"
-        "    def _module_violations(self) -> None:\n"
+        "class Module:\n"
+        "    def stray_violations(self) -> None:\n"
         "        Violation('p', 1, 'TB040', 'a head; a clause')\n"
     )
     with pytest.raises(RuntimeError, match="exactly the four"):
@@ -33,8 +33,8 @@ def test_a_violation_spec_may_name_its_fields() -> None:
     checks_text = (
         "TS_NAME_BY_BLOCK: dict = {}\n"
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
-        "class Codebase:\n"
-        "    def _module_violations(self) -> None:\n"
+        "class Module:\n"
+        "    def stray_violations(self) -> None:\n"
         "        Violation(ViolationSpec('p', 1, code='TB040', message='a head; a clause'))\n"
     )
     rendered = rulebook.render(checks_text, (), "")
@@ -45,8 +45,8 @@ def test_a_violation_code_must_be_literal_or_bound() -> None:
     checks_text = (
         "TS_NAME_BY_BLOCK: dict = {}\n"
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
-        "class Codebase:\n"
-        "    def _module_violations(self) -> None:\n"
+        "class Module:\n"
+        "    def stray_violations(self) -> None:\n"
         "        Violation(ViolationSpec(p, 1, computed, 'head; a clause'))\n"
     )
     with pytest.raises(RuntimeError, match="neither a literal"):
@@ -57,8 +57,8 @@ def test_one_clause_carries_one_code() -> None:
     checks_text = (
         "TS_NAME_BY_BLOCK: dict = {}\n"
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
-        "class Codebase:\n"
-        "    def _module_violations(self) -> None:\n"
+        "class Module:\n"
+        "    def stray_violations(self) -> None:\n"
         "        Violation(ViolationSpec('p', 1, 'TB040', 'a head; one shared clause'))\n"
         "        Violation(ViolationSpec('p', 1, 'TB041', 'b head; one shared clause'))\n"
     )
@@ -84,8 +84,8 @@ def test_a_message_without_a_normative_clause_is_rejected() -> None:
     checks_text = (
         "TS_NAME_BY_BLOCK: dict = {}\n"
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
-        "class Codebase:\n"
-        "    def _module_violations(self) -> None:\n"
+        "class Module:\n"
+        "    def stray_violations(self) -> None:\n"
         "        Violation(ViolationSpec('p', 1, 'TB040', 'a bare head with no tail'))\n"
     )
     with pytest.raises(RuntimeError, match="normative clause"):
@@ -96,8 +96,8 @@ def test_a_clause_carrying_a_hole_is_rejected() -> None:
     checks_text = (
         "TS_NAME_BY_BLOCK: dict = {}\n"
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
-        "class Codebase:\n"
-        "    def _module_violations(self) -> None:\n"
+        "class Module:\n"
+        "    def stray_violations(self) -> None:\n"
         "        Violation(ViolationSpec('p', 1, 'TB040', f'head; a clause about {target}'))\n"
     )
     with pytest.raises(RuntimeError, match="not a literal"):
@@ -108,8 +108,8 @@ def test_a_message_hole_with_no_reader_name_is_rejected() -> None:
     checks_text = (
         "TS_NAME_BY_BLOCK: dict = {}\n"
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
-        "class Codebase:\n"
-        "    def _module_violations(self) -> None:\n"
+        "class Module:\n"
+        "    def stray_violations(self) -> None:\n"
         "        Violation(ViolationSpec('p', 1, 'TB040', f'{mystery} head; a clause'))\n"
     )
     with pytest.raises(RuntimeError, match="extend HOLE_NAMES"):
@@ -131,8 +131,8 @@ def test_a_subject_with_no_applies_to_entry_is_rejected() -> None:
 def test_a_checks_module_without_the_block_name_map_is_rejected() -> None:
     checks_text = (
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
-        "class Codebase:\n"
-        "    def _module_violations(self) -> None:\n"
+        "class Module:\n"
+        "    def stray_violations(self) -> None:\n"
         "        Violation(ViolationSpec('p', 1, 'TB040', 'head; a clause'))\n"
     )
     with pytest.raises(RuntimeError, match="TS_NAME_BY_BLOCK"):
