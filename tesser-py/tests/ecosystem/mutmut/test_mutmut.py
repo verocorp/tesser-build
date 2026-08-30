@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import re
 import shutil
@@ -17,8 +19,8 @@ _JUNK_DIRS = ("mutants", "__pycache__", ".mypy_cache", ".pytest_cache")
 
 
 def _run(
-    args: "list[str]", cwd: pathlib.Path, env: "dict[str, str]", timeout: int
-) -> "subprocess.CompletedProcess[str]":
+    args: list[str], cwd: pathlib.Path, env: dict[str, str], timeout: int
+) -> subprocess.CompletedProcess[str]:
     proc = subprocess.Popen(
         args,
         cwd=cwd,
@@ -37,7 +39,7 @@ def _run(
     return subprocess.CompletedProcess(args, proc.returncode, stdout, stderr)
 
 
-def _clean_env() -> "dict[str, str]":
+def _clean_env() -> dict[str, str]:
     env = {
         key: value
         for key, value in os.environ.items()
@@ -51,8 +53,8 @@ class _Outcome:
     def __init__(
         self,
         project: pathlib.Path,
-        env: "dict[str, str]",
-        run: "subprocess.CompletedProcess[str]",
+        env: dict[str, str],
+        run: subprocess.CompletedProcess[str],
     ) -> None:
         self._project = project
         self._env = env
@@ -104,8 +106,8 @@ def _mutmut_on(fixture: str, tmp_path: pathlib.Path) -> _Outcome:
     return _Outcome(project, env, run)
 
 
-def _fixture_files(root: pathlib.Path) -> "dict[str, bytes]":
-    files: "dict[str, bytes]" = {}
+def _fixture_files(root: pathlib.Path) -> dict[str, bytes]:
+    files: dict[str, bytes] = {}
     for path in root.rglob("*"):
         relative = path.relative_to(root)
         if any(part in _JUNK_DIRS for part in relative.parts):
