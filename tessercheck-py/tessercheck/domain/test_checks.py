@@ -12312,6 +12312,7 @@ def test_a_domain_method_takes_one_primitive_spec_or_domain_object() -> None:
                 "shop/domain/order.py",
                 "shop.domain.order",
                 "import enum\n"
+                "import typing\n"
                 "import tesser.domain as ts\n"
                 "import shop.client.client as wire\n"
                 "class Size(enum.Enum):\n"
@@ -12345,6 +12346,10 @@ def test_a_domain_method_takes_one_primitive_spec_or_domain_object() -> None:
                 "        self._line = lines[0]\n"
                 "    def restock(self, lines: 'tuple[Line, ...]') -> None:\n"
                 "        self._line = lines[0]\n"
+                "    def refill(self, lines: tuple[Line, ...] | None) -> None:\n"
+                "        self._line = Line(LineSpec(''))\n"
+                "    def reload(self, lines: typing.Optional[tuple[Line, ...]]) -> None:\n"
+                "        self._line = Line(LineSpec(''))\n"
                 "    def apply(self, request: wire.AskRequest) -> None:\n"
                 "        self._line = Line(LineSpec(request.text))\n"
                 "    def anything(self, *rest: str) -> None:\n"
@@ -12378,6 +12383,10 @@ def test_a_domain_method_takes_one_primitive_spec_or_domain_object() -> None:
         "type the domain has not named" in f
         for f in findings
     )
+    for optional in ("refill", "reload"):
+        assert any(
+            f"Order.{optional} parameter 'lines' is a container" in f for f in findings
+        ), optional
     assert any(
         "Order.apply parameter 'request' is not a primitive, a spec, or a domain object; "
         "a domain object's method takes one of those three, because a port or client "
@@ -12395,3 +12404,95 @@ def test_a_domain_method_takes_one_primitive_spec_or_domain_object() -> None:
             conforming,
             findings,
         )
+
+
+def test_a_service_decision_is_not_hidden_in_a_call_a_shadow_or_a_destructuring() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/answer.py",
+                "shop.domain.answer",
+                "import enum\n"
+                "import tesser.domain as ts\n"
+                "class Reply(ts.Outcome):\n"
+                "    YES = enum.auto()\n"
+                "    NO = enum.auto()\n"
+                "class AnswerSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Answer(ts.AggregateRoot):\n"
+                "    def __init__(self, spec: AnswerSpec) -> None:\n"
+                "        self.text = spec.text\n"
+                "    def decide(self) -> Reply:\n"
+                "        return Reply.YES\n",
+                False,
+            ),
+            (
+                "shop/domain/test_answer.py",
+                "shop.domain.test_answer",
+                "def test_answer_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "shop/hidden.py",
+                "shop.hidden",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.domain.answer as answer\n"
+                "from shop.client.client import AskRequest, AskResponse\n"
+                "class CallableService(ts.ApplicationService):\n"
+                "    def __call__(self, request: AskRequest) -> AskResponse:\n"
+                "        asked = answer.Answer(answer.AnswerSpec(text=request.text))\n"
+                "        match asked.decide():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        match asked.decide():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n"
+                "class ShadowService(ts.ApplicationService):\n"
+                "    def destructured(self, request: AskRequest) -> AskResponse:\n"
+                "        asked = answer.Answer(answer.AnswerSpec(text=request.text))\n"
+                "        [asked] = [self._peer.ask(request)]\n"
+                "        match asked.decide():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n"
+                "    def shadowed(self, request: AskRequest) -> AskResponse:\n"
+                "        def inner() -> None:\n"
+                "            request = answer.Answer(answer.AnswerSpec(text='x'))\n"
+                "        match request.decide():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "CallableService.__call__ matches a second time; a service method decides once" in f
+        for f in findings
+    ), findings
+    for method in ("ShadowService.destructured", "ShadowService.shadowed"):
+        assert any(
+            f"{method} match subject is not a call on a domain object" in f
+            for f in findings
+        ), method

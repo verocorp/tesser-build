@@ -504,6 +504,8 @@ TYPING_MODULE: typing.Final[str] = "typing"
 
 SPEC_BLOCKS: typing.Final[frozenset[str]] = frozenset({"spec", "component_spec", "app_spec"})
 
+PUBLIC_CALL: typing.Final[str] = "__call__"
+
 CONTAINER_NAMES: typing.Final[frozenset[str]] = frozenset(
     {
         "tuple",
@@ -1507,7 +1509,7 @@ class Codebase(ts.AggregateRoot):
                                 )
                             )
                             continue
-                        if item.name.startswith("_"):
+                        if item.name.startswith("_") and item.name != PUBLIC_CALL:
                             continue
                         found.extend(
                             self._signature_violations(  # tesser:debt TB051
@@ -4017,6 +4019,19 @@ class Codebase(ts.AggregateRoot):
                 head = ast.parse(head.value, mode="eval").body
             except SyntaxError:
                 return False
+        if isinstance(head, ast.BinOp) and isinstance(head.op, ast.BitOr):
+            return Codebase._is_container_annotation(
+                head.left
+            ) or Codebase._is_container_annotation(head.right)
+        if isinstance(head, ast.Subscript) and Codebase._annotation_head(head) in (
+            "Optional",
+            "Final",
+            "Annotated",
+        ):
+            wrapped = head.slice
+            if isinstance(wrapped, ast.Tuple) and wrapped.elts:
+                wrapped = wrapped.elts[0]
+            return Codebase._is_container_annotation(wrapped)
         if isinstance(head, ast.Subscript):
             head = head.value
         if isinstance(head, ast.Attribute):
@@ -7213,7 +7228,7 @@ class Codebase(ts.AggregateRoot):
             found.extend(
                 self._delegation_violations(module, method_names, where, item)  # tesser:debt TB051
             )
-            if item.name.startswith("_"):
+            if item.name.startswith("_") and item.name != PUBLIC_CALL:
                 continue
             found.extend(
                 self._signature_violations(  # tesser:debt TB051
@@ -7334,7 +7349,9 @@ class Codebase(ts.AggregateRoot):
             found.extend(
                 self._delegation_violations(module, method_names, where, item)  # tesser:debt TB051
             )
-            if item.name == "__init__" or item.name.startswith("_"):
+            if item.name == "__init__" or (
+                item.name.startswith("_") and item.name != PUBLIC_CALL
+            ):
                 continue
             found.extend(
                 self._signature_violations(  # tesser:debt TB051
@@ -7987,14 +8004,14 @@ class Codebase(ts.AggregateRoot):
         wanted: typing.Callable[[ast.expr], bool],
     ) -> frozenset[str]:
         bound: set[str] = set()
-        otherwise: set[str] = set()
-        for node in ast.walk(fn):
-            target: ast.expr | None = None
+        otherwise: set[str] = set(Codebase._parameter_names(fn))
+        for node in Codebase._own_scope(fn):
+            targets: list[ast.expr] = []
             value: ast.expr | None = None
-            if isinstance(node, ast.Assign) and len(node.targets) == 1:
-                target, value = node.targets[0], node.value
+            if isinstance(node, ast.Assign):
+                targets, value = list(node.targets), node.value
             elif isinstance(node, (ast.AnnAssign, ast.AugAssign, ast.NamedExpr)):
-                target, value = node.target, node.value
+                targets, value = [node.target], node.value
             elif isinstance(node, (ast.For, ast.AsyncFor, ast.comprehension)):
                 otherwise.update(
                     sub.id for sub in ast.walk(node.target) if isinstance(sub, ast.Name)
@@ -8009,13 +8026,45 @@ class Codebase(ts.AggregateRoot):
                             if isinstance(sub, ast.Name)
                         )
                 continue
-            if not isinstance(target, ast.Name):
+            elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                otherwise.update(
+                    (alias.asname or alias.name).split(".")[0] for alias in node.names
+                )
                 continue
-            if value is not None and wanted(value):
-                bound.add(target.id)
-            else:
-                otherwise.add(target.id)
+            elif isinstance(node, (ast.Global, ast.Nonlocal)):
+                otherwise.update(node.names)
+                continue
+            if len(targets) == 1 and isinstance(targets[0], ast.Name):
+                if value is not None and wanted(value):
+                    bound.add(targets[0].id)
+                else:
+                    otherwise.add(targets[0].id)
+                continue
+            for target in targets:
+                otherwise.update(
+                    sub.id for sub in ast.walk(target) if isinstance(sub, ast.Name)
+                )
         return frozenset(bound - otherwise)
+
+    @staticmethod
+    def _parameter_names(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> frozenset[str]:
+        args = fn.args
+        named = [arg.arg for arg in args.posonlyargs + args.args + args.kwonlyargs]
+        if args.vararg is not None:
+            named.append(args.vararg.arg)
+        if args.kwarg is not None:
+            named.append(args.kwarg.arg)
+        return frozenset(named)
+
+    @staticmethod
+    def _own_scope(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> typing.Iterator[ast.AST]:
+        stack: list[ast.AST] = list(ast.iter_child_nodes(fn))
+        while stack:
+            node = stack.pop()
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+                continue
+            yield node
+            stack.extend(ast.iter_child_nodes(node))
 
     @staticmethod
     def _is_domain_construction(

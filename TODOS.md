@@ -2,6 +2,48 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Left open by the v0.0.89.0 adversarial pass (2026-08-29, PR #148)
+
+Seventeen bypass probes were run against the new clauses — twelve mine, five
+from a Codex challenge on the branch diff. Five real holes were fixed in-wave
+(a quoted container annotation, a public `__call__` skipping every service-body
+rule, a destructuring rebind, a nested-scope shadow, and a container behind
+`| None`). Two findings were recorded rather than fixed, and one reported
+"false positive" was ruled correct behaviour.
+
+- [ ] **TB084 does not tie an arm's outcome to the method's return outcome.**
+  `match asked.decide(): case Other.YES:` — where `Other` is a *different*
+  `ts.Outcome` class than the one `decide()` returns — satisfies the new
+  "arms name an outcome member" clause. Closing it needs return-type inference
+  the walk does not have, which is the same reason "Outcome tracking through
+  locals" was ruled out of scope on 2026-08-26. `mypy --strict` rejects it
+  today (non-overlapping pattern against the declared return type), and every
+  gated tree runs `mypy --strict`, so the path is covered — but by the type
+  checker, not by the analyzer. Decide whether that is enough.
+- [ ] **A domain method's unannotated parameter is skipped.** `TB019`'s
+  parameter mirror reads annotations, so `def apply(self, request):` evades the
+  type clause (the count and `*args` clauses still fire). This is the same
+  policy the TB019 *return* rule already documents — "skips ... unannotated
+  ones (the gated trees run `mypy --strict`, which already requires the
+  annotation)" — so it is consistent rather than an oversight. Revisit only if
+  the analyzer is ever meant to stand alone without a type checker beside it.
+- [ ] **`examples/asyncpg`'s schema change is not a migration.** The `widgets`
+  table gained a `standing text NOT NULL` column in v0.0.89.0, and the
+  repository still issues `CREATE TABLE IF NOT EXISTS`, so a Postgres container
+  left over from an earlier checkout keeps the two-column table and every save
+  fails on the unknown column. CI is unaffected (a fresh service container per
+  run) and the repository sibling tests drop the table first, but the e2e does
+  not. Workaround: `DROP TABLE widgets` in the throwaway container. The repo
+  has no migration story at all — `SKILL.md` names safe change/migration
+  sequencing as deliberately out of scope — so this is a note, not a bug,
+  until that scope opens.
+
+**Ruled correct, not a defect:** the Codex pass flagged a comparison inside a
+nested `def` in a service method being reported against the service. That is
+the intended reading — a service inlines its logic (`TB082`), so a helper
+function defined inside a service method to hold the comparison is the service
+deciding with an extra step, not an exemption.
+
 ## Repository tests and the pool: two questions from the asyncpg review (2026-08-29, Chris)
 
 - [ ] **What may a repository test set up for itself?** Chris's expectation
