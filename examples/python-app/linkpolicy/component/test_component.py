@@ -29,7 +29,7 @@ def test_a_component_exposes_a_client_that_checks_a_url() -> None:
 
     resp = built.client.check(client.CheckRequest("https://ok.example/x"))
 
-    assert resp.allowed is True
+    assert resp.decision == "allowed"
     assert resp.reason == "ok"
 
 
@@ -38,7 +38,7 @@ def test_a_component_exposes_a_client_that_denies_a_blocked_host() -> None:
 
     resp = built.client.check(client.CheckRequest("https://evil.example/x"))
 
-    assert resp.allowed is False
+    assert resp.decision == "denied"
     assert resp.reason == "host 'evil.example' is blocked"
 
 
@@ -48,7 +48,7 @@ def test_a_component_wires_its_service_to_the_repository_it_built() -> None:
     built.client.check(client.CheckRequest("https://ok.example/x"))
     listed = built.client.list_verdicts(client.ListVerdictsRequest())
 
-    assert [(v.target_url, v.allowed) for v in listed.verdicts] == [("https://ok.example/x", True)]
+    assert [(v.target_url, v.decision) for v in listed.verdicts] == [("https://ok.example/x", "allowed")]
 
 
 def test_each_component_gets_its_own_repository() -> None:

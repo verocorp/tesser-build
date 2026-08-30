@@ -16,11 +16,7 @@ class PolicyVerdictGateway(ts.Gateway):
         records = tuple(
             verdict_source.VerdictRecord(
                 target_url=v.target_url,
-                decision=(
-                    verdict_source.VerdictDecision.ALLOWED
-                    if v.allowed
-                    else verdict_source.VerdictDecision.DENIED
-                ),
+                decision=verdict_source.VerdictDecision(v.decision),
                 reason=v.reason,
             )
             for v in resp.verdicts

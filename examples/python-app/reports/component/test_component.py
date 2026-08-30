@@ -67,7 +67,7 @@ def test_the_wired_client_joins_a_link_to_the_verdict_recorded_for_it() -> None:
         campaign_client.LinkView("spring-sale", "https://a.example/s", "active")
     )
     verdicts = FakeLinkPolicyClient(
-        linkpolicy_client.VerdictView("https://a.example/s", False, "host blocked")
+        linkpolicy_client.VerdictView("https://a.example/s", "denied", "host blocked")
     )
 
     component = wire.Reports(config.Config(config.Spec()), links, verdicts)

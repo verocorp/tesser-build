@@ -13,8 +13,8 @@ class CheckRequest(ts.Request):
 
 class CheckResponse(ts.Response):
 
-    def __init__(self, allowed: bool, reason: str) -> None:
-        self.allowed = allowed
+    def __init__(self, decision: str, reason: str) -> None:
+        self.decision = decision
         self.reason = reason
 
 
@@ -26,9 +26,9 @@ class ListVerdictsRequest(ts.Request):
 
 class VerdictView(ts.Response):
 
-    def __init__(self, target_url: str, allowed: bool, reason: str) -> None:
+    def __init__(self, target_url: str, decision: str, reason: str) -> None:
         self.target_url = target_url
-        self.allowed = allowed
+        self.decision = decision
         self.reason = reason
 
 

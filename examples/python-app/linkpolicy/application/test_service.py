@@ -46,7 +46,7 @@ def test_check_allows_a_url_the_policy_permits() -> None:
 
     resp = subject.check(client.CheckRequest("https://ok.example/x"))
 
-    assert resp.allowed is True
+    assert resp.decision == "allowed"
     assert resp.reason == "ok"
 
 
@@ -55,7 +55,7 @@ def test_check_denies_a_url_whose_scheme_is_not_allowed() -> None:
 
     resp = subject.check(client.CheckRequest("http://ok.example/x"))
 
-    assert resp.allowed is False
+    assert resp.decision == "denied"
     assert resp.reason == "scheme 'http' not allowed"
 
 
@@ -64,7 +64,7 @@ def test_check_denies_a_url_on_a_blocked_host() -> None:
 
     resp = subject.check(client.CheckRequest("https://evil.example/x"))
 
-    assert resp.allowed is False
+    assert resp.decision == "denied"
     assert resp.reason == "host 'evil.example' is blocked"
 
 
@@ -117,9 +117,9 @@ def test_list_verdicts_maps_every_record_to_a_view() -> None:
 
     resp = service.LinkPolicyService(repo).list_verdicts(client.ListVerdictsRequest())
 
-    assert [(v.target_url, v.allowed, v.reason) for v in resp.verdicts] == [
-        ("https://ok.example/x", True, "ok"),
-        ("https://bad.example/y", False, "host 'bad.example' is blocked"),
+    assert [(v.target_url, v.decision, v.reason) for v in resp.verdicts] == [
+        ("https://ok.example/x", "allowed", "ok"),
+        ("https://bad.example/y", "denied", "host 'bad.example' is blocked"),
     ]
 
 
@@ -130,8 +130,8 @@ def test_list_verdicts_returns_what_check_recorded() -> None:
     subject.check(client.CheckRequest("https://ok.example/x"))
     resp = subject.list_verdicts(client.ListVerdictsRequest())
 
-    assert [(v.target_url, v.allowed) for v in resp.verdicts] == [
-        ("https://ok.example/x", True)
+    assert [(v.target_url, v.decision) for v in resp.verdicts] == [
+        ("https://ok.example/x", "allowed")
     ]
 
 

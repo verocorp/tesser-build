@@ -19,24 +19,20 @@ class LinkPolicyService(ts.ApplicationService):
         verdict = self._policy.evaluate(target_url_text)
         verdict_target_url = str(verdict.target_url)
         verdict_reason = str(verdict.reason)
-        allowed = str(verdict.allowed) == "allowed"
-        decision = (
-            verdict_repository.VerdictDecision.ALLOWED
-            if allowed
-            else verdict_repository.VerdictDecision.DENIED
-        )
+        verdict_decision = str(verdict.allowed)
+        decision = verdict_repository.VerdictDecision(verdict_decision)
         record_verdict_request = verdict_repository.RecordVerdictRequest(
             target_url=verdict_target_url, decision=decision, reason=verdict_reason
         )
         self._repo.record(record_verdict_request)
-        return client.CheckResponse(allowed=allowed, reason=verdict_reason)
+        return client.CheckResponse(decision=verdict_decision, reason=verdict_reason)
 
     def list_verdicts(self, req: client.ListVerdictsRequest) -> client.ListVerdictsResponse:
         listed = self._repo.all(verdict_repository.ListVerdictsRequest())
         views: list[client.VerdictView] = []
         for record in listed.verdicts:
-            record_allowed = record.decision == verdict_repository.VerdictDecision.ALLOWED
-            view = client.VerdictView(record.target_url, record_allowed, record.reason)
+            record_decision = record.decision.value
+            view = client.VerdictView(record.target_url, record_decision, record.reason)
             views.append(view)
         listed_views = tuple(views)
         return client.ListVerdictsResponse(verdicts=listed_views)
