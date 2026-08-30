@@ -153,3 +153,24 @@ def test_a_verdict_the_domain_would_not_accept_fails_the_whole_join() -> None:
                 verdicts=(report.RecordedVerdictSpec("https://a.example/s", "allowed", ""),),
             )
         )
+
+
+def test_two_joins_of_the_same_links_and_verdicts_are_equal() -> None:
+    def joined() -> report.LinkVerdicts:
+        return report.LinkVerdicts(
+            report.LinkVerdictsSpec(
+                links=(report.LinkSpec("spring-sale", "https://a.example/s"),),
+                verdicts=(
+                    report.RecordedVerdictSpec("https://a.example/s", "denied", "host blocked"),
+                ),
+            )
+        )
+
+    other = report.LinkVerdicts(
+        report.LinkVerdictsSpec(
+            links=(report.LinkSpec("spring-sale", "https://a.example/s"),), verdicts=()
+        )
+    )
+
+    assert joined() == joined()
+    assert joined() != other

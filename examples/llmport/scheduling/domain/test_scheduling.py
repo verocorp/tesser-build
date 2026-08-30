@@ -327,3 +327,55 @@ def test_a_naming_with_a_blank_name_is_rejected() -> None:
         domain.Naming(
             domain.NamingSpec(name="  ", offered=domain.OfferSpec(labels=("mon-9am",)))
         )
+
+
+def test_naming_a_booking_that_is_past_collecting_a_name_is_rejected() -> None:
+    booking = domain.Booking(
+        domain.BookingSpec(step="confirm", name="Ada", chosen="mon-9am", offered=("mon-9am",))
+    )
+
+    with pytest.raises(ValueError, match="not available at step"):
+        booking.provide_name(
+            domain.NamingSpec(name="Grace", offered=domain.OfferSpec(labels=("tue-2pm",)))
+        )
+
+    assert str(booking.step()) == "confirm"
+
+
+def test_reoffering_before_a_slot_was_chosen_is_rejected() -> None:
+    booking = domain.Booking(
+        domain.BookingSpec(step="collect_name", name="", chosen="", offered=())
+    )
+
+    with pytest.raises(ValueError, match="not available at step"):
+        booking.reoffer(domain.OfferSpec(labels=("mon-9am",)))
+
+    assert str(booking.step()) == "collect_name"
+
+
+def test_an_offer_of_nothing_is_refused_before_the_step_is_read() -> None:
+    booking = domain.Booking(
+        domain.BookingSpec(step="confirm", name="Ada", chosen="mon-9am", offered=("mon-9am",))
+    )
+
+    with pytest.raises(ValueError, match="no slots are available"):
+        booking.provide_name(
+            domain.NamingSpec(name="Grace", offered=domain.OfferSpec(labels=()))
+        )
+
+    assert str(booking.step()) == "confirm"
+
+
+def test_a_naming_is_equal_when_it_names_the_same_customer_and_offer() -> None:
+    one = domain.Naming(
+        domain.NamingSpec(name="Ada", offered=domain.OfferSpec(labels=("mon-9am",)))
+    )
+    same = domain.Naming(
+        domain.NamingSpec(name="Ada", offered=domain.OfferSpec(labels=("mon-9am",)))
+    )
+    other = domain.Naming(
+        domain.NamingSpec(name="Grace", offered=domain.OfferSpec(labels=("mon-9am",)))
+    )
+
+    assert one == same
+    assert one != other

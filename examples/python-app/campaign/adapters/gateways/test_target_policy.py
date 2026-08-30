@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 import tesser.testing as ts
 
 import campaign.adapters.gateways.target_policy as target_policy
@@ -66,3 +67,10 @@ def test_the_gateway_asks_the_neighbour_once_per_check() -> None:
     gateway.check(port.CheckTargetRequest(target_url="https://ok.example/b"))
 
     assert client.asked == ["https://ok.example/a", "https://ok.example/b"]
+
+
+def test_a_neighbour_decision_the_gateway_knows_no_verdict_for_is_refused() -> None:
+    gateway = target_policy.LinkPolicyTargetPolicy(RecordingPolicyClient("maybe", "unsure"))
+
+    with pytest.raises(KeyError):
+        gateway.check(port.CheckTargetRequest(target_url="https://ok.example/x"))

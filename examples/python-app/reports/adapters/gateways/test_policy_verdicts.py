@@ -100,3 +100,14 @@ def test_a_failure_inside_the_policy_context_reaches_the_caller() -> None:
         policy_verdicts.PolicyVerdictGateway(verdicts).verdicts(
             verdict_source.ListVerdictsRequest()
         )
+
+
+def test_a_verdict_decision_outside_the_recorded_set_is_refused() -> None:
+    verdicts = FakeLinkPolicyClient(
+        linkpolicy_client.VerdictView("https://a.example/s", "maybe", "unsure")
+    )
+
+    with pytest.raises(ValueError):
+        policy_verdicts.PolicyVerdictGateway(verdicts).verdicts(
+            verdict_source.ListVerdictsRequest()
+        )

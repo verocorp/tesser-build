@@ -12496,3 +12496,228 @@ def test_a_service_decision_is_not_hidden_in_a_call_a_shadow_or_a_destructuring(
             f"{method} match subject is not a call on a domain object" in f
             for f in findings
         ), method
+
+
+def test_a_public_call_is_read_like_any_other_actions_or_orchestrator_method() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/calling_actions.py",
+                "shop.application.calling_actions",
+                "import tesser.application as ts\n"
+                "import shop.application.ports.quotes as quotes\n"
+                "class Calling(ts.Actions):\n"
+                "    def __init__(self, quoting: quotes.Quotes) -> None:\n"
+                "        self._quoting = quoting\n"
+                "    def __call__(self, a: quotes.QuoteRequest, b: quotes.QuoteRequest) -> int:\n"
+                "        return 0\n",
+                False,
+            ),
+            (
+                "shop/application/orchestrators/calling.py",
+                "shop.application.orchestrators.calling",
+                "import tesser.application as ts\n"
+                "import shop.application.ports.quotes as quotes\n"
+                "class Calling(ts.Orchestrator):\n"
+                "    def __init__(self, quoting: quotes.Quotes) -> None:\n"
+                "        self._quoting = quoting\n"
+                "    def __call__(self, a: quotes.QuoteRequest, b: quotes.QuoteRequest) -> int:\n"
+                "        return 0\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.calling_actions.Calling.__call__ takes 2 parameters; "
+        "an actions method takes exactly one ts.Request" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.orchestrators.calling.Calling.__call__ takes 2 parameters; "
+        "an orchestrator method takes exactly one ts.Request" in f
+        for f in findings
+    ), findings
+
+
+def test_a_domain_method_parameter_is_read_through_the_wrappers_that_hide_a_container() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/crate.py",
+                "shop.domain.crate",
+                "import typing\n"
+                "import tesser.domain as ts\n"
+                "class LineSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Line(ts.ValueObject):\n"
+                "    _text: str\n"
+                "    def __init__(self, spec: LineSpec) -> None:\n"
+                "        object.__setattr__(self, '_text', spec.text)\n"
+                "    def __str__(self) -> str:\n"
+                "        return self._text\n"
+                "class Crate(ts.AggregateRoot):\n"
+                "    def __init__(self, spec: LineSpec) -> None:\n"
+                "        self._line = Line(spec)\n"
+                "    def _rebuild(self, first: str, second: str) -> None:\n"
+                "        self._line = Line(LineSpec(first))\n"
+                "    def note(self, thing) -> None:\n"
+                "        self._line = Line(LineSpec(''))\n"
+                "    @classmethod\n"
+                "    def build(cls, text: str, more: str) -> None:\n"
+                "        return None\n"
+                "    def tag(self, *, first: str, second: str) -> None:\n"
+                "        self._line = Line(LineSpec(first))\n"
+                "    def annotated(self, lines: typing.Annotated[tuple[Line, ...], 'many']) -> None:\n"
+                "        self._line = lines[0]\n"
+                "    def sequenced(self, lines: typing.Sequence[Line]) -> None:\n"
+                "        self._line = lines[0]\n"
+                "    def bulk(self, rows: dict) -> None:\n"
+                "        self._line = Line(LineSpec(''))\n"
+                "    def odd(self, lines: 'tuple[Line, ...') -> None:\n"
+                "        self._line = Line(LineSpec(''))\n",
+                False,
+            ),
+            (
+                "shop/domain/test_crate.py",
+                "shop.domain.test_crate",
+                "def test_crate_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any("Crate._rebuild" in f and "TB019" in f for f in findings), findings
+    assert not any("Crate.note parameter" in f for f in findings), findings
+    assert any(
+        "Crate.build takes 2 parameters; a domain object's method takes one thing" in f
+        for f in findings
+    ), findings
+    assert any(
+        "Crate.tag takes 2 parameters; a domain object's method takes one thing" in f
+        for f in findings
+    ), findings
+    for wrapped in ("annotated", "sequenced", "bulk"):
+        assert any(
+            f"Crate.{wrapped} parameter 'lines' is a container" in f
+            or f"Crate.{wrapped} parameter 'rows' is a container" in f
+            for f in findings
+        ), (wrapped, findings)
+    assert not any("Crate.odd parameter 'lines' is a container" in f for f in findings), findings
+
+
+def test_a_service_decision_is_read_through_the_binding_forms_that_hide_its_subject() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/answer.py",
+                "shop.domain.answer",
+                "import enum\n"
+                "import tesser.domain as ts\n"
+                "class Reply(ts.Outcome):\n"
+                "    YES = enum.auto()\n"
+                "    NO = enum.auto()\n"
+                "class AnswerSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Answer(ts.AggregateRoot):\n"
+                "    def __init__(self, spec: AnswerSpec) -> None:\n"
+                "        self.text = spec.text\n"
+                "    def decide(self) -> Reply:\n"
+                "        return Reply.YES\n",
+                False,
+            ),
+            (
+                "shop/domain/test_answer.py",
+                "shop.domain.test_answer",
+                "def test_answer_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "shop/binding.py",
+                "shop.binding",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.domain.answer as answer\n"
+                "from shop.client.client import AskRequest, AskResponse\n"
+                "class BindingService(ts.ApplicationService):\n"
+                "    def walrus(self, request: AskRequest) -> AskResponse:\n"
+                "        (asked := answer.Answer(answer.AnswerSpec(text=request.text)))\n"
+                "        match asked.decide():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n"
+                "    def declared(self, request: AskRequest) -> AskResponse:\n"
+                "        asked: answer.Answer = answer.Answer(answer.AnswerSpec(text=request.text))\n"
+                "        match asked.decide():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n"
+                "    def looped(self, request: AskRequest) -> AskResponse:\n"
+                "        asked = answer.Answer(answer.AnswerSpec(text=request.text))\n"
+                "        for asked in ():\n"
+                "            pass\n"
+                "        match asked.decide():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n"
+                "    def managed(self, request: AskRequest) -> AskResponse:\n"
+                "        asked = answer.Answer(answer.AnswerSpec(text=request.text))\n"
+                "        with self._peer.session(request) as asked:\n"
+                "            pass\n"
+                "        match asked.decide():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n"
+                "    def comprehended(self, request: AskRequest) -> AskResponse:\n"
+                "        asked = answer.Answer(answer.AnswerSpec(text=request.text))\n"
+                "        kept = tuple(asked for asked in ())\n"
+                "        match asked.decide():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n"
+                "    def imported(self, request: AskRequest) -> AskResponse:\n"
+                "        import shop.domain.answer as asked\n"
+                "        match asked.decide():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n",
+                False,
+            ),
+        ))).violations()
+               )
+    for hidden in ("looped", "managed", "comprehended", "imported"):
+        assert any(
+            f"BindingService.{hidden} match subject is not a call on a domain object" in f
+            for f in findings
+        ), (hidden, findings)
+    for bound in ("BindingService.walrus", "BindingService.declared"):
+        assert not any(bound in f for f in findings), (bound, findings)
