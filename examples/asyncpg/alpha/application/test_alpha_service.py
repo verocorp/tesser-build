@@ -25,6 +25,14 @@ class FakeWidgetRepository(widget_repository.WidgetRepository):
         self._standing_by_name = standing_by_name
         self._saved = saved
 
+    async def add_widget(self, request: widget_repository.AddWidgetRequest) -> widget_repository.AddWidgetResponse:
+        if request.name in self._part_by_name:
+            raise errors.conflict("widget_exists", f"widget {request.name!r} is already stored")
+        self._saved.append(request.name)
+        self._part_by_name[request.name] = request.part
+        self._standing_by_name[request.name] = request.standing
+        return widget_repository.AddWidgetResponse(name=request.name)
+
     async def save_widget(self, request: widget_repository.SaveWidgetRequest) -> widget_repository.SaveWidgetResponse:
         self._saved.append(request.name)
         self._part_by_name[request.name] = request.part
@@ -153,6 +161,17 @@ class TestAlphaServiceOverACommittedTransaction:
             await service.take(client.TakeRequest(name="x", part="q"))
         assert caught.value.kind is errors.Kind.NOT_FOUND
 
+    async def test_adding_a_stored_name_conflicts_and_leaves_the_stored_widget_alone(self) -> None:
+        widget_store = FakeCommittedWidgetStore()
+        service = alpha_service.AlphaService(widget_store, FakeRefusedBetaCheck())
+        released = await service.add(client.AddRequest(name="a", part="a"))
+        with pytest.raises(errors.DomainError) as caught:
+            await service.add(client.AddRequest(name="a", part="q"))
+        assert released.standing == "released"
+        assert caught.value.kind is errors.Kind.CONFLICT
+        assert widget_store.part_by_name == {"a": "a"}
+        assert widget_store.standing_by_name == {"a": "released"}
+
     async def test_find_reports_whether_the_store_holds_the_name(self) -> None:
         service = alpha_service.AlphaService(FakeCommittedWidgetStore(), FakeOkBetaCheck())
         await service.add(client.AddRequest(name="a", part="p"))
@@ -233,7 +252,15 @@ class TestAlphaServiceMappers:
     def test_a_widget_maps_to_an_add_response(self) -> None:
         built = widget.Widget(alpha_service.MapToWidgetSpec(client.AddRequest(name="a", part="p")))
         assert alpha_service.MapToAddResponse(built).name == "a"
+        assert alpha_service.MapToAddResponse(built).part == "a"
         assert alpha_service.MapToAddResponse(built).standing == "kept"
+
+    def test_a_widget_maps_to_an_add_widget_request(self) -> None:
+        built = widget.Widget(alpha_service.MapToWidgetSpec(client.AddRequest(name="a", part="p")))
+        request = alpha_service.MapToAddWidgetRequest(built)
+        assert request.name == "a"
+        assert request.part == "a"
+        assert request.standing == "kept"
 
     def test_a_widget_maps_to_a_take_response_carrying_the_part_it_now_holds(self) -> None:
         built = widget.Widget(alpha_service.MapToWidgetSpec(client.AddRequest(name="a", part="p")))

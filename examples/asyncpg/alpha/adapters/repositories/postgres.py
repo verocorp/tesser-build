@@ -15,6 +15,13 @@ _SCHEMA: typing.Final[str] = (
     "CREATE TABLE IF NOT EXISTS widgets "
     "(name text PRIMARY KEY, part text NOT NULL, standing text NOT NULL)"
 )
+_SCHEMA_STANDING: typing.Final[str] = (
+    "ALTER TABLE widgets ADD COLUMN IF NOT EXISTS standing text NOT NULL DEFAULT 'kept'"
+)
+_ADD: typing.Final[str] = (
+    "INSERT INTO widgets (name, part, standing) VALUES ($1, $2, $3) "
+    "ON CONFLICT (name) DO NOTHING RETURNING name"
+)
 _SAVE: typing.Final[str] = (
     "INSERT INTO widgets (name, part, standing) VALUES ($1, $2, $3) "
     "ON CONFLICT (name) DO UPDATE SET part = EXCLUDED.part, standing = EXCLUDED.standing"
@@ -29,6 +36,12 @@ class PostgresWidgetRepository(ts.Repository):
 
     def __init__(self, connection: asyncpg.pool.PoolConnectionProxy[asyncpg.Record]) -> None:
         self._connection = connection
+
+    async def add_widget(self, request: widget_repository.AddWidgetRequest) -> widget_repository.AddWidgetResponse:
+        added = await self._connection.fetchval(_ADD, request.name, request.part, request.standing)
+        if added is None:
+            raise errors.conflict("widget_exists", f"widget {request.name!r} is already stored")
+        return widget_repository.AddWidgetResponse(name=request.name)
 
     async def save_widget(self, request: widget_repository.SaveWidgetRequest) -> widget_repository.SaveWidgetResponse:
         await self._connection.execute(_SAVE, request.name, request.part, request.standing)
@@ -59,6 +72,7 @@ class PostgresWidgetStore(ts.Repository):
         async with self._database.acquire() as connection:
             if not self._schema_ready:
                 await connection.execute(_SCHEMA)
+                await connection.execute(_SCHEMA_STANDING)
                 self._schema_ready = True
             async with connection.transaction():
                 yield PostgresWidgetRepository(connection)

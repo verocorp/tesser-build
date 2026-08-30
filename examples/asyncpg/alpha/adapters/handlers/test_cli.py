@@ -11,7 +11,7 @@ import protocol.cli as protocol_cli
 class FakeClient(client.Client):
 
     async def add(self, request: client.AddRequest) -> client.AddResponse:
-        return client.AddResponse(name=request.name, standing="kept")
+        return client.AddResponse(name=request.name, part=request.part, standing="kept")
 
     async def take(self, request: client.TakeRequest) -> client.TakeResponse:
         return client.TakeResponse(name=request.name, part=request.part, standing="kept")
@@ -22,7 +22,7 @@ class FakeClient(client.Client):
 
 class TestHandler:
 
-    async def test_add_prints_the_added_name(self) -> None:
+    async def test_add_prints_the_name_the_part_and_the_standing(self) -> None:
         handler = cli.Handler(FakeClient())
         response = await handler.add(protocol_cli.CliRequest(args=("a", "p")))
-        assert response.line == protocol_cli.Line(text="a")
+        assert response.line == protocol_cli.Line(text="a p kept")

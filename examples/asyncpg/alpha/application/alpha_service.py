@@ -49,6 +49,16 @@ class MapToClearanceSpec(ts.Mapper, clearance.ClearanceSpec):
         super().__init__(verdict=answer.verdict.value)
 
 
+class MapToAddWidgetRequest(ts.Mapper, widget_repository.AddWidgetRequest):
+
+    def __init__(self, added: widget.Widget) -> None:
+        super().__init__(
+            name=str(added.identity),
+            part=str(added.part.identity),
+            standing=str(added.standing),
+        )
+
+
 class MapToSaveWidgetRequest(ts.Mapper, widget_repository.SaveWidgetRequest):
 
     def __init__(self, saved: widget.Widget) -> None:
@@ -74,7 +84,11 @@ class MapToFindWidgetRequest(ts.Mapper, widget_repository.FindWidgetRequest):
 class MapToAddResponse(ts.Mapper, client.AddResponse):
 
     def __init__(self, added: widget.Widget) -> None:
-        super().__init__(name=str(added.identity), standing=str(added.standing))
+        super().__init__(
+            name=str(added.identity),
+            part=str(added.part.identity),
+            standing=str(added.standing),
+        )
 
 
 class MapToTakeResponse(ts.Mapper, client.TakeResponse):
@@ -104,7 +118,7 @@ class AlphaService(ts.ApplicationService):
             case _ as never:
                 typing.assert_never(never)
         async with self._widget_store.transaction() as widgets_repo:
-            await widgets_repo.save_widget(MapToSaveWidgetRequest(added))
+            await widgets_repo.add_widget(MapToAddWidgetRequest(added))
         return MapToAddResponse(added)
 
     async def take(self, request: client.TakeRequest) -> client.TakeResponse:

@@ -11,6 +11,20 @@ class Found(enum.Enum):
     NO = "no"
 
 
+class AddWidgetRequest(ts.Request):
+
+    def __init__(self, name: str, part: str, standing: str) -> None:
+        self.name = name
+        self.part = part
+        self.standing = standing
+
+
+class AddWidgetResponse(ts.Response):
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
 class SaveWidgetRequest(ts.Request):
 
     def __init__(self, name: str, part: str, standing: str) -> None:
@@ -52,6 +66,8 @@ class FindWidgetResponse(ts.Response):
 
 
 class WidgetRepository(ts.Port, typing.Protocol):
+
+    async def add_widget(self, request: AddWidgetRequest) -> AddWidgetResponse: ...
 
     async def save_widget(self, request: SaveWidgetRequest) -> SaveWidgetResponse: ...
 

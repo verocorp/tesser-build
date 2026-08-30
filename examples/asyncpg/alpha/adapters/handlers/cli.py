@@ -19,4 +19,6 @@ class Handler(ts.Handler):
         name = request.arg(0, "name", _ADD_USAGE)
         part = request.arg(1, "part", _ADD_USAGE)
         added = await self._client.add(client.AddRequest(name=name, part=part))
-        return cli.CliResponse(exit_code=0, line=cli.Line(text=added.name))
+        return cli.CliResponse(
+            exit_code=0, line=cli.Line(text=f"{added.name} {added.part} {added.standing}")
+        )

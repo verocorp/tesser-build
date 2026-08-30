@@ -52,6 +52,47 @@ class TestPostgresWidgetStore:
         await database.close()
         assert loaded.standing == "released"
 
+    async def test_adding_a_stored_name_conflicts_and_leaves_the_row_alone(self) -> None:
+        dsn = os.environ["ALPHA_STORAGE"]
+        connection = await asyncpg.connect(dsn)
+        await connection.execute("DROP TABLE IF EXISTS widgets")
+        await connection.close()
+        database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
+        await database.open()
+        widget_store = postgres.PostgresWidgetStore(database)
+        async with widget_store.transaction() as widgets_repo:
+            await widgets_repo.add_widget(
+                widget_repository.AddWidgetRequest(name="a", part="p", standing="released")
+            )
+        with pytest.raises(errors.DomainError) as caught:
+            async with widget_store.transaction() as widgets_repo:
+                await widgets_repo.add_widget(
+                    widget_repository.AddWidgetRequest(name="a", part="q", standing="kept")
+                )
+        async with widget_store.transaction() as widgets_repo:
+            loaded = await widgets_repo.load_widget(widget_repository.LoadWidgetRequest(name="a"))
+        await database.close()
+        assert caught.value.kind is errors.Kind.CONFLICT
+        assert loaded.part == "p"
+        assert loaded.standing == "released"
+
+    async def test_the_schema_step_adds_the_standing_column_to_an_older_table(self) -> None:
+        dsn = os.environ["ALPHA_STORAGE"]
+        connection = await asyncpg.connect(dsn)
+        await connection.execute("DROP TABLE IF EXISTS widgets")
+        await connection.execute(
+            "CREATE TABLE widgets (name text PRIMARY KEY, part text NOT NULL)"
+        )
+        await connection.execute("INSERT INTO widgets (name, part) VALUES ('old', 'p')")
+        await connection.close()
+        database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
+        await database.open()
+        widget_store = postgres.PostgresWidgetStore(database)
+        async with widget_store.transaction() as widgets_repo:
+            loaded = await widgets_repo.load_widget(widget_repository.LoadWidgetRequest(name="old"))
+        await database.close()
+        assert loaded.standing == "kept"
+
     async def test_loading_an_unknown_widget_is_not_found(self) -> None:
         dsn = os.environ["ALPHA_STORAGE"]
         connection = await asyncpg.connect(dsn)
