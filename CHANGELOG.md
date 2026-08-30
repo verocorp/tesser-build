@@ -5,6 +5,74 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.89.0] - 2026-08-29
+
+A service decides once. Anything that needs a decision goes through a domain
+object (Chris ruling 2026-08-29), and the checkers are cut against three
+services rewritten to that shape rather than against a sketch.
+
+- **A service method carries exactly one `match`**, and its subject is a call
+  on a domain object — a local bound to a construction, or the construction
+  inline. A port call, a `str(...)`, a bare attribute, or a local rebound from
+  any of those is a finding, and so is a second `match` in the same method.
+  This retires the old `TB082` subject clause ("a match subject is not a single
+  call"), which was what forced a service to branch on a port answer in the one
+  shape `TB084` forbids for an outcome — the conflict the coherence review
+  proved by probe.
+- **A service never spells a decision of its own.** A comparison, a conditional
+  expression (`x if c else y`), a boolean operator, and a comprehension's `if`
+  clause join `if` and conditional `while` as `TB082` findings. `try`/`except`
+  is deliberately out of scope; the error norm owns it.
+- **`TB084` reads the subject as well as the arms.** A `match` whose subject is
+  a domain call but whose arms are strings is a finding, so a match that should
+  have been exhaustive can no longer hide behind string patterns.
+- **A domain object's public method takes one thing.** `TB019` gains the
+  parameter mirror: at most one parameter besides `self`, and it is a primitive
+  (an enum counts), a spec, or a domain object — never a port or client DTO,
+  never a container, never two, never `*args`/`**kwargs`. Unlike the return
+  rule it reads `-> None` transitions too, which is exactly where a port DTO
+  would otherwise walk into the domain.
+- **A closed set crosses a boundary as its canonical string, never a bool**
+  (`domain-return.md` rule 8). Prose only — the existing no-bools rules carry
+  the check — but it is what the rewrites below are built on.
+
+The trees are the fixtures, and five of them moved:
+
+- `examples/minimal` and `examples/asyncpg` put the `BetaCheck` verdict through
+  the domain instead of dropping it. One `match`, on `Widget.take`; the held
+  arm asks beta and hands the answer to `Widget.clear(spec) -> None`, which
+  decides kept-vs-released and records it as a `Standing` value object. The
+  service then persists unconditionally, so a refused widget is stored *as
+  released* rather than not stored at all — `standing` goes onto the spec, the
+  save request, the load response, the `widgets` table and the client response,
+  and the Postgres e2e reloads a refused widget to prove it round-trips.
+- `examples/python-app/reports` moves the join, the "no verdict recorded"
+  default and the denied-before-allowed order onto `report.LinkVerdicts`. The
+  service is four lines with no branch of any kind, and both bool collapses are
+  gone: the port enum reaches the domain as its own value, and the client DTO
+  carries `decision: str`.
+- `examples/python-app/linkpolicy` stops comparing a `Decision` down to a bool.
+  Its client DTOs carry `decision: str`; the reports gateway rebuilds its own
+  enum from that string, and the campaign gateway — an anti-corruption boundary
+  whose peer speaks a different vocabulary — through a `Final` translation
+  table, which is what an ACL is for.
+- `examples/llmport` gives `Booking.provide_name` and `Booking.reoffer` one
+  spec each, with the `Offer` collection the domain was missing owning the "no
+  slots are available" rule, and replaces four hand-built repository requests
+  with the mapper the rulebook already asks for.
+
+Ruled deliberately, and recorded rather than fixed: a port DTO still names its
+own enum (`reports/.../verdict_source.py`), which is now the inconsistent shape
+beside the client DTOs — the ruling bans the bool, not the port enum. And the
+"new object vs transition" question is **not** prescribed: building both
+renderings showed they collapse into the same code once the answer becomes a
+transition, so the docs show both.
+
+`skills/tesser-build/` renderings walked in the same change
+(`application-services.md`, `python.md`, `domain-return.md`, `SKILL.md`;
+skill-version 62), plus the `rationale/coverage.md` rows for `TB019` and
+`TB084`.
+
 ## [0.0.88.0] - 2026-08-29
 
 The prose catches up to the code, and two guards so it stops drifting. Every

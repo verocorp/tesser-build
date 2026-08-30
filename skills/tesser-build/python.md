@@ -515,7 +515,8 @@ class Widget(ts.AggregateRoot):
                     typing.assert_never(never)
 ```
 
-  TB082 accepts a `match` subject that is one call or a local bound to one.
+  TB082 accepts a `match` subject that is a call on a domain object, or a
+  local bound to one — here `outcome`, bound and rebound by `driven.advance()`.
   A third member (`BLOCKED`) is a type error at every reader, not a redesign.
 
 ## Application services
@@ -525,9 +526,16 @@ Coordination only — no business logic. Four named steps
 dependency is a `ts.Port` `Protocol` (the analyzer requires it), every public
 method takes exactly one `ts.Request` and returns a `ts.Response`, and the
 method inlines its logic — no delegation chains, no `if`, no conditional
-`while`: the one branch a service has is a `match` on the `ts.Outcome` a
-transition returned (**Outcomes**, above), one level deep, and the one loop
-is `while True:` ended by a match arm's `break`. Every
+`while`, no comparison, no conditional expression, no `and`/`or`, no
+comprehension filter: the one branch a service has is **one** `match` on the
+`ts.Outcome` a transition returned (**Outcomes**, above), one level deep, whose
+subject is a call on a domain object, and the one loop
+is `while True:` ended by a match arm's `break`. A second decision in the same
+method is a second `match`, and a second `match` is a finding — call the port
+every time, fold the question into the first request, or make it a workflow
+(**Orchestrators, actions, jobs**, below). What an arm does after deciding is
+not itself a decision: it may drive a `-> None` transition that records the
+answer as state, and the method then persists unconditionally. Every
 translation the method needs is a **mapper** — a class that *is* the spec or
 DTO it maps to (`MapTo…`, **Application ports** below) — so the service names
 the use case and never spells a field out.

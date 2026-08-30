@@ -76,6 +76,31 @@ behavior may return. (Maintainer ruling 2026-08-08.)
    redesign. If you find yourself wanting to persist or transmit one, it was a
    status — a field, on the spec, with an exit (rule 5). (TB084.)
 
+7. **A public method takes one thing.** Besides `self`, a domain object's
+   public method takes at most one parameter, and it is a **primitive** (an
+   enum counts — it is a primitive with a name), a **spec**, or a **domain
+   object**. Never a port or client DTO, because the wire format would then
+   decide what the domain may be asked; never a container, because a
+   collection handed in is a type the domain has not named — name it (an
+   `Offer` over `tuple[Slot, ...]`) and pass that; never two, because a rule
+   about how two arguments relate belongs inside the object that owns them.
+   A spec handed to a method is *forwarded*, not read: it may only be read by
+   the `__init__` of its own object (TB083), so the method builds that object
+   and asks it. The comparison dunders and the language-fixed dunders follow
+   their protocol signatures and are out of scope. (Maintainer ruling
+   2026-08-29; TB019.)
+8. **A closed set crosses a boundary as its canonical string, never a bool.**
+   When a domain decision leaves the process — onto a port DTO, a `Client`
+   DTO, a repository row — it goes as the string its value object's canonical
+   exit produces (`"allowed"` / `"denied"`), and the receiving side rebuilds
+   its own value object or enum from it. A `bool` on the way out is the
+   collapse `value-objects.md`'s primitive-obsession check names, and it costs
+   the set its third member forever; the comparison that produces the bool is
+   also the rule the domain was supposed to own (TB082). Two DTOs on either
+   side of a boundary each name their own closed set — neither imports the
+   other's. (Maintainer ruling 2026-08-29; no clause of its own — the existing
+   no-bools rules cover the check.)
+
 ## Decisions you must make
 
 1. **Is this predicate public?** If only your own module asks, make it private
@@ -139,6 +164,11 @@ behavior may return. (Maintainer ruling 2026-08-08.)
 ones (the gated trees run `mypy --strict`, which already requires the
 annotation), reads containers through to their payload, and resolves a
 `tesser.domain`-qualified return without the library being in the analyzed tree.
+The same code carries rule 7 on the way in: a public method with more than one
+parameter, with `*args`/`**kwargs`, with a container parameter, or with a
+parameter that is neither a primitive nor a spec nor a domain object is a
+finding — and unlike the return rule it also reads a `-> None` transition,
+which is where a port DTO would otherwise walk into the domain.
 
 It also stands down where another check already owns the shape, so one leak is
 never reported twice: a bare `return self._x` belongs to TB010 (value object)
