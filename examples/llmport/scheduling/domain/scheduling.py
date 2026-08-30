@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import enum
 import typing
 
 import tesser.domain as ts
@@ -66,6 +67,37 @@ class BookingID(ts.ValueObject):
 
     def __str__(self) -> str:
         return serialization.canonical_str(self._value)
+
+
+class Resumed(ts.Outcome):
+    RESUMED = enum.auto()
+    STARTED = enum.auto()
+
+
+class ResumptionSpec(ts.Spec):
+
+    def __init__(self, presence: str) -> None:
+        self.presence = presence
+
+
+class Resumption(ts.ValueObject):
+
+    _presence: str
+
+    def __init__(self, spec: ResumptionSpec) -> None:
+        if spec.presence not in ("present", "absent"):
+            raise ValueError(f"presence {spec.presence!r} is not a presence")
+        object.__setattr__(self, "_presence", spec.presence)
+
+    def resumed(self) -> Resumed:
+        if self._presence == "present":
+            return Resumed.RESUMED
+        return Resumed.STARTED
+
+
+class Settled(ts.Outcome):
+    BOOKED = enum.auto()
+    REOFFERED = enum.auto()
 
 
 class OfferSpec(ts.Spec):
@@ -210,7 +242,7 @@ class Booking(ts.AggregateRoot):
             raise ValueError(f"not available at step {self._step}")
         self._step = Step(BOOKED)
 
-    def settle(self, reoffers: Reoffers) -> None:
+    def settle(self, reoffers: Reoffers) -> Settled:
         if str(self._step) != BOOKED:
             raise ValueError(f"not available at step {self._step}")
         for offered in reoffers.offered:
@@ -219,4 +251,5 @@ class Booking(ts.AggregateRoot):
             self._offered = offered
             self._chosen = None
             self._step = Step(CHOOSE_SLOT)
-            return
+            return Settled.REOFFERED
+        return Settled.BOOKED
