@@ -33,6 +33,9 @@ def _repo(root: pathlib.Path) -> pathlib.Path:  # tesser:debt TB073
     (root / "appone").mkdir()
     (root / "appone" / ".tesser-root").write_text("app\n")
     (root / "appone" / "requirements-dev.txt").write_text("pytest\n")
+    (root / "appone" / "pyproject.toml").write_text(
+        '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'
+    )
     (root / "docs").mkdir()
     (root / "examples" / "demo").mkdir(parents=True)
     (root / "manifest.json").write_text(
@@ -74,3 +77,12 @@ def test_a_nonexistent_root_is_a_problem_not_a_crash(tmp_path: pathlib.Path) -> 
     )
     assert len(response.problems) == 1
     assert "is not a directory" in response.problems[0]
+
+
+def test_a_stale_python_floor_is_reported_through_the_stack(tmp_path: pathlib.Path) -> None:
+    _repo(tmp_path)
+    (tmp_path / "appone" / "pyproject.toml").write_text(
+        '[project]\nname = "appone"\nrequires-python = ">=3.11"\n'
+    )
+    response = wire.Repo(config.Config(config.Spec())).client.check(client.CheckRequest(repo_root=str(tmp_path)))
+    assert any("the Python floor is 3.12" in p for p in response.problems), response.problems

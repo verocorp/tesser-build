@@ -5,6 +5,33 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.91.1] - 2026-08-30
+
+The Python floor is **3.12** (Chris ruling 2026-08-30). It already was, in
+fact: nine modules use PEP 695 generic syntax — `tesser/application/job_context.py`
+and its test, four files in `examples/durable-execution/`, three in
+`examples/minimal/` — so `import tesser.adapters` has been a `SyntaxError`
+on 3.11 for some time. Every CI job already installs 3.12 or later. What
+changed is that the declarations now say so, and a check keeps them saying so.
+
+- **`requires-python = ">=3.12"`** in the three distributions —
+  `tesser-py/pyproject.toml`, `tessercheck-py/pyproject.toml`,
+  `tessercheck-cli/pyproject.toml`. The comment on the `tesser` floor named
+  `typing.assert_never` (3.11); it names PEP 695 now, which is the real
+  constraint.
+- **`target-version = "py312"`** in `examples/python-app/ruff.toml`, which had
+  been deliberately held at the permissive `py311`. There is no permissive
+  floor left to be permissive about.
+- **The layout app checks it.** `layout/`'s reader now collects every
+  `pyproject.toml` and `ruff.toml` in the tree and the `Repo` aggregate fails
+  when any of them states a floor other than 3.12 — a stale `requires-python`,
+  a `[project]` table that states none at all, a stale ruff `target-version`,
+  an unparsable config file — or when any `python-version:` in
+  `.github/workflows/test.yml` pins below it. The floor is one constant
+  (`FLOOR` in `layout/repo/domain/rules.py`), so raising it next time is a
+  one-line change that then names every file that disagrees. Runs as step 0 of
+  `scripts/verify`, like the rest of the layout check.
+
 ## [0.0.91.0] - 2026-08-30
 
 Adapter-side mappers and engine serdes get declared kinds (Chris ruling

@@ -60,6 +60,10 @@ def _spec(
         ("appone/.tesser-root", "read", "app\n"),
     ),
     requirements: tuple[str, ...] = ("appone", "libby"),
+    floors: tuple[tuple[str, str, str, str], ...] = (
+        ("libby/pyproject.toml", "requires-python", "read", ">=3.12"),
+        ("libby/ruff.toml", "target-version", "read", "py312"),
+    ),
 ) -> rules.RepoSpec:
     return rules.RepoSpec(
         manifest=manifest,
@@ -69,6 +73,7 @@ def _spec(
         examples=examples,
         declarations=declarations,
         requirements=requirements,
+        floors=floors,
     )
 
 
@@ -303,3 +308,79 @@ def test_a_trailing_slash_app_row_is_a_problem_and_trees_survives_it() -> None:
     repo = rules.Repo(_spec(manifest=("read", rows, "")))
     assert any("has no scripts/verify case arm" in str(p.text()) for p in repo.problems())
     assert tuple(str(tree) for tree in repo.trees()) == ("appone", "libby")
+
+
+def test_a_requires_python_below_the_floor_is_a_problem() -> None:
+    floors = (("libby/pyproject.toml", "requires-python", "read", ">=3.11"),)
+    found = _texts(rules.Repo(_spec(floors=floors)))
+    assert any(
+        "libby/pyproject.toml states requires-python = '>=3.11'; the Python "
+        "floor is 3.12, so it reads '>=3.12'" in text
+        for text in found
+    ), found
+
+
+def test_a_whitespaced_requires_python_at_the_floor_is_clean() -> None:
+    floors = (("libby/pyproject.toml", "requires-python", "read", ">= 3.12"),)
+    assert _texts(rules.Repo(_spec(floors=floors))) == ()
+
+
+def test_a_distribution_without_a_requires_python_is_a_problem() -> None:
+    floors = (("libby/pyproject.toml", "requires-python", "undeclared", ""),)
+    found = _texts(rules.Repo(_spec(floors=floors)))
+    assert any(
+        "libby/pyproject.toml declares a distribution without requires-python" in text
+        for text in found
+    ), found
+
+
+def test_a_target_version_below_the_floor_is_a_problem() -> None:
+    floors = (("libby/ruff.toml", "target-version", "read", "py311"),)
+    found = _texts(rules.Repo(_spec(floors=floors)))
+    assert any(
+        "libby/ruff.toml states target-version = 'py311'" in text for text in found
+    ), found
+
+
+def test_an_unparsable_config_file_is_a_problem() -> None:
+    floors = (
+        ("libby/pyproject.toml", "requires-python", "malformed", ""),
+        ("libby/ruff.toml", "requires-python", "unreadable", ""),
+    )
+    found = _texts(rules.Repo(_spec(floors=floors)))
+    assert "libby/pyproject.toml is malformed" in found, found
+    assert "libby/ruff.toml is unreadable" in found, found
+
+
+def test_a_workflow_pin_below_the_floor_is_a_problem() -> None:
+    workflow = (
+        "read",
+        _spec().workflow[1] + "      - uses: actions/setup-python@v5\n"
+        "        with:\n"
+        "          python-version: '3.11'\n",
+    )
+    found = _texts(rules.Repo(_spec(workflow=workflow)))
+    assert any(
+        ".github/workflows/test.yml pins python-version 3.11, below the "
+        "Python floor 3.12" in text
+        for text in found
+    ), found
+
+
+def test_a_matrix_entry_below_the_floor_is_a_problem() -> None:
+    workflow = (
+        "read",
+        _spec().workflow[1] + "        python-version: ['3.11', '3.12', '3.13']\n",
+    )
+    found = _texts(rules.Repo(_spec(workflow=workflow)))
+    assert any("pins python-version 3.11" in text for text in found), found
+    assert not any("pins python-version 3.12" in text for text in found), found
+
+
+def test_a_matrix_at_and_above_the_floor_is_clean() -> None:
+    workflow = (
+        "read",
+        _spec().workflow[1] + "        python-version: ['3.12', '3.13', '3.14']\n"
+        "          python-version: ${{ matrix.python-version }}\n",
+    )
+    assert _texts(rules.Repo(_spec(workflow=workflow))) == ()

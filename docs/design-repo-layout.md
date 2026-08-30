@@ -139,7 +139,14 @@ run it with system Python. What it holds:
    repo, at any depth** — is an `app` row, so a Python tree cannot be filed
    under a kind that drops its gates;
 6. a symlinked top-level or `examples/*` directory is a failure; deeper
-   symlinks inside declared trees are the analyzer's TB045.
+   symlinks inside declared trees are the analyzer's TB045;
+7. every stated Python floor in the repo is the one floor — a `pyproject.toml`
+   with a `[project]` table states `requires-python = ">=3.12"` (and stating
+   nothing is itself a failure), a ruff `target-version` reads `py312`, and no
+   `python-version:` in `.github/workflows/test.yml` pins below 3.12. The
+   floor is one constant in `layout/repo/domain/rules.py` (`FLOOR`), so
+   raising it later is a one-line change that then names every file that
+   disagrees.
 
 The app is tested at four tiers, each reaching only what its placement
 allows: the rules have a test per failure case beside them

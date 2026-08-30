@@ -19,6 +19,10 @@ def _repo(root: pathlib.Path) -> pathlib.Path:  # tesser:debt TB073
     (root / "appone").mkdir()
     (root / "appone" / ".tesser-root").write_text("app\n")
     (root / "appone" / "requirements-dev.txt").write_text("pytest\n")
+    (root / "appone" / "pyproject.toml").write_text(
+        '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'
+    )
+    (root / "appone" / "ruff.toml").write_text('target-version = "py312"\n')
     return root
 
 
@@ -199,3 +203,73 @@ def test_an_undecodable_manifest_reports_unreadable(tmp_path: pathlib.Path) -> N
     read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
     assert read.manifest.state is repo_reader.ManifestState.UNREADABLE
     assert read.manifest.rows == ()
+
+
+def test_the_walk_reads_the_stated_python_floors(tmp_path: pathlib.Path) -> None:
+    reader = file_repository.FilesystemRepoReader()
+    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(_repo(tmp_path))))
+    stated = {(record.path, record.key, record.state, record.value) for record in read.floors}
+    assert stated == {
+        (
+            "appone/pyproject.toml",
+            repo_reader.FloorKey.REQUIRES_PYTHON,
+            repo_reader.FloorState.READ,
+            ">=3.12",
+        ),
+        (
+            "appone/ruff.toml",
+            repo_reader.FloorKey.TARGET_VERSION,
+            repo_reader.FloorState.READ,
+            "py312",
+        ),
+    }
+
+
+def test_a_pyproject_without_a_project_table_states_no_floor(tmp_path: pathlib.Path) -> None:
+    _repo(tmp_path)
+    (tmp_path / "appone" / "pyproject.toml").write_text(
+        "[tool.pytest.ini_options]\ntestpaths = [\"tests\"]\n"
+    )
+    reader = file_repository.FilesystemRepoReader()
+    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
+    assert [record.path for record in read.floors] == ["appone/ruff.toml"]
+
+
+def test_a_project_table_without_requires_python_reports_undeclared(tmp_path: pathlib.Path) -> None:
+    _repo(tmp_path)
+    (tmp_path / "appone" / "pyproject.toml").write_text('[project]\nname = "appone"\n')
+    reader = file_repository.FilesystemRepoReader()
+    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
+    states = {record.path: record.state for record in read.floors}
+    assert states["appone/pyproject.toml"] is repo_reader.FloorState.UNDECLARED
+
+
+def test_a_pyproject_ruff_table_states_the_target_version(tmp_path: pathlib.Path) -> None:
+    _repo(tmp_path)
+    (tmp_path / "appone" / "ruff.toml").unlink()
+    (tmp_path / "appone" / "pyproject.toml").write_text(
+        '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'
+        '[tool.ruff]\ntarget-version = "py312"\n'
+    )
+    reader = file_repository.FilesystemRepoReader()
+    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
+    keys = {record.key: record.value for record in read.floors}
+    assert keys[repo_reader.FloorKey.TARGET_VERSION] == "py312"
+
+
+def test_a_malformed_toml_reports_malformed(tmp_path: pathlib.Path) -> None:
+    _repo(tmp_path)
+    (tmp_path / "appone" / "ruff.toml").write_text("target-version = \n")
+    reader = file_repository.FilesystemRepoReader()
+    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
+    states = {record.path: record.state for record in read.floors}
+    assert states["appone/ruff.toml"] is repo_reader.FloorState.MALFORMED
+
+
+def test_an_undecodable_toml_reports_unreadable(tmp_path: pathlib.Path) -> None:
+    _repo(tmp_path)
+    (tmp_path / "appone" / "ruff.toml").write_bytes(b"\xff\xfe\x00x")
+    reader = file_repository.FilesystemRepoReader()
+    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
+    states = {record.path: record.state for record in read.floors}
+    assert states["appone/ruff.toml"] is repo_reader.FloorState.UNREADABLE

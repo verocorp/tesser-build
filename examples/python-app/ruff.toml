@@ -8,14 +8,14 @@
 # form, which is why it replaced `_env_reads` in tests/test_enforcement.py: the
 # hand-written detector only saw `os.getenv(...)`.
 #
-# `target-version` is the permissive floor (3.11), not CI's interpreter (3.12).
+# `target-version` is the repo's Python floor, which is also CI's interpreter.
 # Neither TID251 nor PLR1722 is version-gated, and consumers copy this tree.
 #
 # Teeth: tests/test_architecture_teeth.py injects violations and asserts this
 # config still fails on them. A widened `per-file-ignores` is otherwise a
 # silent hole — the rule stops firing and CI stays green.
 
-target-version = "py311"
+target-version = "py312"
 
 # F823 catches `x = x.Thing(...)` where `x` is also a module alias: the
 # assignment makes `x` function-local for the whole body, so the read on the

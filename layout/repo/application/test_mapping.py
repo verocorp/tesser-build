@@ -14,6 +14,8 @@ def _read(
     workflow_state: str = "read",
     declaration_state: str = "read",
     entry_form: str = "directory",
+    floor_key: str = "requires-python",
+    floor_state: str = "read",
 ) -> repo_reader.ReadRepoResponse:
     return repo_reader.ReadRepoResponse(
         manifest=repo_reader.ManifestRecord(
@@ -45,6 +47,14 @@ def _read(
             ),
         ),
         requirements=("layout",),
+        floors=(
+            repo_reader.FloorRecord(
+                path="layout/pyproject.toml",
+                key=repo_reader.FloorKey(floor_key),
+                state=repo_reader.FloorState(floor_state),
+                value=">=3.12",
+            ),
+        ),
     )
 
 
@@ -164,9 +174,48 @@ def test_empty_collections_map_to_empty_tuples() -> None:
         examples=(),
         declarations=(),
         requirements=(),
+        floors=(),
     )
 
     spec = mapping.MapToRepoSpec(read)
 
     assert spec.manifest == (domain.READ, (), "")
     assert (spec.top, spec.examples, spec.declarations, spec.requirements) == ((), (), (), ())
+    assert spec.floors == ()
+
+
+def test_every_floor_key_maps_to_its_domain_constant() -> None:
+    keys = (
+        repo_reader.FloorKey.REQUIRES_PYTHON,
+        repo_reader.FloorKey.TARGET_VERSION,
+    )
+    mapped = tuple(
+        mapping.MapToRepoSpec(_read(floor_key=key.value)).floors[0][1] for key in keys
+    )
+    assert mapped == (domain.REQUIRES_PYTHON, domain.TARGET_VERSION)
+
+
+def test_every_floor_state_maps_to_its_domain_constant() -> None:
+    states = (
+        repo_reader.FloorState.READ,
+        repo_reader.FloorState.UNDECLARED,
+        repo_reader.FloorState.UNREADABLE,
+        repo_reader.FloorState.MALFORMED,
+    )
+    mapped = tuple(
+        mapping.MapToRepoSpec(_read(floor_state=state.value)).floors[0][2]
+        for state in states
+    )
+    assert mapped == (
+        domain.READ,
+        domain.UNDECLARED,
+        domain.UNREADABLE,
+        domain.MALFORMED,
+    )
+
+
+def test_the_spec_carries_the_floor_path_and_value_the_reader_gave() -> None:
+    spec = mapping.MapToRepoSpec(_read())
+    assert spec.floors == (
+        ("layout/pyproject.toml", domain.REQUIRES_PYTHON, domain.READ, ">=3.12"),
+    )

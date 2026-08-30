@@ -17,6 +17,8 @@ MALFORMED: typing.Final[str] = "malformed"
 
 MISSHAPEN: typing.Final[str] = "misshapen"
 
+UNDECLARED: typing.Final[str] = "undeclared"
+
 DIRECTORY: typing.Final[str] = "directory"
 
 SYMLINK: typing.Final[str] = "symlink"
@@ -31,9 +33,26 @@ DECLARATION: typing.Final[str] = ".tesser-root"
 
 REQUIREMENTS: typing.Final[str] = "requirements-dev.txt"
 
+FLOOR: typing.Final[str] = "3.12"
+
+REQUIRES_PYTHON: typing.Final[str] = "requires-python"
+
+TARGET_VERSION: typing.Final[str] = "target-version"
+
+FLOOR_LITERALS: typing.Final[dict[str, str]] = {
+    REQUIRES_PYTHON: f">={FLOOR}",
+    TARGET_VERSION: f"py{FLOOR.replace('.', '')}",
+}
+
 ARM_SHAPE: typing.Final[re.Pattern[str]] = re.compile(
     r"^\s*([a-z0-9-]+)\)\s+(run_[a-z0-9_]+)\s", re.MULTILINE
 )
+
+PYTHON_PIN: typing.Final[re.Pattern[str]] = re.compile(
+    r"^\s*python-version:\s*(.+)$", re.MULTILINE
+)
+
+VERSION_TOKEN: typing.Final[re.Pattern[str]] = re.compile(r"\d+\.\d+")
 
 
 class Text(ts.ValueObject):
@@ -86,6 +105,7 @@ class RepoSpec(ts.Spec):
         examples: tuple[tuple[str, str], ...],
         declarations: tuple[tuple[str, str, str], ...],
         requirements: tuple[str, ...],
+        floors: tuple[tuple[str, str, str, str], ...],
     ) -> None:
         self.manifest = manifest
         self.verify = verify
@@ -94,6 +114,7 @@ class RepoSpec(ts.Spec):
         self.examples = examples
         self.declarations = declarations
         self.requirements = requirements
+        self.floors = floors
 
 
 class Repo(ts.AggregateRoot):
@@ -106,6 +127,7 @@ class Repo(ts.AggregateRoot):
         self._examples = spec.examples
         self._declarations = spec.declarations
         self._requirements = spec.requirements
+        self._floors = spec.floors
 
     def problems(self) -> tuple[Problem, ...]:
         state, manifest_rows, note = self._manifest
@@ -225,6 +247,34 @@ class Repo(ts.AggregateRoot):
             )
             for key in sorted(self._requirements)
             if rows.get(key) != KIND_APP
+        )
+        for path, floor_key, floor_state, value in sorted(self._floors):
+            literal = FLOOR_LITERALS[floor_key]
+            if floor_state == UNDECLARED:
+                found.append(
+                    Problem(
+                        f"{path} declares a distribution without {floor_key}; "
+                        f"every distribution states the Python floor as '{literal}'"
+                    )
+                )
+            elif floor_state != READ:
+                found.append(Problem(f"{path} is {floor_state}"))
+            elif value.replace(" ", "") != literal:
+                found.append(
+                    Problem(
+                        f"{path} states {floor_key} = '{value}'; the Python floor "
+                        f"is {FLOOR}, so it reads '{literal}'"
+                    )
+                )
+        floor_parts = tuple(int(part) for part in FLOOR.split("."))
+        found.extend(
+            Problem(
+                f".github/workflows/test.yml pins python-version {token}, "
+                f"below the Python floor {FLOOR}"
+            )
+            for pin in PYTHON_PIN.finditer(workflow_text)
+            for token in VERSION_TOKEN.findall(pin.group(1))
+            if tuple(int(part) for part in token.split(".")) < floor_parts
         )
         return tuple(found)
 

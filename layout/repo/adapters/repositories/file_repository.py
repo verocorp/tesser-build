@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import tomllib
 import typing
 
 import tesser.adapters as ts
@@ -34,6 +35,10 @@ DECLARATION: typing.Final[str] = ".tesser-root"
 
 REQUIREMENTS: typing.Final[str] = "requirements-dev.txt"
 
+PYPROJECT: typing.Final[str] = "pyproject.toml"
+
+RUFF: typing.Final[str] = "ruff.toml"
+
 
 class FilesystemRepoReader(ts.Repository):
 
@@ -56,9 +61,11 @@ class FilesystemRepoReader(ts.Repository):
                 examples=(),
                 declarations=(),
                 requirements=(),
+                floors=(),
             )
         declarations: list[repo_reader.DeclarationRecord] = []
         requirements: list[str] = []
+        configs: list[pathlib.Path] = []
         pending = [base]
         while pending:
             walked = pending.pop()
@@ -91,6 +98,64 @@ class FilesystemRepoReader(ts.Repository):
                     )
                 elif entry.name == REQUIREMENTS and not entry.is_dir():
                     requirements.append(str(entry.parent.relative_to(base)))
+                elif entry.name in (PYPROJECT, RUFF) and not entry.is_dir():
+                    configs.append(entry)
+        floors: list[repo_reader.FloorRecord] = []
+        for config in configs:
+            config_path = str(config.relative_to(base))
+            try:
+                stated = tomllib.loads(config.read_text(encoding="utf-8-sig"))
+            except (UnicodeDecodeError, OSError):
+                floors.append(
+                    repo_reader.FloorRecord(
+                        path=config_path,
+                        key=repo_reader.FloorKey.REQUIRES_PYTHON,
+                        state=repo_reader.FloorState.UNREADABLE,
+                        value="",
+                    )
+                )
+                continue
+            except tomllib.TOMLDecodeError:
+                floors.append(
+                    repo_reader.FloorRecord(
+                        path=config_path,
+                        key=repo_reader.FloorKey.REQUIRES_PYTHON,
+                        state=repo_reader.FloorState.MALFORMED,
+                        value="",
+                    )
+                )
+                continue
+            project = stated.get("project")
+            if isinstance(project, dict):
+                declared = project.get("requires-python")
+                floors.append(
+                    repo_reader.FloorRecord(
+                        path=config_path,
+                        key=repo_reader.FloorKey.REQUIRES_PYTHON,
+                        state=(
+                            repo_reader.FloorState.READ
+                            if isinstance(declared, str)
+                            else repo_reader.FloorState.UNDECLARED
+                        ),
+                        value=declared if isinstance(declared, str) else "",
+                    )
+                )
+            if config.name == PYPROJECT:
+                tool = stated.get("tool")
+                ruff = tool.get("ruff") if isinstance(tool, dict) else None
+            else:
+                ruff = stated
+            if isinstance(ruff, dict):
+                target = ruff.get("target-version")
+                if isinstance(target, str):
+                    floors.append(
+                        repo_reader.FloorRecord(
+                            path=config_path,
+                            key=repo_reader.FloorKey.TARGET_VERSION,
+                            state=repo_reader.FloorState.READ,
+                            value=target,
+                        )
+                    )
         try:
             manifest_text = (base / "manifest.json").read_text(encoding="utf-8-sig")
         except FileNotFoundError:
@@ -222,4 +287,5 @@ class FilesystemRepoReader(ts.Repository):
             examples=tuple(examples),
             declarations=tuple(declarations),
             requirements=tuple(requirements),
+            floors=tuple(floors),
         )

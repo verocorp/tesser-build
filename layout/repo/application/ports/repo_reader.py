@@ -64,6 +64,29 @@ class DeclarationRecord(ts.Response):
         self.text = text
 
 
+class FloorKey(enum.Enum):
+    REQUIRES_PYTHON = "requires-python"
+    TARGET_VERSION = "target-version"
+
+
+class FloorState(enum.Enum):
+    READ = "read"
+    UNDECLARED = "undeclared"
+    UNREADABLE = "unreadable"
+    MALFORMED = "malformed"
+
+
+class FloorRecord(ts.Response):
+
+    def __init__(
+        self, path: str, key: FloorKey, state: FloorState, value: str
+    ) -> None:
+        self.path = path
+        self.key = key
+        self.state = state
+        self.value = value
+
+
 class ReadRepoRequest(ts.Request):
 
     def __init__(self, repo_root: str) -> None:
@@ -81,6 +104,7 @@ class ReadRepoResponse(ts.Response):
         examples: tuple[EntryRecord, ...],
         declarations: tuple[DeclarationRecord, ...],
         requirements: tuple[str, ...],
+        floors: tuple[FloorRecord, ...],
     ) -> None:
         self.manifest = manifest
         self.verify = verify
@@ -89,6 +113,7 @@ class ReadRepoResponse(ts.Response):
         self.examples = examples
         self.declarations = declarations
         self.requirements = requirements
+        self.floors = floors
 
 
 class RepoReader(ts.Port, typing.Protocol):
