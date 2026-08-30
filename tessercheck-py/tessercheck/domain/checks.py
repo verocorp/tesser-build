@@ -31,6 +31,8 @@ TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.adapters", "Gateway"): "gateway",
     ("tesser.adapters", "Handler"): "handler",
     ("tesser.adapters", "Job"): "job",
+    ("tesser.adapters", "Mapper"): "mapper",
+    ("tesser.adapters", "Serde"): "serde",
     ("tesser.adapters", "JobContext"): "job_context",
     ("tesser.testing", "JobContext"): "job_context",
     ("tesser.component", "Component"): "component",
@@ -112,8 +114,35 @@ ADAPTER_KIND_PACKAGES: typing.Final[dict[str, frozenset[str]]] = {
     "handlers": frozenset({"handler"}),
     "gateways": frozenset({"gateway"}),
     "repositories": frozenset({"repository"}),
-    "jobs": frozenset({"job", "job_context"}),
+    "jobs": frozenset({"job", "job_context", "serde"}),
 }
+
+SERDE_BLOCK: typing.Final[str] = "serde"
+
+ADAPTER_PLACED_BLOCKS: typing.Final[frozenset[str]] = ADAPTER_BLOCKS | frozenset({SERDE_BLOCK})
+
+SERDE_METHODS: typing.Final[tuple[str, ...]] = ("serialize", "deserialize")
+
+SERDE_HELD: typing.Final[frozenset[str]] = frozenset({"type", "Type"})
+
+SERDE_DECISIONS: typing.Final[tuple[type[ast.stmt | ast.expr], ...]] = (
+    ast.If,
+    ast.IfExp,
+    ast.Match,
+    ast.While,
+    ast.For,
+    ast.AsyncFor,
+    ast.Try,
+    ast.TryStar,
+    ast.BoolOp,
+    ast.Compare,
+    ast.ListComp,
+    ast.SetComp,
+    ast.DictComp,
+    ast.GeneratorExp,
+    ast.Assert,
+    ast.Lambda,
+)
 
 ADAPTER_KIND_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "handlers": ("client",),
@@ -157,9 +186,14 @@ KIND_ROLE: typing.Final[dict[str, str]] = {
     "handler": "adapters",
     "job": "adapters",
     "job_context": "adapters",
+    "serde": "adapters",
     "component": "component",
     "component_config": "component",
     "component_spec": "component",
+}
+
+KIND_EXTRA_ROLES: typing.Final[dict[str, frozenset[str]]] = {
+    "mapper": frozenset({"adapters"}),
 }
 
 KIND_HOME: typing.Final[dict[str, str]] = {
@@ -190,6 +224,7 @@ KIND_NAME: typing.Final[dict[str, str]] = {
     "handler": "an inbound handler",
     "job": "a job",
     "job_context": "a job context",
+    "serde": "a serde",
     "component": "a component",
     "component_config": "a component config",
     "component_spec": "a component config spec",
@@ -1579,6 +1614,8 @@ class Codebase(ts.AggregateRoot):
                         )
                 elif block == "mapper":
                     found.extend(self._mapper_violations(module, cls, blocks))  # tesser:debt TB051
+                elif block == SERDE_BLOCK:
+                    found.extend(self._serde_violations(module, cls))  # tesser:debt TB051
                 elif block == "actions":
                     found.extend(self._actions_violations(module, cls, blocks))  # tesser:debt TB051
                 elif block == "orchestrator":
@@ -5541,7 +5578,11 @@ class Codebase(ts.AggregateRoot):
                             "a host lives in srv and a protocol kind in a protocol module, never a context",
                         ))
                     )
-                elif KIND_ROLE[block] != role and block not in extra:
+                elif (
+                    KIND_ROLE[block] != role
+                    and role not in KIND_EXTRA_ROLES.get(block, frozenset())
+                    and block not in extra
+                ):
                     found.append(
                         Violation(ViolationSpec(
                             module.path(),
@@ -5578,7 +5619,25 @@ class Codebase(ts.AggregateRoot):
             expected = ADAPTER_KIND_PACKAGES.get(kind_package or "", frozenset())
             for cls in module.class_defs():
                 block = blocks.get((module.name(), cls.name))
-                if block is None or block not in ADAPTER_BLOCKS or block in expected:
+                if block is None:
+                    continue
+                where = f"{module.name()}.{cls.name}"
+                if (
+                    block != SERDE_BLOCK
+                    and block in (ADAPTER_PLACED_BLOCKS | frozenset({"mapper"}))
+                    and any(module._resolve(base) not in blocks for base in cls.bases)
+                ):
+                    found.append(
+                        Violation(ViolationSpec(
+                            module.path(),
+                            cls.lineno,
+                            "TB052",
+                            f"{where} subclasses a base the tree does not declare; only a "
+                            "serde subclasses a base from outside the tree, because the "
+                            "engine is the caller and the serde is the shape it calls",
+                        ))
+                    )
+                if block not in ADAPTER_PLACED_BLOCKS or block in expected:
                     continue
                 if not expected:
                     continue
@@ -5587,7 +5646,7 @@ class Codebase(ts.AggregateRoot):
                         module.path(),
                         cls.lineno,
                         "TB052",
-                        f"{module.name()}.{cls.name} is {KIND_NAME[block]}, and its "
+                        f"{where} is {KIND_NAME[block]}, and its "
                         "package names another kind; an adapters module holds the kind "
                         "of its kind package, because the package is what carries its reach",
                     ))
@@ -6738,10 +6797,161 @@ class Codebase(ts.AggregateRoot):
                     )
         return tuple(found)
 
+    @staticmethod
+    def _empty_test(node: ast.expr) -> bool:
+        if isinstance(node, ast.Name):
+            return True
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            return isinstance(node.operand, ast.Name)
+        if isinstance(node, ast.Compare) and len(node.ops) == 1:
+            return (
+                isinstance(node.ops[0], (ast.Is, ast.IsNot))
+                and isinstance(node.left, ast.Name)
+                and isinstance(node.comparators[0], ast.Constant)
+                and node.comparators[0].value is None
+            )
+        return False
+
+    def _serde_violations(self, module: Module, cls: ast.ClassDef) -> tuple[Violation, ...]:
+        where = f"{module.name()}.{cls.name}"
+        found: list[Violation] = []
+        if len(cls.type_params) != 1:
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    cls.lineno,
+                    "TB081",
+                    f"{where} declares {len(cls.type_params)} type parameters; a serde names "
+                    "one type parameter, the shape it carries in both directions",
+                ))
+            )
+        methods = [
+            item
+            for item in cls.body
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+        declared = {item.name for item in methods}
+        for member in SERDE_METHODS:
+            if member in declared:
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    cls.lineno,
+                    "TB081",
+                    f"{where} declares no {member}; a serde declares serialize and "
+                    "deserialize and nothing else, because those two are what the engine calls",
+                ))
+            )
+        for item in cls.body:
+            if isinstance(item, ast.Pass):
+                continue
+            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        item.lineno,
+                        "TB081",
+                        f"{where} carries a class-level statement; a serde holds its two "
+                        "calls and the target type it is built with, and nothing else",
+                    ))
+                )
+                continue
+            if item.name in SERDE_METHODS or item.name == "__init__":
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    item.lineno,
+                    "TB081",
+                    f"{where}.{item.name} is a method; a serde declares serialize and "
+                    "deserialize and nothing else, because those two are what the engine calls",
+                ))
+            )
+        held: set[str] = set()
+        for item in methods:
+            if item.name != "__init__":
+                continue
+            for arg in (
+                list(item.args.posonlyargs) + list(item.args.args) + list(item.args.kwonlyargs)
+            ):
+                if arg.arg == "self":
+                    continue
+                if (
+                    arg.annotation is not None
+                    and self._annotation_head(arg.annotation) in SERDE_HELD  # tesser:debt TB051
+                ):
+                    held.add(arg.arg)
+                    continue
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        arg.lineno,
+                        "TB081",
+                        f"{where}.__init__ parameter {arg.arg!r} is not a target type; a serde "
+                        "is built with at most the type it deserializes into, because anything "
+                        "else is state the engine cannot see",
+                    ))
+                )
+        for item in methods:
+            for node in ast.walk(item):
+                targets: list[ast.expr] = []
+                if isinstance(node, ast.Assign):
+                    targets = list(node.targets)
+                elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
+                    targets = [node.target]
+                for leaf in targets:
+                    if not isinstance(leaf, ast.Attribute):
+                        continue
+                    if not (isinstance(leaf.value, ast.Name) and leaf.value.id == "self"):
+                        continue
+                    if (
+                        item.name == "__init__"
+                        and isinstance(node, ast.Assign)
+                        and isinstance(node.value, ast.Name)
+                        and node.value.id in held
+                    ):
+                        continue
+                    field = leaf.attr
+                    found.append(
+                        Violation(ViolationSpec(
+                            module.path(),
+                            leaf.lineno,
+                            "TB081",
+                            f"{where} stores {field!r}; a serde is built with at most the type "
+                            "it deserializes into, because anything else is state the engine "
+                            "cannot see",
+                        ))
+                    )
+        for item in methods:
+            if item.name not in SERDE_METHODS:
+                continue
+            allowed: set[int] = set()
+            for node in ast.walk(item):
+                if isinstance(node, ast.If) and self._empty_test(node.test):  # tesser:debt TB051
+                    allowed.update(id(sub) for sub in ast.walk(node.test))
+                    allowed.add(id(node))
+            for node in ast.walk(item):
+                if id(node) in allowed or not isinstance(node, SERDE_DECISIONS):
+                    continue
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        node.lineno,
+                        "TB082",
+                        f"{where}.{item.name} decides; a serde branches only on the empty "
+                        "payload, because anything else is a decision that belongs where the "
+                        "domain can see it",
+                    ))
+                )
+        return tuple(found)
+
     def _mapper_violations(
         self, module: Module, cls: ast.ClassDef, blocks: dict[tuple[str, str], str]
     ) -> tuple[Violation, ...]:
         where = f"{module.name()}.{cls.name}"
+        parts = module.name().split(".")
+        adapter_side = len(parts) > 1 and parts[1] == "adapters"
         found: list[Violation] = []
         if not cls.name.startswith(MAPPER_PREFIX):
             found.append(
@@ -6878,7 +7088,7 @@ class Codebase(ts.AggregateRoot):
                         ))
                     )
                     continue
-                if primitive_leaf(arg.annotation):
+                if primitive_leaf(arg.annotation) and not adapter_side:
                     found.append(
                         Violation(ViolationSpec(
                             module.path(),

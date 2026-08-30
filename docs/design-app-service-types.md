@@ -128,9 +128,15 @@ in the ports module, and both ends import it.
   `adapters/jobs/restate.py`, beside the decorators that bind it (the
   workflow gateway's sibling test decorates its throwaway handler over a
   serde stand-in defined inside the test, since a gateway test cannot reach
-  `jobs/`) and carries the wave's one remaining `tesser:debt TB052`: every context
-  class must declare a `ts.*` base, `restate.serde.Serde` is an ABC, and no
-  adapter serde kind exists yet — recorded in `TODOS.md`.
+  `jobs/`). It carried the wave's one remaining `tesser:debt TB052` — every
+  context class must declare a `ts.*` base, and `restate.serde.Serde` is an
+  ABC — until the 2026-08-30 ruling named the kind: `tesser.adapters.Serde`,
+  admitted in `adapters/jobs/`, declaring exactly `serialize` and
+  `deserialize` over one type parameter, holding at most the target type, and
+  branching on nothing but the empty payload. It is the one adapter class
+  allowed a base from outside the tree, because the engine is the caller, so
+  the class reads `class RecordSerde[T](ts.Serde, restate.serde.Serde[T])`
+  and the marker is gone.
   What that serde has to be (codex #9): type-directed and recursive, not
   "JSON of `__init__` fields". Port DTO fields may be primitives, nested
   DTOs, tuples, and `enum.Enum` members (TB080); Optional and bool are

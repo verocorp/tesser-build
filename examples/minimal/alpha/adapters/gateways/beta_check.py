@@ -4,10 +4,9 @@ import tesser.adapters as ts
 
 import alpha.application.ports.beta_check as beta_check
 import beta.client.client as beta_client
-import tesser.application as application  # tesser:debt TB050
 
 
-class MapToCheckResponse(application.Mapper, beta_check.CheckResponse):  # tesser:debt TB052
+class MapToCheckResponse(ts.Mapper, beta_check.CheckResponse):
 
     def __init__(self, answer: beta_client.CheckResponse) -> None:
         super().__init__(

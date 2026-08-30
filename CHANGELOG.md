@@ -5,6 +5,82 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.91.0] - 2026-08-30
+
+Adapter-side mappers and engine serdes get declared kinds (Chris ruling
+2026-08-30), which empties the last three `tesser:debt` markers out of the
+example trees.
+
+- **`tesser.adapters.Mapper`** carries the same contract as
+  `tesser.application.Mapper` — a mapper *is* its target: `MapToX(ts.Mapper, X)`,
+  one `super().__init__`, stores nothing, no other method. `TB052`'s kind → role
+  table now admits `mapper` in an `adapters` role module as well as
+  `application`, so a gateway or repository that ends in `return MapToX(answer)`
+  imports only `tesser.adapters`.
+- **A mapper in an adapters module may take a primitive** (`TB080` carve-out).
+  A repository wrapping a client that hands back a `bool` or a row value is the
+  normal case, and `MapToHasKeyResponse(result: bool)` is what it looks like.
+  The application-side rule is unchanged: a mapper there takes whole objects,
+  never a field already pulled off one.
+- **`tesser.adapters.Serde`** is a new kind, admitted in `adapters/jobs/`
+  (`TB052`). It declares exactly `serialize` and `deserialize` over **one type
+  parameter**, may hold at most the target type it was built with, and branches
+  on nothing beyond the empty/None case — a serde with decision logic is a
+  finding (`TB081`, `TB082`). It is also the **one adapter class allowed a base
+  from outside the tree**: the engine is the caller and the SDK's ABC is the
+  shape it calls, so `class RecordSerde[T](ts.Serde, restate.serde.Serde[T])`
+  is legal and every other adapter class subclassing something the tree does
+  not declare is a `TB052` finding.
+- Markers deleted: `TB050`/`TB052`/`TB080` in
+  `examples/minimal/beta/adapters/repositories/memory.py`, `TB050`/`TB052` in
+  `examples/minimal/alpha/adapters/gateways/beta_check.py`, and `TB052` in
+  `examples/durable-execution/ordering/adapters/jobs/restate.py`. The
+  durable-execution tree now runs the analyzer with no markers at all.
+
+### Also here: three debt-wave PRs that merged without release notes
+
+Each retired markers by moving code to a conforming placement rather than by
+widening a rule; no analyzer rule changed in any of the three.
+
+- **#151 — five marker lines in the example trees, across three `TODOS.md`
+  items.** The `JSONObject = dict[str, object]` alias is gone from
+  `examples/python-app/protocol/http.py` and `examples/errorspy/protocol/http.py`
+  (`TB051` ×2), inlined at all six annotations, because the only
+  analyzer-clean spelling is the one `mypy --strict` rejects as
+  `[valid-type]` — `python.md`'s protocol illustration follows, so a consumer
+  copying it no longer copies a debt-marked shape. `python-app`'s
+  `tests/test_shape.py` is cut back to the structural half tessercheck cannot
+  assert (every discovered context owns `domain`, `application`, `component`
+  and exposes a `Client`), deleting three tests that duplicated sibling
+  handler coverage and one that re-implemented the host's exception ladder
+  inside itself (`TB050` ×1, `TB070` ×2). The two `tesser:debt-file TB041`
+  markers on `tests/support.py` and `tests/discovery.py` stay: the blocking
+  rule for each candidate home — `TB041`, `TB065`, `TB040`, `TB071`/`TB072`,
+  `TB073` — is now written into `TODOS.md` so the next reader does not
+  re-derive it.
+- **#152 — four `TB051` module-function markers in `tessercheck-py` itself.**
+  `srv/cli/main.py` and `srv/cli/rules.py` trade their module-level `run(argv)`
+  for `MainHost`/`RulesHost` `ts.Host` classes, the shape
+  `examples/python-app/srv/cli/main.py` and `layout/srv/cli/` already use;
+  `application/mapping.py`'s `findings()` becomes
+  `MapToCheckResponse(ts.Mapper, client.CheckResponse)`; and
+  `domain/rulebook.py`'s `render()` becomes a `Rulebook` value object over a
+  `RulebookSpec`, with `__str__` as its sole primitive exit, because a
+  domain-role module holds only domain kinds. `roadmap/generate.py` imports
+  the rulebook directly and was updated with the other call sites.
+- **#153 — four markers in `examples/llmport`.** The three module-level view
+  functions in `scheduling/application/views.py` (`TB051` ×3) each got the home
+  the 2026-08-29 ruling gives it: `began` was a mapping, so it is
+  `MapToBegunBookingSpec(ts.Mapper, domain.BookingSpec)`; the two `*_reply`
+  functions were decisions, so they went to the class that owns the fact they
+  branched on — a new `Resumption` value object answering `Resumed`, and
+  `Booking.settle` now returning the `Settled` outcome it was already
+  performing. Both service methods carry exactly one `match`, closed by
+  `typing.assert_never`. The `TB074` marker on `srv/voice/agent.py` is retired
+  by a real sibling test rather than a shim: `livekit-agents` joins
+  `requirements-dev.txt` and `srv/voice/test_agent.py` drives the actual
+  `livekit.agents.Agent` over hand-written `@ts.fake` doubles.
+
 ## [0.0.90.1] - 2026-08-30
 
 `ts.Record` stopped rejecting a class-level default on CPython 3.14 — the gap

@@ -11535,6 +11535,192 @@ def test_an_adapters_module_lives_in_the_kind_package_it_names() -> None:
     )
 
 
+def test_an_adapters_mapper_is_admitted_and_takes_a_librarys_primitive() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/repositories/memory.py",
+                "shop.adapters.repositories.memory",
+                "import tesser.adapters as ts\n"
+                "import shop.application.ports.catalog as catalog\n"
+                "class MapToLookupResponse(ts.Mapper, catalog.LookupResponse):\n"
+                "    def __init__(self, result: str) -> None:\n"
+                "        super().__init__(text=result)\n"
+                "class MemoryCatalog(ts.Repository):\n"
+                "    def lookup(self, request: catalog.LookupRequest)"
+                " -> catalog.LookupResponse:\n"
+                "        return MapToLookupResponse(request.text)\n",
+                False,
+            ),
+            (
+                "shop/adapters/repositories/test_memory.py",
+                "shop.adapters.repositories.test_memory",
+                "def test_memory_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "shop/application/views.py",
+                "shop.application.views",
+                "import tesser.application as ts\n"
+                "import shop.application.ports.catalog as catalog\n"
+                "class MapToLookupRequestFlat(ts.Mapper, catalog.LookupRequest):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        super().__init__(text=text)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert not any(
+        "shop.adapters.repositories.memory.MapToLookupResponse" in f
+        and "declares no ts.* base" in f
+        for f in findings
+    )
+    assert not any(
+        "shop.adapters.repositories.memory.MapToLookupResponse" in f
+        and "a kind lives only in its role module" in f
+        for f in findings
+    )
+    assert not any(
+        "shop.adapters.repositories.memory.MapToLookupResponse" in f
+        and "a mapper takes whole objects, never a field already pulled off one" in f
+        for f in findings
+    )
+    assert not any(
+        "shop.adapters.repositories.memory.MapToLookupResponse" in f
+        and "only a serde subclasses a base from outside the tree" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.views.MapToLookupRequestFlat parameter 'text' is a primitive" in f
+        and "a mapper takes whole objects, never a field already pulled off one" in f
+        for f in findings
+    )
+
+
+def test_a_serde_declares_two_calls_holds_the_target_type_and_decides_nothing() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/jobs/wire.py",
+                "shop.adapters.jobs.wire",
+                "import tesser.adapters as ts\n"
+                "class RecordSerde[T](ts.Serde):\n"
+                "    def __init__(self, kind: type[T]) -> None:\n"
+                "        self._kind = kind\n"
+                "    def serialize(self, obj: T | None) -> bytes:\n"
+                "        if obj is None:\n"
+                "            return b''\n"
+                "        return repr(obj).encode()\n"
+                "    def deserialize(self, buf: bytes) -> T | None:\n"
+                "        if not buf:\n"
+                "            return None\n"
+                "        return self._kind()\n",
+                False,
+            ),
+            (
+                "shop/adapters/jobs/test_wire.py",
+                "shop.adapters.jobs.test_wire",
+                "def test_wire_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "shop/adapters/jobs/sloppy.py",
+                "shop.adapters.jobs.sloppy",
+                "import tesser.adapters as ts\n"
+                "class LooseSerde(ts.Serde):\n"
+                "    CACHE: int = 0\n"
+                "    def __init__(self, label: str) -> None:\n"
+                "        self._label = label\n"
+                "    def serialize(self, obj: object) -> bytes:\n"
+                "        for part in (obj,):\n"
+                "            self._label = 'x'\n"
+                "        return b''\n"
+                "    def helper(self) -> None:\n"
+                "        return None\n",
+                False,
+            ),
+            (
+                "shop/adapters/gateways/stray.py",
+                "shop.adapters.gateways.stray",
+                "import typing\n"
+                "import tesser.adapters as ts\n"
+                "class StraySerde[T](ts.Serde):\n"
+                "    def serialize(self, obj: T) -> bytes:\n"
+                "        return b''\n"
+                "    def deserialize(self, buf: bytes) -> T | None:\n"
+                "        return None\n"
+                "class WiredGateway(ts.Gateway, typing.Protocol):\n"
+                "    pass\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert not any("shop.adapters.jobs.wire.RecordSerde" in f for f in findings)
+    assert any(
+        "shop.adapters.jobs.sloppy.LooseSerde declares 0 type parameters" in f
+        and "a serde names one type parameter, the shape it carries in both directions" in f
+        for f in findings
+    )
+    assert any(
+        "shop.adapters.jobs.sloppy.LooseSerde declares no deserialize" in f
+        and "a serde declares serialize and deserialize and nothing else, because "
+        "those two are what the engine calls" in f
+        for f in findings
+    )
+    assert any(
+        "shop.adapters.jobs.sloppy.LooseSerde.helper is a method" in f
+        and "a serde declares serialize and deserialize and nothing else, because "
+        "those two are what the engine calls" in f
+        for f in findings
+    )
+    assert any(
+        "shop.adapters.jobs.sloppy.LooseSerde carries a class-level statement" in f
+        and "a serde holds its two calls and the target type it is built with, "
+        "and nothing else" in f
+        for f in findings
+    )
+    assert any(
+        "shop.adapters.jobs.sloppy.LooseSerde.__init__ parameter 'label' is not a "
+        "target type" in f
+        and "a serde is built with at most the type it deserializes into, because "
+        "anything else is state the engine cannot see" in f
+        for f in findings
+    )
+    assert any(
+        "shop.adapters.jobs.sloppy.LooseSerde stores '_label'" in f
+        and "a serde is built with at most the type it deserializes into, because "
+        "anything else is state the engine cannot see" in f
+        for f in findings
+    )
+    assert any(
+        "shop.adapters.jobs.sloppy.LooseSerde.serialize decides" in f
+        and "a serde branches only on the empty payload, because anything else is a "
+        "decision that belongs where the domain can see it" in f
+        for f in findings
+    )
+    assert any(
+        "shop.adapters.gateways.stray.StraySerde is a serde, and its package names "
+        "another kind" in f
+        for f in findings
+    )
+    assert any(
+        "shop.adapters.gateways.stray.WiredGateway subclasses a base the tree does "
+        "not declare" in f
+        and "only a serde subclasses a base from outside the tree, because the "
+        "engine is the caller and the serde is the shape it calls" in f
+        for f in findings
+    )
+    assert not any(
+        "shop.adapters.gateways.stray.StraySerde subclasses a base the tree does "
+        "not declare" in f
+        for f in findings
+    )
+
+
 def test_only_a_job_reaches_the_application_client_and_the_orchestrators() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"

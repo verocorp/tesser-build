@@ -761,6 +761,17 @@ had to re-name at the construction site). A spec built by a mapper is still
 a spec — bind it, pass it whole, never read its fields in the service
 (TB083 types the local as the target).
 
+An adapter maps too, and it has its own base: `tesser.adapters.Mapper`,
+same contract, declared beside the gateway or repository that uses it so a
+`gateways/` or `repositories/` module still imports only `tesser.adapters`
+(maintainer ruling 2026-08-30). A gateway or repository ends in
+`return MapToX(answer)` and reads as call-then-map, never as logic. One
+carve-out applies on that side only: **an adapters mapper may take a
+primitive**, because a repository wrapping a client that hands back a `bool`
+or a row value is the normal case (`MapToHasKeyResponse(result: bool)`).
+The application side is unchanged — a mapper there takes whole objects,
+never a field already pulled off one (TB080).
+
 ```python
 # campaign/application/views.py (verified impl: examples/errorspy/)
 class MapToCampaignSpec(ts.Mapper, campaign.CampaignSpec):
@@ -948,9 +959,17 @@ class Ordering(ts.Component):
 - **Messages are declared once, on the port.** The engine is a relay, so the
   send side and the receive side of one message are not independent: the
   gateway sends the port's `ts.Request`, the job receives it, and the
-  application client speaks the same shape. No wire types; where the SDK
-  cannot serialize a `ts.Request` itself, the edge brings a serde (the one
-  class in the tree with no `ts.*` base — a named gap, `TODOS.md`).
+  application client speaks the same shape. No wire types.
+- **Where the SDK cannot serialize a `ts.Request` itself, the job's package
+  brings a serde** (`ts.Serde`, in `adapters/jobs/`, maintainer ruling
+  2026-08-30). It declares exactly `serialize` and `deserialize` over **one
+  type parameter**, may hold at most the target type it was built with, and
+  branches on nothing but the empty payload — a serde with decision logic is
+  a finding (TB081, TB082), because a decision made on the wire is one no
+  domain object owns. It is the **one adapter class allowed a base from
+  outside the tree** (TB052): the engine is the caller and the SDK's ABC is
+  the shape it calls, so the class reads
+  `class RecordSerde[T](ts.Serde, restate.serde.Serde[T])`.
 - **A component publishes exactly `client` and `jobs`**, each typed; every
   other attribute is private (TB081). `jobs` is one job or a tuple of them;
   where it is a tuple the host mounts the definitions of each — `[d for job in
@@ -1020,6 +1039,11 @@ class StorageCampaignRepository(ts.Repository):
   domain object by assigning attributes.
 - **No domain math.** A finder may filter/order (persistence selection);
   summing or rule-checking is a leak.
+- **Assemble the answer with a mapper, not by hand** (`ts.Mapper` from
+  `tesser.adapters`, declared beside the adapter): the method ends in
+  `return MapToFindCampaignResponse(row)` so the adapter reads as
+  call-then-map. On the adapter side that mapper may take the primitive the
+  client handed back — see **Application ports** above.
 - Persistence backends — SQLAlchemy, async drivers — are consumer-specific;
   the `Protocol` is the stable contract, the backing store is not this
   skill's decision. The worked examples use an in-memory map and a fake

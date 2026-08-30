@@ -124,10 +124,17 @@ function, so the only reader of the string is the SDK.
 
 ### What this shape costs, in rules
 
-One `tesser:debt` marker, waiting on a rule rather than a fix — recorded in the
-repo's `TODOS.md`: `RecordSerde` in `ordering/adapters/jobs/restate.py`
-carries no `ts.*` base (**TB052**), because an adapters module admits no serde
-kind yet. The engine's serde is an ABC, so it cannot be duck-typed away.
+Nothing, since the serde kind landed. `RecordSerde` in
+`ordering/adapters/jobs/restate.py` used to carry a `tesser:debt TB052`,
+because every context class declares a `ts.*` base and the engine's serde is
+an ABC that cannot be duck-typed away. The 2026-08-30 ruling named the kind:
+`tesser.adapters.Serde`, admitted in `adapters/jobs/`, declaring exactly
+`serialize` and `deserialize` over one type parameter, holding at most the
+target type, and branching on nothing but the empty payload — and it is the
+one adapter class allowed a base from outside the tree, because the engine is
+the caller. So the class reads
+`class RecordSerde[T](ts.Serde, restate.serde.Serde[T])`, and this tree now
+runs the analyzer with no markers at all.
 
 ## Messages are declared once, on the port
 
