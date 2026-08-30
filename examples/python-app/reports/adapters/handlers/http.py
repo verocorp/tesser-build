@@ -12,7 +12,7 @@ class Handler(ts.Handler):
 
     def links_by_verdict(self, _req: http.HttpRequest) -> http.HttpResponse:
         resp = self._client.links_by_verdict(client.LinksByVerdictRequest())
-        rows: list[http.JSONObject] = [
+        rows: list[dict[str, object]] = [
             {
                 "slug": view.slug,
                 "target_url": view.target_url,

@@ -8,9 +8,6 @@ import typing
 import tesser.srv as ts
 
 
-JSONObject = dict[str, object]  # tesser:debt TB051
-
-
 class BadRequest(ts.Rejection):
     pass
 
@@ -50,7 +47,7 @@ class HttpRequest(ts.Request):
     headers: abc.Mapping[str, str]
     body: bytes
 
-    def json_body(self) -> JSONObject:
+    def json_body(self) -> dict[str, object]:
         raw = self.body
         if not raw:
             return {}
@@ -83,7 +80,7 @@ class HttpResponse(ts.Response):
     headers: abc.Mapping[str, str]
 
     @classmethod
-    def json(cls, status_code: int, body: JSONObject, headers: abc.Mapping[str, str] | None = None) -> HttpResponse:
+    def json(cls, status_code: int, body: dict[str, object], headers: abc.Mapping[str, str] | None = None) -> HttpResponse:
         payload = json.dumps(body).encode("utf-8")
         declared = dict(headers or {})
         if not any(name.lower() == "content-type" for name in declared):
@@ -100,7 +97,7 @@ class HttpResponse(ts.Response):
             raise BadRequest("a redirect target carries a control character")
         return cls(status_code, b"", {"Location": url})
 
-    def json_body(self) -> JSONObject:
+    def json_body(self) -> dict[str, object]:
         raw = self.body
         if not raw:
             return {}

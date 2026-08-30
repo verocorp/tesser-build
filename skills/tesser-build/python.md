@@ -1161,7 +1161,7 @@ class HttpRequest(ts.Request):
     headers: Mapping[str, str]
     body: bytes                                   # raw; the handler interprets it
 
-    def json_body(self) -> JSONObject:            # the record carries its readers
+    def json_body(self) -> dict[str, object]:     # the record carries its readers
         return _json_object(self.body)
 
     def path_param(self, name: str) -> str: ...
@@ -1174,7 +1174,7 @@ class HttpResponse(ts.Response):
     headers: Mapping[str, str]
 
     @classmethod
-    def json(cls, status_code: int, body: JSONObject, headers: Mapping[str, str] | None = None) -> HttpResponse: ...
+    def json(cls, status_code: int, body: dict[str, object], headers: Mapping[str, str] | None = None) -> HttpResponse: ...
 
     @classmethod
     def problem(cls, status_code: int, code: str, detail: str) -> HttpResponse:
