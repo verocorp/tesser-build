@@ -22,9 +22,9 @@ def test_every_place_is_earned_by_a_checked_tree_or_is_a_finding() -> None:
     )
     contexts = frozenset({"shop"})
     for name, is_package, expected in finding_rows:
-        got = checks.Codebase._locate(name, is_package, contexts)
+        got = str(checks.Placement(checks.PlacementSpec(name, is_package, tuple(sorted(contexts)))))
         assert got == expected, (
-            f"_locate({name!r}) = {got!r}, expected the finding place {expected!r}"
+            f"Placement({name!r}) = {got!r}, expected the finding place {expected!r}"
         )
     finding_places = frozenset(expected for _, _, expected in finding_rows)
     repo = pathlib.Path(__file__).resolve().parents[3]
@@ -54,20 +54,21 @@ def test_every_place_is_earned_by_a_checked_tree_or_is_a_finding() -> None:
         )
         for name, is_package in names:
             exercised.add(
-                checks.Codebase._locate(name, is_package, tree_contexts, export)
+                str(checks.Placement(checks.PlacementSpec(name, is_package, tuple(sorted(tree_contexts)), export)))
             )
     assert checked_trees >= 2, (
         f"only {checked_trees} checked trees found from {repo / 'manifest.json'}; "
         "this test must run from the tesser-build repo checkout"
     )
     assert exporting_trees >= 1, (
-        "no checked tree declares an export; the export branch of _locate is "
+        "no checked tree declares an export; the export branch of Placement is "
         "reachable only from such a tree, so without one it is unearned"
     )
-    tokens = conftest.returned_tokens(conftest.function_tree(checks.Codebase._locate))
+    tokens = conftest.returned_tokens(conftest.function_tree(checks.Placement.__init__))
+    assert tokens, "no placement tokens extracted from Placement.__init__; the totality below would pass on an empty set"
     unearned = tokens - exercised - finding_places
     assert unearned == frozenset(), (
-        f"_locate can produce {sorted(unearned)}, but no checked tree contains such "
+        f"Placement can produce {sorted(unearned)}, but no checked tree contains such "
         "a module and it is not a finding place; a classification exists only if a "
         "real tree earns it or a violation names it — an allowance the checker "
         "grants only itself is how context-main lived unnoticed for six releases"

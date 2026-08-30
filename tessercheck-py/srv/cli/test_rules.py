@@ -14,8 +14,8 @@ def test_a_usage_error_becomes_exit_code_two_with_the_usage_line(
     (tmp_path / "tessercheck" / "domain" / "checks.py").write_text(
         "TS_NAME_BY_BLOCK: dict = {}\n"
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
-        "class Codebase:\n"
-        "    def _comment_violations(self) -> None:\n"
+        "class Module:\n"
+        "    def comment_violations(self) -> None:\n"
         "        Violation(ViolationSpec('p', 1, 'TB020', 'a shape; the rendered tail'))\n"
     )
     (tmp_path / "tessercheck" / "tests").mkdir(parents=True)
@@ -36,8 +36,8 @@ def test_the_host_never_leaks_internals_on_the_unexpected_path(
     (tmp_path / "tessercheck" / "domain" / "checks.py").write_text(
         "TS_NAME_BY_BLOCK: dict = {}\n"
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
-        "class Codebase:\n"
-        "    def _comment_violations(self) -> None:\n"
+        "class Module:\n"
+        "    def comment_violations(self) -> None:\n"
         "        Violation(ViolationSpec('p', 1, 'TB020', 'a shape; the rendered tail'))\n"
     )
     (tmp_path / "tessercheck" / "tests").mkdir(parents=True)
@@ -57,8 +57,8 @@ def test_a_tree_renders_the_rulebook_into_the_output(
     (tmp_path / "tessercheck" / "domain" / "checks.py").write_text(
         "TS_NAME_BY_BLOCK: dict = {}\n"
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
-        "class Codebase:\n"
-        "    def _comment_violations(self) -> None:\n"
+        "class Module:\n"
+        "    def comment_violations(self) -> None:\n"
         "        Violation(ViolationSpec('p', 1, 'TB020', 'a shape; the rendered tail'))\n"
     )
     (tmp_path / "tessercheck" / "tests").mkdir(parents=True)
@@ -76,8 +76,8 @@ def test_rendering_replaces_a_stale_output(tmp_path: pathlib.Path) -> None:
     (tmp_path / "tessercheck" / "domain" / "checks.py").write_text(
         "TS_NAME_BY_BLOCK: dict = {}\n"
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
-        "class Codebase:\n"
-        "    def _comment_violations(self) -> None:\n"
+        "class Module:\n"
+        "    def comment_violations(self) -> None:\n"
         "        Violation(ViolationSpec('p', 1, 'TB020', 'a shape; the rendered tail'))\n"
     )
     (tmp_path / "tessercheck" / "tests").mkdir(parents=True)
@@ -95,8 +95,8 @@ def test_checking_a_matching_output_settles_at_zero(
     (tmp_path / "tessercheck" / "domain" / "checks.py").write_text(
         "TS_NAME_BY_BLOCK: dict = {}\n"
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
-        "class Codebase:\n"
-        "    def _comment_violations(self) -> None:\n"
+        "class Module:\n"
+        "    def comment_violations(self) -> None:\n"
         "        Violation(ViolationSpec('p', 1, 'TB020', 'a shape; the rendered tail'))\n"
     )
     (tmp_path / "tessercheck" / "tests").mkdir(parents=True)
@@ -115,8 +115,8 @@ def test_checking_a_stale_output_settles_at_one(
     (tmp_path / "tessercheck" / "domain" / "checks.py").write_text(
         "TS_NAME_BY_BLOCK: dict = {}\n"
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
-        "class Codebase:\n"
-        "    def _comment_violations(self) -> None:\n"
+        "class Module:\n"
+        "    def comment_violations(self) -> None:\n"
         "        Violation(ViolationSpec('p', 1, 'TB020', 'a shape; the rendered tail'))\n"
     )
     (tmp_path / "tessercheck" / "tests").mkdir(parents=True)
@@ -135,8 +135,8 @@ def test_checking_a_missing_output_settles_at_one(
     (tmp_path / "tessercheck" / "domain" / "checks.py").write_text(
         "TS_NAME_BY_BLOCK: dict = {}\n"
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
-        "class Codebase:\n"
-        "    def _comment_violations(self) -> None:\n"
+        "class Module:\n"
+        "    def comment_violations(self) -> None:\n"
         "        Violation(ViolationSpec('p', 1, 'TB020', 'a shape; the rendered tail'))\n"
     )
     (tmp_path / "tessercheck" / "tests").mkdir(parents=True)

@@ -82,11 +82,12 @@ def test_no_module_shape_is_silent(tmp_path: pathlib.Path) -> None:
         f"import — a location the walk does not govern: {silent}"
     )
     covered = frozenset(
-        checks.Codebase._locate(rel[:-3].replace("/", "."), False, frozenset({"shop"}))
+        str(checks.Placement(checks.PlacementSpec(rel[:-3].replace("/", "."), False, ("shop",))))
         for rel, _ in corpus
         if not rel.endswith("__init__.py")
     )
-    returned = conftest.returned_tokens(conftest.function_tree(checks.Codebase._locate))
+    returned = conftest.returned_tokens(conftest.function_tree(checks.Placement.__init__))
+    assert returned, "no placement tokens extracted from Placement.__init__; the totality below would pass on an empty set"
     package_only = frozenset(
         {
             "shell-init",
@@ -102,5 +103,5 @@ def test_no_module_shape_is_silent(tmp_path: pathlib.Path) -> None:
     )
     uncovered = returned - package_only - covered
     assert uncovered == frozenset(), (
-        f"_locate tokens with no corpus shape exercising them end-to-end: {sorted(uncovered)}"
+        f"Placement tokens with no corpus shape exercising them end-to-end: {sorted(uncovered)}"
     )

@@ -28,6 +28,21 @@ def test_rules_md_is_current() -> None:
     )
 
 
+def test_every_applies_to_row_is_reached_by_a_violation() -> None:
+    root = pathlib.Path(__file__).resolve().parents[2]
+    read = rulebook_repository.FilesystemRulebookSources().read(
+        rulebook_sources.ReadRulebookRequest(tree=str(root))
+    )
+    rulebook.Rulebook(
+        rulebook.RulebookSpec(
+            read.checks_text,
+            tuple((module.name, module.text) for module in read.test_modules),
+            read.contracts_text,
+            True,
+        )
+    )
+
+
 def test_every_rule_has_a_fixture() -> None:
     root = pathlib.Path(__file__).resolve().parents[2]
     read = rulebook_repository.FilesystemRulebookSources().read(

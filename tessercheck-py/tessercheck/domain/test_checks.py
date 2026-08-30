@@ -82,7 +82,15 @@ def _spec(
     )
 
 
-def test_locate_is_the_single_routing_decision() -> None:
+def test_a_kind_table_names_one_block_per_symbol() -> None:
+    with pytest.raises(ValueError, match="one block per symbol"):
+        checks.KindTable(checks.KindTableSpec((
+            ("shop.domain.thing", "Thing", "aggregate"),
+            ("shop.domain.thing", "Thing", "spec"),
+        )))
+
+
+def test_placement_is_the_single_routing_decision() -> None:
     contexts = frozenset({"shop", "two"})
     table = (
         ("solo", False, "root"),
@@ -178,9 +186,9 @@ def test_locate_is_the_single_routing_decision() -> None:
         ("kernel.conftest", False, "conftest"),
     )
     for name, is_package, expected in table:
-        got = checks.Codebase._locate(name, is_package, contexts)
+        got = str(checks.Placement(checks.PlacementSpec(name, is_package, tuple(sorted(contexts)))))
         assert got == expected, (
-            f"_locate({name!r}, is_package={is_package}) = {got!r}, expected {expected!r}"
+            f"Placement({name!r}, is_package={is_package}) = {got!r}, expected {expected!r}"
         )
     exported = (
         ("shells", True, "kernel-init"),
@@ -190,19 +198,19 @@ def test_locate_is_the_single_routing_decision() -> None:
         ("shells.test_base", False, "test"),
     )
     for name, is_package, expected in exported:
-        got = checks.Codebase._locate(name, is_package, contexts, "shells")
+        got = str(checks.Placement(checks.PlacementSpec(name, is_package, tuple(sorted(contexts)), "shells")))
         assert got == expected, (
-            f"_locate({name!r}, is_package={is_package}, export='shells') = {got!r}, "
+            f"Placement({name!r}, is_package={is_package}, export='shells') = {got!r}, "
             f"expected {expected!r}"
         )
-    assert checks.Codebase._locate("shells.thing", False, contexts) == "root", (
+    assert str(checks.Placement(checks.PlacementSpec("shells.thing", False, tuple(sorted(contexts))))) == "root", (
         "an undeclared export directory must classify as it always did"
     )
-    locate_tree = ast.parse(
-        textwrap.dedent(inspect.getsource(checks.Codebase._locate))
+    placement_tree = ast.parse(
+        textwrap.dedent(inspect.getsource(checks.Placement.__init__))
     )
     locate = next(
-        node for node in locate_tree.body if isinstance(node, ast.FunctionDef)
+        node for node in placement_tree.body if isinstance(node, ast.FunctionDef)
     )
     returned = frozenset(
         value.value
@@ -213,18 +221,18 @@ def test_locate_is_the_single_routing_decision() -> None:
     )
     exercised = frozenset(expected for _, _, expected in table)
     assert returned == exercised, (
-        f"the classification table and _locate's return set drifted apart: "
+        f"the classification table and Placement's return set drifted apart: "
         f"unexercised tokens {sorted(returned - exercised)}, "
         f"stale table rows {sorted(exercised - returned)}"
     )
 
 
 def test_every_location_token_has_a_dispatch_arm() -> None:
-    locate_tree = ast.parse(
-        textwrap.dedent(inspect.getsource(checks.Codebase._locate))
+    placement_tree = ast.parse(
+        textwrap.dedent(inspect.getsource(checks.Placement.__init__))
     )
     locate = next(
-        node for node in locate_tree.body if isinstance(node, ast.FunctionDef)
+        node for node in placement_tree.body if isinstance(node, ast.FunctionDef)
     )
     tokens = frozenset(
         value.value
@@ -234,7 +242,7 @@ def test_every_location_token_has_a_dispatch_arm() -> None:
         if isinstance(value, ast.Constant) and isinstance(value.value, str)
     )
     dispatch_tree = ast.parse(
-        textwrap.dedent(inspect.getsource(checks.Codebase._module_violations))
+        textwrap.dedent(inspect.getsource(checks.Codebase.violations))
     )
     dispatch = next(
         node for node in dispatch_tree.body if isinstance(node, ast.FunctionDef)
@@ -250,10 +258,10 @@ def test_every_location_token_has_a_dispatch_arm() -> None:
         and len(node.comparators) == 1
         and isinstance(node.comparators[0], ast.Constant)
     )
-    assert tokens, "no tokens extracted from _locate"
+    assert tokens, "no tokens extracted from Placement"
     unhandled = tokens - handled - {"context-stray"}
     assert unhandled == frozenset(), (
-        f"_locate can return tokens with no dispatch arm: {sorted(unhandled)} "
+        f"Placement can return tokens with no dispatch arm: {sorted(unhandled)} "
         "(context-stray is the dispatch's final return)"
     )
 
@@ -1398,6 +1406,222 @@ def test_a_straight_accessor_local_is_flagged() -> None:
     assert not any("NamingService.computes names a straight accessor" in f for f in findings)
 
 
+def test_provenance_is_reported_before_the_rest_of_a_body() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/leading.py",
+                "shop.leading",
+                "import tesser.application as ts\n"
+                "from shop.client.client import AskRequest, AskResponse\n"
+                "class LeadingService(ts.ApplicationService):\n"
+                "    def __init__(self, port: object) -> None:\n"
+                "        self._port = port\n"
+                "    def echo(self, request: AskRequest) -> AskResponse:\n"
+                "        text = self.other\n"
+                "        self._port.fetch(request)\n"
+                "        return AskResponse(text=text)\n",
+                False,
+            ),
+        ))).violations()
+               )
+    body = [f for f in findings if "LeadingService.echo" in f]
+    sent = next(
+        index for index, f in enumerate(body)
+        if "sends its request itself straight to a port" in f
+    )
+    accessor = next(
+        index for index, f in enumerate(body) if "names a straight accessor" in f
+    )
+    assert sent < accessor, body
+
+
+def test_every_second_match_is_reported_before_the_subjects() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/deciding.py",
+                "shop.deciding",
+                "import tesser.application as ts\n"
+                "from shop.client.client import AskRequest, AskResponse\n"
+                "class DecidingTwiceService(ts.ApplicationService):\n"
+                "    def echo(self, request: AskRequest) -> AskResponse:\n"
+                "        match request.first:\n"
+                "            case 1:\n"
+                "                pass\n"
+                "        match request.second:\n"
+                "            case 2:\n"
+                "                pass\n"
+                "        match request.third:\n"
+                "            case 3:\n"
+                "                pass\n"
+                "        return AskResponse(text='')\n",
+                False,
+            ),
+        ))).violations()
+               )
+    body = [f for f in findings if "DecidingTwiceService.echo" in f]
+    seconds = [index for index, f in enumerate(body) if "matches a second time" in f]
+    subjects = [
+        index for index, f in enumerate(body)
+        if "match subject is not a call on a domain object" in f
+    ]
+    assert len(seconds) == 2, body
+    assert len(subjects) == 3, body
+    assert max(seconds) < min(subjects), body
+
+
+def test_a_role_module_reports_its_loose_code_before_its_adapter_kind() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/adapters/repositories/__init__.py",
+                "shop.adapters.repositories",
+                "",
+                True,
+            ),
+            (
+                "shop/adapters/repositories/db.py",
+                "shop.adapters.repositories.db",
+                "import tesser.adapters as ts\n"
+                "LOOSE = 1\n"
+                "def helper() -> None: ...\n"
+                "class Thing(ts.Handler):\n"
+                "    def go(self) -> None: ...\n",
+                False,
+            ),
+        ))).violations()
+               )
+    module = [f for f in findings if "shop/adapters/repositories/db.py" in f]
+    function = next(
+        index for index, f in enumerate(module)
+        if "is a module function" in f
+    )
+    loose = next(
+        index for index, f in enumerate(module)
+        if "declares a module constant without Final" in f
+    )
+    package = next(
+        index for index, f in enumerate(module)
+        if "package names another kind" in f
+    )
+    assert function < package and loose < package, module
+
+
+def test_a_spec_reports_its_body_in_source_order() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/odd.py",
+                "shop.domain.odd",
+                "import tesser.domain as ts\n"
+                "class OddSpec(ts.Spec):\n"
+                "    def helper(self) -> None:\n"
+                "        return None\n"
+                "    other = 1\n",
+                False,
+            ),
+        ))).violations()
+               )
+    body = [f for f in findings if "shop.domain.odd.OddSpec" in f]
+    method = next(
+        index for index, f in enumerate(body) if "defines a method on a spec" in f
+    )
+    statement = next(
+        index for index, f in enumerate(body) if "carries a class-level statement" in f
+    )
+    assert method < statement, body
+
+
+def test_a_port_method_reports_its_shape_after_its_signature() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
+                "",
+                True,
+            ),
+            (
+                "shop/application/ports/reader.py",
+                "shop.application.ports.reader",
+                "import tesser.application as ts\n"
+                "class Reader(ts.Port):\n"
+                "    def read(self) -> None: ...\n",
+                False,
+            ),
+        ))).violations()
+               )
+    body = [f for f in findings if "Reader.read" in f]
+    takes = next(index for index, f in enumerate(body) if "takes 0 parameters" in f)
+    returns = next(
+        index for index, f in enumerate(body) if "does not return a ts.Response" in f
+    )
+    names = next(
+        index for index, f in enumerate(body) if "names a shape it does not declare" in f
+    )
+    assert takes < returns < names, body
+
+
+def test_an_orchestrator_reports_its_dependencies_before_its_job_contexts() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/orchestrators/leading.py",
+                "shop.application.orchestrators.leading",
+                "import tesser.application as ts\n"
+                "class Leading(ts.Orchestrator):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self._text = text\n",
+                False,
+            ),
+        ))).violations()
+    )
+    body = [f for f in findings if "Leading.__init__" in f]
+    depends = next(
+        index for index, f in enumerate(body)
+        if "is not a ts.Port or a ts.Store" in f
+    )
+    contexts = next(index for index, f in enumerate(body) if "job contexts" in f)
+    assert depends < contexts, body
+
+
+def test_an_application_client_reports_each_class_before_the_count() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/client/pair.py",
+                "shop.application.client.pair",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.application.ports.quotes as quotes\n"
+                "class First(ts.Client, typing.Protocol):\n"
+                "    HELD = len('x')\n"
+                "    def quote(self, request: quotes.QuoteRequest)"
+                " -> quotes.QuoteResponse: ...\n"
+                "class Second(ts.Client, typing.Protocol):\n"
+                "    def quote(self, request: quotes.QuoteRequest)"
+                " -> quotes.QuoteResponse: ...\n",
+                False,
+            ),
+        ))).violations()
+    )
+    body = [f for f in findings if "shop/application/client/pair.py" in f]
+    held = next(
+        index for index, f in enumerate(body)
+        if "First carries a class-level statement" in f
+    )
+    count = next(index for index, f in enumerate(body) if "client protocols" in f)
+    assert held < count, body
+
+
 def test_service_body_rules_are_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
@@ -1610,6 +1834,65 @@ def test_records_never_carry_domain_objects() -> None:
     assert any(
         "LoadingPort.fetch" in f and "a port speaks records, never domain objects" in f
         for f in findings
+    )
+
+
+def test_a_record_names_the_first_domain_object_its_annotation_walks() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/money.py",
+                "shop.domain.money",
+                "import tesser.domain as ts\n"
+                "import tesser.serialization as serialization\n"
+                "class Amount(ts.ValueObject):\n"
+                "    _value: str\n"
+                "    def __init__(self, value: str) -> None:\n"
+                "        object.__setattr__(self, '_value', value)\n"
+                "    def __str__(self) -> str:\n"
+                "        return serialization.canonical_str(self._value)\n",
+                False,
+            ),
+            (
+                "shop/adapters/repositories/pairing.py",
+                "shop.adapters.repositories.pairing",
+                "import tesser.adapters as ts\n"
+                "import shop.domain.money as money\n"
+                "import shop.domain.thing as thing\n"
+                "class PairingRepo(ts.Repository):\n"
+                "    def load(self, pair: tuple[thing.Thing, money.Amount]) -> None:\n"
+                "        return None\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "PairingRepo.load carries an aggregate in its signature" in f for f in findings
+    )
+    assert not any(
+        "PairingRepo.load carries a value object in its signature" in f for f in findings
+    )
+
+
+def test_an_annotated_self_carries_its_domain_object_into_the_signature() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/adapters/repositories/selfish.py",
+                "shop.adapters.repositories.selfish",
+                "import tesser.adapters as ts\n"
+                "import shop.domain.thing as thing\n"
+                "class SelfishRepo(ts.Repository):\n"
+                "    def load(self: thing.Thing) -> None:\n"
+                "        return None\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "SelfishRepo.load carries an aggregate in its signature" in f for f in findings
     )
 
 
@@ -4910,6 +5193,36 @@ def test_helper_rules_are_flagged() -> None:
     assert any("bad_builder" in f and "has control flow" in f and "a helper only constructs" in f for f in findings)
 
 
+def test_a_helper_is_reported_where_it_stands_in_its_module() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/test_placed_helpers.py",
+                "shop.test_placed_helpers",
+                "import tesser.testing as th\n"
+                "from shop.domain.thing import Thing\n"
+                "@th.helper\n"
+                "def build(thing: Thing) -> Thing:\n"
+                "    return thing\n"
+                "def loose() -> None:\n"
+                "    return None\n",
+                False,
+            ),
+        ))).violations()
+               )
+    body = [f for f in findings if "shop/test_placed_helpers.py" in f]
+    helper = next(
+        index for index, f in enumerate(body)
+        if "a helper takes only defaulted primitives" in f
+    )
+    undeclared = next(
+        index for index, f in enumerate(body)
+        if "is neither a test nor a declared helper" in f
+    )
+    assert helper < undeclared, body
+
+
 def test_a_helper_builds_any_construction_data_but_never_a_protocol_or_a_domain_object() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
@@ -7683,6 +7996,50 @@ def test_a_ports_module_holds_only_shapes_the_rules_can_read() -> None:
     assert any(
         "shop.application.ports.sink.Header holds a Subscript" in f for f in findings
     ), f"an expression in a class base ran at import: {findings}"
+
+
+def test_a_ports_enum_member_sharing_a_line_with_an_extra_is_readable() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
+                "",
+                True,
+            ),
+            (
+                "shop/application/ports/kinds.py",
+                "shop.application.ports.kinds",
+                "import enum\n"
+                "class Kind(enum.Enum):\n"
+                "    A = 1; del A\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "shop.application.ports.kinds.Kind holds a Delete" in f for f in findings
+    ), findings
+    assert not any(
+        "shop.application.ports.kinds.Kind holds a Assign" in f for f in findings
+    ), findings
+
+
+def test_declarations_are_reported_in_the_order_the_file_lists_them() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(
+            _spec(imports=("zeta", "alpha"), pure_stdlib=("uuid", "bisect"), stdlib=("uuid", "bisect"))
+        ).violations()
+    )
+    rows = [f for f in findings if checks.TREE_DECLARATION in f]
+    zeta = next(index for index, f in enumerate(rows) if "'import zeta'" in f)
+    alpha = next(index for index, f in enumerate(rows) if "'import alpha'" in f)
+    uuid_row = next(index for index, f in enumerate(rows) if "'stdlib uuid'" in f)
+    bisect_row = next(index for index, f in enumerate(rows) if "'stdlib bisect'" in f)
+    assert zeta < alpha, rows
+    assert uuid_row < bisect_row, rows
 
 
 def test_a_second_export_declaration_is_a_finding() -> None:
@@ -12244,6 +12601,29 @@ def test_a_job_context_is_led_with_or_it_is_a_finding() -> None:
     )
 
 
+def test_a_quoted_job_context_return_is_still_a_finding() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/gateways/quoted.py",
+                "shop.adapters.gateways.quoted",
+                "import tesser.adapters as ts\n"
+                "class QuotedGateway(ts.Gateway):\n"
+                "    def handed(self, job: ts.JobContext) -> \"ts.JobContext\":\n"
+                "        return job\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.adapters.gateways.quoted.QuotedGateway.handed returns a "
+        "ts.JobContext; a job context is threaded as the leading parameter of an "
+        "action port call and nowhere else" in f
+        for f in findings
+    )
+
+
 def test_a_gateway_never_holds_an_invocations_job_context() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
@@ -13782,3 +14162,121 @@ def test_a_conditional_expression_over_a_comparison_is_one_decision() -> None:
     chose = tuple(f for f in findings if "ChoosingService.chose" in f and " TB082 " in f)
     assert len(chose) == 1, chose
     assert "chooses with a conditional expression" in chose[0], chose
+
+
+def test_annotation_equality() -> None:
+    one = checks.Annotation(ast.parse("dict[str, int] | None", mode="eval").body)
+    same = checks.Annotation(ast.parse("(dict[str, int] | None)", mode="eval").body)
+    other = checks.Annotation(ast.parse("dict[str, str] | None", mode="eval").body)
+    assert one == same
+    assert hash(one) == hash(same)
+    assert one != other
+
+
+def test_names_equality() -> None:
+    one = checks.Names(("b", "a", "b"))
+    same = checks.Names(("a", "b"))
+    assert one == same
+    assert hash(one) == hash(same)
+    assert one != checks.Names(("a",))
+    assert one - checks.Names(("b",)) == checks.Names(("a",))
+    assert one & checks.Names(("b", "c")) == checks.Names(("b",))
+    assert one | checks.Names(("c",)) == checks.Names(("c", "b", "a"))
+
+
+def test_kind_table_equality_and_lookup() -> None:
+    entries = (
+        ("shop.domain.money", "Money", "valueobject"),
+        ("shop.domain.order", "Order", "aggregate"),
+        ("shop.domain.aaa", "Aaa", "spec"),
+    )
+    table = checks.KindTable(checks.KindTableSpec(entries))
+    assert table == checks.KindTable(checks.KindTableSpec(tuple(reversed(entries))))
+    assert str(table.block_of(checks.Symbol(checks.SymbolSpec("shop.domain.order", "Order")))) == "aggregate"
+    assert str(table.block_of(checks.Symbol(checks.SymbolSpec("shop.domain.aaa", "Aaa")))) == "spec"
+    assert table.block_of(checks.Symbol(checks.SymbolSpec("shop.domain.zzz", "Zzz"))) is None
+    assert table.block_of(checks.Symbol(checks.SymbolSpec("shop.domain.money", "Other"))) is None
+    assert checks.KindTable(checks.KindTableSpec(())).block_of(checks.Symbol(checks.SymbolSpec("a", "B"))) is None
+
+
+def test_a_comparison_dunder_takes_no_domain_method_parameter_check() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/tag.py",
+                "shop.domain.tag",
+                "import tesser.domain as ts\n"
+                "class Tag(ts.ValueObject):\n"
+                "    _value: str\n"
+                "    def __init__(self, value: str) -> None:\n"
+                "        object.__setattr__(self, '_value', value)\n"
+                "    def __eq__(self, other: object) -> bool:\n"
+                "        return isinstance(other, Tag) and self._value == other._value\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert not any("Tag.__eq__ parameter" in f for f in findings), findings
+
+
+def test_an_import_declaration_is_credited_by_the_first_match_only() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(
+            sources=(
+                (
+                    "shop/domain/uses.py",
+                    "shop.domain.uses",
+                    "import pkg.sub.thing\n"
+                    "import tesser.domain as ts\n"
+                    "class UsesSpec(ts.Spec):\n"
+                    "    def __init__(self, text: str) -> None:\n"
+                    "        self.text = text\n",
+                    False,
+                ),
+            ),
+            imports=("pkg", "pkg.sub"),
+        )).violations()
+    )
+    assert any("pkg.sub" in f and "legalizes nothing" in f for f in findings), findings
+    assert not any("'pkg'" in f and "legalizes nothing" in f for f in findings), findings
+
+
+def test_a_spec_constructor_first_slot_is_self() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/named.py",
+                "shop.domain.named",
+                "import tesser.domain as ts\n"
+                "class NamedSpec(ts.Spec):\n"
+                "    def __init__(cls, name: str) -> None:\n"
+                "        cls.name = name\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any("NamedSpec.__init__" in f and "parameter 'cls' is not allowed" in f for f in findings), findings
+
+
+def test_a_store_yields_exactly_one_port() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            ("shop/application/ports/__init__.py", "shop.application.ports", "", True),
+            (
+                "shop/application/ports/pair.py",
+                "shop.application.ports.pair",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class Held(ts.Port, typing.Protocol):\n"
+                "    pass\n"
+                "class Pair(ts.Store, typing.Protocol):\n"
+                "    def transaction(self) -> typing.AsyncContextManager[Held, Held]: ...\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any("Pair.transaction" in f for f in findings), findings

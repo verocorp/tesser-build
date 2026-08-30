@@ -13,23 +13,18 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "where": "⟨module.Class.method⟩",
     "module.name()": "⟨module⟩",
     "cls.name": "⟨class⟩",
-    "callee.attr": "⟨method⟩",
     "callee.id": "⟨function⟩",
     "len(params)": "⟨count⟩",
     "len(ports)": "⟨count⟩",
     "len(stores)": "⟨count⟩",
-    "len(bases)": "⟨count⟩",
     "len(protocols)": "⟨count⟩",
     "len(held)": "⟨count⟩",
     "len(responses)": "⟨count⟩",
     "len(calls)": "⟨count⟩",
     "published": "⟨attribute⟩",
-    "target.attr": "⟨attribute⟩",
-    "node.func.value.attr": "⟨attribute⟩",
     "len(taken)": "⟨count⟩",
     "arg.arg": "⟨name⟩",
     "inner.attr": "⟨field⟩",
-    "node.value": "⟨literal⟩",
     "stmt.name": "⟨name⟩",
     "node.name": "⟨class⟩",
     "member.name": "⟨method⟩",
@@ -45,7 +40,6 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "own_roles": "⟨roles⟩",
     "foreign_roles": "⟨roles⟩",
     "KIND_NAME[block]": "⟨kind⟩",
-    "KIND_ROLE[block]": "⟨role⟩",
     "KIND_HOME[block]": "⟨role⟩",
     "enum_base": "⟨enum⟩",
     "KIND_NAME[touched]": "⟨kind⟩",
@@ -57,7 +51,6 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "child.func.id": "⟨builtin⟩",
     "field": "⟨field⟩",
     "item.name": "⟨method⟩",
-    "leaf": "⟨scalar⟩",
     "head": "⟨scalar⟩",
     "named": "⟨types⟩",
     "spec_name": "⟨name⟩",
@@ -67,48 +60,55 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "target_name": "⟨class⟩",
     "supers": "⟨count⟩",
     "len(inits)": "⟨count⟩",
-    "len(cls.type_params)": "⟨count⟩",
     "outcome": "⟨outcome⟩",
     "kept": "⟨field⟩",
     "taker": "⟨function⟩",
     "sunder": "⟨attribute⟩",
     "keyword": "⟨keyword⟩",
     "member": "⟨member⟩",
+    "self._module": "⟨module⟩",
+    "self._name": "⟨class⟩",
+    "field.name()": "⟨field⟩",
+    "method.name()": "⟨method⟩",
+    "arg": "⟨name⟩",
+    "decl.module()": "⟨module⟩",
+    "decl.name()": "⟨class⟩",
+    "delegate": "⟨method⟩",
+    "function": "⟨function⟩",
+    "owner": "⟨module⟩.⟨class⟩",
+    "module_name": "⟨module⟩",
+    "type_params": "⟨count⟩",
 }
 
 APPLIES_TO: typing.Final[dict[str, str]] = {
     "Codebase.__init__": "checked source file",
     "Codebase.violations": "debt marker",
-    "Codebase._declaration_violations": "the checked tree itself",
-    "Codebase._export_declaration_violations": "the checked tree itself",
-    "Codebase._import_declaration_violations": "the checked tree itself",
-    "Codebase._unused_import_violations": "the checked tree itself",
-    "Codebase._stdlib_declaration_violations": "the checked tree itself",
-    "Codebase._kernel_init_violations": "kernel `__init__`",
-    "Codebase._kernel_module_violations": "kernel module",
-    "Codebase._tesser_init_violations": "tesser distribution `__init__`",
-    "Codebase._tesser_shell_violations": "tesser distribution module",
-    "Codebase._kernel_import_violations": "kernel module",
-    "Codebase._comment_violations": "every module",
-    "Codebase._double_violations": "every module",
-    "Codebase._shadowing_violations": "every module",
-    "Codebase._string_equality_violations": "every module",
-    "Codebase._sibling_reference_violations": "every class, in every module",
-    "Codebase._spec_use_violations": "every function that holds a spec, in every module",
-    "Codebase._spec_shared_violations": "domain object `__init__`",
-    "Codebase._vo_field_violations": "value object class",
-    "Codebase._exposure_violations": "value object class",
-    "Codebase._composition_violations": "value object class",
-    "Codebase._construction_path_violations": "value object class",
-    "Codebase._exit_violations": "value object conversion dunder",
-    "Codebase._structured_exit_violations": "entity or aggregate conversion dunder",
-    "Codebase._copy_violations": "entity or aggregate accessor",
-    "Codebase._held_root_violations": "entity or aggregate field",
-    "Codebase._domain_return_violations": "domain object public method",
-    "Codebase._domain_parameter_violations": "domain object public method",
-    "Codebase._outcome_violations": "outcome class",
-    "Codebase._outcome_field_violations": "domain object field",
-    "Codebase._outcome_use_violations": "every non-test module",
+    "Declaration.violations": "the checked tree itself",
+    "Declaration.unused_violations": "the checked tree itself",
+    "Module.kernel_init_violations": "kernel `__init__`",
+    "Module.kernel_violations": "kernel module",
+    "Module.tesser_init_violations": "tesser distribution `__init__`",
+    "Module.tesser_shell_violations": "tesser distribution module",
+    "Module.kernel_import_violations": "kernel module",
+    "Module.comment_violations": "every module",
+    "Module.double_violations": "every module",
+    "Module.shadowing_violations": "every module",
+    "Module.string_equality_violations": "every module",
+    "Module.sibling_reference_violations": "every class, in every module",
+    "Module.spec_use_violations": "every function that holds a spec, in every module",
+    "Module.spec_shared_violations": "domain object `__init__`",
+    "ClassDecl.vo_field_violations": "value object class",
+    "ClassDecl.exposure_violations": "value object class",
+    "ClassDecl.composition_violations": "value object class",
+    "ClassDecl.construction_path_violations": "value object class",
+    "ClassDecl.exit_violations": "value object conversion dunder",
+    "ClassDecl.structured_exit_violations": "entity or aggregate conversion dunder",
+    "ClassDecl.copy_violations": "entity or aggregate accessor",
+    "ClassDecl.held_root_violations": "entity or aggregate field",
+    "ClassDecl.domain_method_violations": "domain object public method",
+    "ClassDecl.outcome_violations": "outcome class",
+    "ClassDecl.outcome_field_violations": "domain object field",
+    "Module.outcome_use_violations": "every non-test module",
     "a service method": "public service method",
     "an actions method": "public actions method",
     "an orchestrator method": "public orchestrator method",
@@ -118,6 +118,12 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "an orchestrator": "orchestrator `__init__`",
     "an application client package": "application client `__init__`",
     "an orchestrators package": "orchestrators `__init__`",
+    "a context": "context `__init__`",
+    "a context tests": "context tests `__init__`",
+    "a protocol": "protocol package `__init__`",
+    "a ports": "ports `__init__`",
+    "a srv or app": "srv / app `__init__`",
+    "ImportEdge.form_violations": "direction-legal context import (role modules and their __init__, srv/app, test modules)",
     "application client": "application client module",
     "a client method": "client protocol method",
     "a domain constructor": "aggregate or entity `__init__`",
@@ -129,48 +135,36 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "a port": "port protocol method",
     "a port method": "port protocol method",
     "ports": "ports module",
-    "Codebase._delegation_violations": "every service method, including private",
-    "Codebase._body_violations": "public service method",
-    "Codebase._decision_violations": "public service method",
-    "Codebase._module_violations": "context package",
-    "Codebase._context_init_violations": "context `__init__`",
-    "Codebase._dynamic_import_violations": "every module",
-    "Codebase._ports_init_violations": "ports `__init__`",
-    "Codebase._decoration_violations": "ports module",
-    "Codebase._ports_shape_violations": "ports module",
-    "Codebase._ports_call_shape": "ports module",
-    "Codebase._unreadable": "ports module",
-    "Codebase._ports_module_violations": "ports module",
-    "Codebase._port_violations": "port protocol method",
-    "Codebase._application_client_module_violations": "application client module",
-    "Codebase._import_time_violations": "application client class",
-    "Codebase._orchestrators_module_violations": "orchestrators module",
-    "Codebase._actions_violations": "actions class",
-    "Codebase._orchestrator_violations": "orchestrator class",
-    "Codebase._actions_client_violations": "application client protocol method",
-    "Codebase._port_call_violations": "public actions method",
-    "Codebase._thread_violations": "public orchestrator method",
-    "Codebase._held_context_violations": "repository or gateway class",
-    "Codebase._port_annotation_violations": "port protocol method",
-    "Codebase._store_violations": "store protocol method",
-    "Codebase._store_return_violations": "store protocol method",
-    "Codebase._role_module_violations": "context role module",
-    "Codebase._import_violations": "context role module",
-    "Codebase._app_import_violations": "srv / app module",
-    "Codebase._test_module_violations": "test module",
-    "Codebase._test_placement_violations": "test module, by where it is placed",
-    "Codebase._eval_module_violations": "eval module (`eval_*.py`)",
-    "Codebase._context_tests_init_violations": "context tests `__init__`",
-    "Codebase._homeless_violations": "top-level module",
-    "Codebase._conftest_leaf_violations": "conftest module",
-    "Codebase._shell_reach_violations": "test module, by where it is placed",
-    "Codebase._tests_package_violations": "tests package module",
-    "Codebase._role_init_violations": "role package `__init__`",
-    "Codebase._app_init_violations": "srv / app `__init__`",
-    "Codebase._protocol_init_violations": "protocol package `__init__`",
-    "Codebase._app_module_violations": "app module",
-    "Codebase._srv_module_violations": "srv module",
-    "Codebase._protocol_module_violations": "protocol module",
+    "Body.delegation_violations": "every service method, including private",
+    "Body.violations": "public service method",
+    "Module.stray_violations": "context package",
+    "Module.dynamic_import_violations": "every module",
+    "Module.ports_violations": "ports module",
+    "ClassDecl.port_violations": "port protocol method",
+    "Module.application_client_violations": "application client module",
+    "ClientClass.violations": "application client class",
+    "Module.orchestrators_violations": "orchestrators module",
+    "ClassDecl.actions_violations": "actions class",
+    "ClassDecl.orchestrator_violations": "orchestrator class",
+    "ClassDecl.actions_client_violations": "application client protocol method",
+    "Body.port_call_violations": "public actions method",
+    "Body.thread_violations": "public orchestrator method",
+    "Body.held_context_violations": "repository or gateway class",
+    "ClassDecl.store_violations": "store protocol method",
+    "Module.role_violations": "context role module",
+    "Module.adapter_violations": "context role module",
+    "Module.import_violations": "context role module",
+    "Module.app_import_violations": "srv / app module",
+    "Module.test_violations": "test module",
+    "Module.placement_violations": "test module, by where it is placed",
+    "Module.eval_violations": "eval module (`eval_*.py`)",
+    "Module.homeless_violations": "top-level module",
+    "Module.conftest_leaf_violations": "conftest module",
+    "Module.tests_package_violations": "tests package module",
+    "Module.role_init_violations": "role package `__init__`",
+    "Module.app_violations": "app module",
+    "Module.srv_violations": "srv module",
+    "Module.protocol_violations": "protocol module",
     "srv": "srv module",
     "app": "app module",
     "protocol": "protocol module",
@@ -179,21 +173,16 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "context role": "context role module",
     "kernel": "kernel module",
     "test": "test module",
-    "Codebase._form_violations": "direction-legal context import (role modules and their __init__, srv/app, test modules)",
-    "Codebase._member_form_violations": "every import in every governed module",
-    "Codebase._stray_import_violations": "role, srv/app, or test module",
-    "Codebase._helper_violations": "@ts.helper function",
-    "Codebase._pairing_violations": "implementation module and its sibling test file",
-    "Codebase._dependency_violations": "service `__init__`",
-    "Codebase._valueobject_violations": "value object `__init__`",
-    "Codebase._component_violations": "component class",
-    "Codebase._mapper_violations": "mapper class",
-    "Codebase._serde_violations": "serde class",
-    "Codebase._provenance_violations": "public service method",
-    "Codebase._app_config_violations": "config class",
-    "Codebase._component_config_violations": "config class",
-    "Codebase._spec_violations": "spec class",
-    "Codebase._dto_violations": "request/response DTO",
+    "ImportEdge.member_form_violations": "every import in every governed module",
+    "Module.stray_import_violations": "role, srv/app, or test module",
+    "Helper.violations": "@ts.helper function",
+    "Module.pairing_violations": "implementation module and its sibling test file",
+    "ClassDecl.valueobject_violations": "value object `__init__`",
+    "ClassDecl.component_violations": "component class",
+    "ClassDecl.mapper_violations": "mapper class",
+    "ClassDecl.serde_violations": "serde class",
+    "ClassDecl.spec_violations": "spec class",
+    "ClassDecl.dto_violations": "request/response DTO",
 }
 
 WHERE_PREFIX: typing.Final[re.Pattern[str]] = re.compile(r"^(?:⟨[^⟩]+⟩[.:]*)+\s*")
@@ -262,10 +251,12 @@ class RulebookSpec(ts.Spec):
         checks_text: str,
         test_modules: tuple[tuple[str, str], ...] = (),
         contracts_text: str = "",
+        total: bool = False,
     ) -> None:
         self.checks_text = checks_text
         self.test_modules = test_modules
         self.contracts_text = contracts_text
+        self.total = total
 
 
 class Rulebook(ts.ValueObject):
@@ -273,6 +264,7 @@ class Rulebook(ts.ValueObject):
     _value: str
 
     def __init__(self, spec: RulebookSpec) -> None:
+        subjects: set[str] = set()
         def spec_fields(call: ast.Call) -> dict[str, ast.expr] | None:
             if call.keywords or len(call.args) != 1:
                 return None
@@ -362,24 +354,56 @@ class Rulebook(ts.ValueObject):
                         and isinstance(alias_node.value.slice, ast.Name)
                     ):
                         aliases[alias_node.targets[0].id] = alias_node.value.slice.id
-                params = [arg.arg for arg in method.args.args if arg.arg != "self"]
                 bindings: list[dict[str, str | None]] = []
-                for node in ast.walk(tree):
-                    if (
-                        isinstance(node, ast.Call)
-                        and isinstance(node.func, ast.Attribute)
-                        and node.func.attr == method.name
-                        and isinstance(node.func.value, ast.Name)
-                        and node.func.value.id == "self"
-                    ):
-                        bound_args: dict[str, str | None] = {}
-                        for name, arg in zip(params, node.args):
-                            if isinstance(arg, ast.Constant) and (
-                                arg.value is None or isinstance(arg.value, str)
+                spec_names: list[str] = []
+                for member in cls.body:
+                    if isinstance(member, ast.FunctionDef) and member.name == "__init__":
+                        for spec_arg in member.args.args[1:]:
+                            if isinstance(spec_arg.annotation, ast.Name) and spec_arg.annotation.id.endswith("Spec"):
+                                spec_names.append(spec_arg.annotation.id)
+                for spec_name in spec_names:
+                    spec_cls = next(
+                        (n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == spec_name), None
+                    )
+                    spec_init = next(
+                        (m for m in spec_cls.body if isinstance(m, ast.FunctionDef) and m.name == "__init__"),
+                        None,
+                    ) if spec_cls is not None else None
+                    if spec_init is None:
+                        continue
+                    spec_params = [a.arg for a in spec_init.args.posonlyargs + spec_init.args.args][1:]
+                    defaulted = spec_params[len(spec_params) - len(spec_init.args.defaults):]
+                    spec_keywords = [a.arg for a in spec_init.args.kwonlyargs]
+                    for node in ast.walk(tree):
+                        if not (
+                            isinstance(node, ast.Call)
+                            and isinstance(node.func, ast.Name)
+                            and node.func.id == spec_name
+                        ):
+                            continue
+                        spec_bound: dict[str, str | None] = {}
+                        for name, default in zip(defaulted, spec_init.args.defaults):
+                            if isinstance(default, ast.Constant) and (
+                                default.value is None or isinstance(default.value, str)
                             ):
-                                bound_args[name] = arg.value
-                        if bound_args not in bindings:
-                            bindings.append(bound_args)
+                                spec_bound[name] = default.value
+                        for name, kw_default in zip(spec_keywords, spec_init.args.kw_defaults):
+                            if isinstance(kw_default, ast.Constant) and (
+                                kw_default.value is None or isinstance(kw_default.value, str)
+                            ):
+                                spec_bound[name] = kw_default.value
+                        for name, arg in zip(spec_params, node.args):
+                            if isinstance(arg, ast.Constant) and (arg.value is None or isinstance(arg.value, str)):
+                                spec_bound[name] = arg.value
+                        for keyword in node.keywords:
+                            if (
+                                keyword.arg is not None
+                                and isinstance(keyword.value, ast.Constant)
+                                and (keyword.value.value is None or isinstance(keyword.value.value, str))
+                            ):
+                                spec_bound[keyword.arg] = keyword.value.value
+                        if spec_bound not in bindings:
+                            bindings.append(spec_bound)
                 for binding in bindings or [{}]:
                     for call in calls:
                         fields = spec_fields(call)
@@ -402,6 +426,7 @@ class Rulebook(ts.ValueObject):
                             )
                         if code is None:
                             continue
+                        used: list[str] = []
                         message_node = fields["message"]
                         if isinstance(message_node, ast.Constant) and isinstance(
                             message_node.value, str
@@ -425,7 +450,8 @@ class Rulebook(ts.ValueObject):
                                 text = ast.unparse(expr)
                                 if isinstance(expr, ast.Name) and expr.id in binding:
                                     bound = binding[expr.id]
-                                    if bound is None:
+                                    used.append(expr.id)
+                                    if bound is None or bound == "":
                                         dropped = True
                                         break
                                     parts.append(bound)
@@ -470,8 +496,14 @@ class Rulebook(ts.ValueObject):
                             )
                         shape = WHERE_PREFIX.sub("", head)
                         subject = binding.get("subject")
+                        named_subject = next(
+                            (binding[name] for name in used if isinstance(binding.get(name), str) and binding[name] in APPLIES_TO),
+                            None,
+                        )
                         key = (
-                            subject
+                            named_subject
+                            if isinstance(named_subject, str)
+                            else subject
                             if isinstance(subject, str)
                             else f"{cls.name}.{method.name}"
                         )
@@ -479,6 +511,7 @@ class Rulebook(ts.ValueObject):
                             raise RuntimeError(
                                 f"no APPLIES_TO entry for {key!r}; extend the map"
                             )
+                        subjects.add(key)
                         if clause not in codes:
                             order.append(clause)
                             codes[clause] = code
@@ -589,6 +622,13 @@ class Rulebook(ts.ValueObject):
             "architecture violation-injection test).",
             "",
         ]
+        if spec.total:
+            dead = tuple(sorted(key for key in APPLIES_TO if key not in subjects))
+            if dead:
+                raise RuntimeError(
+                    f"APPLIES_TO rows nothing produces: {', '.join(dead)}; "
+                    "drop the row or fix its key"
+                )
         object.__setattr__(self, "_value", "\n".join(lines))
 
     def __str__(self) -> str:

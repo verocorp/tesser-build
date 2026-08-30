@@ -5,6 +5,152 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.93.0] - 2026-08-30
+
+The analyzer now conforms to the rule it enforces. `TB051` says a method is
+for outsiders — a class reaches into itself only for direct recursion — and
+`tessercheck-py/tessercheck/domain/checks.py` carried 231 `# tesser:debt
+TB051` markers, all on one `Codebase` class whose ~130 private methods
+called each other. Every marker is gone. `Codebase` is now `__init__` plus
+`violations()`; the checks live on the objects that own the facts they
+read. No rule changed: the generated `RULES.md` has the same 299 rows
+before and after (three rows' cell lists reordered), and every example
+tree's zero-findings gate is green.
+
+### Changed
+- **`checks.py` is a set of domain objects, not one class.** A `Module`
+  owns its `Scope`, `Placement` (the old `_locate`), test tier, enums, and
+  spoken ports, and carries the per-placement checks (`kernel`, `srv`,
+  `app`, `protocol`, `role`, `orchestrators`, `application_client`,
+  `ports`, `test`, `helper`, `spec_use`, `outcome_use`, `pairing`, …). A
+  `ClassDecl` carries every class-kind check (value object, entity,
+  aggregate, record, DTO, mapper, spec, port, client, actions, orchestrator,
+  job, serde). `Method`, `Body`, `Annotation`, `ImportEdge`, and
+  `Declaration` carry the fixed-message checks on what they see.
+  `violations()` is the only dispatcher: fixpoint, registry, place-keyed
+  arms, class blocks, used-declarations post-pass.
+- **Tree facts are a value object.** `RegistrySpec`/`Registry` (kinds,
+  domain enums, outcome methods, action ports, contexts, export, tops,
+  module and package names, declared imports, pure stdlib, mapper targets,
+  spec registry) is built twice in `violations()` — spec facts need a first
+  registry — and every `Module`/`ClassDecl` method takes it whole.
+- **Literal-parameterized checks are policy value objects.** A check whose
+  message carries a rulebook literal (`SignaturePolicy`,
+  `RecordSignaturePolicy`, `DependencyPolicy`, `TesserImportPolicy`,
+  `StatementPolicy`, `ModuleFunctionPolicy`, `PackageInitPolicy`,
+  `AnnotationPolicy`) is a module `Final` constant built from a literal
+  spec call. The rulebook binds a row by scanning those literal
+  `XSpec(...)` calls; the row key is the bound literal the message names
+  when it is an `APPLIES_TO` key, else the subject, else `Class.method`.
+  `Rulebook`'s `APPLIES_TO` keys moved from `Codebase._*` to
+  `Module.*`/`ClassDecl.*`/`Body.*`/`Declaration.*`/`ImportEdge.*`; the
+  rendered rows did not move.
+- **`ast.*` nodes are a foreign type.** They enter the domain only through
+  a wrapper's constructor or spec (`Annotation`, `FieldSpec`, `ParamSpec`,
+  `MethodSpec`, `ClassDeclSpec`, `BodySpec`, `EnumShapeSpec`), each
+  carrying `# tesser:debt TB080` until the rule for foreign types is cut
+  (`TODOS.md`, "Foreign types at the analyzer's door"). Wrappers compare by
+  `ast.dump`, not node identity, so two wrappers over the same source are
+  equal.
+- **Merged main's adapter-mapper, engine-serde, and DTO-equality rulings
+  (v0.0.90.0–v0.0.92.0)** into the new shape: the serde block and its
+  constants live on `ClassDecl.serde_violations`, and `Rulebook` is the
+  `RulebookSpec` value object main introduced with the bindings above
+  applied inside its `__init__`.
+- `tessercheck-py/.tesser-root` declares `stdlib bisect`.
+- **The ship review's pass over the new shape.** Dead code the
+  decomposition left (seven `Module` accessors, an orphaned
+  `Codebase._names_a_domain_enum`, five unread `Codebase` fields,
+  `COMPONENT_KINDS`, the rulebook's `self.method('literal')` binding
+  branch, eight `HOLE_NAMES` rows no hole names) is gone; `Annotation`
+  compares by `_source` alone (one `ast.unparse` per annotation instead of
+  that plus an `ast.dump`); the declared-uses pass skips the tesser
+  distribution shell the way main's kernel arm did; the two placement
+  totality meta-tests assert their token set is non-empty before checking
+  it; and `Annotation`, `Names`, `KindTable`, the `''`-binding drop, and
+  the no-`__init__` spec guard have direct tests.
+- **Four divergences from main the adversarial review measured, restored.**
+  A hand-written `__eq__` on a domain object no longer draws `TB019` on
+  its `other` parameter (main ran the return checks on comparison dunders
+  and skipped the parameter checks; the decomposition had collapsed the
+  two gates into one). An import declaration is credited by the first
+  match only, and only from an edge the import check would have reached
+  (`import pkg` beside `import pkg.sub` reports `pkg.sub` unused again).
+  A method's first slot is dropped when it is `self`, or `cls` under
+  `@classmethod`, so a spec `__init__(cls, ...)` is a `TB080` again. A
+  store's `AsyncContextManager[A, A]` no longer passes as one port
+  (`Annotation.form()` carries `multi_slice` past `Names`' dedup). Each
+  has a test.
+- **The quadratic run is fixed — the third measured divergence resolved
+  with no ruling needed.** The decomposition had made the run quadratic in
+  tree size: TB080 makes whole-tree facts cross every construction
+  boundary as primitives, TB016 makes each crossing wrap them back into
+  value objects, and the new per-class/per-method boundaries multiplied
+  the crossings (~2,200 `Registry` constructions on a 200-module tree,
+  each O(classes)). Every `Registry` field is now a one-field holder value
+  object (`NameRows`, `KindRows`, `SymbolRows`, `TargetRows`, `MakerRows`,
+  `MethodRows`, `FieldRows`, `SharedRows`) that stores the spec's tuple
+  verbatim — TB016's compound clause starts at two stored fields — and
+  materializes the real `Names`/`KindTable`/`Symbols` lazily in its
+  accessor, so `Registry.__init__` is 17 O(1) constructions and
+  `KindTable` keeps one primitive entries tuple. Both rules hold as
+  written: the analyzer built from the fix reports zero findings over its
+  own source. Measured: last-doubling exponent 2.04 → 1.45 (fitted 1.17
+  vs main's 1.14), 800 synthetic modules 14.5s → 1.2s, all 11 gated trees
+  11.0s → 5.5s (main 3.7s), findings identical everywhere.
+- **The four-audit differential wave's restorations.** Four adversarial
+  slice audits (method bodies, placement, spec/rulebook, per-class)
+  diffed main's `checks.py` against this one; everything they measured
+  outside the two open rulings is restored, with 18 new tests (each
+  behavior-restoring one verified to fail against the pre-fix tree): the
+  quoted `ts.JobContext` return finding; `Refs`, an order-preserving
+  sibling of `Names`, so a signature names the first domain object its
+  annotation walks; the annotated `self` scan; enum extras keyed by body
+  position, so `A = 1; del A` no longer flags the member; the rulebook
+  extractor's posonlyargs/kwonlyargs alignment; nine emission-order
+  regressions back to main's order (provenance first, the second-match
+  pass, module functions and statements before the adapters block,
+  helpers and application-client classes emitted inline through new
+  `Helper` and `ClientClass` value objects, class-body statements merged
+  into the method loop by source position, signature policies inside the
+  per-method loop, `.tesser-root` declaration order for TB044); a reverse
+  totality guard over the rulebook's `APPLIES_TO`
+  (`RulebookSpec(total=True)`, locked over the real tree); and a
+  duplicate-symbol guard on `KindTable`. The differential sweep is
+  byte-identical on 16 of 18 trees — the two exceptions are the intended
+  `ts.Mapper`/`ts.Serde` base change — and RULES.md matches main's 299
+  rows modulo line numbers, row order, four cell-list orderings, and the
+  new tests' fixture column.
+
+### Known
+- **Two measured divergences from main are open rulings, not fixed
+  here** (`TODOS.md`, "checks.py after the TB051 burn-down"): a quoted
+  annotation now resolves where main's never did (a re-emit of every
+  example with every annotation quoted loses 16 findings on python-app —
+  mypy says the spellings are one type; the rule should say whether
+  tessercheck agrees); and `contexts`/`tops` are derived from every
+  source file, parsed or not, so an unparseable `.pyi` can change its
+  siblings' placement. The third measured divergence — the quadratic run
+  — is fixed above. The differential run is byte-identical on all eleven
+  gated trees.
+- A flat ~2× constant against main remains after the quadratic fix (all
+  11 gated trees 5.5s vs 3.7s): the decomposition allocates more objects
+  per module, and one O(modules²) term main also has (a whole-tree
+  frozenset rebuilt inside the per-module dispatch loop) survives.
+  Recorded in `TODOS.md` ("checks.py after the TB051 burn-down"), not
+  fixed here.
+- `Annotation`, `Names`, and `KindTable` have equality tests; the other
+  new value objects and the two entities' `identity()` do not (convention
+  2, not machine-enforced). Listed in `TODOS.md`, with the review's other
+  not-taken findings (`Module._resolve` reaches, `EnumShape` duplicated in
+  `ClassDecl`, accessor-less `ImportEdge`/`Debt`/`Comment`/`TesserImport`,
+  a duplicate `node.name` hole, unbounded recursion on a pathological
+  annotation — carried forward, not new).
+- Nine `TB051` markers remain outside `checks.py` (`tesser-py` `entity.py`,
+  `examples/python-app` `protocol/http.py` and `srv/http/main.py`,
+  `examples/llmport` `srv/voice/agent.py`); they are the three open
+  sub-rulings already in `TODOS.md` and were out of scope.
+
 ## [0.0.92.0] - 2026-08-30
 
 Two domain-modeling gaps that test helpers had been papering over, found by

@@ -305,6 +305,185 @@ where it lands.
   checker should flag it (a TB062-family row for the exported package), and
   `widget.py`'s `Label` field goes when it lands.
 
+## checks.py after the TB051 burn-down (2026-08-30)
+
+`tessercheck/domain/checks.py` carries zero `# tesser:debt TB051` markers:
+`Codebase` is `__init__` plus `violations()`, and every rule lives on the
+object that owns its facts (`Module`, `ClassDecl`, `Method`, `Body`,
+`Annotation`, `ImportEdge`, `Declaration`) or on a literal-only policy value
+object whose module-level `Final` constant is the rulebook's binding source.
+Two things the burn-down left behind, deliberately:
+
+- [ ] **Residual analyzer cost after the Registry fix: a flat ~2× main.**
+  The quadratic itself is fixed (see ruling item 3 below, resolved): all
+  11 gated trees run 5.5s against main's 3.7s, and the scaling exponent
+  matches main. What remains is the decomposition's per-class object graph
+  (`ClassDecl`/`Body`/`AnnotationPolicy` allocate more per module than
+  main's one class did) and one O(modules²) term main has too: the
+  whole-tree `frozenset(each.name().split(".")[0] for each in
+  self._modules)` rebuilt inside the per-module dispatch loop
+  (`checks.py` kernel-tops intersection; main had 15 sites of the same
+  pattern) — ~9% of runtime at 800 synthetic modules and the reason the
+  residual slope is 1.45 on the last doubling rather than ~1.0. Hoist it
+  when a consumer tree makes 2× on seconds matter. The earlier per-call
+  scan list stands for that pass: `Names.__contains__` scans a tuple;
+  `Method.__init__`'s self-alias fixpoint re-walks the body per pass;
+  `Body.__init__` and `ClassDecl.__init__` walk the same subtree three to
+  four times.
+- [ ] **Equality tests for the new value objects** (convention rule 2, not
+  machine-enforced): `Annotation` and `Names` have them (v0.0.93.0);
+  `Symbols`, `KindTable`, `Scope`, `Registry`, `Signature`, `Slot`, `Fact`,
+  `Body`, `Placement`, `Declaration`, `SpecReader`, `EnumShape`, and the
+  policy classes do not. `Method.identity` and `ClassDecl.identity` are
+  never read, so entity equality is unexercised too.
+- [ ] **Shape leftovers the review named and this wave did not take.**
+  `Codebase` still reaches `module._resolve(node)` at four sites where
+  `module.scope().resolve(...)` is the public path — give `Module` a public
+  `resolve` or route through `Scope`, then delete `Module._resolve`.
+  `ClassDecl.__init__` re-implements `EnumShape.__init__`'s member
+  classification instead of building an `EnumShape`. `ImportEdge`, `Debt`,
+  `Comment`, and `TesserImport` publish nothing, so `Module` and `Codebase`
+  read their private fields at ~55 sites. `rulebook.HOLE_NAMES` carries
+  `"node.name"` twice (⟨class⟩ then ⟨function⟩; the second wins, so the
+  `TB051` sibling-reach row renders ⟨function⟩ where it means ⟨class⟩ —
+  fixing it changes a rendered row, so it waits for a rules change).
+  `rulebook.py`'s direct literal-argument binding block has had zero hits
+  since `77aa2fb` moved every site onto `XSpec(...)`.
+- [ ] **Three divergences from main the ship's adversarial review measured
+  — items 1 and 2 are rulings; item 3 resolved in-wave with no ruling
+  needed.** A differential run (main's `checks.py` and this one over the
+  same tree) is byte-identical on all eleven gated trees; 1 and 2 show
+  only on inputs no tree has.
+  1. *Quoted annotations now resolve.* `Annotation` unquotes a string
+     annotation before resolving it; main's `_resolve` never did, so
+     `def _spec() -> "CampaignSpec":` fired `TB073` on main (unresolved →
+     "returns no construction data") and is clean here (resolved → a
+     spec). Re-emitting every example with every annotation quoted loses
+     16 findings on python-app and gains none (TB073 helper return,
+     TB081 dependency/keeps/publishes/client-shape/store-return, TB082
+     zero-calls), and the same unquoting *adds* `TB010` on a VO accessor
+     returning a quoted domain enum. mypy treats the two spellings as one
+     type; the question is whether tessercheck does. If yes, main was
+     emitting spurious findings on quoted code and this is the fix; if no,
+     `Annotation.primary(unquote=...)` should default to the old
+     behaviour. Either way the rule should say which.
+  2. *`contexts`/`tops` are computed over every source, parsed or not.*
+     `Codebase.__init__` derives them from `spec.sources` (a `.pyi`, a
+     duplicate name, a file that fails to parse all count) and freezes them
+     into each `Placement`; main computed them in `violations()` over the
+     modules that parsed. A `gamma/domain/broken.pyi` beside nothing else
+     under `gamma` flips `gamma/other.py` from `TB040` (no governed
+     package) to `TB041` (not a context module), so a whole check family
+     changes. `violations()` still recomputes `contexts` from parsed
+     modules for the `Registry`, so `module.place()` and
+     `registry.contexts()` can disagree in one run. Fix: build the
+     placement inputs from the parsed modules (a second `Module`
+     construction, or `Placement` built after the parse) — a behaviour
+     choice because it decides whether an unparseable file governs its
+     siblings.
+  3. *The run was quadratic in tree size — RESOLVED, no ruling needed.*
+     The cause was a rule interaction, not a breach: TB080 makes
+     whole-tree facts cross every construction boundary as primitives,
+     TB016 makes each crossing wrap them back into value objects, and the
+     TB051 decomposition multiplied the crossings (~2,200 `Registry`
+     constructions on a 200-module tree, each one O(classes) because
+     `KindTable` re-sorts and re-wraps every kind row). The fix keeps both
+     rules as written: every `Registry` field is a one-field holder value
+     object (`NameRows`, `KindRows`, `SymbolRows`, `TargetRows`,
+     `MakerRows`, `MethodRows`, `FieldRows`, `SharedRows`) that stores the
+     spec's tuple verbatim — TB016's compound clause fires only at two or
+     more stored fields — and materializes the real
+     `Names`/`KindTable`/`Symbols` in its accessor, so re-deriving at each
+     boundary is O(1). Measured on synthetic trees: last-doubling exponent
+     2.04 → 1.45 (fitted slope 1.17 vs main's 1.14), 800 modules 14.5s →
+     1.2s, 1600 modules 59.6s → 3.1s, findings identical at every size and
+     on all 11 gated trees (the ship review's 205s-at-800 figure was a
+     denser synthetic tree; same exponent). Lazy is also the honest shape:
+     of 2,200 `KindTable`s built per run only 1,360 were ever read, and
+     `mapper_target`/`outcome_methods`/`action_ports` were built 2,200
+     times and read zero times.
+  Smaller: a VO `__init__(this, value)` (first slot named neither `self`
+  nor `cls`) gains two `TB080`s where main dropped slot 0 by position —
+  the same leading-parameter question as `cls` under `@classmethod`. The
+  enum-extras line keying and the component annotation order were
+  restored by the audit wave below.
+- [x] **The four-audit differential wave (2026-08-30) and its
+  restorations.** Four slice audits (method bodies, placement,
+  spec/rulebook, per-class) ran main's `checks.py` against this one over
+  synthetic and real trees; every divergence they measured outside the
+  two open rulings was restored, each with a pinning test verified to
+  fail against the pre-fix tree: the quoted `ts.JobContext` return
+  finding; walk-order `Refs` (a signature names the first domain object
+  its annotation walks again); the annotated `self` scan; enum extras
+  keyed by body position (`A = 1; del A` no longer flags the member); the
+  rulebook extractor's posonlyargs/kwonlyargs alignment; nine
+  emission-order regressions back to main's order (provenance first, the
+  second-match pass, module functions and statements before the adapters
+  block, helpers and application-client classes emitted inline through
+  new `Helper` and `ClientClass` value objects, class-body statements
+  merged into the method loop by source position, signature policies
+  inside the per-method loop, `.tesser-root` declaration order for
+  TB044); a reverse totality guard over the rulebook's `APPLIES_TO`
+  (`RulebookSpec(total=True)`, locked over the real tree); and a
+  duplicate-symbol guard on `KindTable`. The differential sweep is
+  byte-identical on 16 of 18 trees — the two exceptions are the intended
+  `ts.Mapper`/`ts.Serde` base change — and every remaining synthetic
+  divergence is one of the two rulings above. Left open: `ScopeSpec` is
+  built identically in four places on `Module`; deduplicating it needs a
+  spec parameter threaded from `violations()` or a ruling, because TB083
+  forbids keeping the spec and TB051 forbids a builder self-call.
+- [ ] **A deep annotation crashes the run.** `Annotation.__init__`'s
+  closures recurse over `|` chains and nested subscripts with no depth
+  bound; `x: int | int | ...` a few thousand deep parses but raises
+  `RecursionError` out of `ClassDecl.__init__`, past the `SyntaxError` guard
+  that turns a bad file into a `TB043` finding. The pre-refactor helpers
+  recursed too, but the threshold dropped about 3×: a 400-deep `|` chain
+  runs on main and exits `unexpected error` here (both fail at 1200). It
+  fails closed — the tree goes unchecked, nothing is bypassed. Catch it
+  beside `SyntaxError` or walk iteratively.
+- [ ] **The nine `TB080` markers** (`Annotation`, `FieldSpec`, `ParamSpec`,
+  `MethodSpec`, `ClassDeclSpec`, `BodySpec`, `EnumShapeSpec`,
+  `HelperSpec`, `ClientClassSpec`) are the foreign-type ruling's whole
+  footprint — see the section below.
+
+## Foreign types at the analyzer's door (2026-08-30, deferred rule)
+
+The TB051 burn-down of `tessercheck/domain/checks.py` decomposes `Codebase`'s
+methods into domain objects that wrap Python syntax: `Annotation`, `Field`,
+`Method`, `ClassDecl`, `Scope`, `Names`, `Symbols`. Every one conforms to the
+rules as written except at one point: an `ast.*` node crossing a constructor
+or a spec field. A node is not a primitive and cannot decompose into one, so
+`TB080` fires on the nine wrapper constructors that take one. Each carries
+`# tesser:debt TB080` — the debt names the unruled question at the one place
+the answer would change code, and it is bounded by the number of wrapper
+*types*, not call sites.
+
+The hunch under test: a **foreign type** is a value the tree does not define
+and cannot decompose; it may appear only as the constructor parameter of a
+domain object whose sole job is to be a valid tesser object wrapping it, and
+that object exposes it through nothing but its own methods.
+
+- [ ] **Rule the entry half.** `TB080`'s two allowlists (value-object
+  constructor parameter; spec field) admit types declared foreign per tree —
+  a `.tesser-root` line following the `stdlib <module>` precedent. Evidence:
+  the VO-family slice (this commit) — 40 findings on the first cut, 4 after
+  conforming to the existing vocabulary (seven once every wrapper existed),
+  all of them the foreign parameter.
+- [ ] **Build the exit half.** Nothing catches a wrapper that stores a raw
+  node and hands it back: a probe VO with `_node: ast.expr` and
+  `def node(self) -> ast.expr` passes the analyzer clean today, because
+  `TB010`'s pass-through test knows only `PRIMITIVES`. The door is only a
+  door once a foreign type is a finding in a field annotation, a return
+  annotation, or a non-constructor parameter. Until then the exit is
+  review-only.
+- [ ] **Storage is settled by evidence, not yet by rule.** `ts.ValueObject`
+  equality reads `__dict__` and `ast` nodes compare by identity, so a wrapper
+  storing the node is equal only to itself; storing `ast.dump(node)` (no
+  attributes, so positions drop out) restores value equality across
+  re-parses and line moves. A quoted annotation (`"dict[str, int]"`) and the
+  bare expression are the same annotation to the checker, so the wrapper's
+  constructor unquotes before canonicalizing.
+
 ## Sibling-reference rule: three open sub-rulings (2026-08-23, v0.0.76.0)
 
 TB051's structural clause (a method may not reference a sibling method; direct
