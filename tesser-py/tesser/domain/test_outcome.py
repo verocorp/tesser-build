@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import enum
 import functools
 import typing
@@ -98,7 +100,7 @@ def test_a_metaclass_cannot_skip_the_gate_it_inherits() -> None:
             bases: tuple[type, ...],
             classdict: enum._EnumDict,
             **kwargs: typing.Any,
-        ) -> "Skipping":
+        ) -> Skipping:
             return enum.EnumMeta.__new__(metacls, cls, bases, classdict, **kwargs)
 
     with pytest.raises(TypeError, match=r"Escaped uses a custom metaclass"):
@@ -174,7 +176,7 @@ def test_an_outcome_hides_no_behavior_in_the_enum_slots() -> None:
     with pytest.raises(TypeError, match=r"Made defines '__new__'"):
 
         class Made(ts.Outcome):
-            def __new__(cls, value: int) -> "Made":
+            def __new__(cls, value: int) -> Made:
                 made = object.__new__(cls)
                 made._value_ = value
                 return made

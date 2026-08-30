@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import enum
 import typing
 
@@ -66,7 +68,7 @@ class _OutcomeMeta(enum.EnumMeta):
         bases: tuple[type, ...],
         classdict: enum._EnumDict,
         **kwargs: typing.Any,
-    ) -> "_OutcomeMeta":
+    ) -> _OutcomeMeta:
         made = super().__new__(metacls, cls, bases, classdict, **kwargs)
         for base in bases:
             if isinstance(base, _OutcomeMeta):

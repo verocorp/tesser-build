@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import dataclasses
 
 
@@ -10,7 +12,7 @@ class Amount:
         if self._value < 0:
             raise ValueError(f"amount must not be negative: {self._value}")
 
-    def add(self, other: "Amount") -> "Amount":
+    def add(self, other: Amount) -> Amount:
         return Amount(self._value + other._value)
 
     def value(self) -> int:

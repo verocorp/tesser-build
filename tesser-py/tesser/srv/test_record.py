@@ -243,13 +243,13 @@ def test_a_string_annotation_is_read_as_a_field_and_may_not_carry_a_default() ->
     ):
 
         class _Quoted(tesser.srv.Response):
-            status: "int" = 200
+            status: "int" = 200  # tesser:debt TB021
 
 
 def test_a_string_annotated_classvar_is_not_a_field_and_keeps_its_class_level_value() -> None:
     class QuotedTagged(tesser.srv.Response):
 
-        KIND: "typing.ClassVar[str]" = "reply"
+        KIND: "typing.ClassVar[str]" = "reply"  # tesser:debt TB021
 
         def __init__(self, status: int) -> None:
             super().__init__(status=status)

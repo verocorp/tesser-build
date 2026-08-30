@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import ast
 import bisect
 import builtins
@@ -534,6 +536,8 @@ OUTCOME_SUNDERS: typing.Final[frozenset[str]] = frozenset({"_value_", "_name_"})
 
 TYPING_MODULE: typing.Final[str] = "typing"
 
+LITERAL: typing.Final[str] = "Literal"
+
 SPEC_BLOCKS: typing.Final[frozenset[str]] = frozenset({"spec", "component_spec", "app_spec"})
 
 PUBLIC_CALL: typing.Final[str] = "__call__"
@@ -840,10 +844,10 @@ class SpecRef(ts.ValueObject):
     def shape(self) -> SpecShape:
         return self._shape
 
-    def one(self) -> "SpecRef":
+    def one(self) -> SpecRef:
         return SpecRef(SpecRefSpec(SymbolSpec(str(self._symbol.module()), str(self._symbol.name())), "one"))
 
-    def many(self) -> "SpecRef":
+    def many(self) -> SpecRef:
         return SpecRef(SpecRefSpec(SymbolSpec(str(self._symbol.module()), str(self._symbol.name())), "many"))
 
 
@@ -1045,13 +1049,13 @@ class Names(ts.ValueObject):
     def __init__(self, items: tuple[str, ...]) -> None:
         object.__setattr__(self, "_items", tuple(sorted(frozenset(items))))
 
-    def __and__(self, other: "Names") -> "Names":
+    def __and__(self, other: Names) -> Names:
         return Names(tuple(item for item in self._items if item in other._items))
 
-    def __sub__(self, other: "Names") -> "Names":
+    def __sub__(self, other: Names) -> Names:
         return Names(tuple(item for item in self._items if item not in other._items))
 
-    def __or__(self, other: "Names") -> "Names":
+    def __or__(self, other: Names) -> Names:
         return Names(self._items + other._items)
 
     def __bool__(self) -> bool:
@@ -1100,7 +1104,7 @@ class Symbols(ts.ValueObject):
     def __init__(self, spec: SymbolsSpec) -> None:
         object.__setattr__(self, "_items", tuple(Symbol(item) for item in spec.items))
 
-    def __and__(self, other: "Symbols") -> "Symbols":
+    def __and__(self, other: Symbols) -> Symbols:
         return Symbols(SymbolsSpec(tuple(
             SymbolSpec(str(item.module()), str(item.name()))
             for item in self._items
@@ -1593,7 +1597,7 @@ class Scope(ts.ValueObject):
             return Symbol(SymbolSpec(str(self._module), wanted))
         return None
 
-    def symbols(self, annotation: "Annotation") -> Symbols:
+    def symbols(self, annotation: Annotation) -> Symbols:
         found: list[tuple[str, str]] = []
         for ref in annotation.refs():
             if "." in ref:
@@ -1719,14 +1723,6 @@ class Annotation(ts.ValueObject):
     _form: Names
 
     def __init__(self, node: ast.expr) -> None:  # tesser:debt TB080
-        def unquote(inner: ast.expr) -> ast.expr | None:
-            if isinstance(inner, ast.Constant) and isinstance(inner.value, str):
-                try:
-                    return ast.parse(inner.value, mode="eval").body
-                except SyntaxError:
-                    return None
-            return inner
-
         def head_of(inner: ast.expr) -> str | None:
             cursor: ast.expr | None = inner
             while cursor is not None:
@@ -1737,18 +1733,10 @@ class Annotation(ts.ValueObject):
                 if isinstance(cursor, ast.Subscript):
                     cursor = cursor.value
                     continue
-                if isinstance(cursor, ast.Constant) and isinstance(cursor.value, str):
-                    cursor = unquote(cursor)
-                    if isinstance(cursor, ast.Constant):
-                        return None
-                    continue
                 return None
             return None
 
         def candidates(inner: ast.expr | None) -> list[tuple[str, str]]:
-            if inner is None:
-                return []
-            inner = unquote(inner)
             if inner is None:
                 return []
             if isinstance(inner, ast.BinOp) and isinstance(inner.op, ast.BitOr):
@@ -1770,9 +1758,7 @@ class Annotation(ts.ValueObject):
         def names_bool(inner: ast.expr | None) -> bool:
             if inner is None:
                 return False
-            probe = unquote(inner)
-            if probe is None:
-                return False
+            probe = inner
             if isinstance(probe, ast.BinOp) and isinstance(probe.op, ast.BitOr):
                 return names_bool(probe.left) or names_bool(probe.right)
             if isinstance(probe, ast.Subscript) and head_of(probe) in ("Optional", "Final", "Annotated"):
@@ -1795,9 +1781,7 @@ class Annotation(ts.ValueObject):
             return False
 
         def primitive_leaf(inner: ast.expr) -> bool:
-            probe = unquote(inner)
-            if probe is None:
-                return False
+            probe = inner
             if isinstance(probe, ast.BinOp) and isinstance(probe.op, ast.BitOr):
                 return primitive_leaf(probe.left) or primitive_leaf(probe.right)
             if isinstance(probe, ast.Subscript):
@@ -1811,8 +1795,7 @@ class Annotation(ts.ValueObject):
             return head_of(probe) in PRIMITIVES
 
         form: list[str] = []
-        unquoted = unquote(node)
-        if isinstance(unquoted, (ast.Name, ast.Attribute)):
+        if isinstance(node, (ast.Name, ast.Attribute)):
             form.append("bare")
         if names_bool(node):
             form.append("bool")
@@ -1823,11 +1806,6 @@ class Annotation(ts.ValueObject):
         spec_candidates = tuple(Text(f"{ref}|{shape}") for ref, shape in candidates(node))
         slice_names: list[str] = []
         sliced = node
-        if isinstance(sliced, ast.Constant) and isinstance(sliced.value, str):
-            try:
-                sliced = ast.parse(sliced.value, mode="eval").body
-            except SyntaxError:
-                sliced = node
         if isinstance(sliced, ast.Subscript):
             elements = sliced.slice.elts if isinstance(sliced.slice, ast.Tuple) else [sliced.slice]
             for element in elements:
@@ -1837,14 +1815,22 @@ class Annotation(ts.ValueObject):
                     slice_names.append(f"{ast.unparse(element.value)}.{element.attr}")
                 elif not (isinstance(element, ast.Constant) and element.value is Ellipsis):
                     slice_names.append("?")
+        quoted_anywhere = False
+        marks: list[ast.expr] = [node]
+        while marks:
+            mark = marks.pop()
+            if isinstance(mark, ast.Constant):
+                if isinstance(mark.value, str):
+                    quoted_anywhere = True
+                continue
+            if isinstance(mark, ast.Subscript) and head_of(mark.value) == LITERAL:
+                marks.append(mark.value)
+                continue
+            marks.extend(
+                child for child in ast.iter_child_nodes(mark) if isinstance(child, ast.expr)
+            )
+        quote_marks: list[str] = ["quoted"] if quoted_anywhere else []
         primary: ast.expr = node
-        quote_marks: list[str] = []
-        if isinstance(primary, ast.Constant) and isinstance(primary.value, str):
-            quote_marks.append("quoted")
-            try:
-                primary = ast.parse(primary.value, mode="eval").body
-            except SyntaxError:
-                primary = node
         while isinstance(primary, ast.Subscript):
             primary = primary.value
         primary_ref: str | None = None
@@ -1864,23 +1850,11 @@ class Annotation(ts.ValueObject):
             if isinstance(cursor, ast.Subscript):
                 cursor = cursor.value
                 continue
-            if isinstance(cursor, ast.Constant) and isinstance(cursor.value, str):
-                try:
-                    parsed = ast.parse(cursor.value, mode="eval").body
-                except SyntaxError:
-                    break
-                cursor = None if isinstance(parsed, ast.Constant) else parsed
-                continue
             break
         container: str | None = None
         pending: list[ast.expr] = [node]
         while pending and container is None:
             probe = pending.pop()
-            if isinstance(probe, ast.Constant) and isinstance(probe.value, str):
-                try:
-                    probe = ast.parse(probe.value, mode="eval").body
-                except SyntaxError:
-                    continue
             if isinstance(probe, ast.BinOp) and isinstance(probe.op, ast.BitOr):
                 pending.extend([probe.left, probe.right])
                 continue
@@ -1906,24 +1880,14 @@ class Annotation(ts.ValueObject):
                 container = probe.id
         names: set[str] = set()
         refs: list[str] = []
-        stack: list[ast.AST] = [node]
-        while stack:
-            top = stack.pop()
-            for sub in ast.walk(top):
-                if isinstance(sub, ast.Name):
-                    names.add(sub.id)
-                    refs.append(sub.id)
-                elif isinstance(sub, ast.Attribute):
-                    names.add(sub.attr)
-                    if isinstance(sub.value, (ast.Name, ast.Attribute)):
-                        refs.append(f"{ast.unparse(sub.value)}.{sub.attr}")
-                elif isinstance(sub, ast.Constant) and isinstance(sub.value, str):
-                    try:
-                        quoted = ast.parse(sub.value, mode="eval").body
-                    except SyntaxError:
-                        continue
-                    if not isinstance(quoted, ast.Constant):
-                        stack.append(quoted)
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.Name):
+                names.add(sub.id)
+                refs.append(sub.id)
+            elif isinstance(sub, ast.Attribute):
+                names.add(sub.attr)
+                if isinstance(sub.value, (ast.Name, ast.Attribute)):
+                    refs.append(f"{ast.unparse(sub.value)}.{sub.attr}")
         produced: set[str] = set()
         produced_refs: set[str] = set()
         walk_stack: list[ast.expr] = [node]
@@ -1944,13 +1908,6 @@ class Annotation(ts.ValueObject):
                     walk_stack.append(walked.slice)
                 continue
             if isinstance(walked, ast.Constant):
-                if isinstance(walked.value, str):
-                    try:
-                        parsed_walk = ast.parse(walked.value, mode="eval")
-                    except SyntaxError:
-                        continue
-                    if not isinstance(parsed_walk.body, ast.Constant):
-                        walk_stack.append(parsed_walk.body)
                 continue
             if isinstance(walked, ast.Attribute):
                 produced.add(walked.attr)
@@ -1969,12 +1926,6 @@ class Annotation(ts.ValueObject):
         while peel and leaves is not None:
             leaf = peel.pop()
             if isinstance(leaf, ast.Constant):
-                if isinstance(leaf.value, str):
-                    try:
-                        peel.append(ast.parse(leaf.value, mode="eval").body)
-                    except SyntaxError:
-                        leaves = None
-                    continue
                 if leaf.value is Ellipsis or leaf.value is None:
                     continue
                 leaves = None
@@ -2349,7 +2300,7 @@ class SignaturePolicy(ts.ValueObject):
             )
         return tuple(found)
 
-    def missing_constructor_violations(self, decl: "ClassDecl") -> tuple[Violation, ...]:
+    def missing_constructor_violations(self, decl: ClassDecl) -> tuple[Violation, ...]:
         constructs = str(self._constructs) if self._constructs is not None else ""
         if decl.constructor() is not None:
             return ()
@@ -2380,7 +2331,7 @@ class RecordSignaturePolicy(ts.ValueObject):
         object.__setattr__(self, "_subject", Text(spec.subject))
         object.__setattr__(self, "_leading_context", Names(("leading",) if spec.leading_context else ()))
 
-    def violations(self, decl: "ClassDecl") -> tuple[Violation, ...]:
+    def violations(self, decl: ClassDecl) -> tuple[Violation, ...]:
         subject = str(self._subject)
         found: list[Violation] = []
         for signature in decl.signatures():
@@ -3994,17 +3945,13 @@ class ClassDecl(ts.Entity):
 
         SlotRow = tuple[str, str | None, tuple[str, ...], tuple[str, str] | None, bool]
 
-        def slot(name: str, annotation: Annotation | None, unquote: bool) -> SlotRow:
+        def slot(name: str, annotation: Annotation | None) -> SlotRow:
             if annotation is None:
                 return (name, None, (), None, False)
-            block: str | None = None
-            resolved: Symbol | None = None
             primary = annotation.primary()
-            named = scope.resolve(primary) if primary is not None else None
-            named_block = kinds.block_of(named) if named is not None else None
-            if primary is not None and (unquote or not annotation.quoted()):
-                resolved = named
-                block = str(named_block) if named_block is not None else None
+            resolved = scope.resolve(primary) if primary is not None else None
+            named_block = kinds.block_of(resolved) if resolved is not None else None
+            block = str(named_block) if named_block is not None else None
             touched: list[str] = []
             for symbol in scope.symbols(annotation):
                 found_block = kinds.block_of(symbol)
@@ -4015,7 +3962,7 @@ class ClassDecl(ts.Entity):
                 block,
                 tuple(touched),
                 (str(resolved.module()), str(resolved.name())) if resolved is not None else None,
-                named_block is not None and str(named_block) == JOB_CONTEXT_BLOCK,
+                block is not None and block == JOB_CONTEXT_BLOCK,
             )
 
         SignatureRow = tuple[
@@ -4053,9 +4000,9 @@ class ClassDecl(ts.Entity):
                 int(method.lineno()),
                 str(method.name()),
                 tuple(method.open()),
-                tuple(slot(str(param.name()), param.annotation(), True) for param in method.params()),
-                slot("return", method.returns(), False) if method.returns() is not None else None,
-                slot(str(first.name()), first.annotation(), True) if first is not None else None,
+                tuple(slot(str(param.name()), param.annotation()) for param in method.params()),
+                slot("return", method.returns()) if method.returns() is not None else None,
+                slot(str(first.name()), first.annotation()) if first is not None else None,
             ))
         object.__setattr__(self, "_signatures", tuple(Signature(signature_spec(row)) for row in signature_rows))
         own_block = kinds.block_of(Symbol(SymbolSpec(spec.module, node.name)))
@@ -5712,7 +5659,7 @@ class TesserImportPolicy(ts.ValueObject):
         object.__setattr__(self, "_absent_clause", Text(spec.absent_clause) if spec.absent_clause else None)
         object.__setattr__(self, "_norms", Names(spec.norms))
 
-    def violations(self, module: "Module") -> tuple[Violation, ...]:
+    def violations(self, module: Module) -> tuple[Violation, ...]:
         package = str(self._package)
         only_clause = str(self._only_clause)
         once_clause = str(self._once_clause)
@@ -5809,7 +5756,7 @@ class StatementPolicy(ts.ValueObject):
         object.__setattr__(self, "_loose_clause", Text(spec.loose_clause))
         object.__setattr__(self, "_entry", Text(spec.entry) if spec.entry else None)
 
-    def violations(self, module: "Module") -> tuple[Violation, ...]:
+    def violations(self, module: Module) -> tuple[Violation, ...]:
         subject = str(self._subject)
         loose_clause = str(self._loose_clause)
         entry = str(self._entry) if self._entry is not None else None
@@ -5908,7 +5855,7 @@ class ModuleFunctionPolicy(ts.ValueObject):
     def __init__(self, spec: ModuleFunctionPolicySpec) -> None:
         object.__setattr__(self, "_subject", Text(spec.subject))
 
-    def violations(self, module: "Module") -> tuple[Violation, ...]:
+    def violations(self, module: Module) -> tuple[Violation, ...]:
         subject = str(self._subject)
         module_name = module.name()
         found: list[Violation] = []
@@ -5939,7 +5886,7 @@ class PackageInitPolicy(ts.ValueObject):
     def __init__(self, spec: PackageInitPolicySpec) -> None:
         object.__setattr__(self, "_subject", Text(spec.subject))
 
-    def violations(self, module: "Module") -> tuple[Violation, ...]:
+    def violations(self, module: Module) -> tuple[Violation, ...]:
         subject = str(self._subject)
         module_name = module.name()
         return tuple(
@@ -6303,20 +6250,9 @@ class Module(ts.Entity):
             return str(block) if block is not None else None
 
         def names_outcome(node: ast.expr) -> bool:
-            stack: list[ast.expr] = [node]
-            while stack:
-                top = stack.pop()
-                for sub in ast.walk(top):
-                    if isinstance(sub, (ast.Name, ast.Attribute)):
-                        if block_of(sub) == OUTCOME_BLOCK:
-                            return True
-                    elif isinstance(sub, ast.Constant) and isinstance(sub.value, str):
-                        try:
-                            quoted = ast.parse(sub.value, mode="eval").body
-                        except SyntaxError:
-                            continue
-                        if not isinstance(quoted, ast.Constant):
-                            stack.append(quoted)
+            for sub in ast.walk(node):
+                if isinstance(sub, (ast.Name, ast.Attribute)) and block_of(sub) == OUTCOME_BLOCK:
+                    return True
             return False
 
         def outcome_key(node: ast.expr) -> tuple[str, str] | None:
@@ -6586,6 +6522,38 @@ class Module(ts.Entity):
                     f"{module_name} reaches into {outcome}; an outcome class is named only "
                     "in an annotation, a return, or a case pattern, because indexing, getattr, "
                     "and iteration read members the type checker cannot exhaust",
+                ))
+            )
+        return tuple(found)
+
+    def annotation_violations(self) -> tuple[Violation, ...]:
+        module_name = self._name
+        sites: list[ast.expr] = []
+        for stmt in self._body:
+            for node in ast.walk(stmt):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    args = node.args
+                    taken = args.posonlyargs + args.args + args.kwonlyargs
+                    taken += [each for each in (args.vararg, args.kwarg) if each is not None]
+                    sites.extend(arg.annotation for arg in taken if arg.annotation is not None)
+                    if node.returns is not None:
+                        sites.append(node.returns)
+                elif isinstance(node, ast.AnnAssign):
+                    sites.append(node.annotation)
+        found: list[Violation] = []
+        for site in sorted(sites, key=lambda item: (item.lineno, item.col_offset)):
+            written = Annotation(site)
+            if not written.quoted():
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    site.lineno,
+                    "TB021",
+                    f"{module_name} quotes {written.source()}; an annotation is written "
+                    "unquoted — a quoted type is a string the analyzer cannot read, and "
+                    "from __future__ import annotations is what defers a name the module "
+                    "has not defined yet",
                 ))
             )
         return tuple(found)
@@ -10066,6 +10034,7 @@ class Codebase(ts.AggregateRoot):
             ),
         )
         for module in self._modules:
+            found.extend(module.annotation_violations())
             found.extend(module.comment_violations())
             found.extend(module.double_violations())
             found.extend(module.shadowing_violations())
