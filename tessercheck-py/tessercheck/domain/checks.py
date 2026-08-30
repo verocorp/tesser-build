@@ -1107,6 +1107,47 @@ class KindTable(ts.ValueObject):
         return None
 
 
+class SharedSpecSpec(ts.Spec):
+
+    def __init__(self, module: str, cls: str, line: int, spec: SymbolSpec, owner: SymbolSpec) -> None:
+        self.module = module
+        self.cls = cls
+        self.line = line
+        self.spec = spec
+        self.owner = owner
+
+
+class SharedSpec(ts.ValueObject):
+
+    _module: Text
+    _cls: Text
+    _line: Line
+    _spec: Symbol
+    _owner: Symbol
+
+    def __init__(self, spec: SharedSpecSpec) -> None:
+        object.__setattr__(self, "_module", Text(spec.module))
+        object.__setattr__(self, "_cls", Text(spec.cls))
+        object.__setattr__(self, "_line", Line(spec.line))
+        object.__setattr__(self, "_spec", Symbol(spec.spec))
+        object.__setattr__(self, "_owner", Symbol(spec.owner))
+
+    def module(self) -> Text:
+        return self._module
+
+    def cls(self) -> Text:
+        return self._cls
+
+    def line(self) -> Line:
+        return self._line
+
+    def spec(self) -> Symbol:
+        return self._spec
+
+    def owner(self) -> Symbol:
+        return self._owner
+
+
 class RegistrySpec(ts.Spec):
 
     def __init__(
@@ -1122,7 +1163,19 @@ class RegistrySpec(ts.Spec):
         declared_imports: tuple[str, ...] = (),
         pure_stdlib: tuple[str, ...] = (),
         mapper_targets: tuple[tuple[str, str, str, str], ...] = (),
+        spec_makers: tuple[tuple[str, str, str, str, str], ...] = (),
+        spec_methods: tuple[tuple[str, str, str, str], ...] = (),
+        spec_fields: tuple[tuple[str, str, str, str, str, str], ...] = (),
+        spec_takers: tuple[tuple[str, str, str, str], ...] = (),
+        spec_shared: tuple[SharedSpecSpec, ...] = (),
+        package_names: tuple[str, ...] = (),
     ) -> None:
+        self.package_names = package_names
+        self.spec_makers = spec_makers
+        self.spec_methods = spec_methods
+        self.spec_fields = spec_fields
+        self.spec_takers = spec_takers
+        self.spec_shared = spec_shared
         self.kinds = kinds
         self.domain_enums = domain_enums
         self.outcome_methods = outcome_methods
@@ -1149,8 +1202,82 @@ class Registry(ts.ValueObject):
     _declared_imports: Names
     _pure_stdlib: Names
     _mapper_targets: tuple[tuple[Symbol, Symbol], ...]
+    _spec_makers: tuple[tuple[Symbol, SpecRef], ...]
+    _spec_methods: tuple[tuple[Text, SpecRef], ...]
+    _spec_fields: tuple[tuple[Text, SpecRef], ...]
+    _spec_takers: tuple[tuple[Symbol, Symbol], ...]
+    _spec_shared: tuple[SharedSpec, ...]
+    _package_names: Names
+
+    def module_names(self) -> Names:
+        return self._module_names
+
+    def package_names(self) -> Names:
+        return self._package_names
+
+    def spec_maker(self, function: Symbol) -> SpecRef | None:
+        for named, made in self._spec_makers:
+            if named == function:
+                return made
+        return None
+
+    def spec_method(self, name: Text) -> SpecRef | None:
+        for named, made in self._spec_methods:
+            if named == name:
+                return made
+        return None
+
+    def spec_field(self, key: Text) -> SpecRef | None:
+        for named, made in self._spec_fields:
+            if named == key:
+                return made
+        return None
+
+    def spec_takers(self, spec: Symbol) -> Symbols:
+        return Symbols(SymbolsSpec(tuple(
+            SymbolSpec(str(taker.module()), str(taker.name()))
+            for named, taker in self._spec_takers
+            if named == spec
+        )))
+
+    def spec_shared(self) -> tuple[SharedSpec, ...]:
+        return self._spec_shared
 
     def __init__(self, spec: RegistrySpec) -> None:
+        object.__setattr__(
+            self,
+            "_spec_makers",
+            tuple(
+                (Symbol(SymbolSpec(module, name)), SpecRef(SpecRefSpec(SymbolSpec(spec_module, spec_name), shape)))
+                for module, name, spec_module, spec_name, shape in spec.spec_makers
+            ),
+        )
+        object.__setattr__(
+            self,
+            "_spec_methods",
+            tuple(
+                (Text(name), SpecRef(SpecRefSpec(SymbolSpec(spec_module, spec_name), shape)))
+                for name, spec_module, spec_name, shape in spec.spec_methods
+            ),
+        )
+        object.__setattr__(
+            self,
+            "_spec_fields",
+            tuple(
+                (Text(f"{module}|{name}|{attr}"), SpecRef(SpecRefSpec(SymbolSpec(spec_module, spec_name), shape)))
+                for module, name, attr, spec_module, spec_name, shape in spec.spec_fields
+            ),
+        )
+        object.__setattr__(
+            self,
+            "_spec_takers",
+            tuple(
+                (Symbol(SymbolSpec(spec_module, spec_name)), Symbol(SymbolSpec(module, name)))
+                for spec_module, spec_name, module, name in spec.spec_takers
+            ),
+        )
+        object.__setattr__(self, "_spec_shared", tuple(SharedSpec(item) for item in spec.spec_shared))
+        object.__setattr__(self, "_package_names", Names(spec.package_names))
         object.__setattr__(self, "_kinds", KindTable(spec.kinds))
         object.__setattr__(self, "_domain_enums", Symbols(SymbolsSpec(spec.domain_enums)))
         object.__setattr__(self, "_outcome_methods", Names(spec.outcome_methods))
@@ -1270,6 +1397,7 @@ class ScopeSpec(ts.Spec):
         classes: tuple[str, ...],
         functions: tuple[str, ...] = (),
         spoken: str | None = None,
+        enums: tuple[str, ...] = (),
     ) -> None:
         self.module = module
         self.imported = imported
@@ -1277,6 +1405,7 @@ class ScopeSpec(ts.Spec):
         self.classes = classes
         self.functions = functions
         self.spoken = spoken
+        self.enums = enums
 
 
 class Scope(ts.ValueObject):
@@ -1287,6 +1416,7 @@ class Scope(ts.ValueObject):
     _classes: Names
     _functions: Names
     _spoken: Text | None
+    _enums: Names
 
     def __init__(self, spec: ScopeSpec) -> None:
         object.__setattr__(self, "_module", Text(spec.module))
@@ -1295,6 +1425,10 @@ class Scope(ts.ValueObject):
         object.__setattr__(self, "_classes", Names(spec.classes))
         object.__setattr__(self, "_functions", Names(spec.functions))
         object.__setattr__(self, "_spoken", Text(spec.spoken) if spec.spoken else None)
+        object.__setattr__(self, "_enums", Names(spec.enums))
+
+    def enums(self) -> Names:
+        return self._enums
 
     def functions(self) -> Names:
         return self._functions
@@ -1451,8 +1585,112 @@ class Annotation(ts.ValueObject):
     _primary: Text | None
     _quoted: Names
     _slice_names: Names
+    _spec_candidates: tuple[Text, ...]
+    _form: Names
 
     def __init__(self, node: ast.expr) -> None:  # tesser:debt TB080
+        def unquote(inner: ast.expr) -> ast.expr | None:
+            if isinstance(inner, ast.Constant) and isinstance(inner.value, str):
+                try:
+                    return ast.parse(inner.value, mode="eval").body
+                except SyntaxError:
+                    return None
+            return inner
+
+        def head_of(inner: ast.expr) -> str | None:
+            cursor: ast.expr | None = inner
+            while cursor is not None:
+                if isinstance(cursor, ast.Name):
+                    return cursor.id
+                if isinstance(cursor, ast.Attribute):
+                    return cursor.attr
+                if isinstance(cursor, ast.Subscript):
+                    cursor = cursor.value
+                    continue
+                if isinstance(cursor, ast.Constant) and isinstance(cursor.value, str):
+                    cursor = unquote(cursor)
+                    if isinstance(cursor, ast.Constant):
+                        return None
+                    continue
+                return None
+            return None
+
+        def candidates(inner: ast.expr | None) -> list[tuple[str, str]]:
+            if inner is None:
+                return []
+            inner = unquote(inner)
+            if inner is None:
+                return []
+            if isinstance(inner, ast.BinOp) and isinstance(inner.op, ast.BitOr):
+                return candidates(inner.left) + candidates(inner.right)
+            if isinstance(inner, ast.Subscript):
+                sub_head = head_of(inner)
+                elements = inner.slice.elts if isinstance(inner.slice, ast.Tuple) else [inner.slice]
+                if sub_head in ("Optional", "Union"):
+                    return [item for each in elements for item in candidates(each)]
+                if sub_head in ("tuple", "list", "set", "frozenset", "Sequence", "Iterable", "Collection"):
+                    return [(ref, "many") for each in elements for ref, shape in candidates(each) if shape == "one"]
+                return []
+            if isinstance(inner, ast.Name):
+                return [(inner.id, "one")]
+            if isinstance(inner, ast.Attribute) and isinstance(inner.value, (ast.Name, ast.Attribute)):
+                return [(f"{ast.unparse(inner.value)}.{inner.attr}", "one")]
+            return []
+
+        def names_bool(inner: ast.expr | None) -> bool:
+            if inner is None:
+                return False
+            probe = unquote(inner)
+            if probe is None:
+                return False
+            if isinstance(probe, ast.BinOp) and isinstance(probe.op, ast.BitOr):
+                return names_bool(probe.left) or names_bool(probe.right)
+            if isinstance(probe, ast.Subscript) and head_of(probe) in ("Optional", "Final", "Annotated"):
+                wrapped = probe.slice
+                if isinstance(wrapped, ast.Tuple) and wrapped.elts:
+                    wrapped = wrapped.elts[0]
+                return names_bool(wrapped)
+            return isinstance(probe, ast.Name) and probe.id == "bool"
+
+        def is_union(inner: ast.expr | None) -> bool:
+            if isinstance(inner, ast.BinOp) and isinstance(inner.op, ast.BitOr):
+                return True
+            if isinstance(inner, ast.Subscript):
+                if isinstance(inner.value, ast.Name) and inner.value.id in ("Optional", "Union"):
+                    return True
+                elements = inner.slice.elts if isinstance(inner.slice, ast.Tuple) else [inner.slice]
+                return any(is_union(element) for element in elements)
+            if isinstance(inner, ast.Attribute):
+                return inner.attr in ("Optional", "Union")
+            return False
+
+        def primitive_leaf(inner: ast.expr) -> bool:
+            probe = unquote(inner)
+            if probe is None:
+                return False
+            if isinstance(probe, ast.BinOp) and isinstance(probe.op, ast.BitOr):
+                return primitive_leaf(probe.left) or primitive_leaf(probe.right)
+            if isinstance(probe, ast.Subscript):
+                sub_head = head_of(probe)
+                elements = probe.slice.elts if isinstance(probe.slice, ast.Tuple) else [probe.slice]
+                if sub_head in ("Callable", "Literal", "type", "Type"):
+                    return False
+                if sub_head in ("dict", "Dict", "Mapping", "MutableMapping"):
+                    elements = elements[-1:]
+                return any(primitive_leaf(each) for each in elements)
+            return head_of(probe) in PRIMITIVES
+
+        form: list[str] = []
+        unquoted = unquote(node)
+        if isinstance(unquoted, (ast.Name, ast.Attribute)):
+            form.append("bare")
+        if names_bool(node):
+            form.append("bool")
+        if is_union(node):
+            form.append("union")
+        if primitive_leaf(node):
+            form.append("primitive_leaf")
+        spec_candidates = tuple(Text(f"{ref}|{shape}") for ref, shape in candidates(node))
         slice_names: list[str] = []
         sliced = node
         if isinstance(sliced, ast.Constant) and isinstance(sliced.value, str):
@@ -1643,6 +1881,8 @@ class Annotation(ts.ValueObject):
         object.__setattr__(self, "_primary", Text(primary_ref) if primary_ref else None)
         object.__setattr__(self, "_quoted", Names(tuple(quote_marks)))
         object.__setattr__(self, "_slice_names", Names(tuple(slice_names)))
+        object.__setattr__(self, "_spec_candidates", spec_candidates)
+        object.__setattr__(self, "_form", Names(tuple(form)))
 
     def source(self) -> Text:
         return self._source
@@ -1677,6 +1917,12 @@ class Annotation(ts.ValueObject):
     def slice_names(self) -> Names:
         return self._slice_names
 
+    def spec_candidates(self) -> tuple[Text, ...]:
+        return self._spec_candidates
+
+    def form(self) -> Names:
+        return self._form
+
 
 class AnnotationPolicySpec(ts.Spec):
 
@@ -1687,12 +1933,14 @@ class AnnotationPolicySpec(ts.Spec):
         enums: tuple[str, ...],
         scope: ScopeSpec,
         registry: RegistrySpec,
+        domain_enums: str = "allowed",
     ) -> None:
         self.blocks = blocks
         self.primitives = primitives
         self.enums = enums
         self.scope = scope
         self.registry = registry
+        self.domain_enums = domain_enums
 
 
 class AnnotationPolicy(ts.ValueObject):
@@ -1702,6 +1950,7 @@ class AnnotationPolicy(ts.ValueObject):
     _enums: Names
     _scope: Scope
     _registry: Registry
+    _domain_enums: Names
 
     def __init__(self, spec: AnnotationPolicySpec) -> None:
         object.__setattr__(self, "_blocks", Names(spec.blocks))
@@ -1709,6 +1958,7 @@ class AnnotationPolicy(ts.ValueObject):
         object.__setattr__(self, "_enums", Names(spec.enums))
         object.__setattr__(self, "_scope", Scope(spec.scope))
         object.__setattr__(self, "_registry", Registry(spec.registry))
+        object.__setattr__(self, "_domain_enums", Names((spec.domain_enums,)))
 
     def disallowed(self, annotation: Annotation) -> Names:
         leaves = annotation.leaves()
@@ -1722,7 +1972,7 @@ class AnnotationPolicy(ts.ValueObject):
             if symbol is None:
                 rejected.append(leaf)
                 continue
-            if symbol in self._registry.domain_enums():
+            if "allowed" in self._domain_enums and symbol in self._registry.domain_enums():
                 continue
             block = self._registry.kinds().block_of(symbol)
             if block is None or str(block) not in self._blocks:
@@ -2706,6 +2956,280 @@ class DependencyPolicy(ts.ValueObject):
         return tuple(found)
 
 
+class SpecReaderSpec(ts.Spec):
+
+    def __init__(self, scope: ScopeSpec, registry: RegistrySpec) -> None:
+        self.scope = scope
+        self.registry = registry
+
+
+class SpecReader(ts.ValueObject):
+
+    _scope: Scope
+    _registry: Registry
+
+    def __init__(self, spec: SpecReaderSpec) -> None:
+        object.__setattr__(self, "_scope", Scope(spec.scope))
+        object.__setattr__(self, "_registry", Registry(spec.registry))
+
+    def ref(self, annotation: Annotation) -> SpecRef | None:
+        kinds = self._registry.kinds()
+        for candidate in annotation.spec_candidates():
+            ref, shape = str(candidate).rsplit("|", 1)
+            symbol = self._scope.resolve(Text(ref))
+            if symbol is None:
+                continue
+            block = kinds.block_of(symbol)
+            if block is not None and str(block) == "mapper":
+                symbol = self._registry.mapper_target(symbol)
+                block = kinds.block_of(symbol) if symbol is not None else None
+            if symbol is not None and block is not None and str(block) in SPEC_BLOCKS:
+                return SpecRef(SpecRefSpec(SymbolSpec(str(symbol.module()), str(symbol.name())), shape))
+        return None
+
+
+class DeclarationSpec(ts.Spec):
+
+    def __init__(
+        self,
+        declared: str,
+        exports: tuple[str, ...],
+        imports: tuple[str, ...],
+        stdlib: tuple[str, ...],
+        pure_stdlib: tuple[str, ...],
+        nested: tuple[str, ...],
+        symlinked: tuple[str, ...],
+        module_names: tuple[str, ...],
+        package_names: tuple[str, ...],
+    ) -> None:
+        self.declared = declared
+        self.exports = exports
+        self.imports = imports
+        self.stdlib = stdlib
+        self.pure_stdlib = pure_stdlib
+        self.nested = nested
+        self.symlinked = symlinked
+        self.module_names = module_names
+        self.package_names = package_names
+
+
+class Declaration(ts.ValueObject):
+
+    _declared: Text
+    _exports: Names
+    _export: Text | None
+    _imports: Names
+    _stdlib: Names
+    _pure_stdlib: Names
+    _nested: Names
+    _symlinked: Names
+    _module_names: Names
+    _package_names: Names
+
+    def __init__(self, spec: DeclarationSpec) -> None:
+        object.__setattr__(self, "_declared", Text(spec.declared))
+        object.__setattr__(self, "_exports", Names(spec.exports))
+        object.__setattr__(self, "_export", Text(spec.exports[0]) if len(spec.exports) == 1 else None)
+        object.__setattr__(self, "_imports", Names(spec.imports))
+        object.__setattr__(self, "_stdlib", Names(spec.stdlib))
+        object.__setattr__(self, "_pure_stdlib", Names(spec.pure_stdlib))
+        object.__setattr__(self, "_nested", Names(spec.nested))
+        object.__setattr__(self, "_symlinked", Names(spec.symlinked))
+        object.__setattr__(self, "_module_names", Names(spec.module_names))
+        object.__setattr__(self, "_package_names", Names(spec.package_names))
+
+    def violations(self) -> tuple[Violation, ...]:
+        declared = str(self._declared)
+        found: list[Violation] = []
+        if declared == DECLARED_MISSING:
+            found.append(
+                Violation(ViolationSpec(
+                    TREE_DECLARATION,
+                    1,
+                    "TB044",
+                    "this tree is not declared; a checkable tree carries a "
+                    ".tesser-root file containing 'app' at its root",
+                ))
+            )
+        elif declared == DECLARED_UNREADABLE:
+            found.append(
+                Violation(ViolationSpec(
+                    TREE_DECLARATION,
+                    1,
+                    "TB044",
+                    "this tree's declaration is not readable; "
+                    "a .tesser-root is a plain UTF-8 text file",
+                ))
+            )
+        elif len(tuple(self._exports)) > 1:
+            found.append(
+                Violation(ViolationSpec(
+                    TREE_DECLARATION,
+                    1,
+                    "TB044",
+                    "this tree declares a second exported kernel; a tree has one "
+                    "exported kernel, so a declaration carries at most one "
+                    "'export <dir>' line",
+                ))
+            )
+        elif declared != DECLARED_APP:
+            found.append(
+                Violation(ViolationSpec(
+                    TREE_DECLARATION,
+                    1,
+                    "TB044",
+                    "this tree declares an unrecognized kind; a declaration is "
+                    "'app', then only 'skip <dir>', 'export <dir>', "
+                    "'import <package>', and 'stdlib <module>' lines",
+                ))
+            )
+        if len(tuple(self._exports)) <= 1:
+            export = str(self._export) if self._export is not None else None
+            tops = frozenset(name.split(".")[0] for name in self._module_names)
+            if export is not None:
+                exported: list[Violation] = []
+                if export == KERNEL_PACKAGE or export in SHELL_PACKAGES:
+                    exported.append(
+                        Violation(ViolationSpec(
+                            TREE_DECLARATION,
+                            1,
+                            "TB044",
+                            f"this tree exports '{self._export}'; an exported kernel "
+                            "never takes the name of the kernel package or the app shell",
+                        ))
+                    )
+                elif export not in self._package_names:
+                    exported.append(
+                        Violation(ViolationSpec(
+                            TREE_DECLARATION,
+                            1,
+                            "TB044",
+                            f"this tree exports '{self._export}' but no such package "
+                            "exists; an export names a package at the tree root",
+                        ))
+                    )
+                elif export == TESSER and sorted(tops - frozenset({TESSER, TESTS_ROLE, "conftest"})):
+                    outsiders = sorted(tops - frozenset({TESSER, TESTS_ROLE, "conftest"}))
+                    exported.append(
+                        Violation(ViolationSpec(
+                            TREE_DECLARATION,
+                            1,
+                            "TB044",
+                            f"this tree exports 'tesser' but also holds {', '.join(outsiders)}; "
+                            "a tree exporting tesser is the distribution itself — "
+                            "its top level is tesser and tests, nothing else",
+                        ))
+                    )
+                elif export != TESSER and any(
+                    len(parts) >= 2 and parts[0] == export and parts[1] in ROLES
+                    for parts in (name.split(".") for name in self._module_names)
+                ):
+                    exported.append(
+                        Violation(ViolationSpec(
+                            TREE_DECLARATION,
+                            1,
+                            "TB044",
+                            f"this tree exports '{self._export}', a context-shaped package; "
+                            "a bounded context's domain is never exported — a kernel is not a context",
+                        ))
+                    )
+                found.extend(exported[:1])
+            for declared_import in self._imports:
+                head = declared_import.split(".")[0]
+                declared = declared_import
+                if head == KERNEL_PACKAGE or head in SHELL_PACKAGES or head in tops:
+                    found.append(
+                        Violation(ViolationSpec(
+                            TREE_DECLARATION,
+                            1,
+                            "TB044",
+                            f"this tree declares 'import {declared}' but that names "
+                            "this tree; an import declaration names an installed "
+                            "external kernel, never something the walk governs",
+                        ))
+                    )
+                elif head in self._stdlib:
+                    found.append(
+                        Violation(ViolationSpec(
+                            TREE_DECLARATION,
+                            1,
+                            "TB044",
+                            f"this tree declares 'import {declared}' but that names "
+                            "the stdlib; the pure stdlib is already legal and the "
+                            "rest of it is never a kernel",
+                        ))
+                    )
+            for declared_stdlib in self._pure_stdlib:
+                head = declared_stdlib.split(".")[0]
+                declared = declared_stdlib
+                if head not in self._stdlib:
+                    found.append(
+                        Violation(ViolationSpec(
+                            TREE_DECLARATION,
+                            1,
+                            "TB044",
+                            f"this tree declares 'stdlib {declared}' but that is not "
+                            "the stdlib; a stdlib declaration widens the domain's pure "
+                            "stdlib, an external package is declared with import",
+                        ))
+                    )
+                elif declared in CORE_STDLIB["domain"] or head in CORE_STDLIB["domain"]:
+                    found.append(
+                        Violation(ViolationSpec(
+                            TREE_DECLARATION,
+                            1,
+                            "TB044",
+                            f"this tree declares 'stdlib {declared}' but the domain "
+                            "already imports it; a stdlib declaration widens the default "
+                            "pure stdlib, never repeats it",
+                        ))
+                    )
+        for relative in self._nested:
+            found.append(
+                Violation(ViolationSpec(
+                    relative,
+                    1,
+                    "TB044",
+                    "declares a nested tree root; a tessercheck run covers one "
+                    "declared tree, so run that tree directly",
+                ))
+            )
+        for relative in self._symlinked:
+            found.append(
+                Violation(ViolationSpec(
+                    relative,
+                    1,
+                    "TB045",
+                    "is a symlinked directory; a declared tree is walked in "
+                    "full, and a symlink escapes the walk",
+                ))
+            )
+        return tuple(found)
+
+    def unused_violations(self, used: Names) -> tuple[Violation, ...]:
+        return tuple(
+            Violation(ViolationSpec(
+                TREE_DECLARATION,
+                1,
+                "TB044",
+                f"this tree declares 'import {declared}' and nothing uses it; "
+                "an import declaration that legalizes nothing is itself a finding",
+            ))
+            for declared in self._imports
+            if declared not in used
+        ) + tuple(
+            Violation(ViolationSpec(
+                TREE_DECLARATION,
+                1,
+                "TB044",
+                f"this tree declares 'stdlib {declared}' and nothing uses it; "
+                "a stdlib declaration that legalizes nothing is itself a finding",
+            ))
+            for declared in self._pure_stdlib
+            if declared not in used
+        )
+
+
 class FieldSpec(ts.Spec):
 
     def __init__(self, name: str, node: ast.expr, lineno: int) -> None:  # tesser:debt TB080
@@ -2784,9 +3308,155 @@ class Method(ts.Entity):
     _delegated: Text | None
     _constructs: Names
     _form: Names
+    _facts: tuple[Fact, ...]
 
     def __init__(self, spec: MethodSpec) -> None:
         node = spec.node
+        method_facts: list[tuple[int, str, str | None, tuple[str, ...]]] = []
+        if node.decorator_list:
+            method_facts.append((node.lineno, "decorated", None, ()))
+        if isinstance(node, ast.AsyncFunctionDef):
+            method_facts.append((node.lineno, "async", None, ()))
+        assignable = frozenset(
+            arg.arg for arg in node.args.posonlyargs + node.args.args + node.args.kwonlyargs if arg.arg != "self"
+        )
+        carrier = True
+        for stmt in node.body:
+            if isinstance(stmt, ast.Return) and (
+                stmt.value is None or (isinstance(stmt.value, ast.Constant) and stmt.value.value is None)
+            ):
+                continue
+            target: ast.expr | None = None
+            assigned: ast.expr | None = None
+            if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
+                target, assigned = stmt.targets[0], stmt.value
+            elif isinstance(stmt, ast.AnnAssign):
+                target, assigned = stmt.target, stmt.value
+            if (
+                isinstance(target, ast.Attribute)
+                and isinstance(target.value, ast.Name)
+                and target.value.id == "self"
+                and isinstance(assigned, ast.Name)
+                and assigned.id in assignable
+            ):
+                continue
+            carrier = False
+            break
+        if carrier:
+            method_facts.append((node.lineno, "carrier", None, ()))
+
+        def own_returns(root: ast.AST) -> list[ast.Return]:
+            returned: list[ast.Return] = []
+            for child in ast.iter_child_nodes(root):
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+                    continue
+                if isinstance(child, ast.Return):
+                    returned.append(child)
+                returned.extend(own_returns(child))
+            return returned
+
+        for returned in own_returns(node):
+            method_facts.append((returned.lineno, "return", None, ()))
+        selves = {"self"}
+        grew = True
+        while grew:
+            grew = False
+            for inner in ast.walk(node):
+                if (
+                    isinstance(inner, (ast.Assign, ast.NamedExpr))
+                    and isinstance(inner.value, ast.Name)
+                    and inner.value.id in selves
+                ):
+                    for alias in (inner.targets if isinstance(inner, ast.Assign) else [inner.target]):
+                        if isinstance(alias, ast.Name) and alias.id not in selves:
+                            selves.add(alias.id)
+                            grew = True
+        for inner in ast.walk(node):
+            if (
+                isinstance(inner, ast.Call)
+                and isinstance(inner.func, ast.Attribute)
+                and inner.func.attr == "__init__"
+                and isinstance(inner.func.value, ast.Call)
+                and isinstance(inner.func.value.func, ast.Name)
+                and inner.func.value.func.id == "super"
+            ):
+                as_statement = any(isinstance(stmt, ast.Expr) and stmt.value is inner for stmt in node.body)
+                method_facts.append((inner.lineno, "super", None, ("statement",) if as_statement else ()))
+            targets: list[ast.expr] = []
+            if isinstance(inner, ast.Assign):
+                targets = list(inner.targets)
+            elif isinstance(inner, (ast.AugAssign, ast.AnnAssign)):
+                targets = [inner.target]
+            elif isinstance(inner, (ast.For, ast.AsyncFor)):
+                targets = [inner.target]
+            elif isinstance(inner, (ast.With, ast.AsyncWith)):
+                targets = [item.optional_vars for item in inner.items if item.optional_vars is not None]
+            elif isinstance(inner, ast.NamedExpr):
+                targets = [inner.target]
+            elif isinstance(inner, ast.Delete):
+                targets = list(inner.targets)
+            stored: ast.expr | None = None
+            pending = list(targets)
+            while pending and stored is None:
+                leaf = pending.pop(0)
+                if isinstance(leaf, (ast.Tuple, ast.List)):
+                    pending = list(leaf.elts) + pending
+                    continue
+                if isinstance(leaf, ast.Starred):
+                    pending.insert(0, leaf.value)
+                    continue
+                if not isinstance(leaf, (ast.Attribute, ast.Subscript)):
+                    continue
+                root: ast.expr = leaf
+                while isinstance(root, (ast.Attribute, ast.Subscript)):
+                    root = root.value
+                if isinstance(root, ast.Name) and root.id in selves:
+                    stored = leaf
+            if stored is None and (
+                isinstance(inner, ast.Call)
+                and isinstance(inner.func, ast.Attribute)
+                and inner.func.attr == "__setattr__"
+            ):
+                stored = inner
+            if stored is None and (
+                isinstance(inner, ast.Call)
+                and isinstance(inner.func, ast.Name)
+                and inner.func.id in ("setattr", "vars", "delattr")
+                and inner.args
+                and isinstance(inner.args[0], ast.Name)
+                and inner.args[0].id in selves
+            ):
+                stored = inner
+            if stored is None and (
+                isinstance(inner, ast.Attribute)
+                and inner.attr == "__dict__"
+                and isinstance(inner.value, ast.Name)
+                and inner.value.id in selves
+            ):
+                stored = inner
+            if stored is None and (
+                isinstance(inner, ast.Call)
+                and isinstance(inner.func, ast.Attribute)
+                and isinstance(inner.func.value, ast.Attribute)
+                and isinstance(inner.func.value.value, ast.Name)
+                and inner.func.value.value.id in selves
+            ):
+                stored = inner.func.value
+            if stored is not None:
+                named: ast.expr = stored
+                while isinstance(named, ast.Subscript):
+                    named = named.value
+                stored_field = (
+                    named.attr
+                    if isinstance(named, ast.Attribute)
+                    else named.func.id
+                    if isinstance(named, ast.Call) and isinstance(named.func, ast.Name)
+                    else "__setattr__"
+                    if isinstance(named, ast.Call)
+                    else "__dict__"
+                )
+                method_facts.append((stored.lineno, "store", stored_field, ()))
+        object.__setattr__(self, "_facts", tuple(Fact(FactSpec(*item)) for item in method_facts))
         shape_only = all(
             isinstance(stmt, ast.Pass)
             or (isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant) and stmt.value.value is Ellipsis)
@@ -2889,6 +3559,9 @@ class Method(ts.Entity):
     def form(self) -> Names:
         return self._form
 
+    def facts(self) -> tuple[Fact, ...]:
+        return self._facts
+
 
 class ClassDeclSpec(ts.Spec):
 
@@ -2928,6 +3601,13 @@ class ClassDecl(ts.Entity):
     _bases: Names
     _decoration: Names
     _extras: tuple[Fact, ...]
+    _block: Text | None
+    _statements: tuple[Fact, ...]
+    _spec_reader: SpecReader
+    _constructor_policy: AnnotationPolicy
+    _spec_policy: AnnotationPolicy
+    _port_dto_policy: AnnotationPolicy
+    _client_dto_policy: AnnotationPolicy
     _leaf: Text | None
 
     def __init__(self, spec: ClassDeclSpec) -> None:
@@ -3140,6 +3820,41 @@ class ClassDecl(ts.Entity):
             if valued:
                 extras.append((item.lineno, "valued", None, ()))
         object.__setattr__(self, "_extras", tuple(Fact(FactSpec(*item)) for item in extras))
+        object.__setattr__(self, "_block", own_block)
+        object.__setattr__(
+            self,
+            "_statements",
+            tuple(
+                Fact(FactSpec(item.lineno, "statement", None, ("pass",) if isinstance(item, ast.Pass) else ()))
+                for item in node.body
+                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+            ),
+        )
+        object.__setattr__(self, "_spec_reader", SpecReader(SpecReaderSpec(spec.scope, spec.registry)))
+        object.__setattr__(
+            self,
+            "_constructor_policy",
+            AnnotationPolicy(AnnotationPolicySpec((), tuple(sorted(PRIMITIVES)), (), spec.scope, spec.registry)),
+        )
+        object.__setattr__(
+            self,
+            "_spec_policy",
+            AnnotationPolicy(AnnotationPolicySpec(("spec",), tuple(sorted(PRIMITIVES)), (), spec.scope, spec.registry)),
+        )
+        object.__setattr__(
+            self,
+            "_port_dto_policy",
+            AnnotationPolicy(AnnotationPolicySpec(
+                ("port_request", "port_response"), tuple(sorted(PORT_DTO_PRIMITIVES)), tuple(self._scope.enums()), spec.scope, spec.registry, "none"
+            )),
+        )
+        object.__setattr__(
+            self,
+            "_client_dto_policy",
+            AnnotationPolicy(AnnotationPolicySpec(
+                ("request", "response"), tuple(sorted(PRIMITIVES)), (), spec.scope, spec.registry, "none"
+            )),
+        )
         bodies: list[Body] = []
         if own_block is not None and str(own_block) in BODY_BLOCKS:
             class_methods = tuple(str(method.name()) for method in methods)
@@ -3194,6 +3909,419 @@ class ClassDecl(ts.Entity):
 
     def bodies(self) -> tuple[Body, ...]:
         return self._bodies
+
+    def valueobject_violations(self) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        init = next((method for method in self._methods if str(method.name()) == "__init__"), None)
+        if init is None:
+            return (
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(self._lineno),
+                    "TB080",
+                    f"{self._module}.{self._name} defines no __init__; "
+                    "a value object constructs in its own __init__",
+                )),
+            )
+        where = f"{self._module}.{self._name}.__init__"
+        if init.open():
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(init.lineno()),
+                    "TB080",
+                    f"{where} uses *args/**kwargs; "
+                    "a value object declares its construction data as named parameters",
+                ))
+            )
+        params = init.params()
+        if len(params) != 1 and not init.open():
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(init.lineno()),
+                    "TB080",
+                    f"{where} takes {len(params)} parameters; "
+                    "a value object takes one primitive or exactly one ts.Spec",
+                ))
+            )
+        for param in params:
+            arg = str(param.name())
+            annotation = param.annotation()
+            plain = annotation is not None and not self._constructor_policy.disallowed(annotation)
+            taken = self._spec_reader.ref(annotation) if annotation is not None else None
+            exact = (
+                taken is not None
+                and taken.shape() == SPEC_ONE
+                and annotation is not None
+                and "bare" in annotation.form()
+            )
+            if not (plain or exact):
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(init.lineno()),
+                        "TB080",
+                        f"{where} parameter {arg!r} is not allowed; "
+                        "a value object constructs from one primitive or one spec, never value objects",
+                    ))
+                )
+        return tuple(found)
+
+    def spec_violations(self) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for fact in self._statements:
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(fact.lineno()),
+                    "TB080",
+                    f"{self._module}.{self._name} carries a class-level statement; "
+                    "a spec declares its fields as __init__ parameters, "
+                    "where the field rules can read them",
+                ))
+            )
+        init_seen = False
+        for method in self._methods:
+            where = f"{self._module}.{self._name}.{method.name()}"
+            if str(method.name()) != "__init__":
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(method.lineno()),
+                        "TB080",
+                        f"{where} defines a method on a spec; a spec only carries construction data",
+                    ))
+                )
+                continue
+            init_seen = True
+            if method.open():
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(method.lineno()),
+                        "TB080",
+                        f"{where} uses *args/**kwargs; a spec declares its fields "
+                        "as named __init__ parameters, where the field rules can read them",
+                    ))
+                )
+            for param in method.params():
+                arg = str(param.name())
+                annotation = param.annotation()
+                if annotation is None or self._spec_policy.disallowed(annotation):
+                    found.append(
+                        Violation(ViolationSpec(
+                            str(self._path),
+                            int(method.lineno()),
+                            "TB080",
+                            f"{where} parameter {arg!r} is not allowed; "
+                            "a spec field is a primitive or a child spec, never a value object",
+                        ))
+                    )
+        if not init_seen:
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(self._lineno),
+                    "TB080",
+                    f"{self._module}.{self._name} defines no __init__; "
+                    "a spec defines the __init__ that carries its fields",
+                ))
+            )
+        return tuple(found)
+
+    def dto_violations(self) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        own = str(self._block) if self._block is not None else None
+        port_dto = own in ("port_request", "port_response")
+        policy = self._port_dto_policy if port_dto else self._client_dto_policy
+        if port_dto:
+            for fact in self._statements:
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(fact.lineno()),
+                        "TB080",
+                        f"{self._module}.{self._name} carries a class-level statement; "
+                        "a port DTO declares its fields as __init__ parameters, "
+                        "where the field rules can read them",
+                    ))
+                )
+        for method in self._methods:
+            where = f"{self._module}.{self._name}.{method.name()}"
+            if str(method.name()) == "__init__" and method.open():
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(method.lineno()),
+                        "TB080",
+                        f"{where} uses *args/**kwargs; a DTO declares its fields "
+                        "as named __init__ parameters, where the field rules can read them",
+                    ))
+                )
+            if str(method.name()) != "__init__":
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(method.lineno()),
+                        "TB080",
+                        f"{where} defines a method on a DTO; a DTO carries data and nothing else",
+                    ))
+                )
+                continue
+            if port_dto and not any(str(fact.kind()) == "carrier" for fact in method.facts()):
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(method.lineno()),
+                        "TB080",
+                        f"{where} carries logic; a port DTO constructor only assigns its "
+                        "parameters, because a ports module holds no logic to import",
+                    ))
+                )
+            for param in method.params():
+                arg = str(param.name())
+                annotation = param.annotation()
+                if annotation is not None and "bool" in annotation.form():
+                    if port_dto:
+                        found.append(
+                            Violation(ViolationSpec(
+                                str(self._path),
+                                int(method.lineno()),
+                                "TB080",
+                                f"{where} field {arg!r} is a bool; a port DTO field is "
+                                "never a bare bool — model the outcome as an enum",
+                            ))
+                        )
+                    else:
+                        found.append(
+                            Violation(ViolationSpec(
+                                str(self._path),
+                                int(method.lineno()),
+                                "TB080",
+                                f"{where} field {arg!r} is a bool; a client DTO field is "
+                                "never a bare bool — a closed set crosses as its canonical string",
+                            ))
+                        )
+                    continue
+                if port_dto and annotation is not None and "union" in annotation.form():
+                    found.append(
+                        Violation(ViolationSpec(
+                            str(self._path),
+                            int(method.lineno()),
+                            "TB080",
+                            f"{where} field {arg!r} is a union; a port DTO field "
+                            "is never a union, optional included — model the outcome as an enum",
+                        ))
+                    )
+                    continue
+                if annotation is None or policy.disallowed(annotation):
+                    found.append(
+                        Violation(ViolationSpec(
+                            str(self._path),
+                            int(method.lineno()),
+                            "TB080",
+                            f"{where} parameter {arg!r} is not allowed; "
+                            "a DTO field is a primitive or another DTO",
+                        ))
+                    )
+        return tuple(found)
+
+    def mapper_violations(self) -> tuple[Violation, ...]:
+        where = f"{self._module}.{self._name}"
+        found: list[Violation] = []
+        if not str(self._name).startswith(MAPPER_PREFIX):
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(self._lineno),
+                    "TB080",
+                    f"{where} does not start with MapTo; a mapper is named for "
+                    "what it maps to, because its parameters already say what it maps from",
+                ))
+            )
+        target = self._registry.mapper_target(Symbol(SymbolSpec(str(self._module), str(self._name))))
+        if target is None:
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(self._lineno),
+                    "TB080",
+                    f"{where} is not its target; a mapper subclasses ts.Mapper and then "
+                    "the one spec or DTO it maps to, so constructing the mapper constructs the target",
+                ))
+            )
+        else:
+            target_name = str(target.name())
+            if target_name not in str(self._name):
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(self._lineno),
+                        "TB080",
+                        f"{where} does not name {target_name}; a mapper is named "
+                        "MapTo plus its target, so the reader knows what the constructor yields",
+                    ))
+                )
+        if self._decoration:
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(self._lineno),
+                    "TB080",
+                    f"{where} declares a decorator or a class keyword; a mapper is a plain "
+                    "class, because a metaclass or decorator can replace the constructor "
+                    "that is the mapping",
+                ))
+            )
+        inits = [method for method in self._methods if str(method.name()) == "__init__"]
+        init = inits[-1] if inits else None
+        if init is None:
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(self._lineno),
+                    "TB080",
+                    f"{where} has no __init__; a mapper's constructor is the mapping, so "
+                    "without one the target's own constructor is exposed",
+                ))
+            )
+        else:
+            facts = init.facts()
+            if any(str(fact.kind()) == "async" for fact in facts):
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(init.lineno()),
+                        "TB080",
+                        f"{where}.__init__ is async; a mapper's constructor runs the mapping "
+                        "when it is called, and a coroutine never does",
+                    ))
+                )
+            if len(inits) > 1:
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(init.lineno()),
+                        "TB080",
+                        f"{where} defines __init__ {len(inits)} times; a mapper has one "
+                        "constructor, because the last definition silently wins",
+                    ))
+                )
+            if any(str(fact.kind()) == "decorated" for fact in facts):
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(init.lineno()),
+                        "TB080",
+                        f"{where}.__init__ is decorated; a mapper's constructor is plain, "
+                        "because a decorator can replace the mapping",
+                    ))
+                )
+            if init.open():
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(init.lineno()),
+                        "TB080",
+                        f"{where}.__init__ uses *args or **kwargs; a mapper names each "
+                        "whole object it takes",
+                    ))
+                )
+            for param in init.params():
+                arg = str(param.name())
+                annotation = param.annotation()
+                if annotation is None:
+                    found.append(
+                        Violation(ViolationSpec(
+                            str(self._path),
+                            int(param.lineno()),
+                            "TB080",
+                            f"{where} parameter {arg!r} has no annotation; a mapper names "
+                            "the whole object it takes",
+                        ))
+                    )
+                    continue
+                if "primitive_leaf" in annotation.form():
+                    found.append(
+                        Violation(ViolationSpec(
+                            str(self._path),
+                            int(param.lineno()),
+                            "TB080",
+                            f"{where} parameter {arg!r} is a primitive; a mapper takes "
+                            "whole objects, never a field already pulled off one",
+                        ))
+                    )
+            supers = sum(1 for fact in facts if str(fact.kind()) == "super" and "statement" in fact.traits())
+            for fact in facts:
+                if str(fact.kind()) == "return":
+                    found.append(
+                        Violation(ViolationSpec(
+                            str(self._path),
+                            int(fact.lineno()),
+                            "TB080",
+                            f"{where}.__init__ returns; a mapper's constructor runs to its "
+                            "super().__init__, so the target is always initialized",
+                        ))
+                    )
+            for fact in facts:
+                if str(fact.kind()) == "super" and "statement" not in fact.traits():
+                    found.append(
+                        Violation(ViolationSpec(
+                            str(self._path),
+                            int(fact.lineno()),
+                            "TB080",
+                            f"{where}.__init__ calls super().__init__ inside a branch; a mapper "
+                            "calls it as a statement of the constructor body, so the target is "
+                            "always initialized",
+                        ))
+                    )
+                elif str(fact.kind()) == "store":
+                    field = str(fact.detail())
+                    found.append(
+                        Violation(ViolationSpec(
+                            str(self._path),
+                            int(fact.lineno()),
+                            "TB080",
+                            f"{where} stores {field!r}; a mapper stores nothing but its target's "
+                            "fields — it calls super().__init__ once and assigns nothing itself",
+                        ))
+                    )
+            if supers != 1:
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(init.lineno()),
+                        "TB080",
+                        f"{where}.__init__ calls super().__init__ {supers} times; a mapper "
+                        "calls super().__init__ exactly once, because that call is the mapping",
+                    ))
+                )
+        for fact in self._statements:
+            if "pass" in fact.traits():
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(fact.lineno()),
+                    "TB080",
+                    f"{where} carries a class-level statement; a mapper stores nothing "
+                    "but its target's fields, so its body is one __init__",
+                ))
+            )
+        for method in self._methods:
+            if str(method.name()) == "__init__":
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(method.lineno()),
+                    "TB080",
+                    f"{where}.{method.name()} is a method; a mapper holds only __init__, "
+                    "because it is its target and the target already carries the fields",
+                ))
+            )
+        return tuple(found)
 
     def port_violations(self) -> tuple[Violation, ...]:
         found: list[Violation] = []
@@ -4511,6 +5639,16 @@ class Module(ts.Entity):
         )
 
 
+        enum_names: list[str] = []
+        for stmt in self._class_defs:
+            if EnumShape(EnumShapeSpec(stmt, ScopeSpec(
+                self._name,
+                tuple(ImportSpec(local, target, original) for local, (target, original) in self._imported.items()),
+                tuple(AliasSpec(alias, package) for alias, package in self._package_aliases.items()),
+                tuple(self._classes),
+            ))).base() is not None:
+                enum_names.append(stmt.name)
+        self._enums: tuple[str, ...] = tuple(enum_names)
         spoken_modules = [
             str(edge._target)
             for edge in self._edges
@@ -4525,6 +5663,7 @@ class Module(ts.Entity):
             tuple(self._classes),
             tuple(sorted(self._functions)),
             self._spoken,
+            self._enums,
         ))
 
         self._placement = Placement(PlacementSpec(spec.name, spec.is_package, spec.contexts, spec.export))
@@ -6040,6 +7179,7 @@ class Module(ts.Entity):
             tuple(self._classes),
             tuple(sorted(self._functions)),
             self._spoken,
+            self._enums,
         )
         found: list[Violation] = []
         if role == "adapters" and kind_package not in ADAPTER_KIND_PACKAGES:
@@ -6553,6 +7693,7 @@ class Module(ts.Entity):
             tuple(self._classes),
             tuple(sorted(self._functions)),
             self._spoken,
+            self._enums,
         )
         found: list[Violation] = []
 
@@ -7069,6 +8210,7 @@ class Module(ts.Entity):
             tuple(self._classes),
             tuple(sorted(self._functions)),
             self._spoken,
+            self._enums,
         )
         policy = AnnotationPolicy(AnnotationPolicySpec((), tuple(sorted(PRIMITIVES)), (), scope_spec, registry))
         found: list[Violation] = []
@@ -7353,6 +8495,522 @@ class Module(ts.Entity):
                 )
         return tuple(found)
 
+
+    def enums(self) -> Names:
+        return Names(self._enums)
+
+    def spec_reader(self, registry: RegistrySpec) -> SpecReader:
+        return SpecReader(SpecReaderSpec(
+            ScopeSpec(
+                self._name,
+                tuple(ImportSpec(local, target, original) for local, (target, original) in self._imported.items()),
+                tuple(AliasSpec(alias, package) for alias, package in self._package_aliases.items()),
+                tuple(self._classes),
+                tuple(sorted(self._functions)),
+                self._spoken,
+                self._enums,
+            ),
+            registry,
+        ))
+
+    def spec_shared_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        found: list[Violation] = []
+        for shared in Registry(registry).spec_shared():
+            if str(shared.module()) != module_name:
+                continue
+            shared_class = str(shared.cls())
+            spec_label = f"{shared.spec().module()}.{shared.spec().name()}"
+            owner_label = f"{shared.owner().module()}.{shared.owner().name()}"
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    int(shared.line()),
+                    "TB083",
+                    f"{module_name}.{shared_class} takes {spec_label}, which {owner_label} already takes; "
+                    "a spec constructs exactly one object",
+                ))
+            )
+        return tuple(found)
+
+    def pairing_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        facts = Registry(registry)
+        kinds = facts.kinds()
+        names = frozenset(facts.module_names()) - frozenset(facts.package_names())
+        parts = module_name.split(".")
+        base = parts[-1]
+        place = str(self._placement)
+        parent = ".".join(parts[:-1])
+        found: list[Violation] = []
+        if place in PAIRED_PLACES and not self._is_package and base != "__main__":
+            saw_class = False
+            declaration_only = True
+            for stmt in self._body:
+                if isinstance(stmt, (ast.Import, ast.ImportFrom)):
+                    continue
+                block = kinds.block_of(Symbol(SymbolSpec(module_name, stmt.name))) if isinstance(stmt, ast.ClassDef) else None
+                if not isinstance(stmt, ast.ClassDef) or block is None or str(block) not in DECLARATION_BLOCKS:
+                    declaration_only = False
+                    break
+                for item in stmt.body:
+                    if not isinstance(item, ast.FunctionDef):
+                        continue
+                    if item.name == "__init__":
+                        continue
+                    if (
+                        len(item.body) == 1
+                        and isinstance(item.body[0], ast.Expr)
+                        and isinstance(item.body[0].value, ast.Constant)
+                    ):
+                        continue
+                    declaration_only = False
+                    break
+                if not declaration_only:
+                    break
+                saw_class = True
+            if declaration_only and saw_class:
+                return ()
+            sibling = (parent + "." if parent else "") + "test_" + base
+            if sibling not in names:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        1,
+                        "TB074",
+                        f"{module_name} has no sibling test file; an implementation "
+                        "module carries exactly one test_<module>.py beside it",
+                    ))
+                )
+        elif place == "test" and base.startswith("test_") and "tests" not in parts:
+            subject = (parent + "." if parent else "") + base[len("test_") :]
+            if subject not in names:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        1,
+                        "TB074",
+                        f"{module_name} pairs with no implementation module; a sibling "
+                        "test file is named test_<module>.py for the module beside it",
+                    ))
+                )
+        return tuple(found)
+
+    def spec_use_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        path = self._path
+        facts = Registry(registry)
+        kinds = facts.kinds()
+        scope = self._scope
+        reader = SpecReader(SpecReaderSpec(
+            ScopeSpec(
+                self._name,
+                tuple(ImportSpec(local, target, original) for local, (target, original) in self._imported.items()),
+                tuple(AliasSpec(alias, package) for alias, package in self._package_aliases.items()),
+                tuple(self._classes),
+                tuple(sorted(self._functions)),
+                self._spoken,
+                self._enums,
+            ),
+            registry,
+        ))
+
+        def annotation(node: ast.expr | None) -> SpecRef | None:
+            return reader.ref(Annotation(node)) if node is not None else None
+
+        def resolve(node: ast.expr) -> Symbol | None:
+            ref = Annotation(node).primary()
+            return scope.resolve(ref) if ref is not None else None
+
+        def maker(node: ast.expr) -> SpecRef | None:
+            made = annotation(node)
+            if made is not None:
+                return made
+            if isinstance(node, ast.Name):
+                return facts.spec_maker(Symbol(SymbolSpec(module_name, node.id)))
+            symbol = resolve(node)
+            if symbol is not None:
+                known = facts.spec_maker(symbol)
+                if known is not None:
+                    return known
+            if isinstance(node, ast.Attribute):
+                return facts.spec_method(Text(node.attr))
+            return None
+
+        def typed(node: ast.expr, names: dict[str, SpecRef]) -> SpecRef | None:
+            if isinstance(node, (ast.Await, ast.NamedExpr)):
+                return typed(node.value, names)
+            if isinstance(node, ast.Name):
+                return names.get(node.id)
+            if isinstance(node, ast.Call):
+                made = maker(node.func)
+                if made is not None:
+                    return made
+                if isinstance(node.func, ast.Name) and node.func.id == "enumerate" and node.args:
+                    return typed(node.args[0], names)
+                return None
+            if isinstance(node, ast.Attribute):
+                owner = typed(node.value, names)
+                if owner is not None and owner.shape() == SPEC_ONE:
+                    return facts.spec_field(Text(f"{owner.symbol().module()}|{owner.symbol().name()}|{node.attr}"))
+                return None
+            if isinstance(node, ast.Subscript):
+                owner = typed(node.value, names)
+                if owner is not None and owner.shape() == SPEC_MANY:
+                    return owner if isinstance(node.slice, ast.Slice) else owner.one()
+                return None
+            if isinstance(node, ast.IfExp):
+                return typed(node.body, names) or typed(node.orelse, names)
+            if isinstance(node, ast.BoolOp):
+                for each in node.values:
+                    found_value = typed(each, names)
+                    if found_value is not None:
+                        return found_value
+            return None
+
+        def carried(node: ast.expr, names: dict[str, SpecRef]) -> str | None:
+            if isinstance(node, (ast.Name, ast.Call, ast.Attribute, ast.Subscript)) and typed(node, names) is not None:
+                if isinstance(node, ast.Name):
+                    return node.id
+                if isinstance(node, ast.Call) and maker(node.func) is not None:
+                    return ast.unparse(node.func)
+                return ast.unparse(node)
+            parts: list[ast.expr] = []
+            if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+                parts = list(node.elts)
+            elif isinstance(node, ast.Dict):
+                parts = [value for value in node.values if value is not None]
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in ("list", "tuple", "set", "frozenset", "dict")
+            ):
+                parts = [*node.args, *(k.value for k in node.keywords)]
+            elif isinstance(node, ast.IfExp):
+                parts = [node.body, node.orelse]
+            elif isinstance(node, ast.BoolOp):
+                parts = list(node.values)
+            elif isinstance(node, (ast.Await, ast.NamedExpr)):
+                parts = [node.value]
+            for each in parts:
+                hit = carried(each, names)
+                if hit is not None:
+                    return hit
+            return None
+
+        def bound(fn: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda) -> set[str]:
+            args = fn.args
+            out = {a.arg for a in args.posonlyargs + args.args + args.kwonlyargs}
+            if args.vararg is not None:
+                out.add(args.vararg.arg)
+            if args.kwarg is not None:
+                out.add(args.kwarg.arg)
+            return out
+
+        def own_scope(nodes: list[ast.AST]) -> list[ast.AST]:
+            out: list[ast.AST] = []
+            stack = list(nodes)
+            while stack:
+                cur = stack.pop()
+                out.append(cur)
+                if isinstance(
+                    cur,
+                    (
+                        ast.FunctionDef,
+                        ast.AsyncFunctionDef,
+                        ast.Lambda,
+                        ast.ClassDef,
+                        ast.ListComp,
+                        ast.SetComp,
+                        ast.DictComp,
+                        ast.GeneratorExp,
+                    ),
+                ):
+                    continue
+                stack.extend(ast.iter_child_nodes(cur))
+            return out
+
+        def stored(node: ast.AST) -> list[str]:
+            return [t.id for t in ast.walk(node) if isinstance(t, ast.Name) and isinstance(t.ctx, ast.Store)]
+
+        def element(target: ast.expr, iterable: ast.expr, names: dict[str, SpecRef]) -> tuple[str, SpecRef] | None:
+            many = typed(iterable, names)
+            if many is None or many.shape() != SPEC_MANY:
+                return None
+            if isinstance(target, ast.Name):
+                return target.id, many.one()
+            if (
+                isinstance(target, ast.Tuple)
+                and len(target.elts) == 2
+                and isinstance(target.elts[1], ast.Name)
+                and isinstance(iterable, ast.Call)
+                and isinstance(iterable.func, ast.Name)
+                and iterable.func.id == "enumerate"
+            ):
+                return target.elts[1].id, many.one()
+            return None
+
+        def held_in(body: list[ast.stmt], names: dict[str, SpecRef]) -> dict[str, SpecRef]:
+            names = dict(names)
+            local = own_scope(list(body))
+            local.extend(
+                inner
+                for node in local
+                if isinstance(node, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp))
+                for inner in ast.walk(node)
+                if isinstance(inner, ast.NamedExpr)
+            )
+            changed = True
+            while changed:
+                changed = False
+                for node in local:
+                    if isinstance(node, ast.Assign):
+                        made = typed(node.value, names)
+                        if made is not None:
+                            for target in node.targets:
+                                if isinstance(target, ast.Name) and target.id not in names:
+                                    names[target.id] = made
+                                    changed = True
+                    elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                        made = annotation(node.annotation) or (
+                            typed(node.value, names) if node.value is not None else None
+                        )
+                        if made is not None and node.target.id not in names:
+                            names[node.target.id] = made
+                            changed = True
+                    elif isinstance(node, ast.NamedExpr) and isinstance(node.target, ast.Name):
+                        made = typed(node.value, names)
+                        if made is not None and node.target.id not in names:
+                            names[node.target.id] = made
+                            changed = True
+                    elif isinstance(node, (ast.For, ast.AsyncFor)):
+                        picked = element(node.target, node.iter, names)
+                        if picked is not None and picked[0] not in names:
+                            names[picked[0]] = picked[1]
+                            changed = True
+            shadowed: set[str] = set()
+            for node in local:
+                if isinstance(node, (ast.For, ast.AsyncFor)):
+                    if element(node.target, node.iter, names) is None:
+                        shadowed.update(stored(node.target))
+                elif isinstance(node, (ast.With, ast.AsyncWith)):
+                    for item in node.items:
+                        if item.optional_vars is not None:
+                            shadowed.update(stored(item.optional_vars))
+                elif isinstance(node, ast.ExceptHandler) and node.name is not None:
+                    shadowed.add(node.name)
+                elif isinstance(node, ast.Assign) and typed(node.value, names) is None:
+                    for target in node.targets:
+                        shadowed.update(stored(target))
+                elif isinstance(node, ast.AnnAssign) and annotation(node.annotation) is None and (
+                    node.value is None or typed(node.value, names) is None
+                ):
+                    shadowed.update(stored(node.target))
+                elif isinstance(node, ast.AugAssign):
+                    shadowed.update(stored(node.target))
+                elif isinstance(node, ast.NamedExpr) and typed(node.value, names) is None:
+                    shadowed.update(stored(node.target))
+                elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                    shadowed.update(alias.asname or alias.name.split(".")[0] for alias in node.names)
+                elif isinstance(node, ast.Match):
+                    for case in node.cases:
+                        for pattern in ast.walk(case.pattern):
+                            if isinstance(pattern, (ast.MatchAs, ast.MatchStar)) and pattern.name is not None:
+                                shadowed.add(pattern.name)
+                            elif isinstance(pattern, ast.MatchMapping) and pattern.rest is not None:
+                                shadowed.add(pattern.rest)
+            return {name: made for name, made in names.items() if name not in shadowed}
+
+        def held(fn: ast.FunctionDef | ast.AsyncFunctionDef, names: dict[str, SpecRef]) -> dict[str, SpecRef]:
+            seeded = dict(names)
+            for a in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs:
+                made = annotation(a.annotation)
+                if made is not None:
+                    seeded[a.arg] = made
+            return held_in(list(fn.body), seeded)
+
+        def kept(node: ast.AST, names: dict[str, SpecRef], top: bool) -> str | None:
+            if top and isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) for t in node.targets):
+                return carried(node.value, names)
+            if top and isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                if node.value is not None:
+                    return carried(node.value, names)
+                return ast.unparse(node.annotation) if annotation(node.annotation) is not None else None
+            if isinstance(node, ast.Assign) and any(
+                isinstance(t, (ast.Attribute, ast.Subscript))
+                for target in node.targets
+                for t in (target.elts if isinstance(target, (ast.Tuple, ast.List)) else [target])
+            ):
+                return carried(node.value, names)
+            if isinstance(node, ast.AugAssign) and isinstance(node.target, (ast.Attribute, ast.Subscript)):
+                return carried(node.value, names)
+            if isinstance(node, ast.AnnAssign) and isinstance(node.target, (ast.Attribute, ast.Subscript)):
+                if node.value is not None:
+                    return carried(node.value, names)
+                return ast.unparse(node.annotation) if annotation(node.annotation) is not None else None
+            if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Attribute) and node.func.attr in (
+                    "append", "appendleft", "extend", "insert", "setdefault"
+                ):
+                    for each in [*node.args, *(k.value for k in node.keywords)]:
+                        hit = carried(each, names)
+                        if hit is not None:
+                            return hit
+                if isinstance(node.func, ast.Attribute) and node.func.attr == "__setattr__":
+                    if len(node.args) == 3:
+                        return carried(node.args[2], names)
+                    if len(node.args) == 2:
+                        return carried(node.args[1], names)
+                if isinstance(node.func, ast.Name) and node.func.id == "setattr" and len(node.args) == 3:
+                    return carried(node.args[2], names)
+            return None
+
+        def read(node: ast.AST, names: dict[str, SpecRef]) -> tuple[str, str, Symbol] | None:
+            if isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load):
+                owner = typed(node.value, names)
+                if owner is not None and owner.shape() == SPEC_ONE and not node.attr.startswith("__"):
+                    return ast.unparse(node.value), node.attr, owner.symbol()
+                return None
+            if isinstance(node, ast.Call) and node.args:
+                owner = typed(node.args[0], names)
+                if owner is None or owner.shape() == SPEC_MANY:
+                    return None
+                if isinstance(node.func, ast.Name) and node.func.id in ("getattr", "vars"):
+                    field = (
+                        node.args[1].value
+                        if len(node.args) > 1
+                        and isinstance(node.args[1], ast.Constant)
+                        and isinstance(node.args[1].value, str)
+                        else "__dict__"
+                    )
+                    return ast.unparse(node.args[0]), field, owner.symbol()
+                if ast.unparse(node.func).split(".")[-1] in ("asdict", "astuple", "copy", "deepcopy"):
+                    return ast.unparse(node.args[0]), "__dict__", owner.symbol()
+            return None
+
+        found: list[Violation] = []
+        seen: set[tuple[int, str, str]] = set()
+
+        def scan(
+            nodes: list[ast.AST],
+            names: dict[str, SpecRef],
+            where: str,
+            owner_here: Symbol | None,
+            assembling: bool,
+            top: bool = False,
+        ) -> None:
+            for cur in own_scope(nodes):
+                if top and isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                if top and isinstance(cur, ast.ClassDef):
+                    scan(list(cur.body), names, f"{where}.{cur.name}", None, False, True)
+                    continue
+                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    scan(
+                        list(cur.body),
+                        held(cur, {n: t for n, t in names.items() if n not in bound(cur)}),
+                        f"{where}.{cur.name}",
+                        owner_here,
+                        assembling,
+                    )
+                    continue
+                if isinstance(cur, ast.Lambda):
+                    scan(
+                        [cur.body],
+                        {n: t for n, t in names.items() if n not in bound(cur)},
+                        where,
+                        owner_here,
+                        assembling,
+                    )
+                    continue
+                if isinstance(cur, ast.ClassDef):
+                    scan(list(cur.body), names, f"{where}.{cur.name}", owner_here, assembling)
+                    continue
+                if isinstance(cur, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
+                    first, rest = cur.generators[0], cur.generators[1:]
+                    scan([first.iter], names, where, owner_here, assembling)
+                    targets = {
+                        t.id
+                        for comp in cur.generators
+                        for t in ast.walk(comp.target)
+                        if isinstance(t, ast.Name)
+                    }
+                    inner = {n: t for n, t in names.items() if n not in targets}
+                    for comp in cur.generators:
+                        picked = element(comp.target, comp.iter, inner if comp is not first else names)
+                        if picked is not None:
+                            inner[picked[0]] = picked[1]
+                    parts: list[ast.AST] = [*first.ifs]
+                    for comp in rest:
+                        parts.extend([comp.iter, *comp.ifs])
+                    parts.extend([cur.key, cur.value] if isinstance(cur, ast.DictComp) else [cur.elt])
+                    scan(parts, inner, where, owner_here, assembling)
+                    continue
+                if not isinstance(cur, (ast.stmt, ast.expr)):
+                    continue
+                spec_name = kept(cur, names, top)
+                if spec_name is not None and not assembling and (cur.lineno, "\x00keeps", spec_name) not in seen:
+                    seen.add((cur.lineno, "\x00keeps", spec_name))
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            cur.lineno,
+                            "TB083",
+                            f"{where} keeps the spec {spec_name!r}; "
+                            "a spec is never kept, it initializes its own object and is done",
+                        ))
+                    )
+                hit = read(cur, names)
+                if hit is not None:
+                    spec_name, field, key = hit
+                    licensed = owner_here is not None and owner_here in facts.spec_takers(key)
+                    if not licensed and (cur.lineno, field, spec_name) not in seen:
+                        seen.add((cur.lineno, field, spec_name))
+                        found.append(
+                            Violation(ViolationSpec(
+                                path,
+                                cur.lineno,
+                                "TB083",
+                                f"{where} reads {field!r} of the spec {spec_name!r}; "
+                                "a spec is only read where it initializes its own object",
+                            ))
+                        )
+
+        def roots() -> list[tuple[ast.FunctionDef | ast.AsyncFunctionDef, ast.ClassDef | None]]:
+            out: list[tuple[ast.FunctionDef | ast.AsyncFunctionDef, ast.ClassDef | None]] = []
+            stack: list[tuple[ast.AST, ast.ClassDef | None]] = [(stmt, None) for stmt in self._body]
+            while stack:
+                cur, cls = stack.pop()
+                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    out.append((cur, cls))
+                    continue
+                if isinstance(cur, ast.Lambda):
+                    continue
+                if isinstance(cur, ast.ClassDef):
+                    stack.extend((item, cur) for item in cur.body)
+                    continue
+                stack.extend((child, cls) for child in ast.iter_child_nodes(cur))
+            return out
+
+        module_names = held_in(list(self._body), {})
+        scan(list(self._body), module_names, module_name, None, False, True)
+        for fn, cls in roots():
+            named_block = kinds.block_of(Symbol(SymbolSpec(module_name, cls.name))) if cls is not None else None
+            block = str(named_block) if named_block is not None else None
+            where = (
+                f"{module_name}.{cls.name}.{fn.name}" if cls is not None else f"{module_name}.{fn.name}"
+            )
+            scan(
+                list(fn.body),
+                held(fn, module_names),
+                where,
+                Symbol(SymbolSpec(module_name, cls.name))
+                if cls is not None and fn.name == "__init__" and block in SPEC_READER_BLOCKS
+                else None,
+                fn.name == "__init__" and block in SPEC_BLOCKS,
+            )
+        return tuple(sorted(found, key=lambda v: int(v.line())))
+
     def class_decls(self, registry: RegistrySpec) -> tuple[ClassDecl, ...]:
         scope = ScopeSpec(
             self._name,
@@ -7361,6 +9019,7 @@ class Module(ts.Entity):
             tuple(self._classes),
             tuple(sorted(self._functions)),
             self._spoken,
+            self._enums,
         )
         return tuple(
             ClassDecl(ClassDeclSpec(node, self._name, self._path, scope, registry)) for node in self._class_defs
@@ -7672,6 +9331,17 @@ class Codebase(ts.AggregateRoot):
                 )
         self._modules = tuple(modules)
         self._broken = tuple(broken)
+        self._tree = Declaration(DeclarationSpec(
+            spec.declared,
+            spec.exports,
+            spec.imports,
+            tuple(sorted(spec.stdlib)),
+            spec.pure_stdlib,
+            spec.nested,
+            spec.symlinked,
+            tuple(sorted(module.name() for module in self._modules)),
+            tuple(sorted(module.name() for module in self._modules if module.is_package())),
+        ))
         self._declaration = spec.declared
         self._nested = spec.nested
         self._symlinked = spec.symlinked
@@ -7693,7 +9363,7 @@ class Codebase(ts.AggregateRoot):
         self._outcome_methods: frozenset[tuple[str, str, str]] = frozenset()
 
     def violations(self) -> tuple[Violation, ...]:
-        declaration = self._declaration_violations()  # tesser:debt TB051
+        declaration = self._tree.violations()
         if declaration:
             return declaration
         self._used_imports = set()
@@ -7745,7 +9415,10 @@ class Codebase(ts.AggregateRoot):
                     for item in cls.body
                     if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
                     and item.returns is not None
-                    and self._returns_outcome(module, item.returns, blocks)  # tesser:debt TB051
+                    and "[" not in str(Annotation(item.returns).source())
+                    and (returned_outcome := Annotation(item.returns).primary()) is not None
+                    and (returned_symbol := module.scope().resolve(returned_outcome)) is not None
+                    and blocks.get((str(returned_symbol.module()), str(returned_symbol.name()))) == OUTCOME_BLOCK
                 }
                 inherits[(module.name(), cls.name)] = [
                     resolved
@@ -7794,22 +9467,32 @@ class Codebase(ts.AggregateRoot):
             and str(module.place()) == "role"
             for stmt in module.class_defs()
             if (module.name(), stmt.name) not in blocks
-            and self._enum_base(module, stmt) is not None  # tesser:debt TB051
+            and stmt.name in module.enums()
+        )
+        kind_rows = tuple((module_name, class_name, block_name) for (module_name, class_name), block_name in sorted(blocks.items()))
+        domain_enum_rows = tuple((module_name, class_name) for module_name, class_name in sorted(self._domain_enums))
+        outcome_method_rows = tuple(f"{module_name}|{class_name}|{method_name}" for module_name, class_name, method_name in sorted(self._outcome_methods))
+        action_port_rows = tuple((module_name, class_name) for module_name, class_name in sorted(self._action_ports))
+        context_rows = tuple(sorted(contexts))
+        top_rows = tuple(sorted({each.name().split(".")[0] for each in self._modules}))
+        module_name_rows = tuple(sorted(each.name() for each in self._modules))
+        package_name_rows = tuple(sorted(each.name() for each in self._modules if each.is_package()))
+        mapper_target_rows = tuple(
+            (source[0], source[1], target[0], target[1]) for source, target in sorted(self._mapper_target.items())
         )
         registry = RegistrySpec(
-            KindTableSpec(tuple((module_name, class_name, block_name) for (module_name, class_name), block_name in sorted(blocks.items()))),
-            tuple(SymbolSpec(module_name, class_name) for module_name, class_name in sorted(self._domain_enums)),
-            tuple(f"{module_name}|{class_name}|{method_name}" for module_name, class_name, method_name in sorted(self._outcome_methods)),
-            tuple(SymbolSpec(module_name, class_name) for module_name, class_name in sorted(self._action_ports)),
-            contexts=tuple(sorted(contexts)),
+            KindTableSpec(kind_rows),
+            tuple(SymbolSpec(module_name, class_name) for module_name, class_name in domain_enum_rows),
+            outcome_method_rows,
+            tuple(SymbolSpec(module_name, class_name) for module_name, class_name in action_port_rows),
+            contexts=context_rows,
             export=self._export,
-            tops=tuple(sorted({each.name().split(".")[0] for each in self._modules})),
-            module_names=tuple(sorted(each.name() for each in self._modules)),
+            tops=top_rows,
+            module_names=module_name_rows,
             declared_imports=tuple(self._imports),
             pure_stdlib=tuple(self._pure_stdlib),
-            mapper_targets=tuple(
-                (source[0], source[1], target[0], target[1]) for source, target in sorted(self._mapper_target.items())
-            ),
+            mapper_targets=mapper_target_rows,
+            package_names=package_name_rows,
         )
 
         def constructed(policy: SignaturePolicy, decl: ClassDecl) -> tuple[Violation, ...]:
@@ -7823,10 +9506,11 @@ class Codebase(ts.AggregateRoot):
             if str(module.place())
             not in TEST_TIER
         ]
+        readers = {module.name(): module.spec_reader(registry) for module in checked}
         for module in checked:
             for fn in module.body():
-                if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    made = self._spec_key(module, fn.returns, blocks)
+                if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) and fn.returns is not None:
+                    made = readers[module.name()].ref(Annotation(fn.returns))
                     if made is not None:
                         self._spec_makers[(module.name(), fn.name)] = made
         returning: dict[str, SpecRef | None] = {}
@@ -7835,6 +9519,7 @@ class Codebase(ts.AggregateRoot):
         self._spec_fields = {}
         self._spec_shared = []
         for module in checked:
+            reader = readers[module.name()]
             for cls in module.class_defs():
                 block = blocks.get((module.name(), cls.name))
                 for item in cls.body:
@@ -7846,12 +9531,12 @@ class Codebase(ts.AggregateRoot):
                         if arg.arg != "self"
                     ]
                     if item.name != "__init__":
-                        made = self._spec_key(module, item.returns, blocks)
+                        made = reader.ref(Annotation(item.returns)) if item.returns is not None else None
                         returning[item.name] = (
                             made if item.name not in returning or returning[item.name] == made else None
                         )
                     elif block in SPEC_READER_BLOCKS and len(params) == 1:
-                        taken = self._spec_key(module, params[0].annotation, blocks)
+                        taken = reader.ref(Annotation(params[0].annotation)) if params[0].annotation is not None else None
                         if taken is not None and taken.shape() == SPEC_ONE:
                             first = self._spec_owner.setdefault(taken.symbol(), (module.name(), cls.name))
                             self._spec_takers.setdefault(taken.symbol(), set()).add((module.name(), cls.name))
@@ -7863,10 +9548,53 @@ class Codebase(ts.AggregateRoot):
                         self._spec_fields[Symbol(SymbolSpec(module.name(), cls.name))] = {
                             arg.arg: field
                             for arg in params
-                            if (field := self._spec_key(module, arg.annotation, blocks)) is not None
+                            if arg.annotation is not None
+                            and (field := reader.ref(Annotation(arg.annotation))) is not None
                         }
         self._spec_methods = {name: made for name, made in returning.items() if made is not None}
         self._spec_shared.sort(key=lambda entry: entry[:3])
+        registry = RegistrySpec(
+            KindTableSpec(kind_rows),
+            tuple(SymbolSpec(module_name, class_name) for module_name, class_name in domain_enum_rows),
+            outcome_method_rows,
+            tuple(SymbolSpec(module_name, class_name) for module_name, class_name in action_port_rows),
+            contexts=context_rows,
+            export=self._export,
+            tops=top_rows,
+            module_names=module_name_rows,
+            declared_imports=tuple(self._imports),
+            pure_stdlib=tuple(self._pure_stdlib),
+            mapper_targets=mapper_target_rows,
+            package_names=package_name_rows,
+            spec_makers=tuple(
+                (module_name, fn_name, str(made.symbol().module()), str(made.symbol().name()), str(made.shape()))
+                for (module_name, fn_name), made in sorted(self._spec_makers.items())
+            ),
+            spec_methods=tuple(
+                (name, str(made.symbol().module()), str(made.symbol().name()), str(made.shape()))
+                for name, made in sorted(self._spec_methods.items())
+            ),
+            spec_fields=tuple(
+                (str(owner.module()), str(owner.name()), attr, str(made.symbol().module()), str(made.symbol().name()), str(made.shape()))
+                for owner, fields in self._spec_fields.items()
+                for attr, made in sorted(fields.items())
+            ),
+            spec_takers=tuple(
+                (str(spec_symbol.module()), str(spec_symbol.name()), taker[0], taker[1])
+                for spec_symbol, takers in self._spec_takers.items()
+                for taker in sorted(takers)
+            ),
+            spec_shared=tuple(
+                SharedSpecSpec(
+                    shared_module,
+                    shared_class,
+                    line,
+                    SymbolSpec(str(shared_spec.module()), str(shared_spec.name())),
+                    SymbolSpec(shared_owner[0], shared_owner[1]),
+                )
+                for shared_module, shared_class, line, shared_spec, shared_owner in self._spec_shared
+            ),
+        )
         for module in self._modules:
             found.extend(module.comment_violations())
             found.extend(module.double_violations())
@@ -8015,8 +9743,8 @@ class Codebase(ts.AggregateRoot):
             else:
                 found.extend(module.stray_violations())
             if str(module.place()) not in TEST_TIER:
-                found.extend(self._spec_use_violations(module, blocks))  # tesser:debt TB051
-                found.extend(self._spec_shared_violations(module))  # tesser:debt TB051
+                found.extend(module.spec_use_violations(registry))
+                found.extend(module.spec_shared_violations(registry))
                 found.extend(module.outcome_use_violations(registry))
             if self._export == TESSER and str(module.place()) == "test":
                 continue
@@ -8033,7 +9761,7 @@ class Codebase(ts.AggregateRoot):
                 elif block == "app_config":
                     found.extend(constructed(APP_CONFIG_CONSTRUCTOR, decl))
                 elif block == "valueobject":
-                    found.extend(self._valueobject_violations(module, cls, blocks))  # tesser:debt TB051
+                    found.extend(decl.valueobject_violations())
                     found.extend(decl.vo_field_violations())
                 elif block == OUTCOME_BLOCK:
                     found.extend(decl.outcome_violations())
@@ -8050,9 +9778,9 @@ class Codebase(ts.AggregateRoot):
                     found.extend(decl.domain_method_violations())
                     found.extend(decl.outcome_field_violations())
                 elif block == "spec":
-                    found.extend(self._spec_violations(module, cls, blocks))  # tesser:debt TB051
+                    found.extend(decl.spec_violations())
                 elif block in ("request", "response", "port_request", "port_response"):
-                    found.extend(self._dto_violations(module, cls, blocks))  # tesser:debt TB051
+                    found.extend(decl.dto_violations())
                 elif block == "client":
                     for signature in decl.signatures():
                         if str(signature.name()).startswith("_") and str(signature.name()) != PUBLIC_CALL:
@@ -8091,7 +9819,7 @@ class Codebase(ts.AggregateRoot):
                         found.extend(SERVICE_METHOD.violations(body.signature()))
                         found.extend(body.violations())
                 elif block == "mapper":
-                    found.extend(self._mapper_violations(module, cls, blocks))  # tesser:debt TB051
+                    found.extend(decl.mapper_violations())
                 elif block == "actions":
                     found.extend(decl.actions_violations())
                     for body in decl.bodies():
@@ -8122,14 +9850,15 @@ class Codebase(ts.AggregateRoot):
                         if str(signature.name()).startswith("_") and str(signature.name()) != "__call__":
                             continue
                         found.extend(APP_CLIENT_METHOD.violations(signature))
-        found.extend(self._pairing_violations(contexts, blocks))  # tesser:debt TB051
+        for module in self._modules:
+            found.extend(module.pairing_violations(registry))
         for module in self._modules:
             place = str(module.place())
             if place in ("role", "orchestrators", "orchestrators-file", "kernel"):
                 self._used_imports.update(str(name) for name in module.declared_uses(Names(tuple(self._imports))))
                 if place == "kernel" or module.name().split(".")[1:2] == ["domain"]:
                     self._used_pure_stdlib.update(str(name) for name in module.declared_uses(Names(tuple(self._pure_stdlib))))
-        found.extend(self._unused_import_violations())  # tesser:debt TB051
+        found.extend(self._tree.unused_violations(Names(tuple(self._used_imports | self._used_pure_stdlib))))
         kept: list[Violation] = []
         used: set[tuple[str, Line]] = set()
         by_path = {module.path(): module for module in self._modules}
@@ -8166,831 +9895,6 @@ class Codebase(ts.AggregateRoot):
                     )
         return tuple(kept)
 
-    def _pairing_violations(
-        self, contexts: frozenset[str], blocks: dict[tuple[str, str], str]
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        names = {module.name() for module in self._modules if not module.is_package()}
-        for module in self._modules:
-            parts = module.name().split(".")
-            base = parts[-1]
-            place = str(module.place())
-            parent = ".".join(parts[:-1])
-            if place in PAIRED_PLACES and not module.is_package() and base != "__main__":
-                saw_class = False
-                declaration_only = True
-                for stmt in module.body():
-                    if isinstance(stmt, (ast.Import, ast.ImportFrom)):
-                        continue
-                    if not isinstance(stmt, ast.ClassDef) or blocks.get(
-                        (module.name(), stmt.name)
-                    ) not in DECLARATION_BLOCKS:
-                        declaration_only = False
-                        break
-                    for item in stmt.body:
-                        if not isinstance(item, ast.FunctionDef):
-                            continue
-                        if item.name == "__init__":
-                            continue
-                        if (
-                            len(item.body) == 1
-                            and isinstance(item.body[0], ast.Expr)
-                            and isinstance(item.body[0].value, ast.Constant)
-                        ):
-                            continue
-                        declaration_only = False
-                        break
-                    if not declaration_only:
-                        break
-                    saw_class = True
-                if declaration_only and saw_class:
-                    continue
-                sibling = (parent + "." if parent else "") + "test_" + base
-                if sibling not in names:
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            1,
-                            "TB074",
-                            f"{module.name()} has no sibling test file; an implementation "
-                            "module carries exactly one test_<module>.py beside it",
-                        ))
-                    )
-            elif place == "test" and base.startswith("test_") and "tests" not in parts:
-                subject = (parent + "." if parent else "") + base[len("test_") :]
-                if subject not in names:
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            1,
-                            "TB074",
-                            f"{module.name()} pairs with no implementation module; a sibling "
-                            "test file is named test_<module>.py for the module beside it",
-                        ))
-                    )
-        return tuple(found)
-
-    def _declaration_violations(self) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        if self._declaration == DECLARED_MISSING:
-            found.append(
-                Violation(ViolationSpec(
-                    TREE_DECLARATION,
-                    1,
-                    "TB044",
-                    "this tree is not declared; a checkable tree carries a "
-                    ".tesser-root file containing 'app' at its root",
-                ))
-            )
-        elif self._declaration == DECLARED_UNREADABLE:
-            found.append(
-                Violation(ViolationSpec(
-                    TREE_DECLARATION,
-                    1,
-                    "TB044",
-                    "this tree's declaration is not readable; "
-                    "a .tesser-root is a plain UTF-8 text file",
-                ))
-            )
-        elif len(self._exports) > 1:
-            found.append(
-                Violation(ViolationSpec(
-                    TREE_DECLARATION,
-                    1,
-                    "TB044",
-                    "this tree declares a second exported kernel; a tree has one "
-                    "exported kernel, so a declaration carries at most one "
-                    "'export <dir>' line",
-                ))
-            )
-        elif self._declaration != DECLARED_APP:
-            found.append(
-                Violation(ViolationSpec(
-                    TREE_DECLARATION,
-                    1,
-                    "TB044",
-                    "this tree declares an unrecognized kind; a declaration is "
-                    "'app', then only 'skip <dir>', 'export <dir>', "
-                    "'import <package>', and 'stdlib <module>' lines",
-                ))
-            )
-        if len(self._exports) <= 1:
-            found.extend(self._export_declaration_violations())  # tesser:debt TB051
-            found.extend(self._import_declaration_violations())  # tesser:debt TB051
-            found.extend(self._stdlib_declaration_violations())  # tesser:debt TB051
-        for relative in self._nested:
-            found.append(
-                Violation(ViolationSpec(
-                    relative,
-                    1,
-                    "TB044",
-                    "declares a nested tree root; a tessercheck run covers one "
-                    "declared tree, so run that tree directly",
-                ))
-            )
-        for relative in self._symlinked:
-            found.append(
-                Violation(ViolationSpec(
-                    relative,
-                    1,
-                    "TB045",
-                    "is a symlinked directory; a declared tree is walked in "
-                    "full, and a symlink escapes the walk",
-                ))
-            )
-        return tuple(found)
-
-    def _export_declaration_violations(self) -> tuple[Violation, ...]:
-        if self._export is None:
-            return ()
-        if self._export == KERNEL_PACKAGE or self._export in SHELL_PACKAGES:
-            return (
-                Violation(ViolationSpec(
-                    TREE_DECLARATION,
-                    1,
-                    "TB044",
-                    f"this tree exports '{self._export}'; an exported kernel "
-                    "never takes the name of the kernel package or the app shell",
-                )),
-            )
-        if not any(
-            module.name() == self._export and module.is_package()
-            for module in self._modules
-        ):
-            return (
-                Violation(ViolationSpec(
-                    TREE_DECLARATION,
-                    1,
-                    "TB044",
-                    f"this tree exports '{self._export}' but no such package "
-                    "exists; an export names a package at the tree root",
-                )),
-            )
-        if self._export == TESSER:
-            outsiders = sorted(
-                frozenset(
-                    module.name().split(".")[0] for module in self._modules
-                )
-                - frozenset({TESSER, TESTS_ROLE, "conftest"})
-            )
-            if outsiders:
-                return (
-                    Violation(ViolationSpec(
-                        TREE_DECLARATION,
-                        1,
-                        "TB044",
-                        f"this tree exports 'tesser' but also holds {', '.join(outsiders)}; "
-                        "a tree exporting tesser is the distribution itself — "
-                        "its top level is tesser and tests, nothing else",
-                    )),
-                )
-        if self._export != TESSER and any(
-            len(parts) >= 2 and parts[0] == self._export and parts[1] in ROLES
-            for parts in (module.name().split(".") for module in self._modules)
-        ):
-            return (
-                Violation(ViolationSpec(
-                    TREE_DECLARATION,
-                    1,
-                    "TB044",
-                    f"this tree exports '{self._export}', a context-shaped package; "
-                    "a bounded context's domain is never exported — a kernel is not a context",
-                )),
-            )
-        return ()
-
-    def _import_declaration_violations(self) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        tops = (frozenset(each.name().split(".")[0] for each in self._modules))
-        for declared in self._imports:
-            head = declared.split(".")[0]
-            if head == KERNEL_PACKAGE or head in SHELL_PACKAGES or head in tops:
-                found.append(
-                    Violation(ViolationSpec(
-                        TREE_DECLARATION,
-                        1,
-                        "TB044",
-                        f"this tree declares 'import {declared}' but that names "
-                        "this tree; an import declaration names an installed "
-                        "external kernel, never something the walk governs",
-                    ))
-                )
-            elif head in self._stdlib:
-                found.append(
-                    Violation(ViolationSpec(
-                        TREE_DECLARATION,
-                        1,
-                        "TB044",
-                        f"this tree declares 'import {declared}' but that names "
-                        "the stdlib; the pure stdlib is already legal and the "
-                        "rest of it is never a kernel",
-                    ))
-                )
-        return tuple(found)
-
-    def _unused_import_violations(self) -> tuple[Violation, ...]:
-        return tuple(
-            Violation(ViolationSpec(
-                TREE_DECLARATION,
-                1,
-                "TB044",
-                f"this tree declares 'import {declared}' and nothing uses it; "
-                "an import declaration that legalizes nothing is itself a finding",
-            ))
-            for declared in self._imports
-            if declared not in self._used_imports
-        ) + tuple(
-            Violation(ViolationSpec(
-                TREE_DECLARATION,
-                1,
-                "TB044",
-                f"this tree declares 'stdlib {declared}' and nothing uses it; "
-                "a stdlib declaration that legalizes nothing is itself a finding",
-            ))
-            for declared in self._pure_stdlib
-            if declared not in self._used_pure_stdlib
-        )
-
-    def _stdlib_declaration_violations(self) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for declared in self._pure_stdlib:
-            head = declared.split(".")[0]
-            if head not in self._stdlib:
-                found.append(
-                    Violation(ViolationSpec(
-                        TREE_DECLARATION,
-                        1,
-                        "TB044",
-                        f"this tree declares 'stdlib {declared}' but that is not "
-                        "the stdlib; a stdlib declaration widens the domain's pure "
-                        "stdlib, an external package is declared with import",
-                    ))
-                )
-            elif declared in CORE_STDLIB["domain"] or head in CORE_STDLIB["domain"]:
-                found.append(
-                    Violation(ViolationSpec(
-                        TREE_DECLARATION,
-                        1,
-                        "TB044",
-                        f"this tree declares 'stdlib {declared}' but the domain "
-                        "already imports it; a stdlib declaration widens the default "
-                        "pure stdlib, never repeats it",
-                    ))
-                )
-        return tuple(found)
-
-    @staticmethod
-    def _unquoted(node: ast.expr | None) -> ast.expr | None:
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            try:
-                return ast.parse(node.value, mode="eval").body
-            except SyntaxError:
-                return None
-        return node
-
-    def _spec_shared_violations(self, module: Module) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for shared_module, shared_class, line, shared_spec, shared_owner in self._spec_shared:
-            if shared_module != module.name():
-                continue
-            spec_label = f"{shared_spec.module()}.{shared_spec.name()}"
-            owner_label = ".".join(shared_owner)
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    line,
-                    "TB083",
-                    f"{module.name()}.{shared_class} takes {spec_label}, which {owner_label} already takes; "
-                    "a spec constructs exactly one object",
-                ))
-            )
-        return tuple(found)
-
-    def _spec_key(
-        self, module: Module, node: ast.expr | None, blocks: dict[tuple[str, str], str]
-    ) -> SpecRef | None:
-        if node is None:
-            return None
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            try:
-                node = ast.parse(node.value, mode="eval").body
-            except SyntaxError:
-                return None
-        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
-            return self._spec_key(module, node.left, blocks) or self._spec_key(module, node.right, blocks)
-        if isinstance(node, ast.Subscript):
-            head = Codebase._annotation_head(node)
-            inner = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
-            if head in ("Optional", "Union"):
-                for each in inner:
-                    found = self._spec_key(module, each, blocks)
-                    if found is not None:
-                        return found
-                return None
-            if head in ("tuple", "list", "set", "frozenset", "Sequence", "Iterable", "Collection"):
-                for each in inner:
-                    found = self._spec_key(module, each, blocks)
-                    if found is not None and found.shape() == SPEC_ONE:
-                        return found.many()
-            return None
-        key = module._resolve(node)
-        if key is not None and blocks.get(key) == "mapper":
-            key = self._mapper_target.get(key)
-        if key is not None and blocks.get(key) in SPEC_BLOCKS:
-            return SpecRef(SpecRefSpec(SymbolSpec(key[0], key[1]), "one"))
-        return None
-
-    def _spec_use_violations(
-        self, module: Module, blocks: dict[tuple[str, str], str]
-    ) -> tuple[Violation, ...]:
-        def annotation(node: ast.expr | None) -> SpecRef | None:
-            return self._spec_key(module, node, blocks)
-
-        def maker(node: ast.expr) -> SpecRef | None:
-            made = annotation(node)
-            if made is not None:
-                return made
-            if isinstance(node, ast.Name):
-                return self._spec_makers.get((module.name(), node.id))
-            key = module._resolve(node)
-            if key is not None and key in self._spec_makers:
-                return self._spec_makers[key]
-            if isinstance(node, ast.Attribute):
-                return self._spec_methods.get(node.attr)
-            return None
-
-        def typed(node: ast.expr, names: dict[str, SpecRef]) -> SpecRef | None:
-            if isinstance(node, (ast.Await, ast.NamedExpr)):
-                return typed(node.value, names)
-            if isinstance(node, ast.Name):
-                return names.get(node.id)
-            if isinstance(node, ast.Call):
-                made = maker(node.func)
-                if made is not None:
-                    return made
-                if isinstance(node.func, ast.Name) and node.func.id == "enumerate" and node.args:
-                    return typed(node.args[0], names)
-                return None
-            if isinstance(node, ast.Attribute):
-                owner = typed(node.value, names)
-                if owner is not None and owner.shape() == SPEC_ONE:
-                    return self._spec_fields.get(owner.symbol(), {}).get(node.attr)
-                return None
-            if isinstance(node, ast.Subscript):
-                owner = typed(node.value, names)
-                if owner is not None and owner.shape() == SPEC_MANY:
-                    return owner if isinstance(node.slice, ast.Slice) else owner.one()
-                return None
-            if isinstance(node, ast.IfExp):
-                return typed(node.body, names) or typed(node.orelse, names)
-            if isinstance(node, ast.BoolOp):
-                for each in node.values:
-                    found = typed(each, names)
-                    if found is not None:
-                        return found
-            return None
-
-        def carried(node: ast.expr, names: dict[str, SpecRef]) -> str | None:
-            if isinstance(node, (ast.Name, ast.Call, ast.Attribute, ast.Subscript)) and typed(node, names) is not None:
-                if isinstance(node, ast.Name):
-                    return node.id
-                if isinstance(node, ast.Call) and maker(node.func) is not None:
-                    return ast.unparse(node.func)
-                return ast.unparse(node)
-            parts: list[ast.expr] = []
-            if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
-                parts = list(node.elts)
-            elif isinstance(node, ast.Dict):
-                parts = [value for value in node.values if value is not None]
-            elif (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id in ("list", "tuple", "set", "frozenset", "dict")
-            ):
-                parts = [*node.args, *(k.value for k in node.keywords)]
-            elif isinstance(node, ast.IfExp):
-                parts = [node.body, node.orelse]
-            elif isinstance(node, ast.BoolOp):
-                parts = list(node.values)
-            elif isinstance(node, (ast.Await, ast.NamedExpr)):
-                parts = [node.value]
-            for each in parts:
-                hit = carried(each, names)
-                if hit is not None:
-                    return hit
-            return None
-
-        def bound(fn: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda) -> set[str]:
-            args = fn.args
-            out = {a.arg for a in args.posonlyargs + args.args + args.kwonlyargs}
-            if args.vararg is not None:
-                out.add(args.vararg.arg)
-            if args.kwarg is not None:
-                out.add(args.kwarg.arg)
-            return out
-
-        def scope(nodes: list[ast.AST]) -> list[ast.AST]:
-            out: list[ast.AST] = []
-            stack = list(nodes)
-            while stack:
-                cur = stack.pop()
-                out.append(cur)
-                if isinstance(
-                    cur,
-                    (
-                        ast.FunctionDef,
-                        ast.AsyncFunctionDef,
-                        ast.Lambda,
-                        ast.ClassDef,
-                        ast.ListComp,
-                        ast.SetComp,
-                        ast.DictComp,
-                        ast.GeneratorExp,
-                    ),
-                ):
-                    continue
-                stack.extend(ast.iter_child_nodes(cur))
-            return out
-
-        def stored(node: ast.AST) -> list[str]:
-            return [t.id for t in ast.walk(node) if isinstance(t, ast.Name) and isinstance(t.ctx, ast.Store)]
-
-        def element(target: ast.expr, iterable: ast.expr, names: dict[str, SpecRef]) -> tuple[str, SpecRef] | None:
-            many = typed(iterable, names)
-            if many is None or many.shape() != SPEC_MANY:
-                return None
-            if isinstance(target, ast.Name):
-                return target.id, many.one()
-            if (
-                isinstance(target, ast.Tuple)
-                and len(target.elts) == 2
-                and isinstance(target.elts[1], ast.Name)
-                and isinstance(iterable, ast.Call)
-                and isinstance(iterable.func, ast.Name)
-                and iterable.func.id == "enumerate"
-            ):
-                return target.elts[1].id, many.one()
-            return None
-
-        def held_in(body: list[ast.stmt], names: dict[str, SpecRef]) -> dict[str, SpecRef]:
-            names = dict(names)
-            local = scope(list(body))
-            local.extend(
-                inner
-                for node in local
-                if isinstance(node, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp))
-                for inner in ast.walk(node)
-                if isinstance(inner, ast.NamedExpr)
-            )
-            changed = True
-            while changed:
-                changed = False
-                for node in local:
-                    if isinstance(node, ast.Assign):
-                        made = typed(node.value, names)
-                        if made is not None:
-                            for target in node.targets:
-                                if isinstance(target, ast.Name) and target.id not in names:
-                                    names[target.id] = made
-                                    changed = True
-                    elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-                        made = annotation(node.annotation) or (
-                            typed(node.value, names) if node.value is not None else None
-                        )
-                        if made is not None and node.target.id not in names:
-                            names[node.target.id] = made
-                            changed = True
-                    elif isinstance(node, ast.NamedExpr) and isinstance(node.target, ast.Name):
-                        made = typed(node.value, names)
-                        if made is not None and node.target.id not in names:
-                            names[node.target.id] = made
-                            changed = True
-                    elif isinstance(node, (ast.For, ast.AsyncFor)):
-                        picked = element(node.target, node.iter, names)
-                        if picked is not None and picked[0] not in names:
-                            names[picked[0]] = picked[1]
-                            changed = True
-            shadowed: set[str] = set()
-            for node in local:
-                if isinstance(node, (ast.For, ast.AsyncFor)):
-                    if element(node.target, node.iter, names) is None:
-                        shadowed.update(stored(node.target))
-                elif isinstance(node, (ast.With, ast.AsyncWith)):
-                    for item in node.items:
-                        if item.optional_vars is not None:
-                            shadowed.update(stored(item.optional_vars))
-                elif isinstance(node, ast.ExceptHandler) and node.name is not None:
-                    shadowed.add(node.name)
-                elif isinstance(node, ast.Assign) and typed(node.value, names) is None:
-                    for target in node.targets:
-                        shadowed.update(stored(target))
-                elif isinstance(node, ast.AnnAssign) and annotation(node.annotation) is None and (
-                    node.value is None or typed(node.value, names) is None
-                ):
-                    shadowed.update(stored(node.target))
-                elif isinstance(node, ast.AugAssign):
-                    shadowed.update(stored(node.target))
-                elif isinstance(node, ast.NamedExpr) and typed(node.value, names) is None:
-                    shadowed.update(stored(node.target))
-                elif isinstance(node, (ast.Import, ast.ImportFrom)):
-                    shadowed.update(alias.asname or alias.name.split(".")[0] for alias in node.names)
-                elif isinstance(node, ast.Match):
-                    for case in node.cases:
-                        for pattern in ast.walk(case.pattern):
-                            if isinstance(pattern, (ast.MatchAs, ast.MatchStar)) and pattern.name is not None:
-                                shadowed.add(pattern.name)
-                            elif isinstance(pattern, ast.MatchMapping) and pattern.rest is not None:
-                                shadowed.add(pattern.rest)
-            return {name: made for name, made in names.items() if name not in shadowed}
-
-        def held(fn: ast.FunctionDef | ast.AsyncFunctionDef, names: dict[str, SpecRef]) -> dict[str, SpecRef]:
-            seeded = dict(names)
-            for a in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs:
-                made = annotation(a.annotation)
-                if made is not None:
-                    seeded[a.arg] = made
-            return held_in(list(fn.body), seeded)
-
-        def kept(node: ast.AST, names: dict[str, SpecRef], top: bool) -> str | None:
-            if top and isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) for t in node.targets):
-                return carried(node.value, names)
-            if top and isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-                if node.value is not None:
-                    return carried(node.value, names)
-                return ast.unparse(node.annotation) if annotation(node.annotation) is not None else None
-            if isinstance(node, ast.Assign) and any(
-                isinstance(t, (ast.Attribute, ast.Subscript))
-                for target in node.targets
-                for t in (target.elts if isinstance(target, (ast.Tuple, ast.List)) else [target])
-            ):
-                return carried(node.value, names)
-            if isinstance(node, ast.AugAssign) and isinstance(node.target, (ast.Attribute, ast.Subscript)):
-                return carried(node.value, names)
-            if isinstance(node, ast.AnnAssign) and isinstance(node.target, (ast.Attribute, ast.Subscript)):
-                if node.value is not None:
-                    return carried(node.value, names)
-                return ast.unparse(node.annotation) if annotation(node.annotation) is not None else None
-            if isinstance(node, ast.Call):
-                if isinstance(node.func, ast.Attribute) and node.func.attr in (
-                    "append", "appendleft", "extend", "insert", "setdefault"
-                ):
-                    for each in [*node.args, *(k.value for k in node.keywords)]:
-                        hit = carried(each, names)
-                        if hit is not None:
-                            return hit
-                if isinstance(node.func, ast.Attribute) and node.func.attr == "__setattr__":
-                    if len(node.args) == 3:
-                        return carried(node.args[2], names)
-                    if len(node.args) == 2:
-                        return carried(node.args[1], names)
-                if isinstance(node.func, ast.Name) and node.func.id == "setattr" and len(node.args) == 3:
-                    return carried(node.args[2], names)
-            return None
-
-        def read(node: ast.AST, names: dict[str, SpecRef]) -> tuple[str, str, Symbol] | None:
-            if isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load):
-                owner = typed(node.value, names)
-                if owner is not None and owner.shape() == SPEC_ONE and not node.attr.startswith("__"):
-                    return ast.unparse(node.value), node.attr, owner.symbol()
-                return None
-            if isinstance(node, ast.Call) and node.args:
-                owner = typed(node.args[0], names)
-                if owner is None or owner.shape() == SPEC_MANY:
-                    return None
-                if isinstance(node.func, ast.Name) and node.func.id in ("getattr", "vars"):
-                    field = (
-                        node.args[1].value
-                        if len(node.args) > 1
-                        and isinstance(node.args[1], ast.Constant)
-                        and isinstance(node.args[1].value, str)
-                        else "__dict__"
-                    )
-                    return ast.unparse(node.args[0]), field, owner.symbol()
-                if ast.unparse(node.func).split(".")[-1] in ("asdict", "astuple", "copy", "deepcopy"):
-                    return ast.unparse(node.args[0]), "__dict__", owner.symbol()
-            return None
-
-        found: list[Violation] = []
-        seen: set[tuple[int, str, str]] = set()
-
-        def scan(
-            nodes: list[ast.AST],
-            names: dict[str, SpecRef],
-            where: str,
-            owner_here: tuple[str, str] | None,
-            assembling: bool,
-            top: bool = False,
-        ) -> None:
-            for cur in scope(nodes):
-                if top and isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    continue
-                if top and isinstance(cur, ast.ClassDef):
-                    scan(list(cur.body), names, f"{where}.{cur.name}", None, False, True)
-                    continue
-                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    scan(
-                        list(cur.body),
-                        held(cur, {n: t for n, t in names.items() if n not in bound(cur)}),
-                        f"{where}.{cur.name}",
-                        owner_here,
-                        assembling,
-                    )
-                    continue
-                if isinstance(cur, ast.Lambda):
-                    scan(
-                        [cur.body],
-                        {n: t for n, t in names.items() if n not in bound(cur)},
-                        where,
-                        owner_here,
-                        assembling,
-                    )
-                    continue
-                if isinstance(cur, ast.ClassDef):
-                    scan(list(cur.body), names, f"{where}.{cur.name}", owner_here, assembling)
-                    continue
-                if isinstance(cur, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
-                    first, rest = cur.generators[0], cur.generators[1:]
-                    scan([first.iter], names, where, owner_here, assembling)
-                    targets = {
-                        t.id
-                        for comp in cur.generators
-                        for t in ast.walk(comp.target)
-                        if isinstance(t, ast.Name)
-                    }
-                    inner = {n: t for n, t in names.items() if n not in targets}
-                    for comp in cur.generators:
-                        picked = element(comp.target, comp.iter, inner if comp is not first else names)
-                        if picked is not None:
-                            inner[picked[0]] = picked[1]
-                    parts: list[ast.AST] = [*first.ifs]
-                    for comp in rest:
-                        parts.extend([comp.iter, *comp.ifs])
-                    parts.extend([cur.key, cur.value] if isinstance(cur, ast.DictComp) else [cur.elt])
-                    scan(parts, inner, where, owner_here, assembling)
-                    continue
-                if not isinstance(cur, (ast.stmt, ast.expr)):
-                    continue
-                spec_name = kept(cur, names, top)
-                if spec_name is not None and not assembling and (cur.lineno, "\x00keeps", spec_name) not in seen:
-                    seen.add((cur.lineno, "\x00keeps", spec_name))
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            cur.lineno,
-                            "TB083",
-                            f"{where} keeps the spec {spec_name!r}; "
-                            "a spec is never kept, it initializes its own object and is done",
-                        ))
-                    )
-                hit = read(cur, names)
-                if hit is not None:
-                    spec_name, field, key = hit
-                    licensed = owner_here is not None and owner_here in self._spec_takers.get(key, set())
-                    if not licensed and (cur.lineno, field, spec_name) not in seen:
-                        seen.add((cur.lineno, field, spec_name))
-                        found.append(
-                            Violation(ViolationSpec(
-                                module.path(),
-                                cur.lineno,
-                                "TB083",
-                                f"{where} reads {field!r} of the spec {spec_name!r}; "
-                                "a spec is only read where it initializes its own object",
-                            ))
-                        )
-
-        def roots() -> list[tuple[ast.FunctionDef | ast.AsyncFunctionDef, ast.ClassDef | None]]:
-            out: list[tuple[ast.FunctionDef | ast.AsyncFunctionDef, ast.ClassDef | None]] = []
-            stack: list[tuple[ast.AST, ast.ClassDef | None]] = [(stmt, None) for stmt in module.body()]
-            while stack:
-                cur, cls = stack.pop()
-                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    out.append((cur, cls))
-                    continue
-                if isinstance(cur, ast.Lambda):
-                    continue
-                if isinstance(cur, ast.ClassDef):
-                    stack.extend((item, cur) for item in cur.body)
-                    continue
-                stack.extend((child, cls) for child in ast.iter_child_nodes(cur))
-            return out
-
-        module_names = held_in(list(module.body()), {})
-        scan(list(module.body()), module_names, module.name(), None, False, True)
-        for fn, cls in roots():
-            block = blocks.get((module.name(), cls.name)) if cls is not None else None
-            where = (
-                f"{module.name()}.{cls.name}.{fn.name}" if cls is not None else f"{module.name()}.{fn.name}"
-            )
-            scan(
-                list(fn.body),
-                held(fn, module_names),
-                where,
-                (module.name(), cls.name)
-                if cls is not None and fn.name == "__init__" and block in SPEC_READER_BLOCKS
-                else None,
-                fn.name == "__init__" and block in SPEC_BLOCKS,
-            )
-        return tuple(sorted(found, key=lambda v: int(v.line())))
-
-    @staticmethod
-    def _names_bool(node: ast.expr | None) -> bool:
-        if node is None:
-            return False
-        head = node
-        if isinstance(head, ast.Constant) and isinstance(head.value, str):
-            try:
-                head = ast.parse(head.value, mode="eval").body
-            except SyntaxError:
-                return False
-        if isinstance(head, ast.BinOp) and isinstance(head.op, ast.BitOr):
-            return Codebase._names_bool(head.left) or Codebase._names_bool(head.right)
-        if isinstance(head, ast.Subscript) and Codebase._annotation_head(head) in (
-            "Optional",
-            "Final",
-            "Annotated",
-        ):
-            wrapped = head.slice
-            if isinstance(wrapped, ast.Tuple) and wrapped.elts:
-                wrapped = wrapped.elts[0]
-            return Codebase._names_bool(wrapped)
-        return isinstance(head, ast.Name) and head.id == "bool"
-
-    def _annotation_scalar_names(
-        self, node: ast.expr, keep_all: bool = False
-    ) -> frozenset[str]:
-        names: set[str] = set()
-        for sub in ast.walk(node):
-            if isinstance(sub, ast.Name):
-                names.add(sub.id)
-            elif isinstance(sub, ast.Attribute):
-                names.add(sub.attr)
-            elif isinstance(sub, ast.Constant) and isinstance(sub.value, str):
-                try:
-                    parsed = ast.parse(sub.value, mode="eval")
-                except SyntaxError:
-                    continue
-                if not isinstance(parsed.body, ast.Constant):
-                    names |= self._annotation_scalar_names(parsed.body, keep_all=keep_all)
-        if keep_all:
-            return frozenset(names)
-        return frozenset(names - RETURN_WRAPPERS - SELF_NAMES)
-
-    @staticmethod
-    def _annotation_head(node: ast.expr) -> str | None:
-        if isinstance(node, ast.Name):
-            return node.id
-        if isinstance(node, ast.Attribute):
-            return node.attr
-        if isinstance(node, ast.Subscript):
-            return Codebase._annotation_head(node.value)
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            try:
-                parsed = ast.parse(node.value, mode="eval")
-            except SyntaxError:
-                return None
-            if isinstance(parsed.body, ast.Constant):
-                return None
-            return Codebase._annotation_head(parsed.body)
-        return None
-
-    @classmethod
-    def _own_scope_returns(cls, node: ast.AST) -> list[ast.Return]:
-        found: list[ast.Return] = []
-        for child in ast.iter_child_nodes(node):
-            if isinstance(
-                child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
-            ):
-                continue
-            if isinstance(child, ast.Return):
-                found.append(child)
-            found.extend(cls._own_scope_returns(child))
-        return found
-
-    @classmethod
-    def _is_union(cls, node: ast.expr | None) -> bool:
-        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
-            return True
-        if isinstance(node, ast.Subscript):
-            if isinstance(node.value, ast.Name) and node.value.id in ("Optional", "Union"):
-                return True
-            elements = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
-            return any(cls._is_union(element) for element in elements)
-        if isinstance(node, ast.Attribute):
-            return node.attr in ("Optional", "Union")
-        return False
-
-    @staticmethod
-    def _enum_base(module: Module, stmt: ast.ClassDef) -> str | None:
-        for base in stmt.bases:
-            if isinstance(base, ast.Attribute) and isinstance(base.value, ast.Name):
-                if module._package_aliases.get(base.value.id) == ENUM_MODULE:
-                    return base.attr
-            elif isinstance(base, ast.Name):
-                origin = module._imported.get(base.id)
-                if origin is not None and origin[0] == ENUM_MODULE:
-                    return origin[1]
-        return None
-
     def _names_a_domain_enum(self, module: Module, node: ast.expr | None) -> bool:
         if node is None:
             return False
@@ -9000,682 +9904,4 @@ class Codebase(ts.AggregateRoot):
                 if key is not None and key in self._domain_enums:
                     return True
         return False
-
-    def _valueobject_violations(
-        self,
-        module: Module,
-        cls: ast.ClassDef,
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        init = (next(
-                    (
-                        item
-                        for item in cls.body
-                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "__init__"
-                    ),
-                    None,
-                ))
-        if init is None:
-            return (
-                Violation(ViolationSpec(
-                    module.path(),
-                    cls.lineno,
-                    "TB080",
-                    f"{module.name()}.{cls.name} defines no __init__; "
-                    "a value object constructs in its own __init__",
-                )),
-            )
-        where = f"{module.name()}.{cls.name}.__init__"
-        if init.args.vararg is not None or init.args.kwarg is not None:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    init.lineno,
-                    "TB080",
-                    f"{where} uses *args/**kwargs; "
-                    "a value object declares its construction data as named parameters",
-                ))
-            )
-        params = (init.args.posonlyargs + init.args.args)[1:] + init.args.kwonlyargs
-        if len(params) != 1 and init.args.vararg is None and init.args.kwarg is None:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    init.lineno,
-                    "TB080",
-                    f"{where} takes {len(params)} parameters; "
-                    "a value object takes one primitive or exactly one ts.Spec",
-                ))
-            )
-        for arg in params:
-            plain = self._allowed_annotation(module, arg.annotation, blocks, frozenset(), domain_enums=True)
-            taken = self._spec_key(module, arg.annotation, blocks)
-            exact = (
-                taken is not None
-                and taken.shape() == SPEC_ONE
-                and isinstance(self._unquoted(arg.annotation), (ast.Name, ast.Attribute))  # tesser:debt TB051
-            )
-            if not (plain or exact):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        init.lineno,
-                        "TB080",
-                        f"{where} parameter {arg.arg!r} is not allowed; "
-                        "a value object constructs from one primitive or one spec, never value objects",
-                    ))
-                )
-        return tuple(found)
-
-    def _spec_violations(
-        self,
-        module: Module,
-        cls: ast.ClassDef,
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        init_seen = False
-        for item in cls.body:
-            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        item.lineno,
-                        "TB080",
-                        f"{module.name()}.{cls.name} carries a class-level statement; "
-                        "a spec declares its fields as __init__ parameters, "
-                        "where the field rules can read them",
-                    ))
-                )
-                continue
-            where = f"{module.name()}.{cls.name}.{item.name}"
-            if item.name != "__init__":
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        item.lineno,
-                        "TB080",
-                        f"{where} defines a method on a spec; a spec only carries construction data",
-                    ))
-                )
-                continue
-            init_seen = True
-            if item.args.vararg is not None or item.args.kwarg is not None:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        item.lineno,
-                        "TB080",
-                        f"{where} uses *args/**kwargs; a spec declares its fields "
-                        "as named __init__ parameters, where the field rules can read them",
-                    ))
-                )
-            for arg in ([
-                        arg
-                        for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
-                        if arg.arg != "self"
-                    ]):
-                if not self._allowed_annotation(module, arg.annotation, blocks, frozenset({"spec"}), domain_enums=True):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            item.lineno,
-                            "TB080",
-                            f"{where} parameter {arg.arg!r} is not allowed; "
-                            "a spec field is a primitive or a child spec, never a value object",
-                        ))
-                    )
-        if not init_seen:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    cls.lineno,
-                    "TB080",
-                    f"{module.name()}.{cls.name} defines no __init__; "
-                    "a spec defines the __init__ that carries its fields",
-                ))
-            )
-        return tuple(found)
-
-    def _dto_violations(
-        self,
-        module: Module,
-        cls: ast.ClassDef,
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        own = blocks.get((module.name(), cls.name))
-        port_dto = own in ("port_request", "port_response")
-        nested = (
-            frozenset({"port_request", "port_response"})
-            if port_dto
-            else frozenset({"request", "response"})
-        )
-        named_enums: set[str] = set()
-        if port_dto:
-            for enum_stmt in module.class_defs():
-                if self._enum_base(module, enum_stmt) is not None:  # tesser:debt TB051
-                    named_enums.add(enum_stmt.name)
-        enums = frozenset(named_enums)
-        for item in cls.body:
-            if port_dto and not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        item.lineno,
-                        "TB080",
-                        f"{module.name()}.{cls.name} carries a class-level statement; "
-                        "a port DTO declares its fields as __init__ parameters, "
-                        "where the field rules can read them",
-                    ))
-                )
-                continue
-            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                continue
-            where = f"{module.name()}.{cls.name}.{item.name}"
-            if item.name == "__init__" and (
-                item.args.vararg is not None or item.args.kwarg is not None
-            ):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        item.lineno,
-                        "TB080",
-                        f"{where} uses *args/**kwargs; a DTO declares its fields "
-                        "as named __init__ parameters, where the field rules can read them",
-                    ))
-                )
-            if item.name != "__init__":
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        item.lineno,
-                        "TB080",
-                        f"{where} defines a method on a DTO; a DTO carries data and nothing else",
-                    ))
-                )
-                continue
-            carrier = True
-            if port_dto:
-                assignable = frozenset(arg.arg for arg in ([
-                            arg
-                            for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
-                            if arg.arg != "self"
-                        ]))
-                for stmt in item.body:
-                    if isinstance(stmt, ast.Return) and (
-                        stmt.value is None
-                        or (
-                            isinstance(stmt.value, ast.Constant)
-                            and stmt.value.value is None
-                        )
-                    ):
-                        continue
-                    target: ast.expr | None = None
-                    assigned: ast.expr | None = None
-                    if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
-                        target, assigned = stmt.targets[0], stmt.value
-                    elif isinstance(stmt, ast.AnnAssign):
-                        target, assigned = stmt.target, stmt.value
-                    if (
-                        isinstance(target, ast.Attribute)
-                        and isinstance(target.value, ast.Name)
-                        and target.value.id == "self"
-                        and isinstance(assigned, ast.Name)
-                        and assigned.id in assignable
-                    ):
-                        continue
-                    carrier = False
-                    break
-            if port_dto and not carrier:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        item.lineno,
-                        "TB080",
-                        f"{where} carries logic; a port DTO constructor only assigns its "
-                        "parameters, because a ports module holds no logic to import",
-                    ))
-                )
-            for arg in ([
-                        arg
-                        for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
-                        if arg.arg != "self"
-                    ]):
-                if self._names_bool(arg.annotation):  # tesser:debt TB051
-                    if port_dto:
-                        found.append(
-                            Violation(ViolationSpec(
-                                module.path(),
-                                item.lineno,
-                                "TB080",
-                                f"{where} field {arg.arg!r} is a bool; a port DTO field is "
-                                "never a bare bool — model the outcome as an enum",
-                            ))
-                        )
-                    else:
-                        found.append(
-                            Violation(ViolationSpec(
-                                module.path(),
-                                item.lineno,
-                                "TB080",
-                                f"{where} field {arg.arg!r} is a bool; a client DTO field is "
-                                "never a bare bool — a closed set crosses as its canonical string",
-                            ))
-                        )
-                    continue
-                if port_dto and self._is_union(arg.annotation):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            item.lineno,
-                            "TB080",
-                            f"{where} field {arg.arg!r} is a union; a port DTO field "
-                            "is never a union, optional included — model the outcome as an enum",
-                        ))
-                    )
-                    continue
-                if not self._allowed_annotation(
-                    module,
-                    arg.annotation,
-                    blocks,
-                    nested,
-                    enums,
-                    PORT_DTO_PRIMITIVES if port_dto else PRIMITIVES,
-                ):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            item.lineno,
-                            "TB080",
-                            f"{where} parameter {arg.arg!r} is not allowed; "
-                            "a DTO field is a primitive or another DTO",
-                        ))
-                    )
-        return tuple(found)
-
-    def _mapper_violations(
-        self, module: Module, cls: ast.ClassDef, blocks: dict[tuple[str, str], str]
-    ) -> tuple[Violation, ...]:
-        where = f"{module.name()}.{cls.name}"
-        found: list[Violation] = []
-        if not cls.name.startswith(MAPPER_PREFIX):
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    cls.lineno,
-                    "TB080",
-                    f"{where} does not start with MapTo; a mapper is named for "
-                    "what it maps to, because its parameters already say what it maps from",
-                ))
-            )
-        target = self._mapper_target.get((module.name(), cls.name))
-        if target is None:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    cls.lineno,
-                    "TB080",
-                    f"{where} is not its target; a mapper subclasses ts.Mapper and then "
-                    "the one spec or DTO it maps to, so constructing the mapper constructs the target",
-                ))
-            )
-        else:
-            target_name = target[1]
-            if target_name not in cls.name:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        cls.lineno,
-                        "TB080",
-                        f"{where} does not name {target_name}; a mapper is named "
-                        "MapTo plus its target, so the reader knows what the constructor yields",
-                    ))
-                )
-        if cls.decorator_list or cls.keywords:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    cls.lineno,
-                    "TB080",
-                    f"{where} declares a decorator or a class keyword; a mapper is a plain "
-                    "class, because a metaclass or decorator can replace the constructor "
-                    "that is the mapping",
-                ))
-            )
-        inits = [
-            item
-            for item in cls.body
-            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "__init__"
-        ]
-        init = inits[-1] if inits else None
-        if init is None:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    cls.lineno,
-                    "TB080",
-                    f"{where} has no __init__; a mapper's constructor is the mapping, so "
-                    "without one the target's own constructor is exposed",
-                ))
-            )
-        else:
-            if isinstance(init, ast.AsyncFunctionDef):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        init.lineno,
-                        "TB080",
-                        f"{where}.__init__ is async; a mapper's constructor runs the mapping "
-                        "when it is called, and a coroutine never does",
-                    ))
-                )
-            if len(inits) > 1:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        init.lineno,
-                        "TB080",
-                        f"{where} defines __init__ {len(inits)} times; a mapper has one "
-                        "constructor, because the last definition silently wins",
-                    ))
-                )
-            if init.decorator_list:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        init.lineno,
-                        "TB080",
-                        f"{where}.__init__ is decorated; a mapper's constructor is plain, "
-                        "because a decorator can replace the mapping",
-                    ))
-                )
-            if init.args.vararg is not None or init.args.kwarg is not None:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        init.lineno,
-                        "TB080",
-                        f"{where}.__init__ uses *args or **kwargs; a mapper names each "
-                        "whole object it takes",
-                    ))
-                )
-            def primitive_leaf(node: ast.expr) -> bool:
-                if isinstance(node, ast.Constant) and isinstance(node.value, str):
-                    try:
-                        node = ast.parse(node.value, mode="eval").body
-                    except SyntaxError:
-                        return False
-                if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
-                    return primitive_leaf(node.left) or primitive_leaf(node.right)
-                if isinstance(node, ast.Subscript):
-                    head = self._annotation_head(node)  # tesser:debt TB051
-                    inner = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
-                    if head in ("Callable", "Literal", "type", "Type"):
-                        return False
-                    if head in ("dict", "Dict", "Mapping", "MutableMapping"):
-                        inner = inner[-1:]
-                    return any(primitive_leaf(each) for each in inner)
-                return self._annotation_head(node) in PRIMITIVES  # tesser:debt TB051
-
-            for arg in (
-                list(init.args.posonlyargs) + list(init.args.args) + list(init.args.kwonlyargs)
-            ):
-                if arg.arg == "self":
-                    continue
-                if arg.annotation is None:
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            arg.lineno,
-                            "TB080",
-                            f"{where} parameter {arg.arg!r} has no annotation; a mapper names "
-                            "the whole object it takes",
-                        ))
-                    )
-                    continue
-                if primitive_leaf(arg.annotation):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            arg.lineno,
-                            "TB080",
-                            f"{where} parameter {arg.arg!r} is a primitive; a mapper takes "
-                            "whole objects, never a field already pulled off one",
-                        ))
-                    )
-            supers = sum(
-                1
-                for stmt in init.body
-                if isinstance(stmt, ast.Expr)
-                and isinstance(stmt.value, ast.Call)
-                and isinstance(stmt.value.func, ast.Attribute)
-                and stmt.value.func.attr == "__init__"
-                and isinstance(stmt.value.func.value, ast.Call)
-                and isinstance(stmt.value.func.value.func, ast.Name)
-                and stmt.value.func.value.func.id == "super"
-            )
-            for returned in self._own_scope_returns(init):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        returned.lineno,
-                        "TB080",
-                        f"{where}.__init__ returns; a mapper's constructor runs to its "
-                        "super().__init__, so the target is always initialized",
-                    ))
-                )
-            selves = {"self"}
-            grew = True
-            while grew:
-                grew = False
-                for node in ast.walk(init):
-                    if (
-                        isinstance(node, (ast.Assign, ast.NamedExpr))
-                        and isinstance(node.value, ast.Name)
-                        and node.value.id in selves
-                    ):
-                        for alias in (node.targets if isinstance(node, ast.Assign) else [node.target]):
-                            if isinstance(alias, ast.Name) and alias.id not in selves:
-                                selves.add(alias.id)
-                                grew = True
-            for node in ast.walk(init):
-                if (
-                    isinstance(node, ast.Call)
-                    and isinstance(node.func, ast.Attribute)
-                    and node.func.attr == "__init__"
-                    and isinstance(node.func.value, ast.Call)
-                    and isinstance(node.func.value.func, ast.Name)
-                    and node.func.value.func.id == "super"
-                    and not any(
-                        isinstance(stmt, ast.Expr) and stmt.value is node for stmt in init.body
-                    )
-                ):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            node.lineno,
-                            "TB080",
-                            f"{where}.__init__ calls super().__init__ inside a branch; a mapper "
-                            "calls it as a statement of the constructor body, so the target is "
-                            "always initialized",
-                        ))
-                    )
-                targets: list[ast.expr] = []
-                if isinstance(node, ast.Assign):
-                    targets = list(node.targets)
-                elif isinstance(node, (ast.AugAssign, ast.AnnAssign)):
-                    targets = [node.target]
-                elif isinstance(node, (ast.For, ast.AsyncFor)):
-                    targets = [node.target]
-                elif isinstance(node, (ast.With, ast.AsyncWith)):
-                    targets = [item.optional_vars for item in node.items if item.optional_vars is not None]
-                elif isinstance(node, ast.NamedExpr):
-                    targets = [node.target]
-                elif isinstance(node, ast.Delete):
-                    targets = list(node.targets)
-                stored: ast.expr | None = None
-                pending = list(targets)
-                while pending and stored is None:
-                    leaf = pending.pop(0)
-                    if isinstance(leaf, (ast.Tuple, ast.List)):
-                        pending = list(leaf.elts) + pending
-                        continue
-                    if isinstance(leaf, ast.Starred):
-                        pending.insert(0, leaf.value)
-                        continue
-                    if not isinstance(leaf, (ast.Attribute, ast.Subscript)):
-                        continue
-                    root: ast.expr = leaf
-                    while isinstance(root, (ast.Attribute, ast.Subscript)):
-                        root = root.value
-                    if isinstance(root, ast.Name) and root.id in selves:
-                        stored = leaf
-                if stored is None and (
-                    isinstance(node, ast.Call)
-                    and isinstance(node.func, ast.Attribute)
-                    and node.func.attr == "__setattr__"
-                ):
-                    stored = node
-                if stored is None and (
-                    isinstance(node, ast.Call)
-                    and isinstance(node.func, ast.Name)
-                    and node.func.id in ("setattr", "vars", "delattr")
-                    and node.args
-                    and isinstance(node.args[0], ast.Name)
-                    and node.args[0].id in selves
-                ):
-                    stored = node
-                if stored is None and (
-                    isinstance(node, ast.Attribute)
-                    and node.attr == "__dict__"
-                    and isinstance(node.value, ast.Name)
-                    and node.value.id in selves
-                ):
-                    stored = node
-                if stored is None and (
-                    isinstance(node, ast.Call)
-                    and isinstance(node.func, ast.Attribute)
-                    and isinstance(node.func.value, ast.Attribute)
-                    and isinstance(node.func.value.value, ast.Name)
-                    and node.func.value.value.id in selves
-                ):
-                    stored = node.func.value
-                if stored is not None:
-                    named: ast.expr = stored
-                    while isinstance(named, ast.Subscript):
-                        named = named.value
-                    field = (
-                        named.attr
-                        if isinstance(named, ast.Attribute)
-                        else named.func.id
-                        if isinstance(named, ast.Call) and isinstance(named.func, ast.Name)
-                        else "__setattr__"
-                        if isinstance(named, ast.Call)
-                        else "__dict__"
-                    )
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            stored.lineno,
-                            "TB080",
-                            f"{where} stores {field!r}; a mapper stores nothing but its target's "
-                            "fields — it calls super().__init__ once and assigns nothing itself",
-                        ))
-                    )
-            if supers != 1:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        init.lineno,
-                        "TB080",
-                        f"{where}.__init__ calls super().__init__ {supers} times; a mapper "
-                        "calls super().__init__ exactly once, because that call is the mapping",
-                    ))
-                )
-        for item in cls.body:
-            if isinstance(item, ast.Pass):
-                continue
-            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        item.lineno,
-                        "TB080",
-                        f"{where} carries a class-level statement; a mapper stores nothing "
-                        "but its target's fields, so its body is one __init__",
-                    ))
-                )
-                continue
-            if item.name == "__init__":
-                continue
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    item.lineno,
-                    "TB080",
-                    f"{where}.{item.name} is a method; a mapper holds only __init__, "
-                    "because it is its target and the target already carries the fields",
-                ))
-            )
-        return tuple(found)
-
-    @staticmethod
-    def _returns_outcome(
-        module: Module, node: ast.expr, blocks: dict[tuple[str, str], str]
-    ) -> bool:
-        while isinstance(node, ast.Constant) and isinstance(node.value, str):
-            try:
-                node = ast.parse(node.value, mode="eval").body
-            except SyntaxError:
-                return False
-        if not isinstance(node, (ast.Name, ast.Attribute)):
-            return False
-        key = module._resolve(node)
-        return key is not None and blocks.get(key) == OUTCOME_BLOCK
-
-    def _allowed_annotation(
-        self,
-        module: Module,
-        node: ast.expr | None,
-        blocks: dict[tuple[str, str], str],
-        allowed_blocks: frozenset[str],
-        enums: frozenset[str] = frozenset(),
-        primitives: frozenset[str] = PRIMITIVES,
-        domain_enums: bool = False,
-    ) -> bool:
-        if node is None:
-            return False
-        if isinstance(node, ast.Constant):
-            if isinstance(node.value, str):
-                try:
-                    quoted = ast.parse(node.value, mode="eval").body
-                except SyntaxError:
-                    return False
-                return self._allowed_annotation(module, quoted, blocks, allowed_blocks, enums, primitives, domain_enums)
-            return node.value is Ellipsis or node.value is None
-        if isinstance(node, ast.Name) and node.id in enums:
-            return True
-        if isinstance(node, ast.Name) and node.id in primitives:
-            return True
-        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
-            left_none = isinstance(node.left, ast.Constant) and node.left.value is None
-            right_none = isinstance(node.right, ast.Constant) and node.right.value is None
-            if left_none == right_none:
-                return False
-            wrapped = node.right if left_none else node.left
-            return self._allowed_annotation(module, wrapped, blocks, allowed_blocks, enums, primitives, domain_enums)
-        if isinstance(node, ast.Subscript):
-            if isinstance(node.value, ast.Name) and node.value.id == "tuple":
-                elements = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
-                return all(
-                    self._allowed_annotation(module, element, blocks, allowed_blocks, enums, primitives, domain_enums)
-                    for element in elements
-                )
-            return False
-        key = module._resolve(node)
-        if domain_enums and key is not None and key in self._domain_enums:
-            return True
-        return key is not None and blocks.get(key) in allowed_blocks
 
