@@ -961,6 +961,11 @@ class Comment(ts.ValueObject):
         object.__setattr__(self, "_text", Text(spec.text))
 
 
+BODY_BLOCKS: typing.Final[frozenset[str]] = frozenset(
+    {"service", "actions", "orchestrator", "repository", "gateway", "handler"}
+)
+
+
 class Names(ts.ValueObject):
 
     _items: tuple[str, ...]
@@ -973,6 +978,9 @@ class Names(ts.ValueObject):
 
     def __sub__(self, other: "Names") -> "Names":
         return Names(tuple(item for item in self._items if item not in other._items))
+
+    def __or__(self, other: "Names") -> "Names":
+        return Names(self._items + other._items)
 
     def __bool__(self) -> bool:
         return bool(self._items)
@@ -1053,25 +1061,43 @@ class KindTable(ts.ValueObject):
 
 class RegistrySpec(ts.Spec):
 
-    def __init__(self, kinds: KindTableSpec, domain_enums: tuple[SymbolSpec, ...]) -> None:
+    def __init__(
+        self,
+        kinds: KindTableSpec,
+        domain_enums: tuple[SymbolSpec, ...],
+        outcome_methods: tuple[str, ...] = (),
+        action_ports: tuple[SymbolSpec, ...] = (),
+    ) -> None:
         self.kinds = kinds
         self.domain_enums = domain_enums
+        self.outcome_methods = outcome_methods
+        self.action_ports = action_ports
 
 
 class Registry(ts.ValueObject):
 
     _kinds: KindTable
     _domain_enums: Symbols
+    _outcome_methods: Names
+    _action_ports: Symbols
 
     def __init__(self, spec: RegistrySpec) -> None:
         object.__setattr__(self, "_kinds", KindTable(spec.kinds))
         object.__setattr__(self, "_domain_enums", Symbols(SymbolsSpec(spec.domain_enums)))
+        object.__setattr__(self, "_outcome_methods", Names(spec.outcome_methods))
+        object.__setattr__(self, "_action_ports", Symbols(SymbolsSpec(spec.action_ports)))
 
     def kinds(self) -> KindTable:
         return self._kinds
 
     def domain_enums(self) -> Symbols:
         return self._domain_enums
+
+    def outcome_methods(self) -> Names:
+        return self._outcome_methods
+
+    def action_ports(self) -> Symbols:
+        return self._action_ports
 
 
 class ImportSpec(ts.Spec):
@@ -1134,11 +1160,13 @@ class ScopeSpec(ts.Spec):
         imported: tuple[ImportSpec, ...],
         packages: tuple[AliasSpec, ...],
         classes: tuple[str, ...],
+        functions: tuple[str, ...] = (),
     ) -> None:
         self.module = module
         self.imported = imported
         self.packages = packages
         self.classes = classes
+        self.functions = functions
 
 
 class Scope(ts.ValueObject):
@@ -1147,12 +1175,32 @@ class Scope(ts.ValueObject):
     _imported: tuple[Import, ...]
     _packages: tuple[Alias, ...]
     _classes: Names
+    _functions: Names
 
     def __init__(self, spec: ScopeSpec) -> None:
         object.__setattr__(self, "_module", Text(spec.module))
         object.__setattr__(self, "_imported", tuple(Import(item) for item in spec.imported))
         object.__setattr__(self, "_packages", tuple(Alias(item) for item in spec.packages))
         object.__setattr__(self, "_classes", Names(spec.classes))
+        object.__setattr__(self, "_functions", Names(spec.functions))
+
+    def functions(self) -> Names:
+        return self._functions
+
+    def locals(self) -> Names:
+        return Names(tuple(str(binding.local()) for binding in self._imported) + tuple(str(alias.alias()) for alias in self._packages))
+
+    def package_of(self, alias: Text) -> Text | None:
+        for item in self._packages:
+            if item.alias() == alias:
+                return item.package()
+        return None
+
+    def import_of(self, local: Text) -> Symbol | None:
+        for binding in self._imported:
+            if binding.local() == local:
+                return Symbol(SymbolSpec(str(binding.target()), str(binding.original())))
+        return None
 
     def resolve(self, ref: Text) -> Symbol | None:
         wanted = str(ref)
@@ -1460,10 +1508,17 @@ class AnnotationPolicy(ts.ValueObject):
 
 class SlotSpec(ts.Spec):
 
-    def __init__(self, name: str, block: str | None, touched: tuple[str, ...]) -> None:
+    def __init__(
+        self,
+        name: str,
+        block: str | None,
+        touched: tuple[str, ...],
+        symbol: SymbolSpec | None = None,
+    ) -> None:
         self.name = name
         self.block = block
         self.touched = touched
+        self.symbol = symbol
 
 
 class Slot(ts.ValueObject):
@@ -1471,11 +1526,16 @@ class Slot(ts.ValueObject):
     _name: Text
     _block: Text | None
     _touched: tuple[Text, ...]
+    _symbol: Symbol | None
 
     def __init__(self, spec: SlotSpec) -> None:
         object.__setattr__(self, "_name", Text(spec.name))
         object.__setattr__(self, "_block", Text(spec.block) if spec.block else None)
         object.__setattr__(self, "_touched", tuple(Text(block) for block in spec.touched))
+        object.__setattr__(self, "_symbol", Symbol(spec.symbol) if spec.symbol is not None else None)
+
+    def symbol(self) -> Symbol | None:
+        return self._symbol
 
     def name(self) -> Text:
         return self._name
@@ -1755,6 +1815,673 @@ class RecordSignaturePolicy(ts.ValueObject):
         return tuple(found)
 
 
+class FactSpec(ts.Spec):
+
+    def __init__(self, lineno: int, kind: str, detail: str | None, traits: tuple[str, ...]) -> None:
+        self.lineno = lineno
+        self.kind = kind
+        self.detail = detail
+        self.traits = traits
+
+
+class Fact(ts.ValueObject):
+
+    _lineno: Line
+    _kind: Text
+    _detail: Text | None
+    _traits: Names
+
+    def __init__(self, spec: FactSpec) -> None:
+        object.__setattr__(self, "_lineno", Line(spec.lineno))
+        object.__setattr__(self, "_kind", Text(spec.kind))
+        object.__setattr__(self, "_detail", Text(spec.detail) if spec.detail else None)
+        object.__setattr__(self, "_traits", Names(spec.traits))
+
+    def lineno(self) -> Line:
+        return self._lineno
+
+    def kind(self) -> Text:
+        return self._kind
+
+    def detail(self) -> Text | None:
+        return self._detail
+
+    def traits(self) -> Names:
+        return self._traits
+
+
+class BodySpec(ts.Spec):
+
+    def __init__(  # tesser:debt TB080
+        self,
+        node: ast.FunctionDef | ast.AsyncFunctionDef,
+        where: str,
+        path: str,
+        class_methods: tuple[str, ...],
+        held_ports: tuple[str, ...],
+        held_contexts: tuple[str, ...],
+        signature: SignatureSpec,
+        scope: ScopeSpec,
+        registry: RegistrySpec,
+    ) -> None:
+        self.node = node
+        self.where = where
+        self.path = path
+        self.class_methods = class_methods
+        self.held_ports = held_ports
+        self.held_contexts = held_contexts
+        self.signature = signature
+        self.scope = scope
+        self.registry = registry
+
+
+class Body(ts.ValueObject):
+
+    _where: Text
+    _path: Path
+    _lineno: Line
+    _name: Text
+    _signature: Signature
+    _facts: tuple[Fact, ...]
+
+    def __init__(self, spec: BodySpec) -> None:
+        fn = spec.node
+        scope = Scope(spec.scope)
+        registry = Registry(spec.registry)
+        kinds = registry.kinds()
+        class_methods = frozenset(spec.class_methods)
+        functions = scope.functions()
+        held_ports = frozenset(spec.held_ports)
+        held_contexts = frozenset(spec.held_contexts)
+        facts: list[tuple[int, str, str | None, tuple[str, ...]]] = []
+
+        def ref_of(node: ast.expr) -> str | None:
+            cursor = node
+            while isinstance(cursor, ast.Subscript):
+                cursor = cursor.value
+            if isinstance(cursor, ast.Name):
+                return cursor.id
+            if isinstance(cursor, ast.Attribute) and isinstance(cursor.value, (ast.Name, ast.Attribute)):
+                return f"{ast.unparse(cursor.value)}.{cursor.attr}"
+            return None
+
+        def block_of(node: ast.expr | None) -> str | None:
+            if node is None:
+                return None
+            ref = ref_of(node)
+            if ref is None:
+                return None
+            symbol = scope.resolve(Text(ref))
+            if symbol is None:
+                return None
+            block = kinds.block_of(symbol)
+            return str(block) if block is not None else None
+
+        def symbol_of(node: ast.expr) -> Symbol | None:
+            ref = ref_of(node)
+            return scope.resolve(Text(ref)) if ref is not None else None
+
+        def own_scope(root: ast.AST) -> typing.Iterator[ast.AST]:
+            stack: list[ast.AST] = list(ast.iter_child_nodes(root))
+            while stack:
+                node = stack.pop()
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+                    continue
+                yield node
+                stack.extend(ast.iter_child_nodes(node))
+
+        def bindings() -> tuple[dict[str, list[ast.expr]], frozenset[str]]:
+            values: dict[str, list[ast.expr]] = {}
+            args = fn.args
+            otherwise: set[str] = {arg.arg for arg in args.posonlyargs + args.args + args.kwonlyargs}
+            if args.vararg is not None:
+                otherwise.add(args.vararg.arg)
+            if args.kwarg is not None:
+                otherwise.add(args.kwarg.arg)
+            for node in own_scope(fn):
+                targets: list[ast.expr] = []
+                value: ast.expr | None = None
+                if isinstance(node, ast.Assign):
+                    targets, value = list(node.targets), node.value
+                elif isinstance(node, ast.AnnAssign):
+                    if node.value is None:
+                        continue
+                    targets, value = [node.target], node.value
+                elif isinstance(node, (ast.AugAssign, ast.NamedExpr)):
+                    targets, value = [node.target], node.value
+                elif isinstance(node, ast.comprehension):
+                    continue
+                elif isinstance(node, (ast.For, ast.AsyncFor)):
+                    otherwise.update(sub.id for sub in ast.walk(node.target) if isinstance(sub, ast.Name))
+                    continue
+                elif isinstance(node, (ast.With, ast.AsyncWith)):
+                    for item in node.items:
+                        if item.optional_vars is not None:
+                            otherwise.update(
+                                sub.id for sub in ast.walk(item.optional_vars) if isinstance(sub, ast.Name)
+                            )
+                    continue
+                elif isinstance(node, ast.ExceptHandler):
+                    if node.name is not None:
+                        otherwise.add(node.name)
+                    continue
+                elif isinstance(node, (ast.MatchAs, ast.MatchStar)):
+                    if node.name is not None:
+                        otherwise.add(node.name)
+                    continue
+                elif isinstance(node, ast.MatchMapping):
+                    if node.rest is not None:
+                        otherwise.add(node.rest)
+                    continue
+                elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                    otherwise.update((alias.asname or alias.name).split(".")[0] for alias in node.names)
+                    continue
+                elif isinstance(node, (ast.Global, ast.Nonlocal)):
+                    otherwise.update(node.names)
+                    continue
+                if len(targets) == 1 and isinstance(targets[0], ast.Name) and value is not None:
+                    values.setdefault(targets[0].id, []).append(value)
+                    continue
+                for target in targets:
+                    otherwise.update(sub.id for sub in ast.walk(target) if isinstance(sub, ast.Name))
+            return values, frozenset(otherwise)
+
+        def domain_kind(node: ast.expr) -> tuple[str, str] | None:
+            if not isinstance(node, ast.Call):
+                return None
+            symbol = symbol_of(node.func)
+            if symbol is None:
+                return None
+            block = kinds.block_of(symbol)
+            if block is None or str(block) not in DOMAIN_BLOCKS:
+                return None
+            return (str(symbol.module()), str(symbol.name()))
+
+        values, otherwise = bindings()
+        domain_names: dict[str, tuple[str, str]] = {}
+        for name, bound in values.items():
+            if name in otherwise:
+                continue
+            found_kinds = [domain_kind(value) for value in bound]
+            first = found_kinds[0]
+            if first is not None and all(kind == first for kind in found_kinds):
+                domain_names[name] = first
+
+        def answers_an_outcome(node: ast.expr) -> bool:
+            if isinstance(node, ast.Await):
+                node = node.value
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                return False
+            receiver = node.func.value
+            owner: tuple[str, str] | None = None
+            if isinstance(receiver, ast.Name):
+                owner = domain_names.get(receiver.id)
+            if owner is None:
+                owner = domain_kind(receiver)
+            if owner is None:
+                return False
+            return f"{owner[0]}|{owner[1]}|{node.func.attr}" in registry.outcome_methods()
+
+        outcome_names = frozenset(
+            name
+            for name, bound in values.items()
+            if name not in otherwise and all(answers_an_outcome(value) for value in bound)
+        )
+
+        def outcome_key(node: ast.expr) -> bool:
+            if not isinstance(node, ast.Attribute):
+                return False
+            return block_of(node.value) == OUTCOME_BLOCK
+
+        def is_comparison_call(func: ast.expr) -> bool:
+            if isinstance(func, ast.Attribute):
+                if func.attr in COMPARISON_CALLS:
+                    return True
+                if isinstance(func.value, ast.Name):
+                    package = scope.package_of(Text(func.value.id))
+                    return package is not None and str(package) == OPERATOR_MODULE and func.attr in OPERATOR_COMPARISONS
+                return False
+            if isinstance(func, ast.Name):
+                origin = scope.import_of(Text(func.id))
+                return (
+                    origin is not None
+                    and str(origin.module()) == OPERATOR_MODULE
+                    and str(origin.name()) in OPERATOR_COMPARISONS
+                )
+            return False
+
+        def is_truth_builtin(func: ast.expr) -> bool:
+            return isinstance(func, ast.Name) and func.id in TRUTH_BUILTINS and func.id not in scope.locals()
+
+        positional = list(fn.args.args)
+        request = positional[1].arg if len(positional) >= 2 else None
+        for stmt in fn.body:
+            if not isinstance(stmt, ast.Assign):
+                continue
+            if not isinstance(stmt.value, (ast.Name, ast.Attribute)):
+                continue
+            if any(isinstance(node, ast.Call) for node in ast.walk(stmt.value)):
+                continue
+            facts.append((stmt.lineno, "accessor", None, ()))
+        decided: set[int] = set()
+        matches: list[ast.Match] = []
+        for node in ast.walk(fn):
+            if isinstance(node, ast.Call):
+                callee = node.func
+                if (
+                    isinstance(callee, ast.Attribute)
+                    and isinstance(callee.value, ast.Name)
+                    and callee.value.id == "self"
+                    and callee.attr in class_methods
+                ):
+                    facts.append((node.lineno, "delegation", callee.attr, ("self",)))
+                elif isinstance(callee, ast.Name) and callee.id in functions:
+                    facts.append((node.lineno, "delegation", callee.id, ("function",)))
+                for value in list(node.args) + [kw.value for kw in node.keywords]:
+                    if isinstance(value, ast.Call) and block_of(value.func) is None:
+                        facts.append((value.lineno, "computed", None, ()))
+                if (
+                    isinstance(callee, ast.Attribute)
+                    and isinstance(callee.value, ast.Attribute)
+                    and isinstance(callee.value.value, ast.Name)
+                    and callee.value.value.id == "self"
+                ):
+                    holder = callee.value.attr
+                    if holder in held_ports:
+                        leading = node.args[0] if node.args else None
+                        threaded = (
+                            isinstance(leading, ast.Attribute)
+                            and isinstance(leading.value, ast.Name)
+                            and leading.value.id == "self"
+                            and leading.attr in held_contexts
+                        )
+                        facts.append((node.lineno, "port_call", holder, ("threaded",) if threaded else ()))
+                    if request is not None:
+                        for passed in list(node.args) + [keyword.value for keyword in node.keywords]:
+                            if isinstance(passed, ast.Name) and passed.id == request:
+                                facts.append((passed.lineno, "request", None, ()))
+                        for inner in ast.walk(node):
+                            if not isinstance(inner, ast.Attribute):
+                                continue
+                            current: ast.expr = inner
+                            while isinstance(current, ast.Attribute):
+                                current = current.value
+                            if isinstance(current, ast.Name) and current.id == request:
+                                facts.append((inner.lineno, "request_field", inner.attr, ()))
+            if isinstance(node, (ast.If, ast.While)) and not (
+                isinstance(node, ast.While) and isinstance(node.test, ast.Constant) and node.test.value is True
+            ):
+                decided.update(id(sub) for sub in ast.walk(node.test))
+                facts.append((node.lineno, "branch", "if" if isinstance(node, ast.If) else "while", ()))
+            elif isinstance(node, ast.Match):
+                matches.append(node)
+            elif isinstance(node, ast.IfExp):
+                decided.update(id(sub) for sub in ast.walk(node.test))
+            elif isinstance(node, ast.comprehension) and node.ifs:
+                decided.update(id(sub) for test in node.ifs for sub in ast.walk(test))
+        for node in ast.walk(fn):
+            if id(node) in decided:
+                continue
+            if isinstance(node, ast.Compare):
+                facts.append((node.lineno, "decision", "compare", ()))
+            elif isinstance(node, ast.Call) and is_comparison_call(node.func):
+                facts.append((node.lineno, "decision", "comparison_call", ()))
+            elif isinstance(node, ast.Call) and is_truth_builtin(node.func):
+                facts.append((node.lineno, "decision", "truth", ()))
+            elif isinstance(node, ast.IfExp):
+                facts.append((node.lineno, "decision", "ifexp", ()))
+            elif isinstance(node, ast.BoolOp):
+                facts.append((node.lineno, "decision", "boolop", ()))
+            elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+                facts.append((node.lineno, "decision", "not", ()))
+            elif isinstance(node, ast.comprehension) and node.ifs:
+                facts.append((node.ifs[0].lineno, "decision", "filter", ()))
+        matches.sort(key=lambda node: node.lineno)
+        for node in matches:
+            traits: list[str] = []
+            subject = node.subject
+            answered = subject.id in outcome_names if isinstance(subject, ast.Name) else answers_an_outcome(subject)
+            if answered:
+                traits.append("answers")
+            if any(
+                outcome_key(sub.value)
+                for case in node.cases
+                for sub in ast.walk(case.pattern)
+                if isinstance(sub, ast.MatchValue)
+            ):
+                traits.append("members")
+            facts.append((node.lineno, "match", None, tuple(traits)))
+        handed = {
+            arg.arg
+            for arg in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs
+            if arg.arg != "self" and block_of(arg.annotation) == JOB_CONTEXT_BLOCK
+        }
+        if handed:
+            for node in ast.walk(fn):
+                if isinstance(node, ast.AnnAssign):
+                    targets: list[ast.expr] = [node.target]
+                    assigned: ast.expr | None = node.value
+                elif isinstance(node, ast.Assign):
+                    targets = list(node.targets)
+                    assigned = node.value
+                else:
+                    continue
+                if not (isinstance(assigned, ast.Name) and assigned.id in handed):
+                    continue
+                for target in targets:
+                    if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name) and target.value.id == "self":
+                        facts.append((node.lineno, "keeps_context", target.attr, ()))
+        object.__setattr__(self, "_where", Text(spec.where))
+        object.__setattr__(self, "_path", Path(spec.path))
+        object.__setattr__(self, "_lineno", Line(fn.lineno))
+        object.__setattr__(self, "_name", Text(fn.name))
+        object.__setattr__(self, "_signature", Signature(spec.signature))
+        object.__setattr__(self, "_facts", tuple(Fact(FactSpec(*item)) for item in facts))
+
+    def name(self) -> Text:
+        return self._name
+
+    def signature(self) -> Signature:
+        return self._signature
+
+    def delegation_violations(self) -> tuple[Violation, ...]:
+        where = str(self._where)
+        found: list[Violation] = []
+        for fact in self._facts:
+            if str(fact.kind()) != "delegation":
+                continue
+            if "self" in fact.traits():
+                delegate = str(fact.detail())
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(fact.lineno()),
+                        "TB082",
+                        f"{where} delegates to self.{delegate}; a service inlines its logic",
+                    ))
+                )
+            else:
+                function = str(fact.detail())
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(fact.lineno()),
+                        "TB082",
+                        f"{where} delegates to {function}; a service inlines its logic",
+                    ))
+                )
+        return tuple(found)
+
+    def violations(self) -> tuple[Violation, ...]:
+        where = str(self._where)
+        path = str(self._path)
+        found: list[Violation] = []
+        first_match = True
+        for fact in self._facts:
+            kind = str(fact.kind())
+            line = int(fact.lineno())
+            if kind == "request":
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB082",
+                        f"{where} sends its request itself straight to a port; "
+                        "a value crossing into a port has passed through a domain type",
+                    ))
+                )
+            elif kind == "request_field":
+                field = str(fact.detail())
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB082",
+                        f"{where} sends {field} from its request straight to a port; "
+                        "a value crossing into a port has passed through a domain type",
+                    ))
+                )
+            elif kind == "accessor":
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB082",
+                        f"{where} names a straight accessor; a service method names what it "
+                        "computes, and reads an accessor where it is used",
+                    ))
+                )
+            elif kind == "computed":
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB082",
+                        f"{where} computes in an argument; a service method names what it "
+                        "computes in a local, and passes a name, a reader, or a declared kind",
+                    ))
+                )
+            elif kind == "branch":
+                keyword = str(fact.detail())
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB082",
+                        f"{where} branches with {keyword}; a service method branches only by "
+                        "matching an outcome — `while True:` ended by a match arm is the loop — "
+                        "because a truth test on a domain object is a bool the domain never handed out",
+                    ))
+                )
+            elif kind == "decision":
+                decision = str(fact.detail())
+                if decision == "compare":
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            line,
+                            "TB082",
+                            f"{where} compares two values; a service method asks a domain object "
+                            "and never compares, because a comparison is a rule written down "
+                            "beside the object that should own it",
+                        ))
+                    )
+                elif decision == "comparison_call":
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            line,
+                            "TB082",
+                            f"{where} calls a comparison; a service method asks a domain object "
+                            "and never compares, because a comparison is a rule written down "
+                            "beside the object that should own it",
+                        ))
+                    )
+                elif decision == "truth":
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            line,
+                            "TB082",
+                            f"{where} asks a builtin whether values are true; a service method "
+                            "branches only by matching an outcome, because bool, any, and all "
+                            "read a truth the domain never handed out",
+                        ))
+                    )
+                elif decision == "ifexp":
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            line,
+                            "TB082",
+                            f"{where} chooses with a conditional expression; a service method "
+                            "branches only by matching an outcome, because `x if c else y` is a "
+                            "branch with no arms for a member added later",
+                        ))
+                    )
+                elif decision == "boolop":
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            line,
+                            "TB082",
+                            f"{where} joins conditions with and/or; a service method branches "
+                            "only by matching an outcome, because a boolean operator is a rule "
+                            "assembled from values the domain never handed out",
+                        ))
+                    )
+                elif decision == "not":
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            line,
+                            "TB082",
+                            f"{where} negates a value; a service method branches only by matching "
+                            "an outcome, because `not x` is a truth test on a value the domain "
+                            "never handed out",
+                        ))
+                    )
+                elif decision == "filter":
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            line,
+                            "TB082",
+                            f"{where} filters a comprehension; a service method branches only by "
+                            "matching an outcome, because which items belong is a rule the "
+                            "domain collection should own",
+                        ))
+                    )
+            elif kind == "match":
+                if not first_match:
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            line,
+                            "TB082",
+                            f"{where} matches a second time; a service method decides once, because "
+                            "a second decision in one method is a rule about their order that no "
+                            "domain object owns",
+                        ))
+                    )
+                first_match = False
+                if "answers" not in fact.traits():
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            line,
+                            "TB082",
+                            f"{where} match subject is not a call on a domain object; "
+                            "a service method matches the outcome a domain object handed "
+                            "back, because a port answer, a string, or an attribute is a "
+                            "rule the service would be reading for itself",
+                        ))
+                    )
+                elif "members" not in fact.traits():
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            line,
+                            "TB084",
+                            f"{where} matches a domain call whose arms name no outcome "
+                            "member; a match on what a domain object answered names outcome "
+                            "members and closes on assert_never, because string arms hide a "
+                            "member added later from the type checker",
+                        ))
+                    )
+        return tuple(found)
+
+    def port_call_violations(self) -> tuple[Violation, ...]:
+        where = str(self._where)
+        calls = [fact for fact in self._facts if str(fact.kind()) == "port_call"]
+        if len(calls) == 1:
+            return ()
+        return (
+            Violation(ViolationSpec(
+                str(self._path),
+                int(self._lineno),
+                "TB082",
+                f"{where} makes {len(calls)} calls on its port; "
+                "an action makes exactly one call on its port",
+            )),
+        )
+
+    def thread_violations(self) -> tuple[Violation, ...]:
+        where = str(self._where)
+        found: list[Violation] = []
+        for fact in self._facts:
+            if str(fact.kind()) != "port_call" or "threaded" in fact.traits():
+                continue
+            published = str(fact.detail())
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(fact.lineno()),
+                    "TB082",
+                    f"{where} calls {published} without its job context first; "
+                    "an orchestrator threads its job context into every action port call",
+                ))
+            )
+        return tuple(found)
+
+    def held_context_violations(self) -> tuple[Violation, ...]:
+        owner = str(self._where).rsplit(".", 1)[0]
+        found: list[Violation] = []
+        for fact in self._facts:
+            if str(fact.kind()) != "keeps_context":
+                continue
+            published = str(fact.detail())
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(fact.lineno()),
+                    "TB081",
+                    f"{owner} keeps {published}, a job "
+                    "context; an adapter is built once and never holds an "
+                    "invocation's job context",
+                ))
+            )
+        return tuple(found)
+
+
+class DependencyPolicySpec(ts.Spec):
+
+    def __init__(self, subject: str, context_ok: bool = False) -> None:
+        self.subject = subject
+        self.context_ok = context_ok
+
+
+class DependencyPolicy(ts.ValueObject):
+
+    _subject: Text
+    _context_ok: Names
+
+    def __init__(self, spec: DependencyPolicySpec) -> None:
+        object.__setattr__(self, "_subject", Text(spec.subject))
+        object.__setattr__(self, "_context_ok", Names(("context",) if spec.context_ok else ()))
+
+    def violations(self, signature: Signature) -> tuple[Violation, ...]:
+        subject = str(self._subject)
+        where = str(signature.where())
+        found: list[Violation] = []
+        for slot in signature.params():
+            block = str(slot.block()) if slot.block() is not None else None
+            if self._context_ok and block == JOB_CONTEXT_BLOCK:
+                continue
+            if block not in ("port", "store"):
+                arg = str(slot.name())
+                found.append(
+                    Violation(ViolationSpec(
+                        str(signature.path()),
+                        int(signature.lineno()),
+                        "TB081",
+                        f"{where} parameter {arg!r} is not a ts.Port or a ts.Store; "
+                        f"{subject} depends only on ports and the stores that yield them",
+                    ))
+                )
+        return tuple(found)
+
+
 class FieldSpec(ts.Spec):
 
     def __init__(self, name: str, node: ast.expr, lineno: int) -> None:  # tesser:debt TB080
@@ -1959,6 +2686,10 @@ class ClassDecl(ts.Entity):
     _fields: tuple[Field, ...]
     _methods: tuple[Method, ...]
     _signatures: tuple[Signature, ...]
+    _bodies: tuple[Body, ...]
+    _held_ports: Names
+    _held_contexts: Names
+    _stores: tuple[Fact, ...]
     _leaf: Text | None
 
     def __init__(self, spec: ClassDeclSpec) -> None:
@@ -1993,10 +2724,13 @@ class ClassDecl(ts.Entity):
         scope = self._scope
         kinds = self._registry.kinds()
 
-        def slot(name: str, annotation: Annotation | None, unquote: bool) -> SlotSpec:
+        SlotRow = tuple[str, str | None, tuple[str, ...], tuple[str, str] | None]
+
+        def slot(name: str, annotation: Annotation | None, unquote: bool) -> SlotRow:
             if annotation is None:
-                return SlotSpec(name, None, ())
+                return (name, None, (), None)
             block: str | None = None
+            resolved: Symbol | None = None
             primary = annotation.primary()
             if primary is not None and (unquote or not annotation.quoted()):
                 resolved = scope.resolve(primary)
@@ -2007,11 +2741,33 @@ class ClassDecl(ts.Entity):
                 named = kinds.block_of(symbol)
                 if named is not None:
                     touched.append(str(named))
-            return SlotSpec(name, block, tuple(touched))
+            return (
+                name,
+                block,
+                tuple(touched),
+                (str(resolved.module()), str(resolved.name())) if resolved is not None else None,
+            )
 
-        signatures: list[Signature] = []
+        SignatureRow = tuple[str, str, int, str, tuple[str, ...], tuple[SlotRow, ...], SlotRow | None]
+
+        def slot_spec(row: SlotRow) -> SlotSpec:
+            symbol = row[3]
+            return SlotSpec(row[0], row[1], row[2], SymbolSpec(symbol[0], symbol[1]) if symbol is not None else None)
+
+        def signature_spec(row: SignatureRow) -> SignatureSpec:
+            return SignatureSpec(
+                row[0],
+                row[1],
+                row[2],
+                row[3],
+                row[4],
+                tuple(slot_spec(item) for item in row[5]),
+                slot_spec(row[6]) if row[6] is not None else None,
+            )
+
+        signature_rows: list[SignatureRow] = []
         for method in methods:
-            signatures.append(Signature(SignatureSpec(
+            signature_rows.append((
                 f"{spec.module}.{node.name}.{method.name()}",
                 spec.path,
                 int(method.lineno()),
@@ -2019,8 +2775,84 @@ class ClassDecl(ts.Entity):
                 tuple(method.open()),
                 tuple(slot(str(param.name()), param.annotation(), True) for param in method.params()),
                 slot("return", method.returns(), False) if method.returns() is not None else None,
-            )))
-        object.__setattr__(self, "_signatures", tuple(signatures))
+            ))
+        object.__setattr__(self, "_signatures", tuple(Signature(signature_spec(row)) for row in signature_rows))
+        own_block = kinds.block_of(Symbol(SymbolSpec(spec.module, node.name)))
+        init_node = next(
+            (
+                item
+                for item in node.body
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "__init__"
+            ),
+            None,
+        )
+
+        def held(kind: str) -> tuple[str, ...]:
+            if init_node is None:
+                return ()
+            named: set[str] = set()
+            for arg in init_node.args.posonlyargs + init_node.args.args + init_node.args.kwonlyargs:
+                if arg.arg == "self" or arg.annotation is None:
+                    continue
+                primary = Annotation(arg.annotation).primary()
+                resolved = scope.resolve(primary) if primary is not None else None
+                block = kinds.block_of(resolved) if resolved is not None else None
+                if block is not None and str(block) == kind:
+                    named.add(arg.arg)
+            kept: set[str] = set()
+            for inner in ast.walk(init_node):
+                if isinstance(inner, ast.AnnAssign):
+                    targets: list[ast.expr] = [inner.target]
+                    value: ast.expr | None = inner.value
+                elif isinstance(inner, ast.Assign):
+                    targets = list(inner.targets)
+                    value = inner.value
+                else:
+                    continue
+                if not (isinstance(value, ast.Name) and value.id in named):
+                    continue
+                for target in targets:
+                    if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name) and target.value.id == "self":
+                        kept.add(target.attr)
+            return tuple(sorted(kept))
+
+        held_ports = held("port")
+        held_contexts = held(JOB_CONTEXT_BLOCK)
+        object.__setattr__(self, "_held_ports", Names(held_ports))
+        object.__setattr__(self, "_held_contexts", Names(held_contexts))
+        stores: list[tuple[int, str, str | None, tuple[str, ...]]] = []
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.AnnAssign):
+                store_targets: list[ast.expr] = [inner.target]
+            elif isinstance(inner, ast.Assign):
+                store_targets = list(inner.targets)
+            elif isinstance(inner, ast.AugAssign):
+                store_targets = [inner.target]
+            else:
+                continue
+            for target in store_targets:
+                if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name) and target.value.id == "self":
+                    stores.append((inner.lineno, "store", target.attr, ()))
+        object.__setattr__(self, "_stores", tuple(Fact(FactSpec(*item)) for item in stores))
+        bodies: list[Body] = []
+        if own_block is not None and str(own_block) in BODY_BLOCKS:
+            class_methods = tuple(str(method.name()) for method in methods)
+            for item, row in zip(
+                (stmt for stmt in node.body if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef))),
+                signature_rows,
+            ):
+                bodies.append(Body(BodySpec(
+                    item,
+                    row[0],
+                    spec.path,
+                    class_methods,
+                    held_ports,
+                    held_contexts,
+                    signature_spec(row),
+                    spec.scope,
+                    spec.registry,
+                )))
+        object.__setattr__(self, "_bodies", tuple(bodies))
         stored = [field for field in fields if str(field.annotation().head()) != "ClassVar"]
         leaf: str | None = None
         if len(stored) == 1:
@@ -2053,6 +2885,95 @@ class ClassDecl(ts.Entity):
             if str(signature.name()) == "__init__":
                 return signature
         return None
+
+    def bodies(self) -> tuple[Body, ...]:
+        return self._bodies
+
+    def actions_violations(self) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        init = next((item for item in self._signatures if str(item.name()) == "__init__"), None)
+        if init is None:
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(self._lineno),
+                    "TB081",
+                    f"{self._module}.{self._name} defines no __init__; "
+                    "a class of actions takes exactly one port",
+                ))
+            )
+            return tuple(found)
+        params = init.params()
+        if len(params) != 1:
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(init.lineno()),
+                    "TB081",
+                    f"{self._module}.{self._name}.__init__ takes {len(params)} parameters; "
+                    "a class of actions takes exactly one port",
+                ))
+            )
+        return tuple(found)
+
+    def orchestrator_violations(self) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        init = next((item for item in self._signatures if str(item.name()) == "__init__"), None)
+        if init is None:
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(self._lineno),
+                    "TB081",
+                    f"{self._module}.{self._name} defines no __init__; "
+                    "an orchestrator depends only on action ports — a port an "
+                    "application client speaks",
+                ))
+            )
+        else:
+            where = str(init.where())
+            taken = [slot for slot in init.params() if str(slot.block()) == JOB_CONTEXT_BLOCK]
+            if len(taken) != 1:
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(init.lineno()),
+                        "TB081",
+                        f"{where} takes {len(taken)} job contexts; "
+                        "an orchestrator takes exactly one job context and its action ports",
+                    ))
+                )
+            for slot in init.params():
+                if str(slot.block()) != "port":
+                    continue
+                if slot.symbol() is not None and slot.symbol() in self._registry.action_ports():
+                    continue
+                arg = str(slot.name())
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(init.lineno()),
+                        "TB081",
+                        f"{where} parameter {arg!r} is a port no application client "
+                        "speaks; an orchestrator depends only on action ports — a port "
+                        "an application client speaks",
+                    ))
+                )
+        held = self._held_ports | self._held_contexts
+        for fact in self._stores:
+            published = str(fact.detail())
+            if published in held:
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(fact.lineno()),
+                    "TB081",
+                    f"{self._module}.{self._name} keeps {published}; "
+                    "an orchestrator stores only its job context and its action ports",
+                ))
+            )
+        return tuple(found)
 
     def vo_field_violations(self) -> tuple[Violation, ...]:
         found: list[Violation] = []
@@ -2435,6 +3356,24 @@ CLIENT_METHOD: typing.Final[SignaturePolicy] = SignaturePolicy(SignaturePolicySp
     "request", "response", "a client method", "TB081", "a client method takes exactly one ts.Request"
 ))
 
+SERVICE_METHOD: typing.Final[SignaturePolicy] = SignaturePolicy(SignaturePolicySpec(
+    "request", "response", "a service method", "TB081", "a service method takes exactly one ts.Request"
+))
+
+ACTIONS_METHOD: typing.Final[SignaturePolicy] = SignaturePolicy(SignaturePolicySpec(
+    "port_request", "port_response", "an actions method", "TB081", "an actions method takes exactly one ts.Request"
+))
+
+ORCHESTRATOR_METHOD: typing.Final[SignaturePolicy] = SignaturePolicy(SignaturePolicySpec(
+    "port_request", "port_response", "an orchestrator method", "TB081", "an orchestrator method takes exactly one ts.Request"
+))
+
+SERVICE_DEPENDENCIES: typing.Final[DependencyPolicy] = DependencyPolicy(DependencyPolicySpec("a service"))
+
+ACTIONS_DEPENDENCIES: typing.Final[DependencyPolicy] = DependencyPolicy(DependencyPolicySpec("a class of actions"))
+
+ORCHESTRATOR_DEPENDENCIES: typing.Final[DependencyPolicy] = DependencyPolicy(DependencyPolicySpec("an orchestrator", True))
+
 ADAPTER_RECORDS: typing.Final[RecordSignaturePolicy] = RecordSignaturePolicy(RecordSignaturePolicySpec("an adapter", True))
 
 HANDLER_RECORDS: typing.Final[RecordSignaturePolicy] = RecordSignaturePolicy(RecordSignaturePolicySpec("an adapter", False))
@@ -2592,6 +3531,7 @@ class Module(ts.Entity):
             tuple(ImportSpec(local, target, original) for local, (target, original) in self._imported.items()),
             tuple(AliasSpec(alias, package) for alias, package in self._package_aliases.items()),
             tuple(self._classes),
+            tuple(sorted(self._functions)),
         )
         return tuple(
             ClassDecl(ClassDeclSpec(node, self._name, self._path, scope, registry)) for node in self._class_defs
@@ -2869,6 +3809,8 @@ class Codebase(ts.AggregateRoot):
         registry = RegistrySpec(
             KindTableSpec(tuple((module_name, class_name, block_name) for (module_name, class_name), block_name in sorted(blocks.items()))),
             tuple(SymbolSpec(module_name, class_name) for module_name, class_name in sorted(self._domain_enums)),
+            tuple(f"{module_name}|{class_name}|{method_name}" for module_name, class_name, method_name in sorted(self._outcome_methods)),
+            tuple(SymbolSpec(module_name, class_name) for module_name, class_name in sorted(self._action_ports)),
         )
 
         def constructed(policy: SignaturePolicy, decl: ClassDecl) -> tuple[Violation, ...]:
@@ -2983,7 +3925,8 @@ class Codebase(ts.AggregateRoot):
                 elif block in ("repository", "gateway", "handler"):
                     found.extend((HANDLER_RECORDS if block == "handler" else ADAPTER_RECORDS).violations(decl))
                     if block != "handler":
-                        found.extend(self._held_context_violations(module, cls, blocks))  # tesser:debt TB051
+                        for body in decl.bodies():
+                            found.extend(body.held_context_violations())
                 elif block == "port":
                     found.extend(PORT_RECORDS.violations(decl))
                     if self._locate(  # tesser:debt TB051
@@ -3002,51 +3945,41 @@ class Codebase(ts.AggregateRoot):
                     ):
                         found.extend(self._store_violations(module, cls, blocks))  # tesser:debt TB051
                 elif block == "service":
-                    methods = [
-                        item
-                        for item in cls.body
-                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
-                    ]
-                    method_names = frozenset(method.name for method in methods)
-                    for item in methods:
-                        where = f"{module.name()}.{cls.name}.{item.name}"
-                        found.extend(
-                            self._delegation_violations(  # tesser:debt TB051
-                                module, method_names, where, item
-                            )
-                        )
-                        if item.name == "__init__":
-                            found.extend(
-                                self._dependency_violations(  # tesser:debt TB051
-                                    module, where, item.lineno, item, blocks, "a service"
-                                )
-                            )
+                    for body in decl.bodies():
+                        found.extend(body.delegation_violations())
+                        if str(body.name()) == "__init__":
+                            found.extend(SERVICE_DEPENDENCIES.violations(body.signature()))
                             continue
-                        if item.name.startswith("_") and item.name != PUBLIC_CALL:
+                        if str(body.name()).startswith("_") and str(body.name()) != PUBLIC_CALL:
                             continue
-                        found.extend(
-                            self._signature_violations(  # tesser:debt TB051
-                                module,
-                                where,
-                                item.lineno,
-                                item,
-                                "request",
-                                "response",
-                                "a service method",
-                                "TB081",
-                                blocks,
-                                "a service method takes exactly one ts.Request",
-                            )
-                        )
-                        found.extend(
-                            self._body_violations(module, where, item, blocks)  # tesser:debt TB051
-                        )
+                        found.extend(SERVICE_METHOD.violations(body.signature()))
+                        found.extend(body.violations())
                 elif block == "mapper":
                     found.extend(self._mapper_violations(module, cls, blocks))  # tesser:debt TB051
                 elif block == "actions":
-                    found.extend(self._actions_violations(module, cls, blocks))  # tesser:debt TB051
+                    found.extend(decl.actions_violations())
+                    for body in decl.bodies():
+                        found.extend(body.delegation_violations())
+                        if str(body.name()) == "__init__":
+                            found.extend(ACTIONS_DEPENDENCIES.violations(body.signature()))
+                            continue
+                        if str(body.name()).startswith("_") and str(body.name()) != PUBLIC_CALL:
+                            continue
+                        found.extend(ACTIONS_METHOD.violations(body.signature()))
+                        found.extend(body.violations())
+                        found.extend(body.port_call_violations())
                 elif block == "orchestrator":
-                    found.extend(self._orchestrator_violations(module, cls, blocks))  # tesser:debt TB051
+                    found.extend(decl.orchestrator_violations())
+                    for body in decl.bodies():
+                        found.extend(body.delegation_violations())
+                        if str(body.name()) == "__init__":
+                            found.extend(ORCHESTRATOR_DEPENDENCIES.violations(body.signature()))
+                            continue
+                        if str(body.name()).startswith("_") and str(body.name()) != PUBLIC_CALL:
+                            continue
+                        found.extend(ORCHESTRATOR_METHOD.violations(body.signature()))
+                        found.extend(body.violations())
+                        found.extend(body.thread_violations())
                 elif block == "actions_client" and self._locate(  # tesser:debt TB051
                     module.name(), module.is_package(), contexts, self._export
                 ) in ("app-client", "app-client-file"):
@@ -7273,35 +8206,6 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _dependency_violations(
-        self,
-        module: Module,
-        where: str,
-        line: int,
-        fn: ast.FunctionDef | ast.AsyncFunctionDef,
-        blocks: dict[tuple[str, str], str],
-        subject: str = "a service",
-        context_ok: bool = False,
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for arg in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs:
-            if arg.arg == "self":
-                continue
-            if context_ok and self._names_job_context(module, arg.annotation, blocks):  # tesser:debt TB051
-                continue
-            port_key = module._resolve(arg.annotation) if arg.annotation is not None else None
-            if (blocks.get(port_key) if port_key is not None else None) not in ("port", "store"):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        line,
-                        "TB081",
-                        f"{where} parameter {arg.arg!r} is not a ts.Port or a ts.Store; "
-                        f"{subject} depends only on ports and the stores that yield them",
-                    ))
-                )
-        return tuple(found)
-
     def _valueobject_violations(
         self,
         module: Module,
@@ -7922,57 +8826,6 @@ class Codebase(ts.AggregateRoot):
             )
         return tuple(found)
 
-    def _provenance_violations(
-        self, module: Module, where: str, fn: ast.FunctionDef | ast.AsyncFunctionDef
-    ) -> tuple[Violation, ...]:
-        positional = list(fn.args.args)
-        if len(positional) < 2:
-            return ()
-        request = positional[1].arg
-        found: list[Violation] = []
-        for node in ast.walk(fn):
-            if not isinstance(node, ast.Call):
-                continue
-            callee = node.func
-            if not isinstance(callee, ast.Attribute):
-                continue
-            holder = callee.value
-            if not (
-                isinstance(holder, ast.Attribute)
-                and isinstance(holder.value, ast.Name)
-                and holder.value.id == "self"
-            ):
-                continue
-            for passed in list(node.args) + [keyword.value for keyword in node.keywords]:
-                if isinstance(passed, ast.Name) and passed.id == request:
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            passed.lineno,
-                            "TB082",
-                            f"{where} sends its request itself straight to a port; "
-                            "a value crossing into a port has passed through a domain type",
-                        ))
-                    )
-            for inner in ast.walk(node):
-                if not isinstance(inner, ast.Attribute):
-                    continue
-                current: ast.expr = inner
-                while isinstance(current, ast.Attribute):
-                    current = current.value
-                if not (isinstance(current, ast.Name) and current.id == request):
-                    continue
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        inner.lineno,
-                        "TB082",
-                        f"{where} sends {inner.attr} from its request straight to a port; "
-                        "a value crossing into a port has passed through a domain type",
-                    ))
-                )
-        return tuple(found)
-
     def _component_violations(
         self, module: Module, cls: ast.ClassDef, blocks: dict[tuple[str, str], str]
     ) -> tuple[Violation, ...]:
@@ -8046,43 +8899,6 @@ class Codebase(ts.AggregateRoot):
                     )
         return tuple(found)
 
-    @staticmethod
-    def _port_attributes(
-        module: Module,
-        init: ast.FunctionDef | ast.AsyncFunctionDef | None,
-        blocks: dict[tuple[str, str], str],
-        kind: str = "port",
-    ) -> frozenset[str]:
-        if init is None:
-            return frozenset()
-        ports = {
-            arg.arg
-            for arg in init.args.posonlyargs + init.args.args + init.args.kwonlyargs
-            if arg.arg != "self"
-            and arg.annotation is not None
-            and blocks.get(module._resolve(arg.annotation) or ("", "")) == kind
-        }
-        held: set[str] = set()
-        for node in ast.walk(init):
-            if isinstance(node, ast.AnnAssign):
-                targets: list[ast.expr] = [node.target]
-                value = node.value
-            elif isinstance(node, ast.Assign):
-                targets = list(node.targets)
-                value = node.value
-            else:
-                continue
-            if not (isinstance(value, ast.Name) and value.id in ports):
-                continue
-            for target in targets:
-                if (
-                    isinstance(target, ast.Attribute)
-                    and isinstance(target.value, ast.Name)
-                    and target.value.id == "self"
-                ):
-                    held.add(target.attr)
-        return frozenset(held)
-
     def _names_job_context(
         self,
         module: Module,
@@ -8094,246 +8910,6 @@ class Codebase(ts.AggregateRoot):
             return False
         key = module._resolve(unquoted)
         return key is not None and blocks.get(key) == JOB_CONTEXT_BLOCK
-
-    @staticmethod
-    def _init_of(cls: ast.ClassDef) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
-        return next(
-            (
-                item
-                for item in cls.body
-                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
-                and item.name == "__init__"
-            ),
-            None,
-        )
-
-    def _port_call_violations(
-        self,
-        module: Module,
-        where: str,
-        fn: ast.FunctionDef | ast.AsyncFunctionDef,
-        held: frozenset[str],
-    ) -> tuple[Violation, ...]:
-        calls = [
-            node
-            for node in ast.walk(fn)
-            if isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and isinstance(node.func.value, ast.Attribute)
-            and isinstance(node.func.value.value, ast.Name)
-            and node.func.value.value.id == "self"
-            and node.func.value.attr in held
-        ]
-        if len(calls) == 1:
-            return ()
-        return (
-            Violation(ViolationSpec(
-                module.path(),
-                fn.lineno,
-                "TB082",
-                f"{where} makes {len(calls)} calls on its port; "
-                "an action makes exactly one call on its port",
-            )),
-        )
-
-    def _actions_violations(
-        self,
-        module: Module,
-        cls: ast.ClassDef,
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        init = self._init_of(cls)  # tesser:debt TB051
-        held = self._port_attributes(module, init, blocks)  # tesser:debt TB051
-        methods = [
-            item
-            for item in cls.body
-            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
-        ]
-        method_names = frozenset(method.name for method in methods)
-        if init is None:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    cls.lineno,
-                    "TB081",
-                    f"{module.name()}.{cls.name} defines no __init__; "
-                    "a class of actions takes exactly one port",
-                ))
-            )
-        else:
-            params = [
-                arg
-                for arg in init.args.posonlyargs + init.args.args + init.args.kwonlyargs
-                if arg.arg != "self"
-            ]
-            if len(params) != 1:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        init.lineno,
-                        "TB081",
-                        f"{module.name()}.{cls.name}.__init__ takes {len(params)} parameters; "
-                        "a class of actions takes exactly one port",
-                    ))
-                )
-            found.extend(
-                self._dependency_violations(  # tesser:debt TB051
-                    module,
-                    f"{module.name()}.{cls.name}.__init__",
-                    init.lineno,
-                    init,
-                    blocks,
-                    "a class of actions",
-                )
-            )
-        for item in methods:
-            where = f"{module.name()}.{cls.name}.{item.name}"
-            found.extend(
-                self._delegation_violations(module, method_names, where, item)  # tesser:debt TB051
-            )
-            if item.name.startswith("_") and item.name != PUBLIC_CALL:
-                continue
-            found.extend(
-                self._signature_violations(  # tesser:debt TB051
-                    module,
-                    where,
-                    item.lineno,
-                    item,
-                    "port_request",
-                    "port_response",
-                    "an actions method",
-                    "TB081",
-                    blocks,
-                    "an actions method takes exactly one ts.Request",
-                )
-            )
-            found.extend(self._body_violations(module, where, item, blocks))  # tesser:debt TB051
-            found.extend(self._port_call_violations(module, where, item, held))  # tesser:debt TB051
-        return tuple(found)
-
-    def _orchestrator_violations(
-        self,
-        module: Module,
-        cls: ast.ClassDef,
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        init = self._init_of(cls)  # tesser:debt TB051
-        ports = self._port_attributes(module, init, blocks)  # tesser:debt TB051
-        contexts = self._port_attributes(module, init, blocks, JOB_CONTEXT_BLOCK)  # tesser:debt TB051
-        held = ports | contexts
-        methods = [
-            item
-            for item in cls.body
-            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
-        ]
-        method_names = frozenset(method.name for method in methods)
-        if init is None:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    cls.lineno,
-                    "TB081",
-                    f"{module.name()}.{cls.name} defines no __init__; "
-                    "an orchestrator depends only on action ports — a port an "
-                    "application client speaks",
-                ))
-            )
-        else:
-            where = f"{module.name()}.{cls.name}.__init__"
-            found.extend(
-                self._dependency_violations(  # tesser:debt TB051
-                    module, where, init.lineno, init, blocks, "an orchestrator", True
-                )
-            )
-            taken = [
-                arg
-                for arg in init.args.posonlyargs + init.args.args + init.args.kwonlyargs
-                if arg.arg != "self"
-                and self._names_job_context(module, arg.annotation, blocks)  # tesser:debt TB051
-            ]
-            if len(taken) != 1:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        init.lineno,
-                        "TB081",
-                        f"{where} takes {len(taken)} job contexts; "
-                        "an orchestrator takes exactly one job context and its action ports",
-                    ))
-                )
-            for arg in init.args.posonlyargs + init.args.args + init.args.kwonlyargs:
-                if arg.arg == "self" or arg.annotation is None:
-                    continue
-                key = module._resolve(arg.annotation)
-                if blocks.get(key or ("", "")) != "port":
-                    continue
-                if key in self._action_ports:
-                    continue
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        init.lineno,
-                        "TB081",
-                        f"{where} parameter {arg.arg!r} is a port no application client "
-                        "speaks; an orchestrator depends only on action ports — a port "
-                        "an application client speaks",
-                    ))
-                )
-        for node in ast.walk(cls):
-            if isinstance(node, ast.AnnAssign):
-                targets: list[ast.expr] = [node.target]
-            elif isinstance(node, ast.Assign):
-                targets = list(node.targets)
-            elif isinstance(node, ast.AugAssign):
-                targets = [node.target]
-            else:
-                continue
-            for target in targets:
-                if not (
-                    isinstance(target, ast.Attribute)
-                    and isinstance(target.value, ast.Name)
-                    and target.value.id == "self"
-                ):
-                    continue
-                if target.attr in held:
-                    continue
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        node.lineno,
-                        "TB081",
-                        f"{module.name()}.{cls.name} keeps {target.attr}; "
-                        "an orchestrator stores only its job context and its action ports",
-                    ))
-                )
-        for item in methods:
-            where = f"{module.name()}.{cls.name}.{item.name}"
-            found.extend(
-                self._delegation_violations(module, method_names, where, item)  # tesser:debt TB051
-            )
-            if item.name == "__init__" or (
-                item.name.startswith("_") and item.name != PUBLIC_CALL
-            ):
-                continue
-            found.extend(
-                self._signature_violations(  # tesser:debt TB051
-                    module,
-                    where,
-                    item.lineno,
-                    item,
-                    "port_request",
-                    "port_response",
-                    "an orchestrator method",
-                    "TB081",
-                    blocks,
-                    "an orchestrator method takes exactly one ts.Request",
-                )
-            )
-            found.extend(self._body_violations(module, where, item, blocks))  # tesser:debt TB051
-            found.extend(self._thread_violations(module, where, item, ports, contexts))  # tesser:debt TB051
-        return tuple(found)
 
     def _names_jobs(
         self,
@@ -8359,92 +8935,6 @@ class Codebase(ts.AggregateRoot):
         return bool(named) and all(
             blocks.get(module._resolve(element) or ("", "")) == "job" for element in named
         )
-
-    def _held_context_violations(
-        self,
-        module: Module,
-        cls: ast.ClassDef,
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for item in cls.body:
-            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                continue
-            handed = {
-                arg.arg
-                for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
-                if arg.arg != "self"
-                and self._names_job_context(module, arg.annotation, blocks)  # tesser:debt TB051
-            }
-            if not handed:
-                continue
-            for node in ast.walk(item):
-                if isinstance(node, ast.AnnAssign):
-                    targets: list[ast.expr] = [node.target]
-                    value = node.value
-                elif isinstance(node, ast.Assign):
-                    targets = list(node.targets)
-                    value = node.value
-                else:
-                    continue
-                if not (isinstance(value, ast.Name) and value.id in handed):
-                    continue
-                for target in targets:
-                    if not (
-                        isinstance(target, ast.Attribute)
-                        and isinstance(target.value, ast.Name)
-                        and target.value.id == "self"
-                    ):
-                        continue
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            node.lineno,
-                            "TB081",
-                            f"{module.name()}.{cls.name} keeps {target.attr}, a job "
-                            "context; an adapter is built once and never holds an "
-                            "invocation's job context",
-                        ))
-                    )
-        return tuple(found)
-
-    def _thread_violations(
-        self,
-        module: Module,
-        where: str,
-        fn: ast.FunctionDef | ast.AsyncFunctionDef,
-        ports: frozenset[str],
-        contexts: frozenset[str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for node in ast.walk(fn):
-            if not (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and isinstance(node.func.value, ast.Attribute)
-                and isinstance(node.func.value.value, ast.Name)
-                and node.func.value.value.id == "self"
-                and node.func.value.attr in ports
-            ):
-                continue
-            leading = node.args[0] if node.args else None
-            if (
-                isinstance(leading, ast.Attribute)
-                and isinstance(leading.value, ast.Name)
-                and leading.value.id == "self"
-                and leading.attr in contexts
-            ):
-                continue
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    node.lineno,
-                    "TB082",
-                    f"{where} calls {node.func.value.attr} without its job context first; "
-                    "an orchestrator threads its job context into every action port call",
-                ))
-            )
-        return tuple(found)
 
     def _actions_client_violations(
         self,
@@ -8612,445 +9102,6 @@ class Codebase(ts.AggregateRoot):
                 ))
             )
         return tuple(found)
-
-    def _delegation_violations(
-        self,
-        module: Module,
-        method_names: frozenset[str],
-        where: str,
-        fn: ast.FunctionDef | ast.AsyncFunctionDef,
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        functions = module.function_names()
-        for node in ast.walk(fn):
-            if not isinstance(node, ast.Call):
-                continue
-            callee = node.func
-            if (
-                isinstance(callee, ast.Attribute)
-                and isinstance(callee.value, ast.Name)
-                and callee.value.id == "self"
-                and callee.attr in method_names
-            ):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        node.lineno,
-                        "TB082",
-                        f"{where} delegates to self.{callee.attr}; a service inlines its logic",
-                    ))
-                )
-            elif isinstance(callee, ast.Name) and callee.id in functions:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        node.lineno,
-                        "TB082",
-                        f"{where} delegates to {callee.id}; a service inlines its logic",
-                    ))
-                )
-        return tuple(found)
-
-    def _body_violations(
-        self,
-        module: Module,
-        where: str,
-        fn: ast.FunctionDef | ast.AsyncFunctionDef,
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        found.extend(self._provenance_violations(module, where, fn))  # tesser:debt TB051
-        for stmt in fn.body:
-            if not isinstance(stmt, ast.Assign):
-                continue
-            if not isinstance(stmt.value, (ast.Name, ast.Attribute)):
-                continue
-            if any(isinstance(node, ast.Call) for node in ast.walk(stmt.value)):
-                continue
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    stmt.lineno,
-                    "TB082",
-                    f"{where} names a straight accessor; a service method names what it "
-                    "computes, and reads an accessor where it is used",
-                ))
-            )
-        matches: list[ast.Match] = []
-        decided: set[int] = set()
-        for node in ast.walk(fn):
-            if isinstance(node, ast.Call):
-                for value in list(node.args) + [kw.value for kw in node.keywords]:
-                    if not isinstance(value, ast.Call):
-                        continue
-                    value_key = module._resolve(value.func)
-                    if (blocks.get(value_key) if value_key is not None else None) is not None:
-                        continue
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            value.lineno,
-                            "TB082",
-                            f"{where} computes in an argument; a service method names what it "
-                            "computes in a local, and passes a name, a reader, or a declared kind",
-                        ))
-                    )
-            if isinstance(node, (ast.If, ast.While)) and not (
-                isinstance(node, ast.While)
-                and isinstance(node.test, ast.Constant)
-                and node.test.value is True
-            ):
-                decided.update(id(sub) for sub in ast.walk(node.test))
-                keyword = "if" if isinstance(node, ast.If) else "while"
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        node.lineno,
-                        "TB082",
-                        f"{where} branches with {keyword}; a service method branches only by "
-                        "matching an outcome — `while True:` ended by a match arm is the loop — "
-                        "because a truth test on a domain object is a bool the domain never handed out",
-                    ))
-                )
-            elif isinstance(node, ast.Match):
-                matches.append(node)
-            elif isinstance(node, ast.IfExp):
-                decided.update(id(sub) for sub in ast.walk(node.test))
-            elif isinstance(node, ast.comprehension) and node.ifs:
-                decided.update(id(sub) for test in node.ifs for sub in ast.walk(test))
-        found.extend(self._decision_violations(module, where, fn, frozenset(decided)))  # tesser:debt TB051
-        domain_names = self._domain_locals(module, fn, blocks)  # tesser:debt TB051
-        outcome_names = self._outcome_locals(module, fn, blocks, domain_names)  # tesser:debt TB051
-        matches.sort(key=lambda node: node.lineno)
-        for extra in matches[1:]:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    extra.lineno,
-                    "TB082",
-                    f"{where} matches a second time; a service method decides once, because "
-                    "a second decision in one method is a rule about their order that no "
-                    "domain object owns",
-                ))
-            )
-        for node in matches:
-            if not self._is_domain_answer(  # tesser:debt TB051
-                module, node.subject, blocks, domain_names, outcome_names
-            ):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        node.lineno,
-                        "TB082",
-                        f"{where} match subject is not a call on a domain object; "
-                        "a service method matches the outcome a domain object handed "
-                        "back, because a port answer, a string, or an attribute is a "
-                        "rule the service would be reading for itself",
-                    ))
-                )
-            elif not any(
-                self._outcome_key(module, sub.value, blocks) is not None  # tesser:debt TB051
-                for case in node.cases
-                for sub in ast.walk(case.pattern)
-                if isinstance(sub, ast.MatchValue)
-            ):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        node.lineno,
-                        "TB084",
-                        f"{where} matches a domain call whose arms name no outcome "
-                        "member; a match on what a domain object answered names outcome "
-                        "members and closes on assert_never, because string arms hide a "
-                        "member added later from the type checker",
-                    ))
-                )
-        return tuple(found)
-
-    def _decision_violations(
-        self,
-        module: Module,
-        where: str,
-        fn: ast.FunctionDef | ast.AsyncFunctionDef,
-        decided: frozenset[int],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for node in ast.walk(fn):
-            if id(node) in decided:
-                continue
-            if isinstance(node, ast.Compare):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        node.lineno,
-                        "TB082",
-                        f"{where} compares two values; a service method asks a domain object "
-                        "and never compares, because a comparison is a rule written down "
-                        "beside the object that should own it",
-                    ))
-                )
-            elif isinstance(node, ast.Call) and self._is_comparison_call(module, node.func):  # tesser:debt TB051
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        node.lineno,
-                        "TB082",
-                        f"{where} calls a comparison; a service method asks a domain object "
-                        "and never compares, because a comparison is a rule written down "
-                        "beside the object that should own it",
-                    ))
-                )
-            elif isinstance(node, ast.Call) and self._is_truth_builtin(module, node.func):  # tesser:debt TB051
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        node.lineno,
-                        "TB082",
-                        f"{where} asks a builtin whether values are true; a service method "
-                        "branches only by matching an outcome, because bool, any, and all "
-                        "read a truth the domain never handed out",
-                    ))
-                )
-            elif isinstance(node, ast.IfExp):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        node.lineno,
-                        "TB082",
-                        f"{where} chooses with a conditional expression; a service method "
-                        "branches only by matching an outcome, because `x if c else y` is a "
-                        "branch with no arms for a member added later",
-                    ))
-                )
-            elif isinstance(node, ast.BoolOp):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        node.lineno,
-                        "TB082",
-                        f"{where} joins conditions with and/or; a service method branches "
-                        "only by matching an outcome, because a boolean operator is a rule "
-                        "assembled from values the domain never handed out",
-                    ))
-                )
-            elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        node.lineno,
-                        "TB082",
-                        f"{where} negates a value; a service method branches only by matching "
-                        "an outcome, because `not x` is a truth test on a value the domain "
-                        "never handed out",
-                    ))
-                )
-            elif isinstance(node, ast.comprehension) and node.ifs:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        node.ifs[0].lineno,
-                        "TB082",
-                        f"{where} filters a comprehension; a service method branches only by "
-                        "matching an outcome, because which items belong is a rule the "
-                        "domain collection should own",
-                    ))
-                )
-        return tuple(found)
-
-    @staticmethod
-    def _is_comparison_call(module: Module, func: ast.expr) -> bool:
-        if isinstance(func, ast.Attribute):
-            if func.attr in COMPARISON_CALLS:
-                return True
-            return (
-                isinstance(func.value, ast.Name)
-                and module._package_aliases.get(func.value.id) == OPERATOR_MODULE
-                and func.attr in OPERATOR_COMPARISONS
-            )
-        if isinstance(func, ast.Name):
-            origin = module._imported.get(func.id)
-            return (
-                origin is not None
-                and origin[0] == OPERATOR_MODULE
-                and origin[1] in OPERATOR_COMPARISONS
-            )
-        return False
-
-    @staticmethod
-    def _is_truth_builtin(module: Module, func: ast.expr) -> bool:
-        return (
-            isinstance(func, ast.Name)
-            and func.id in TRUTH_BUILTINS
-            and func.id not in module._imported
-            and func.id not in module._package_aliases
-        )
-
-    def _domain_locals(
-        self,
-        module: Module,
-        fn: ast.FunctionDef | ast.AsyncFunctionDef,
-        blocks: dict[tuple[str, str], str],
-    ) -> dict[str, tuple[str, str]]:
-        values, otherwise = self._bindings(fn)  # tesser:debt TB051
-        found: dict[str, tuple[str, str]] = {}
-        for name, bound in values.items():
-            if name in otherwise:
-                continue
-            kinds = [self._domain_kind(module, value, blocks) for value in bound]  # tesser:debt TB051
-            first = kinds[0]
-            if first is not None and all(kind == first for kind in kinds):
-                found[name] = first
-        return found
-
-    def _outcome_locals(
-        self,
-        module: Module,
-        fn: ast.FunctionDef | ast.AsyncFunctionDef,
-        blocks: dict[tuple[str, str], str],
-        domain_names: dict[str, tuple[str, str]],
-    ) -> frozenset[str]:
-        return self._bound_names(  # tesser:debt TB051
-            fn,
-            lambda value: self._answers_an_outcome(module, value, blocks, domain_names),  # tesser:debt TB051
-        )
-
-    @staticmethod
-    def _bound_names(
-        fn: ast.FunctionDef | ast.AsyncFunctionDef,
-        wanted: typing.Callable[[ast.expr], bool],
-    ) -> frozenset[str]:
-        values, otherwise = Codebase._bindings(fn)
-        return frozenset(
-            name
-            for name, bound in values.items()
-            if name not in otherwise and all(wanted(value) for value in bound)
-        )
-
-    @staticmethod
-    def _bindings(
-        fn: ast.FunctionDef | ast.AsyncFunctionDef,
-    ) -> tuple[dict[str, list[ast.expr]], frozenset[str]]:
-        values: dict[str, list[ast.expr]] = {}
-        otherwise: set[str] = set(Codebase._parameter_names(fn))
-        for node in Codebase._own_scope(fn):
-            targets: list[ast.expr] = []
-            value: ast.expr | None = None
-            if isinstance(node, ast.Assign):
-                targets, value = list(node.targets), node.value
-            elif isinstance(node, ast.AnnAssign):
-                if node.value is None:
-                    continue
-                targets, value = [node.target], node.value
-            elif isinstance(node, (ast.AugAssign, ast.NamedExpr)):
-                targets, value = [node.target], node.value
-            elif isinstance(node, ast.comprehension):
-                continue
-            elif isinstance(node, (ast.For, ast.AsyncFor)):
-                otherwise.update(
-                    sub.id for sub in ast.walk(node.target) if isinstance(sub, ast.Name)
-                )
-                continue
-            elif isinstance(node, (ast.With, ast.AsyncWith)):
-                for item in node.items:
-                    if item.optional_vars is not None:
-                        otherwise.update(
-                            sub.id
-                            for sub in ast.walk(item.optional_vars)
-                            if isinstance(sub, ast.Name)
-                        )
-                continue
-            elif isinstance(node, ast.ExceptHandler):
-                if node.name is not None:
-                    otherwise.add(node.name)
-                continue
-            elif isinstance(node, (ast.MatchAs, ast.MatchStar)):
-                if node.name is not None:
-                    otherwise.add(node.name)
-                continue
-            elif isinstance(node, ast.MatchMapping):
-                if node.rest is not None:
-                    otherwise.add(node.rest)
-                continue
-            elif isinstance(node, (ast.Import, ast.ImportFrom)):
-                otherwise.update(
-                    (alias.asname or alias.name).split(".")[0] for alias in node.names
-                )
-                continue
-            elif isinstance(node, (ast.Global, ast.Nonlocal)):
-                otherwise.update(node.names)
-                continue
-            if len(targets) == 1 and isinstance(targets[0], ast.Name) and value is not None:
-                values.setdefault(targets[0].id, []).append(value)
-                continue
-            for target in targets:
-                otherwise.update(
-                    sub.id for sub in ast.walk(target) if isinstance(sub, ast.Name)
-                )
-        return values, frozenset(otherwise)
-
-    @staticmethod
-    def _parameter_names(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> frozenset[str]:
-        args = fn.args
-        named = [arg.arg for arg in args.posonlyargs + args.args + args.kwonlyargs]
-        if args.vararg is not None:
-            named.append(args.vararg.arg)
-        if args.kwarg is not None:
-            named.append(args.kwarg.arg)
-        return frozenset(named)
-
-    @staticmethod
-    def _own_scope(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> typing.Iterator[ast.AST]:
-        stack: list[ast.AST] = list(ast.iter_child_nodes(fn))
-        while stack:
-            node = stack.pop()
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
-                continue
-            yield node
-            stack.extend(ast.iter_child_nodes(node))
-
-    @staticmethod
-    def _domain_kind(
-        module: Module, node: ast.expr, blocks: dict[tuple[str, str], str]
-    ) -> tuple[str, str] | None:
-        if not isinstance(node, ast.Call):
-            return None
-        key = module._resolve(node.func)
-        if key is None or blocks.get(key) not in DOMAIN_BLOCKS:
-            return None
-        return key
-
-    def _answers_an_outcome(
-        self,
-        module: Module,
-        node: ast.expr,
-        blocks: dict[tuple[str, str], str],
-        domain_names: dict[str, tuple[str, str]],
-    ) -> bool:
-        if isinstance(node, ast.Await):
-            node = node.value
-        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
-            return False
-        receiver = node.func.value
-        owner: tuple[str, str] | None = None
-        if isinstance(receiver, ast.Name):
-            owner = domain_names.get(receiver.id)
-        if owner is None:
-            owner = self._domain_kind(module, receiver, blocks)  # tesser:debt TB051
-        if owner is None:
-            return False
-        return (owner[0], owner[1], node.func.attr) in self._outcome_methods
-
-    def _is_domain_answer(
-        self,
-        module: Module,
-        node: ast.expr,
-        blocks: dict[tuple[str, str], str],
-        domain_names: dict[str, tuple[str, str]],
-        outcome_names: frozenset[str],
-    ) -> bool:
-        if isinstance(node, ast.Name):
-            return node.id in outcome_names
-        return self._answers_an_outcome(module, node, blocks, domain_names)  # tesser:debt TB051
 
     def _outcome_violations(self, module: Module, cls: ast.ClassDef) -> tuple[Violation, ...]:
         where = f"{module.name()}.{cls.name}"
