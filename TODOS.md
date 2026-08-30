@@ -275,22 +275,19 @@ where it lands.
   of those types. Needs a design: what crosses the `Client` on failure (an
   outcome on the response? a single edge-facing rejection?), what the
   handler returns, and what — if anything — the host still maps.
-- [ ] **Adapter-side mappers have no home in the rulebook.** A gateway and a
-  repository want to end in `return MapToX(answer)` so an adapter reads as
-  call-then-map, never as logic. `tesser.adapters` has no `Mapper`, and
-  `KIND_ROLE` says a mapper lives in `application`, so
+- [x] **Adapter-side mappers have no home in the rulebook.** Ruled (Chris,
+  2026-08-30) and shipped: `tesser.adapters.Mapper` carries the same contract
+  as `tesser.application.Mapper` (a mapper is its target), and `KIND_EXTRA_ROLES`
+  admits `mapper` in an `adapters` role module as well as `application` (TB052).
   `examples/minimal/alpha/adapters/gateways/beta_check.py` and
-  `examples/minimal/beta/adapters/repositories/memory.py` import
-  `tesser.application` for the base (`tesser:debt TB050`) and carry
-  `tesser:debt TB052` on the mapper class. Ruling: add `Mapper` to
-  `tesser.adapters` and admit `mapper` in `adapters` (TB052), then drop the
-  markers.
-- [ ] **A mapper over a library's primitive result.** `MapToHasKeyResponse`
-  takes the `bool` a db client hands back, which TB080 forbids ("a mapper
-  takes whole objects, never a field already pulled off one") — marked
-  `tesser:debt TB080`. A repository wrapping a client that returns
-  primitives is the normal case, so either the rule carves out the adapter
-  side or the client's result is wrapped first. Decide with the item above.
+  `examples/minimal/beta/adapters/repositories/memory.py` now import
+  `tesser.adapters` alone; the `TB050` and `TB052` markers are gone.
+- [x] **A mapper over a library's primitive result.** Ruled (Chris,
+  2026-08-30) and shipped: a mapper in an `adapters` module may take a
+  primitive, because a repository wrapping a client that returns primitives is
+  the normal case. The application side is unchanged — `MapToX(text: str)` in
+  an application module is still a TB080 finding. `MapToHasKeyResponse` keeps
+  its `bool` and drops its `tesser:debt TB080`.
 - [ ] **Faking a peer's client in a context test.** The context `tests/` tier
   may import a foreign `client` (TB070), but `testing.md` rule 1's two tiers
   (double one collaborator through its port / real in-memory port) never
@@ -2213,18 +2210,16 @@ three rules. Two were ruled by the app-service-types wave
   A check that no `@dataclass` appears in a checked tree closes the bypass at
   the decorator rather than at `Record`.
 
-- [ ] **An engine adapter's serde has no home.** The wire shapes are gone
-  (ruled: a message is declared once, on the port, and both ends of the
-  engine speak the port's own `ts.Request`/`ts.Response`), but where the SDK
-  cannot serialize a `ts.Request` itself the tree brings a serde, and
-  `restate.serde.Serde` is an ABC, so it is a class with no `ts.*` base.
-  `ordering/adapters/jobs/restate.py` carries the one remaining
-  `tesser:debt TB052`. Ruling: name the kind (an adapter serde?), admit it
-  in `adapters` (TB052), and drop the marker. Shares a shape with the
-  adapter-side-mapper ruling above. Related and also unruled: payload
-  versioning on a durable leg (a field added to a port DTO changes the bytes
-  an in-flight journal holds) — until ruled, port DTOs on a durable leg are
-  append-only.
+- [x] **An engine adapter's serde has no home.** Ruled (Chris, 2026-08-30)
+  and shipped as `tesser.adapters.Serde`, admitted in `adapters/jobs/`
+  (TB052): exactly `serialize` and `deserialize`, one type parameter, at most
+  the target type stored, no branch beyond the empty/None case (TB081,
+  TB082) — and the one adapter class allowed a base from outside the tree,
+  because the engine is the caller. `ordering/adapters/jobs/restate.py`
+  declares `class RecordSerde[T](ts.Serde, restate.serde.Serde[T])` and the
+  `tesser:debt TB052` is gone. Still unruled: payload versioning on a durable
+  leg (a field added to a port DTO changes the bytes an in-flight journal
+  holds) — until ruled, port DTOs on a durable leg are append-only.
 
 - [x] **The orchestrator and its actions are not application services**
   — ruled and shipped by the app-service-types wave: `ts.Orchestrator` in

@@ -207,8 +207,9 @@ services open the transaction.
   waits on the row lock; a transaction that raises leaves the prior commit
   intact.
 
-Built; the store ports carry `# tesser:debt TB052` and `# tesser:debt TB081`
-at the two lines below until the rulings land. Two rules that fired were
+Built. The store ports carried `# tesser:debt TB052` and `# tesser:debt TB081`
+at the two lines below until the rulings below landed; the kind is
+`ts.Store` now and the markers are gone. Two rules that fired were
 simply obeyed: a ports module imports `typing.AsyncContextManager`, not
 `contextlib` (TB067, the pure-stdlib allowlist), and a test module holds no
 pytest fixture (TB071) — the Postgres store tests inline their setup.
