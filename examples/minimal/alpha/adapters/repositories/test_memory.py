@@ -11,7 +11,7 @@ class TestMemoryWidgetRepository:
         saved = widgets.save(widget_repository.SaveRequest(name="a", standing="kept"))
         assert saved.name == "a"
 
-    def test_a_released_widget_is_saved_as_released(self) -> None:
+    def test_a_released_standing_is_taken_and_the_save_still_answers_the_name(self) -> None:
         widgets = memory.MemoryWidgetRepository()
         saved = widgets.save(widget_repository.SaveRequest(name="a", standing="released"))
         assert saved.name == "a"
