@@ -149,9 +149,12 @@ Three more example fixes, from the coverage audit:
   than hiding it behind a spec-validation error.
 
 `skills/tesser-build/` renderings walked in the same change
-(`application-services.md`, `python.md`, `domain-return.md`, `SKILL.md`;
-skill-version 62), plus the `rationale/coverage.md` rows for `TB019` and
-`TB084`.
+(`application-services.md`, `python.md`, `domain-return.md`,
+`serialization.md`, `SKILL.md`; skill-version 62), plus the
+`rationale/coverage.md` rows for `TB019` and `TB084` — and two new
+skill-materializations rows, because the domain-return norm had none at all,
+so there was no row to walk. `README.md`'s check-family summary names the
+parameter mirror and the one-`match` rule.
 
 ## [0.0.88.0] - 2026-08-29
 

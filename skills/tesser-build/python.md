@@ -289,6 +289,13 @@ with its own invariant, not a second factory on this one.
   objects (TB019 — the licensed exits are the language-fixed dunders, the
   canonical exit, and a `-> None` transition; quoting an annotation is not
   an escape hatch).
+- **A domain object's public method takes one thing** (TB019's parameter
+  mirror): besides `self`, at most one parameter, and it is a primitive (an
+  enum counts), a spec, or a domain object — never a port or client DTO,
+  never a container, never two, never `*args`/`**kwargs`, and never
+  unannotated. Unlike the return rule it reads a `-> None` transition too,
+  and a public `__call__` is a public method like any other
+  (`domain-return.md` rule 7).
 - **`bool` and `complex` are not value-object material** (TB016), at any
   field count — a bool is atomic (model the raw value where it lives, or
   reach for a richer type when it is really more than binary; a validated

@@ -88,7 +88,8 @@ Classification is declared, never inferred — a class is judged by the
 `tesser` base it names. The 44 shipped codes cover value-object shape and
 serialization (`TB002`–`TB019` — value equality only, no representation
 leak, one construction path, one canonical exit per backing type, domain
-objects out of public behavior),
+objects out of public behavior and one primitive, spec, or domain object
+into it),
 module/class structure (`TB040`–`TB045`), import form and the tier matrices
 (`TB050`–`TB069` — every module carries an import row keyed on where it sits,
 with no exempt modules), test placement and module totality (`TB070`–`TB074`),
@@ -96,7 +97,7 @@ construction paths and boundary signatures (`TB080`–`TB084` — an entity or
 aggregate is built from one spec and a value object from one primitive or one
 spec, a spec initializes only its own object, a mapper *is* the spec or
 DTO it maps to, and control flow comes back as a `ts.Outcome` a service
-matches exhaustively), and the
+matches exhaustively, exactly once per method), and the
 tree-wide **norm checks** with no test exemption: zero comments (`TB020`),
 fakes-only test doubles (`TB030`), no called shadowed builtin (`TB033`), and
 debt-marker hygiene (`TB090` — a
