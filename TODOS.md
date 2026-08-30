@@ -47,7 +47,11 @@ rule, a destructuring rebind, a nested-scope shadow, and a container behind
   read, or sort with the walk the checker has; `try`/`except` additionally
   belongs to the error norm. They are written into
   `skills/tesser-build/application-services.md` beside the existing
-  `try`/`except` carve-out so a reviewer reads them.
+  `try`/`except` carve-out so a reviewer reads them. Two more, recorded in
+  cycle 3: `max`, `min`, and `sorted` are comparison builtins that are not in
+  `TRUTH_BUILTINS`, so a service that ranks with one of them is not reported;
+  and the pre-existing value-dedupe collapses two identical conditional
+  expressions written on one line into a single finding.
 - [ ] **Five `ReportsService` mappers have no direct test.**
   `examples/python-app/reports/application/service.py` declares mappers that
   are exercised only through the service's own tests, so a mapping error
@@ -120,16 +124,16 @@ regression from this wave, and each wants a ruling before code moves.
   wrote (and the response carries the widget), or the response drops the
   field.
 
-- [ ] **A concurrent first writer that aborts: two readings.** One reviewer
-  read the add path as able to report a spurious conflict — first writer
-  inserts, second writer's `ON CONFLICT DO NOTHING` returns no row, first
-  writer's transaction then aborts, and the second caller is told the widget
-  exists when the committed table holds nothing. The same reviewer then
-  argued the second writer blocks on the first's row lock until it resolves,
-  so the case cannot arise. Both readings are recorded because the resolution
-  decides whether `add_widget` needs a retry or a different conflict test;
-  Postgres's documented behaviour under `READ COMMITTED` is the thing to
-  check first.
+- [x] **A concurrent first writer that aborts: no spurious conflict.** One
+  reviewer read the add path as able to report a spurious conflict — first
+  writer inserts, second writer's `ON CONFLICT DO NOTHING` returns no row,
+  first writer's transaction then aborts, and the second caller is told the
+  widget exists when the committed table holds nothing. Decided against a live
+  Postgres in cycle 3: the second writer does not see "no row" and return. It
+  blocks on the first writer's speculative-insertion lock until that
+  transaction resolves, and when the first aborts the second's insert
+  proceeds and returns its own name. The second reading is the correct one;
+  `add_widget` needs no retry and no different conflict test.
 
 ## Decisions go through a domain object (2026-08-29, Chris ruling)
 
