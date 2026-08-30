@@ -10478,8 +10478,10 @@ def test_an_outcome_is_tracked_through_the_shapes_the_rules_do_not_name() -> Non
     assert any("driver.py:28: TB084" in f and "without closing on assert_never" in f for f in findings)
     assert any("driver.py:36: TB084" in f and "without closing on assert_never" in f for f in findings)
     assert any(
-        "Driver.unbound match subject is not a single call; "
-        "a service method satisfies a condition with one domain call" in f
+        "Driver.unbound match subject is not a call on a domain object; "
+        "a service method matches the outcome a domain object handed back, because "
+        "a port answer, a string, or an attribute is a rule the service would be "
+        "reading for itself" in f
         for f in findings
     )
     assert not any("Driver.unbound" in f and "TB084" in f for f in findings)
@@ -10673,7 +10675,7 @@ def test_an_outcome_is_neither_kept_nor_reached_into_nor_widened() -> None:
     assert any("driver.py:24: TB084" in f and "without closing on assert_never" in f for f in findings)
     assert not any("driver.py:33" in f and "TB084" in f for f in findings)
     assert not any("Driver.returning" in f and "TB082" in f for f in findings)
-    assert any("Driver.laundered match subject is not a single call" in f for f in findings)
+    assert any("Driver.laundered match subject is not a call on a domain object" in f for f in findings)
     assert any(
         "driver.py:54: TB084 shop.application.driver mixes a pattern into an outcome match; "
         "every arm before the closer names members, because a class, capture, or guarded arm "
@@ -11974,3 +11976,253 @@ def test_a_component_publishes_its_jobs_as_one_job_or_a_tuple_of_them() -> None:
         for f in findings
     )
     assert not any("shop.component.component.Shop publishes jobs" in f for f in findings)
+
+
+def test_a_service_decides_once_and_only_on_a_domain_answer() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/answer.py",
+                "shop.domain.answer",
+                "import enum\n"
+                "import tesser.domain as ts\n"
+                "class Reply(ts.Outcome):\n"
+                "    YES = enum.auto()\n"
+                "    NO = enum.auto()\n"
+                "class AnswerSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Answer(ts.AggregateRoot):\n"
+                "    def __init__(self, spec: AnswerSpec) -> None:\n"
+                "        self.text = spec.text\n"
+                "    def decide(self) -> Reply:\n"
+                "        return Reply.YES\n",
+                False,
+            ),
+            (
+                "shop/domain/test_answer.py",
+                "shop.domain.test_answer",
+                "def test_answer_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "shop/deciding.py",
+                "shop.deciding",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.domain.answer as answer\n"
+                "from shop.client.client import AskRequest, AskResponse\n"
+                "class DecidingService(ts.ApplicationService):\n"
+                "    def clean(self, request: AskRequest) -> AskResponse:\n"
+                "        asked = answer.Answer(answer.AnswerSpec(text=request.text))\n"
+                "        match asked.decide():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n"
+                "    def inline(self, request: AskRequest) -> AskResponse:\n"
+                "        match answer.Answer(answer.AnswerSpec(text=request.text)).decide():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n"
+                "    def twice(self, request: AskRequest) -> AskResponse:\n"
+                "        asked = answer.Answer(answer.AnswerSpec(text=request.text))\n"
+                "        match asked.decide():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        match asked.decide():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n"
+                "    def on_a_port(self, request: AskRequest) -> AskResponse:\n"
+                "        match self._peer.ask(request):\n"
+                "            case 1:\n"
+                "                pass\n"
+                "        return AskResponse(text='')\n"
+                "    def on_a_string(self, request: AskRequest) -> AskResponse:\n"
+                "        asked = answer.Answer(answer.AnswerSpec(text=request.text))\n"
+                "        match str(asked.decide()):\n"
+                "            case 'yes':\n"
+                "                pass\n"
+                "        return AskResponse(text='')\n"
+                "    def on_an_attribute(self, request: AskRequest) -> AskResponse:\n"
+                "        match request.text:\n"
+                "            case 'x':\n"
+                "                pass\n"
+                "        return AskResponse(text='')\n"
+                "    def rebound(self, request: AskRequest) -> AskResponse:\n"
+                "        asked = answer.Answer(answer.AnswerSpec(text=request.text))\n"
+                "        asked = self._peer.ask(request)\n"
+                "        match asked.decide():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n"
+                "    def with_string_arms(self, request: AskRequest) -> AskResponse:\n"
+                "        asked = answer.Answer(answer.AnswerSpec(text=request.text))\n"
+                "        match asked.decide():\n"
+                "            case 'yes':\n"
+                "                pass\n"
+                "        return AskResponse(text='')\n"
+                "    def decides_itself(self, request: AskRequest) -> AskResponse:\n"
+                "        same = request.text == 'x'\n"
+                "        picked = 'a' if same else 'b'\n"
+                "        both = same and picked\n"
+                "        kept = tuple(letter for letter in picked if letter)\n"
+                "        return AskResponse(text=picked)\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "DecidingService.twice matches a second time; a service method decides once, "
+        "because a second decision in one method is a rule about their order that no "
+        "domain object owns" in f
+        for f in findings
+    )
+    for method in ("on_a_port", "on_a_string", "on_an_attribute", "rebound"):
+        assert any(
+            f"DecidingService.{method} match subject is not a call on a domain object; "
+            "a service method matches the outcome a domain object handed back, because "
+            "a port answer, a string, or an attribute is a rule the service would be "
+            "reading for itself" in f
+            for f in findings
+        ), method
+    assert any(
+        "DecidingService.with_string_arms matches a domain call whose arms name no "
+        "outcome member; a match on what a domain object answered names outcome members "
+        "and closes on assert_never, because string arms hide a member added later from "
+        "the type checker" in f
+        for f in findings
+    )
+    assert any(
+        "DecidingService.decides_itself compares two values; a service method asks a "
+        "domain object and never compares, because a comparison is a rule written down "
+        "beside the object that should own it" in f
+        for f in findings
+    )
+    assert any(
+        "DecidingService.decides_itself chooses with a conditional expression; a service "
+        "method branches only by matching an outcome, because `x if c else y` is a branch "
+        "with no arms for a member added later" in f
+        for f in findings
+    )
+    assert any(
+        "DecidingService.decides_itself joins conditions with and/or; a service method "
+        "branches only by matching an outcome, because a boolean operator is a rule "
+        "assembled from values the domain never handed out" in f
+        for f in findings
+    )
+    assert any(
+        "DecidingService.decides_itself filters a comprehension; a service method branches "
+        "only by matching an outcome, because which items belong is a rule the domain "
+        "collection should own" in f
+        for f in findings
+    )
+    for conforming in ("DecidingService.clean", "DecidingService.inline"):
+        assert not any(conforming in f for f in findings), (conforming, findings)
+
+
+def test_a_domain_method_takes_one_primitive_spec_or_domain_object() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/order.py",
+                "shop.domain.order",
+                "import enum\n"
+                "import tesser.domain as ts\n"
+                "import shop.client.client as wire\n"
+                "class Size(enum.Enum):\n"
+                "    SMALL = 'small'\n"
+                "class LineSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Line(ts.ValueObject):\n"
+                "    _text: str\n"
+                "    def __init__(self, spec: LineSpec) -> None:\n"
+                "        object.__setattr__(self, '_text', spec.text)\n"
+                "    def __str__(self) -> str:\n"
+                "        return self._text\n"
+                "class Order(ts.AggregateRoot):\n"
+                "    def __init__(self, spec: LineSpec) -> None:\n"
+                "        self._line = Line(spec)\n"
+                "    @property\n"
+                "    def line(self) -> Line:\n"
+                "        return self._line\n"
+                "    def rename(self, spec: LineSpec) -> None:\n"
+                "        self._line = Line(spec)\n"
+                "    def relabel(self, text: str) -> None:\n"
+                "        self._line = Line(LineSpec(text))\n"
+                "    def resize(self, size: Size) -> None:\n"
+                "        self._line = Line(LineSpec(size.value))\n"
+                "    def replace(self, line: Line) -> None:\n"
+                "        self._line = line\n"
+                "    def merge(self, line: Line, other: Line) -> None:\n"
+                "        self._line = other\n"
+                "    def load(self, lines: tuple[Line, ...]) -> None:\n"
+                "        self._line = lines[0]\n"
+                "    def apply(self, request: wire.AskRequest) -> None:\n"
+                "        self._line = Line(LineSpec(request.text))\n"
+                "    def anything(self, *rest: str) -> None:\n"
+                "        self._line = Line(LineSpec(rest[0]))\n",
+                False,
+            ),
+            (
+                "shop/domain/test_order.py",
+                "shop.domain.test_order",
+                "def test_order_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "Order.merge takes 2 parameters; a domain object's method takes one thing, "
+        "because a rule about how two arguments relate belongs inside the object that "
+        "owns them" in f
+        for f in findings
+    )
+    assert any(
+        "Order.load parameter 'lines' is a container; a domain object's method takes one "
+        "primitive, one spec, or one domain object, because a collection handed in is a "
+        "type the domain has not named" in f
+        for f in findings
+    )
+    assert any(
+        "Order.apply parameter 'request' is not a primitive, a spec, or a domain object; "
+        "a domain object's method takes one of those three, because a port or client "
+        "shape reaching a domain method is the wire format deciding what the domain may "
+        "be asked" in f
+        for f in findings
+    )
+    assert any(
+        "Order.anything uses *args/**kwargs; a domain object's method names the one thing "
+        "it takes, because an open argument list is a signature no rule can read" in f
+        for f in findings
+    )
+    for conforming in ("Order.rename", "Order.relabel", "Order.resize", "Order.replace", "Order.line"):
+        assert not any(f"{conforming} " in f and "TB019" in f for f in findings), (
+            conforming,
+            findings,
+        )
