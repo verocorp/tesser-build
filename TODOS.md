@@ -314,24 +314,22 @@ object that owns its facts (`Module`, `ClassDecl`, `Method`, `Body`,
 object whose module-level `Final` constant is the rulebook's binding source.
 Two things the burn-down left behind, deliberately:
 
-- [ ] **Self-check wall time 2.2s → 4.1s on this tree.** Every `ClassDecl`
-  rebuilds a `Registry` (a sorted `KindTable`), a `SpecReader`, and four
-  `AnnotationPolicy` objects from the same two specs, because a spec may
-  carry primitives and child specs but never a value object, so nothing
-  built once can be handed down. The cost is linear in classes × kinds.
-  Options when it matters: a `KindTableSpec` that is already sorted so the
-  table constructor stops sorting; one `AnnotationPolicy` per class taking
-  its slot as the argument; or a ruling that a tree-level value object may
-  be passed whole to a constructor. The last is the honest one and is the
-  same question as the foreign-type ruling above. The ship review's
-  performance pass named the scans that compound it: `Registry.modules_under`
-  and `KindTable.blocks_in` walk every module name / every class symbol per
-  call (called per import edge in `kernel_import`, `role`, and `app_import`
-  checks); `Method.__init__`'s self-alias fixpoint re-walks the body per
-  pass; `Names.__contains__` scans a tuple; `Body.__init__` and
-  `ClassDecl.__init__` walk the same subtree three to four times. A sorted
-  prefix range (bisect) for `modules_under`, a by-module index for
-  `blocks_in`, and one walk per constructor are the mechanical fixes.
+- [ ] **Residual analyzer cost after the Registry fix: a flat ~2× main.**
+  The quadratic itself is fixed (see ruling item 3 below, resolved): all
+  11 gated trees run 5.5s against main's 3.7s, and the scaling exponent
+  matches main. What remains is the decomposition's per-class object graph
+  (`ClassDecl`/`Body`/`AnnotationPolicy` allocate more per module than
+  main's one class did) and one O(modules²) term main has too: the
+  whole-tree `frozenset(each.name().split(".")[0] for each in
+  self._modules)` rebuilt inside the per-module dispatch loop
+  (`checks.py` kernel-tops intersection; main had 15 sites of the same
+  pattern) — ~9% of runtime at 800 synthetic modules and the reason the
+  residual slope is 1.45 on the last doubling rather than ~1.0. Hoist it
+  when a consumer tree makes 2× on seconds matter. The earlier per-call
+  scan list stands for that pass: `Names.__contains__` scans a tuple;
+  `Method.__init__`'s self-alias fixpoint re-walks the body per pass;
+  `Body.__init__` and `ClassDecl.__init__` walk the same subtree three to
+  four times.
 - [ ] **Equality tests for the new value objects** (convention rule 2, not
   machine-enforced): `Annotation` and `Names` have them (v0.0.93.0);
   `Symbols`, `KindTable`, `Scope`, `Registry`, `Signature`, `Slot`, `Fact`,
@@ -352,10 +350,10 @@ Two things the burn-down left behind, deliberately:
   `rulebook.py`'s direct literal-argument binding block has had zero hits
   since `77aa2fb` moved every site onto `XSpec(...)`.
 - [ ] **Three divergences from main the ship's adversarial review measured
-  and this wave did not settle — each is a ruling, not a fix.** A
-  differential run (main's `checks.py` and this one over the same tree)
-  is byte-identical on all eleven gated trees; these show only on inputs
-  no tree has.
+  — items 1 and 2 are rulings; item 3 resolved in-wave with no ruling
+  needed.** A differential run (main's `checks.py` and this one over the
+  same tree) is byte-identical on all eleven gated trees; 1 and 2 show
+  only on inputs no tree has.
   1. *Quoted annotations now resolve.* `Annotation` unquotes a string
      annotation before resolving it; main's `_resolve` never did, so
      `def _spec() -> "CampaignSpec":` fired `TB073` on main (unresolved →
@@ -383,18 +381,27 @@ Two things the burn-down left behind, deliberately:
      construction, or `Placement` built after the parse) — a behaviour
      choice because it decides whether an unparseable file governs its
      siblings.
-  3. *The self-check cost is quadratic in tree size, not linear.* The
-     "2.2s → 4.1s" above is right for this tree; on synthetic trees of N
-     domain modules main is linear and this branch is not (50: 0.3s vs
-     1.1s; 200: 0.6s vs 13s; 800: 2.8s vs 205s). `Registry.__init__` is
-     ~85% of the profile — 6,812 constructions at N=200 driving 5.6M
-     `Symbol` and 14M `Text` constructions — because a `Registry` is
-     rebuilt per `ClassDecl`, per `AnnotationPolicy` (five per class), per
-     `SpecReader`, and per `Body` (per method). The cure is the ruling the
-     first bullet names (a tree-level value object passed whole), or a
-     `Registry` that is cheap to build (keep the spec's primitive tuples
-     and build `Symbol`s lazily). Consumer trees are larger than any
-     example here; measure one before merging.
+  3. *The run was quadratic in tree size — RESOLVED, no ruling needed.*
+     The cause was a rule interaction, not a breach: TB080 makes
+     whole-tree facts cross every construction boundary as primitives,
+     TB016 makes each crossing wrap them back into value objects, and the
+     TB051 decomposition multiplied the crossings (~2,200 `Registry`
+     constructions on a 200-module tree, each one O(classes) because
+     `KindTable` re-sorts and re-wraps every kind row). The fix keeps both
+     rules as written: every `Registry` field is a one-field holder value
+     object (`NameRows`, `KindRows`, `SymbolRows`, `TargetRows`,
+     `MakerRows`, `MethodRows`, `FieldRows`, `SharedRows`) that stores the
+     spec's tuple verbatim — TB016's compound clause fires only at two or
+     more stored fields — and materializes the real
+     `Names`/`KindTable`/`Symbols` in its accessor, so re-deriving at each
+     boundary is O(1). Measured on synthetic trees: last-doubling exponent
+     2.04 → 1.45 (fitted slope 1.17 vs main's 1.14), 800 modules 14.5s →
+     1.2s, 1600 modules 59.6s → 3.1s, findings identical at every size and
+     on all 11 gated trees (the ship review's 205s-at-800 figure was a
+     denser synthetic tree; same exponent). Lazy is also the honest shape:
+     of 2,200 `KindTable`s built per run only 1,360 were ever read, and
+     `mapper_target`/`outcome_methods`/`action_ports` were built 2,200
+     times and read zero times.
   Smaller, recorded: `EnumShape` keys its extras by line where main keyed
   by node identity, so two statements sharing a line via `;` in an enum
   body cross-contaminate; a VO `__init__(this, value)` (first slot named

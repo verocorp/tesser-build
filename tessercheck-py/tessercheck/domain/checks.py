@@ -1111,30 +1111,27 @@ class KindTableSpec(ts.Spec):
 
 class KindTable(ts.ValueObject):
 
-    _symbols: tuple[Symbol, ...]
-    _blocks: tuple[Text, ...]
+    _entries: tuple[tuple[str, str, str], ...]
 
     def __init__(self, spec: KindTableSpec) -> None:
-        ordered = sorted(spec.entries)
-        object.__setattr__(
-            self, "_symbols", tuple(Symbol(SymbolSpec(module, name)) for module, name, _ in ordered)
-        )
-        object.__setattr__(self, "_blocks", tuple(Text(block) for _, _, block in ordered))
+        object.__setattr__(self, "_entries", tuple(sorted(spec.entries)))
 
     def blocks_in(self, module: Text) -> Names:
-        return Names(tuple(
-            str(block)
-            for symbol, block in zip(self._symbols, self._blocks)
-            if symbol.module() == module
-        ))
+        wanted = str(module)
+        return Names(tuple(block for owner, _, block in self._entries if owner == wanted))
 
     def block_of(self, symbol: Symbol) -> Text | None:
-        wanted = (str(symbol.module()), str(symbol.name()))
+        wanted_module = str(symbol.module())
+        wanted_name = str(symbol.name())
         index = bisect.bisect_left(
-            self._symbols, wanted, key=lambda item: (str(item.module()), str(item.name()))
+            self._entries, (wanted_module, wanted_name), key=lambda item: (item[0], item[1])
         )
-        if index < len(self._symbols) and self._symbols[index] == symbol:
-            return self._blocks[index]
+        if (
+            index < len(self._entries)
+            and self._entries[index][0] == wanted_module
+            and self._entries[index][1] == wanted_name
+        ):
+            return Text(self._entries[index][2])
         return None
 
 
@@ -1179,14 +1176,144 @@ class SharedSpec(ts.ValueObject):
         return self._owner
 
 
+class NameRows(ts.ValueObject):
+
+    _items: tuple[str, ...]
+
+    def __init__(self, items: tuple[str, ...]) -> None:
+        object.__setattr__(self, "_items", items)
+
+    def names(self) -> Names:
+        return Names(self._items)
+
+    def under(self, target: Text) -> Names:
+        wanted = str(target)
+        return Names(tuple(
+            name for name in self._items if name == wanted or name.startswith(wanted + ".")
+        ))
+
+
+class SymbolRows(ts.ValueObject):
+
+    _items: tuple[tuple[str, str], ...]
+
+    def __init__(self, items: tuple[tuple[str, str], ...]) -> None:
+        object.__setattr__(self, "_items", items)
+
+    def symbols(self) -> Symbols:
+        return Symbols(SymbolsSpec(tuple(SymbolSpec(module, name) for module, name in self._items)))
+
+
+class KindRows(ts.ValueObject):
+
+    _items: tuple[tuple[str, str, str], ...]
+
+    def __init__(self, items: tuple[tuple[str, str, str], ...]) -> None:
+        object.__setattr__(self, "_items", items)
+
+    def table(self) -> KindTable:
+        return KindTable(KindTableSpec(self._items))
+
+
+class TargetRows(ts.ValueObject):
+
+    _items: tuple[tuple[str, str, str, str], ...]
+
+    def __init__(self, items: tuple[tuple[str, str, str, str], ...]) -> None:
+        object.__setattr__(self, "_items", items)
+
+    def target(self, source: Symbol) -> Symbol | None:
+        wanted_module = str(source.module())
+        wanted_name = str(source.name())
+        for module, name, target_module, target_name in self._items:
+            if module == wanted_module and name == wanted_name:
+                return Symbol(SymbolSpec(target_module, target_name))
+        return None
+
+    def takers(self, source: Symbol) -> Symbols:
+        wanted_module = str(source.module())
+        wanted_name = str(source.name())
+        return Symbols(SymbolsSpec(tuple(
+            SymbolSpec(module, name)
+            for spec_module, spec_name, module, name in self._items
+            if spec_module == wanted_module and spec_name == wanted_name
+        )))
+
+
+class MakerRows(ts.ValueObject):
+
+    _items: tuple[tuple[str, str, str, str, str], ...]
+
+    def __init__(self, items: tuple[tuple[str, str, str, str, str], ...]) -> None:
+        object.__setattr__(self, "_items", items)
+
+    def ref(self, function: Symbol) -> SpecRef | None:
+        wanted_module = str(function.module())
+        wanted_name = str(function.name())
+        for module, name, spec_module, spec_name, shape in self._items:
+            if module == wanted_module and name == wanted_name:
+                return SpecRef(SpecRefSpec(SymbolSpec(spec_module, spec_name), shape))
+        return None
+
+
+class MethodRows(ts.ValueObject):
+
+    _items: tuple[tuple[str, str, str, str], ...]
+
+    def __init__(self, items: tuple[tuple[str, str, str, str], ...]) -> None:
+        object.__setattr__(self, "_items", items)
+
+    def ref(self, name: Text) -> SpecRef | None:
+        wanted = str(name)
+        for named, spec_module, spec_name, shape in self._items:
+            if named == wanted:
+                return SpecRef(SpecRefSpec(SymbolSpec(spec_module, spec_name), shape))
+        return None
+
+
+class FieldRows(ts.ValueObject):
+
+    _items: tuple[tuple[str, str, str, str, str, str], ...]
+
+    def __init__(self, items: tuple[tuple[str, str, str, str, str, str], ...]) -> None:
+        object.__setattr__(self, "_items", items)
+
+    def ref(self, key: Text) -> SpecRef | None:
+        wanted = str(key)
+        for module, name, attr, spec_module, spec_name, shape in self._items:
+            if f"{module}|{name}|{attr}" == wanted:
+                return SpecRef(SpecRefSpec(SymbolSpec(spec_module, spec_name), shape))
+        return None
+
+
+class SharedRows(ts.ValueObject):
+
+    _items: tuple[tuple[str, str, int, str, str, str, str], ...]
+
+    def __init__(self, items: tuple[tuple[str, str, int, str, str, str, str], ...]) -> None:
+        object.__setattr__(self, "_items", items)
+
+    def shared(self) -> tuple[SharedSpec, ...]:
+        return tuple(
+            SharedSpec(SharedSpecSpec(
+                module,
+                cls,
+                line,
+                SymbolSpec(spec_module, spec_name),
+                SymbolSpec(owner_module, owner_name),
+            ))
+            for module, cls, line, spec_module, spec_name, owner_module, owner_name in self._items
+        )
+
+
 class RegistrySpec(ts.Spec):
 
     def __init__(
         self,
-        kinds: KindTableSpec,
-        domain_enums: tuple[SymbolSpec, ...],
+        kinds: tuple[tuple[str, str, str], ...],
+        domain_enums: tuple[tuple[str, str], ...],
         outcome_methods: tuple[str, ...] = (),
-        action_ports: tuple[SymbolSpec, ...] = (),
+        action_ports: tuple[tuple[str, str], ...] = (),
         contexts: tuple[str, ...] = (),
         export: str | None = None,
         tops: tuple[str, ...] = (),
@@ -1198,7 +1325,7 @@ class RegistrySpec(ts.Spec):
         spec_methods: tuple[tuple[str, str, str, str], ...] = (),
         spec_fields: tuple[tuple[str, str, str, str, str, str], ...] = (),
         spec_takers: tuple[tuple[str, str, str, str], ...] = (),
-        spec_shared: tuple[SharedSpecSpec, ...] = (),
+        spec_shared: tuple[tuple[str, str, int, str, str, str, str], ...] = (),
         package_names: tuple[str, ...] = (),
     ) -> None:
         self.package_names = package_names
@@ -1222,148 +1349,96 @@ class RegistrySpec(ts.Spec):
 
 class Registry(ts.ValueObject):
 
-    _kinds: KindTable
-    _domain_enums: Symbols
-    _outcome_methods: Names
-    _action_ports: Symbols
-    _contexts: Names
+    _kinds: KindRows
+    _domain_enums: SymbolRows
+    _outcome_methods: NameRows
+    _action_ports: SymbolRows
+    _contexts: NameRows
     _export: Text | None
-    _tops: Names
-    _module_names: Names
-    _declared_imports: Names
-    _pure_stdlib: Names
-    _mapper_targets: tuple[tuple[Symbol, Symbol], ...]
-    _spec_makers: tuple[tuple[Symbol, SpecRef], ...]
-    _spec_methods: tuple[tuple[Text, SpecRef], ...]
-    _spec_fields: tuple[tuple[Text, SpecRef], ...]
-    _spec_takers: tuple[tuple[Symbol, Symbol], ...]
-    _spec_shared: tuple[SharedSpec, ...]
-    _package_names: Names
-
-    def module_names(self) -> Names:
-        return self._module_names
-
-    def package_names(self) -> Names:
-        return self._package_names
-
-    def spec_maker(self, function: Symbol) -> SpecRef | None:
-        for named, made in self._spec_makers:
-            if named == function:
-                return made
-        return None
-
-    def spec_method(self, name: Text) -> SpecRef | None:
-        for named, made in self._spec_methods:
-            if named == name:
-                return made
-        return None
-
-    def spec_field(self, key: Text) -> SpecRef | None:
-        for named, made in self._spec_fields:
-            if named == key:
-                return made
-        return None
-
-    def spec_takers(self, spec: Symbol) -> Symbols:
-        return Symbols(SymbolsSpec(tuple(
-            SymbolSpec(str(taker.module()), str(taker.name()))
-            for named, taker in self._spec_takers
-            if named == spec
-        )))
-
-    def spec_shared(self) -> tuple[SharedSpec, ...]:
-        return self._spec_shared
+    _tops: NameRows
+    _module_names: NameRows
+    _declared_imports: NameRows
+    _pure_stdlib: NameRows
+    _mapper_targets: TargetRows
+    _spec_makers: MakerRows
+    _spec_methods: MethodRows
+    _spec_fields: FieldRows
+    _spec_takers: TargetRows
+    _spec_shared: SharedRows
+    _package_names: NameRows
 
     def __init__(self, spec: RegistrySpec) -> None:
-        object.__setattr__(
-            self,
-            "_spec_makers",
-            tuple(
-                (Symbol(SymbolSpec(module, name)), SpecRef(SpecRefSpec(SymbolSpec(spec_module, spec_name), shape)))
-                for module, name, spec_module, spec_name, shape in spec.spec_makers
-            ),
-        )
-        object.__setattr__(
-            self,
-            "_spec_methods",
-            tuple(
-                (Text(name), SpecRef(SpecRefSpec(SymbolSpec(spec_module, spec_name), shape)))
-                for name, spec_module, spec_name, shape in spec.spec_methods
-            ),
-        )
-        object.__setattr__(
-            self,
-            "_spec_fields",
-            tuple(
-                (Text(f"{module}|{name}|{attr}"), SpecRef(SpecRefSpec(SymbolSpec(spec_module, spec_name), shape)))
-                for module, name, attr, spec_module, spec_name, shape in spec.spec_fields
-            ),
-        )
-        object.__setattr__(
-            self,
-            "_spec_takers",
-            tuple(
-                (Symbol(SymbolSpec(spec_module, spec_name)), Symbol(SymbolSpec(module, name)))
-                for spec_module, spec_name, module, name in spec.spec_takers
-            ),
-        )
-        object.__setattr__(self, "_spec_shared", tuple(SharedSpec(item) for item in spec.spec_shared))
-        object.__setattr__(self, "_package_names", Names(spec.package_names))
-        object.__setattr__(self, "_kinds", KindTable(spec.kinds))
-        object.__setattr__(self, "_domain_enums", Symbols(SymbolsSpec(spec.domain_enums)))
-        object.__setattr__(self, "_outcome_methods", Names(spec.outcome_methods))
-        object.__setattr__(self, "_action_ports", Symbols(SymbolsSpec(spec.action_ports)))
-        object.__setattr__(self, "_contexts", Names(spec.contexts))
+        object.__setattr__(self, "_spec_makers", MakerRows(spec.spec_makers))
+        object.__setattr__(self, "_spec_methods", MethodRows(spec.spec_methods))
+        object.__setattr__(self, "_spec_fields", FieldRows(spec.spec_fields))
+        object.__setattr__(self, "_spec_takers", TargetRows(spec.spec_takers))
+        object.__setattr__(self, "_spec_shared", SharedRows(spec.spec_shared))
+        object.__setattr__(self, "_package_names", NameRows(spec.package_names))
+        object.__setattr__(self, "_kinds", KindRows(spec.kinds))
+        object.__setattr__(self, "_domain_enums", SymbolRows(spec.domain_enums))
+        object.__setattr__(self, "_outcome_methods", NameRows(spec.outcome_methods))
+        object.__setattr__(self, "_action_ports", SymbolRows(spec.action_ports))
+        object.__setattr__(self, "_contexts", NameRows(spec.contexts))
         object.__setattr__(self, "_export", Text(spec.export) if spec.export else None)
-        object.__setattr__(self, "_tops", Names(spec.tops))
-        object.__setattr__(self, "_module_names", Names(spec.module_names))
-        object.__setattr__(self, "_declared_imports", Names(spec.declared_imports))
-        object.__setattr__(self, "_pure_stdlib", Names(spec.pure_stdlib))
-        object.__setattr__(
-            self,
-            "_mapper_targets",
-            tuple(
-                (Symbol(SymbolSpec(module, name)), Symbol(SymbolSpec(target_module, target_name)))
-                for module, name, target_module, target_name in spec.mapper_targets
-            ),
-        )
+        object.__setattr__(self, "_tops", NameRows(spec.tops))
+        object.__setattr__(self, "_module_names", NameRows(spec.module_names))
+        object.__setattr__(self, "_declared_imports", NameRows(spec.declared_imports))
+        object.__setattr__(self, "_pure_stdlib", NameRows(spec.pure_stdlib))
+        object.__setattr__(self, "_mapper_targets", TargetRows(spec.mapper_targets))
+
+    def module_names(self) -> Names:
+        return self._module_names.names()
+
+    def package_names(self) -> Names:
+        return self._package_names.names()
+
+    def spec_maker(self, function: Symbol) -> SpecRef | None:
+        return self._spec_makers.ref(function)
+
+    def spec_method(self, name: Text) -> SpecRef | None:
+        return self._spec_methods.ref(name)
+
+    def spec_field(self, key: Text) -> SpecRef | None:
+        return self._spec_fields.ref(key)
+
+    def spec_takers(self, spec: Symbol) -> Symbols:
+        return self._spec_takers.takers(spec)
+
+    def spec_shared(self) -> tuple[SharedSpec, ...]:
+        return self._spec_shared.shared()
 
     def contexts(self) -> Names:
-        return self._contexts
+        return self._contexts.names()
 
     def export(self) -> Text | None:
         return self._export
 
     def tops(self) -> Names:
-        return self._tops
+        return self._tops.names()
 
     def modules_under(self, target: Text) -> Names:
-        wanted = str(target)
-        return Names(tuple(name for name in self._module_names if name == wanted or name.startswith(wanted + ".")))
+        return self._module_names.under(target)
 
     def declared_imports(self) -> Names:
-        return self._declared_imports
+        return self._declared_imports.names()
 
     def pure_stdlib(self) -> Names:
-        return self._pure_stdlib
+        return self._pure_stdlib.names()
 
     def mapper_target(self, mapper: Symbol) -> Symbol | None:
-        for source, target in self._mapper_targets:
-            if source == mapper:
-                return target
-        return None
+        return self._mapper_targets.target(mapper)
 
     def kinds(self) -> KindTable:
-        return self._kinds
+        return self._kinds.table()
 
     def domain_enums(self) -> Symbols:
-        return self._domain_enums
+        return self._domain_enums.symbols()
 
     def outcome_methods(self) -> Names:
-        return self._outcome_methods
+        return self._outcome_methods.names()
 
     def action_ports(self) -> Symbols:
-        return self._action_ports
+        return self._action_ports.symbols()
 
 
 class ImportSpec(ts.Spec):
@@ -9705,10 +9780,10 @@ class Codebase(ts.AggregateRoot):
             (source[0], source[1], target[0], target[1]) for source, target in sorted(self._mapper_target.items())
         )
         registry = RegistrySpec(
-            KindTableSpec(kind_rows),
-            tuple(SymbolSpec(module_name, class_name) for module_name, class_name in domain_enum_rows),
+            kind_rows,
+            domain_enum_rows,
             outcome_method_rows,
-            tuple(SymbolSpec(module_name, class_name) for module_name, class_name in action_port_rows),
+            action_port_rows,
             contexts=context_rows,
             export=self._export,
             tops=top_rows,
@@ -9778,10 +9853,10 @@ class Codebase(ts.AggregateRoot):
         self._spec_methods = {name: made for name, made in returning.items() if made is not None}
         self._spec_shared.sort(key=lambda entry: entry[:3])
         registry = RegistrySpec(
-            KindTableSpec(kind_rows),
-            tuple(SymbolSpec(module_name, class_name) for module_name, class_name in domain_enum_rows),
+            kind_rows,
+            domain_enum_rows,
             outcome_method_rows,
-            tuple(SymbolSpec(module_name, class_name) for module_name, class_name in action_port_rows),
+            action_port_rows,
             contexts=context_rows,
             export=self._export,
             tops=top_rows,
@@ -9809,12 +9884,14 @@ class Codebase(ts.AggregateRoot):
                 for taker in sorted(takers)
             ),
             spec_shared=tuple(
-                SharedSpecSpec(
+                (
                     shared_module,
                     shared_class,
                     line,
-                    SymbolSpec(str(shared_spec.module()), str(shared_spec.name())),
-                    SymbolSpec(shared_owner[0], shared_owner[1]),
+                    str(shared_spec.module()),
+                    str(shared_spec.name()),
+                    shared_owner[0],
+                    shared_owner[1],
                 )
                 for shared_module, shared_class, line, shared_spec, shared_owner in self._spec_shared
             ),

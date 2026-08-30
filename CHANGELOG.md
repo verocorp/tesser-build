@@ -81,22 +81,40 @@ tree's zero-findings gate is green.
   store's `AsyncContextManager[A, A]` no longer passes as one port
   (`Annotation.form()` carries `multi_slice` past `Names`' dedup). Each
   has a test.
+- **The quadratic run is fixed — the third measured divergence resolved
+  with no ruling needed.** The decomposition had made the run quadratic in
+  tree size: TB080 makes whole-tree facts cross every construction
+  boundary as primitives, TB016 makes each crossing wrap them back into
+  value objects, and the new per-class/per-method boundaries multiplied
+  the crossings (~2,200 `Registry` constructions on a 200-module tree,
+  each O(classes)). Every `Registry` field is now a one-field holder value
+  object (`NameRows`, `KindRows`, `SymbolRows`, `TargetRows`, `MakerRows`,
+  `MethodRows`, `FieldRows`, `SharedRows`) that stores the spec's tuple
+  verbatim — TB016's compound clause starts at two stored fields — and
+  materializes the real `Names`/`KindTable`/`Symbols` lazily in its
+  accessor, so `Registry.__init__` is 17 O(1) constructions and
+  `KindTable` keeps one primitive entries tuple. Both rules hold as
+  written: the analyzer built from the fix reports zero findings over its
+  own source. Measured: last-doubling exponent 2.04 → 1.45 (fitted 1.17
+  vs main's 1.14), 800 synthetic modules 14.5s → 1.2s, all 11 gated trees
+  11.0s → 5.5s (main 3.7s), findings identical everywhere.
 
 ### Known
-- **Three measured divergences from main are open rulings, not fixed
+- **Two measured divergences from main are open rulings, not fixed
   here** (`TODOS.md`, "checks.py after the TB051 burn-down"): a quoted
   annotation now resolves where main's never did (a re-emit of every
   example with every annotation quoted loses 16 findings on python-app —
   mypy says the spellings are one type; the rule should say whether
-  tessercheck agrees); `contexts`/`tops` are derived from every source
-  file, parsed or not, so an unparseable `.pyi` can change its siblings'
-  placement; and the per-class/per-method `Registry` rebuilds make the
-  run quadratic in tree size (main linear; 800 synthetic modules 2.8s vs
-  205s) — measure a consumer tree before relying on the gate there. The
-  differential run is byte-identical on all eleven gated trees.
-- The analyzer's self-check went from 2.2s to 4.1s: `Registry`,
-  `SpecReader`, and `AnnotationPolicy` are rebuilt per class. Recorded with
-  three options in `TODOS.md` ("checks.py after the TB051 burn-down"), not
+  tessercheck agrees); and `contexts`/`tops` are derived from every
+  source file, parsed or not, so an unparseable `.pyi` can change its
+  siblings' placement. The third measured divergence — the quadratic run
+  — is fixed above. The differential run is byte-identical on all eleven
+  gated trees.
+- A flat ~2× constant against main remains after the quadratic fix (all
+  11 gated trees 5.5s vs 3.7s): the decomposition allocates more objects
+  per module, and one O(modules²) term main also has (a whole-tree
+  frozenset rebuilt inside the per-module dispatch loop) survives.
+  Recorded in `TODOS.md` ("checks.py after the TB051 burn-down"), not
   fixed here.
 - `Annotation`, `Names`, and `KindTable` have equality tests; the other
   new value objects and the two entities' `identity()` do not (convention
