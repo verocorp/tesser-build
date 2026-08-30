@@ -77,6 +77,8 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "field.name()": "⟨field⟩",
     "method.name()": "⟨method⟩",
     "arg": "⟨name⟩",
+    "decl.module()": "⟨module⟩",
+    "decl.name()": "⟨class⟩",
 }
 
 APPLIES_TO: typing.Final[dict[str, str]] = {
@@ -191,8 +193,6 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Codebase._component_violations": "component class",
     "Codebase._mapper_violations": "mapper class",
     "Codebase._provenance_violations": "public service method",
-    "Codebase._app_config_violations": "config class",
-    "Codebase._component_config_violations": "config class",
     "Codebase._spec_violations": "spec class",
     "Codebase._dto_violations": "request/response DTO",
 }
@@ -368,6 +368,49 @@ def render(  # tesser:debt TB051
                             bound_args[name] = arg.value
                     if bound_args not in bindings:
                         bindings.append(bound_args)
+            spec_names: list[str] = []
+            for member in cls.body:
+                if isinstance(member, ast.FunctionDef) and member.name == "__init__":
+                    for spec_arg in member.args.args[1:]:
+                        if isinstance(spec_arg.annotation, ast.Name) and spec_arg.annotation.id.endswith("Spec"):
+                            spec_names.append(spec_arg.annotation.id)
+            for spec_name in spec_names:
+                spec_cls = next(
+                    (n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == spec_name), None
+                )
+                spec_init = next(
+                    (m for m in spec_cls.body if isinstance(m, ast.FunctionDef) and m.name == "__init__"),
+                    None,
+                ) if spec_cls is not None else None
+                if spec_init is None:
+                    continue
+                spec_params = [a.arg for a in spec_init.args.args[1:]]
+                defaulted = spec_params[len(spec_params) - len(spec_init.args.defaults):]
+                for node in ast.walk(tree):
+                    if not (
+                        isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Name)
+                        and node.func.id == spec_name
+                    ):
+                        continue
+                    spec_bound: dict[str, str | None] = {}
+                    for name, default in zip(defaulted, spec_init.args.defaults):
+                        if isinstance(default, ast.Constant) and (
+                            default.value is None or isinstance(default.value, str)
+                        ):
+                            spec_bound[name] = default.value
+                    for name, arg in zip(spec_params, node.args):
+                        if isinstance(arg, ast.Constant) and (arg.value is None or isinstance(arg.value, str)):
+                            spec_bound[name] = arg.value
+                    for keyword in node.keywords:
+                        if (
+                            keyword.arg is not None
+                            and isinstance(keyword.value, ast.Constant)
+                            and (keyword.value.value is None or isinstance(keyword.value.value, str))
+                        ):
+                            spec_bound[keyword.arg] = keyword.value.value
+                    if spec_bound not in bindings:
+                        bindings.append(spec_bound)
             for binding in bindings or [{}]:
                 for call in calls:
                     fields = spec_fields(call)
@@ -390,6 +433,7 @@ def render(  # tesser:debt TB051
                         )
                     if code is None:
                         continue
+                    used: list[str] = []
                     message_node = fields["message"]
                     if isinstance(message_node, ast.Constant) and isinstance(
                         message_node.value, str
@@ -413,7 +457,8 @@ def render(  # tesser:debt TB051
                             text = ast.unparse(expr)
                             if isinstance(expr, ast.Name) and expr.id in binding:
                                 bound = binding[expr.id]
-                                if bound is None:
+                                used.append(expr.id)
+                                if bound is None or bound == "":
                                     dropped = True
                                     break
                                 parts.append(bound)
@@ -458,8 +503,14 @@ def render(  # tesser:debt TB051
                         )
                     shape = WHERE_PREFIX.sub("", head)
                     subject = binding.get("subject")
+                    named_subject = next(
+                        (binding[name] for name in used if isinstance(binding.get(name), str) and binding[name] in APPLIES_TO),
+                        None,
+                    )
                     key = (
-                        subject
+                        named_subject
+                        if isinstance(named_subject, str)
+                        else subject
                         if isinstance(subject, str)
                         else f"{cls.name}.{method.name}"
                     )

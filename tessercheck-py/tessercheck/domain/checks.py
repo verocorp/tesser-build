@@ -1197,8 +1197,25 @@ class Annotation(ts.ValueObject):
     _produced: Names
     _produced_refs: Names
     _leaves: Names | None
+    _primary: Text | None
+    _quoted: Names
 
     def __init__(self, node: ast.expr) -> None:  # tesser:debt TB080
+        primary: ast.expr = node
+        quote_marks: list[str] = []
+        if isinstance(primary, ast.Constant) and isinstance(primary.value, str):
+            quote_marks.append("quoted")
+            try:
+                primary = ast.parse(primary.value, mode="eval").body
+            except SyntaxError:
+                primary = node
+        while isinstance(primary, ast.Subscript):
+            primary = primary.value
+        primary_ref: str | None = None
+        if isinstance(primary, ast.Name):
+            primary_ref = primary.id
+        elif isinstance(primary, ast.Attribute) and isinstance(primary.value, (ast.Name, ast.Attribute)):
+            primary_ref = f"{ast.unparse(primary.value)}.{primary.attr}"
         cursor: ast.expr | None = node
         head: str | None = None
         while cursor is not None:
@@ -1355,6 +1372,8 @@ class Annotation(ts.ValueObject):
         object.__setattr__(self, "_produced", Names(tuple(produced)))
         object.__setattr__(self, "_produced_refs", Names(tuple(produced_refs)))
         object.__setattr__(self, "_leaves", Names(tuple(leaves)) if leaves is not None else None)
+        object.__setattr__(self, "_primary", Text(primary_ref) if primary_ref else None)
+        object.__setattr__(self, "_quoted", Names(tuple(quote_marks)))
 
     def source(self) -> Text:
         return self._source
@@ -1379,6 +1398,12 @@ class Annotation(ts.ValueObject):
 
     def leaves(self) -> Names | None:
         return self._leaves
+
+    def primary(self) -> Text | None:
+        return self._primary
+
+    def quoted(self) -> Names:
+        return self._quoted
 
 
 class AnnotationPolicySpec(ts.Spec):
@@ -1431,6 +1456,303 @@ class AnnotationPolicy(ts.ValueObject):
             if block is None or str(block) not in self._blocks:
                 rejected.append(leaf)
         return Names(tuple(rejected))
+
+
+class SlotSpec(ts.Spec):
+
+    def __init__(self, name: str, block: str | None, touched: tuple[str, ...]) -> None:
+        self.name = name
+        self.block = block
+        self.touched = touched
+
+
+class Slot(ts.ValueObject):
+
+    _name: Text
+    _block: Text | None
+    _touched: tuple[Text, ...]
+
+    def __init__(self, spec: SlotSpec) -> None:
+        object.__setattr__(self, "_name", Text(spec.name))
+        object.__setattr__(self, "_block", Text(spec.block) if spec.block else None)
+        object.__setattr__(self, "_touched", tuple(Text(block) for block in spec.touched))
+
+    def name(self) -> Text:
+        return self._name
+
+    def block(self) -> Text | None:
+        return self._block
+
+    def touched(self) -> tuple[Text, ...]:
+        return self._touched
+
+
+class SignatureSpec(ts.Spec):
+
+    def __init__(
+        self,
+        where: str,
+        path: str,
+        lineno: int,
+        name: str,
+        open: tuple[str, ...],
+        params: tuple[SlotSpec, ...],
+        returns: SlotSpec | None,
+    ) -> None:
+        self.where = where
+        self.path = path
+        self.lineno = lineno
+        self.name = name
+        self.open = open
+        self.params = params
+        self.returns = returns
+
+
+class Signature(ts.ValueObject):
+
+    _where: Text
+    _path: Path
+    _lineno: Line
+    _name: Text
+    _open: Names
+    _params: tuple[Slot, ...]
+    _returns: Slot | None
+
+    def __init__(self, spec: SignatureSpec) -> None:
+        object.__setattr__(self, "_where", Text(spec.where))
+        object.__setattr__(self, "_path", Path(spec.path))
+        object.__setattr__(self, "_lineno", Line(spec.lineno))
+        object.__setattr__(self, "_name", Text(spec.name))
+        object.__setattr__(self, "_open", Names(spec.open))
+        object.__setattr__(self, "_params", tuple(Slot(item) for item in spec.params))
+        object.__setattr__(self, "_returns", Slot(spec.returns) if spec.returns is not None else None)
+
+    def where(self) -> Text:
+        return self._where
+
+    def path(self) -> Path:
+        return self._path
+
+    def lineno(self) -> Line:
+        return self._lineno
+
+    def name(self) -> Text:
+        return self._name
+
+    def open(self) -> Names:
+        return self._open
+
+    def params(self) -> tuple[Slot, ...]:
+        return self._params
+
+    def returns(self) -> Slot | None:
+        return self._returns
+
+
+class SignaturePolicySpec(ts.Spec):
+
+    def __init__(
+        self,
+        param_block: str,
+        return_block: str | None,
+        subject: str,
+        code: str,
+        taking: str,
+        leading_context: bool = False,
+        constructs: str = "",
+    ) -> None:
+        self.param_block = param_block
+        self.return_block = return_block
+        self.subject = subject
+        self.code = code
+        self.taking = taking
+        self.leading_context = leading_context
+        self.constructs = constructs
+
+
+class SignaturePolicy(ts.ValueObject):
+
+    _param_block: Text
+    _return_block: Text | None
+    _subject: Text
+    _code: Code
+    _taking: Text
+    _leading_context: Names
+    _constructs: Text | None
+
+    def __init__(self, spec: SignaturePolicySpec) -> None:
+        object.__setattr__(self, "_param_block", Text(spec.param_block))
+        object.__setattr__(self, "_return_block", Text(spec.return_block) if spec.return_block else None)
+        object.__setattr__(self, "_subject", Text(spec.subject))
+        object.__setattr__(self, "_code", Code(spec.code))
+        object.__setattr__(self, "_taking", Text(spec.taking))
+        object.__setattr__(self, "_leading_context", Names(("leading",) if spec.leading_context else ()))
+        object.__setattr__(self, "_constructs", Text(spec.constructs) if spec.constructs else None)
+
+    def violations(self, signature: Signature) -> tuple[Violation, ...]:
+        param_block = str(self._param_block)
+        return_block = str(self._return_block) if self._return_block is not None else None
+        subject = str(self._subject)
+        code = str(self._code)
+        taking = str(self._taking)
+        where = str(signature.where())
+        path = str(signature.path())
+        line = int(signature.lineno())
+        expected = TS_NAME_BY_BLOCK[param_block]
+        found: list[Violation] = []
+        params = list(signature.params())
+        if self._leading_context and params and str(params[0].block()) == JOB_CONTEXT_BLOCK:
+            params = params[1:]
+        for slot in params:
+            if str(slot.block()) == JOB_CONTEXT_BLOCK:
+                arg = str(slot.name())
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB081",
+                        f"{where} parameter {arg!r} is a ts.JobContext; a job context "
+                        "is threaded as the leading parameter of an action port call and "
+                        "nowhere else",
+                    ))
+                )
+        returns = signature.returns()
+        if returns is not None and str(returns.block()) == JOB_CONTEXT_BLOCK:
+            found.append(
+                Violation(ViolationSpec(
+                    path,
+                    line,
+                    "TB081",
+                    f"{where} returns a ts.JobContext; a job context is threaded as the "
+                    "leading parameter of an action port call and nowhere else",
+                ))
+            )
+        if signature.open():
+            found.append(
+                Violation(ViolationSpec(
+                    path,
+                    line,
+                    code,
+                    f"{where} uses *args/**kwargs; {taking}",
+                ))
+            )
+        if len(params) != 1:
+            found.append(
+                Violation(ViolationSpec(
+                    path,
+                    line,
+                    code,
+                    f"{where} takes {len(params)} parameters; {taking}",
+                ))
+            )
+        for slot in params:
+            if str(slot.block()) != param_block:
+                arg = str(slot.name())
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        code,
+                        f"{where} parameter {arg!r} is not a {expected}; {taking}",
+                    ))
+                )
+        if return_block is not None and (
+            returns is None or str(returns.block()) != return_block
+        ):
+            found.append(
+                Violation(ViolationSpec(
+                    path,
+                    line,
+                    code,
+                    f"{where} does not return a {TS_NAME_BY_BLOCK[return_block]}; "
+                    f"{subject} returns a {TS_NAME_BY_BLOCK[return_block]}",
+                ))
+            )
+        return tuple(found)
+
+    def missing_constructor_violations(self, decl: "ClassDecl") -> tuple[Violation, ...]:
+        constructs = str(self._constructs) if self._constructs is not None else ""
+        if decl.constructor() is not None:
+            return ()
+        return (
+            Violation(ViolationSpec(
+                str(decl.path()),
+                int(decl.lineno()),
+                "TB080",
+                f"{decl.module()}.{decl.name()} defines no __init__; "
+                f"{constructs} constructs from exactly one ts.Spec",
+            )),
+        )
+
+
+class RecordSignaturePolicySpec(ts.Spec):
+
+    def __init__(self, subject: str, leading_context: bool) -> None:
+        self.subject = subject
+        self.leading_context = leading_context
+
+
+class RecordSignaturePolicy(ts.ValueObject):
+
+    _subject: Text
+    _leading_context: Names
+
+    def __init__(self, spec: RecordSignaturePolicySpec) -> None:
+        object.__setattr__(self, "_subject", Text(spec.subject))
+        object.__setattr__(self, "_leading_context", Names(("leading",) if spec.leading_context else ()))
+
+    def violations(self, decl: "ClassDecl") -> tuple[Violation, ...]:
+        subject = str(self._subject)
+        found: list[Violation] = []
+        for signature in decl.signatures():
+            where = str(signature.where())
+            path = str(signature.path())
+            line = int(signature.lineno())
+            taken = list(signature.params())
+            for slot in taken[1:] if self._leading_context else taken:
+                if str(slot.block()) == JOB_CONTEXT_BLOCK:
+                    arg = str(slot.name())
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            line,
+                            "TB081",
+                            f"{where} parameter {arg!r} is a ts.JobContext; a job "
+                            "context is threaded as the leading parameter of an action "
+                            "port call and nowhere else",
+                        ))
+                    )
+            returns = signature.returns()
+            if returns is not None and str(returns.block()) == JOB_CONTEXT_BLOCK:
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB081",
+                        f"{where} returns a ts.JobContext; a job context is threaded as "
+                        "the leading parameter of an action port call and nowhere else",
+                    ))
+                )
+            slots = list(signature.params())
+            if returns is not None:
+                slots.append(returns)
+            for slot in slots:
+                touched: str | None = None
+                for block in slot.touched():
+                    if str(block) in DOMAIN_OBJECT_BLOCKS:
+                        touched = str(block)
+                        break
+                if touched is not None:
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            line,
+                            "TB081",
+                            f"{where} carries {KIND_NAME[touched]} in its signature; "
+                            f"{subject} speaks records, never domain objects",
+                        ))
+                    )
+        return tuple(found)
 
 
 class FieldSpec(ts.Spec):
@@ -1636,6 +1958,7 @@ class ClassDecl(ts.Entity):
     _parameter_policy: AnnotationPolicy
     _fields: tuple[Field, ...]
     _methods: tuple[Method, ...]
+    _signatures: tuple[Signature, ...]
     _leaf: Text | None
 
     def __init__(self, spec: ClassDeclSpec) -> None:
@@ -1667,6 +1990,37 @@ class ClassDecl(ts.Entity):
                 methods.append(Method(MethodSpec(stmt, node.name)))
         object.__setattr__(self, "_fields", tuple(fields))
         object.__setattr__(self, "_methods", tuple(methods))
+        scope = self._scope
+        kinds = self._registry.kinds()
+
+        def slot(name: str, annotation: Annotation | None, unquote: bool) -> SlotSpec:
+            if annotation is None:
+                return SlotSpec(name, None, ())
+            block: str | None = None
+            primary = annotation.primary()
+            if primary is not None and (unquote or not annotation.quoted()):
+                resolved = scope.resolve(primary)
+                block_text = kinds.block_of(resolved) if resolved is not None else None
+                block = str(block_text) if block_text is not None else None
+            touched: list[str] = []
+            for symbol in scope.symbols(annotation):
+                named = kinds.block_of(symbol)
+                if named is not None:
+                    touched.append(str(named))
+            return SlotSpec(name, block, tuple(touched))
+
+        signatures: list[Signature] = []
+        for method in methods:
+            signatures.append(Signature(SignatureSpec(
+                f"{spec.module}.{node.name}.{method.name()}",
+                spec.path,
+                int(method.lineno()),
+                str(method.name()),
+                tuple(method.open()),
+                tuple(slot(str(param.name()), param.annotation(), True) for param in method.params()),
+                slot("return", method.returns(), False) if method.returns() is not None else None,
+            )))
+        object.__setattr__(self, "_signatures", tuple(signatures))
         stored = [field for field in fields if str(field.annotation().head()) != "ClassVar"]
         leaf: str | None = None
         if len(stored) == 1:
@@ -1678,6 +2032,27 @@ class ClassDecl(ts.Entity):
     @property
     def identity(self) -> Text:
         return self._identity
+
+    def module(self) -> Text:
+        return self._module
+
+    def path(self) -> Path:
+        return self._path
+
+    def name(self) -> Text:
+        return self._name
+
+    def lineno(self) -> Line:
+        return self._lineno
+
+    def signatures(self) -> tuple[Signature, ...]:
+        return self._signatures
+
+    def constructor(self) -> Signature | None:
+        for signature in self._signatures:
+            if str(signature.name()) == "__init__":
+                return signature
+        return None
 
     def vo_field_violations(self) -> tuple[Violation, ...]:
         found: list[Violation] = []
@@ -2038,6 +2413,33 @@ class ClassDecl(ts.Entity):
                     ))
                 )
         return tuple(found)
+
+
+AGGREGATE_CONSTRUCTOR: typing.Final[SignaturePolicy] = SignaturePolicy(SignaturePolicySpec(
+    "spec", None, "a domain constructor", "TB080", "a domain constructor takes exactly one ts.Spec", constructs="an aggregate"
+))
+
+ENTITY_CONSTRUCTOR: typing.Final[SignaturePolicy] = SignaturePolicy(SignaturePolicySpec(
+    "spec", None, "a domain constructor", "TB080", "a domain constructor takes exactly one ts.Spec", constructs="an entity"
+))
+
+APP_CONFIG_CONSTRUCTOR: typing.Final[SignaturePolicy] = SignaturePolicy(SignaturePolicySpec(
+    "app_spec", None, "a config constructor", "TB080", "a config constructor takes exactly one ts.Spec", constructs="a config"
+))
+
+COMPONENT_CONFIG_CONSTRUCTOR: typing.Final[SignaturePolicy] = SignaturePolicy(SignaturePolicySpec(
+    "component_spec", None, "a config constructor", "TB080", "a config constructor takes exactly one ts.Spec", constructs="a config"
+))
+
+CLIENT_METHOD: typing.Final[SignaturePolicy] = SignaturePolicy(SignaturePolicySpec(
+    "request", "response", "a client method", "TB081", "a client method takes exactly one ts.Request"
+))
+
+ADAPTER_RECORDS: typing.Final[RecordSignaturePolicy] = RecordSignaturePolicy(RecordSignaturePolicySpec("an adapter", True))
+
+HANDLER_RECORDS: typing.Final[RecordSignaturePolicy] = RecordSignaturePolicy(RecordSignaturePolicySpec("an adapter", False))
+
+PORT_RECORDS: typing.Final[RecordSignaturePolicy] = RecordSignaturePolicy(RecordSignaturePolicySpec("a port", True))
 
 
 class ModuleSpec(ts.Spec):
@@ -2468,6 +2870,11 @@ class Codebase(ts.AggregateRoot):
             KindTableSpec(tuple((module_name, class_name, block_name) for (module_name, class_name), block_name in sorted(blocks.items()))),
             tuple(SymbolSpec(module_name, class_name) for module_name, class_name in sorted(self._domain_enums)),
         )
+
+        def constructed(policy: SignaturePolicy, decl: ClassDecl) -> tuple[Violation, ...]:
+            init = decl.constructor()
+            return policy.missing_constructor_violations(decl) if init is None else policy.violations(init)
+
         self._spec_makers = {}
         checked = [
             module
@@ -2538,15 +2945,15 @@ class Codebase(ts.AggregateRoot):
             for cls, decl in zip(module.class_defs(), module.class_decls(registry)):
                 block = blocks.get((module.name(), cls.name))
                 if block == "aggregate":
-                    found.extend(self._constructor_violations(module, cls, blocks, "an aggregate"))  # tesser:debt TB051
+                    found.extend(constructed(AGGREGATE_CONSTRUCTOR, decl))
                 elif block == "entity":
-                    found.extend(self._constructor_violations(module, cls, blocks, "an entity"))  # tesser:debt TB051
+                    found.extend(constructed(ENTITY_CONSTRUCTOR, decl))
                 elif block == "component":
                     found.extend(self._component_violations(module, cls, blocks))  # tesser:debt TB051
                 elif block == "component_config":
-                    found.extend(self._component_config_violations(module, cls, blocks))  # tesser:debt TB051
+                    found.extend(constructed(COMPONENT_CONFIG_CONSTRUCTOR, decl))
                 elif block == "app_config":
-                    found.extend(self._app_config_violations(module, cls, blocks))  # tesser:debt TB051
+                    found.extend(constructed(APP_CONFIG_CONSTRUCTOR, decl))
                 elif block == "valueobject":
                     found.extend(self._valueobject_violations(module, cls, blocks))  # tesser:debt TB051
                     found.extend(decl.vo_field_violations())
@@ -2569,39 +2976,16 @@ class Codebase(ts.AggregateRoot):
                 elif block in ("request", "response", "port_request", "port_response"):
                     found.extend(self._dto_violations(module, cls, blocks))  # tesser:debt TB051
                 elif block == "client":
-                    for item in cls.body:
-                        if not isinstance(
-                            item, (ast.FunctionDef, ast.AsyncFunctionDef)
-                        ) or (item.name.startswith("_") and item.name != PUBLIC_CALL):
+                    for signature in decl.signatures():
+                        if str(signature.name()).startswith("_") and str(signature.name()) != PUBLIC_CALL:
                             continue
-                        found.extend(
-                            self._signature_violations(  # tesser:debt TB051
-                                module,
-                                f"{module.name()}.{cls.name}.{item.name}",
-                                item.lineno,
-                                item,
-                                "request",
-                                "response",
-                                "a client method",
-                                "TB081",
-                                blocks,
-                                "a client method takes exactly one ts.Request",
-                            )
-                        )
+                        found.extend(CLIENT_METHOD.violations(signature))
                 elif block in ("repository", "gateway", "handler"):
-                    found.extend(
-                        self._record_signature_violations(  # tesser:debt TB051
-                            module, cls, blocks, "an adapter", block != "handler"
-                        )
-                    )
+                    found.extend((HANDLER_RECORDS if block == "handler" else ADAPTER_RECORDS).violations(decl))
                     if block != "handler":
                         found.extend(self._held_context_violations(module, cls, blocks))  # tesser:debt TB051
                 elif block == "port":
-                    found.extend(
-                        self._record_signature_violations(  # tesser:debt TB051
-                            module, cls, blocks, "a port", True
-                        )
-                    )
+                    found.extend(PORT_RECORDS.violations(decl))
                     if self._locate(  # tesser:debt TB051
                         module.name(), module.is_package(), contexts, self._export
                     ) in (
@@ -6918,70 +7302,6 @@ class Codebase(ts.AggregateRoot):
                 )
         return tuple(found)
 
-    def _record_signature_violations(
-        self,
-        module: Module,
-        cls: ast.ClassDef,
-        blocks: dict[tuple[str, str], str],
-        subject: str,
-        leading_context: bool = False,
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for item in cls.body:
-            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                continue
-            where = f"{module.name()}.{cls.name}.{item.name}"
-            taken = [
-                arg
-                for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
-                if arg.arg != "self"
-            ]
-            for arg in taken[1:] if leading_context else taken:
-                if self._names_job_context(module, arg.annotation, blocks):  # tesser:debt TB051
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            item.lineno,
-                            "TB081",
-                            f"{where} parameter {arg.arg!r} is a ts.JobContext; a job "
-                            "context is threaded as the leading parameter of an action "
-                            "port call and nowhere else",
-                        ))
-                    )
-            if self._names_job_context(module, item.returns, blocks):  # tesser:debt TB051
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        item.lineno,
-                        "TB081",
-                        f"{where} returns a ts.JobContext; a job context is threaded as "
-                        "the leading parameter of an action port call and nowhere else",
-                    ))
-                )
-            annotations = [
-                arg.annotation for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
-            ]
-            annotations.append(item.returns)
-            for annotation in annotations:
-                touched: str | None = None
-                for sub in ast.walk(annotation) if annotation is not None else ():
-                    if isinstance(sub, (ast.Name, ast.Attribute)):
-                        key = module._resolve(sub)
-                        if key is not None and blocks.get(key) in DOMAIN_OBJECT_BLOCKS:
-                            touched = blocks[key]
-                            break
-                if touched is not None:
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            item.lineno,
-                            "TB081",
-                            f"{where} carries {KIND_NAME[touched]} in its signature; "
-                            f"{subject} speaks records, never domain objects",
-                        ))
-                    )
-        return tuple(found)
-
     def _valueobject_violations(
         self,
         module: Module,
@@ -8200,115 +8520,6 @@ class Codebase(ts.AggregateRoot):
                     ))
                 )
         return tuple(found)
-
-    def _constructor_violations(
-        self,
-        module: Module,
-        cls: ast.ClassDef,
-        blocks: dict[tuple[str, str], str],
-        subject: str,
-    ) -> tuple[Violation, ...]:
-        init = (next(
-                    (
-                        item
-                        for item in cls.body
-                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "__init__"
-                    ),
-                    None,
-                ))
-        if init is None:
-            return (
-                Violation(ViolationSpec(
-                    module.path(),
-                    cls.lineno,
-                    "TB080",
-                    f"{module.name()}.{cls.name} defines no __init__; "
-                    f"{subject} constructs from exactly one ts.Spec",
-                )),
-            )
-        where = f"{module.name()}.{cls.name}.__init__"
-        return self._signature_violations(  # tesser:debt TB051
-            module,
-            where,
-            init.lineno,
-            init,
-            "spec",
-            None,
-            "a domain constructor",
-            "TB080",
-            blocks,
-            "a domain constructor takes exactly one ts.Spec",
-        )
-
-    def _app_config_violations(
-        self, module: Module, cls: ast.ClassDef, blocks: dict[tuple[str, str], str]
-    ) -> tuple[Violation, ...]:
-        init = (next(
-                    (
-                        item
-                        for item in cls.body
-                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "__init__"
-                    ),
-                    None,
-                ))
-        if init is None:
-            return (
-                Violation(ViolationSpec(
-                    module.path(),
-                    cls.lineno,
-                    "TB080",
-                    f"{module.name()}.{cls.name} defines no __init__; "
-                    "a config constructs from exactly one ts.Spec",
-                )),
-            )
-        where = f"{module.name()}.{cls.name}.__init__"
-        return self._signature_violations(  # tesser:debt TB051
-            module,
-            where,
-            init.lineno,
-            init,
-            "app_spec",
-            None,
-            "a config constructor",
-            "TB080",
-            blocks,
-            "a config constructor takes exactly one ts.Spec",
-        )
-
-    def _component_config_violations(
-        self, module: Module, cls: ast.ClassDef, blocks: dict[tuple[str, str], str]
-    ) -> tuple[Violation, ...]:
-        init = (next(
-                    (
-                        item
-                        for item in cls.body
-                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "__init__"
-                    ),
-                    None,
-                ))
-        if init is None:
-            return (
-                Violation(ViolationSpec(
-                    module.path(),
-                    cls.lineno,
-                    "TB080",
-                    f"{module.name()}.{cls.name} defines no __init__; "
-                    "a config constructs from exactly one ts.Spec",
-                )),
-            )
-        where = f"{module.name()}.{cls.name}.__init__"
-        return self._signature_violations(  # tesser:debt TB051
-            module,
-            where,
-            init.lineno,
-            init,
-            "component_spec",
-            None,
-            "a config constructor",
-            "TB080",
-            blocks,
-            "a config constructor takes exactly one ts.Spec",
-        )
 
     def _signature_violations(
         self,
