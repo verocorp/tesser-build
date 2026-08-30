@@ -59,6 +59,20 @@ holds module imports or nothing, as it always has. A context module further
 carries an alias (`import campaign.domain.money as money`), because the
 analyzer resolves names as attribute-over-alias.
 
+**An annotation is written unquoted** (TB021, maintainer ruling 2026-08-30). A
+string in type position is a finding, wherever an annotation is read — a
+parameter, a return, a field. The tool for a name the module has not defined
+yet is `from __future__ import annotations`, which defers every annotation in
+the module and makes the quoted form unnecessary; it is the one `from` import
+the module-import rule exempts, so it costs nothing to add. The reason is
+mechanical: the analyzer reads annotations to decide what a class is, what a
+method takes, and what crosses a boundary, and a quoted annotation resolves to
+nothing — so `spec: 'TagSpec'` is not a spec, `-> 'Reply'` is not an outcome,
+and `job: 'ts.JobContext'` is not a job context. Quoting a type does not make
+a rule pass; it makes the rule blind, which is why the quoting itself is what
+gets reported. Strings inside `typing.Literal[...]` are data, not types, and
+are left alone.
+
 **What the shell buys, once.** `ts.ValueObject` owns immutability and value
 equality at runtime: assignment and deletion raise, `__eq__`/`__hash__`
 compare by type and content, and a subclass that tries to override

@@ -358,6 +358,20 @@
       ]
     },
     {
+      "key": "norm-annotations",
+      "title": "Norm: annotations",
+      "py_example": [
+        "examples/python-app",
+        "examples/minimal"
+      ],
+      "go_example": [],
+      "go_analyzers": [],
+      "py_checks": [
+        "TB021"
+      ],
+      "rationale": []
+    },
+    {
       "key": "norm-serialization",
       "title": "Norm: serialization",
       "skill": "serialization.md",

@@ -5,6 +5,80 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.96.0] - 2026-08-30
+
+An annotation is written unquoted. `TB021` reports a string in type position
+wherever the analyzer reads an annotation, and the unquote machinery is gone —
+a quoted annotation resolves to nothing, everywhere, uniformly. This is the
+maintainer ruling (Chris, 2026-08-30) on the first of the three questions
+v0.0.93.0's ship review left open: not "is `"X"` the same type as `X`" but
+"do not write `"X"`".
+
+### Added
+- **`TB021` — an annotation is written unquoted.** `Module.annotation_violations`
+  reads every annotation the analyzer reads — a parameter (positional,
+  keyword-only, `*args`, `**kwargs`), a return, an `AnnAssign` field, at any
+  nesting depth — and reports a string constant anywhere inside it, at the
+  line the quote is written. Strings inside a `typing.Literal[...]` subscript
+  are data, not types, and are exempt; `typing.Annotated[...]` metadata is not
+  (recorded as a two-sided question in `TODOS.md`). The fix at a site is
+  `from __future__ import annotations` — the one `from` import `TB053` exempts,
+  so it costs nothing — plus the quotes removed.
+
+### Changed
+- **The resolver is opaque on a quoted annotation, in every direction.**
+  Deleted: `Annotation.__init__`'s `unquote` closure and its uses in
+  `primary()`, `head_of()`, `candidates()`, `names_bool()` and
+  `primitive_leaf()`; the string descents in the `_refs`, `produced`,
+  `leaves`, `container`, `head` and `slice_names` walks; `names_outcome`'s
+  descent in `Module.outcome_use_violations`; the `slot(name, annotation,
+  unquote)` flag with its `True`/`False` call sites; and the `context` fact
+  that resolved a return through unquoting. `held()` follows `primary()` and
+  needed no separate change. The eight sites the v0.0.93.0 audit measured
+  diverging from main — five that became more permissive when an annotation
+  was quoted (`DependencyPolicy` port/store, `held()`'s ports and contexts,
+  a component publishing an untyped client, a store's transaction return, an
+  actions client naming an undeclared shape) and three that became stricter
+  (a quoted annotation counting as `touched`, `held_root`/`outcome_field`
+  descending into strings, a quoted non-action port parameter) — are erased by
+  the ban rather than reconciled one at a time.
+- **`Annotation.quoted()` is the fact the new check reads.** It was a
+  top-level-only mark consumed by `slot()`; it is now the deep,
+  `Literal`-excluding walk, and `slot()` no longer reads it.
+- **Every quoted annotation in the repo is gone but two.** 32 of 34 sites
+  migrated (`tessercheck-py/tessercheck/domain/checks.py`,
+  `tesser-py/tesser/domain/outcome.py` and `test_outcome.py`,
+  `tesser-py/tests/ecosystem/mutmut/test_mutmut.py` and both fixture
+  `vo/amount.py` files). The two that stay are deliberate runtime fixtures in
+  `tesser-py/tesser/srv/test_record.py` — `status: "int"` and
+  `KIND: "typing.ClassVar[str]"` are the inputs `ts.Record`'s string-based
+  `_is_field` exists to read — and carry a site-level `# tesser:debt TB021`.
+- **Pinning tests whose expectation changed** (each deliberately, to the new
+  world): `test_a_quoted_job_context_return_is_still_a_finding` became
+  `test_a_quoted_return_is_the_quoting_finding_and_resolves_to_nothing` (the
+  quoted return draws `TB021` and no longer draws `TB081`), with
+  `test_an_unquoted_return_still_draws_the_job_context_finding` added beside it
+  and `test_a_literal_string_in_an_annotation_is_data_not_a_quoted_type` added
+  for the carve-out; `test_mutable_set_and_quoted_annotations_are_still_mutable_collections`
+  → `test_a_mutable_set_is_a_mutable_collection_and_a_quoted_field_is_a_quoting_finding`;
+  and in `test_mapper_shape_rules_are_flagged`,
+  `test_construction_containers_discriminate_specs_from_value_objects`,
+  `test_review_pins_for_the_shape_norms`,
+  `test_a_spec_is_tracked_through_aliases_stores_and_shadows`,
+  `test_a_spec_constructs_exactly_one_object_and_a_value_object_takes_it_exactly`,
+  `test_an_outcome_is_neither_kept_nor_reached_into_nor_widened`,
+  `test_a_domain_method_takes_one_primitive_spec_or_domain_object`,
+  `test_a_match_subject_names_a_method_whose_annotation_is_itself_an_outcome`
+  and `test_a_client_dto_bool_is_read_through_the_annotations_that_wrap_it`
+  the quoted fixture now draws `TB021` in place of (or alongside) the finding
+  its resolution used to produce.
+- **Paperwork.** `RULES.md` regenerated (300 rows); `rationale/coverage.md`
+  gains the `TB021` checker row and a skill-materializations row;
+  `roadmap/registry.json` gains a `norm-annotations` row and `ROADMAP.md` is
+  regenerated; `skills/tesser-build/python.md` teaches the rule in its opening
+  rules and `skill-version` goes to 66; `TODOS.md`'s ruling item 1 is marked
+  RULED with what landed, and the `Annotated`-metadata question is recorded.
+
 ## [0.0.95.0] - 2026-08-30
 
 `contexts` and `tops` now come from the modules that parsed. This resolves

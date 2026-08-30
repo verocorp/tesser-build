@@ -350,24 +350,33 @@ Two things the burn-down left behind, deliberately:
   `rulebook.py`'s direct literal-argument binding block has had zero hits
   since `77aa2fb` moved every site onto `XSpec(...)`.
 - [ ] **Three divergences from main the ship's adversarial review measured
-  — item 1 is still an open ruling; item 2 was ruled 2026-08-30 and fixed
-  in v0.0.95.0; item 3 resolved in-wave with no ruling needed.** A
-  differential run (main's `checks.py` and this one over the same tree) is
-  byte-identical on all eleven gated trees; 1 and 2 showed only on inputs
-  no tree has.
-  1. *Quoted annotations now resolve.* `Annotation` unquotes a string
-     annotation before resolving it; main's `_resolve` never did, so
-     `def _spec() -> "CampaignSpec":` fired `TB073` on main (unresolved →
-     "returns no construction data") and is clean here (resolved → a
-     spec). Re-emitting every example with every annotation quoted loses
-     16 findings on python-app and gains none (TB073 helper return,
-     TB081 dependency/keeps/publishes/client-shape/store-return, TB082
-     zero-calls), and the same unquoting *adds* `TB010` on a VO accessor
-     returning a quoted domain enum. mypy treats the two spellings as one
-     type; the question is whether tessercheck does. If yes, main was
-     emitting spurious findings on quoted code and this is the fix; if no,
-     `Annotation.primary(unquote=...)` should default to the old
-     behaviour. Either way the rule should say which.
+  — items 1 and 2 are both RULED and landed (v0.0.96.0 and v0.0.95.0);
+  item 3 resolved in-wave with no ruling needed.** A differential run
+  (main's `checks.py` and this one over the same tree) is byte-identical
+  on all eleven gated trees; 1 and 2 showed only on inputs no tree has.
+  1. *Quoted annotations* — **RULED 2026-08-30 (Chris), landed in
+     v0.0.96.0: quoted types are banned.** The answer to "does tessercheck
+     treat `"X"` and `X` as one type" is neither — an annotation is
+     written unquoted, and a string in type position is a `TB021` finding
+     wherever the analyzer reads an annotation (parameter, return,
+     `AnnAssign`). The unquote machinery is deleted: the closure and its
+     uses in `primary()`/`head_of()`/`candidates()`/`names_bool()`/
+     `primitive_leaf()`, the `_refs`/`produced`/`leaves`/`container`/
+     `head`/`slice_names` descents into string constants, `names_outcome`'s
+     descent, the `slot(name, annotation, unquote)` flag with its
+     `True`/`False` call sites, and the `context` fact that resolved the
+     return through unquoting. A quoted annotation now resolves to nothing
+     everywhere — uniformly, in both directions — and the eight sites the
+     audit measured diverging (`DependencyPolicy` port/store, `held()`,
+     component-publishes, store transaction return, actions client shape,
+     adapters `touched`, `held_root`/`outcome_field`, the orchestrator's
+     non-action port) are erased by one rule rather than reconciled one by
+     one. The fix at a site is `from __future__ import annotations` plus
+     the quotes removed; 32 of the tree's 34 quoted annotations migrated
+     that way and the remaining two are debt-marked runtime fixtures in
+     `tesser-py/tesser/srv/test_record.py`, where `status: "int"` and
+     `KIND: "typing.ClassVar[str]"` are the inputs `ts.Record`'s
+     string-based `_is_field` exists to read.
   2. *`contexts`/`tops` were computed over every source, parsed or not —
      RULED and fixed in v0.0.95.0.* Chris, 2026-08-30: parsed modules are
      the universe. A file that never becomes a `Module` names no context
@@ -448,6 +457,28 @@ Two things the burn-down left behind, deliberately:
   `MethodSpec`, `ClassDeclSpec`, `BodySpec`, `EnumShapeSpec`,
   `HelperSpec`, `ClientClassSpec`) are the foreign-type ruling's whole
   footprint — see the section below.
+
+## What TB021 counts as a type (2026-08-30, v0.0.96.0)
+
+The quoted-types ban excepts one thing by name: a string inside a
+`typing.Literal[...]` subscript, because those strings are data, not types.
+`typing.Annotated[bool, 'why']` is not excepted, and its second slot is data
+too — so today the analyzer reports a metadata string as a quoted type.
+
+- [ ] **Two-sided question: does TB021's Literal carve-out extend to
+  `Annotated` metadata?** *For extending it:* `Annotated[T, m]` is defined as
+  "`T` with metadata `m`"; only slot 0 is in type position, and a string in a
+  later slot is as much data as a `Literal` member. Flagging it asks an author
+  to rewrite metadata that was never a type, and there is no unquoted spelling
+  of "the string `why`". *Against extending it:* the ruling as given names
+  `Literal` and nothing else, and a narrow carve-out is the safe default for a
+  new check — every additional exception is a place a real quoted type can
+  hide (`Annotated['Money', 'why']` would go unreported under a
+  whole-subscript exemption, so any extension has to exempt slots 1..n only).
+  No gated tree uses `Annotated` with metadata today, so the cost of the
+  narrow reading is currently zero; the pinning test
+  `test_a_client_dto_bool_is_read_through_the_annotations_that_wrap_it`
+  locks the present behaviour so a change is visible.
 
 ## Foreign types at the analyzer's door (2026-08-30, deferred rule)
 
