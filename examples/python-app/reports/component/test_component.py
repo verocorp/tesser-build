@@ -67,14 +67,14 @@ def test_the_wired_client_joins_a_link_to_the_verdict_recorded_for_it() -> None:
         campaign_client.LinkView("spring-sale", "https://a.example/s", "active")
     )
     verdicts = FakeLinkPolicyClient(
-        linkpolicy_client.VerdictView("https://a.example/s", False, "host blocked")
+        linkpolicy_client.VerdictView("https://a.example/s", "denied", "host blocked")
     )
 
     component = wire.Reports(config.Config(config.Spec()), links, verdicts)
     try:
         resp = component.client.links_by_verdict(client.LinksByVerdictRequest())
-        assert [(view.slug, view.allowed, view.reason) for view in resp.links] == [
-            ("spring-sale", False, "host blocked")
+        assert [(view.slug, view.decision, view.reason) for view in resp.links] == [
+            ("spring-sale", "denied", "host blocked")
         ]
     finally:
         component.close()
@@ -89,8 +89,8 @@ def test_the_wired_client_reports_a_link_no_policy_has_ruled_on() -> None:
     component = wire.Reports(config.Config(config.Spec()), links, verdicts)
     try:
         resp = component.client.links_by_verdict(client.LinksByVerdictRequest())
-        assert [(view.slug, view.allowed, view.reason) for view in resp.links] == [
-            ("spring-sale", True, "no verdict recorded")
+        assert [(view.slug, view.decision, view.reason) for view in resp.links] == [
+            ("spring-sale", "allowed", "no verdict recorded")
         ]
     finally:
         component.close()

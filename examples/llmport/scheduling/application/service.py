@@ -22,20 +22,11 @@ class BookingService(ts.ApplicationService):
         booking_id_text = str(booking_id)
         found = self._repository.find(booking_repository.FindBookingRequest(booking_id=booking_id_text))
         booking = views.began(found)
-        stored_name = booking.name()
-        stored_chosen = booking.chosen()
         stored_step = booking.step()
         stored_step_text = str(stored_step)
         stored_offered = booking.offered()
         offered_slots = tuple(str(slot) for slot in stored_offered)
-        save_booking_request = booking_repository.SaveBookingRequest(
-            booking_id=booking_id_text,
-            step=stored_step_text,
-            name="" if stored_name is None else str(stored_name),
-            chosen="" if stored_chosen is None else str(stored_chosen),
-            offered=offered_slots,
-        )
-        self._repository.save(save_booking_request)
+        self._repository.save(views.MapToSaveBookingRequest(booking, booking_id))
         begin_reply = views.begin_reply(found)
         return client.BookingStateResponse(
             step=stored_step_text, offered_slots=offered_slots, reply=begin_reply
@@ -47,22 +38,12 @@ class BookingService(ts.ApplicationService):
         found = self._repository.find(booking_repository.FindBookingRequest(booking_id=booking_id_text))
         booking = domain.Booking(views.MapToBookingSpec(found_booking=found))
         available = self._directory.available(slot_directory.AvailableSlotsRequest())
-        offered = tuple(domain.Slot(label) for label in available.slots)
-        booking.provide_name(domain.CustomerName(request.name), offered)
-        stored_name = booking.name()
-        stored_chosen = booking.chosen()
+        booking.provide_name(views.MapToNamingSpec(request, available))
         stored_step = booking.step()
         stored_step_text = str(stored_step)
         stored_offered = booking.offered()
         offered_slots = tuple(str(slot) for slot in stored_offered)
-        save_booking_request = booking_repository.SaveBookingRequest(
-            booking_id=booking_id_text,
-            step=stored_step_text,
-            name="" if stored_name is None else str(stored_name),
-            chosen="" if stored_chosen is None else str(stored_chosen),
-            offered=offered_slots,
-        )
-        self._repository.save(save_booking_request)
+        self._repository.save(views.MapToSaveBookingRequest(booking, booking_id))
         return client.BookingStateResponse(
             step=stored_step_text,
             offered_slots=offered_slots,
@@ -75,20 +56,11 @@ class BookingService(ts.ApplicationService):
         found = self._repository.find(booking_repository.FindBookingRequest(booking_id=booking_id_text))
         booking = domain.Booking(views.MapToBookingSpec(found_booking=found))
         booking.choose_slot(domain.Slot(request.slot))
-        stored_name = booking.name()
-        stored_chosen = booking.chosen()
         stored_step = booking.step()
         stored_step_text = str(stored_step)
         stored_offered = booking.offered()
         offered_slots = tuple(str(slot) for slot in stored_offered)
-        save_booking_request = booking_repository.SaveBookingRequest(
-            booking_id=booking_id_text,
-            step=stored_step_text,
-            name="" if stored_name is None else str(stored_name),
-            chosen="" if stored_chosen is None else str(stored_chosen),
-            offered=offered_slots,
-        )
-        self._repository.save(save_booking_request)
+        self._repository.save(views.MapToSaveBookingRequest(booking, booking_id))
         return client.BookingStateResponse(
             step=stored_step_text,
             offered_slots=offered_slots,
@@ -107,20 +79,11 @@ class BookingService(ts.ApplicationService):
         reserved = self._directory.reserve(slot_directory.ReserveSlotRequest(slot=slot, name=name))
         confirm_reply = views.confirm_reply(reserved, booking)
         booking.settle(domain.Reoffers(views.MapToReoffersSpec(reserved_slot=reserved)))
-        stored_name = booking.name()
-        stored_chosen = booking.chosen()
         stored_step = booking.step()
         stored_step_text = str(stored_step)
         stored_offered = booking.offered()
         offered_slots = tuple(str(slot) for slot in stored_offered)
-        save_booking_request = booking_repository.SaveBookingRequest(
-            booking_id=booking_id_text,
-            step=stored_step_text,
-            name="" if stored_name is None else str(stored_name),
-            chosen="" if stored_chosen is None else str(stored_chosen),
-            offered=offered_slots,
-        )
-        self._repository.save(save_booking_request)
+        self._repository.save(views.MapToSaveBookingRequest(booking, booking_id))
         return client.BookingStateResponse(
             step=stored_step_text, offered_slots=offered_slots, reply=confirm_reply
         )

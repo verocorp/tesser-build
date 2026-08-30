@@ -66,7 +66,7 @@ def test_a_config_wires_a_client_that_serves_a_report() -> None:
         campaign_client.LinkView("spring-sale", "https://a.example/s", "active")
     )
     verdicts = FakeLinkPolicyClient(
-        linkpolicy_client.VerdictView("https://a.example/s", True, "on the allowlist")
+        linkpolicy_client.VerdictView("https://a.example/s", "allowed", "on the allowlist")
     )
 
     component = wire.Reports(config.Config(config.Spec()), links, verdicts)

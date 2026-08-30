@@ -222,7 +222,10 @@ belongs to the edge, recorded where its golden test lives.
   keys and framing — stays review-enforced. Honest gap, narrowed.
 - **TB080** flags the DTO-field half of rules 6 and 8: a port DTO field is
   never a union (optional included) and never a bare `bool` — model the
-  outcome as an enum. **TB052** flags the rest of the ports module's contents:
+  outcome as an enum. The bare-bool clause covers a `Client` request/response
+  DTO too, where the fix is the canonical string rather than an enum, because
+  that value leaves the context (`domain-return.md` rule 8). **TB052** flags
+  the rest of the ports module's contents:
   a subclassed DTO (a response hierarchy is a union mypy cannot check for
   exhaustiveness), a `StrEnum`/`IntEnum` outcome or a hand-mixed base
   (`class Outcome(str, enum.Enum)`) (a member that compares equal to a raw

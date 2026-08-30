@@ -289,6 +289,13 @@ with its own invariant, not a second factory on this one.
   objects (TB019 — the licensed exits are the language-fixed dunders, the
   canonical exit, and a `-> None` transition; quoting an annotation is not
   an escape hatch).
+- **A domain object's public method takes one thing** (TB019's parameter
+  mirror): besides `self`, at most one parameter, and it is a primitive (an
+  enum counts), a spec, or a domain object — never a port or client DTO,
+  never a container, never two, never `*args`/`**kwargs`, and never
+  unannotated. Unlike the return rule it reads a `-> None` transition too,
+  and a public `__call__` is a public method like any other
+  (`domain-return.md` rule 7).
 - **`bool` and `complex` are not value-object material** (TB016), at any
   field count — a bool is atomic (model the raw value where it lives, or
   reach for a richer type when it is really more than binary; a validated
@@ -515,7 +522,8 @@ class Widget(ts.AggregateRoot):
                     typing.assert_never(never)
 ```
 
-  TB082 accepts a `match` subject that is one call or a local bound to one.
+  TB082 accepts a `match` subject that is a call on a domain object, or a
+  local bound to one — here `outcome`, bound and rebound by `driven.advance()`.
   A third member (`BLOCKED`) is a type error at every reader, not a redesign.
 
 ## Application services
@@ -523,11 +531,21 @@ class Widget(ts.AggregateRoot):
 Coordination only — no business logic. Four named steps
 (`application-services.md`): convert → delegate → persist → respond. Every
 dependency is a `ts.Port` `Protocol` (the analyzer requires it), every public
-method takes exactly one `ts.Request` and returns a `ts.Response`, and the
+method takes exactly one `ts.Request` and returns a `ts.Response` — and a
+public `__call__` is a public method, not a private one — and the
 method inlines its logic — no delegation chains, no `if`, no conditional
-`while`: the one branch a service has is a `match` on the `ts.Outcome` a
-transition returned (**Outcomes**, above), one level deep, and the one loop
-is `while True:` ended by a match arm's `break`. Every
+`while`, no comparison (spelled, or called as `a.__eq__(b)` or
+`operator.eq(a, b)`), no `not`, no conditional expression, no `and`/`or`, no
+comprehension filter: the one branch a service has is **one** `match` on the
+`ts.Outcome` a transition returned (**Outcomes**, above), whose
+subject is a call on a domain object *whose method is annotated to return that
+outcome*, and the one loop
+is `while True:` ended by a match arm's `break`. A second decision in the same
+method is a second `match`, and a second `match` is a finding — call the port
+every time, fold the question into the first request, or make it a workflow
+(**Orchestrators, actions, jobs**, below). What an arm does after deciding is
+not itself a decision: it may drive a `-> None` transition that records the
+answer as state, and the method then persists unconditionally. Every
 translation the method needs is a **mapper** — a class that *is* the spec or
 DTO it maps to (`MapTo…`, **Application ports** below) — so the service names
 the use case and never spells a field out.
@@ -712,7 +730,9 @@ class CampaignRepository(ts.Port, typing.Protocol):
   request in / one response out exists to prevent.
 - **A port DTO field is never a union (optional included) and never a bare
   `bool`** (TB080), and **a port DTO is never subclassed** (TB052) — a
-  response hierarchy is a union mypy cannot check for exhaustiveness.
+  response hierarchy is a union mypy cannot check for exhaustiveness. The
+  bare-bool clause covers a `Client` request/response DTO too, where the fix
+  is the canonical string rather than an enum (`domain-return.md` rule 8).
 - **A multi-outcome answer is an enum outcome plus payload; a collection is a
   tuple.** Where cardinality *is* the answer (list-all), the tuple alone says
   it — no outcome enum. The enum is a plain `enum.Enum`, never `StrEnum`/

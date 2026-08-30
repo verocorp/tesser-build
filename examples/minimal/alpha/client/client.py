@@ -14,8 +14,9 @@ class AddRequest(ts.Request):
 
 class AddResponse(ts.Response):
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, standing: str) -> None:
         self.name = name
+        self.standing = standing
 
 
 class Client(ts.Client, typing.Protocol):

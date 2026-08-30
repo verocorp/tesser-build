@@ -141,7 +141,7 @@ def test_handler_translates_wire_to_client_dtos() -> None:
 class FakeReportsClientStub(reports_client.Client):
     def links_by_verdict(self, req: reports_client2.LinksByVerdictRequest) -> reports_client2.LinksByVerdictResponse:
         return reports_client2.LinksByVerdictResponse(
-            links=(reports_client2.LinkVerdictView("promo", "https://ok.example/x", False, "host blocked"),)
+            links=(reports_client2.LinkVerdictView("promo", "https://ok.example/x", "denied", "host blocked"),)
         )
 
 
@@ -159,7 +159,7 @@ def test_reports_handler_translates_client_dtos_to_component() -> None:
             {
                 "slug": "promo",
                 "target_url": "https://ok.example/x",
-                "allowed": False,
+                "decision": "denied",
                 "reason": "host blocked",
             }
         ]

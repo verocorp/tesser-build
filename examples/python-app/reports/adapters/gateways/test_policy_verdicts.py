@@ -32,7 +32,7 @@ class FakeLinkPolicyClient(linkpolicy_client.Client):
 
 def test_an_allowed_verdict_arrives_as_the_allowed_member() -> None:
     verdicts = FakeLinkPolicyClient(
-        linkpolicy_client.VerdictView("https://a.example/s", True, "on the allowlist")
+        linkpolicy_client.VerdictView("https://a.example/s", "allowed", "on the allowlist")
     )
 
     resp = policy_verdicts.PolicyVerdictGateway(verdicts).verdicts(
@@ -46,7 +46,7 @@ def test_an_allowed_verdict_arrives_as_the_allowed_member() -> None:
 
 def test_a_denied_verdict_arrives_as_the_denied_member() -> None:
     verdicts = FakeLinkPolicyClient(
-        linkpolicy_client.VerdictView("https://a.example/s", False, "host blocked")
+        linkpolicy_client.VerdictView("https://a.example/s", "denied", "host blocked")
     )
 
     resp = policy_verdicts.PolicyVerdictGateway(verdicts).verdicts(
@@ -58,8 +58,8 @@ def test_a_denied_verdict_arrives_as_the_denied_member() -> None:
 
 def test_every_verdict_the_policy_context_serves_crosses_the_boundary() -> None:
     verdicts = FakeLinkPolicyClient(
-        linkpolicy_client.VerdictView("https://a.example/s", True, "on the allowlist"),
-        linkpolicy_client.VerdictView("https://a.example/w", False, "host blocked"),
+        linkpolicy_client.VerdictView("https://a.example/s", "allowed", "on the allowlist"),
+        linkpolicy_client.VerdictView("https://a.example/w", "denied", "host blocked"),
     )
 
     resp = policy_verdicts.PolicyVerdictGateway(verdicts).verdicts(
@@ -95,6 +95,17 @@ def test_a_policy_context_with_no_verdicts_yields_no_records() -> None:
 
 def test_a_failure_inside_the_policy_context_reaches_the_caller() -> None:
     verdicts = FakeLinkPolicyClient(error=errors.InfraError("policy store unreachable"))
+
+    with pytest.raises(errors.InfraError):
+        policy_verdicts.PolicyVerdictGateway(verdicts).verdicts(
+            verdict_source.ListVerdictsRequest()
+        )
+
+
+def test_a_verdict_decision_outside_the_recorded_set_is_refused() -> None:
+    verdicts = FakeLinkPolicyClient(
+        linkpolicy_client.VerdictView("https://a.example/s", "maybe", "unsure")
+    )
 
     with pytest.raises(errors.InfraError):
         policy_verdicts.PolicyVerdictGateway(verdicts).verdicts(

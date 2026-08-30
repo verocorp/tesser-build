@@ -5,6 +5,7 @@ import pytest
 import scheduling.application.ports.booking_repository as booking_repository
 import scheduling.application.ports.slot_directory as slot_directory
 import scheduling.application.views as views
+import scheduling.client.client as client
 import scheduling.domain.scheduling as domain
 
 
@@ -168,3 +169,44 @@ def test_a_taken_slot_reads_back_as_a_prompt_to_offer_the_updated_slots() -> Non
         views.confirm_reply(reserved, booking)
         == "mon-9am was just taken; offer the caller the updated slots"
     )
+
+
+def test_a_provide_name_request_maps_to_a_naming_of_the_slots_still_open() -> None:
+    mapper = views.MapToNamingSpec(
+        request=client.ProvideNameRequest(booking_id="b-1", name="Ada"),
+        available=slot_directory.AvailableSlotsResponse(slots=("mon-9am", "tue-2pm")),
+    )
+
+    assert mapper.name == "Ada"
+    assert mapper.offered.labels == ("mon-9am", "tue-2pm")
+
+
+def test_a_booking_that_has_not_been_named_yet_saves_a_blank_name_and_choice() -> None:
+    booking = domain.Booking(
+        domain.BookingSpec(step="collect_name", name="", chosen="", offered=())
+    )
+
+    mapper = views.MapToSaveBookingRequest(booking, domain.BookingID("b-1"))
+
+    assert mapper.booking_id == "b-1"
+    assert mapper.step == "collect_name"
+    assert mapper.name == ""
+    assert mapper.chosen == ""
+    assert mapper.offered == ()
+
+
+def test_a_booking_that_chose_a_slot_saves_the_name_the_choice_and_the_offer() -> None:
+    booking = domain.Booking(
+        domain.BookingSpec(step="collect_name", name="", chosen="", offered=())
+    )
+    booking.provide_name(
+        domain.NamingSpec(name="Ada", offered=domain.OfferSpec(labels=("mon-9am", "tue-2pm")))
+    )
+    booking.choose_slot(domain.Slot("mon-9am"))
+
+    mapper = views.MapToSaveBookingRequest(booking, domain.BookingID("b-1"))
+
+    assert mapper.step == "confirm"
+    assert mapper.name == "Ada"
+    assert mapper.chosen == "mon-9am"
+    assert mapper.offered == ("mon-9am", "tue-2pm")

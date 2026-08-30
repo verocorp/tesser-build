@@ -5,6 +5,7 @@ import tesser.testing as ts
 import alpha.application.ports.quoting as quoting
 import alpha.application.ports.widget_repository as widget_repository
 import alpha.application.widget_actions as actions
+import alpha.domain.widget as widget
 
 
 @ts.fake
@@ -30,3 +31,6 @@ class TestWidgetActions:
         widgets = FakeWidgetRepository()
         actions.WidgetActions(widgets).quote(quoting.QuoteRequest(name="a"))
         assert widgets.saved == ["a"]
+
+    def test_a_quoted_widget_is_saved_standing_kept(self) -> None:
+        assert actions.MapToSaveRequest(widget.Name("a")).standing == "kept"

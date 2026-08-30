@@ -5,6 +5,157 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.89.0] - 2026-08-29
+
+A service decides once. Anything that needs a decision goes through a domain
+object (Chris ruling 2026-08-29), and the checkers are cut against three
+services rewritten to that shape rather than against a sketch.
+
+- **A service method carries exactly one `match`**, and its subject is a call
+  on a domain object — a local bound to a construction, or the construction
+  inline. A port call, a `str(...)`, a bare attribute, or a local rebound from
+  any of those is a finding, and so is a second `match` in the same method.
+  This retires the old `TB082` subject clause ("a match subject is not a single
+  call"), which was what forced a service to branch on a port answer in the one
+  shape `TB084` forbids for an outcome — the conflict the coherence review
+  proved by probe.
+- **A service never spells a decision of its own.** A comparison, a conditional
+  expression (`x if c else y`), a boolean operator, and a comprehension's `if`
+  clause join `if` and conditional `while` as `TB082` findings. `try`/`except`
+  is deliberately out of scope; the error norm owns it.
+- **`TB084` reads the subject as well as the arms.** A `match` whose subject is
+  a domain call but whose arms are strings is a finding, so a match that should
+  have been exhaustive can no longer hide behind string patterns.
+- **A domain object's public method takes one thing.** `TB019` gains the
+  parameter mirror: at most one parameter besides `self`, and it is a primitive
+  (an enum counts), a spec, or a domain object — never a port or client DTO,
+  never a container, never two, never `*args`/`**kwargs`. Unlike the return
+  rule it reads `-> None` transitions too, which is exactly where a port DTO
+  would otherwise walk into the domain.
+- **A closed set crosses a boundary as its canonical string, never a bool**
+  (`domain-return.md` rule 8). `TB080`'s bare-bool clause now carries the check
+  for a `Client` request/response DTO as well as a port DTO — it had been gated
+  on port DTOs alone, so `CheckResponse(allowed: bool)` on a client boundary
+  passed. A *port* DTO may still name its own enum instead of the string; the
+  rule is about what leaves the context.
+- **A public `__call__` is public to every kind rule.** `TB019`, and the
+  service / actions / orchestrator signature and body rules, read a name
+  starting with `_` as private — which let a callable domain object, service,
+  actions class or orchestrator take any arguments in any shape and skip every
+  body rule. `__call__` is now exempted from that skip everywhere.
+- **An unannotated domain-method parameter is a finding** (`TB019`). The
+  parameter mirror read annotations, so `def apply(self, request):` evaded the
+  type clause; it now reports under a sibling of the "names the one thing it
+  takes" clause. This closes the hole the v0.0.89.0 adversarial pass recorded
+  rather than fixed.
+- **More decision forms a service cannot spell** (`TB082`): `not x`, a call on
+  a comparison dunder (`a.__eq__(b)`, `__contains__`, `__bool__`, …), and a
+  call into the `operator` module. And the `match` subject's method must be
+  *annotated* to return a `ts.Outcome` — an unannotated, `typing.Any`, or
+  plainly non-outcome return is read as "not a call on a domain object" rather
+  than trusted.
+- **One decision is one finding.** A comparison inside an `if` test, or inside
+  a comprehension's filter, reported twice; it now reports once, as the branch
+  it sits in.
+- **What `__call__` and a wrapped annotation still hid.** A `ts.Client`'s
+  `__call__` skipped the signature rules the exemption above was meant to
+  close, and a value object's `__call__` returning the backing field slipped
+  past `TB010`'s accessor-leak clause; both now read a public `__call__` like
+  any other method. `bool(...)`, `any(...)`, and `all(...)` join `TB082` as
+  decisions a service spells for itself. A client DTO's bare bool is read
+  through the wrappers — `'bool'`, `bool | None`, `typing.Optional[bool]`,
+  `typing.Annotated[bool, ...]` — the same unwrapping the container and
+  allowed-annotation checks already do. And an unannotated *return* on a public
+  domain method is a `TB019` finding of its own, so the caller-side `TB082`
+  has a partner finding at the cause rather than only blaming the service.
+- **Where the rules were reading too much or too little.** `operator.add` and
+  `operator.itemgetter` no longer report as "calls a comparison" — only the
+  module's comparison and truth functions do. An awaited subject
+  (`match await widget.decide():`, or a local bound to one) resolves like the
+  synchronous form, and an outcome-returning method a domain object *inherits*
+  resolves as well as one it declares. A conditional expression over a
+  comparison reports once, not twice. And a comprehension's target is its own
+  scope in Python 3, so it no longer poisons an outer domain local of the same
+  name — the fixture that asserted the opposite asserted a bug.
+- **A quoted container annotation is still a container** (`TB019`), and the
+  container vocabulary is now built from the mutable-collection set, so the
+  `typing`-spelled names (`typing.List[int]`, `typing.Dict[...]`) get the
+  container message too.
+- **Retired: "nests a conditional; a service method branches one level deep"**
+  (`TB082`). It could only fire where a `match` sat inside a `match` arm, which
+  the decides-once clause reports already; the fixture that pinned it now pins
+  that clause instead.
+- **Named gaps, not exemptions** (`application-services.md`, `TODOS.md`): dict
+  dispatch (`table[key]`), a `.get(key, default)` carrying the fallback, a
+  ranking `sorted(..., key=...)`, and `try`/`except`. Each is a decision a
+  domain object should own; none is mechanically separable from a legitimate
+  lookup today.
+
+The trees are the fixtures, and five of them moved:
+
+- `examples/minimal` and `examples/asyncpg` put the `BetaCheck` verdict through
+  the domain instead of dropping it. One `match`, on `Widget.take`; the held
+  arm asks beta and hands the answer to `Widget.clear(spec) -> None`, which
+  matches a `Verdict` outcome the `Clearance` itself answers — the
+  kept-vs-released rule now lives beside the verdict rather than in an
+  if/else against a module-level constant — and records the result as a
+  `Standing` value object. The
+  service then persists unconditionally, so a refused widget is stored *as
+  released* rather than not stored at all — `standing` goes onto the spec, the
+  save request, the load response, the `widgets` table and the client response,
+  and the Postgres e2e reloads a refused widget to prove it round-trips.
+- `examples/python-app/reports` moves the join, the "no verdict recorded"
+  default and the denied-before-allowed order onto `report.LinkVerdicts`. The
+  service is four lines with no branch of any kind, and both bool collapses are
+  gone: the port enum reaches the domain as its own value, and the client DTO
+  carries `decision: str`.
+- `examples/python-app/linkpolicy` stops comparing a `Decision` down to a bool.
+  Its client DTOs carry `decision: str`; the reports gateway rebuilds its own
+  enum from that string, and the campaign gateway — an anti-corruption boundary
+  whose peer speaks a different vocabulary — through a `Final` translation
+  table, which is what an ACL is for.
+- `examples/llmport` gives `Booking.provide_name` and `Booking.reoffer` one
+  spec each, with the `Offer` collection the domain was missing owning the "no
+  slots are available" rule, and replaces four hand-built repository requests
+  with the mapper the rulebook already asks for.
+
+Ruled deliberately, and recorded rather than fixed: a port DTO still names its
+own enum (`reports/.../verdict_source.py`), which is now the inconsistent shape
+beside the client DTOs — the ruling bans the bool, not the port enum. And the
+"new object vs transition" question is **not** prescribed: building both
+renderings showed they collapse into the same code once the answer becomes a
+transition, so the docs show both.
+
+Three more example fixes, from the coverage audit:
+
+- `examples/asyncpg`: **adding a stored name is a conflict, not an overwrite.**
+  `add` went through the upsert `save_widget`, so a second `add` of the same
+  name silently replaced its part and its standing. The port declares
+  `add_widget` beside `save_widget`; the Postgres repository inserts with
+  `ON CONFLICT (name) DO NOTHING RETURNING name` and raises the conflict kind
+  when nothing comes back. `take`, which loads first, keeps the upsert. The
+  schema step is upgrade-safe for the column this release added — `CREATE TABLE
+  IF NOT EXISTS` followed by `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` — so a
+  table left by an earlier checkout gains `standing` instead of failing every
+  save; migrations proper stay out of scope. `AddResponse` carries the part the
+  widget holds and the CLI prints name, part and standing.
+- `examples/python-app`: both gateways rebuilt a closed set from a peer's
+  string and let Python's own error out (`KeyError`, `ValueError`); an unknown
+  decision now raises `errors.InfraError` naming it — the peer is speaking a
+  vocabulary this context does not know. `reports/domain/report.py` stops
+  reusing `_UNRECORDED_DECISION` as the sort pivot.
+- `examples/llmport`: `Booking.provide_name` and `Booking.reoffer` read the
+  step *before* building the spec, so a wrong-step call reports the step rather
+  than hiding it behind a spec-validation error.
+
+`skills/tesser-build/` renderings walked in the same change
+(`application-services.md`, `python.md`, `domain-return.md`,
+`serialization.md`, `SKILL.md`; skill-version 62), plus the
+`rationale/coverage.md` rows for `TB019` and `TB084` — and two new
+skill-materializations rows, because the domain-return norm had none at all,
+so there was no row to walk. `README.md`'s check-family summary names the
+parameter mirror and the one-`match` rule.
+
 ## [0.0.88.0] - 2026-08-29
 
 The prose catches up to the code, and two guards so it stops drifting. Every

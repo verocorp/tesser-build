@@ -16,7 +16,7 @@ class Handler(ts.Handler):
             {
                 "slug": view.slug,
                 "target_url": view.target_url,
-                "allowed": view.allowed,
+                "decision": view.decision,
                 "reason": view.reason,
             }
             for view in resp.links

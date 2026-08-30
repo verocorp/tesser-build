@@ -492,6 +492,10 @@ OUTCOME_BASE: typing.Final[tuple[str, str]] = ("tesser.domain", "Outcome")
 
 DOMAIN_OBJECT_BLOCKS: typing.Final[frozenset[str]] = DOMAIN_BLOCKS | frozenset({OUTCOME_BLOCK})
 
+DOMAIN_METHOD_PARAMETER_BLOCKS: typing.Final[frozenset[str]] = DOMAIN_BLOCKS | frozenset(
+    {"spec"}
+)
+
 ASSERT_NEVER: typing.Final[str] = "assert_never"
 
 OUTCOME_SUNDERS: typing.Final[frozenset[str]] = frozenset({"_value_", "_name_"})
@@ -499,6 +503,21 @@ OUTCOME_SUNDERS: typing.Final[frozenset[str]] = frozenset({"_value_", "_name_"})
 TYPING_MODULE: typing.Final[str] = "typing"
 
 SPEC_BLOCKS: typing.Final[frozenset[str]] = frozenset({"spec", "component_spec", "app_spec"})
+
+PUBLIC_CALL: typing.Final[str] = "__call__"
+
+CONTAINER_NAMES: typing.Final[frozenset[str]] = MUTABLE_COLLECTIONS | frozenset(
+    {
+        "tuple",
+        "Tuple",
+        "frozenset",
+        "FrozenSet",
+        "Sequence",
+        "Iterable",
+        "Collection",
+        "Mapping",
+    }
+)
 
 SPEC_READER_BLOCKS: typing.Final[frozenset[str]] = DOMAIN_BLOCKS | frozenset(
     {"component_config", "app_config"}
@@ -511,6 +530,10 @@ WRAPPABLE_SCALARS: typing.Final[frozenset[str]] = frozenset(
 )
 
 NON_WRAPPABLE_SCALARS: typing.Final[frozenset[str]] = frozenset({"bool", "complex"})
+
+DOMAIN_METHOD_PRIMITIVES: typing.Final[frozenset[str]] = (
+    PRIMITIVES | WRAPPABLE_SCALARS | NON_WRAPPABLE_SCALARS
+)
 
 CANONICAL_EXIT: typing.Final[dict[str, str]] = {
     "str": "__str__",
@@ -556,6 +579,18 @@ LANGUAGE_FIXED: typing.Final[frozenset[str]] = frozenset(
 COMPARISON_DUNDERS: typing.Final[frozenset[str]] = frozenset(
     {"__eq__", "__ne__", "__lt__", "__le__", "__gt__", "__ge__"}
 )
+
+COMPARISON_CALLS: typing.Final[frozenset[str]] = COMPARISON_DUNDERS | frozenset(
+    {"__contains__", "__bool__"}
+)
+
+OPERATOR_MODULE: typing.Final[str] = "operator"
+
+OPERATOR_COMPARISONS: typing.Final[frozenset[str]] = frozenset(
+    {"eq", "ne", "lt", "le", "gt", "ge", "contains", "not_", "truth", "is_", "is_not"}
+)
+
+TRUTH_BUILTINS: typing.Final[frozenset[str]] = frozenset({"bool", "any", "all"})
 
 RETURN_WRAPPERS: typing.Final[frozenset[str]] = frozenset(
     {
@@ -1229,6 +1264,7 @@ class Codebase(ts.AggregateRoot):
         self._spec_fields: dict[Symbol, dict[str, SpecRef]] = {}
         self._spec_shared: list[tuple[str, str, int, Symbol, tuple[str, str]]] = []
         self._mapper_target: dict[tuple[str, str], tuple[str, str]] = {}
+        self._outcome_methods: frozenset[tuple[str, str, str]] = frozenset()
 
     def violations(self) -> tuple[Violation, ...]:
         declaration = self._declaration_violations()  # tesser:debt TB051
@@ -1268,6 +1304,43 @@ class Codebase(ts.AggregateRoot):
                 target_key = module._resolve(cls.bases[1])
                 if target_key is not None and blocks.get(target_key) in DATA_BLOCKS:
                     self._mapper_target[(module.name(), cls.name)] = target_key
+        answered: dict[tuple[str, str], set[str]] = {}
+        declared: dict[tuple[str, str], frozenset[str]] = {}
+        inherits: dict[tuple[str, str], list[tuple[str, str]]] = {}
+        for module in self._modules:
+            for cls in module.class_defs():
+                declared[(module.name(), cls.name)] = frozenset(
+                    item.name
+                    for item in cls.body
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                )
+                answered[(module.name(), cls.name)] = {
+                    item.name
+                    for item in cls.body
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and item.returns is not None
+                    and self._returns_outcome(module, item.returns, blocks)  # tesser:debt TB051
+                }
+                inherits[(module.name(), cls.name)] = [
+                    resolved
+                    for resolved in (module._resolve(base) for base in cls.bases)
+                    if resolved is not None
+                ]
+        changed = True
+        while changed:
+            changed = False
+            for key, base_keys in inherits.items():
+                for base_key in base_keys:
+                    handed = answered.get(base_key)
+                    if handed is None:
+                        continue
+                    inherited = handed - declared[key]
+                    if not inherited <= answered[key]:
+                        answered[key] |= inherited
+                        changed = True
+        self._outcome_methods = frozenset(
+            (key[0], key[1], name) for key, names in answered.items() for name in names
+        )
         named: set[str] = set()
         for module in self._modules:
             parts = module.name().split(".")
@@ -1419,7 +1492,7 @@ class Codebase(ts.AggregateRoot):
                     for item in cls.body:
                         if not isinstance(
                             item, (ast.FunctionDef, ast.AsyncFunctionDef)
-                        ) or item.name.startswith("_"):
+                        ) or (item.name.startswith("_") and item.name != PUBLIC_CALL):
                             continue
                         found.extend(
                             self._signature_violations(  # tesser:debt TB051
@@ -1485,7 +1558,7 @@ class Codebase(ts.AggregateRoot):
                                 )
                             )
                             continue
-                        if item.name.startswith("_"):
+                        if item.name.startswith("_") and item.name != PUBLIC_CALL:
                             continue
                         found.extend(
                             self._signature_violations(  # tesser:debt TB051
@@ -3640,7 +3713,9 @@ class Codebase(ts.AggregateRoot):
                     ))
                 )
         for item in cls.body:
-            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) or item.name.startswith("_"):
+            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) or (
+                item.name.startswith("_") and item.name != PUBLIC_CALL
+            ):
                 continue
             bare = item.body[0].value if len(item.body) == 1 and isinstance(item.body[0], ast.Return) else None
             if not (
@@ -3914,6 +3989,150 @@ class Codebase(ts.AggregateRoot):
                     )
         return tuple(found)
 
+    def _domain_parameter_violations(
+        self,
+        module: Module,
+        cls: ast.ClassDef,
+        item: ast.FunctionDef | ast.AsyncFunctionDef,
+        blocks: dict[tuple[str, str], str],
+    ) -> tuple[Violation, ...]:
+        if item.name.startswith("_") and item.name != PUBLIC_CALL:
+            return ()
+        where = f"{module.name()}.{cls.name}.{item.name}"
+        found: list[Violation] = []
+        if item.returns is None:
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    item.lineno,
+                    "TB019",
+                    f"{where} return is unannotated; a domain object's method names what it "
+                    "hands back, because a caller reading an unnamed return is guessing at "
+                    "the answer the object gave",
+                ))
+            )
+        args = item.args
+        params = list(args.posonlyargs) + list(args.args)
+        if params and params[0].arg in ("self", "cls"):
+            params = params[1:]
+        params += list(args.kwonlyargs)
+        if args.vararg is not None or args.kwarg is not None:
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    item.lineno,
+                    "TB019",
+                    f"{where} uses *args/**kwargs; a domain object's method names the one "
+                    "thing it takes, because an open argument list is a signature no rule can read",
+                ))
+            )
+        if len(params) > 1:
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    item.lineno,
+                    "TB019",
+                    f"{where} takes {len(params)} parameters; a domain object's method takes "
+                    "one thing, because a rule about how two arguments relate belongs inside "
+                    "the object that owns them",
+                ))
+            )
+        for arg in params:
+            if arg.annotation is None:
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        item.lineno,
+                        "TB019",
+                        f"{where} parameter {arg.arg!r} is unannotated; a domain object's "
+                        "method names the one thing it takes, because an argument with no "
+                        "type is a signature no rule can read",
+                    ))
+                )
+                continue
+            if self._is_container_annotation(arg.annotation):  # tesser:debt TB051
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        item.lineno,
+                        "TB019",
+                        f"{where} parameter {arg.arg!r} is a container; a domain object's "
+                        "method takes one primitive, one spec, or one domain object, because "
+                        "a collection handed in is a type the domain has not named",
+                    ))
+                )
+                continue
+            if not self._allowed_annotation(
+                module,
+                arg.annotation,
+                blocks,
+                DOMAIN_METHOD_PARAMETER_BLOCKS,
+                primitives=DOMAIN_METHOD_PRIMITIVES,
+                domain_enums=True,
+            ):
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        item.lineno,
+                        "TB019",
+                        f"{where} parameter {arg.arg!r} is not a primitive, a spec, or a "
+                        "domain object; a domain object's method takes one of those three, "
+                        "because a port or client shape reaching a domain method is the wire "
+                        "format deciding what the domain may be asked",
+                    ))
+                )
+        return tuple(found)
+
+    @staticmethod
+    def _names_bool(node: ast.expr | None) -> bool:
+        if node is None:
+            return False
+        head = node
+        if isinstance(head, ast.Constant) and isinstance(head.value, str):
+            try:
+                head = ast.parse(head.value, mode="eval").body
+            except SyntaxError:
+                return False
+        if isinstance(head, ast.BinOp) and isinstance(head.op, ast.BitOr):
+            return Codebase._names_bool(head.left) or Codebase._names_bool(head.right)
+        if isinstance(head, ast.Subscript) and Codebase._annotation_head(head) in (
+            "Optional",
+            "Final",
+            "Annotated",
+        ):
+            wrapped = head.slice
+            if isinstance(wrapped, ast.Tuple) and wrapped.elts:
+                wrapped = wrapped.elts[0]
+            return Codebase._names_bool(wrapped)
+        return isinstance(head, ast.Name) and head.id == "bool"
+
+    @staticmethod
+    def _is_container_annotation(node: ast.expr) -> bool:
+        head = node
+        if isinstance(head, ast.Constant) and isinstance(head.value, str):
+            try:
+                head = ast.parse(head.value, mode="eval").body
+            except SyntaxError:
+                return False
+        if isinstance(head, ast.BinOp) and isinstance(head.op, ast.BitOr):
+            return Codebase._is_container_annotation(
+                head.left
+            ) or Codebase._is_container_annotation(head.right)
+        if isinstance(head, ast.Subscript) and Codebase._annotation_head(head) in (
+            "Optional",
+            "Final",
+            "Annotated",
+        ):
+            wrapped = head.slice
+            if isinstance(wrapped, ast.Tuple) and wrapped.elts:
+                wrapped = wrapped.elts[0]
+            return Codebase._is_container_annotation(wrapped)
+        if isinstance(head, ast.Subscript):
+            head = head.value
+        if isinstance(head, ast.Attribute):
+            return head.attr in CONTAINER_NAMES
+        return isinstance(head, ast.Name) and head.id in CONTAINER_NAMES
+
     def _domain_return_violations(
         self,
         module: Module,
@@ -3926,8 +4145,15 @@ class Codebase(ts.AggregateRoot):
                 continue
             if item.name in LANGUAGE_FIXED:
                 continue
-            if item.name.startswith("_") and item.name not in COMPARISON_DUNDERS:
+            if (
+                item.name.startswith("_")
+                and item.name not in COMPARISON_DUNDERS
+                and item.name != PUBLIC_CALL
+            ):
                 continue
+            found.extend(
+                self._domain_parameter_violations(module, cls, item, blocks)  # tesser:debt TB051
+            )
             if item.returns is None:
                 continue
             if isinstance(item.returns, ast.Constant) and item.returns.value is None:
@@ -6460,20 +6686,27 @@ class Codebase(ts.AggregateRoot):
                         for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
                         if arg.arg != "self"
                     ]):
-                if (
-                    port_dto
-                    and isinstance(arg.annotation, ast.Name)
-                    and arg.annotation.id == "bool"
-                ):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            item.lineno,
-                            "TB080",
-                            f"{where} field {arg.arg!r} is a bool; a port DTO field is "
-                            "never a bare bool — model the outcome as an enum",
-                        ))
-                    )
+                if self._names_bool(arg.annotation):  # tesser:debt TB051
+                    if port_dto:
+                        found.append(
+                            Violation(ViolationSpec(
+                                module.path(),
+                                item.lineno,
+                                "TB080",
+                                f"{where} field {arg.arg!r} is a bool; a port DTO field is "
+                                "never a bare bool — model the outcome as an enum",
+                            ))
+                        )
+                    else:
+                        found.append(
+                            Violation(ViolationSpec(
+                                module.path(),
+                                item.lineno,
+                                "TB080",
+                                f"{where} field {arg.arg!r} is a bool; a client DTO field is "
+                                "never a bare bool — a closed set crosses as its canonical string",
+                            ))
+                        )
                     continue
                 if port_dto and self._is_union(arg.annotation):
                     found.append(
@@ -7101,7 +7334,7 @@ class Codebase(ts.AggregateRoot):
             found.extend(
                 self._delegation_violations(module, method_names, where, item)  # tesser:debt TB051
             )
-            if item.name.startswith("_"):
+            if item.name.startswith("_") and item.name != PUBLIC_CALL:
                 continue
             found.extend(
                 self._signature_violations(  # tesser:debt TB051
@@ -7222,7 +7455,9 @@ class Codebase(ts.AggregateRoot):
             found.extend(
                 self._delegation_violations(module, method_names, where, item)  # tesser:debt TB051
             )
-            if item.name == "__init__" or item.name.startswith("_"):
+            if item.name == "__init__" or (
+                item.name.startswith("_") and item.name != PUBLIC_CALL
+            ):
                 continue
             found.extend(
                 self._signature_violations(  # tesser:debt TB051
@@ -7676,7 +7911,6 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         found.extend(self._provenance_violations(module, where, fn))  # tesser:debt TB051
-        bound_to_calls = self._names_bound_to_calls(fn)  # tesser:debt TB051
         for stmt in fn.body:
             if not isinstance(stmt, ast.Assign):
                 continue
@@ -7693,30 +7927,31 @@ class Codebase(ts.AggregateRoot):
                     "computes, and reads an accessor where it is used",
                 ))
             )
+        matches: list[ast.Match] = []
+        decided: set[int] = set()
         for node in ast.walk(fn):
-            if not isinstance(node, ast.Call):
-                continue
-            for value in list(node.args) + [kw.value for kw in node.keywords]:
-                if not isinstance(value, ast.Call):
-                    continue
-                value_key = module._resolve(value.func)
-                if (blocks.get(value_key) if value_key is not None else None) is not None:
-                    continue
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        value.lineno,
-                        "TB082",
-                        f"{where} computes in an argument; a service method names what it "
-                        "computes in a local, and passes a name, a reader, or a declared kind",
-                    ))
-                )
-        for node in ast.walk(fn):
+            if isinstance(node, ast.Call):
+                for value in list(node.args) + [kw.value for kw in node.keywords]:
+                    if not isinstance(value, ast.Call):
+                        continue
+                    value_key = module._resolve(value.func)
+                    if (blocks.get(value_key) if value_key is not None else None) is not None:
+                        continue
+                    found.append(
+                        Violation(ViolationSpec(
+                            module.path(),
+                            value.lineno,
+                            "TB082",
+                            f"{where} computes in an argument; a service method names what it "
+                            "computes in a local, and passes a name, a reader, or a declared kind",
+                        ))
+                    )
             if isinstance(node, (ast.If, ast.While)) and not (
                 isinstance(node, ast.While)
                 and isinstance(node.test, ast.Constant)
                 and node.test.value is True
             ):
+                decided.update(id(sub) for sub in ast.walk(node.test))
                 keyword = "if" if isinstance(node, ast.If) else "while"
                 found.append(
                     Violation(ViolationSpec(
@@ -7729,62 +7964,344 @@ class Codebase(ts.AggregateRoot):
                     ))
                 )
             elif isinstance(node, ast.Match):
-                if not isinstance(node.subject, ast.Call) and not (
-                    isinstance(node.subject, ast.Name)
-                    and node.subject.id in bound_to_calls
-                ):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            node.lineno,
-                            "TB082",
-                            f"{where} match subject is not a single call; "
-                            "a service method satisfies a condition with one domain call",
-                        ))
-                    )
-                if (any(
-                            isinstance(sub, ast.Match)
-                            for stmt in ([stmt for case in node.cases for stmt in case.body])
-                            for sub in ast.walk(stmt)
-                        )):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            node.lineno,
-                            "TB082",
-                            f"{where} nests a conditional; a service method branches one level deep",
-                        ))
-                    )
+                matches.append(node)
+            elif isinstance(node, ast.IfExp):
+                decided.update(id(sub) for sub in ast.walk(node.test))
+            elif isinstance(node, ast.comprehension) and node.ifs:
+                decided.update(id(sub) for test in node.ifs for sub in ast.walk(test))
+        found.extend(self._decision_violations(module, where, fn, frozenset(decided)))  # tesser:debt TB051
+        domain_names = self._domain_locals(module, fn, blocks)  # tesser:debt TB051
+        outcome_names = self._outcome_locals(module, fn, blocks, domain_names)  # tesser:debt TB051
+        matches.sort(key=lambda node: node.lineno)
+        for extra in matches[1:]:
+            found.append(
+                Violation(ViolationSpec(
+                    module.path(),
+                    extra.lineno,
+                    "TB082",
+                    f"{where} matches a second time; a service method decides once, because "
+                    "a second decision in one method is a rule about their order that no "
+                    "domain object owns",
+                ))
+            )
+        for node in matches:
+            if not self._is_domain_answer(  # tesser:debt TB051
+                module, node.subject, blocks, domain_names, outcome_names
+            ):
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        node.lineno,
+                        "TB082",
+                        f"{where} match subject is not a call on a domain object; "
+                        "a service method matches the outcome a domain object handed "
+                        "back, because a port answer, a string, or an attribute is a "
+                        "rule the service would be reading for itself",
+                    ))
+                )
+            elif not any(
+                self._outcome_key(module, sub.value, blocks) is not None  # tesser:debt TB051
+                for case in node.cases
+                for sub in ast.walk(case.pattern)
+                if isinstance(sub, ast.MatchValue)
+            ):
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        node.lineno,
+                        "TB084",
+                        f"{where} matches a domain call whose arms name no outcome "
+                        "member; a match on what a domain object answered names outcome "
+                        "members and closes on assert_never, because string arms hide a "
+                        "member added later from the type checker",
+                    ))
+                )
+        return tuple(found)
+
+    def _decision_violations(
+        self,
+        module: Module,
+        where: str,
+        fn: ast.FunctionDef | ast.AsyncFunctionDef,
+        decided: frozenset[int],
+    ) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for node in ast.walk(fn):
+            if id(node) in decided:
+                continue
+            if isinstance(node, ast.Compare):
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        node.lineno,
+                        "TB082",
+                        f"{where} compares two values; a service method asks a domain object "
+                        "and never compares, because a comparison is a rule written down "
+                        "beside the object that should own it",
+                    ))
+                )
+            elif isinstance(node, ast.Call) and self._is_comparison_call(module, node.func):  # tesser:debt TB051
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        node.lineno,
+                        "TB082",
+                        f"{where} calls a comparison; a service method asks a domain object "
+                        "and never compares, because a comparison is a rule written down "
+                        "beside the object that should own it",
+                    ))
+                )
+            elif isinstance(node, ast.Call) and self._is_truth_builtin(module, node.func):  # tesser:debt TB051
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        node.lineno,
+                        "TB082",
+                        f"{where} asks a builtin whether values are true; a service method "
+                        "branches only by matching an outcome, because bool, any, and all "
+                        "read a truth the domain never handed out",
+                    ))
+                )
+            elif isinstance(node, ast.IfExp):
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        node.lineno,
+                        "TB082",
+                        f"{where} chooses with a conditional expression; a service method "
+                        "branches only by matching an outcome, because `x if c else y` is a "
+                        "branch with no arms for a member added later",
+                    ))
+                )
+            elif isinstance(node, ast.BoolOp):
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        node.lineno,
+                        "TB082",
+                        f"{where} joins conditions with and/or; a service method branches "
+                        "only by matching an outcome, because a boolean operator is a rule "
+                        "assembled from values the domain never handed out",
+                    ))
+                )
+            elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        node.lineno,
+                        "TB082",
+                        f"{where} negates a value; a service method branches only by matching "
+                        "an outcome, because `not x` is a truth test on a value the domain "
+                        "never handed out",
+                    ))
+                )
+            elif isinstance(node, ast.comprehension) and node.ifs:
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        node.ifs[0].lineno,
+                        "TB082",
+                        f"{where} filters a comprehension; a service method branches only by "
+                        "matching an outcome, because which items belong is a rule the "
+                        "domain collection should own",
+                    ))
+                )
         return tuple(found)
 
     @staticmethod
-    def _names_bound_to_calls(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> frozenset[str]:
-        bound: set[str] = set()
-        otherwise: set[str] = set()
-        for node in ast.walk(fn):
-            target: ast.expr | None = None
+    def _is_comparison_call(module: Module, func: ast.expr) -> bool:
+        if isinstance(func, ast.Attribute):
+            if func.attr in COMPARISON_CALLS:
+                return True
+            return (
+                isinstance(func.value, ast.Name)
+                and module._package_aliases.get(func.value.id) == OPERATOR_MODULE
+                and func.attr in OPERATOR_COMPARISONS
+            )
+        if isinstance(func, ast.Name):
+            origin = module._imported.get(func.id)
+            return (
+                origin is not None
+                and origin[0] == OPERATOR_MODULE
+                and origin[1] in OPERATOR_COMPARISONS
+            )
+        return False
+
+    @staticmethod
+    def _is_truth_builtin(module: Module, func: ast.expr) -> bool:
+        return (
+            isinstance(func, ast.Name)
+            and func.id in TRUTH_BUILTINS
+            and func.id not in module._imported
+            and func.id not in module._package_aliases
+        )
+
+    def _domain_locals(
+        self,
+        module: Module,
+        fn: ast.FunctionDef | ast.AsyncFunctionDef,
+        blocks: dict[tuple[str, str], str],
+    ) -> dict[str, tuple[str, str]]:
+        values, otherwise = self._bindings(fn)  # tesser:debt TB051
+        found: dict[str, tuple[str, str]] = {}
+        for name, bound in values.items():
+            if name in otherwise:
+                continue
+            kinds = [self._domain_kind(module, value, blocks) for value in bound]  # tesser:debt TB051
+            first = kinds[0]
+            if first is not None and all(kind == first for kind in kinds):
+                found[name] = first
+        return found
+
+    def _outcome_locals(
+        self,
+        module: Module,
+        fn: ast.FunctionDef | ast.AsyncFunctionDef,
+        blocks: dict[tuple[str, str], str],
+        domain_names: dict[str, tuple[str, str]],
+    ) -> frozenset[str]:
+        return self._bound_names(  # tesser:debt TB051
+            fn,
+            lambda value: self._answers_an_outcome(module, value, blocks, domain_names),  # tesser:debt TB051
+        )
+
+    @staticmethod
+    def _bound_names(
+        fn: ast.FunctionDef | ast.AsyncFunctionDef,
+        wanted: typing.Callable[[ast.expr], bool],
+    ) -> frozenset[str]:
+        values, otherwise = Codebase._bindings(fn)
+        return frozenset(
+            name
+            for name, bound in values.items()
+            if name not in otherwise and all(wanted(value) for value in bound)
+        )
+
+    @staticmethod
+    def _bindings(
+        fn: ast.FunctionDef | ast.AsyncFunctionDef,
+    ) -> tuple[dict[str, list[ast.expr]], frozenset[str]]:
+        values: dict[str, list[ast.expr]] = {}
+        otherwise: set[str] = set(Codebase._parameter_names(fn))
+        for node in Codebase._own_scope(fn):
+            targets: list[ast.expr] = []
             value: ast.expr | None = None
-            if isinstance(node, ast.Assign) and len(node.targets) == 1:
-                target, value = node.targets[0], node.value
-            elif isinstance(node, (ast.AnnAssign, ast.AugAssign, ast.NamedExpr)):
-                target, value = node.target, node.value
-            elif isinstance(node, (ast.For, ast.AsyncFor, ast.comprehension)):
-                otherwise.update(sub.id for sub in ast.walk(node.target) if isinstance(sub, ast.Name))
+            if isinstance(node, ast.Assign):
+                targets, value = list(node.targets), node.value
+            elif isinstance(node, ast.AnnAssign):
+                if node.value is None:
+                    continue
+                targets, value = [node.target], node.value
+            elif isinstance(node, (ast.AugAssign, ast.NamedExpr)):
+                targets, value = [node.target], node.value
+            elif isinstance(node, ast.comprehension):
+                continue
+            elif isinstance(node, (ast.For, ast.AsyncFor)):
+                otherwise.update(
+                    sub.id for sub in ast.walk(node.target) if isinstance(sub, ast.Name)
+                )
                 continue
             elif isinstance(node, (ast.With, ast.AsyncWith)):
                 for item in node.items:
                     if item.optional_vars is not None:
                         otherwise.update(
-                            sub.id for sub in ast.walk(item.optional_vars) if isinstance(sub, ast.Name)
+                            sub.id
+                            for sub in ast.walk(item.optional_vars)
+                            if isinstance(sub, ast.Name)
                         )
                 continue
-            if not isinstance(target, ast.Name):
+            elif isinstance(node, ast.ExceptHandler):
+                if node.name is not None:
+                    otherwise.add(node.name)
                 continue
-            if isinstance(value, ast.Call):
-                bound.add(target.id)
-            else:
-                otherwise.add(target.id)
-        return frozenset(bound - otherwise)
+            elif isinstance(node, (ast.MatchAs, ast.MatchStar)):
+                if node.name is not None:
+                    otherwise.add(node.name)
+                continue
+            elif isinstance(node, ast.MatchMapping):
+                if node.rest is not None:
+                    otherwise.add(node.rest)
+                continue
+            elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                otherwise.update(
+                    (alias.asname or alias.name).split(".")[0] for alias in node.names
+                )
+                continue
+            elif isinstance(node, (ast.Global, ast.Nonlocal)):
+                otherwise.update(node.names)
+                continue
+            if len(targets) == 1 and isinstance(targets[0], ast.Name) and value is not None:
+                values.setdefault(targets[0].id, []).append(value)
+                continue
+            for target in targets:
+                otherwise.update(
+                    sub.id for sub in ast.walk(target) if isinstance(sub, ast.Name)
+                )
+        return values, frozenset(otherwise)
+
+    @staticmethod
+    def _parameter_names(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> frozenset[str]:
+        args = fn.args
+        named = [arg.arg for arg in args.posonlyargs + args.args + args.kwonlyargs]
+        if args.vararg is not None:
+            named.append(args.vararg.arg)
+        if args.kwarg is not None:
+            named.append(args.kwarg.arg)
+        return frozenset(named)
+
+    @staticmethod
+    def _own_scope(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> typing.Iterator[ast.AST]:
+        stack: list[ast.AST] = list(ast.iter_child_nodes(fn))
+        while stack:
+            node = stack.pop()
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+                continue
+            yield node
+            stack.extend(ast.iter_child_nodes(node))
+
+    @staticmethod
+    def _domain_kind(
+        module: Module, node: ast.expr, blocks: dict[tuple[str, str], str]
+    ) -> tuple[str, str] | None:
+        if not isinstance(node, ast.Call):
+            return None
+        key = module._resolve(node.func)
+        if key is None or blocks.get(key) not in DOMAIN_BLOCKS:
+            return None
+        return key
+
+    def _answers_an_outcome(
+        self,
+        module: Module,
+        node: ast.expr,
+        blocks: dict[tuple[str, str], str],
+        domain_names: dict[str, tuple[str, str]],
+    ) -> bool:
+        if isinstance(node, ast.Await):
+            node = node.value
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            return False
+        receiver = node.func.value
+        owner: tuple[str, str] | None = None
+        if isinstance(receiver, ast.Name):
+            owner = domain_names.get(receiver.id)
+        if owner is None:
+            owner = self._domain_kind(module, receiver, blocks)  # tesser:debt TB051
+        if owner is None:
+            return False
+        return (owner[0], owner[1], node.func.attr) in self._outcome_methods
+
+    def _is_domain_answer(
+        self,
+        module: Module,
+        node: ast.expr,
+        blocks: dict[tuple[str, str], str],
+        domain_names: dict[str, tuple[str, str]],
+        outcome_names: frozenset[str],
+    ) -> bool:
+        if isinstance(node, ast.Name):
+            return node.id in outcome_names
+        return self._answers_an_outcome(module, node, blocks, domain_names)  # tesser:debt TB051
 
     def _outcome_violations(self, module: Module, cls: ast.ClassDef) -> tuple[Violation, ...]:
         where = f"{module.name()}.{cls.name}"
@@ -8123,6 +8640,20 @@ class Codebase(ts.AggregateRoot):
                 if not isinstance(quoted, ast.Constant) and Codebase._names_outcome(module, quoted, blocks):
                     return True
         return False
+
+    @staticmethod
+    def _returns_outcome(
+        module: Module, node: ast.expr, blocks: dict[tuple[str, str], str]
+    ) -> bool:
+        while isinstance(node, ast.Constant) and isinstance(node.value, str):
+            try:
+                node = ast.parse(node.value, mode="eval").body
+            except SyntaxError:
+                return False
+        if not isinstance(node, (ast.Name, ast.Attribute)):
+            return False
+        key = module._resolve(node)
+        return key is not None and blocks.get(key) == OUTCOME_BLOCK
 
     @staticmethod
     def _is_member_pattern(

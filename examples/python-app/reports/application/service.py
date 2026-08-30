@@ -8,6 +8,54 @@ import reports.client.client as client
 import reports.domain.report as report
 
 
+class MapToLinkSpec(ts.Mapper, report.LinkSpec):
+
+    def __init__(self, record: link_source.LinkRecord) -> None:
+        super().__init__(slug=record.slug, target_url=record.target_url)
+
+
+class MapToRecordedVerdictSpec(ts.Mapper, report.RecordedVerdictSpec):
+
+    def __init__(self, record: verdict_source.VerdictRecord) -> None:
+        super().__init__(
+            target_url=record.target_url,
+            decision=record.decision.value,
+            reason=record.reason,
+        )
+
+
+class MapToLinkVerdictsSpec(ts.Mapper, report.LinkVerdictsSpec):
+
+    def __init__(
+        self,
+        listed_links: link_source.ListLinksResponse,
+        listed_verdicts: verdict_source.ListVerdictsResponse,
+    ) -> None:
+        super().__init__(
+            links=tuple(MapToLinkSpec(record) for record in listed_links.links),
+            verdicts=tuple(
+                MapToRecordedVerdictSpec(record) for record in listed_verdicts.verdicts
+            ),
+        )
+
+
+class MapToLinkVerdictView(ts.Mapper, client.LinkVerdictView):
+
+    def __init__(self, row: report.LinkVerdict) -> None:
+        super().__init__(
+            slug=str(row.slug),
+            target_url=str(row.target_url),
+            decision=str(row.decision),
+            reason=str(row.reason),
+        )
+
+
+class MapToLinksByVerdictResponse(ts.Mapper, client.LinksByVerdictResponse):
+
+    def __init__(self, joined: report.LinkVerdicts) -> None:
+        super().__init__(links=tuple(MapToLinkVerdictView(row) for row in joined.rows))
+
+
 class ReportsService(ts.ApplicationService):
 
     def __init__(self, links: link_source.LinkSource, verdicts: verdict_source.VerdictSource) -> None:
@@ -16,51 +64,6 @@ class ReportsService(ts.ApplicationService):
 
     def links_by_verdict(self, req: client.LinksByVerdictRequest) -> client.LinksByVerdictResponse:
         listed_links = self._links.links(link_source.ListLinksRequest())
-        links = tuple(
-            report.Link(report.LinkSpec(slug=f.slug, target_url=f.target_url))
-            for f in listed_links.links
-        )
         listed_verdicts = self._verdicts.verdicts(verdict_source.ListVerdictsRequest())
-        verdicts = tuple(
-            report.RecordedVerdict(
-                report.RecordedVerdictSpec(
-                    f.target_url, f.decision == verdict_source.VerdictDecision.ALLOWED, f.reason
-                )
-            )
-            for f in listed_verdicts.verdicts
-        )
-        by_url = {str(v.target_url): v for v in verdicts}
-        joined: list[report.LinkVerdict] = []
-        for link in links:
-            link_slug = str(link.slug)
-            link_target = str(link.target_url)
-            link_allowed = (
-                str(by_url[link_target].allowed) == "allowed" if link_target in by_url else True
-            )
-            link_reason = (
-                str(by_url[link_target].reason)
-                if link_target in by_url
-                else "no verdict recorded"
-            )
-            joined.append(
-                report.LinkVerdict(
-                    report.LinkVerdictSpec(
-                        slug=link_slug,
-                        target_url=link_target,
-                        allowed=link_allowed,
-                        reason=link_reason,
-                    )
-                )
-            )
-        joined.sort(key=lambda r: (str(r.allowed) == "allowed", str(r.slug)))
-        rows = tuple(joined)
-        views: list[client.LinkVerdictView] = []
-        for row in rows:
-            slug = str(row.slug)
-            target_url = str(row.target_url)
-            decision = str(row.allowed)
-            reason = str(row.reason)
-            view = client.LinkVerdictView(slug, target_url, decision == "allowed", reason)
-            views.append(view)
-        listed = tuple(views)
-        return client.LinksByVerdictResponse(links=listed)
+        joined = report.LinkVerdicts(MapToLinkVerdictsSpec(listed_links, listed_verdicts))
+        return MapToLinksByVerdictResponse(joined)

@@ -10,7 +10,7 @@ import alpha.domain.widget as widget
 class MapToSaveRequest(ts.Mapper, widget_repository.SaveRequest):
 
     def __init__(self, named: widget.Name) -> None:
-        super().__init__(name=str(named))
+        super().__init__(name=str(named), standing="kept")
 
 
 class MapToQuoteResponse(ts.Mapper, quoting.QuoteResponse):

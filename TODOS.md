@@ -2,6 +2,73 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Left open by the v0.0.89.0 adversarial pass (2026-08-29, PR #148)
+
+Seventeen bypass probes were run against the new clauses — twelve mine, five
+from a Codex challenge on the branch diff. Five real holes were fixed in-wave
+(a quoted container annotation, a public `__call__` skipping every service-body
+rule, a destructuring rebind, a nested-scope shadow, and a container behind
+`| None`). Two findings were recorded rather than fixed, and one reported
+"false positive" was ruled correct behaviour.
+
+- [ ] **TB084 does not tie an arm's outcome to the method's return outcome.**
+  `match asked.decide(): case Other.YES:` — where `Other` is a *different*
+  `ts.Outcome` class than the one `decide()` returns — satisfies the new
+  "arms name an outcome member" clause. Closing it needs return-type inference
+  the walk does not have, which is the same reason "Outcome tracking through
+  locals" was ruled out of scope on 2026-08-26. `mypy --strict` rejects it
+  today (non-overlapping pattern against the declared return type), and every
+  gated tree runs `mypy --strict`, so the path is covered — but by the type
+  checker, not by the analyzer. Decide whether that is enough. **Narrowed in
+  the fix pass:** the subject's method must now be annotated to return *some*
+  `ts.Outcome`, so an unannotated or `typing.Any` subject no longer passes.
+  What remains open is only the mismatch — arms naming a *different* outcome
+  class than the one the method returns.
+- [x] **A domain method's unannotated parameter is skipped.** Closed in the fix
+  pass: an unannotated parameter is now a `TB019` finding under a sibling of
+  the "names the one thing it takes" clause, so the rule no longer leans on
+  `mypy --strict` standing beside it.
+- [x] **`examples/asyncpg`'s schema change is not a migration.** Closed for the
+  one column this release added: the schema step now follows `CREATE TABLE IF
+  NOT EXISTS` with `ALTER TABLE widgets ADD COLUMN IF NOT EXISTS standing text
+  NOT NULL DEFAULT 'kept'`, so a container left over from an earlier checkout
+  gains the column instead of failing every save, and no `DROP TABLE` is
+  needed. The repo still has no migration story at all — `SKILL.md` names safe
+  change/migration sequencing as deliberately out of scope — so renames, drops,
+  backfills and cross-deploy ordering remain unaddressed, which the asyncpg
+  design record now says.
+
+- [ ] **Four TB082 decision forms are named gaps, not exemptions.** A service
+  can still spell a decision as dict dispatch (`table[key]` picking a branch),
+  a `.get(key, default)` whose default *is* the fallback rule, a
+  `sorted(..., key=...)` whose key function ranks, or a `try`/`except` used as
+  a branch. Each is a rule a domain object should own. None was closed in the
+  fix pass because none is mechanically separable from a legitimate lookup,
+  read, or sort with the walk the checker has; `try`/`except` additionally
+  belongs to the error norm. They are written into
+  `skills/tesser-build/application-services.md` beside the existing
+  `try`/`except` carve-out so a reviewer reads them. Two more, recorded in
+  cycle 3: `max`, `min`, and `sorted` are comparison builtins that are not in
+  `TRUTH_BUILTINS`, so a service that ranks with one of them is not reported;
+  and the pre-existing value-dedupe collapses two identical conditional
+  expressions written on one line into a single finding.
+- [ ] **Five `ReportsService` mappers have no direct test.**
+  `examples/python-app/reports/application/service.py` declares mappers that
+  are exercised only through the service's own tests, so a mapping error
+  surfaces as a service failure rather than at the mapper. The asyncpg sibling
+  (`alpha/application/test_alpha_service.py`, `TestAlphaServiceMappers`) is the
+  shape to copy.
+- [ ] **`beta_config.Spec("a")` in `examples/minimal` is dead config.** The
+  component ignores the value it is handed, so the spec proves nothing and a
+  reader cannot tell whether the coordinate matters. Either give beta a
+  coordinate it reads, or drop the spec field.
+
+**Ruled correct, not a defect:** the Codex pass flagged a comparison inside a
+nested `def` in a service method being reported against the service. That is
+the intended reading — a service inlines its logic (`TB082`), so a helper
+function defined inside a service method to hold the comparison is the service
+deciding with an extra step, not an exemption.
+
 ## Repository tests and the pool: two questions from the asyncpg review (2026-08-29, Chris)
 
 - [ ] **What may a repository test set up for itself?** Chris's expectation
@@ -32,6 +99,42 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   example-only fix and the rule is "an app owns its pools through a kind
   that serialises its lifecycle", stated in `python.md` and unchecked.
 
+## Three asyncpg store findings left standing (2026-08-29, ship review cycle 2)
+
+Found by the cycle-2 reviewers, recorded rather than fixed — none is a
+regression from this wave, and each wants a ruling before code moves.
+
+- [ ] **`_schema_ready` is unsynchronised.** `PostgresWidgetStore.transaction`
+  and `PostgresKeyStore.transaction`
+  (`examples/asyncpg/alpha/adapters/repositories/postgres.py:73-80`,
+  `beta/adapters/repositories/postgres.py:41-46`) read and set a plain bool,
+  so two concurrent first `transaction()` calls both see `False` and both run
+  the DDL. `CREATE TABLE IF NOT EXISTS` is not concurrency-safe against
+  itself — two sessions can race to the same catalog insert and one gets a
+  duplicate-key error — so the window is real, not merely wasteful. The same
+  `asyncio.Lock` shape `Database.open()` took would close it; whether the
+  example fixes it or a shipped `ts.Store` lifecycle does is the open
+  question above.
+
+- [ ] **`AddResponse.part` always equals the request's part on the add path.**
+  Nothing in `examples/asyncpg` can distinguish the widget's own part from
+  the part that was asked for, because the add path echoes the request rather
+  than reading the stored row back. A test that asserts `response.part` is
+  therefore asserting its own input. Either the add path reads the row it
+  wrote (and the response carries the widget), or the response drops the
+  field.
+
+- [x] **A concurrent first writer that aborts: no spurious conflict.** One
+  reviewer read the add path as able to report a spurious conflict — first
+  writer inserts, second writer's `ON CONFLICT DO NOTHING` returns no row,
+  first writer's transaction then aborts, and the second caller is told the
+  widget exists when the committed table holds nothing. Decided against a live
+  Postgres in cycle 3: the second writer does not see "no row" and return. It
+  blocks on the first writer's speculative-insertion lock until that
+  transaction resolves, and when the first aborts the second's insert
+  proceeds and returns its own name. The second reading is the correct one;
+  `add_widget` needs no retry and no different conflict test.
+
 ## Decisions go through a domain object (2026-08-29, Chris ruling)
 
 **The ruling.** Anything that needs a decision goes through a domain object;
@@ -52,36 +155,64 @@ cannot see it. The ruling removes the conflict by removing the premise: a
 service never branches on a port answer at all — it branches on an outcome a
 domain object returned.
 
-The dodge is visible in the trees today. Both exemplars avoid the bind only by
-discarding the port response: `examples/minimal/alpha/application/alpha_service.py`
-calls `self._checks.check(...)` and drops the answer, and
-`examples/asyncpg/alpha/application/alpha_service.py:87` does the same with the
-`BetaCheck` verdict.
+**Amended 2026-08-29 (Chris): no nested `match`.** A service method has
+**exactly one** `match`, on the outcome that chooses the port sequence. Every
+later decision is a `-> None` transition the domain records as **state** (never
+the outcome itself — TB084's never-held still holds), and the service persists
+the result unconditionally. Where a second decision would genuinely need a
+second port call, the shapes are: call the port every time, fold the question
+into the first request, or make it a workflow. Building both renderings first
+showed why: with the answer becoming a transition on the object that already
+exists, "construct a new domain object from the response spec" and "hand the
+spec to an existing object" collapse into the same code — neither is
+prescribed, and the docs show both (`asyncpg`'s `take` constructs from a load
+response, its `add` transitions).
 
-**Open work under it (none of it is in PR #147 — that PR records the ruling
-only):**
+**Closed in v0.0.89.0 (PR #148).**
 
-- [ ] **Re-cut TB082.** A `match` subject in a service method must be a call to
-  a *domain object's* method, and its arms must be outcome members; a
-  comparison, a conditional expression (`x if c else y`), a comprehension `if`,
-  and a boolean operator in a service body all become findings. This subsumes
-  the open conditional-expression item under "Follow-ons from the outcome
-  ruling" below — same ruling, wider node set — and retires the current
-  subject rule ("a match subject is not a single call"), which is what forces
-  the illegal shape.
-- [ ] **Rewrite the services that dodge it.**
-  `examples/minimal/alpha/application/alpha_service.py` (discards the port
-  answer), `examples/asyncpg/alpha/application/alpha_service.py:87` (discards
-  the `BetaCheck` verdict), and
-  `examples/python-app/reports/application/service.py:27,38` (compares a port
-  DTO's enum down to a bool at `:27`, then branches with a conditional
-  expression at `:38`). Each needs the
-  response → spec → domain object → outcome chain the ruling describes, so the
-  rewrites are also the fixtures the re-cut is tested against.
-- [ ] **Where the mapping lives.** The ruling says the port response is mapped
-  to a spec. A mapper *is* its target (TB080), so `MapTo<X>Spec(response)` is
-  the shape; confirm nothing in TB083's owner-binding rule blocks a service
-  from building that spec and handing it whole into the domain object.
+- [x] **Re-cut TB082.** Done: the subject must be a call on a domain object
+  (a local bound to a construction, or the construction inline); a second
+  `match` in one method, a comparison, a conditional expression, a boolean
+  operator, and a comprehension's `if` clause are findings. `try`/`except` is
+  deliberately out of scope — the error norm owns it. The old subject rule
+  ("a match subject is not a single call") is retired. This closed the
+  conditional-expression item under "Follow-ons from the outcome ruling"
+  below.
+- [x] **Key TB084 on the subject.** Done: a `match` whose subject IS a domain
+  call but whose arms name no outcome member is a finding, so string arms
+  cannot hide a match that should have been exhaustive.
+- [x] **Rewrite the services that dodge it.** Done, and two more the new
+  clauses found: `examples/minimal` and `examples/asyncpg` (both to the
+  one-`match` shape, with the verdict recorded as a `Standing` value object
+  the repository persists), `examples/python-app/reports` (the join, the
+  default and the order moved onto `report.LinkVerdicts`; the service has no
+  branch at all), `examples/python-app/linkpolicy` (the closed set crosses as
+  its canonical string), and `examples/llmport` (a mapper for the save
+  request, one spec per transition).
+- [x] **Where the mapping lives.** Confirmed clean, both shapes. TB083 fires
+  on *reading* a spec's fields outside its own object's `__init__` or on
+  *keeping* one; a spec handed into a method that forwards it to that
+  `__init__` does neither — the shape `Widget.take` already had. Zero TB083
+  findings across all eleven trees.
+- [x] **The parameter rule (Chris, 2026-08-29).** A domain object's public
+  method takes at most one parameter besides `self`, and it is a primitive
+  (enums included), a spec, or a domain object — never a port or client DTO,
+  never a container, never two, never `*args`/`**kwargs`. `TB019`, and it
+  reads `-> None` transitions too. This closes the "No rule governs a domain
+  method's parameters" gap.
+- [x] **Closed sets cross as strings (Chris, 2026-08-29).** A closed set
+  crosses a boundary as its canonical string, never a bool; the receiving side
+  rebuilds its own value object. `domain-return.md` rule 8 — prose only, since
+  the existing no-bools clauses carry the check.
+- [ ] **A port DTO still names its own enum, and that is now the inconsistent
+  shape.** `examples/python-app/reports/application/ports/verdict_source.py:9`
+  declares `VerdictDecision(enum.Enum)` on a `ts.Response`, while
+  `reports/client/client.py` and `linkpolicy/client/client.py` now carry
+  `decision: str`. Left alone deliberately in v0.0.89.0 (Chris): the ruling
+  bans the *bool*, not the port enum, and a ports enum stays local to its
+  ports module (`TB051`). Open only as a consistency question — decide whether
+  a port DTO should also speak the canonical string, or whether the port enum
+  is the one place a closed set survives the crossing intact.
 
 ## Every exported class carries tests (2026-08-29, Chris ruling)
 
@@ -105,14 +236,13 @@ only):**
 
 ## Follow-ons from the outcome ruling (2026-08-26, v0.0.84.0)
 
-- [ ] **A conditional expression in a service is a branch TB082 does not
-  see.** `if`/`while` statements are findings (ruled 2026-08-26: a truth test
-  on a domain object is a bool the domain never handed out), but
-  `x if cond else y` and a comprehension's `if` clause pass —
-  `examples/python-app`'s `reports` and `linkpolicy` services carry both,
-  branching on port-DTO strings. Same ruling, one more node kind, plus the
-  two example rewrites (the answer is a port outcome enum matched in a
-  mapper).
+- [x] **A conditional expression in a service is a branch TB082 does not
+  see.** Closed in v0.0.89.0: `x if c else y`, a comparison, a boolean
+  operator and a comprehension's `if` clause are all TB082 findings, and both
+  `reports` and `linkpolicy` are rewritten. The answer turned out not to be a
+  port enum matched in a mapper — a mapper is not allowed to decide either —
+  but the decision moving onto a domain object, with the closed set crossing
+  the boundary as its canonical string.
 - [ ] **Outcome tracking through locals.** TB084 tracks a kept outcome only
   from the class's own outcome-returning methods (`self._x = self.m()`, or a
   local bound from one); `self._x = other.advance()` and handing a local to
@@ -663,19 +793,28 @@ wait for a ruling:
   constructor raising a domain conflict hides the refusal inside a constructor
   call; a service that reads like a book would show "blocked destination →
   conflict" as its own statement. Recommendation: a mapper never raises; the
-  outcome `match` moves back into the service as a statement. Blocked on the
-  TB082 re-cut below, because a `match` on a port response field is not "a
-  single call" today.
-- [ ] **TB082's remaining clauses were written for the accessor mapper.** The
-  one-mapper-assembly clause is gone with this wave. "Names a straight
-  accessor", "computes in an argument", and "match subject is a single call"
-  stay; the second is what makes `Campaign(MapToCampaignSpec(...))` legal (a
-  mapper is a declared kind), the third is what keeps the outcome matches in
-  the mappers. Re-cut with the decision above.
-- [ ] **A domain method's parameters have no rule.** TB019 governs returns
-  only; `Labels.get(key: str)` (python-app) takes a primitive and nothing
-  reports it. Mirror clause: a domain object's public method takes a value
-  object, an entity, or the spec it forwards whole.
+  outcome `match` moves back into the service as a statement. **Unblocked by
+  the v0.0.89.0 re-cut, and harder than it looked:** a service `match` subject
+  must now be a call on a *domain object*, so a mapper's `match` on a port
+  response cannot simply move into the service — the lookup outcome has to
+  become something a domain object answers. Still open, and still a ruling.
+- [x] **TB082's remaining clauses were written for the accessor mapper —
+  WALKED in v0.0.89.0.** One of the three was dead and is retired; two still
+  do work and stay. "Match subject is a single call" is **gone**, replaced by
+  "match subject is not a call on a domain object" — it was the clause that
+  forced the illegal shape. "Computes in an argument" **stays**: it is what
+  makes `Campaign(MapToCampaignSpec(...))` legal (a mapper is a declared kind)
+  while a bare call in an argument is not, and removing it would let any
+  computation hide in an argument. "Names a straight accessor" **stays**: it
+  has its own fixture (`test_a_straight_accessor_local_is_flagged`) and
+  nothing else reports a local that is just a rename of an attribute.
+- [x] **A domain method's parameters have no rule — CLOSED in v0.0.89.0.**
+  TB019 now carries the mirror: at most one parameter besides `self`, and it
+  is a primitive (an enum counts), a spec, or a domain object. Ruled wider
+  than the sketch here: a primitive IS allowed, so `Labels.get(key: str)`
+  stands; what the clause forbids is a port or client DTO, a container, two
+  parameters, and `*args`/`**kwargs`, and it reads `-> None` transitions,
+  which is where a port DTO would otherwise walk into the domain.
 - [ ] **"Stores nothing" reads `self.x = …`, `self.x: T = …`, `self.x += …` and
   any `.__setattr__(` call.** (v0.0.83.0 closed the three named bypasses:
   `setattr(self, …)`, `self.__dict__[…] = …`, and `vars(self)[…]` are stores

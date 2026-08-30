@@ -48,11 +48,33 @@ myself?* Yes → application service.
    service). The service may *ask* — a `match` on the `ts.Outcome` a
    transition returned (`domain-return.md` rule 6) — and that is its only
    branch: no `if`, no conditional `while` (`while True:` ended by a match
-   arm is the loop), because a truth test on a domain object is a bool the
-   domain never handed out, and it never spells an operator or a domain
-   constant of its own. The leakage
+   arm is the loop), no comparison, no conditional expression (`x if c else
+   y`), no `and`/`or`, and no `if` clause in a comprehension, because a truth
+   test on a domain object is a bool the domain never handed out, and it never
+   spells an operator or a domain constant of its own. The leakage
    checks below are how you catch yourself breaking this.
-2. **The four-step shape.** Every method reads as a short sequence of named
+2. **One `match` per method, on what a domain object answered.** A service
+   method decides **once**. The `match` subject is a call on a domain object —
+   a local bound to a construction (`added = Widget(spec)` … `match
+   added.take(other)`) or the construction inline (`match
+   Widget(spec).take(other)`) — never a port call, never a `str(...)`, never a
+   bare attribute, and its arms are outcome members closed by `case _ as
+   never: assert_never(never)`. A second `match` in the same method is a
+   second rule, about the order of two decisions, that no domain object owns.
+
+   **A second decision that would need a second port call** has three
+   shapes, and the choice is a design decision, not a rule: **call the port
+   every time** and let the one `match` sort the answer; **fold the second
+   question into the first request** so one answer covers both; or, when the
+   steps are genuinely a sequence with their own retries and failures, it is
+   a **workflow** — an orchestrator on a durable-execution engine
+   (`python.md#orchestrators-actions-jobs`), not a service method.
+
+   What the *arms* do afterwards is not a decision. An arm may drive a
+   `-> None` transition that records what it learned as state, and the method
+   then persists unconditionally — the exemplars in `examples/minimal` and
+   `examples/asyncpg` are written that way.
+3. **The four-step shape.** Every method reads as a short sequence of named
    steps, each one call:
    1. **Convert** — request DTO → domain input (a spec or value objects). Pure
       mapping, no rules.
@@ -68,10 +90,10 @@ myself?* Yes → application service.
       (the service-layer twin of a value object leaking its representation).
    Not every method uses all four (a pure command may skip Respond beyond an
    ack), but the order never changes and no step hides domain logic.
-3. **Dependencies come in through the constructor.** The repository (and any
+4. **Dependencies come in through the constructor.** The repository (and any
    domain service) is injected, never constructed inside. The service owns
    coordination, not wiring.
-4. **One transaction boundary per use case.** The service decides *where* the
+5. **One transaction boundary per use case.** The service decides *where* the
    unit of work begins and ends; it does not decide *what* is valid inside it.
    (In Python the boundary is a `ts.Store` the service opens once per method;
    see `repositories.md#rules` rule 6 and `python.md#ports`.)
@@ -150,13 +172,29 @@ lives in one place it never has to spell out (`python.md`, TB080).
 **The Python analyzer backs the shape, not the judgement.** A
 `ts.ApplicationService` subclass is the structural signal `tessercheck` keys on:
 `TB081` requires every constructor dependency to be a `ts.Port` and every public
-method to take exactly one `ts.Request` and return one `ts.Response`; `TB082`
+method to take exactly one `ts.Request` and return one `ts.Response` — and a
+public `__call__` is a public method, not a private one; `TB082`
 rejects a delegation chain, any `if` or `while` (a service branches only by
-`match`, on one domain call or a local bound to one — the outcome a transition
-returned), a nested `match`, a value computed in an argument position, and a
-raw request field crossing into a port; `TB084` requires a `match` on an
-outcome to close on `assert_never`. A conditional *expression* (`x if c else
-y`) is not yet in TB082's reach — a named follow-on. What no check judges is whether the body *coordinates* or *decides*
+`match`, on the outcome a transition returned), a **second** `match` in the same
+method, a `match` subject that is not a call on a domain
+object, a comparison, a call on a comparison dunder or into the `operator`
+module, a `not`, a conditional expression, a boolean operator, a
+comprehension's `if` clause, a value computed in an argument position, and a
+raw request field crossing into a port. One decision is one finding: a
+comparison inside an `if` test or a comprehension filter is reported once, as
+the branch it sits in. The subject's method must be *annotated* to return a
+`ts.Outcome` — an unannotated, `typing.Any`, or plainly non-outcome return is
+read as "not a call on a domain object" rather than trusted. `TB084` requires
+a `match` on an outcome to close on `assert_never`, and reads the *subject* as
+well as the arms, so a match on a domain call whose arms are strings — or whose
+arms mix a string in beside a member — is a finding rather than a hiding place.
+
+Four decision forms are **named gaps**, not exemptions: `try`/`except` (the
+error norm owns it), dict dispatch (`table[key]`), a dict `.get(key, default)`
+carrying the fallback, and a `sorted(..., key=...)` whose key function ranks.
+Each puts a rule in the service that a domain object should own; none is
+mechanically distinguishable today from a legitimate lookup, so a reviewer
+reads them rather than a checker. What no check judges is whether the body *coordinates* or *decides*
 — that stays review, not the compiler (and Go has no mirror of these checks
 today). The leakage checks
 below are a *future*-analyzer seed, not a live check — and even then only two of

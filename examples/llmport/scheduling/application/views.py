@@ -6,6 +6,7 @@ import tesser.application as ts
 
 import scheduling.application.ports.booking_repository as booking_repository
 import scheduling.application.ports.slot_directory as slot_directory
+import scheduling.client.client as client
 import scheduling.domain.scheduling as domain
 
 
@@ -21,6 +22,32 @@ class MapToBookingSpec(ts.Mapper, domain.BookingSpec):
                 typing.assert_never(unreachable)
         super().__init__(
             step=view.step, name=view.name, chosen=view.chosen, offered=view.offered
+        )
+
+
+class MapToNamingSpec(ts.Mapper, domain.NamingSpec):
+
+    def __init__(
+        self,
+        request: client.ProvideNameRequest,
+        available: slot_directory.AvailableSlotsResponse,
+    ) -> None:
+        super().__init__(
+            name=request.name, offered=domain.OfferSpec(labels=available.slots)
+        )
+
+
+class MapToSaveBookingRequest(ts.Mapper, booking_repository.SaveBookingRequest):
+
+    def __init__(self, booking: domain.Booking, booking_id: domain.BookingID) -> None:
+        stored_name = booking.name()
+        stored_chosen = booking.chosen()
+        super().__init__(
+            booking_id=str(booking_id),
+            step=str(booking.step()),
+            name="" if stored_name is None else str(stored_name),
+            chosen="" if stored_chosen is None else str(stored_chosen),
+            offered=tuple(str(slot) for slot in booking.offered()),
         )
 
 

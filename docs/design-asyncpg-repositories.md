@@ -188,6 +188,11 @@ services open the transaction.
   statement once on first use — **on the connection, before the transaction
   opens**. Inside the transaction it is rolled back with everything else, and
   the store's "schema ready" flag then lies; the rollback test caught this.
+  The schema step is upgrade-safe for a column added later — it follows
+  `CREATE TABLE IF NOT EXISTS` with `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`,
+  so a table created by an earlier checkout gains the column instead of
+  breaking every save — but migrations proper (renames, drops, backfills,
+  ordering across deploys) stay out of scope for this example.
 - `alpha/application/alpha_service.py`: holds the store; every use case opens
   `async with self._widget_store.transaction() as widgets_repo:`, and
   `add`'s `HELD` arm calls `beta_check` **after** the transaction closes.
