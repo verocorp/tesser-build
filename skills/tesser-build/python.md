@@ -524,12 +524,15 @@ class Widget(ts.AggregateRoot):
 Coordination only — no business logic. Four named steps
 (`application-services.md`): convert → delegate → persist → respond. Every
 dependency is a `ts.Port` `Protocol` (the analyzer requires it), every public
-method takes exactly one `ts.Request` and returns a `ts.Response`, and the
+method takes exactly one `ts.Request` and returns a `ts.Response` — and a
+public `__call__` is a public method, not a private one — and the
 method inlines its logic — no delegation chains, no `if`, no conditional
-`while`, no comparison, no conditional expression, no `and`/`or`, no
+`while`, no comparison (spelled, or called as `a.__eq__(b)` or
+`operator.eq(a, b)`), no `not`, no conditional expression, no `and`/`or`, no
 comprehension filter: the one branch a service has is **one** `match` on the
-`ts.Outcome` a transition returned (**Outcomes**, above), one level deep, whose
-subject is a call on a domain object, and the one loop
+`ts.Outcome` a transition returned (**Outcomes**, above), whose
+subject is a call on a domain object *whose method is annotated to return that
+outcome*, and the one loop
 is `while True:` ended by a match arm's `break`. A second decision in the same
 method is a second `match`, and a second `match` is a finding — call the port
 every time, fold the question into the first request, or make it a workflow
@@ -720,7 +723,9 @@ class CampaignRepository(ts.Port, typing.Protocol):
   request in / one response out exists to prevent.
 - **A port DTO field is never a union (optional included) and never a bare
   `bool`** (TB080), and **a port DTO is never subclassed** (TB052) — a
-  response hierarchy is a union mypy cannot check for exhaustiveness.
+  response hierarchy is a union mypy cannot check for exhaustiveness. The
+  bare-bool clause covers a `Client` request/response DTO too, where the fix
+  is the canonical string rather than an enum (`domain-return.md` rule 8).
 - **A multi-outcome answer is an enum outcome plus payload; a collection is a
   tuple.** Where cardinality *is* the answer (list-all), the tuple alone says
   it — no outcome enum. The enum is a plain `enum.Enum`, never `StrEnum`/

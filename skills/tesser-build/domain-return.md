@@ -98,8 +98,11 @@ behavior may return. (Maintainer ruling 2026-08-08.)
    the set its third member forever; the comparison that produces the bool is
    also the rule the domain was supposed to own (TB082). Two DTOs on either
    side of a boundary each name their own closed set — neither imports the
-   other's. (Maintainer ruling 2026-08-29; no clause of its own — the existing
-   no-bools rules cover the check.)
+   other's. The **string form is required of a `Client` DTO and a repository
+   row**; a *port* DTO may name its own enum instead, because a port and its
+   adapters live inside one context and the enum never crosses out of it.
+   (Maintainer ruling 2026-08-29; TB080's bare-bool clause carries the check
+   for a port DTO and for a client request/response DTO alike.)
 
 ## Decisions you must make
 

@@ -172,17 +172,29 @@ lives in one place it never has to spell out (`python.md`, TB080).
 **The Python analyzer backs the shape, not the judgement.** A
 `ts.ApplicationService` subclass is the structural signal `tessercheck` keys on:
 `TB081` requires every constructor dependency to be a `ts.Port` and every public
-method to take exactly one `ts.Request` and return one `ts.Response`; `TB082`
+method to take exactly one `ts.Request` and return one `ts.Response` — and a
+public `__call__` is a public method, not a private one; `TB082`
 rejects a delegation chain, any `if` or `while` (a service branches only by
 `match`, on the outcome a transition returned), a **second** `match` in the same
-method, a nested `match`, a `match` subject that is not a call on a domain
-object, a comparison, a conditional expression, a boolean operator, a
+method, a `match` subject that is not a call on a domain
+object, a comparison, a call on a comparison dunder or into the `operator`
+module, a `not`, a conditional expression, a boolean operator, a
 comprehension's `if` clause, a value computed in an argument position, and a
-raw request field crossing into a port; `TB084` requires a `match` on an
-outcome to close on `assert_never`, and reads the *subject* as well as the arms,
-so a match on a domain call whose arms are strings is a finding rather than a
-hiding place. `try`/`except` is deliberately out of scope — the error norm
-owns it. What no check judges is whether the body *coordinates* or *decides*
+raw request field crossing into a port. One decision is one finding: a
+comparison inside an `if` test or a comprehension filter is reported once, as
+the branch it sits in. The subject's method must be *annotated* to return a
+`ts.Outcome` — an unannotated, `typing.Any`, or plainly non-outcome return is
+read as "not a call on a domain object" rather than trusted. `TB084` requires
+a `match` on an outcome to close on `assert_never`, and reads the *subject* as
+well as the arms, so a match on a domain call whose arms are strings — or whose
+arms mix a string in beside a member — is a finding rather than a hiding place.
+
+Four decision forms are **named gaps**, not exemptions: `try`/`except` (the
+error norm owns it), dict dispatch (`table[key]`), a dict `.get(key, default)`
+carrying the fallback, and a `sorted(..., key=...)` whose key function ranks.
+Each puts a rule in the service that a domain object should own; none is
+mechanically distinguishable today from a legitimate lookup, so a reviewer
+reads them rather than a checker. What no check judges is whether the body *coordinates* or *decides*
 — that stays review, not the compiler (and Go has no mirror of these checks
 today). The leakage checks
 below are a *future*-analyzer seed, not a live check — and even then only two of

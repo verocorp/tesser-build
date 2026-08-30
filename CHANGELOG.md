@@ -33,15 +33,53 @@ services rewritten to that shape rather than against a sketch.
   rule it reads `-> None` transitions too, which is exactly where a port DTO
   would otherwise walk into the domain.
 - **A closed set crosses a boundary as its canonical string, never a bool**
-  (`domain-return.md` rule 8). Prose only — the existing no-bools rules carry
-  the check — but it is what the rewrites below are built on.
+  (`domain-return.md` rule 8). `TB080`'s bare-bool clause now carries the check
+  for a `Client` request/response DTO as well as a port DTO — it had been gated
+  on port DTOs alone, so `CheckResponse(allowed: bool)` on a client boundary
+  passed. A *port* DTO may still name its own enum instead of the string; the
+  rule is about what leaves the context.
+- **A public `__call__` is public to every kind rule.** `TB019`, and the
+  service / actions / orchestrator signature and body rules, read a name
+  starting with `_` as private — which let a callable domain object, service,
+  actions class or orchestrator take any arguments in any shape and skip every
+  body rule. `__call__` is now exempted from that skip everywhere.
+- **An unannotated domain-method parameter is a finding** (`TB019`). The
+  parameter mirror read annotations, so `def apply(self, request):` evaded the
+  type clause; it now reports under a sibling of the "names the one thing it
+  takes" clause. This closes the hole the v0.0.89.0 adversarial pass recorded
+  rather than fixed.
+- **More decision forms a service cannot spell** (`TB082`): `not x`, a call on
+  a comparison dunder (`a.__eq__(b)`, `__contains__`, `__bool__`, …), and a
+  call into the `operator` module. And the `match` subject's method must be
+  *annotated* to return a `ts.Outcome` — an unannotated, `typing.Any`, or
+  plainly non-outcome return is read as "not a call on a domain object" rather
+  than trusted.
+- **One decision is one finding.** A comparison inside an `if` test, or inside
+  a comprehension's filter, reported twice; it now reports once, as the branch
+  it sits in.
+- **A quoted container annotation is still a container** (`TB019`), and the
+  container vocabulary is now built from the mutable-collection set, so the
+  `typing`-spelled names (`typing.List[int]`, `typing.Dict[...]`) get the
+  container message too.
+- **Retired: "nests a conditional; a service method branches one level deep"**
+  (`TB082`). It could only fire where a `match` sat inside a `match` arm, which
+  the decides-once clause reports already; the fixture that pinned it now pins
+  that clause instead.
+- **Named gaps, not exemptions** (`application-services.md`, `TODOS.md`): dict
+  dispatch (`table[key]`), a `.get(key, default)` carrying the fallback, a
+  ranking `sorted(..., key=...)`, and `try`/`except`. Each is a decision a
+  domain object should own; none is mechanically separable from a legitimate
+  lookup today.
 
 The trees are the fixtures, and five of them moved:
 
 - `examples/minimal` and `examples/asyncpg` put the `BetaCheck` verdict through
   the domain instead of dropping it. One `match`, on `Widget.take`; the held
   arm asks beta and hands the answer to `Widget.clear(spec) -> None`, which
-  decides kept-vs-released and records it as a `Standing` value object. The
+  matches a `Verdict` outcome the `Clearance` itself answers — the
+  kept-vs-released rule now lives beside the verdict rather than in an
+  if/else against a module-level constant — and records the result as a
+  `Standing` value object. The
   service then persists unconditionally, so a refused widget is stored *as
   released* rather than not stored at all — `standing` goes onto the spec, the
   save request, the load response, the `widgets` table and the client response,
@@ -67,6 +105,28 @@ beside the client DTOs — the ruling bans the bool, not the port enum. And the
 "new object vs transition" question is **not** prescribed: building both
 renderings showed they collapse into the same code once the answer becomes a
 transition, so the docs show both.
+
+Three more example fixes, from the coverage audit:
+
+- `examples/asyncpg`: **adding a stored name is a conflict, not an overwrite.**
+  `add` went through the upsert `save_widget`, so a second `add` of the same
+  name silently replaced its part and its standing. The port declares
+  `add_widget` beside `save_widget`; the Postgres repository inserts with
+  `ON CONFLICT (name) DO NOTHING RETURNING name` and raises the conflict kind
+  when nothing comes back. `take`, which loads first, keeps the upsert. The
+  schema step is upgrade-safe for the column this release added — `CREATE TABLE
+  IF NOT EXISTS` followed by `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` — so a
+  table left by an earlier checkout gains `standing` instead of failing every
+  save; migrations proper stay out of scope. `AddResponse` carries the part the
+  widget holds and the CLI prints name, part and standing.
+- `examples/python-app`: both gateways rebuilt a closed set from a peer's
+  string and let Python's own error out (`KeyError`, `ValueError`); an unknown
+  decision now raises `errors.InfraError` naming it — the peer is speaking a
+  vocabulary this context does not know. `reports/domain/report.py` stops
+  reusing `_UNRECORDED_DECISION` as the sort pivot.
+- `examples/llmport`: `Booking.provide_name` and `Booking.reoffer` read the
+  step *before* building the spec, so a wrong-step call reports the step rather
+  than hiding it behind a spec-validation error.
 
 `skills/tesser-build/` renderings walked in the same change
 (`application-services.md`, `python.md`, `domain-return.md`, `SKILL.md`;

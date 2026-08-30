@@ -19,24 +19,45 @@ rule, a destructuring rebind, a nested-scope shadow, and a container behind
   locals" was ruled out of scope on 2026-08-26. `mypy --strict` rejects it
   today (non-overlapping pattern against the declared return type), and every
   gated tree runs `mypy --strict`, so the path is covered — but by the type
-  checker, not by the analyzer. Decide whether that is enough.
-- [ ] **A domain method's unannotated parameter is skipped.** `TB019`'s
-  parameter mirror reads annotations, so `def apply(self, request):` evades the
-  type clause (the count and `*args` clauses still fire). This is the same
-  policy the TB019 *return* rule already documents — "skips ... unannotated
-  ones (the gated trees run `mypy --strict`, which already requires the
-  annotation)" — so it is consistent rather than an oversight. Revisit only if
-  the analyzer is ever meant to stand alone without a type checker beside it.
-- [ ] **`examples/asyncpg`'s schema change is not a migration.** The `widgets`
-  table gained a `standing text NOT NULL` column in v0.0.89.0, and the
-  repository still issues `CREATE TABLE IF NOT EXISTS`, so a Postgres container
-  left over from an earlier checkout keeps the two-column table and every save
-  fails on the unknown column. CI is unaffected (a fresh service container per
-  run) and the repository sibling tests drop the table first, but the e2e does
-  not. Workaround: `DROP TABLE widgets` in the throwaway container. The repo
-  has no migration story at all — `SKILL.md` names safe change/migration
-  sequencing as deliberately out of scope — so this is a note, not a bug,
-  until that scope opens.
+  checker, not by the analyzer. Decide whether that is enough. **Narrowed in
+  the fix pass:** the subject's method must now be annotated to return *some*
+  `ts.Outcome`, so an unannotated or `typing.Any` subject no longer passes.
+  What remains open is only the mismatch — arms naming a *different* outcome
+  class than the one the method returns.
+- [x] **A domain method's unannotated parameter is skipped.** Closed in the fix
+  pass: an unannotated parameter is now a `TB019` finding under a sibling of
+  the "names the one thing it takes" clause, so the rule no longer leans on
+  `mypy --strict` standing beside it.
+- [x] **`examples/asyncpg`'s schema change is not a migration.** Closed for the
+  one column this release added: the schema step now follows `CREATE TABLE IF
+  NOT EXISTS` with `ALTER TABLE widgets ADD COLUMN IF NOT EXISTS standing text
+  NOT NULL DEFAULT 'kept'`, so a container left over from an earlier checkout
+  gains the column instead of failing every save, and no `DROP TABLE` is
+  needed. The repo still has no migration story at all — `SKILL.md` names safe
+  change/migration sequencing as deliberately out of scope — so renames, drops,
+  backfills and cross-deploy ordering remain unaddressed, which the asyncpg
+  design record now says.
+
+- [ ] **Four TB082 decision forms are named gaps, not exemptions.** A service
+  can still spell a decision as dict dispatch (`table[key]` picking a branch),
+  a `.get(key, default)` whose default *is* the fallback rule, a
+  `sorted(..., key=...)` whose key function ranks, or a `try`/`except` used as
+  a branch. Each is a rule a domain object should own. None was closed in the
+  fix pass because none is mechanically separable from a legitimate lookup,
+  read, or sort with the walk the checker has; `try`/`except` additionally
+  belongs to the error norm. They are written into
+  `skills/tesser-build/application-services.md` beside the existing
+  `try`/`except` carve-out so a reviewer reads them.
+- [ ] **Five `ReportsService` mappers have no direct test.**
+  `examples/python-app/reports/application/service.py` declares mappers that
+  are exercised only through the service's own tests, so a mapping error
+  surfaces as a service failure rather than at the mapper. The asyncpg sibling
+  (`alpha/application/test_alpha_service.py`, `TestAlphaServiceMappers`) is the
+  shape to copy.
+- [ ] **`beta_config.Spec("a")` in `examples/minimal` is dead config.** The
+  component ignores the value it is handed, so the spec proves nothing and a
+  reader cannot tell whether the coordinate matters. Either give beta a
+  coordinate it reads, or drop the spec field.
 
 **Ruled correct, not a defect:** the Codex pass flagged a comparison inside a
 nested `def` in a service method being reported against the service. That is
