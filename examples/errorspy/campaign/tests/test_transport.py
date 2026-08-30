@@ -2,45 +2,35 @@ from __future__ import annotations
 
 import json
 
-import tesser.testing as ts
-
 import campaign.adapters.repositories.repo_storage as repo_storage
 import campaign.adapters.handlers.http as handlers
 import campaign.application.service as service
 import storage
 
 
-@ts.helper
-def _handler(*, down: bool = False) -> handlers.Handler:  # tesser:debt TB073
-    return handlers.Handler(
-        service.CampaignService(
-            repo_storage.StorageCampaignRepository(storage.FakeStorage(down=down))
-        )
-    )
-
-
-@ts.helper
-def _valid_create() -> str:  # tesser:debt TB073
-    return json.dumps(
+def test_create_valid_is_201() -> None:
+    h = handlers.Handler(service.CampaignService(repo_storage.StorageCampaignRepository(storage.FakeStorage())))
+    body = json.dumps(
         {
             "window": {"start": "2026-01-01", "end": "2026-02-01"},
             "links": [{"slug": "spring-sale", "target_url": "https://x.com"}],
         }
     )
 
-
-def test_create_valid_is_201() -> None:
-    assert _handler().create_campaign("c1", _valid_create()).status == 201
+    assert h.create_campaign("c1", body).status == 201
 
 
 def test_validation_is_422_with_rfc9457_body() -> None:
+    h = handlers.Handler(service.CampaignService(repo_storage.StorageCampaignRepository(storage.FakeStorage())))
     bad = json.dumps(
         {
             "window": {"start": "2026-01-01", "end": "2026-02-01"},
             "links": [{"slug": "BAD", "target_url": "https://x.com"}],
         }
     )
-    resp = _handler().create_campaign("c1", bad)
+
+    resp = h.create_campaign("c1", bad)
+
     assert resp.status == 422
     assert resp.body["type"] == "/problems/bad_slug"
     assert resp.body["status"] == 422
@@ -48,31 +38,57 @@ def test_validation_is_422_with_rfc9457_body() -> None:
 
 
 def test_not_found_is_404() -> None:
-    resp = _handler().get_campaign("nope")
+    h = handlers.Handler(service.CampaignService(repo_storage.StorageCampaignRepository(storage.FakeStorage())))
+
+    resp = h.get_campaign("nope")
+
     assert resp.status == 404
     assert resp.body["type"] == "/problems/campaign_missing"
 
 
 def test_conflict_is_409() -> None:
-    h = _handler()
-    h.create_campaign("c1", _valid_create())
+    h = handlers.Handler(service.CampaignService(repo_storage.StorageCampaignRepository(storage.FakeStorage())))
+    h.create_campaign(
+        "c1",
+        json.dumps(
+            {
+                "window": {"start": "2026-01-01", "end": "2026-02-01"},
+                "links": [{"slug": "spring-sale", "target_url": "https://x.com"}],
+            }
+        ),
+    )
     dup = json.dumps({"slug": "spring-sale", "target_url": "https://y.com"})
+
     resp = h.add_link("c1", dup)
+
     assert resp.status == 409
     assert resp.body["type"] == "/problems/duplicate_slug"
 
 
 def test_malformed_json_is_400_not_422() -> None:
-    resp = _handler().create_campaign("c1", "{not json")
+    h = handlers.Handler(service.CampaignService(repo_storage.StorageCampaignRepository(storage.FakeStorage())))
+
+    resp = h.create_campaign("c1", "{not json")
+
     assert resp.status == 400
     assert resp.body["type"] == "/problems/malformed_request"
 
 
 def test_aggregated_validation_lists_all_invalid_params() -> None:
-    h = _handler()
-    h.create_campaign("c1", _valid_create())
+    h = handlers.Handler(service.CampaignService(repo_storage.StorageCampaignRepository(storage.FakeStorage())))
+    h.create_campaign(
+        "c1",
+        json.dumps(
+            {
+                "window": {"start": "2026-01-01", "end": "2026-02-01"},
+                "links": [{"slug": "spring-sale", "target_url": "https://x.com"}],
+            }
+        ),
+    )
     both_bad = json.dumps({"slug": "BAD", "target_url": "ftp://nope"})
+
     resp = h.add_link("c1", both_bad)
+
     assert resp.status == 422
     assert resp.body["type"] == "/problems/validation_failed"
     params = resp.body["invalid-params"]
@@ -82,6 +98,11 @@ def test_aggregated_validation_lists_all_invalid_params() -> None:
 
 
 def test_infra_is_503() -> None:
-    resp = _handler(down=True).get_campaign("c1")
+    h = handlers.Handler(
+        service.CampaignService(repo_storage.StorageCampaignRepository(storage.FakeStorage(down=True)))
+    )
+
+    resp = h.get_campaign("c1")
+
     assert resp.status == 503
     assert resp.body["type"] == "/problems/unavailable"

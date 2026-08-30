@@ -5,7 +5,7 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
-## [0.0.89.2] - 2026-08-30
+## [0.0.90.1] - 2026-08-30
 
 `ts.Record` stopped rejecting a class-level default on CPython 3.14 — the gap
 v0.0.89.1 found and named while adding the 3.13 matrix arm. Under PEP 649 a
@@ -78,6 +78,34 @@ and only one of them survived the change.
   *inherited* field a class-level default (`class Child(Parent): status = 500`),
   because the gate pairs each base's own annotations with that same base's
   namespace. That is a pre-existing gap in the same contract, not a 3.14 one.
+## [0.0.90.0] - 2026-08-30
+
+Five of the fifteen `TB073` debt markers in the test modules excused
+functions that were never helpers under `testing.md` rule 9 — a helper holds
+the values a test does not care about; it does not call the code under test
+or wire it. `_read(root)` invoked the real `FilesystemRepoReader`,
+`_handler(down=)` wired handler → service → repository over `FakeStorage`,
+and `_valid_create()` / `_create_body()` returned a JSON string. The debt was
+not a rule that fit badly; it was arrangement hidden behind a name.
+
+### Changed
+- **`layout/repo/adapters/repositories/test_file_repository.py`** — every
+  test constructs the reader and issues the `ReadRepoRequest` itself; the
+  `_read` helper and its marker are gone.
+- **`examples/errorspy/campaign/tests/test_transport.py` and `test_e2e.py`**
+  — every test builds its own `handlers.Handler(...)` over a fresh
+  `FakeStorage()` and writes the JSON body it sends, so the arrangement is
+  visible at the claim. `_handler`, `_valid_create`, `_create_body` and
+  their four markers are gone, along with the now-unused `tesser.testing`
+  import. `FakeStorage(down=False)` collapses to `FakeStorage()` — the
+  default was already up.
+
+The remaining ten markers (the seven `_repo` fixture-tree builders in
+`layout/`, `_texts` in `layout/repo/domain/test_rules.py`, and the four
+undeclared comparison projections in
+`examples/python-app/campaign/tests/test_serialization_edges.py`) are the
+subject of a separate ruling: they are a fixture shape and a projection
+shape, neither of which the helper rule describes.
 
 ## [0.0.89.1] - 2026-08-30
 

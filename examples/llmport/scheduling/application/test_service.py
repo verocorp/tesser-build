@@ -70,6 +70,7 @@ def test_the_full_booking_flow_through_the_client_surface() -> None:
     state = service.begin(client.BeginBookingRequest(booking_id="b1"))
     assert isinstance(state, client.BookingStateResponse)
     assert state.step == "collect_name"
+    assert state.reply == "ask the caller for their name"
     assert repository.stored["b1"].name == ""
     assert repository.stored["b1"].chosen == ""
     assert repository.stored["b1"].offered == ()
@@ -85,7 +86,7 @@ def test_the_full_booking_flow_through_the_client_surface() -> None:
 
     state = service.confirm(client.ConfirmBookingRequest(booking_id="b1"))
     assert state.step == "booked"
-    assert "mon-9am" in state.reply
+    assert state.reply == "booked mon-9am for Ada Lovelace"
     assert directory.reserved == [("mon-9am", "Ada Lovelace")]
     assert repository.stored["b1"].step == "booked"
     assert repository.stored["b1"].name == "Ada Lovelace"
@@ -117,7 +118,7 @@ def test_a_slot_taken_between_choice_and_confirm_comes_back_as_a_fresh_offer() -
     directory.slots.remove("mon-9am")
     state = service.confirm(client.ConfirmBookingRequest(booking_id="b1"))
 
-    assert "mon-9am was just taken" in state.reply
+    assert state.reply == "mon-9am was just taken; offer the caller the updated slots"
     assert state.step == "choose_slot"
     assert state.offered_slots == ("tue-2pm",)
     assert repository.stored["b1"].step == "choose_slot"

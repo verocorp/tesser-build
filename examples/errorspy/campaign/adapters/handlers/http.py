@@ -22,11 +22,11 @@ class Handler(ts.Handler):
                 raise http.BadRequest(f"malformed JSON: {e}") from e
             if not isinstance(data, dict):
                 raise http.BadRequest("expected a JSON object")
-            body: http.JSONObject = data
+            body: dict[str, object] = data
             window_value = body.get("window")
             if not isinstance(window_value, dict):
                 raise http.BadRequest("'window' must be an object")
-            window: http.JSONObject = window_value
+            window: dict[str, object] = window_value
             links_value = body.get("links")
             if not isinstance(links_value, list):
                 raise http.BadRequest("'links' must be an array")
@@ -41,7 +41,7 @@ class Handler(ts.Handler):
             for link in links:
                 if not isinstance(link, dict):
                     raise http.BadRequest("'link' must be an object")
-                entry: http.JSONObject = link
+                entry: dict[str, object] = link
                 slug = entry.get("slug")
                 if not isinstance(slug, str):
                     raise http.BadRequest("expected a string field")
@@ -70,7 +70,7 @@ class Handler(ts.Handler):
             )
         except errors.DomainError as e:
             status = errors.status_for(e.kind)
-            problem: http.JSONObject = {
+            problem: dict[str, object] = {
                 "type": f"/problems/{e.code}",
                 "title": e.code.replace("_", " "),
                 "status": status,
@@ -123,7 +123,7 @@ class Handler(ts.Handler):
             )
         except errors.DomainError as e:
             status = errors.status_for(e.kind)
-            problem: http.JSONObject = {
+            problem: dict[str, object] = {
                 "type": f"/problems/{e.code}",
                 "title": e.code.replace("_", " "),
                 "status": status,
@@ -166,7 +166,7 @@ class Handler(ts.Handler):
                 raise http.BadRequest(f"malformed JSON: {e}") from e
             if not isinstance(data, dict):
                 raise http.BadRequest("expected a JSON object")
-            body: http.JSONObject = data
+            body: dict[str, object] = data
             slug = body.get("slug")
             if not isinstance(slug, str):
                 raise http.BadRequest("expected a string field")
@@ -193,7 +193,7 @@ class Handler(ts.Handler):
             )
         except errors.DomainError as e:
             status = errors.status_for(e.kind)
-            problem: http.JSONObject = {
+            problem: dict[str, object] = {
                 "type": f"/problems/{e.code}",
                 "title": e.code.replace("_", " "),
                 "status": status,
@@ -246,7 +246,7 @@ class Handler(ts.Handler):
             )
         except errors.DomainError as e:
             status = errors.status_for(e.kind)
-            problem: http.JSONObject = {
+            problem: dict[str, object] = {
                 "type": f"/problems/{e.code}",
                 "title": e.code.replace("_", " "),
                 "status": status,

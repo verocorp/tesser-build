@@ -908,10 +908,19 @@ wait for a ruling:
   honest.
   The hard-collision detail preserved from the ratchet era: an exception
   must subclass `Exception`, so a declares-its-block rule has no satisfiable
-  form for wire exception classes (the `ts.Error` track), and the only
-  analyzer-clean alias spelling (`JSONObject: Final = ...`) is rejected by
-  `mypy --strict` [valid-type] — verified 2026-08-07. Those carry debt markers
-  until their rule changes land.
+  form for wire exception classes (the `ts.Error` track). Those carry debt
+  markers until their rule changes land.
+  **The two type aliases are gone (2026-08-30).** The collision was real —
+  `JSONObject: Final = ...` is analyzer-clean but rejected by `mypy --strict`
+  [valid-type], verified 2026-08-07 — so the fix was to stop naming the
+  alias at all: `examples/python-app/protocol/http.py` and
+  `examples/errorspy/protocol/http.py` now spell `dict[str, object]` inline
+  at every annotation, and `skills/tesser-build/python.md`'s protocol
+  illustration follows. No rule changed. The residue is now 17 markers.
+  The shape test's `tesser.context` import (TB050) is gone too: the DTO
+  assertions it needed are what TB042 (a context `__init__` is empty),
+  TB080 (a DTO field is a primitive or another DTO), and TB081 (a client
+  method returns a `ts.Response`) now enforce, so the test dropped them.
 - [ ] **Host-class vocabulary — PARTIALLY RESOLVED (srv-wire-vocabulary wave,
   2026-08-07).** `tesser.srv` now exists (Host, Port, Record, Request,
   Response — package-scoped kinds per the errors-ruling grammar; `Record`
@@ -1023,8 +1032,19 @@ wait for a ruling:
   2026-08-12).** A tree-root conftest is a TB065 leaf; a conftest inside a
   tests location carries that location's TB070 row. `tests.discovery` /
   `tests.support` keep their TB041 debt-file markers but now answer for their
-  imports under the root-tests tier; `tests.test_shape`'s `tesser.context`
-  import keeps its explicit TB050 pin.
+  imports under the root-tests tier. (`tests.test_shape`'s `tesser.context`
+  pin is gone as of 2026-08-30 — see the residue entry above.)
+  **Why the two TB041 debt-file markers cannot be retired without a ruling**
+  (checked 2026-08-30): there is no legal placement in the tree for a shared
+  test-support module. `tests/` admits only test modules and conftest
+  (TB041); a conftest is a leaf that imports nothing from its tree (TB065),
+  which `tests/support.py` does; a top-level module belongs to no governed
+  package (TB040); and inside a test module the only non-test forms are
+  `@ts.helper` — defaulted primitives only, builds a spec or a DTO, no
+  control flow (TB073) — and `@ts.fake` (TB071/TB072). The AST/filesystem
+  detectors satisfy none of those. Retiring the markers therefore means
+  deleting the detector tests, which is the wave-sized "Relocate the
+  architecture detectors out of `tests/`" item below, not a cleanup.
 - [ ] **Test-module annotation.** When tests declare themselves, flip
   "a test module imports tesser.testing at most once, as ts" to exactly-once.
 - [ ] **Wire vocabulary — what the srv-matrix build wave left open**

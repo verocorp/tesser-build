@@ -12,10 +12,14 @@ def test_rules_md_is_current() -> None:
     read = rulebook_repository.FilesystemRulebookSources().read(
         rulebook_sources.ReadRulebookRequest(tree=str(root))
     )
-    rendered = rulebook.render(
-        read.checks_text,
-        tuple((module.name, module.text) for module in read.test_modules),
-        read.contracts_text,
+    rendered = str(
+        rulebook.Rulebook(
+            rulebook.RulebookSpec(
+                read.checks_text,
+                tuple((module.name, module.text) for module in read.test_modules),
+                read.contracts_text,
+            )
+        )
     )
     output = root / "RULES.md"
     assert output.exists(), "RULES.md missing; generate with: python3 -m srv.cli.rules"
@@ -29,10 +33,14 @@ def test_every_rule_has_a_fixture() -> None:
     read = rulebook_repository.FilesystemRulebookSources().read(
         rulebook_sources.ReadRulebookRequest(tree=str(root))
     )
-    rendered = rulebook.render(
-        read.checks_text,
-        tuple((module.name, module.text) for module in read.test_modules),
-        read.contracts_text,
+    rendered = str(
+        rulebook.Rulebook(
+            rulebook.RulebookSpec(
+                read.checks_text,
+                tuple((module.name, module.text) for module in read.test_modules),
+                read.contracts_text,
+            )
+        )
     )
     uncovered = [
         line.split(" | ")[1]
@@ -56,10 +64,14 @@ def test_every_violation_site_yields_a_rulebook_row() -> None:
             or (isinstance(node.func, ast.Attribute) and node.func.attr == "Violation")
         )
     ]
-    rendered = rulebook.render(
-        read.checks_text,
-        tuple((module.name, module.text) for module in read.test_modules),
-        read.contracts_text,
+    rendered = str(
+        rulebook.Rulebook(
+            rulebook.RulebookSpec(
+                read.checks_text,
+                tuple((module.name, module.text) for module in read.test_modules),
+                read.contracts_text,
+            )
+        )
     )
     rows = [line for line in rendered.splitlines() if line.startswith("| TB")]
     rendered_lines = {
