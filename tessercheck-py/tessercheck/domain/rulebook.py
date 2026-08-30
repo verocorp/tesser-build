@@ -5,6 +5,7 @@ import re
 import typing
 
 import tesser.domain as ts
+import tesser.serialization as serialization
 
 import tessercheck.domain.checks as checks
 
@@ -252,325 +253,341 @@ class RuleRow(ts.ValueObject):
         return self._linenos
 
 
-def render(  # tesser:debt TB051
-    checks_text: str,
-    test_modules: tuple[tuple[str, str], ...] = (),
-    contracts_text: str = "",
-) -> str:
-    def spec_fields(call: ast.Call) -> dict[str, ast.expr] | None:
-        if call.keywords or len(call.args) != 1:
-            return None
-        spec = call.args[0]
-        if not isinstance(spec, ast.Call):
-            return None
-        if isinstance(spec.func, ast.Name):
-            named = spec.func.id
-        elif isinstance(spec.func, ast.Attribute):
-            named = spec.func.attr
-        else:
-            return None
-        if named != VIOLATION_SPEC or len(spec.args) > len(VIOLATION_FIELDS):
-            return None
-        bound = dict(zip(VIOLATION_FIELDS, spec.args))
-        for keyword in spec.keywords:
-            if keyword.arg is None or keyword.arg in bound:
-                return None
-            bound[keyword.arg] = keyword.value
-        if set(bound) != set(VIOLATION_FIELDS):
-            return None
-        return bound
+class RulebookSpec(ts.Spec):
 
-    tree = ast.parse(checks_text)
-    assertions: list[tuple[str, tuple[str, ...]]] = []
-    for _, module_text in test_modules:
-        module_tree = ast.parse(module_text)
-        for fn in module_tree.body:
-            if not isinstance(fn, ast.FunctionDef) or not fn.name.startswith("test_"):
-                continue
-            literals: list[str] = []
-            for assert_node in ast.walk(fn):
-                if isinstance(assert_node, ast.Assert):
-                    for sub in ast.walk(assert_node):
-                        if (
-                            isinstance(sub, ast.Constant)
-                            and isinstance(sub.value, str)
-                            and len(sub.value) >= 8
-                        ):
-                            literals.append(sub.value)
-            assertions.append((fn.name, tuple(literals)))
-    ts_map: dict[str, str] | None = None
-    for ts_node in tree.body:
-        if (
-            isinstance(ts_node, ast.AnnAssign)
-            and isinstance(ts_node.target, ast.Name)
-            and ts_node.target.id == "TS_NAME_BY_BLOCK"
-            and isinstance(ts_node.value, ast.Dict)
-        ):
-            ts_map = {}
-            for ts_key, ts_value in zip(ts_node.value.keys, ts_node.value.values):
-                if (
-                    isinstance(ts_key, ast.Constant)
-                    and isinstance(ts_key.value, str)
-                    and isinstance(ts_value, ast.Constant)
-                    and isinstance(ts_value.value, str)
-                ):
-                    ts_map[ts_key.value] = ts_value.value
-            break
-    if ts_map is None:
-        raise RuntimeError("TS_NAME_BY_BLOCK not found in checks.py")
-    order: list[str] = []
-    codes: dict[str, str] = {}
-    applies: dict[str, list[str]] = {}
-    shapes: dict[str, list[str]] = {}
-    linenos: dict[str, list[int]] = {}
-    for cls in (n for n in tree.body if isinstance(n, ast.ClassDef)):
-        for method in (n for n in cls.body if isinstance(n, ast.FunctionDef)):
-            calls = [
-                node
-                for node in ast.walk(method)
-                if isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id == "Violation"
-            ]
-            if not calls:
-                continue
-            aliases: dict[str, str] = {}
-            for alias_node in method.body:
-                if (
-                    isinstance(alias_node, ast.Assign)
-                    and len(alias_node.targets) == 1
-                    and isinstance(alias_node.targets[0], ast.Name)
-                    and isinstance(alias_node.value, ast.Subscript)
-                    and isinstance(alias_node.value.value, ast.Name)
-                    and alias_node.value.value.id == "TS_NAME_BY_BLOCK"
-                    and isinstance(alias_node.value.slice, ast.Name)
-                ):
-                    aliases[alias_node.targets[0].id] = alias_node.value.slice.id
-            params = [arg.arg for arg in method.args.args if arg.arg != "self"]
-            bindings: list[dict[str, str | None]] = []
-            for node in ast.walk(tree):
-                if (
-                    isinstance(node, ast.Call)
-                    and isinstance(node.func, ast.Attribute)
-                    and node.func.attr == method.name
-                    and isinstance(node.func.value, ast.Name)
-                    and node.func.value.id == "self"
-                ):
-                    bound_args: dict[str, str | None] = {}
-                    for name, arg in zip(params, node.args):
-                        if isinstance(arg, ast.Constant) and (
-                            arg.value is None or isinstance(arg.value, str)
-                        ):
-                            bound_args[name] = arg.value
-                    if bound_args not in bindings:
-                        bindings.append(bound_args)
-            for binding in bindings or [{}]:
-                for call in calls:
-                    fields = spec_fields(call)
-                    if fields is None:
-                        raise RuntimeError(
-                            f"checks.py:{call.lineno}: Violation takes exactly the four "
-                            "spec fields (path, line, code, message), as one ViolationSpec"
-                        )
-                    code_expr = fields["code"]
-                    if isinstance(code_expr, ast.Constant) and isinstance(
-                        code_expr.value, str
-                    ):
-                        code: str | None = code_expr.value
-                    elif isinstance(code_expr, ast.Name) and code_expr.id in binding:
-                        code = binding[code_expr.id]
-                    else:
-                        raise RuntimeError(
-                            f"checks.py:{call.lineno}: violation code is neither a literal nor a "
-                            "literally-bound parameter"
-                        )
-                    if code is None:
-                        continue
-                    message_node = fields["message"]
-                    if isinstance(message_node, ast.Constant) and isinstance(
-                        message_node.value, str
-                    ):
-                        message = str(message_node.value)
-                    else:
-                        if not isinstance(message_node, ast.JoinedStr):
-                            raise RuntimeError(
-                                f"checks.py:{call.lineno}: violation message is not a literal or f-string"
-                            )
-                        parts: list[str] = []
-                        dropped = False
-                        for value in message_node.values:
-                            if isinstance(value, ast.Constant) and isinstance(
-                                value.value, str
+    def __init__(
+        self,
+        checks_text: str,
+        test_modules: tuple[tuple[str, str], ...] = (),
+        contracts_text: str = "",
+    ) -> None:
+        self.checks_text = checks_text
+        self.test_modules = test_modules
+        self.contracts_text = contracts_text
+
+
+class Rulebook(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, spec: RulebookSpec) -> None:
+        def spec_fields(call: ast.Call) -> dict[str, ast.expr] | None:
+            if call.keywords or len(call.args) != 1:
+                return None
+            violation_spec_call = call.args[0]
+            if not isinstance(violation_spec_call, ast.Call):
+                return None
+            if isinstance(violation_spec_call.func, ast.Name):
+                named = violation_spec_call.func.id
+            elif isinstance(violation_spec_call.func, ast.Attribute):
+                named = violation_spec_call.func.attr
+            else:
+                return None
+            if named != VIOLATION_SPEC or len(violation_spec_call.args) > len(VIOLATION_FIELDS):
+                return None
+            bound = dict(zip(VIOLATION_FIELDS, violation_spec_call.args))
+            for keyword in violation_spec_call.keywords:
+                if keyword.arg is None or keyword.arg in bound:
+                    return None
+                bound[keyword.arg] = keyword.value
+            if set(bound) != set(VIOLATION_FIELDS):
+                return None
+            return bound
+
+        tree = ast.parse(spec.checks_text)
+        assertions: list[tuple[str, tuple[str, ...]]] = []
+        for _, module_text in spec.test_modules:
+            module_tree = ast.parse(module_text)
+            for fn in module_tree.body:
+                if not isinstance(fn, ast.FunctionDef) or not fn.name.startswith("test_"):
+                    continue
+                literals: list[str] = []
+                for assert_node in ast.walk(fn):
+                    if isinstance(assert_node, ast.Assert):
+                        for sub in ast.walk(assert_node):
+                            if (
+                                isinstance(sub, ast.Constant)
+                                and isinstance(sub.value, str)
+                                and len(sub.value) >= 8
                             ):
-                                parts.append(value.value)
-                                continue
-                            assert isinstance(value, ast.FormattedValue)
-                            expr = value.value
-                            text = ast.unparse(expr)
-                            if isinstance(expr, ast.Name) and expr.id in binding:
-                                bound = binding[expr.id]
-                                if bound is None:
+                                literals.append(sub.value)
+                assertions.append((fn.name, tuple(literals)))
+        ts_map: dict[str, str] | None = None
+        for ts_node in tree.body:
+            if (
+                isinstance(ts_node, ast.AnnAssign)
+                and isinstance(ts_node.target, ast.Name)
+                and ts_node.target.id == "TS_NAME_BY_BLOCK"
+                and isinstance(ts_node.value, ast.Dict)
+            ):
+                ts_map = {}
+                for ts_key, ts_value in zip(ts_node.value.keys, ts_node.value.values):
+                    if (
+                        isinstance(ts_key, ast.Constant)
+                        and isinstance(ts_key.value, str)
+                        and isinstance(ts_value, ast.Constant)
+                        and isinstance(ts_value.value, str)
+                    ):
+                        ts_map[ts_key.value] = ts_value.value
+                break
+        if ts_map is None:
+            raise RuntimeError("TS_NAME_BY_BLOCK not found in checks.py")
+        order: list[str] = []
+        codes: dict[str, str] = {}
+        applies: dict[str, list[str]] = {}
+        shapes: dict[str, list[str]] = {}
+        linenos: dict[str, list[int]] = {}
+        for cls in (n for n in tree.body if isinstance(n, ast.ClassDef)):
+            for method in (n for n in cls.body if isinstance(n, ast.FunctionDef)):
+                calls = [
+                    node
+                    for node in ast.walk(method)
+                    if isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id == "Violation"
+                ]
+                if not calls:
+                    continue
+                aliases: dict[str, str] = {}
+                for alias_node in method.body:
+                    if (
+                        isinstance(alias_node, ast.Assign)
+                        and len(alias_node.targets) == 1
+                        and isinstance(alias_node.targets[0], ast.Name)
+                        and isinstance(alias_node.value, ast.Subscript)
+                        and isinstance(alias_node.value.value, ast.Name)
+                        and alias_node.value.value.id == "TS_NAME_BY_BLOCK"
+                        and isinstance(alias_node.value.slice, ast.Name)
+                    ):
+                        aliases[alias_node.targets[0].id] = alias_node.value.slice.id
+                params = [arg.arg for arg in method.args.args if arg.arg != "self"]
+                bindings: list[dict[str, str | None]] = []
+                for node in ast.walk(tree):
+                    if (
+                        isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Attribute)
+                        and node.func.attr == method.name
+                        and isinstance(node.func.value, ast.Name)
+                        and node.func.value.id == "self"
+                    ):
+                        bound_args: dict[str, str | None] = {}
+                        for name, arg in zip(params, node.args):
+                            if isinstance(arg, ast.Constant) and (
+                                arg.value is None or isinstance(arg.value, str)
+                            ):
+                                bound_args[name] = arg.value
+                        if bound_args not in bindings:
+                            bindings.append(bound_args)
+                for binding in bindings or [{}]:
+                    for call in calls:
+                        fields = spec_fields(call)
+                        if fields is None:
+                            raise RuntimeError(
+                                f"checks.py:{call.lineno}: Violation takes exactly the four "
+                                "spec fields (path, line, code, message), as one ViolationSpec"
+                            )
+                        code_expr = fields["code"]
+                        if isinstance(code_expr, ast.Constant) and isinstance(
+                            code_expr.value, str
+                        ):
+                            code: str | None = code_expr.value
+                        elif isinstance(code_expr, ast.Name) and code_expr.id in binding:
+                            code = binding[code_expr.id]
+                        else:
+                            raise RuntimeError(
+                                f"checks.py:{call.lineno}: violation code is neither a literal nor a "
+                                "literally-bound parameter"
+                            )
+                        if code is None:
+                            continue
+                        message_node = fields["message"]
+                        if isinstance(message_node, ast.Constant) and isinstance(
+                            message_node.value, str
+                        ):
+                            message = str(message_node.value)
+                        else:
+                            if not isinstance(message_node, ast.JoinedStr):
+                                raise RuntimeError(
+                                    f"checks.py:{call.lineno}: violation message is not a literal or f-string"
+                                )
+                            parts: list[str] = []
+                            dropped = False
+                            for value in message_node.values:
+                                if isinstance(value, ast.Constant) and isinstance(
+                                    value.value, str
+                                ):
+                                    parts.append(value.value)
+                                    continue
+                                assert isinstance(value, ast.FormattedValue)
+                                expr = value.value
+                                text = ast.unparse(expr)
+                                if isinstance(expr, ast.Name) and expr.id in binding:
+                                    bound = binding[expr.id]
+                                    if bound is None:
+                                        dropped = True
+                                        break
+                                    parts.append(bound)
+                                    continue
+                                if text in HOLE_NAMES:
+                                    parts.append(HOLE_NAMES[text])
+                                    continue
+                                param: str | None = None
+                                if isinstance(expr, ast.Name) and expr.id in aliases:
+                                    param = aliases[expr.id]
+                                elif (
+                                    isinstance(expr, ast.Subscript)
+                                    and isinstance(expr.value, ast.Name)
+                                    and expr.value.id == "TS_NAME_BY_BLOCK"
+                                    and isinstance(expr.slice, ast.Name)
+                                ):
+                                    param = expr.slice.id
+                                if param is None:
+                                    raise RuntimeError(
+                                        f"checks.py:{call.lineno}: no reader name for message hole {{{text}}}; extend HOLE_NAMES"
+                                    )
+                                if param not in binding:
+                                    raise RuntimeError(
+                                        f"checks.py:{call.lineno}: hole {{{text}}} depends on caller argument {param!r} that is not a literal"
+                                    )
+                                block = binding[param]
+                                if block is None:
                                     dropped = True
                                     break
-                                parts.append(bound)
+                                parts.append(ts_map[block])
+                            if dropped:
                                 continue
-                            if text in HOLE_NAMES:
-                                parts.append(HOLE_NAMES[text])
-                                continue
-                            param: str | None = None
-                            if isinstance(expr, ast.Name) and expr.id in aliases:
-                                param = aliases[expr.id]
-                            elif (
-                                isinstance(expr, ast.Subscript)
-                                and isinstance(expr.value, ast.Name)
-                                and expr.value.id == "TS_NAME_BY_BLOCK"
-                                and isinstance(expr.slice, ast.Name)
-                            ):
-                                param = expr.slice.id
-                            if param is None:
-                                raise RuntimeError(
-                                    f"checks.py:{call.lineno}: no reader name for message hole {{{text}}}; extend HOLE_NAMES"
-                                )
-                            if param not in binding:
-                                raise RuntimeError(
-                                    f"checks.py:{call.lineno}: hole {{{text}}} depends on caller argument {param!r} that is not a literal"
-                                )
-                            block = binding[param]
-                            if block is None:
-                                dropped = True
-                                break
-                            parts.append(ts_map[block])
-                        if dropped:
-                            continue
-                        message = "".join(parts)
-                    if "; " not in message:
-                        raise RuntimeError(
-                            f"checks.py:{call.lineno}: violation message lacks a '; <normative clause>' tail"
+                            message = "".join(parts)
+                        if "; " not in message:
+                            raise RuntimeError(
+                                f"checks.py:{call.lineno}: violation message lacks a '; <normative clause>' tail"
+                            )
+                        head, clause = message.rsplit("; ", 1)
+                        if "⟨" in clause:
+                            raise RuntimeError(
+                                f"checks.py:{call.lineno}: the normative clause after ';' is not a literal"
+                            )
+                        shape = WHERE_PREFIX.sub("", head)
+                        subject = binding.get("subject")
+                        key = (
+                            subject
+                            if isinstance(subject, str)
+                            else f"{cls.name}.{method.name}"
                         )
-                    head, clause = message.rsplit("; ", 1)
-                    if "⟨" in clause:
-                        raise RuntimeError(
-                            f"checks.py:{call.lineno}: the normative clause after ';' is not a literal"
-                        )
-                    shape = WHERE_PREFIX.sub("", head)
-                    subject = binding.get("subject")
-                    key = (
-                        subject
-                        if isinstance(subject, str)
-                        else f"{cls.name}.{method.name}"
-                    )
-                    if key not in APPLIES_TO:
-                        raise RuntimeError(
-                            f"no APPLIES_TO entry for {key!r}; extend the map"
-                        )
-                    if clause not in codes:
-                        order.append(clause)
-                        codes[clause] = code
-                        applies[clause] = []
-                        shapes[clause] = []
-                        linenos[clause] = []
-                    if codes[clause] != code:
-                        raise RuntimeError(
-                            f"checks.py:{call.lineno}: clause {clause!r} carries code {code}, "
-                            f"but an earlier site carries {codes[clause]}; one clause has one code"
-                        )
-                    if APPLIES_TO[key] not in applies[clause]:
-                        applies[clause].append(APPLIES_TO[key])
-                    if shape not in shapes[clause]:
-                        shapes[clause].append(shape)
-                    if call.lineno not in linenos[clause]:
-                        linenos[clause].append(call.lineno)
-    lines = [
-        "# Rules implemented in the spike",
-        "",
-        "Generated from the implementation by the rulebook — never hand-edit.",
-        "`python3 -m srv.cli.rules --check` fails when this file drifts from the",
-        "code; regenerate with `python3 -m srv.cli.rules`. One row per rule: the",
-        "normative clause every violation message ends with. ⟨…⟩ marks a value",
-        "filled in per violation. A rule emitted from more than one owner lists",
-        "every owner in Applies to, joined by ·. Fixture coverage is exact: a",
-        "test covers a rule when an assert literal contains the clause.",
-        "",
-        "## tessercheck rules (from the violation messages in tessercheck/domain/checks.py)",
-        "",
-        "| Code | The rule | Applies to | Fires when | Source | Fixtures |",
-        "|---|---|---|---|---|---|",
-    ]
-    for row in (
-        RuleRow(
-            RuleRowSpec(
-                clause,
-                codes[clause],
-                " · ".join(applies[clause]),
-                tuple(shapes[clause]),
-                tuple(linenos[clause]),
+                        if key not in APPLIES_TO:
+                            raise RuntimeError(
+                                f"no APPLIES_TO entry for {key!r}; extend the map"
+                            )
+                        if clause not in codes:
+                            order.append(clause)
+                            codes[clause] = code
+                            applies[clause] = []
+                            shapes[clause] = []
+                            linenos[clause] = []
+                        if codes[clause] != code:
+                            raise RuntimeError(
+                                f"checks.py:{call.lineno}: clause {clause!r} carries code {code}, "
+                                f"but an earlier site carries {codes[clause]}; one clause has one code"
+                            )
+                        if APPLIES_TO[key] not in applies[clause]:
+                            applies[clause].append(APPLIES_TO[key])
+                        if shape not in shapes[clause]:
+                            shapes[clause].append(shape)
+                        if call.lineno not in linenos[clause]:
+                            linenos[clause].append(call.lineno)
+        lines = [
+            "# Rules implemented in the spike",
+            "",
+            "Generated from the implementation by the rulebook — never hand-edit.",
+            "`python3 -m srv.cli.rules --check` fails when this file drifts from the",
+            "code; regenerate with `python3 -m srv.cli.rules`. One row per rule: the",
+            "normative clause every violation message ends with. ⟨…⟩ marks a value",
+            "filled in per violation. A rule emitted from more than one owner lists",
+            "every owner in Applies to, joined by ·. Fixture coverage is exact: a",
+            "test covers a rule when an assert literal contains the clause.",
+            "",
+            "## tessercheck rules (from the violation messages in tessercheck/domain/checks.py)",
+            "",
+            "| Code | The rule | Applies to | Fires when | Source | Fixtures |",
+            "|---|---|---|---|---|---|",
+        ]
+        for row in (
+            RuleRow(
+                RuleRowSpec(
+                    clause,
+                    codes[clause],
+                    " · ".join(applies[clause]),
+                    tuple(shapes[clause]),
+                    tuple(linenos[clause]),
+                )
             )
-        )
-        for clause in order
-    ):
-        covered = tuple(
-            name
-            for name, literals in assertions
-            if any(str(row.clause()) in literal for literal in literals)
-        )
-        coverage = ", ".join(covered) if covered else "NONE"
-        shape_text = " · ".join(str(shape) for shape in row.shapes()).replace("|", "\\|")
-        source = "domain/checks.py:" + ",".join(
-            str(int(line)) for line in sorted(row.linenos(), key=int)
-        )
-        lines.append(
-            f"| {row.code()} | {row.clause()} | {row.applies_to()} | {shape_text} | {source} | {coverage} |"
-        )
-    package: str | None = None
-    for node in tree.body:
-        if (
-            isinstance(node, ast.AnnAssign)
-            and isinstance(node.target, ast.Name)
-            and node.target.id == "PROTOCOL_PACKAGE"
-            and isinstance(node.value, ast.Constant)
-            and isinstance(node.value.value, str)
+            for clause in order
         ):
-            package = str(node.value.value)
-            break
-    if package is None:
-        raise RuntimeError("PROTOCOL_PACKAGE not found in checks.py")
-    lines += [
-        "",
-        "## Named exemptions (carve-outs the code makes on purpose, not rules)",
-        "",
-        f"- modules under the top-level `{package}/` package are the protocol",
-        "  modules (PROTOCOL_PACKAGE in tessercheck/domain/checks.py) — package membership",
-        "  is the declaration; no suffix opts a module in, so a stray `*wire.py`",
-        "  is homeless.",
-        "- the job kind (`ts.Job`, in `adapters/jobs/`) carries placement and",
-        "  import rules only — no signature or body rules yet (deliberate: the",
-        "  job's reach is what the split exists for; what a job may hold is a",
-        "  later wave).",
-        "- srv and protocol kinds carry placement and import rules only — no",
-        "  signature or body rules yet (deliberate: the srv signature matrix",
-        "  ruled the kinds and their invariants, not tessercheck rules over",
-        "  their members — see TODOS.md).",
-        "",
-        "## Import contracts (from .importlinter)",
-        "",
-        "| Contract | Rule |",
-        "|---|---|",
-    ]
-    contract_id = None
-    for contract_line in contracts_text.splitlines():
-        header = re.match(r"\[importlinter:contract:(.+)\]", contract_line.strip())
-        if header:
-            contract_id = header.group(1)
-            continue
-        name_match = re.match(r"name\s*=\s*(.+)", contract_line.strip())
-        if name_match and contract_id is not None:
-            lines.append(f"| {contract_id} | {name_match.group(1)} |")
-            contract_id = None
-    lines += [
-        "",
-        "Import contracts are verified by violation-injection runs during development;",
-        "no committed test re-runs them (named gap — cf. python-app's committed",
-        "architecture violation-injection test).",
-        "",
-    ]
-    return "\n".join(lines)
+            covered = tuple(
+                name
+                for name, literals in assertions
+                if any(str(row.clause()) in literal for literal in literals)
+            )
+            coverage = ", ".join(covered) if covered else "NONE"
+            shape_text = " · ".join(str(shape) for shape in row.shapes()).replace("|", "\\|")
+            source = "domain/checks.py:" + ",".join(
+                str(int(line)) for line in sorted(row.linenos(), key=int)
+            )
+            lines.append(
+                f"| {row.code()} | {row.clause()} | {row.applies_to()} | {shape_text} | {source} | {coverage} |"
+            )
+        package: str | None = None
+        for node in tree.body:
+            if (
+                isinstance(node, ast.AnnAssign)
+                and isinstance(node.target, ast.Name)
+                and node.target.id == "PROTOCOL_PACKAGE"
+                and isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str)
+            ):
+                package = str(node.value.value)
+                break
+        if package is None:
+            raise RuntimeError("PROTOCOL_PACKAGE not found in checks.py")
+        lines += [
+            "",
+            "## Named exemptions (carve-outs the code makes on purpose, not rules)",
+            "",
+            f"- modules under the top-level `{package}/` package are the protocol",
+            "  modules (PROTOCOL_PACKAGE in tessercheck/domain/checks.py) — package membership",
+            "  is the declaration; no suffix opts a module in, so a stray `*wire.py`",
+            "  is homeless.",
+            "- the job kind (`ts.Job`, in `adapters/jobs/`) carries placement and",
+            "  import rules only — no signature or body rules yet (deliberate: the",
+            "  job's reach is what the split exists for; what a job may hold is a",
+            "  later wave).",
+            "- srv and protocol kinds carry placement and import rules only — no",
+            "  signature or body rules yet (deliberate: the srv signature matrix",
+            "  ruled the kinds and their invariants, not tessercheck rules over",
+            "  their members — see TODOS.md).",
+            "",
+            "## Import contracts (from .importlinter)",
+            "",
+            "| Contract | Rule |",
+            "|---|---|",
+        ]
+        contract_id = None
+        for contract_line in spec.contracts_text.splitlines():
+            header = re.match(r"\[importlinter:contract:(.+)\]", contract_line.strip())
+            if header:
+                contract_id = header.group(1)
+                continue
+            name_match = re.match(r"name\s*=\s*(.+)", contract_line.strip())
+            if name_match and contract_id is not None:
+                lines.append(f"| {contract_id} | {name_match.group(1)} |")
+                contract_id = None
+        lines += [
+            "",
+            "Import contracts are verified by violation-injection runs during development;",
+            "no committed test re-runs them (named gap — cf. python-app's committed",
+            "architecture violation-injection test).",
+            "",
+        ]
+        object.__setattr__(self, "_value", "\n".join(lines))
+
+    def __str__(self) -> str:
+        return serialization.canonical_str(self._value)
