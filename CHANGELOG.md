@@ -5,6 +5,43 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.95.0] - 2026-08-30
+
+`contexts` and `tops` now come from the modules that parsed. This resolves
+open ruling 2 on PR #159 (Chris, 2026-08-30: parsed modules are the
+universe).
+
+### Fixed
+- **A file that never becomes a module no longer governs its siblings.**
+  `Codebase.__init__` derived `tops` and `contexts` from `spec.sources` —
+  every `.pyi` stub, duplicate-name file, non-UTF-8 file, and file that
+  fails to parse counted — and froze those values into each `Module`'s
+  `Placement` and into the kernel-tops intersections behind `Module`'s
+  spoken ports and test tier. `violations()` then recomputed `contexts`
+  and `tops` from `self._modules` for the `Registry`, so a single run
+  carried two disagreeing context sets: a module could be *placed* as a
+  context role while `registry.contexts()` — read by the import,
+  placement, protocol, eval, and test checks — did not name that context.
+  There is now one derivation. `__init__` filters and parses first, then
+  derives `tops` and `contexts` from the survivors, then builds the
+  `Module` objects; `violations()` reads the same stored values instead of
+  recomputing them.
+- **Measured effect.** `shop/__init__.py` beside only a
+  `shop/domain/money.pyi` stub reports `TB040 shop belongs to no governed
+  package` again, as it did before the `TB051` decomposition; the same
+  flip held for a duplicate name, a non-UTF-8 file, and a `SyntaxError`
+  file. A differential run against the pre-decomposition `checks.py`
+  (v0.0.92.0) is byte-identical on all eleven gated trees and on the
+  50/200/800-module synthetic trees, and the four synthetic repros go from
+  DIFFERENT to SAME. Two pinning tests lock it, both verified to fail
+  against the unfixed tree.
+- **One `O(modules^2)` term goes with it.** The deleted recomputation
+  rebuilt the whole-tree kernel-tops intersection inside a per-module
+  loop. Cost is a wash overall — the filter pass parses each source once
+  more before `Module` parses it again — measured at 3.20s to 3.37s on
+  tessercheck-py's own 135-module tree and 7.76s to 7.52s on the
+  800-module synthetic tree.
+
 ## [0.0.93.0] - 2026-08-30
 
 The analyzer now conforms to the rule it enforces. `TB051` says a method is
