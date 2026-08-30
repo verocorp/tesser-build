@@ -12,24 +12,26 @@ import protocol.cli as protocol_cli
 _USAGE: typing.Final[str] = "usage: python -m srv.cli.main [tree]"
 
 
-def run(argv: list[str]) -> int:  # tesser:debt TB051
-    app = loader.load()
-    try:
-        handler = cli.Handler(app.tessercheck.client)
+class MainHost(ts.Host):
+
+    def run(self, argv: list[str]) -> int:
+        app = loader.load()
         try:
-            resp = handler.check(protocol_cli.CliRequest(args=tuple(argv)))
-        except protocol_cli.UsageError as e:
-            resp = protocol_cli.CliResponse(2, stdout="", stderr=f"{e}\n{_USAGE}")
-        except Exception:
-            resp = protocol_cli.CliResponse(1, stdout="", stderr="unexpected error")
-        if resp.stdout:
-            print(resp.stdout)
-        if resp.stderr:
-            print(resp.stderr, file=sys.stderr)
-        return resp.exit_code
-    finally:
-        app.close()
+            handler = cli.Handler(app.tessercheck.client)
+            try:
+                resp = handler.check(protocol_cli.CliRequest(args=tuple(argv)))
+            except protocol_cli.UsageError as e:
+                resp = protocol_cli.CliResponse(2, stdout="", stderr=f"{e}\n{_USAGE}")
+            except Exception:
+                resp = protocol_cli.CliResponse(1, stdout="", stderr="unexpected error")
+            if resp.stdout:
+                print(resp.stdout)
+            if resp.stderr:
+                print(resp.stderr, file=sys.stderr)
+            return resp.exit_code
+        finally:
+            app.close()
 
 
 if __name__ == "__main__":
-    ts.main(run)
+    ts.main(MainHost().run)

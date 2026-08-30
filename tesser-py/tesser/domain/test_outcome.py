@@ -71,7 +71,7 @@ def test_an_outcome_member_carries_no_hand_picked_int() -> None:
 
 
 def test_an_outcome_admits_no_custom_metaclass() -> None:
-    class Sneaky(enum.EnumMeta):
+    class Sneaky(outcome._OutcomeMeta):
         def sneaky(cls) -> bool:
             return True
 
@@ -79,6 +79,35 @@ def test_an_outcome_admits_no_custom_metaclass() -> None:
 
         class Hidden(ts.Outcome, metaclass=Sneaky):
             DONE = enum.auto()
+
+    class Unrelated(enum.EnumMeta):
+        def unrelated(cls) -> bool:
+            return True
+
+    with pytest.raises(TypeError, match=r"metaclass conflict"):
+
+        class Alien(ts.Outcome, metaclass=Unrelated):  # type: ignore[metaclass]
+            DONE = enum.auto()
+
+
+def test_a_metaclass_cannot_skip_the_gate_it_inherits() -> None:
+    class Skipping(outcome._OutcomeMeta):
+        def __new__(
+            metacls,
+            cls: str,
+            bases: tuple[type, ...],
+            classdict: enum._EnumDict,
+            **kwargs: typing.Any,
+        ) -> "Skipping":
+            return enum.EnumMeta.__new__(metacls, cls, bases, classdict, **kwargs)
+
+    with pytest.raises(TypeError, match=r"Escaped uses a custom metaclass"):
+
+        class Escaped(ts.Outcome, metaclass=Skipping):
+            DONE = enum.auto()
+
+            def is_done(self) -> bool:
+                return True
 
 
 def test_an_outcome_hides_no_behavior_behind_an_underscore() -> None:
@@ -192,7 +221,7 @@ def test_an_outcome_carries_nothing_but_its_members() -> None:
 
             DONE = enum.auto()
 
-    with pytest.raises(TypeError, match=r"Annotated defines '__annotations__'"):
+    with pytest.raises(TypeError, match=r"Annotated defines '__annotat(ions__|e_func__)'"):
 
         class Annotated(ts.Outcome):
             DONE = enum.auto()
@@ -230,6 +259,53 @@ def test_a_well_formed_outcome_survives_the_gate() -> None:
 
     assert [route(member) for member in Settle] == ["paid", "refused", "retry"]
     assert len({Settle.PAID, Settle.REFUSED, Settle.RETRY}) == 3
+
+
+def test_an_outcome_is_not_rejected_by_an_outcome_declared_before_it() -> None:
+    class Delivery(ts.Outcome):
+        SENT = enum.auto()
+        RETURNED = enum.auto()
+
+    class Refund(ts.Outcome):
+        ISSUED = enum.auto()
+        DECLINED = enum.auto()
+
+    assert list(Delivery) == [Delivery.SENT, Delivery.RETURNED]
+    assert list(Refund) == [Refund.ISSUED, Refund.DECLINED]
+
+
+def test_the_allowlist_does_not_depend_on_the_name_of_the_class_that_produced_it() -> None:
+    class Short(ts.Outcome):
+        pass
+
+    class AConsiderablyLongerName(ts.Outcome):
+        pass
+
+    assert frozenset(Short.__dict__) == outcome._GENERATED
+    assert frozenset(AConsiderablyLongerName.__dict__) == outcome._GENERATED
+
+
+def test_a_name_the_machinery_writes_and_then_removes_never_reaches_the_gate() -> None:
+    halves: list[frozenset[str]] = []
+
+    class Watched(enum.Enum):
+        def __init_subclass__(cls, **kwargs: object) -> None:
+            super().__init_subclass__(**kwargs)
+            halves.append(frozenset(cls.__dict__))
+
+    class Ferry(Watched):
+        CONTINUE = enum.auto()
+        DONE = enum.auto()
+
+    transient = halves[0] - frozenset(Ferry.__dict__)
+    assert transient
+
+    class Ferry(ts.Outcome):  # type: ignore[no-redef]
+        CONTINUE = enum.auto()
+        DONE = enum.auto()
+
+    assert transient.isdisjoint(frozenset(Ferry.__dict__))
+    assert list(Ferry) == [Ferry.CONTINUE, Ferry.DONE]
 
 
 def test_the_gate_reads_an_allowlist_no_class_body_can_widen() -> None:

@@ -5,6 +5,81 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.89.1] - 2026-08-30
+
+Every `ts.Outcome` subclass raised at class definition on a current CPython
+3.13 (#149) — not a shape the gate meant to reject, but a namespace the gate
+had no business reading. `enum` writes a transient guard flag,
+`_<ClassName>__in_progress`, into the class namespace while the class is being
+built and deletes it once the class is finished. `Outcome.__init_subclass__`
+runs from inside `type.__new__`, mid-creation, so it saw a key the finished
+class never carries — and because the allowlist it compares against was
+seeded from the first subclass the process ever created (the module's own
+probe), the allowlist held `_Probe__in_progress`, which by construction can
+never equal a later class's `_Delivery__in_progress`. First subclass passed,
+every subsequent one raised, with a message naming a key the developer never
+wrote. Present since the gate landed in v0.0.86.0.
+
+### Fixed
+- **The gate reads the finished class, not the namespace `enum` is still
+  writing.** The totality loop, the base, `__new__`, `_generate_next_value_`,
+  member-value and alias checks moved to `enum.EnumMeta.__new__` on the base's
+  own metaclass, which runs them *after* `super().__new__` returns — the point
+  where `enum` has removed its scaffolding and the class carries what it will
+  carry for the rest of its life. A rejection message can now only name
+  something the class body actually spells.
+- **The machinery allowlist is a constant, not a snapshot of whichever
+  subclass came first.** It is read once from an empty `enum.Enum` probe in the
+  module, after creation — a set that is the same whatever an outcome is
+  called, so a name that embeds a class's own name can never enter it. No
+  process-global mutable state is left: `_GENERATED` is `typing.Final`.
+- **The one check that cannot move stayed put.** `Outcome.__init_subclass__`
+  now holds exactly the metaclass identity check, which `type.__new__` calls
+  unconditionally — so a metaclass that inherits the gate and skips it (calling
+  `enum.EnumMeta.__new__` instead of `super().__new__`) is still rejected. That
+  is a regression test, not a hypothetical: without it, a custom metaclass is a
+  hole a metaclass gate opens.
+
+### Changed
+- The `tesser-py` CI job runs a Python matrix — `3.12` and `3.13` — and it is
+  the only job that does. tesser-py is the tree consumers *import*, so it runs
+  on whatever interpreter they have; `3.13` resolves to the newest patch the
+  runner has, which is the coverage a pinned patch cannot give. Every other job
+  stays on `3.12`.
+
+### Notes
+- Reproduced and fixed against five interpreters: 3.13.12 and 3.14.5 raise
+  before the fix and pass after; 3.11.15 (the floor
+  `tesser-py/pyproject.toml` declares), 3.12.5 (the version CI pins, and why
+  CI was green), and 3.12.13 never carried the guard flag and pass either way —
+  the backport is 3.13 and later. The issue reports 3.13.14;
+  3.13.12 is the newest 3.13 this machine's uv index offers and it reproduces
+  identically, so the boundary is somewhere in 3.13, not at .14.
+- The matrix adds 3.13 and not 3.14 for a reason found while testing this fix:
+  on 3.14.5 the whole outcome suite passes, but two `ts.Record` tests fail —
+  a class-level default no longer raises, because PEP 649 changed what a bare
+  annotation leaves in a class body. That is a separate gap in a separate base,
+  untouched here and not something a patch fix should absorb silently.
+- Four hand-written tests in `tesser-py/tesser/domain/test_outcome.py`: two
+  outcomes declared in sequence (the issue's exact shape), the allowlist pinned
+  to what the machinery leaves on an empty outcome *and* to independence from
+  the class's name, a mid-creation-versus-finished comparison that asserts the
+  names `enum` writes and removes never reach the gate, and the metaclass that
+  tries to skip the gate it inherits. The existing custom-metaclass test now
+  covers both routes: a metaclass derived from the base's own (our message) and
+  one derived from `enum.EnumMeta` (Python's metaclass conflict, raised before
+  any of our code runs).
+- `Outcome` is still a plain `enum.Enum` subclass to every consumer:
+  `mypy --strict` accepts the custom metaclass, an exhaustive `match` closed by
+  `typing.assert_never` still type-checks, and TB084 reads the same shapes. The
+  annotation test now matches `__annotations__` or `__annotate_func__` — PEP 649
+  renamed what a bare annotation leaves in a 3.14 class body; the rejection is
+  unchanged, only the name in the message.
+- `scripts/verify` green across all 11 trees on 3.12.5, and green for
+  `tesser-py` on 3.13.12 (including the mutmut ecosystem gate); `go test ./...`,
+  `go vet ./...`, and `gofmt -l .` clean; `roadmap/generate.py --check` up to
+  date. No rule, doc, or skill text changed — `skill-version` stays 62.
+
 ## [0.0.89.0] - 2026-08-29
 
 A service decides once. Anything that needs a decision goes through a domain
