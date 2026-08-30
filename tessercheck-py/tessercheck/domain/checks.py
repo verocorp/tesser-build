@@ -1909,6 +1909,8 @@ class Annotation(ts.ValueObject):
         object.__setattr__(self, "_leaves", Names(tuple(leaves)) if leaves is not None else None)
         object.__setattr__(self, "_primary", Text(primary_ref) if primary_ref else None)
         object.__setattr__(self, "_quoted", Names(tuple(quote_marks)))
+        if isinstance(sliced, ast.Subscript) and isinstance(sliced.slice, ast.Tuple) and len(sliced.slice.elts) > 1:
+            form.append("multi_slice")
         object.__setattr__(self, "_slice_names", Names(tuple(slice_names)))
         object.__setattr__(self, "_spec_candidates", spec_candidates)
         object.__setattr__(self, "_form", Names(tuple(form)))
@@ -3505,7 +3507,7 @@ class Method(ts.Entity):
             self, "_returns", Annotation(node.returns) if node.returns is not None else None
         )
         positional = list(node.args.posonlyargs) + list(node.args.args)
-        if positional and positional[0].arg in ("self", "cls"):
+        if positional and (positional[0].arg == "self" or (positional[0].arg == "cls" and "classmethod" in decorators)):
             positional = positional[1:]
         object.__setattr__(
             self,
@@ -4613,6 +4615,7 @@ class ClassDecl(ts.Entity):
                 and returns.primary() is not None
                 and "." in str(returns.primary())
                 and len(tuple(returns.slice_names())) == 1
+                and "multi_slice" not in returns.form()
                 and all(name in ports for name in returns.slice_names())
             )
             if not yields_port:
@@ -4696,13 +4699,15 @@ class ClassDecl(ts.Entity):
                     "a component releases what it constructed",
                 ))
             )
-        annotated: dict[str, Annotation] = {str(field.name()): field.annotation() for field in self._fields}
-        for field in self._self_annotations:
-            annotated[str(field.name())] = field.annotation()
+        fields: dict[str, Annotation] = {str(field.name()): field.annotation() for field in self._fields}
         for fact in self._stores:
             published = str(fact.detail())
             if published.startswith("_"):
                 continue
+            annotated = dict(fields)
+            for field in self._self_annotations:
+                if int(field.lineno()) <= int(fact.lineno()):
+                    annotated[str(field.name())] = field.annotation()
             if published not in ("client", "jobs"):
                 found.append(
                     Violation(ViolationSpec(
@@ -5139,8 +5144,9 @@ class ClassDecl(ts.Entity):
                         "the answer the object gave",
                     ))
                 )
-            params = method.params()
-            if method.open():
+            checks_params = not (name.startswith("_") and name != PUBLIC_CALL)
+            params = method.params() if checks_params else ()
+            if checks_params and method.open():
                 found.append(
                     Violation(ViolationSpec(
                         str(self._path),
@@ -6748,13 +6754,37 @@ class Module(ts.Entity):
     def test_tier(self) -> Text | None:
         return Text(self._tier[1]) if self._tier is not None else None
 
-    def declared_uses(self, declared: Names) -> Names:
+    def declared_uses(self, registry: RegistrySpec) -> Names:
+        facts = Registry(registry)
+        place = str(self._placement)
+        module_name = self._name
+        export = str(facts.export()) if facts.export() is not None else None
+        tops = frozenset(str(top) for top in facts.tops())
+        contexts = frozenset(str(context) for context in facts.contexts())
+        kernel_tops = (frozenset({KERNEL_PACKAGE}) | (frozenset({export}) if export is not None else frozenset())) & tops
+        own = frozenset({export}) if place == "kernel" and module_name.split(".")[0] == export else kernel_tops
+        declared = tuple(str(name) for name in facts.declared_imports())
+        pure_stdlib = tuple(str(name) for name in facts.pure_stdlib())
+        domain = place == "kernel" or module_name.split(".")[1:2] == ["domain"]
         used: list[str] = []
         for edge in self._edges:
             target = str(edge._target)
-            for name in declared:
-                if target == name or target.startswith(name + "."):
-                    used.append(name)
+            head = target.split(".")[0]
+            if head == TESSER:
+                continue
+            if place != "kernel" and head in contexts:
+                continue
+            if head in own and facts.modules_under(Text(target)):
+                continue
+            covered = next((name for name in declared if target == name or target.startswith(name + ".")), None)
+            if covered is not None:
+                used.append(covered)
+                continue
+            if not domain or target in CORE_STDLIB["domain"] or head in CORE_STDLIB["domain"]:
+                continue
+            covered = next((name for name in pure_stdlib if target == name or target.startswith(name + ".")), None)
+            if covered is not None:
+                used.append(covered)
         return Names(tuple(used))
 
     def stray_violations(self) -> tuple[Violation, ...]:
@@ -10052,9 +10082,11 @@ class Codebase(ts.AggregateRoot):
             place = str(module.place())
             shell = place == "kernel" and self._export == TESSER and module.name().split(".")[0] == TESSER
             if place in ("role", "orchestrators", "orchestrators-file", "kernel") and not shell:
-                self._used_imports.update(str(name) for name in module.declared_uses(Names(tuple(self._imports))))
-                if place == "kernel" or module.name().split(".")[1:2] == ["domain"]:
-                    self._used_pure_stdlib.update(str(name) for name in module.declared_uses(Names(tuple(self._pure_stdlib))))
+                for name in module.declared_uses(registry):
+                    if name in self._imports:
+                        self._used_imports.add(name)
+                    else:
+                        self._used_pure_stdlib.add(name)
         found.extend(self._tree.unused_violations(Names(tuple(self._used_imports | self._used_pure_stdlib))))
         kept: list[Violation] = []
         used: set[tuple[str, Line]] = set()

@@ -351,13 +351,65 @@ Two things the burn-down left behind, deliberately:
   fixing it changes a rendered row, so it waits for a rules change).
   `rulebook.py`'s direct literal-argument binding block has had zero hits
   since `77aa2fb` moved every site onto `XSpec(...)`.
+- [ ] **Three divergences from main the ship's adversarial review measured
+  and this wave did not settle — each is a ruling, not a fix.** A
+  differential run (main's `checks.py` and this one over the same tree)
+  is byte-identical on all eleven gated trees; these show only on inputs
+  no tree has.
+  1. *Quoted annotations now resolve.* `Annotation` unquotes a string
+     annotation before resolving it; main's `_resolve` never did, so
+     `def _spec() -> "CampaignSpec":` fired `TB073` on main (unresolved →
+     "returns no construction data") and is clean here (resolved → a
+     spec). Re-emitting every example with every annotation quoted loses
+     16 findings on python-app and gains none (TB073 helper return,
+     TB081 dependency/keeps/publishes/client-shape/store-return, TB082
+     zero-calls), and the same unquoting *adds* `TB010` on a VO accessor
+     returning a quoted domain enum. mypy treats the two spellings as one
+     type; the question is whether tessercheck does. If yes, main was
+     emitting spurious findings on quoted code and this is the fix; if no,
+     `Annotation.primary(unquote=...)` should default to the old
+     behaviour. Either way the rule should say which.
+  2. *`contexts`/`tops` are computed over every source, parsed or not.*
+     `Codebase.__init__` derives them from `spec.sources` (a `.pyi`, a
+     duplicate name, a file that fails to parse all count) and freezes them
+     into each `Placement`; main computed them in `violations()` over the
+     modules that parsed. A `gamma/domain/broken.pyi` beside nothing else
+     under `gamma` flips `gamma/other.py` from `TB040` (no governed
+     package) to `TB041` (not a context module), so a whole check family
+     changes. `violations()` still recomputes `contexts` from parsed
+     modules for the `Registry`, so `module.place()` and
+     `registry.contexts()` can disagree in one run. Fix: build the
+     placement inputs from the parsed modules (a second `Module`
+     construction, or `Placement` built after the parse) — a behaviour
+     choice because it decides whether an unparseable file governs its
+     siblings.
+  3. *The self-check cost is quadratic in tree size, not linear.* The
+     "2.2s → 4.1s" above is right for this tree; on synthetic trees of N
+     domain modules main is linear and this branch is not (50: 0.3s vs
+     1.1s; 200: 0.6s vs 13s; 800: 2.8s vs 205s). `Registry.__init__` is
+     ~85% of the profile — 6,812 constructions at N=200 driving 5.6M
+     `Symbol` and 14M `Text` constructions — because a `Registry` is
+     rebuilt per `ClassDecl`, per `AnnotationPolicy` (five per class), per
+     `SpecReader`, and per `Body` (per method). The cure is the ruling the
+     first bullet names (a tree-level value object passed whole), or a
+     `Registry` that is cheap to build (keep the spec's primitive tuples
+     and build `Symbol`s lazily). Consumer trees are larger than any
+     example here; measure one before merging.
+  Smaller, recorded: `EnumShape` keys its extras by line where main keyed
+  by node identity, so two statements sharing a line via `;` in an enum
+  body cross-contaminate; a VO `__init__(this, value)` (first slot named
+  neither `self` nor `cls`) gains two `TB080`s where main dropped slot 0
+  by position; the component check's "annotation precedes store" is now
+  by line number where main's was `ast.walk` (breadth-first) order.
 - [ ] **A deep annotation crashes the run.** `Annotation.__init__`'s
   closures recurse over `|` chains and nested subscripts with no depth
   bound; `x: int | int | ...` a few thousand deep parses but raises
   `RecursionError` out of `ClassDecl.__init__`, past the `SyntaxError` guard
-  that turns a bad file into a `TB043` finding. Carried forward from the
-  pre-refactor helpers, not new. Catch it beside `SyntaxError` or walk
-  iteratively.
+  that turns a bad file into a `TB043` finding. The pre-refactor helpers
+  recursed too, but the threshold dropped about 3×: a 400-deep `|` chain
+  runs on main and exits `unexpected error` here (both fail at 1200). It
+  fails closed — the tree goes unchecked, nothing is bypassed. Catch it
+  beside `SyntaxError` or walk iteratively.
 - [ ] **The seven `TB080` markers** (`Annotation`, `FieldSpec`, `ParamSpec`,
   `MethodSpec`, `ClassDeclSpec`, `BodySpec`, `EnumShapeSpec`) are the
   foreign-type ruling's whole footprint — see the section below.

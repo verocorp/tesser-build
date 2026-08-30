@@ -13817,3 +13817,86 @@ def test_kind_table_equality_and_lookup() -> None:
     assert table.block_of(checks.Symbol(checks.SymbolSpec("shop.domain.zzz", "Zzz"))) is None
     assert table.block_of(checks.Symbol(checks.SymbolSpec("shop.domain.money", "Other"))) is None
     assert checks.KindTable(checks.KindTableSpec(())).block_of(checks.Symbol(checks.SymbolSpec("a", "B"))) is None
+
+
+def test_a_comparison_dunder_takes_no_domain_method_parameter_check() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/tag.py",
+                "shop.domain.tag",
+                "import tesser.domain as ts\n"
+                "class Tag(ts.ValueObject):\n"
+                "    _value: str\n"
+                "    def __init__(self, value: str) -> None:\n"
+                "        object.__setattr__(self, '_value', value)\n"
+                "    def __eq__(self, other: object) -> bool:\n"
+                "        return isinstance(other, Tag) and self._value == other._value\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert not any("Tag.__eq__ parameter" in f for f in findings), findings
+
+
+def test_an_import_declaration_is_credited_by_the_first_match_only() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(
+            sources=(
+                (
+                    "shop/domain/uses.py",
+                    "shop.domain.uses",
+                    "import pkg.sub.thing\n"
+                    "import tesser.domain as ts\n"
+                    "class UsesSpec(ts.Spec):\n"
+                    "    def __init__(self, text: str) -> None:\n"
+                    "        self.text = text\n",
+                    False,
+                ),
+            ),
+            imports=("pkg", "pkg.sub"),
+        )).violations()
+    )
+    assert any("pkg.sub" in f and "legalizes nothing" in f for f in findings), findings
+    assert not any("'pkg'" in f and "legalizes nothing" in f for f in findings), findings
+
+
+def test_a_spec_constructor_first_slot_is_self() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/named.py",
+                "shop.domain.named",
+                "import tesser.domain as ts\n"
+                "class NamedSpec(ts.Spec):\n"
+                "    def __init__(cls, name: str) -> None:\n"
+                "        cls.name = name\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any("NamedSpec.__init__" in f and "parameter 'cls' is not allowed" in f for f in findings), findings
+
+
+def test_a_store_yields_exactly_one_port() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            ("shop/application/ports/__init__.py", "shop.application.ports", "", True),
+            (
+                "shop/application/ports/pair.py",
+                "shop.application.ports.pair",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class Held(ts.Port, typing.Protocol):\n"
+                "    pass\n"
+                "class Pair(ts.Store, typing.Protocol):\n"
+                "    def transaction(self) -> typing.AsyncContextManager[Held, Held]: ...\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any("Pair.transaction" in f for f in findings), findings
