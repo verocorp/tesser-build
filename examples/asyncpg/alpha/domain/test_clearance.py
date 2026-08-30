@@ -20,3 +20,17 @@ class TestClearance:
 
     def test_string_is_the_canonical_exit(self) -> None:
         assert str(clearance.Clearance(clearance.ClearanceSpec(verdict="refused"))) == "refused"
+
+
+class TestStanding:
+
+    def test_a_standing_outside_the_set_is_refused(self) -> None:
+        with pytest.raises(errors.DomainError):
+            clearance.Standing("maybe")
+
+    def test_equality_is_by_value(self) -> None:
+        assert clearance.Standing("kept") == clearance.Standing("kept")
+        assert clearance.Standing("kept") != clearance.Standing("released")
+
+    def test_string_is_the_canonical_exit(self) -> None:
+        assert str(clearance.Standing("released")) == "released"

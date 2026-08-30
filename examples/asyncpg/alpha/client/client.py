@@ -14,8 +14,9 @@ class AddRequest(ts.Request):
 
 class AddResponse(ts.Response):
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, standing: str) -> None:
         self.name = name
+        self.standing = standing
 
 
 class TakeRequest(ts.Request):
@@ -27,9 +28,10 @@ class TakeRequest(ts.Request):
 
 class TakeResponse(ts.Response):
 
-    def __init__(self, name: str, part: str) -> None:
+    def __init__(self, name: str, part: str, standing: str) -> None:
         self.name = name
         self.part = part
+        self.standing = standing
 
 
 class FindRequest(ts.Request):

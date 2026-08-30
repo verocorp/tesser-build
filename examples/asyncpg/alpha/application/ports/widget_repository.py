@@ -13,9 +13,10 @@ class Found(enum.Enum):
 
 class SaveWidgetRequest(ts.Request):
 
-    def __init__(self, name: str, part: str) -> None:
+    def __init__(self, name: str, part: str, standing: str) -> None:
         self.name = name
         self.part = part
+        self.standing = standing
 
 
 class SaveWidgetResponse(ts.Response):
@@ -32,9 +33,10 @@ class LoadWidgetRequest(ts.Request):
 
 class LoadWidgetResponse(ts.Response):
 
-    def __init__(self, name: str, part: str) -> None:
+    def __init__(self, name: str, part: str, standing: str) -> None:
         self.name = name
         self.part = part
+        self.standing = standing
 
 
 class FindWidgetRequest(ts.Request):

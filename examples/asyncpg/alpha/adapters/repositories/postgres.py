@@ -11,11 +11,17 @@ import alpha.application.ports.widget_repository as widget_repository
 import pgdatabase.database as pgdatabase
 import tesser.errors as errors
 
-_SCHEMA: typing.Final[str] = "CREATE TABLE IF NOT EXISTS widgets (name text PRIMARY KEY, part text NOT NULL)"
-_SAVE: typing.Final[str] = (
-    "INSERT INTO widgets (name, part) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET part = EXCLUDED.part"
+_SCHEMA: typing.Final[str] = (
+    "CREATE TABLE IF NOT EXISTS widgets "
+    "(name text PRIMARY KEY, part text NOT NULL, standing text NOT NULL)"
 )
-_LOAD_FOR_UPDATE: typing.Final[str] = "SELECT name, part FROM widgets WHERE name = $1 FOR UPDATE"
+_SAVE: typing.Final[str] = (
+    "INSERT INTO widgets (name, part, standing) VALUES ($1, $2, $3) "
+    "ON CONFLICT (name) DO UPDATE SET part = EXCLUDED.part, standing = EXCLUDED.standing"
+)
+_LOAD_FOR_UPDATE: typing.Final[str] = (
+    "SELECT name, part, standing FROM widgets WHERE name = $1 FOR UPDATE"
+)
 _FIND: typing.Final[str] = "SELECT 1 FROM widgets WHERE name = $1"
 
 
@@ -25,14 +31,16 @@ class PostgresWidgetRepository(ts.Repository):
         self._connection = connection
 
     async def save_widget(self, request: widget_repository.SaveWidgetRequest) -> widget_repository.SaveWidgetResponse:
-        await self._connection.execute(_SAVE, request.name, request.part)
+        await self._connection.execute(_SAVE, request.name, request.part, request.standing)
         return widget_repository.SaveWidgetResponse(name=request.name)
 
     async def load_widget(self, request: widget_repository.LoadWidgetRequest) -> widget_repository.LoadWidgetResponse:
         row = await self._connection.fetchrow(_LOAD_FOR_UPDATE, request.name)
         if row is None:
             raise errors.not_found("unknown_widget", f"no widget {request.name!r}")
-        return widget_repository.LoadWidgetResponse(name=row["name"], part=row["part"])
+        return widget_repository.LoadWidgetResponse(
+            name=row["name"], part=row["part"], standing=row["standing"]
+        )
 
     async def find_widget(self, request: widget_repository.FindWidgetRequest) -> widget_repository.FindWidgetResponse:
         row = await self._connection.fetchrow(_FIND, request.name)

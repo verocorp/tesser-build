@@ -18,17 +18,23 @@ import tesser.errors as errors
 @ts.fake
 class FakeWidgetRepository(widget_repository.WidgetRepository):
 
-    def __init__(self, part_by_name: dict[str, str]) -> None:
+    def __init__(self, part_by_name: dict[str, str], standing_by_name: dict[str, str]) -> None:
         self._part_by_name = part_by_name
+        self._standing_by_name = standing_by_name
 
     async def save_widget(self, request: widget_repository.SaveWidgetRequest) -> widget_repository.SaveWidgetResponse:
         self._part_by_name[request.name] = request.part
+        self._standing_by_name[request.name] = request.standing
         return widget_repository.SaveWidgetResponse(name=request.name)
 
     async def load_widget(self, request: widget_repository.LoadWidgetRequest) -> widget_repository.LoadWidgetResponse:
         if request.name not in self._part_by_name:
             raise errors.not_found("unknown_widget", f"no widget {request.name!r}")
-        return widget_repository.LoadWidgetResponse(name=request.name, part=self._part_by_name[request.name])
+        return widget_repository.LoadWidgetResponse(
+            name=request.name,
+            part=self._part_by_name[request.name],
+            standing=self._standing_by_name[request.name],
+        )
 
     async def find_widget(self, request: widget_repository.FindWidgetRequest) -> widget_repository.FindWidgetResponse:
         found = widget_repository.Found.YES if request.name in self._part_by_name else widget_repository.Found.NO
@@ -40,12 +46,13 @@ class FakeCommittedWidgetStore(widget_repository.WidgetStore):
 
     def __init__(self) -> None:
         self.part_by_name: dict[str, str] = {}
+        self.standing_by_name: dict[str, str] = {}
         self.transactions = 0
 
     @contextlib.asynccontextmanager
     async def transaction(self) -> typing.AsyncIterator[widget_repository.WidgetRepository]:
         self.transactions += 1
-        yield FakeWidgetRepository(self.part_by_name)
+        yield FakeWidgetRepository(self.part_by_name, self.standing_by_name)
 
 
 @ts.fake
@@ -54,7 +61,7 @@ class FakeUnavailableWidgetStore(widget_repository.WidgetStore):
     @contextlib.asynccontextmanager
     async def transaction(self) -> typing.AsyncIterator[widget_repository.WidgetRepository]:
         raise errors.InfraError("widget store unavailable")
-        yield FakeWidgetRepository({})
+        yield FakeWidgetRepository({}, {})
 
 
 @ts.fake
@@ -81,30 +88,41 @@ class FakeRefusedBetaCheck(beta_check.BetaCheck):
 
 class TestAlphaServiceOverACommittedTransaction:
 
-    async def test_a_new_part_is_taken_and_the_widget_saved_in_one_transaction(self) -> None:
+    async def test_a_new_part_is_taken_and_the_widget_saved_kept_in_one_transaction(self) -> None:
         widget_store = FakeCommittedWidgetStore()
         checks = FakeOkBetaCheck()
         added = await alpha_service.AlphaService(widget_store, checks).add(client.AddRequest(name="a", part="p"))
         assert added.name == "a"
+        assert added.standing == "kept"
         assert widget_store.part_by_name == {"a": "p"}
+        assert widget_store.standing_by_name == {"a": "kept"}
         assert widget_store.transactions == 1
         assert checks.checked == []
 
-    async def test_a_held_part_cleared_by_beta_is_saved_in_its_own_transaction(self) -> None:
+    async def test_a_held_part_cleared_by_beta_is_persisted_as_kept(self) -> None:
         widget_store = FakeCommittedWidgetStore()
         checks = FakeOkBetaCheck()
-        await alpha_service.AlphaService(widget_store, checks).add(client.AddRequest(name="a", part="a"))
+        added = await alpha_service.AlphaService(widget_store, checks).add(client.AddRequest(name="a", part="a"))
         assert checks.checked == ["a"]
-        assert widget_store.part_by_name == {"a": "a"}
+        assert added.standing == "kept"
+        assert widget_store.standing_by_name == {"a": "kept"}
         assert widget_store.transactions == 1
 
-    async def test_a_held_part_refused_by_beta_is_dropped_and_opens_no_transaction(self) -> None:
+    async def test_a_held_part_refused_by_beta_is_persisted_as_released(self) -> None:
         widget_store = FakeCommittedWidgetStore()
         checks = FakeRefusedBetaCheck()
-        await alpha_service.AlphaService(widget_store, checks).add(client.AddRequest(name="a", part="a"))
+        added = await alpha_service.AlphaService(widget_store, checks).add(client.AddRequest(name="a", part="a"))
         assert checks.checked == ["a"]
-        assert widget_store.part_by_name == {}
-        assert widget_store.transactions == 0
+        assert added.standing == "released"
+        assert widget_store.standing_by_name == {"a": "released"}
+        assert widget_store.transactions == 1
+
+    async def test_a_released_widget_reloads_released(self) -> None:
+        widget_store = FakeCommittedWidgetStore()
+        service = alpha_service.AlphaService(widget_store, FakeRefusedBetaCheck())
+        await service.add(client.AddRequest(name="a", part="a"))
+        taken = await service.take(client.TakeRequest(name="a", part="q"))
+        assert taken.standing == "released"
 
     async def test_take_loads_decides_and_saves_in_one_transaction(self) -> None:
         widget_store = FakeCommittedWidgetStore()
@@ -155,16 +173,8 @@ class TestAlphaServiceOverAFailedTransaction:
         with pytest.raises(errors.InfraError):
             await service.find(client.FindRequest(name="a"))
 
-    async def test_a_held_part_refused_by_beta_answers_because_it_opens_no_transaction(self) -> None:
+    async def test_a_held_part_reaches_beta_and_then_surfaces_the_failure_of_the_save(self) -> None:
         checks = FakeRefusedBetaCheck()
-        added = await alpha_service.AlphaService(FakeUnavailableWidgetStore(), checks).add(
-            client.AddRequest(name="a", part="a")
-        )
-        assert added.name == "a"
-        assert checks.checked == ["a"]
-
-    async def test_a_held_part_cleared_by_beta_surfaces_the_failure_of_the_save(self) -> None:
-        checks = FakeOkBetaCheck()
         service = alpha_service.AlphaService(FakeUnavailableWidgetStore(), checks)
         with pytest.raises(errors.InfraError):
             await service.add(client.AddRequest(name="a", part="a"))
@@ -177,6 +187,7 @@ class TestAlphaServiceMappers:
         spec = alpha_service.MapToWidgetSpec(client.AddRequest(name="a", part="p"))
         assert spec.name == "a"
         assert spec.part.id == "a"
+        assert spec.standing == "kept"
 
     def test_an_add_request_maps_to_the_part_it_names(self) -> None:
         assert alpha_service.MapToPartSpec(client.AddRequest(name="a", part="p")).id == "p"
@@ -185,15 +196,19 @@ class TestAlphaServiceMappers:
         assert alpha_service.MapToTakenPartSpec(client.TakeRequest(name="a", part="q")).id == "q"
 
     def test_a_loaded_widget_maps_to_a_spec_carrying_its_stored_part(self) -> None:
-        spec = alpha_service.MapToLoadedWidgetSpec(widget_repository.LoadWidgetResponse(name="a", part="p"))
+        spec = alpha_service.MapToLoadedWidgetSpec(
+            widget_repository.LoadWidgetResponse(name="a", part="p", standing="released")
+        )
         assert spec.name == "a"
         assert spec.part.id == "p"
+        assert spec.standing == "released"
 
     def test_a_widget_maps_to_a_save_request_carrying_its_name_and_part(self) -> None:
         built = widget.Widget(alpha_service.MapToWidgetSpec(client.AddRequest(name="a", part="p")))
         request = alpha_service.MapToSaveWidgetRequest(built)
         assert request.name == "a"
         assert request.part == "a"
+        assert request.standing == "kept"
 
     def test_a_name_maps_to_a_load_request(self) -> None:
         assert alpha_service.MapToLoadWidgetRequest(widget.Name("a")).name == "a"
@@ -212,6 +227,7 @@ class TestAlphaServiceMappers:
     def test_a_widget_maps_to_an_add_response(self) -> None:
         built = widget.Widget(alpha_service.MapToWidgetSpec(client.AddRequest(name="a", part="p")))
         assert alpha_service.MapToAddResponse(built).name == "a"
+        assert alpha_service.MapToAddResponse(built).standing == "kept"
 
     def test_a_widget_maps_to_a_take_response_carrying_the_part_it_now_holds(self) -> None:
         built = widget.Widget(alpha_service.MapToWidgetSpec(client.AddRequest(name="a", part="p")))
@@ -219,3 +235,4 @@ class TestAlphaServiceMappers:
         response = alpha_service.MapToTakeResponse(built)
         assert response.name == "a"
         assert response.part == "q"
+        assert response.standing == "kept"

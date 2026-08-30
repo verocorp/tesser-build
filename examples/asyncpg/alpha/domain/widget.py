@@ -46,21 +46,19 @@ class Taken(ts.Outcome):
     HELD = enum.auto()
 
 
-class Cleared(ts.Outcome):
-    KEPT = enum.auto()
-    RELEASED = enum.auto()
-
-
 _CLEARED: typing.Final[clearance.Clearance] = clearance.Clearance(
     clearance.ClearanceSpec(verdict="ok")
 )
+_KEPT: typing.Final[clearance.Standing] = clearance.Standing("kept")
+_RELEASED: typing.Final[clearance.Standing] = clearance.Standing("released")
 
 
 class WidgetSpec(ts.Spec):
 
-    def __init__(self, name: str, part: PartSpec) -> None:
+    def __init__(self, name: str, part: PartSpec, standing: str) -> None:
         self.name = name
         self.part = part
+        self.standing = standing
 
 
 class Widget(ts.AggregateRoot):
@@ -69,6 +67,7 @@ class Widget(ts.AggregateRoot):
         self._name = Name(spec.name)
         self._part = Part(spec.part)
         self._label = label.Label(spec.name)
+        self._standing = clearance.Standing(spec.standing)
 
     @property
     def identity(self) -> Name:
@@ -78,6 +77,10 @@ class Widget(ts.AggregateRoot):
     def part(self) -> Part:
         return self._part
 
+    @property
+    def standing(self) -> clearance.Standing:
+        return self._standing
+
     def take(self, spec: PartSpec) -> Taken:
         part = Part(spec)
         if part == self._part:
@@ -85,8 +88,9 @@ class Widget(ts.AggregateRoot):
         self._part = part
         return Taken.TAKEN
 
-    def clear(self, spec: clearance.ClearanceSpec) -> Cleared:
+    def clear(self, spec: clearance.ClearanceSpec) -> None:
         cleared = clearance.Clearance(spec)
         if cleared == _CLEARED:
-            return Cleared.KEPT
-        return Cleared.RELEASED
+            self._standing = _KEPT
+        else:
+            self._standing = _RELEASED

@@ -22,6 +22,7 @@ class TestLoadedApp:
             alpha_client.AddRequest(name="e2e-never-held", part="e2e-never-held")
         )
         refused = await app.alpha.client.find(alpha_client.FindRequest(name="e2e-never-held"))
+        reloaded = await app.alpha.client.take(alpha_client.TakeRequest(name="e2e-never-held", part="q"))
         retaken = await app.alpha.client.take(alpha_client.TakeRequest(name="e2e-taken", part="q"))
         await app.close()
         assert held.key == "e2e-held"
@@ -31,7 +32,10 @@ class TestLoadedApp:
         assert found.found == "yes"
         assert missing.found == "no"
         assert kept.name == "e2e-held"
+        assert kept.standing == "kept"
         assert cleared.found == "yes"
         assert dropped.name == "e2e-never-held"
-        assert refused.found == "no"
+        assert dropped.standing == "released"
+        assert refused.found == "yes"
+        assert reloaded.standing == "released"
         assert retaken.part == "q"

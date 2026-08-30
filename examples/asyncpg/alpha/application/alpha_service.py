@@ -14,13 +14,15 @@ import alpha.domain.widget as widget
 class MapToWidgetSpec(ts.Mapper, widget.WidgetSpec):
 
     def __init__(self, request: client.AddRequest) -> None:
-        super().__init__(name=request.name, part=widget.PartSpec(id=request.name))
+        super().__init__(name=request.name, part=widget.PartSpec(id=request.name), standing="kept")
 
 
 class MapToLoadedWidgetSpec(ts.Mapper, widget.WidgetSpec):
 
     def __init__(self, loaded: widget_repository.LoadWidgetResponse) -> None:
-        super().__init__(name=loaded.name, part=widget.PartSpec(id=loaded.part))
+        super().__init__(
+            name=loaded.name, part=widget.PartSpec(id=loaded.part), standing=loaded.standing
+        )
 
 
 class MapToPartSpec(ts.Mapper, widget.PartSpec):
@@ -50,7 +52,11 @@ class MapToClearanceSpec(ts.Mapper, clearance.ClearanceSpec):
 class MapToSaveWidgetRequest(ts.Mapper, widget_repository.SaveWidgetRequest):
 
     def __init__(self, saved: widget.Widget) -> None:
-        super().__init__(name=str(saved.identity), part=str(saved.part.identity))
+        super().__init__(
+            name=str(saved.identity),
+            part=str(saved.part.identity),
+            standing=str(saved.standing),
+        )
 
 
 class MapToLoadWidgetRequest(ts.Mapper, widget_repository.LoadWidgetRequest):
@@ -68,13 +74,17 @@ class MapToFindWidgetRequest(ts.Mapper, widget_repository.FindWidgetRequest):
 class MapToAddResponse(ts.Mapper, client.AddResponse):
 
     def __init__(self, added: widget.Widget) -> None:
-        super().__init__(name=str(added.identity))
+        super().__init__(name=str(added.identity), standing=str(added.standing))
 
 
 class MapToTakeResponse(ts.Mapper, client.TakeResponse):
 
     def __init__(self, taken_widget: widget.Widget) -> None:
-        super().__init__(name=str(taken_widget.identity), part=str(taken_widget.part.identity))
+        super().__init__(
+            name=str(taken_widget.identity),
+            part=str(taken_widget.part.identity),
+            standing=str(taken_widget.standing),
+        )
 
 
 class AlphaService(ts.ApplicationService):
@@ -85,23 +95,16 @@ class AlphaService(ts.ApplicationService):
 
     async def add(self, request: client.AddRequest) -> client.AddResponse:
         added = widget.Widget(MapToWidgetSpec(request))
-        taken = added.take(MapToPartSpec(request))
-        match taken:
+        match added.take(MapToPartSpec(request)):
             case widget.Taken.TAKEN:
-                async with self._widget_store.transaction() as widgets_repo:
-                    await widgets_repo.save_widget(MapToSaveWidgetRequest(added))
+                pass
             case widget.Taken.HELD:
                 answer = await self._checks.check(MapToCheckRequest(added))
-                match added.clear(MapToClearanceSpec(answer)):
-                    case widget.Cleared.KEPT:
-                        async with self._widget_store.transaction() as widgets_repo:
-                            await widgets_repo.save_widget(MapToSaveWidgetRequest(added))
-                    case widget.Cleared.RELEASED:
-                        pass
-                    case _ as never:
-                        typing.assert_never(never)
+                added.clear(MapToClearanceSpec(answer))
             case _ as never:
                 typing.assert_never(never)
+        async with self._widget_store.transaction() as widgets_repo:
+            await widgets_repo.save_widget(MapToSaveWidgetRequest(added))
         return MapToAddResponse(added)
 
     async def take(self, request: client.TakeRequest) -> client.TakeResponse:

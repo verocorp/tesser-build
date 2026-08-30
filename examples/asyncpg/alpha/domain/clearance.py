@@ -23,3 +23,16 @@ class Clearance(ts.ValueObject):
 
     def __str__(self) -> str:
         return serialization.canonical_str(self._verdict)
+
+
+class Standing(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        if value not in ("kept", "released"):
+            raise errors.invalid("invalid_standing", f"standing {value!r} is not a standing")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return serialization.canonical_str(self._value)
