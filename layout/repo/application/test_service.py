@@ -68,6 +68,14 @@ def _response(
             ),
         ),
         requirements=("appone",),
+        floors=(
+            repo_reader.FloorRecord(
+                path="appone/pyproject.toml",
+                key=repo_reader.FloorKey.REQUIRES_PYTHON,
+                state=repo_reader.FloorState.READ,
+                value=">=3.12",
+            ),
+        ),
     )
 
 
@@ -85,6 +93,7 @@ def _malformed(
         examples=(),
         declarations=(),
         requirements=(),
+        floors=(),
     )
 
 

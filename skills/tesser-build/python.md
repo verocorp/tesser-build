@@ -733,6 +733,15 @@ class CampaignRepository(ts.Port, typing.Protocol):
   response hierarchy is a union mypy cannot check for exhaustiveness. The
   bare-bool clause covers a `Client` request/response DTO too, where the fix
   is the canonical string rather than an enum (`domain-return.md` rule 8).
+- **A DTO compares by value.** `tesser.application` and `tesser.context`
+  `Request`/`Response` (a port DTO and a client DTO alike) are equal when
+  they are the same concrete type with equal fields, and hash the same way,
+  so a nested record or a tuple of records compares through; a subclass may
+  not redefine `__eq__`/`__hash__`. A test that wants "the reloaded save
+  request equals the original" writes `loaded == original`; it never
+  projects both to a tuple first (maintainer ruling 2026-08-30). The
+  protocol tier's `tesser.srv` request/response is a `Record` — equal by
+  value too, but unhashable.
 - **A multi-outcome answer is an enum outcome plus payload; a collection is a
   tuple.** Where cardinality *is* the answer (list-all), the tuple alone says
   it — no outcome enum. The enum is a plain `enum.Enum`, never `StrEnum`/
@@ -760,6 +769,17 @@ superseding the 2026-08-17 accessor mapper, whose every field the service
 had to re-name at the construction site). A spec built by a mapper is still
 a spec — bind it, pass it whole, never read its fields in the service
 (TB083 types the local as the target).
+
+An adapter maps too, and it has its own base: `tesser.adapters.Mapper`,
+same contract, declared beside the gateway or repository that uses it so a
+`gateways/` or `repositories/` module still imports only `tesser.adapters`
+(maintainer ruling 2026-08-30). A gateway or repository ends in
+`return MapToX(answer)` and reads as call-then-map, never as logic. One
+carve-out applies on that side only: **an adapters mapper may take a
+primitive**, because a repository wrapping a client that hands back a `bool`
+or a row value is the normal case (`MapToHasKeyResponse(result: bool)`).
+The application side is unchanged — a mapper there takes whole objects,
+never a field already pulled off one (TB080).
 
 ```python
 # campaign/application/views.py (verified impl: examples/errorspy/)
@@ -948,9 +968,17 @@ class Ordering(ts.Component):
 - **Messages are declared once, on the port.** The engine is a relay, so the
   send side and the receive side of one message are not independent: the
   gateway sends the port's `ts.Request`, the job receives it, and the
-  application client speaks the same shape. No wire types; where the SDK
-  cannot serialize a `ts.Request` itself, the edge brings a serde (the one
-  class in the tree with no `ts.*` base — a named gap, `TODOS.md`).
+  application client speaks the same shape. No wire types.
+- **Where the SDK cannot serialize a `ts.Request` itself, the job's package
+  brings a serde** (`ts.Serde`, in `adapters/jobs/`, maintainer ruling
+  2026-08-30). It declares exactly `serialize` and `deserialize` over **one
+  type parameter**, may hold at most the target type it was built with, and
+  branches on nothing but the empty payload — a serde with decision logic is
+  a finding (TB081, TB082), because a decision made on the wire is one no
+  domain object owns. It is the **one adapter class allowed a base from
+  outside the tree** (TB052): the engine is the caller and the SDK's ABC is
+  the shape it calls, so the class reads
+  `class RecordSerde[T](ts.Serde, restate.serde.Serde[T])`.
 - **A component publishes exactly `client` and `jobs`**, each typed; every
   other attribute is private (TB081). `jobs` is one job or a tuple of them;
   where it is a tuple the host mounts the definitions of each — `[d for job in
@@ -1020,6 +1048,11 @@ class StorageCampaignRepository(ts.Repository):
   domain object by assigning attributes.
 - **No domain math.** A finder may filter/order (persistence selection);
   summing or rule-checking is a leak.
+- **Assemble the answer with a mapper, not by hand** (`ts.Mapper` from
+  `tesser.adapters`, declared beside the adapter): the method ends in
+  `return MapToFindCampaignResponse(row)` so the adapter reads as
+  call-then-map. On the adapter side that mapper may take the primitive the
+  client handed back — see **Application ports** above.
 - Persistence backends — SQLAlchemy, async drivers — are consumer-specific;
   the `Protocol` is the stable contract, the backing store is not this
   skill's decision. The worked examples use an in-memory map and a fake
@@ -1161,7 +1194,7 @@ class HttpRequest(ts.Request):
     headers: Mapping[str, str]
     body: bytes                                   # raw; the handler interprets it
 
-    def json_body(self) -> JSONObject:            # the record carries its readers
+    def json_body(self) -> dict[str, object]:     # the record carries its readers
         return _json_object(self.body)
 
     def path_param(self, name: str) -> str: ...
@@ -1174,7 +1207,7 @@ class HttpResponse(ts.Response):
     headers: Mapping[str, str]
 
     @classmethod
-    def json(cls, status_code: int, body: JSONObject, headers: Mapping[str, str] | None = None) -> HttpResponse: ...
+    def json(cls, status_code: int, body: dict[str, object], headers: Mapping[str, str] | None = None) -> HttpResponse: ...
 
     @classmethod
     def problem(cls, status_code: int, code: str, detail: str) -> HttpResponse:

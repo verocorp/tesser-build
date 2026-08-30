@@ -25,6 +25,30 @@ class MapToBookingSpec(ts.Mapper, domain.BookingSpec):
         )
 
 
+class MapToBegunBookingSpec(ts.Mapper, domain.BookingSpec):
+
+    def __init__(self, found_booking: booking_repository.FindBookingResponse) -> None:
+        step = domain.COLLECT_NAME
+        name = ""
+        chosen = ""
+        offered: tuple[str, ...] = ()
+        match found_booking.presence:
+            case booking_repository.BookingPresence.PRESENT:
+                view = found_booking.bookings[0]
+                step, name, chosen, offered = view.step, view.name, view.chosen, view.offered
+            case booking_repository.BookingPresence.ABSENT:
+                pass
+            case _ as unreachable:
+                typing.assert_never(unreachable)
+        super().__init__(step=step, name=name, chosen=chosen, offered=offered)
+
+
+class MapToResumptionSpec(ts.Mapper, domain.ResumptionSpec):
+
+    def __init__(self, found_booking: booking_repository.FindBookingResponse) -> None:
+        super().__init__(presence=found_booking.presence.value)
+
+
 class MapToNamingSpec(ts.Mapper, domain.NamingSpec):
 
     def __init__(
@@ -63,40 +87,3 @@ class MapToReoffersSpec(ts.Mapper, domain.ReoffersSpec):
             case _ as unreachable:
                 typing.assert_never(unreachable)
         super().__init__(offered=offered)
-
-
-def began(found: booking_repository.FindBookingResponse) -> domain.Booking:  # tesser:debt TB051
-    match found.presence:
-        case booking_repository.BookingPresence.PRESENT:
-            view = found.bookings[0]
-            return domain.Booking(
-                domain.BookingSpec(
-                    step=view.step, name=view.name, chosen=view.chosen, offered=view.offered
-                )
-            )
-        case booking_repository.BookingPresence.ABSENT:
-            return domain.Booking(
-                domain.BookingSpec(step=domain.COLLECT_NAME, name="", chosen="", offered=())
-            )
-        case _ as unreachable:
-            typing.assert_never(unreachable)
-
-
-def begin_reply(found: booking_repository.FindBookingResponse) -> str:  # tesser:debt TB051
-    match found.presence:
-        case booking_repository.BookingPresence.PRESENT:
-            return "continue the booking"
-        case booking_repository.BookingPresence.ABSENT:
-            return "ask the caller for their name"
-        case _ as unreachable:
-            typing.assert_never(unreachable)
-
-
-def confirm_reply(reserved: slot_directory.ReserveSlotResponse, booking: domain.Booking) -> str:  # tesser:debt TB051
-    match reserved.outcome:
-        case slot_directory.ReservationOutcome.RESERVED:
-            return f"booked {booking.chosen()} for {booking.name()}"
-        case slot_directory.ReservationOutcome.SLOT_TAKEN:
-            return f"{booking.chosen()} was just taken; offer the caller the updated slots"
-        case _ as unreachable:
-            typing.assert_never(unreachable)

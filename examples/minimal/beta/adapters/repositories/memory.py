@@ -4,12 +4,11 @@ import tesser.adapters as ts
 
 import beta.application.ports.key_repository as key_repository
 import memoryclient.client as memoryclient
-import tesser.application as application  # tesser:debt TB050
 
 
-class MapToHasKeyResponse(application.Mapper, key_repository.HasKeyResponse):  # tesser:debt TB052
+class MapToHasKeyResponse(ts.Mapper, key_repository.HasKeyResponse):
 
-    def __init__(self, result: bool) -> None:  # tesser:debt TB080
+    def __init__(self, result: bool) -> None:
         super().__init__(held=key_repository.Held.YES if result else key_repository.Held.NO)
 
 

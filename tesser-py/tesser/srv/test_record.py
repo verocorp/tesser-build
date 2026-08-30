@@ -235,6 +235,47 @@ def test_an_annotated_mixin_may_not_smuggle_a_defaulted_field() -> None:
             pass
 
 
+def test_a_string_annotation_is_read_as_a_field_and_may_not_carry_a_default() -> None:
+    with pytest.raises(
+        TypeError,
+        match=r"^_Quoted gives field 'status' a class-level default: "
+        r"a record field has no default outside __init__$",
+    ):
+
+        class _Quoted(tesser.srv.Response):
+            status: "int" = 200
+
+
+def test_a_string_annotated_classvar_is_not_a_field_and_keeps_its_class_level_value() -> None:
+    class QuotedTagged(tesser.srv.Response):
+
+        KIND: "typing.ClassVar[str]" = "reply"
+
+        def __init__(self, status: int) -> None:
+            super().__init__(status=status)
+
+        status: int
+
+    with pytest.raises(TypeError, match=r"^QuotedTagged declares no field 'KIND'$"):
+        tesser.srv.Record.__init__(QuotedTagged.__new__(QuotedTagged), KIND="pwned")
+    assert QuotedTagged(200).KIND == "reply"
+
+
+def test_a_final_is_not_a_field_and_keeps_its_class_level_value() -> None:
+    class Capped(tesser.srv.Response):
+
+        LIMIT: typing.Final[int] = 10
+
+        def __init__(self, status: int) -> None:
+            super().__init__(status=status)
+
+        status: int
+
+    with pytest.raises(TypeError, match=r"^Capped declares no field 'LIMIT'$"):
+        tesser.srv.Record.__init__(Capped.__new__(Capped), LIMIT=99)
+    assert Capped(200).LIMIT == 10
+
+
 def test_a_subclass_that_skips_super_init_builds_an_empty_record_no_guard_can_see() -> None:
     class Forgot(tesser.srv.Response):
 

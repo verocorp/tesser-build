@@ -246,11 +246,11 @@ def go_analyzer_names(root: Path, cmd: list[str]) -> set[str]:
 
 def py_check_codes(root: Path) -> set[str]:
     """The shipped Python check codes, from the same extraction RULES.md is
-    generated with: the rulebook domain module's render over the Violation
-    call sites in tessercheck/domain/checks.py. The rulebook lives inside the
-    tessercheck package (it imports tesser and its own context), so it is
-    imported as a package module with tessercheck-py and tesser-py on
-    sys.path rather than loaded by file path."""
+    generated with: the rulebook domain module's Rulebook value object over
+    the Violation call sites in tessercheck/domain/checks.py. The rulebook
+    lives inside the tessercheck package (it imports tesser and its own
+    context), so it is imported as a package module with tessercheck-py and
+    tesser-py on sys.path rather than loaded by file path."""
     rules_path = root / "tessercheck-py" / "tessercheck" / "domain" / "rulebook.py"
     checks_path = root / "tessercheck-py" / "tessercheck" / "domain" / "checks.py"
     for entry in (root / "tessercheck-py", root / "tesser-py"):
@@ -258,7 +258,8 @@ def py_check_codes(root: Path) -> set[str]:
             sys.path.insert(0, str(entry))
     try:
         rulebook = importlib.import_module("tessercheck.domain.rulebook")
-        rendered = rulebook.render(checks_path.read_text(encoding="utf-8"))
+        spec = rulebook.RulebookSpec(checks_path.read_text(encoding="utf-8"))
+        rendered = str(rulebook.Rulebook(spec))
         codes = {
             line.split("|")[1].strip()
             for line in rendered.splitlines()

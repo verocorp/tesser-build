@@ -26,10 +26,13 @@ scheduling/
                              ReservationOutcome (RESERVED / SLOT_TAKEN)
       booking_repository.py BookingRepository port + its Request/Response
                              DTOs, BookingPresence (PRESENT / ABSENT)
-    views.py      loaded / save_request / state / reoffered — the vocabulary
-                  the service bodies are written in, mapping domain <-> ports
+    views.py      the MapTo* mappers the service bodies are written in, each
+                  one its target spec or port DTO — MapToBookingSpec,
+                  MapToBegunBookingSpec, MapToResumptionSpec, MapToNamingSpec,
+                  MapToSaveBookingRequest, MapToReoffersSpec
     service.py    BookingService, depending on the two ports above
-    test_application.py  sibling test; declares its own @ts.fake port doubles
+    test_views.py / test_service.py  sibling tests; the service test declares
+                  its own @ts.fake port doubles
   adapters/
     handlers.py   LlmToolHandler — one endpoint method per tool, plus the schema
                   declarations the model sees
@@ -46,6 +49,8 @@ srv/
   voice/agent.py  ToolAgent (ts.Host) — the context-generic LiveKit host; it
                   takes the name -> endpoint table in and walks it inline,
                   TB051 having left no module a routing function could live in
+  voice/test_agent.py  sibling test; hand-written @ts.fake surface and
+                  endpoints drive the real livekit Agent with no session
 ```
 
 The division of labor the checkers enforce:
@@ -72,10 +77,13 @@ The division of labor the checkers enforce:
   context below the handler never hears the word "tool".
 - **A taken slot is an outcome, not an error.** `SlotDirectory.reserve`
   returns a `ReservationOutcome` enum (`RESERVED` / `SLOT_TAKEN`) plus payload
-  rather than raising or returning a union, and `confirm` matches on it with
-  `typing.assert_never` for exhaustiveness: reserved books, taken re-offers
-  the slots that are free now and persists
-  that. One call, one turn — the caller is told what happened and what to do
+  rather than raising or returning a union. The service does not read that
+  enum: `MapToReoffersSpec` carries it into `Reoffers`, `Booking.settle`
+  answers a `Settled` outcome (`BOOKED` / `REOFFERED`), and `confirm` matches
+  that one answer with `typing.assert_never` for exhaustiveness — reserved
+  books, taken re-offers the slots that are free now and persists that.
+  `begin` does the same with the repository's `BookingPresence`, through
+  `Resumption.resumed()`. One call, one turn — the caller is told what happened and what to do
   next in the same response, and the state it is told about is the state that
   was saved. This was edge choreography until 2026-08-08 (the adapter caught
   the failure, called a `reoffer` use case, and re-raised with the fresh slots
@@ -88,8 +96,11 @@ The division of labor the checkers enforce:
 - **`srv/voice/agent.py`** translates the protocol onto LiveKit Agents:
   `function_tool(raw_schema=...)` per schema, one shim, `ToolError` for
   `ValueError` (model-correctable, with a tools rebind), halt on anything
-  else. It is in sigcheck's walk (pure AST) but outside the mypy/pytest gate —
-  it needs `livekit-agents` installed and a real session to exercise.
+  else. Its sibling test drives the real `livekit.agents.Agent` — no session,
+  no model, no mocking library: a hand-written `@ts.fake` `ToolSurface` and
+  three `@ts.fake` endpoints, and the mounted tool is awaited directly. That
+  is what `livekit-agents` is doing in `requirements-dev.txt`. It stays
+  outside the mypy gate, which runs on `scheduling protocol conftest.py`.
 - **The protocol speaks turns, not state.** A `ToolTurn` is the mechanism's own
   record: the reply to speak plus the tool schemas now in play. The handler
   translates its context DTO into it, exactly as an HTTP handler renders a

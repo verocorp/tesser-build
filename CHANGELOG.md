@@ -5,6 +5,344 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.92.0] - 2026-08-30
+
+Two domain-modeling gaps that test helpers had been papering over, found by
+asking what the ten remaining `TB071`/`TB073` markers were excusing. A
+`layout` `Problem` was a sentence, so every domain test projected the
+problem list to strings and grepped for a phrase; and two `ts.Request`s built
+from the same values were unequal, so a test that wanted "the reloaded
+request equals the original" projected both to a tuple first. Neither is a
+helper-rule problem. The domain now answers the question the tests were
+asking.
+
+### Added
+- **`layout`: a `Problem` is a rule on a subject.** `Problem(ProblemSpec(rule,
+  subject, note))` — `Rule` is a closed domain enum with one member per
+  finding site (25), the subject is what the rule fired on, and the note is
+  the single extra value a few rules carry (the unknown kind, the parse
+  note, the sibling key, the offending version). `text()` renders the
+  sentence in one `match` closed by `assert_never`, so a rule with no
+  sentence fails mypy; equality is `(rule, subject, note)` and wording is
+  not identity. The CLI output is unchanged.
+- **`Repo.health() -> Health` and `Repo.presence(spec) -> Presence`.** The
+  repo answers as outcomes instead of handing back a tuple to search:
+  `Health.CLEAN | PROBLEMS`, and `Presence.ONLY | AMONG | ABSENT` for one
+  `ProblemSpec`. The service matches `health()` once and renders only in the
+  `PROBLEMS` arm. Every domain test states a spec and reads an outcome; none
+  constructs a `Problem` or reads a sentence. `ONLY` vs `AMONG` made two
+  tests stricter: the demoted-app-row and shared-gate-name scenarios each
+  produce exactly one problem, which `any(...)` never said.
+- **A DTO compares by value.** `ts.Request` and `ts.Response` (application
+  and context) are equal when they are the same concrete type with equal
+  fields, and hash the same way, so nested records and tuples of records
+  compare through, and a subclass may not redefine `__eq__`/`__hash__` (the
+  same guard `ValueObject` and `Record` carry). `python.md` carries the rule
+  (skill-version 65).
+
+### Fixed
+- **An empty `manifest.json` key is a problem, not a traceback.** The first
+  cut of `Problem` rejected an empty subject, so `{"": "app"}` — which the
+  reader admits — would have killed both CLI commands and `scripts/verify`
+  step 0; a `Subject` allows the empty string and the row reports as
+  `manifest.json row '' names no directory on disk`, as before. Found by the
+  pre-merge adversarial review running the old and new `problems()` over 52
+  scenarios; every other sentence was byte-identical, and a table test now
+  locks all 25.
+- **`presence()` answers `ONLY` when the same problem is reported twice**
+  (a workflow pinning `3.11` in two places) — "no other distinct problem",
+  not "exactly one entry".
+
+### Removed
+- **Five more `TB071`/`TB073` markers** (10 → 5). `_texts` in
+  `layout/repo/domain/test_rules.py`; `_shape`, `record_tuple`,
+  `request_tuple`, and `_find` in
+  `examples/python-app/campaign/tests/test_serialization_edges.py`. The
+  serialization-edge tests assert `loaded == original` and
+  `repo._rows[...] == CampaignRecord(...)`, and call the port themselves.
+  The five that remain are the `_repo` fixture-tree builders in `layout/`,
+  a fixture shape the helper rule does not describe; that ruling is separate.
+
+## [0.0.91.1] - 2026-08-30
+
+The Python floor is **3.12** (Chris ruling 2026-08-30). It already was, in
+fact: nine modules use PEP 695 generic syntax — `tesser/application/job_context.py`
+and its test, four files in `examples/durable-execution/`, three in
+`examples/minimal/` — so `import tesser.adapters` has been a `SyntaxError`
+on 3.11 for some time. Every CI job already installs 3.12 or later. What
+changed is that the declarations now say so, and a check keeps them saying so.
+
+- **`requires-python = ">=3.12"`** in the three distributions —
+  `tesser-py/pyproject.toml`, `tessercheck-py/pyproject.toml`,
+  `tessercheck-cli/pyproject.toml`. The comment on the `tesser` floor named
+  `typing.assert_never` (3.11); it names PEP 695 now, which is the real
+  constraint.
+- **`target-version = "py312"`** in `examples/python-app/ruff.toml`, which had
+  been deliberately held at the permissive `py311`. There is no permissive
+  floor left to be permissive about.
+- **The layout app checks it.** `layout/`'s reader now collects every
+  `pyproject.toml` and `ruff.toml` in the tree and the `Repo` aggregate fails
+  when any of them states a floor other than 3.12 — a stale `requires-python`,
+  a `[project]` table that states none at all, a stale ruff `target-version`,
+  an unparsable config file — or when any `python-version:` in
+  `.github/workflows/test.yml` pins below it. The floor is one constant
+  (`FLOOR` in `layout/repo/domain/rules.py`), so raising it next time is a
+  one-line change that then names every file that disagrees. Runs as step 0 of
+  `scripts/verify`, like the rest of the layout check.
+
+## [0.0.91.0] - 2026-08-30
+
+Adapter-side mappers and engine serdes get declared kinds (Chris ruling
+2026-08-30), which empties the last three `tesser:debt` markers out of the
+example trees.
+
+- **`tesser.adapters.Mapper`** carries the same contract as
+  `tesser.application.Mapper` — a mapper *is* its target: `MapToX(ts.Mapper, X)`,
+  one `super().__init__`, stores nothing, no other method. `TB052`'s kind → role
+  table now admits `mapper` in an `adapters` role module as well as
+  `application`, so a gateway or repository that ends in `return MapToX(answer)`
+  imports only `tesser.adapters`.
+- **A mapper in an adapters module may take a primitive** (`TB080` carve-out).
+  A repository wrapping a client that hands back a `bool` or a row value is the
+  normal case, and `MapToHasKeyResponse(result: bool)` is what it looks like.
+  The application-side rule is unchanged: a mapper there takes whole objects,
+  never a field already pulled off one.
+- **`tesser.adapters.Serde`** is a new kind, admitted in `adapters/jobs/`
+  (`TB052`). It declares exactly `serialize` and `deserialize` over **one type
+  parameter**, may hold at most the target type it was built with, and branches
+  on nothing beyond the empty/None case — a serde with decision logic is a
+  finding (`TB081`, `TB082`). It is also the **one adapter class allowed a base
+  from outside the tree**: the engine is the caller and the SDK's ABC is the
+  shape it calls, so `class RecordSerde[T](ts.Serde, restate.serde.Serde[T])`
+  is legal and every other adapter class subclassing something the tree does
+  not declare is a `TB052` finding.
+- Markers deleted: `TB050`/`TB052`/`TB080` in
+  `examples/minimal/beta/adapters/repositories/memory.py`, `TB050`/`TB052` in
+  `examples/minimal/alpha/adapters/gateways/beta_check.py`, and `TB052` in
+  `examples/durable-execution/ordering/adapters/jobs/restate.py`. The
+  durable-execution tree now runs the analyzer with no markers at all.
+
+### Also here: three debt-wave PRs that merged without release notes
+
+Each retired markers by moving code to a conforming placement rather than by
+widening a rule; no analyzer rule changed in any of the three.
+
+- **#151 — five marker lines in the example trees, across three `TODOS.md`
+  items.** The `JSONObject = dict[str, object]` alias is gone from
+  `examples/python-app/protocol/http.py` and `examples/errorspy/protocol/http.py`
+  (`TB051` ×2), inlined at all six annotations, because the only
+  analyzer-clean spelling is the one `mypy --strict` rejects as
+  `[valid-type]` — `python.md`'s protocol illustration follows, so a consumer
+  copying it no longer copies a debt-marked shape. `python-app`'s
+  `tests/test_shape.py` is cut back to the structural half tessercheck cannot
+  assert (every discovered context owns `domain`, `application`, `component`
+  and exposes a `Client`), deleting three tests that duplicated sibling
+  handler coverage and one that re-implemented the host's exception ladder
+  inside itself (`TB050` ×1, `TB070` ×2). The two `tesser:debt-file TB041`
+  markers on `tests/support.py` and `tests/discovery.py` stay: the blocking
+  rule for each candidate home — `TB041`, `TB065`, `TB040`, `TB071`/`TB072`,
+  `TB073` — is now written into `TODOS.md` so the next reader does not
+  re-derive it.
+- **#152 — four `TB051` module-function markers in `tessercheck-py` itself.**
+  `srv/cli/main.py` and `srv/cli/rules.py` trade their module-level `run(argv)`
+  for `MainHost`/`RulesHost` `ts.Host` classes, the shape
+  `examples/python-app/srv/cli/main.py` and `layout/srv/cli/` already use;
+  `application/mapping.py`'s `findings()` becomes
+  `MapToCheckResponse(ts.Mapper, client.CheckResponse)`; and
+  `domain/rulebook.py`'s `render()` becomes a `Rulebook` value object over a
+  `RulebookSpec`, with `__str__` as its sole primitive exit, because a
+  domain-role module holds only domain kinds. `roadmap/generate.py` imports
+  the rulebook directly and was updated with the other call sites.
+- **#153 — four markers in `examples/llmport`.** The three module-level view
+  functions in `scheduling/application/views.py` (`TB051` ×3) each got the home
+  the 2026-08-29 ruling gives it: `began` was a mapping, so it is
+  `MapToBegunBookingSpec(ts.Mapper, domain.BookingSpec)`; the two `*_reply`
+  functions were decisions, so they went to the class that owns the fact they
+  branched on — a new `Resumption` value object answering `Resumed`, and
+  `Booking.settle` now returning the `Settled` outcome it was already
+  performing. Both service methods carry exactly one `match`, closed by
+  `typing.assert_never`. The `TB074` marker on `srv/voice/agent.py` is retired
+  by a real sibling test rather than a shim: `livekit-agents` joins
+  `requirements-dev.txt` and `srv/voice/test_agent.py` drives the actual
+  `livekit.agents.Agent` over hand-written `@ts.fake` doubles.
+
+## [0.0.90.1] - 2026-08-30
+
+`ts.Record` stopped rejecting a class-level default on CPython 3.14 — the gap
+v0.0.89.1 found and named while adding the 3.13 matrix arm. Under PEP 649 a
+class body no longer executes its annotations: the compiler leaves an
+`__annotate_func__` in the class namespace, and `__annotations__` is
+materialized lazily, on first read, by the `type.__annotations__` descriptor.
+`Record.__init_subclass__` read the namespace directly —
+`base.__dict__.get("__annotations__", {})` — so on 3.14 it saw an empty
+mapping, found no fields, and let `status: int = 200` through.
+`Record.__init__` read the same annotations through `getattr` and was never
+affected, which is the whole shape of the defect: one contract, two readers,
+and only one of them survived the change.
+
+### Fixed
+- **One reader for a record's own annotations.** `_own_annotations` is the
+  single way `Record` asks a class what it declared, and both the class-level
+  default gate and the declared-field list go through it. It reads through the
+  attribute — `getattr(cls, "__annotations__", {})` — which returns a class's
+  own annotations and nothing inherited on every supported version, and which
+  on 3.14 is what runs `__annotate_func__`. The gate now sees exactly the
+  fields `__init__` will accept, by construction rather than by coincidence.
+  The `{}` default stays load-bearing: `object` carries no `__annotations__`
+  on 3.12, 3.13, or 3.14, and the field walk crosses it.
+- The two tests that caught this — a record field carrying a class-level
+  default, and an annotated mixin smuggling one in — are unchanged and pass on
+  all three versions. They were the report, so they stay the proof.
+
+### Added
+- Three tests over the annotation reader, none of them version-conditional: a
+  string annotation (`status: "int" = 200`) is still read as a field and still
+  refused a default, a string-annotated `ClassVar` is still not a field and
+  keeps its class-level value, and a `typing.Final` does the same. String
+  annotations are what a `from __future__ import annotations` consumer
+  produces, so the reader is pinned against the representation as well as the
+  storage.
+
+### Changed
+- The `tesser-py` matrix is `3.12`, `3.13`, `3.14`. Every other job stays on
+  `3.12`.
+- `.gitignore` ignores `.venv*/`, not just `.venv/`. Verifying a three-version
+  matrix locally means three environments side by side, and the second one
+  should not show up as an untracked directory.
+
+### Notes
+- Every other class-creation-time gate in `tesser-py` was audited for the same
+  exposure, and `ts.Record` was the only one that reads annotations.
+  `ts.ValueObject` and `ts.Entity` read `__slots__` and dunder names out of
+  `cls.__dict__` — real namespace entries PEP 649 does not move. `ts.Outcome`
+  reads `enum`'s member tables, and v0.0.89.1 already covered the annotation
+  case there: its totality loop rejects `__annotate_func__` exactly as it
+  rejected `__annotations__`, because an outcome carries members and nothing
+  else. The `inspect.signature` reads in the `python-app` and `serdepy` tests
+  look at parameter names, not annotations.
+- `annotationlib.get_annotations(cls, format=FORWARDREF)` was the other
+  candidate and was rejected on evidence: its values are `ForwardRef` objects
+  whose `str()` reads `ForwardRef('ClassVar[int]', ...)`, which the
+  `ClassVar`/`Final` test would classify as a field. `STRING` format does work,
+  but `annotationlib` exists only on 3.14, so it buys a conditional import and
+  a *different* annotation representation per version — where reading through
+  the attribute gives one representation everywhere. The `ts.Outcome` fix names
+  a namespace key because its check is "nothing but members is here"; `Record`
+  needs the annotations themselves, so it reads them the way Python offers
+  them.
+- `scripts/verify` green across all 11 trees on 3.14.5 — not only the tree the
+  matrix touches — and green for `tesser-py` and `tessercheck-py` on 3.12.13
+  and 3.13.12. `go test ./...`, `go vet ./...`, and `gofmt -l .` clean;
+  `roadmap/generate.py --check` up to date. No rule, doc, or skill text
+  changed — `skill-version` stays 62.
+- Unchanged on every version, and left alone here: a subclass can still give an
+  *inherited* field a class-level default (`class Child(Parent): status = 500`),
+  because the gate pairs each base's own annotations with that same base's
+  namespace. That is a pre-existing gap in the same contract, not a 3.14 one.
+## [0.0.90.0] - 2026-08-30
+
+Five of the fifteen `TB073` debt markers in the test modules excused
+functions that were never helpers under `testing.md` rule 9 — a helper holds
+the values a test does not care about; it does not call the code under test
+or wire it. `_read(root)` invoked the real `FilesystemRepoReader`,
+`_handler(down=)` wired handler → service → repository over `FakeStorage`,
+and `_valid_create()` / `_create_body()` returned a JSON string. The debt was
+not a rule that fit badly; it was arrangement hidden behind a name.
+
+### Changed
+- **`layout/repo/adapters/repositories/test_file_repository.py`** — every
+  test constructs the reader and issues the `ReadRepoRequest` itself; the
+  `_read` helper and its marker are gone.
+- **`examples/errorspy/campaign/tests/test_transport.py` and `test_e2e.py`**
+  — every test builds its own `handlers.Handler(...)` over a fresh
+  `FakeStorage()` and writes the JSON body it sends, so the arrangement is
+  visible at the claim. `_handler`, `_valid_create`, `_create_body` and
+  their four markers are gone, along with the now-unused `tesser.testing`
+  import. `FakeStorage(down=False)` collapses to `FakeStorage()` — the
+  default was already up.
+
+The remaining ten markers (the seven `_repo` fixture-tree builders in
+`layout/`, `_texts` in `layout/repo/domain/test_rules.py`, and the four
+undeclared comparison projections in
+`examples/python-app/campaign/tests/test_serialization_edges.py`) are the
+subject of a separate ruling: they are a fixture shape and a projection
+shape, neither of which the helper rule describes.
+
+## [0.0.89.1] - 2026-08-30
+
+Every `ts.Outcome` subclass raised at class definition on a current CPython
+3.13 (#149) — not a shape the gate meant to reject, but a namespace the gate
+had no business reading. `enum` writes a transient guard flag,
+`_<ClassName>__in_progress`, into the class namespace while the class is being
+built and deletes it once the class is finished. `Outcome.__init_subclass__`
+runs from inside `type.__new__`, mid-creation, so it saw a key the finished
+class never carries — and because the allowlist it compares against was
+seeded from the first subclass the process ever created (the module's own
+probe), the allowlist held `_Probe__in_progress`, which by construction can
+never equal a later class's `_Delivery__in_progress`. First subclass passed,
+every subsequent one raised, with a message naming a key the developer never
+wrote. Present since the gate landed in v0.0.86.0.
+
+### Fixed
+- **The gate reads the finished class, not the namespace `enum` is still
+  writing.** The totality loop, the base, `__new__`, `_generate_next_value_`,
+  member-value and alias checks moved to `enum.EnumMeta.__new__` on the base's
+  own metaclass, which runs them *after* `super().__new__` returns — the point
+  where `enum` has removed its scaffolding and the class carries what it will
+  carry for the rest of its life. A rejection message can now only name
+  something the class body actually spells.
+- **The machinery allowlist is a constant, not a snapshot of whichever
+  subclass came first.** It is read once from an empty `enum.Enum` probe in the
+  module, after creation — a set that is the same whatever an outcome is
+  called, so a name that embeds a class's own name can never enter it. No
+  process-global mutable state is left: `_GENERATED` is `typing.Final`.
+- **The one check that cannot move stayed put.** `Outcome.__init_subclass__`
+  now holds exactly the metaclass identity check, which `type.__new__` calls
+  unconditionally — so a metaclass that inherits the gate and skips it (calling
+  `enum.EnumMeta.__new__` instead of `super().__new__`) is still rejected. That
+  is a regression test, not a hypothetical: without it, a custom metaclass is a
+  hole a metaclass gate opens.
+
+### Changed
+- The `tesser-py` CI job runs a Python matrix — `3.12` and `3.13` — and it is
+  the only job that does. tesser-py is the tree consumers *import*, so it runs
+  on whatever interpreter they have; `3.13` resolves to the newest patch the
+  runner has, which is the coverage a pinned patch cannot give. Every other job
+  stays on `3.12`.
+
+### Notes
+- Reproduced and fixed against five interpreters: 3.13.12 and 3.14.5 raise
+  before the fix and pass after; 3.11.15 (the floor
+  `tesser-py/pyproject.toml` declares), 3.12.5 (the version CI pins, and why
+  CI was green), and 3.12.13 never carried the guard flag and pass either way —
+  the backport is 3.13 and later. The issue reports 3.13.14;
+  3.13.12 is the newest 3.13 this machine's uv index offers and it reproduces
+  identically, so the boundary is somewhere in 3.13, not at .14.
+- The matrix adds 3.13 and not 3.14 for a reason found while testing this fix:
+  on 3.14.5 the whole outcome suite passes, but two `ts.Record` tests fail —
+  a class-level default no longer raises, because PEP 649 changed what a bare
+  annotation leaves in a class body. That is a separate gap in a separate base,
+  untouched here and not something a patch fix should absorb silently.
+- Four hand-written tests in `tesser-py/tesser/domain/test_outcome.py`: two
+  outcomes declared in sequence (the issue's exact shape), the allowlist pinned
+  to what the machinery leaves on an empty outcome *and* to independence from
+  the class's name, a mid-creation-versus-finished comparison that asserts the
+  names `enum` writes and removes never reach the gate, and the metaclass that
+  tries to skip the gate it inherits. The existing custom-metaclass test now
+  covers both routes: a metaclass derived from the base's own (our message) and
+  one derived from `enum.EnumMeta` (Python's metaclass conflict, raised before
+  any of our code runs).
+- `Outcome` is still a plain `enum.Enum` subclass to every consumer:
+  `mypy --strict` accepts the custom metaclass, an exhaustive `match` closed by
+  `typing.assert_never` still type-checks, and TB084 reads the same shapes. The
+  annotation test now matches `__annotations__` or `__annotate_func__` — PEP 649
+  renamed what a bare annotation leaves in a 3.14 class body; the rejection is
+  unchanged, only the name in the message.
+- `scripts/verify` green across all 11 trees on 3.12.5, and green for
+  `tesser-py` on 3.13.12 (including the mutmut ecosystem gate); `go test ./...`,
+  `go vet ./...`, and `gofmt -l .` clean; `roadmap/generate.py --check` up to
+  date. No rule, doc, or skill text changed — `skill-version` stays 62.
+
 ## [0.0.89.0] - 2026-08-29
 
 A service decides once. Anything that needs a decision goes through a domain

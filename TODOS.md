@@ -275,22 +275,19 @@ where it lands.
   of those types. Needs a design: what crosses the `Client` on failure (an
   outcome on the response? a single edge-facing rejection?), what the
   handler returns, and what — if anything — the host still maps.
-- [ ] **Adapter-side mappers have no home in the rulebook.** A gateway and a
-  repository want to end in `return MapToX(answer)` so an adapter reads as
-  call-then-map, never as logic. `tesser.adapters` has no `Mapper`, and
-  `KIND_ROLE` says a mapper lives in `application`, so
+- [x] **Adapter-side mappers have no home in the rulebook.** Ruled (Chris,
+  2026-08-30) and shipped: `tesser.adapters.Mapper` carries the same contract
+  as `tesser.application.Mapper` (a mapper is its target), and `KIND_EXTRA_ROLES`
+  admits `mapper` in an `adapters` role module as well as `application` (TB052).
   `examples/minimal/alpha/adapters/gateways/beta_check.py` and
-  `examples/minimal/beta/adapters/repositories/memory.py` import
-  `tesser.application` for the base (`tesser:debt TB050`) and carry
-  `tesser:debt TB052` on the mapper class. Ruling: add `Mapper` to
-  `tesser.adapters` and admit `mapper` in `adapters` (TB052), then drop the
-  markers.
-- [ ] **A mapper over a library's primitive result.** `MapToHasKeyResponse`
-  takes the `bool` a db client hands back, which TB080 forbids ("a mapper
-  takes whole objects, never a field already pulled off one") — marked
-  `tesser:debt TB080`. A repository wrapping a client that returns
-  primitives is the normal case, so either the rule carves out the adapter
-  side or the client's result is wrapped first. Decide with the item above.
+  `examples/minimal/beta/adapters/repositories/memory.py` now import
+  `tesser.adapters` alone; the `TB050` and `TB052` markers are gone.
+- [x] **A mapper over a library's primitive result.** Ruled (Chris,
+  2026-08-30) and shipped: a mapper in an `adapters` module may take a
+  primitive, because a repository wrapping a client that returns primitives is
+  the normal case. The application side is unchanged — `MapToX(text: str)` in
+  an application module is still a TB080 finding. `MapToHasKeyResponse` keeps
+  its `bool` and drops its `tesser:debt TB080`.
 - [ ] **Faking a peer's client in a context test.** The context `tests/` tier
   may import a foreign `client` (TB070), but `testing.md` rule 1's two tiers
   (double one collaborator through its port / real in-memory port) never
@@ -974,10 +971,19 @@ wait for a ruling:
   honest.
   The hard-collision detail preserved from the ratchet era: an exception
   must subclass `Exception`, so a declares-its-block rule has no satisfiable
-  form for wire exception classes (the `ts.Error` track), and the only
-  analyzer-clean alias spelling (`JSONObject: Final = ...`) is rejected by
-  `mypy --strict` [valid-type] — verified 2026-08-07. Those carry debt markers
-  until their rule changes land.
+  form for wire exception classes (the `ts.Error` track). Those carry debt
+  markers until their rule changes land.
+  **The two type aliases are gone (2026-08-30).** The collision was real —
+  `JSONObject: Final = ...` is analyzer-clean but rejected by `mypy --strict`
+  [valid-type], verified 2026-08-07 — so the fix was to stop naming the
+  alias at all: `examples/python-app/protocol/http.py` and
+  `examples/errorspy/protocol/http.py` now spell `dict[str, object]` inline
+  at every annotation, and `skills/tesser-build/python.md`'s protocol
+  illustration follows. No rule changed. The residue is now 17 markers.
+  The shape test's `tesser.context` import (TB050) is gone too: the DTO
+  assertions it needed are what TB042 (a context `__init__` is empty),
+  TB080 (a DTO field is a primitive or another DTO), and TB081 (a client
+  method returns a `ts.Response`) now enforce, so the test dropped them.
 - [ ] **Host-class vocabulary — PARTIALLY RESOLVED (srv-wire-vocabulary wave,
   2026-08-07).** `tesser.srv` now exists (Host, Port, Record, Request,
   Response — package-scoped kinds per the errors-ruling grammar; `Record`
@@ -1089,8 +1095,19 @@ wait for a ruling:
   2026-08-12).** A tree-root conftest is a TB065 leaf; a conftest inside a
   tests location carries that location's TB070 row. `tests.discovery` /
   `tests.support` keep their TB041 debt-file markers but now answer for their
-  imports under the root-tests tier; `tests.test_shape`'s `tesser.context`
-  import keeps its explicit TB050 pin.
+  imports under the root-tests tier. (`tests.test_shape`'s `tesser.context`
+  pin is gone as of 2026-08-30 — see the residue entry above.)
+  **Why the two TB041 debt-file markers cannot be retired without a ruling**
+  (checked 2026-08-30): there is no legal placement in the tree for a shared
+  test-support module. `tests/` admits only test modules and conftest
+  (TB041); a conftest is a leaf that imports nothing from its tree (TB065),
+  which `tests/support.py` does; a top-level module belongs to no governed
+  package (TB040); and inside a test module the only non-test forms are
+  `@ts.helper` — defaulted primitives only, builds a spec or a DTO, no
+  control flow (TB073) — and `@ts.fake` (TB071/TB072). The AST/filesystem
+  detectors satisfy none of those. Retiring the markers therefore means
+  deleting the detector tests, which is the wave-sized "Relocate the
+  architecture detectors out of `tests/`" item below, not a cleanup.
 - [ ] **Test-module annotation.** When tests declare themselves, flip
   "a test module imports tesser.testing at most once, as ts" to exactly-once.
 - [ ] **Wire vocabulary — what the srv-matrix build wave left open**
@@ -2259,18 +2276,16 @@ three rules. Two were ruled by the app-service-types wave
   A check that no `@dataclass` appears in a checked tree closes the bypass at
   the decorator rather than at `Record`.
 
-- [ ] **An engine adapter's serde has no home.** The wire shapes are gone
-  (ruled: a message is declared once, on the port, and both ends of the
-  engine speak the port's own `ts.Request`/`ts.Response`), but where the SDK
-  cannot serialize a `ts.Request` itself the tree brings a serde, and
-  `restate.serde.Serde` is an ABC, so it is a class with no `ts.*` base.
-  `ordering/adapters/jobs/restate.py` carries the one remaining
-  `tesser:debt TB052`. Ruling: name the kind (an adapter serde?), admit it
-  in `adapters` (TB052), and drop the marker. Shares a shape with the
-  adapter-side-mapper ruling above. Related and also unruled: payload
-  versioning on a durable leg (a field added to a port DTO changes the bytes
-  an in-flight journal holds) — until ruled, port DTOs on a durable leg are
-  append-only.
+- [x] **An engine adapter's serde has no home.** Ruled (Chris, 2026-08-30)
+  and shipped as `tesser.adapters.Serde`, admitted in `adapters/jobs/`
+  (TB052): exactly `serialize` and `deserialize`, one type parameter, at most
+  the target type stored, no branch beyond the empty/None case (TB081,
+  TB082) — and the one adapter class allowed a base from outside the tree,
+  because the engine is the caller. `ordering/adapters/jobs/restate.py`
+  declares `class RecordSerde[T](ts.Serde, restate.serde.Serde[T])` and the
+  `tesser:debt TB052` is gone. Still unruled: payload versioning on a durable
+  leg (a field added to a port DTO changes the bytes an in-flight journal
+  holds) — until ruled, port DTOs on a durable leg are append-only.
 
 - [x] **The orchestrator and its actions are not application services**
   — ruled and shipped by the app-service-types wave: `ts.Orchestrator` in

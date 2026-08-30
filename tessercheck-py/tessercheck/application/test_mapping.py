@@ -38,7 +38,7 @@ def test_a_declared_tree_of_conforming_modules_yields_no_findings() -> None:
         stdlib=(),
         pure_stdlib=(),
     )
-    assert mapping.findings(read) == ()
+    assert mapping.MapToCheckResponse(read=read).findings == ()
 
 
 def test_an_undeclared_tree_is_the_only_thing_reported() -> None:
@@ -60,7 +60,7 @@ def test_an_undeclared_tree_is_the_only_thing_reported() -> None:
         stdlib=("os",),
         pure_stdlib=(),
     )
-    found = mapping.findings(read)
+    found = mapping.MapToCheckResponse(read=read).findings
     assert len(found) == 1
     assert "TB044" in found[0]
 
@@ -81,7 +81,7 @@ def test_every_root_form_other_than_app_is_reported() -> None:
             stdlib=(),
             pure_stdlib=(),
         )
-        found = mapping.findings(read)
+        found = mapping.MapToCheckResponse(read=read).findings
         assert len(found) == 1
         assert "TB044" in found[0]
 
@@ -97,7 +97,7 @@ def test_a_symlinked_directory_from_the_read_is_reported() -> None:
         stdlib=(),
         pure_stdlib=(),
     )
-    found = mapping.findings(read)
+    found = mapping.MapToCheckResponse(read=read).findings
     assert any("TB045" in finding and "app/vendored" in finding for finding in found)
 
 
@@ -112,7 +112,7 @@ def test_a_nested_declaration_from_the_read_is_reported() -> None:
         stdlib=(),
         pure_stdlib=(),
     )
-    found = mapping.findings(read)
+    found = mapping.MapToCheckResponse(read=read).findings
     assert any("app/.tesser-root" in finding for finding in found)
 
 
@@ -135,7 +135,7 @@ def test_a_finding_reads_path_line_code_then_message() -> None:
         stdlib=("os",),
         pure_stdlib=(),
     )
-    found = mapping.findings(read)
+    found = mapping.MapToCheckResponse(read=read).findings
     assert found != ()
     head, _, rest = found[0].partition(": ")
     assert head == "shop/domain/thing.py:1"
@@ -161,7 +161,7 @@ def test_an_unreadable_source_is_reported_rather_than_read_as_empty() -> None:
         stdlib=(),
         pure_stdlib=(),
     )
-    found = mapping.findings(read)
+    found = mapping.MapToCheckResponse(read=read).findings
     assert any("shop/domain/thing.py" in finding for finding in found)
 
 
@@ -202,6 +202,6 @@ def test_the_package_form_of_a_source_changes_the_judgement() -> None:
         stdlib=(),
         pure_stdlib=(),
     )
-    assert mapping.findings(as_package) == ()
-    assert mapping.findings(as_module) != ()
+    assert mapping.MapToCheckResponse(read=as_package).findings == ()
+    assert mapping.MapToCheckResponse(read=as_module).findings != ()
 

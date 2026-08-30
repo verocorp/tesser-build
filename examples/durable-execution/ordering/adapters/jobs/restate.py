@@ -14,7 +14,7 @@ import ordering.application.ports.quoting as quoting
 import tesser.errors as errors
 
 
-class RecordSerde[T](restate.serde.Serde[T]):  # tesser:debt TB052
+class RecordSerde[T](ts.Serde, restate.serde.Serde[T]):
 
     def __init__(self, kind: type[T]) -> None:
         self._kind = kind

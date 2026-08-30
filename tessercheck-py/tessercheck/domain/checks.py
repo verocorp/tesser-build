@@ -32,6 +32,8 @@ TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.adapters", "Gateway"): "gateway",
     ("tesser.adapters", "Handler"): "handler",
     ("tesser.adapters", "Job"): "job",
+    ("tesser.adapters", "Mapper"): "mapper",
+    ("tesser.adapters", "Serde"): "serde",
     ("tesser.adapters", "JobContext"): "job_context",
     ("tesser.testing", "JobContext"): "job_context",
     ("tesser.component", "Component"): "component",
@@ -113,8 +115,35 @@ ADAPTER_KIND_PACKAGES: typing.Final[dict[str, frozenset[str]]] = {
     "handlers": frozenset({"handler"}),
     "gateways": frozenset({"gateway"}),
     "repositories": frozenset({"repository"}),
-    "jobs": frozenset({"job", "job_context"}),
+    "jobs": frozenset({"job", "job_context", "serde"}),
 }
+
+SERDE_BLOCK: typing.Final[str] = "serde"
+
+ADAPTER_PLACED_BLOCKS: typing.Final[frozenset[str]] = ADAPTER_BLOCKS | frozenset({SERDE_BLOCK})
+
+SERDE_METHODS: typing.Final[tuple[str, ...]] = ("serialize", "deserialize")
+
+SERDE_HELD: typing.Final[frozenset[str]] = frozenset({"type", "Type"})
+
+SERDE_DECISIONS: typing.Final[tuple[type[ast.stmt | ast.expr], ...]] = (
+    ast.If,
+    ast.IfExp,
+    ast.Match,
+    ast.While,
+    ast.For,
+    ast.AsyncFor,
+    ast.Try,
+    ast.TryStar,
+    ast.BoolOp,
+    ast.Compare,
+    ast.ListComp,
+    ast.SetComp,
+    ast.DictComp,
+    ast.GeneratorExp,
+    ast.Assert,
+    ast.Lambda,
+)
 
 ADAPTER_KIND_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "handlers": ("client",),
@@ -158,9 +187,14 @@ KIND_ROLE: typing.Final[dict[str, str]] = {
     "handler": "adapters",
     "job": "adapters",
     "job_context": "adapters",
+    "serde": "adapters",
     "component": "component",
     "component_config": "component",
     "component_spec": "component",
+}
+
+KIND_EXTRA_ROLES: typing.Final[dict[str, frozenset[str]]] = {
+    "mapper": frozenset({"adapters"}),
 }
 
 KIND_HOME: typing.Final[dict[str, str]] = {
@@ -191,6 +225,7 @@ KIND_NAME: typing.Final[dict[str, str]] = {
     "handler": "an inbound handler",
     "job": "a job",
     "job_context": "a job context",
+    "serde": "a serde",
     "component": "a component",
     "component_config": "a component config",
     "component_spec": "a component config spec",
@@ -3603,6 +3638,7 @@ class ClassDecl(ts.Entity):
     _extras: tuple[Fact, ...]
     _block: Text | None
     _statements: tuple[Fact, ...]
+    _serde_facts: tuple[Fact, ...]
     _spec_reader: SpecReader
     _constructor_policy: AnnotationPolicy
     _spec_policy: AnnotationPolicy
@@ -3821,6 +3857,72 @@ class ClassDecl(ts.Entity):
                 extras.append((item.lineno, "valued", None, ()))
         object.__setattr__(self, "_extras", tuple(Fact(FactSpec(*item)) for item in extras))
         object.__setattr__(self, "_block", own_block)
+        serde_facts: list[tuple[int, str, str | None, tuple[str, ...]]] = []
+        if own_block is not None and str(own_block) == SERDE_BLOCK:
+            serde_facts.append((node.lineno, "type_params", str(len(node.type_params)), ()))
+            serde_methods = [
+                item for item in node.body if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+            ]
+            held_types: set[str] = set()
+            for item in serde_methods:
+                if item.name != "__init__":
+                    continue
+                for arg in list(item.args.posonlyargs) + list(item.args.args) + list(item.args.kwonlyargs):
+                    if arg.arg == "self":
+                        continue
+                    param_head = Annotation(arg.annotation).head() if arg.annotation is not None else None
+                    if param_head is not None and str(param_head) in SERDE_HELD:
+                        held_types.add(arg.arg)
+                        continue
+                    serde_facts.append((arg.lineno, "init_param", arg.arg, ()))
+            for item in serde_methods:
+                for inner in ast.walk(item):
+                    targets: list[ast.expr] = []
+                    if isinstance(inner, ast.Assign):
+                        targets = list(inner.targets)
+                    elif isinstance(inner, (ast.AnnAssign, ast.AugAssign)):
+                        targets = [inner.target]
+                    for stored_leaf in targets:
+                        if not isinstance(stored_leaf, ast.Attribute):
+                            continue
+                        if not (isinstance(stored_leaf.value, ast.Name) and stored_leaf.value.id == "self"):
+                            continue
+                        if (
+                            item.name == "__init__"
+                            and isinstance(inner, ast.Assign)
+                            and isinstance(inner.value, ast.Name)
+                            and inner.value.id in held_types
+                        ):
+                            continue
+                        serde_facts.append((stored_leaf.lineno, "store", stored_leaf.attr, ()))
+
+            def empty_test(test: ast.expr) -> bool:
+                if isinstance(test, ast.Name):
+                    return True
+                if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
+                    return isinstance(test.operand, ast.Name)
+                if isinstance(test, ast.Compare) and len(test.ops) == 1:
+                    return (
+                        isinstance(test.ops[0], (ast.Is, ast.IsNot))
+                        and isinstance(test.left, ast.Name)
+                        and isinstance(test.comparators[0], ast.Constant)
+                        and test.comparators[0].value is None
+                    )
+                return False
+
+            for item in serde_methods:
+                if item.name not in SERDE_METHODS:
+                    continue
+                allowed: set[int] = set()
+                for inner in ast.walk(item):
+                    if isinstance(inner, ast.If) and empty_test(inner.test):
+                        allowed.update(id(sub) for sub in ast.walk(inner.test))
+                        allowed.add(id(inner))
+                for inner in ast.walk(item):
+                    if id(inner) in allowed or not isinstance(inner, SERDE_DECISIONS):
+                        continue
+                    serde_facts.append((inner.lineno, "decision", item.name, ()))
+        object.__setattr__(self, "_serde_facts", tuple(Fact(FactSpec(*item)) for item in serde_facts))
         object.__setattr__(
             self,
             "_statements",
@@ -4127,8 +4229,103 @@ class ClassDecl(ts.Entity):
                     )
         return tuple(found)
 
+    def serde_violations(self) -> tuple[Violation, ...]:
+        where = f"{self._module}.{self._name}"
+        found: list[Violation] = []
+        for fact in self._serde_facts:
+            if str(fact.kind()) == "type_params" and str(fact.detail()) != "1":
+                type_params = str(fact.detail())
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(fact.lineno()),
+                        "TB081",
+                        f"{where} declares {type_params} type parameters; a serde names "
+                        "one type parameter, the shape it carries in both directions",
+                    ))
+                )
+        declared = frozenset(str(method.name()) for method in self._methods)
+        for member in SERDE_METHODS:
+            if member in declared:
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(self._lineno),
+                    "TB081",
+                    f"{where} declares no {member}; a serde declares serialize and "
+                    "deserialize and nothing else, because those two are what the engine calls",
+                ))
+            )
+        for fact in self._statements:
+            if "pass" in fact.traits():
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(fact.lineno()),
+                    "TB081",
+                    f"{where} carries a class-level statement; a serde holds its two "
+                    "calls and the target type it is built with, and nothing else",
+                ))
+            )
+        for method in self._methods:
+            if str(method.name()) in SERDE_METHODS or str(method.name()) == "__init__":
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(method.lineno()),
+                    "TB081",
+                    f"{where}.{method.name()} is a method; a serde declares serialize and "
+                    "deserialize and nothing else, because those two are what the engine calls",
+                ))
+            )
+        for fact in self._serde_facts:
+            if str(fact.kind()) == "init_param":
+                arg = str(fact.detail())
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(fact.lineno()),
+                        "TB081",
+                        f"{where}.__init__ parameter {arg!r} is not a target type; a serde "
+                        "is built with at most the type it deserializes into, because anything "
+                        "else is state the engine cannot see",
+                    ))
+                )
+        for fact in self._serde_facts:
+            if str(fact.kind()) == "store":
+                field = str(fact.detail())
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(fact.lineno()),
+                        "TB081",
+                        f"{where} stores {field!r}; a serde is built with at most the type "
+                        "it deserializes into, because anything else is state the engine "
+                        "cannot see",
+                    ))
+                )
+        for fact in self._serde_facts:
+            if str(fact.kind()) == "decision":
+                member = str(fact.detail())
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(fact.lineno()),
+                        "TB082",
+                        f"{where}.{member} decides; a serde branches only on the empty "
+                        "payload, because anything else is a decision that belongs where the "
+                        "domain can see it",
+                    ))
+                )
+        return tuple(found)
+
     def mapper_violations(self) -> tuple[Violation, ...]:
         where = f"{self._module}.{self._name}"
+        parts = str(self._module).split(".")
+        adapter_side = len(parts) > 1 and parts[1] == "adapters"
         found: list[Violation] = []
         if not str(self._name).startswith(MAPPER_PREFIX):
             found.append(
@@ -4242,7 +4439,7 @@ class ClassDecl(ts.Entity):
                         ))
                     )
                     continue
-                if "primitive_leaf" in annotation.form():
+                if "primitive_leaf" in annotation.form() and not adapter_side:
                     found.append(
                         Violation(ViolationSpec(
                             str(self._path),
@@ -7171,6 +7368,7 @@ class Module(ts.Entity):
         parts = module_name.split(".")
         role = parts[1]
         extra = frozenset({"orchestrator", "port_response"}) if str(self._placement) in ("orchestrators", "orchestrators-file") else frozenset()
+        scope = self._scope
         kind_package = parts[2] if len(parts) >= 4 else None
         scope_spec = ScopeSpec(
             self._name,
@@ -7268,7 +7466,11 @@ class Module(ts.Entity):
                             "a host lives in srv and a protocol kind in a protocol module, never a context",
                         ))
                     )
-                elif KIND_ROLE[block] != role and block not in extra:
+                elif (
+                    KIND_ROLE[block] != role
+                    and role not in KIND_EXTRA_ROLES.get(block, frozenset())
+                    and block not in extra
+                ):
                     found.append(
                         Violation(ViolationSpec(
                             self._path,
@@ -7296,7 +7498,31 @@ class Module(ts.Entity):
             for cls in self._class_defs:
                 named = kinds.block_of(Symbol(SymbolSpec(module_name, cls.name)))
                 block = str(named) if named is not None else None
-                if block is None or block not in ADAPTER_BLOCKS or block in expected:
+                if block is None:
+                    continue
+                where = f"{module_name}.{cls.name}"
+                undeclared_base = False
+                for base in cls.bases:
+                    base_ref = Annotation(base).primary()
+                    base_symbol = scope.resolve(base_ref) if base_ref is not None else None
+                    if base_symbol is None or kinds.block_of(base_symbol) is None:
+                        undeclared_base = True
+                if (
+                    block != SERDE_BLOCK
+                    and block in (ADAPTER_PLACED_BLOCKS | frozenset({"mapper"}))
+                    and undeclared_base
+                ):
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            cls.lineno,
+                            "TB052",
+                            f"{where} subclasses a base the tree does not declare; only a "
+                            "serde subclasses a base from outside the tree, because the "
+                            "engine is the caller and the serde is the shape it calls",
+                        ))
+                    )
+                if block not in ADAPTER_PLACED_BLOCKS or block in expected:
                     continue
                 if not expected:
                     continue
@@ -7305,7 +7531,7 @@ class Module(ts.Entity):
                         self._path,
                         cls.lineno,
                         "TB052",
-                        f"{module_name}.{cls.name} is {KIND_NAME[block]}, and its "
+                        f"{where} is {KIND_NAME[block]}, and its "
                         "package names another kind; an adapters module holds the kind "
                         "of its kind package, because the package is what carries its reach",
                     ))
@@ -9820,6 +10046,8 @@ class Codebase(ts.AggregateRoot):
                         found.extend(body.violations())
                 elif block == "mapper":
                     found.extend(decl.mapper_violations())
+                elif block == SERDE_BLOCK:
+                    found.extend(decl.serde_violations())
                 elif block == "actions":
                     found.extend(decl.actions_violations())
                     for body in decl.bodies():
