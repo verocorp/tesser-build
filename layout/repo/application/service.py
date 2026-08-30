@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import typing
+
 import tesser.application as ts
 
 import repo.application.mapping as mapping
@@ -18,20 +20,24 @@ class LayoutService(ts.ApplicationService):
         root = str(repo_root)
         read = self._reader.read(repo_reader.ReadRepoRequest(repo_root=root))
         built = rules.Repo(mapping.MapToRepoSpec(read))
-        problems: list[str] = []
-        for problem in built.problems():
-            text = problem.text()
-            rendered = str(text)
-            problems.append(rendered)
         counts: list[str] = []
         for count in built.counts():
             counted = str(count)
             counts.append(counted)
-        rendered_problems = tuple(problems)
         rendered_counts = tuple(counts)
-        return client.CheckResponse(
-            problems=rendered_problems, counts=rendered_counts
-        )
+        match built.health():
+            case rules.Health.CLEAN:
+                return client.CheckResponse(problems=(), counts=rendered_counts)
+            case rules.Health.PROBLEMS:
+                problems: list[str] = []
+                for problem in built.problems():
+                    text = problem.text()
+                    rendered = str(text)
+                    problems.append(rendered)
+                rendered_problems = tuple(problems)
+                return client.CheckResponse(problems=rendered_problems, counts=rendered_counts)
+            case _ as unreachable:
+                typing.assert_never(unreachable)
 
     def trees(self, request: client.TreesRequest) -> client.TreesResponse:
         repo_root = rules.RepoRoot(request.repo_root)

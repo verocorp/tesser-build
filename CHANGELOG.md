@@ -5,6 +5,64 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.92.0] - 2026-08-30
+
+Two domain-modeling gaps that test helpers had been papering over, found by
+asking what the ten remaining `TB071`/`TB073` markers were excusing. A
+`layout` `Problem` was a sentence, so every domain test projected the
+problem list to strings and grepped for a phrase; and two `ts.Request`s built
+from the same values were unequal, so a test that wanted "the reloaded
+request equals the original" projected both to a tuple first. Neither is a
+helper-rule problem. The domain now answers the question the tests were
+asking.
+
+### Added
+- **`layout`: a `Problem` is a rule on a subject.** `Problem(ProblemSpec(rule,
+  subject, note))` — `Rule` is a closed domain enum with one member per
+  finding site (25), the subject is what the rule fired on, and the note is
+  the single extra value a few rules carry (the unknown kind, the parse
+  note, the sibling key, the offending version). `text()` renders the
+  sentence in one `match` closed by `assert_never`, so a rule with no
+  sentence fails mypy; equality is `(rule, subject, note)` and wording is
+  not identity. The CLI output is unchanged.
+- **`Repo.health() -> Health` and `Repo.presence(spec) -> Presence`.** The
+  repo answers as outcomes instead of handing back a tuple to search:
+  `Health.CLEAN | PROBLEMS`, and `Presence.ONLY | AMONG | ABSENT` for one
+  `ProblemSpec`. The service matches `health()` once and renders only in the
+  `PROBLEMS` arm. Every domain test states a spec and reads an outcome; none
+  constructs a `Problem` or reads a sentence. `ONLY` vs `AMONG` made two
+  tests stricter: the demoted-app-row and shared-gate-name scenarios each
+  produce exactly one problem, which `any(...)` never said.
+- **A DTO compares by value.** `ts.Request` and `ts.Response` (application
+  and context) are equal when they are the same concrete type with equal
+  fields, and hash the same way, so nested records and tuples of records
+  compare through, and a subclass may not redefine `__eq__`/`__hash__` (the
+  same guard `ValueObject` and `Record` carry). `python.md` carries the rule
+  (skill-version 65).
+
+### Fixed
+- **An empty `manifest.json` key is a problem, not a traceback.** The first
+  cut of `Problem` rejected an empty subject, so `{"": "app"}` — which the
+  reader admits — would have killed both CLI commands and `scripts/verify`
+  step 0; a `Subject` allows the empty string and the row reports as
+  `manifest.json row '' names no directory on disk`, as before. Found by the
+  pre-merge adversarial review running the old and new `problems()` over 52
+  scenarios; every other sentence was byte-identical, and a table test now
+  locks all 25.
+- **`presence()` answers `ONLY` when the same problem is reported twice**
+  (a workflow pinning `3.11` in two places) — "no other distinct problem",
+  not "exactly one entry".
+
+### Removed
+- **Five more `TB071`/`TB073` markers** (10 → 5). `_texts` in
+  `layout/repo/domain/test_rules.py`; `_shape`, `record_tuple`,
+  `request_tuple`, and `_find` in
+  `examples/python-app/campaign/tests/test_serialization_edges.py`. The
+  serialization-edge tests assert `loaded == original` and
+  `repo._rows[...] == CampaignRecord(...)`, and call the port themselves.
+  The five that remain are the `_repo` fixture-tree builders in `layout/`,
+  a fixture shape the helper rule does not describe; that ruling is separate.
+
 ## [0.0.91.1] - 2026-08-30
 
 The Python floor is **3.12** (Chris ruling 2026-08-30). It already was, in
