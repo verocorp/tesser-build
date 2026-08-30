@@ -76,6 +76,7 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "self._name": "⟨class⟩",
     "field.name()": "⟨field⟩",
     "method.name()": "⟨method⟩",
+    "arg": "⟨name⟩",
 }
 
 APPLIES_TO: typing.Final[dict[str, str]] = {
@@ -103,13 +104,12 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "ClassDecl.composition_violations": "value object class",
     "ClassDecl.construction_path_violations": "value object class",
     "ClassDecl.exit_violations": "value object conversion dunder",
-    "Codebase._structured_exit_violations": "entity or aggregate conversion dunder",
+    "ClassDecl.structured_exit_violations": "entity or aggregate conversion dunder",
     "ClassDecl.copy_violations": "entity or aggregate accessor",
-    "Codebase._held_root_violations": "entity or aggregate field",
-    "Codebase._domain_return_violations": "domain object public method",
-    "Codebase._domain_parameter_violations": "domain object public method",
+    "ClassDecl.held_root_violations": "entity or aggregate field",
+    "ClassDecl.domain_method_violations": "domain object public method",
     "Codebase._outcome_violations": "outcome class",
-    "Codebase._outcome_field_violations": "domain object field",
+    "ClassDecl.outcome_field_violations": "domain object field",
     "Codebase._outcome_use_violations": "every non-test module",
     "a service method": "public service method",
     "an actions method": "public actions method",

@@ -1,4 +1,5 @@
 import ast
+import bisect
 import builtins
 import io
 import re
@@ -989,6 +990,8 @@ WRAPPABLE_NAMES: typing.Final[Names] = Names(tuple(WRAPPABLE_SCALARS))
 
 CONSTRUCTOR_DECORATORS: typing.Final[Names] = Names(("classmethod", "staticmethod"))
 
+RETURN_SKIPPED: typing.Final[Names] = Names(tuple(RETURN_WRAPPERS | SELF_NAMES))
+
 
 class SymbolsSpec(ts.Spec):
 
@@ -1012,6 +1015,63 @@ class Symbols(ts.ValueObject):
 
     def __bool__(self) -> bool:
         return bool(self._items)
+
+    def __contains__(self, item: object) -> bool:
+        return item in self._items
+
+    def __iter__(self) -> typing.Iterator[Symbol]:
+        return iter(self._items)
+
+
+class KindTableSpec(ts.Spec):
+
+    def __init__(self, entries: tuple[tuple[str, str, str], ...]) -> None:
+        self.entries = entries
+
+
+class KindTable(ts.ValueObject):
+
+    _symbols: tuple[Symbol, ...]
+    _blocks: tuple[Text, ...]
+
+    def __init__(self, spec: KindTableSpec) -> None:
+        ordered = sorted(spec.entries)
+        object.__setattr__(
+            self, "_symbols", tuple(Symbol(SymbolSpec(module, name)) for module, name, _ in ordered)
+        )
+        object.__setattr__(self, "_blocks", tuple(Text(block) for _, _, block in ordered))
+
+    def block_of(self, symbol: Symbol) -> Text | None:
+        wanted = (str(symbol.module()), str(symbol.name()))
+        index = bisect.bisect_left(
+            self._symbols, wanted, key=lambda item: (str(item.module()), str(item.name()))
+        )
+        if index < len(self._symbols) and self._symbols[index] == symbol:
+            return self._blocks[index]
+        return None
+
+
+class RegistrySpec(ts.Spec):
+
+    def __init__(self, kinds: KindTableSpec, domain_enums: tuple[SymbolSpec, ...]) -> None:
+        self.kinds = kinds
+        self.domain_enums = domain_enums
+
+
+class Registry(ts.ValueObject):
+
+    _kinds: KindTable
+    _domain_enums: Symbols
+
+    def __init__(self, spec: RegistrySpec) -> None:
+        object.__setattr__(self, "_kinds", KindTable(spec.kinds))
+        object.__setattr__(self, "_domain_enums", Symbols(SymbolsSpec(spec.domain_enums)))
+
+    def kinds(self) -> KindTable:
+        return self._kinds
+
+    def domain_enums(self) -> Symbols:
+        return self._domain_enums
 
 
 class ImportSpec(ts.Spec):
@@ -1094,6 +1154,21 @@ class Scope(ts.ValueObject):
         object.__setattr__(self, "_packages", tuple(Alias(item) for item in spec.packages))
         object.__setattr__(self, "_classes", Names(spec.classes))
 
+    def resolve(self, ref: Text) -> Symbol | None:
+        wanted = str(ref)
+        if "." in wanted:
+            prefix, attr = wanted.rsplit(".", 1)
+            for alias in self._packages:
+                if str(alias.alias()) == prefix:
+                    return Symbol(SymbolSpec(str(alias.package()), attr))
+            return None
+        for binding in self._imported:
+            if str(binding.local()) == wanted:
+                return Symbol(SymbolSpec(str(binding.target()), str(binding.original())))
+        if wanted in self._classes:
+            return Symbol(SymbolSpec(str(self._module), wanted))
+        return None
+
     def symbols(self, annotation: "Annotation") -> Symbols:
         found: list[tuple[str, str]] = []
         for ref in annotation.refs():
@@ -1114,10 +1189,14 @@ class Scope(ts.ValueObject):
 class Annotation(ts.ValueObject):
 
     _dump: Text
+    _source: Text
     _head: Text | None
+    _container: Text | None
     _scalars: Names
     _refs: Names
     _produced: Names
+    _produced_refs: Names
+    _leaves: Names | None
 
     def __init__(self, node: ast.expr) -> None:  # tesser:debt TB080
         cursor: ast.expr | None = node
@@ -1140,6 +1219,38 @@ class Annotation(ts.ValueObject):
                 cursor = None if isinstance(parsed, ast.Constant) else parsed
                 continue
             break
+        container: str | None = None
+        pending: list[ast.expr] = [node]
+        while pending and container is None:
+            probe = pending.pop()
+            if isinstance(probe, ast.Constant) and isinstance(probe.value, str):
+                try:
+                    probe = ast.parse(probe.value, mode="eval").body
+                except SyntaxError:
+                    continue
+            if isinstance(probe, ast.BinOp) and isinstance(probe.op, ast.BitOr):
+                pending.extend([probe.left, probe.right])
+                continue
+            if isinstance(probe, ast.Subscript):
+                wrapper: ast.expr = probe.value
+                wrapper_head = (
+                    wrapper.id
+                    if isinstance(wrapper, ast.Name)
+                    else wrapper.attr
+                    if isinstance(wrapper, ast.Attribute)
+                    else None
+                )
+                if wrapper_head in ("Optional", "Final", "Annotated"):
+                    wrapped = probe.slice
+                    if isinstance(wrapped, ast.Tuple) and wrapped.elts:
+                        wrapped = wrapped.elts[0]
+                    pending.append(wrapped)
+                    continue
+                probe = probe.value
+            if isinstance(probe, ast.Attribute) and probe.attr in CONTAINER_NAMES:
+                container = probe.attr
+            elif isinstance(probe, ast.Name) and probe.id in CONTAINER_NAMES:
+                container = probe.id
         names: set[str] = set()
         refs: set[str] = set()
         stack: list[ast.AST] = [node]
@@ -1161,6 +1272,7 @@ class Annotation(ts.ValueObject):
                     if not isinstance(quoted, ast.Constant):
                         stack.append(quoted)
         produced: set[str] = set()
+        produced_refs: set[str] = set()
         walk_stack: list[ast.expr] = [node]
         while walk_stack:
             walked = walk_stack.pop()
@@ -1189,23 +1301,69 @@ class Annotation(ts.ValueObject):
                 continue
             if isinstance(walked, ast.Attribute):
                 produced.add(walked.attr)
+                if isinstance(walked.value, (ast.Name, ast.Attribute)):
+                    produced_refs.add(f"{ast.unparse(walked.value)}.{walked.attr}")
                 continue
             if isinstance(walked, ast.Name):
                 produced.add(walked.id)
+                produced_refs.add(walked.id)
                 continue
             walk_stack.extend(
                 child for child in ast.iter_child_nodes(walked) if isinstance(child, ast.expr)
             )
+        leaves: list[str] | None = []
+        peel: list[ast.expr] = [node]
+        while peel and leaves is not None:
+            leaf = peel.pop()
+            if isinstance(leaf, ast.Constant):
+                if isinstance(leaf.value, str):
+                    try:
+                        peel.append(ast.parse(leaf.value, mode="eval").body)
+                    except SyntaxError:
+                        leaves = None
+                    continue
+                if leaf.value is Ellipsis or leaf.value is None:
+                    continue
+                leaves = None
+                continue
+            if isinstance(leaf, ast.Name):
+                leaves.append(leaf.id)
+                continue
+            if isinstance(leaf, ast.Attribute) and isinstance(leaf.value, (ast.Name, ast.Attribute)):
+                leaves.append(f"{ast.unparse(leaf.value)}.{leaf.attr}")
+                continue
+            if isinstance(leaf, ast.BinOp) and isinstance(leaf.op, ast.BitOr):
+                left_none = isinstance(leaf.left, ast.Constant) and leaf.left.value is None
+                right_none = isinstance(leaf.right, ast.Constant) and leaf.right.value is None
+                if left_none == right_none:
+                    leaves = None
+                    continue
+                peel.append(leaf.right if left_none else leaf.left)
+                continue
+            if isinstance(leaf, ast.Subscript) and isinstance(leaf.value, ast.Name) and leaf.value.id == "tuple":
+                peel.extend(leaf.slice.elts if isinstance(leaf.slice, ast.Tuple) else [leaf.slice])
+                continue
+            leaves = None
         object.__setattr__(self, "_dump", Text(ast.dump(node)))
+        object.__setattr__(self, "_source", Text(ast.unparse(node)))
         object.__setattr__(self, "_head", Text(head) if head else None)
+        object.__setattr__(self, "_container", Text(container) if container else None)
         object.__setattr__(
             self, "_scalars", Names(tuple(names - RETURN_WRAPPERS - SELF_NAMES))
         )
         object.__setattr__(self, "_refs", Names(tuple(refs)))
         object.__setattr__(self, "_produced", Names(tuple(produced)))
+        object.__setattr__(self, "_produced_refs", Names(tuple(produced_refs)))
+        object.__setattr__(self, "_leaves", Names(tuple(leaves)) if leaves is not None else None)
+
+    def source(self) -> Text:
+        return self._source
 
     def head(self) -> Text | None:
         return self._head
+
+    def container(self) -> Text | None:
+        return self._container
 
     def scalars(self) -> Names:
         return self._scalars
@@ -1215,6 +1373,64 @@ class Annotation(ts.ValueObject):
 
     def produced(self) -> Names:
         return self._produced
+
+    def produced_refs(self) -> Names:
+        return self._produced_refs
+
+    def leaves(self) -> Names | None:
+        return self._leaves
+
+
+class AnnotationPolicySpec(ts.Spec):
+
+    def __init__(
+        self,
+        blocks: tuple[str, ...],
+        primitives: tuple[str, ...],
+        enums: tuple[str, ...],
+        scope: ScopeSpec,
+        registry: RegistrySpec,
+    ) -> None:
+        self.blocks = blocks
+        self.primitives = primitives
+        self.enums = enums
+        self.scope = scope
+        self.registry = registry
+
+
+class AnnotationPolicy(ts.ValueObject):
+
+    _blocks: Names
+    _primitives: Names
+    _enums: Names
+    _scope: Scope
+    _registry: Registry
+
+    def __init__(self, spec: AnnotationPolicySpec) -> None:
+        object.__setattr__(self, "_blocks", Names(spec.blocks))
+        object.__setattr__(self, "_primitives", Names(spec.primitives))
+        object.__setattr__(self, "_enums", Names(spec.enums))
+        object.__setattr__(self, "_scope", Scope(spec.scope))
+        object.__setattr__(self, "_registry", Registry(spec.registry))
+
+    def disallowed(self, annotation: Annotation) -> Names:
+        leaves = annotation.leaves()
+        if leaves is None:
+            return Names((str(annotation.source()),))
+        rejected: list[str] = []
+        for leaf in leaves:
+            if "." not in leaf and (leaf in self._enums or leaf in self._primitives):
+                continue
+            symbol = self._scope.resolve(Text(leaf))
+            if symbol is None:
+                rejected.append(leaf)
+                continue
+            if symbol in self._registry.domain_enums():
+                continue
+            block = self._registry.kinds().block_of(symbol)
+            if block is None or str(block) not in self._blocks:
+                rejected.append(leaf)
+        return Names(tuple(rejected))
 
 
 class FieldSpec(ts.Spec):
@@ -1246,6 +1462,35 @@ class Field(ts.ValueObject):
         return self._lineno
 
 
+class ParamSpec(ts.Spec):
+
+    def __init__(self, name: str, node: ast.expr | None, lineno: int) -> None:  # tesser:debt TB080
+        self.name = name
+        self.node = node
+        self.lineno = lineno
+
+
+class Param(ts.ValueObject):
+
+    _name: Text
+    _annotation: Annotation | None
+    _lineno: Line
+
+    def __init__(self, spec: ParamSpec) -> None:
+        object.__setattr__(self, "_name", Text(spec.name))
+        object.__setattr__(self, "_annotation", Annotation(spec.node) if spec.node is not None else None)
+        object.__setattr__(self, "_lineno", Line(spec.lineno))
+
+    def name(self) -> Text:
+        return self._name
+
+    def annotation(self) -> Annotation | None:
+        return self._annotation
+
+    def lineno(self) -> Line:
+        return self._lineno
+
+
 class MethodSpec(ts.Spec):
 
     def __init__(self, node: ast.FunctionDef | ast.AsyncFunctionDef, owner: str) -> None:  # tesser:debt TB080
@@ -1260,6 +1505,8 @@ class Method(ts.Entity):
     _lineno: Line
     _decorators: Names
     _returns: Annotation | None
+    _params: tuple[Param, ...]
+    _open: Names
     _bare_self_attr: Text | None
     _delegated: Text | None
     _constructs: Names
@@ -1278,6 +1525,23 @@ class Method(ts.Entity):
         object.__setattr__(
             self, "_returns", Annotation(node.returns) if node.returns is not None else None
         )
+        positional = list(node.args.posonlyargs) + list(node.args.args)
+        if positional and positional[0].arg in ("self", "cls"):
+            positional = positional[1:]
+        object.__setattr__(
+            self,
+            "_params",
+            tuple(
+                Param(ParamSpec(arg.arg, arg.annotation, arg.lineno))
+                for arg in positional + list(node.args.kwonlyargs)
+            ),
+        )
+        opened: list[str] = []
+        if node.args.vararg is not None:
+            opened.append("*args")
+        if node.args.kwarg is not None:
+            opened.append("**kwargs")
+        object.__setattr__(self, "_open", Names(tuple(opened)))
         bare = node.body[0].value if len(node.body) == 1 and isinstance(node.body[0], ast.Return) else None
         bare_self_attr: str | None = None
         delegated: str | None = None
@@ -1327,6 +1591,12 @@ class Method(ts.Entity):
     def returns(self) -> Annotation | None:
         return self._returns
 
+    def params(self) -> tuple[Param, ...]:
+        return self._params
+
+    def open(self) -> Names:
+        return self._open
+
     def bare_self_attr(self) -> Text | None:
         return self._bare_self_attr
 
@@ -1339,11 +1609,19 @@ class Method(ts.Entity):
 
 class ClassDeclSpec(ts.Spec):
 
-    def __init__(self, node: ast.ClassDef, module: str, path: str, scope: ScopeSpec) -> None:  # tesser:debt TB080
+    def __init__(  # tesser:debt TB080
+        self,
+        node: ast.ClassDef,
+        module: str,
+        path: str,
+        scope: ScopeSpec,
+        registry: RegistrySpec,
+    ) -> None:
         self.node = node
         self.module = module
         self.path = path
         self.scope = scope
+        self.registry = registry
 
 
 class ClassDecl(ts.Entity):
@@ -1354,6 +1632,8 @@ class ClassDecl(ts.Entity):
     _name: Text
     _lineno: Line
     _scope: Scope
+    _registry: Registry
+    _parameter_policy: AnnotationPolicy
     _fields: tuple[Field, ...]
     _methods: tuple[Method, ...]
     _leaf: Text | None
@@ -1366,6 +1646,18 @@ class ClassDecl(ts.Entity):
         object.__setattr__(self, "_name", Text(node.name))
         object.__setattr__(self, "_lineno", Line(node.lineno))
         object.__setattr__(self, "_scope", Scope(spec.scope))
+        object.__setattr__(self, "_registry", Registry(spec.registry))
+        object.__setattr__(
+            self,
+            "_parameter_policy",
+            AnnotationPolicy(AnnotationPolicySpec(
+                tuple(DOMAIN_METHOD_PARAMETER_BLOCKS),
+                tuple(DOMAIN_METHOD_PRIMITIVES),
+                (),
+                spec.scope,
+                spec.registry,
+            )),
+        )
         fields: list[Field] = []
         methods: list[Method] = []
         for stmt in node.body:
@@ -1403,7 +1695,7 @@ class ClassDecl(ts.Entity):
                 )
         return tuple(found)
 
-    def exposure_violations(self, enums: Symbols) -> tuple[Violation, ...]:
+    def exposure_violations(self) -> tuple[Violation, ...]:
         found: list[Violation] = []
         stored = [field for field in self._fields if str(field.annotation().head()) != "ClassVar"]
         by_name = {str(field.name()): field.annotation() for field in stored}
@@ -1411,7 +1703,7 @@ class ClassDecl(ts.Entity):
             if str(field.name()).startswith("_"):
                 continue
             annotation = field.annotation()
-            if annotation.scalars() & SCALAR_NAMES or self._scope.symbols(annotation) & enums:
+            if annotation.scalars() & SCALAR_NAMES or self._scope.symbols(annotation) & self._registry.domain_enums():
                 found.append(
                     Violation(ViolationSpec(
                         str(self._path),
@@ -1430,7 +1722,7 @@ class ClassDecl(ts.Entity):
             returned = method.returns() if method.returns() is not None else by_name.get(str(attr))
             if returned is None:
                 continue
-            if returned.scalars() & SCALAR_NAMES or self._scope.symbols(returned) & enums:
+            if returned.scalars() & SCALAR_NAMES or self._scope.symbols(returned) & self._registry.domain_enums():
                 found.append(
                     Violation(ViolationSpec(
                         str(self._path),
@@ -1538,6 +1830,20 @@ class ClassDecl(ts.Entity):
             )
         return tuple(found)
 
+    def structured_exit_violations(self) -> tuple[Violation, ...]:
+        return tuple(
+            Violation(ViolationSpec(
+                str(self._path),
+                int(method.lineno()),
+                "TB015",
+                f"{self._module}.{self._name}.{method.name()} is a primitive exit; "
+                "a structured domain object has no primitive exit — "
+                "decompose through leaf components",
+            ))
+            for method in self._methods
+            if str(method.name()) in CONVERSION_DUNDERS
+        )
+
     def copy_violations(self) -> tuple[Violation, ...]:
         found: list[Violation] = []
         by_name = {
@@ -1563,6 +1869,172 @@ class ClassDecl(ts.Entity):
                         "TB011",
                         f"{self._module}.{self._name}.{method.name()} hands back its backing collection; "
                         "an accessor returns a defensive copy, never the backing store",
+                    ))
+                )
+        return tuple(found)
+
+    def held_root_violations(self) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for field in self._fields:
+            if str(field.annotation().head()) == "ClassVar":
+                continue
+            for symbol in self._scope.symbols(field.annotation()):
+                if symbol.name() == self._name:
+                    continue
+                if str(self._registry.kinds().block_of(symbol)) == "aggregate":
+                    found.append(
+                        Violation(ViolationSpec(
+                            str(self._path),
+                            int(field.lineno()),
+                            "TB012",
+                            f"{self._module}.{self._name} field {field.name()} holds another aggregate root; "
+                            "an aggregate is referenced by its ID value object, never held",
+                        ))
+                    )
+        return tuple(found)
+
+    def outcome_field_violations(self) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for field in self._fields:
+            if str(field.annotation().head()) == "ClassVar":
+                continue
+            for symbol in self._scope.symbols(field.annotation()):
+                if str(self._registry.kinds().block_of(symbol)) == OUTCOME_BLOCK:
+                    found.append(
+                        Violation(ViolationSpec(
+                            str(self._path),
+                            int(field.lineno()),
+                            "TB084",
+                            f"{self._module}.{self._name} field {field.name()} holds an outcome; "
+                            "an outcome is returned and matched, never held — "
+                            "what must be kept is state, on a spec with an exit",
+                        ))
+                    )
+                    break
+        return tuple(found)
+
+    def domain_method_violations(self) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for method in self._methods:
+            name = str(method.name())
+            if name in LANGUAGE_FIXED:
+                continue
+            if name.startswith("_") and name not in COMPARISON_DUNDERS and name != PUBLIC_CALL:
+                continue
+            where = f"{self._module}.{self._name}.{method.name()}"
+            returns = method.returns()
+            if returns is None:
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(method.lineno()),
+                        "TB019",
+                        f"{where} return is unannotated; a domain object's method names what it "
+                        "hands back, because a caller reading an unnamed return is guessing at "
+                        "the answer the object gave",
+                    ))
+                )
+            params = method.params()
+            if method.open():
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(method.lineno()),
+                        "TB019",
+                        f"{where} uses *args/**kwargs; a domain object's method names the one "
+                        "thing it takes, because an open argument list is a signature no rule can read",
+                    ))
+                )
+            if len(params) > 1:
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(method.lineno()),
+                        "TB019",
+                        f"{where} takes {len(params)} parameters; a domain object's method takes "
+                        "one thing, because a rule about how two arguments relate belongs inside "
+                        "the object that owns them",
+                    ))
+                )
+            for param in params:
+                arg = str(param.name())
+                annotation = param.annotation()
+                if annotation is None:
+                    found.append(
+                        Violation(ViolationSpec(
+                            str(self._path),
+                            int(method.lineno()),
+                            "TB019",
+                            f"{where} parameter {arg!r} is unannotated; a domain object's "
+                            "method names the one thing it takes, because an argument with no "
+                            "type is a signature no rule can read",
+                        ))
+                    )
+                    continue
+                if annotation.container() is not None:
+                    found.append(
+                        Violation(ViolationSpec(
+                            str(self._path),
+                            int(method.lineno()),
+                            "TB019",
+                            f"{where} parameter {arg!r} is a container; a domain object's "
+                            "method takes one primitive, one spec, or one domain object, because "
+                            "a collection handed in is a type the domain has not named",
+                        ))
+                    )
+                    continue
+                if self._parameter_policy.disallowed(annotation):
+                    found.append(
+                        Violation(ViolationSpec(
+                            str(self._path),
+                            int(method.lineno()),
+                            "TB019",
+                            f"{where} parameter {arg!r} is not a primitive, a spec, or a "
+                            "domain object; a domain object's method takes one of those three, "
+                            "because a port or client shape reaching a domain method is the wire "
+                            "format deciding what the domain may be asked",
+                        ))
+                    )
+            if returns is None or str(returns.source()) == "None":
+                continue
+            if method.bare_self_attr() is not None:
+                continue
+            spec_return = False
+            offenders: list[str] = []
+            for ref in returns.produced_refs():
+                produced_name = ref.rsplit(".", 1)[-1]
+                if produced_name in RETURN_SKIPPED or produced_name == str(self._name):
+                    continue
+                symbol = self._scope.resolve(Text(ref))
+                block = self._registry.kinds().block_of(symbol) if symbol is not None else None
+                if str(block) == "spec":
+                    spec_return = True
+                    continue
+                if block is not None and str(block) in DOMAIN_OBJECT_BLOCKS:
+                    continue
+                offenders.append(produced_name)
+            if spec_return:
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(method.lineno()),
+                        "TB015",
+                        f"{self._module}.{self._name}.{method.name()} returns a spec; "
+                        "a domain object never serializes itself — "
+                        "a spec is construction data, not an exit",
+                    ))
+                )
+            if offenders:
+                named = ", ".join(sorted(set(offenders)))
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(method.lineno()),
+                        "TB019",
+                        f"{self._module}.{self._name}.{method.name()} returns {named}; "
+                        "a domain object's public behavior hands back domain objects — "
+                        "the licensed exits are the protocol dunders, the canonical exit, "
+                        "and a -> None transition",
                     ))
                 )
         return tuple(found)
@@ -1711,18 +2183,17 @@ class Module(ts.Entity):
             (local, target, original) for local, (target, original) in self._imported.items()
         )
 
+
+    def class_decls(self, registry: RegistrySpec) -> tuple[ClassDecl, ...]:
         scope = ScopeSpec(
             self._name,
             tuple(ImportSpec(local, target, original) for local, (target, original) in self._imported.items()),
             tuple(AliasSpec(alias, package) for alias, package in self._package_aliases.items()),
             tuple(self._classes),
         )
-        self._class_decls: tuple[ClassDecl, ...] = tuple(
-            ClassDecl(ClassDeclSpec(node, self._name, self._path, scope)) for node in self._class_defs
+        return tuple(
+            ClassDecl(ClassDeclSpec(node, self._name, self._path, scope, registry)) for node in self._class_defs
         )
-
-    def class_decls(self) -> tuple[ClassDecl, ...]:
-        return self._class_decls
 
     def name(self) -> str:
         return self._name
@@ -1993,9 +2464,10 @@ class Codebase(ts.AggregateRoot):
             if (module.name(), stmt.name) not in blocks
             and self._enum_base(module, stmt) is not None  # tesser:debt TB051
         )
-        enums = Symbols(SymbolsSpec(tuple(
-            SymbolSpec(module_name, class_name) for module_name, class_name in sorted(self._domain_enums)
-        )))
+        registry = RegistrySpec(
+            KindTableSpec(tuple((module_name, class_name, block_name) for (module_name, class_name), block_name in sorted(blocks.items()))),
+            tuple(SymbolSpec(module_name, class_name) for module_name, class_name in sorted(self._domain_enums)),
+        )
         self._spec_makers = {}
         checked = [
             module
@@ -2063,7 +2535,7 @@ class Codebase(ts.AggregateRoot):
                 module.name(), module.is_package(), contexts, self._export
             ) == "test":
                 continue
-            for cls, decl in zip(module.class_defs(), module.class_decls()):
+            for cls, decl in zip(module.class_defs(), module.class_decls(registry)):
                 block = blocks.get((module.name(), cls.name))
                 if block == "aggregate":
                     found.extend(self._constructor_violations(module, cls, blocks, "an aggregate"))  # tesser:debt TB051
@@ -2081,31 +2553,17 @@ class Codebase(ts.AggregateRoot):
                 elif block == OUTCOME_BLOCK:
                     found.extend(self._outcome_violations(module, cls))  # tesser:debt TB051
                 if block in DOMAIN_BLOCKS:
-                    fields = [
-                        (stmt.target.id, stmt.annotation, stmt.lineno)
-                        for stmt in cls.body
-                        if isinstance(stmt, ast.AnnAssign)
-                        and isinstance(stmt.target, ast.Name)
-                        and Codebase._annotation_head(stmt.annotation) != "ClassVar"
-                    ]
-                    leaf: str | None = None
-                    if len(fields) == 1:
-                        head = self._annotation_head(fields[0][1])  # tesser:debt TB051
-                        if head in WRAPPABLE_SCALARS or head in NON_WRAPPABLE_SCALARS:
-                            leaf = head
                     if block == "valueobject":
-                        found.extend(decl.exposure_violations(enums))
+                        found.extend(decl.exposure_violations())
                         found.extend(decl.composition_violations())
                         found.extend(decl.construction_path_violations())
                         found.extend(decl.exit_violations())
                     else:
                         found.extend(decl.copy_violations())
-                        found.extend(
-                            self._held_root_violations(module, cls, fields, blocks)  # tesser:debt TB051
-                        )
-                        found.extend(self._structured_exit_violations(module, cls))  # tesser:debt TB051
-                    found.extend(self._domain_return_violations(module, cls, blocks))  # tesser:debt TB051
-                    found.extend(self._outcome_field_violations(module, cls, fields, blocks))  # tesser:debt TB051
+                        found.extend(decl.held_root_violations())
+                        found.extend(decl.structured_exit_violations())
+                    found.extend(decl.domain_method_violations())
+                    found.extend(decl.outcome_field_violations())
                 elif block == "spec":
                     found.extend(self._spec_violations(module, cls, blocks))  # tesser:debt TB051
                 elif block in ("request", "response", "port_request", "port_response"):
@@ -4292,143 +4750,6 @@ class Codebase(ts.AggregateRoot):
                     )
         return tuple(found)
 
-    def _structured_exit_violations(
-        self, module: Module, cls: ast.ClassDef
-    ) -> tuple[Violation, ...]:
-        return tuple(
-            Violation(ViolationSpec(
-                module.path(),
-                item.lineno,
-                "TB015",
-                f"{module.name()}.{cls.name}.{item.name} is a primitive exit; "
-                "a structured domain object has no primitive exit — "
-                "decompose through leaf components",
-            ))
-            for item in cls.body
-            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name in CONVERSION_DUNDERS
-        )
-
-    def _held_root_violations(
-        self,
-        module: Module,
-        cls: ast.ClassDef,
-        fields: list[tuple[str, ast.expr, int]],
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for field, ann, lineno in fields:
-            for node in ast.walk(ann):
-                if not isinstance(node, (ast.Name, ast.Attribute)):
-                    continue
-                key = module._resolve(node)
-                if key is None or key[1] == cls.name:
-                    continue
-                if blocks.get(key) == "aggregate":
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            lineno,
-                            "TB012",
-                            f"{module.name()}.{cls.name} field {field} holds another aggregate root; "
-                            "an aggregate is referenced by its ID value object, never held",
-                        ))
-                    )
-        return tuple(found)
-
-    def _domain_parameter_violations(
-        self,
-        module: Module,
-        cls: ast.ClassDef,
-        item: ast.FunctionDef | ast.AsyncFunctionDef,
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        if item.name.startswith("_") and item.name != PUBLIC_CALL:
-            return ()
-        where = f"{module.name()}.{cls.name}.{item.name}"
-        found: list[Violation] = []
-        if item.returns is None:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    item.lineno,
-                    "TB019",
-                    f"{where} return is unannotated; a domain object's method names what it "
-                    "hands back, because a caller reading an unnamed return is guessing at "
-                    "the answer the object gave",
-                ))
-            )
-        args = item.args
-        params = list(args.posonlyargs) + list(args.args)
-        if params and params[0].arg in ("self", "cls"):
-            params = params[1:]
-        params += list(args.kwonlyargs)
-        if args.vararg is not None or args.kwarg is not None:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    item.lineno,
-                    "TB019",
-                    f"{where} uses *args/**kwargs; a domain object's method names the one "
-                    "thing it takes, because an open argument list is a signature no rule can read",
-                ))
-            )
-        if len(params) > 1:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    item.lineno,
-                    "TB019",
-                    f"{where} takes {len(params)} parameters; a domain object's method takes "
-                    "one thing, because a rule about how two arguments relate belongs inside "
-                    "the object that owns them",
-                ))
-            )
-        for arg in params:
-            if arg.annotation is None:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        item.lineno,
-                        "TB019",
-                        f"{where} parameter {arg.arg!r} is unannotated; a domain object's "
-                        "method names the one thing it takes, because an argument with no "
-                        "type is a signature no rule can read",
-                    ))
-                )
-                continue
-            if self._is_container_annotation(arg.annotation):  # tesser:debt TB051
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        item.lineno,
-                        "TB019",
-                        f"{where} parameter {arg.arg!r} is a container; a domain object's "
-                        "method takes one primitive, one spec, or one domain object, because "
-                        "a collection handed in is a type the domain has not named",
-                    ))
-                )
-                continue
-            if not self._allowed_annotation(
-                module,
-                arg.annotation,
-                blocks,
-                DOMAIN_METHOD_PARAMETER_BLOCKS,
-                primitives=DOMAIN_METHOD_PRIMITIVES,
-                domain_enums=True,
-            ):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        item.lineno,
-                        "TB019",
-                        f"{where} parameter {arg.arg!r} is not a primitive, a spec, or a "
-                        "domain object; a domain object's method takes one of those three, "
-                        "because a port or client shape reaching a domain method is the wire "
-                        "format deciding what the domain may be asked",
-                    ))
-                )
-        return tuple(found)
-
     @staticmethod
     def _names_bool(node: ast.expr | None) -> bool:
         if node is None:
@@ -4451,135 +4772,6 @@ class Codebase(ts.AggregateRoot):
                 wrapped = wrapped.elts[0]
             return Codebase._names_bool(wrapped)
         return isinstance(head, ast.Name) and head.id == "bool"
-
-    @staticmethod
-    def _is_container_annotation(node: ast.expr) -> bool:
-        head = node
-        if isinstance(head, ast.Constant) and isinstance(head.value, str):
-            try:
-                head = ast.parse(head.value, mode="eval").body
-            except SyntaxError:
-                return False
-        if isinstance(head, ast.BinOp) and isinstance(head.op, ast.BitOr):
-            return Codebase._is_container_annotation(
-                head.left
-            ) or Codebase._is_container_annotation(head.right)
-        if isinstance(head, ast.Subscript) and Codebase._annotation_head(head) in (
-            "Optional",
-            "Final",
-            "Annotated",
-        ):
-            wrapped = head.slice
-            if isinstance(wrapped, ast.Tuple) and wrapped.elts:
-                wrapped = wrapped.elts[0]
-            return Codebase._is_container_annotation(wrapped)
-        if isinstance(head, ast.Subscript):
-            head = head.value
-        if isinstance(head, ast.Attribute):
-            return head.attr in CONTAINER_NAMES
-        return isinstance(head, ast.Name) and head.id in CONTAINER_NAMES
-
-    def _domain_return_violations(
-        self,
-        module: Module,
-        cls: ast.ClassDef,
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for item in cls.body:
-            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                continue
-            if item.name in LANGUAGE_FIXED:
-                continue
-            if (
-                item.name.startswith("_")
-                and item.name not in COMPARISON_DUNDERS
-                and item.name != PUBLIC_CALL
-            ):
-                continue
-            found.extend(
-                self._domain_parameter_violations(module, cls, item, blocks)  # tesser:debt TB051
-            )
-            if item.returns is None:
-                continue
-            if isinstance(item.returns, ast.Constant) and item.returns.value is None:
-                continue
-            bare = item.body[0].value if len(item.body) == 1 and isinstance(item.body[0], ast.Return) else None
-            if (
-                isinstance(bare, ast.Attribute)
-                and isinstance(bare.value, ast.Name)
-                and bare.value.id == "self"
-            ):
-                continue
-            spec_return = False
-            offenders: list[str] = []
-            return_pairs: list[tuple[str, ast.expr]] = []
-            walk_stack: list[ast.expr] = [item.returns]
-            while walk_stack:
-                walked = walk_stack.pop()
-                if isinstance(walked, ast.Subscript):
-                    if self._annotation_head(walked.value) not in (  # tesser:debt TB051
-                        "type",
-                        "Type",
-                        "Callable",
-                    ):
-                        walk_stack.append(walked.slice)
-                    continue
-                if isinstance(walked, ast.Constant):
-                    if isinstance(walked.value, str):
-                        try:
-                            parsed = ast.parse(walked.value, mode="eval")
-                        except SyntaxError:
-                            continue
-                        if not isinstance(parsed.body, ast.Constant):
-                            walk_stack.append(parsed.body)
-                    continue
-                if isinstance(walked, ast.Attribute):
-                    return_pairs.append((walked.attr, walked))
-                    continue
-                if isinstance(walked, ast.Name):
-                    return_pairs.append((walked.id, walked))
-                    continue
-                walk_stack.extend(
-                    child
-                    for child in ast.iter_child_nodes(walked)
-                    if isinstance(child, ast.expr)
-                )
-            for name, node in return_pairs:
-                if name in RETURN_WRAPPERS or name in SELF_NAMES or name == cls.name:
-                    continue
-                key = module._resolve(node)
-                if key is not None and blocks.get(key) == "spec":
-                    spec_return = True
-                    continue
-                if key is not None and blocks.get(key) in DOMAIN_OBJECT_BLOCKS:
-                    continue
-                offenders.append(name)
-            if spec_return:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        item.lineno,
-                        "TB015",
-                        f"{module.name()}.{cls.name}.{item.name} returns a spec; "
-                        "a domain object never serializes itself — "
-                        "a spec is construction data, not an exit",
-                    ))
-                )
-            if offenders:
-                named = ", ".join(sorted(set(offenders)))
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        item.lineno,
-                        "TB019",
-                        f"{module.name()}.{cls.name}.{item.name} returns {named}; "
-                        "a domain object's public behavior hands back domain objects — "
-                        "the licensed exits are the protocol dunders, the canonical exit, "
-                        "and a -> None transition",
-                    ))
-                )
-        return tuple(found)
 
     def _annotation_scalar_names(
         self, node: ast.expr, keep_all: bool = False
@@ -8725,33 +8917,6 @@ class Codebase(ts.AggregateRoot):
             origin = module._imported.get(value.func.id)
             return origin is not None and origin == (ENUM_MODULE, "auto")
         return False
-
-    def _outcome_field_violations(
-        self,
-        module: Module,
-        cls: ast.ClassDef,
-        fields: list[tuple[str, ast.expr, int]],
-        blocks: dict[tuple[str, str], str],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for field, ann, lineno in fields:
-            for sub in ast.walk(ann):
-                if not isinstance(sub, (ast.Name, ast.Attribute)):
-                    continue
-                key = module._resolve(sub)
-                if key is not None and blocks.get(key) == OUTCOME_BLOCK:
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            lineno,
-                            "TB084",
-                            f"{module.name()}.{cls.name} field {field} holds an outcome; "
-                            "an outcome is returned and matched, never held — "
-                            "what must be kept is state, on a spec with an exit",
-                        ))
-                    )
-                    break
-        return tuple(found)
 
     def _outcome_use_violations(
         self, module: Module, blocks: dict[tuple[str, str], str]
