@@ -733,6 +733,12 @@ class CampaignRepository(ts.Port, typing.Protocol):
   response hierarchy is a union mypy cannot check for exhaustiveness. The
   bare-bool clause covers a `Client` request/response DTO too, where the fix
   is the canonical string rather than an enum (`domain-return.md` rule 8).
+- **A DTO compares by value.** `ts.Request` and `ts.Response` (port and
+  client alike) are equal when they are the same concrete type with equal
+  fields, and hash the same way, so a nested record or a tuple of records
+  compares through. A test that wants "the reloaded save request equals the
+  original" writes `loaded == original`; it never projects both to a tuple
+  first (maintainer ruling 2026-08-30).
 - **A multi-outcome answer is an enum outcome plus payload; a collection is a
   tuple.** Where cardinality *is* the answer (list-all), the tuple alone says
   it — no outcome enum. The enum is a plain `enum.Enum`, never `StrEnum`/
