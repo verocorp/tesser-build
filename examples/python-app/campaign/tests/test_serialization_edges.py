@@ -19,25 +19,6 @@ import tesser.errors as errors
 import protocol.http as protocol_http
 
 
-def _shape(  # tesser:debt TB071
-    id_: str, budget: campaign_repository.MoneyRecord, links: tuple[campaign_repository.LinkRecord, ...]
-) -> tuple[object, ...]:
-    return (
-        id_,
-        budget.amount,
-        budget.currency,
-        tuple((link.slug, link.target_url, link.status) for link in links),
-    )
-
-
-def record_tuple(record: campaign_repository.CampaignRecord) -> tuple[object, ...]:  # tesser:debt TB071
-    return _shape(record.id, record.budget, record.links)
-
-
-def request_tuple(request: campaign_repository.SaveCampaignRequest) -> tuple[object, ...]:  # tesser:debt TB071
-    return _shape(request.id, request.budget, request.links)
-
-
 @ts.helper
 def campaign_spec(slug: str = "promo") -> campaign.CampaignSpec:
     return campaign.CampaignSpec(
@@ -51,12 +32,6 @@ def campaign_spec(slug: str = "promo") -> campaign.CampaignSpec:
 class FakeTargetPolicyAllowAll(target_policy.TargetPolicy):
     def check(self, request: target_policy.CheckTargetRequest) -> target_policy.CheckTargetResponse:
         return target_policy.CheckTargetResponse(verdict=target_policy.PolicyVerdict.ALLOWED, reason="ok")
-
-
-def _find(  # tesser:debt TB071
-    repo: repo_memory.InMemoryCampaignRepository, campaign_id: str
-) -> campaign_repository.FindCampaignResponse:
-    return repo.find(campaign_repository.FindCampaignRequest(campaign_id=campaign_id))
 
 
 def test_row_golden_locks_the_storage_shape() -> None:
@@ -74,11 +49,14 @@ def test_row_golden_locks_the_storage_shape() -> None:
             for link in saved.links
         ),
     ))
-    assert record_tuple(repo._rows["0123456789abcdef"]) == (
-        "0123456789abcdef",
-        "100.00",
-        "USD",
-        (("promo", "https://ok.example/x", "active"),),
+    assert repo._rows["0123456789abcdef"] == campaign_repository.CampaignRecord(
+        id="0123456789abcdef",
+        budget=campaign_repository.MoneyRecord(amount="100.00", currency="USD"),
+        links=(
+            campaign_repository.LinkRecord(
+                slug="promo", target_url="https://ok.example/x", status="active"
+            ),
+        ),
     )
 
 
@@ -144,7 +122,7 @@ def test_load_reconstructs_value_equal_non_identical() -> None:
             for link in original.links
         ),
     ))
-    found = _find(repo, "0123456789abcdef")
+    found = repo.find(campaign_repository.FindCampaignRequest(campaign_id="0123456789abcdef"))
     match found.outcome:
         case campaign_repository.CampaignLookup.FOUND:
             record = found.campaigns[0]
@@ -163,7 +141,7 @@ def test_load_reconstructs_value_equal_non_identical() -> None:
         )),
     ))
     assert loaded is not original
-    assert request_tuple(campaign_repository.SaveCampaignRequest(
+    assert campaign_repository.SaveCampaignRequest(
         id=str(loaded.id),
         budget=campaign_repository.MoneyRecord(
             amount=str(loaded.budget.amount), currency=str(loaded.budget.currency)
@@ -174,7 +152,7 @@ def test_load_reconstructs_value_equal_non_identical() -> None:
             )
             for link in loaded.links
         ),
-    )) == request_tuple(campaign_repository.SaveCampaignRequest(
+    ) == campaign_repository.SaveCampaignRequest(
         id=str(original.id),
         budget=campaign_repository.MoneyRecord(
             amount=str(original.budget.amount), currency=str(original.budget.currency)
@@ -185,7 +163,7 @@ def test_load_reconstructs_value_equal_non_identical() -> None:
             )
             for link in original.links
         ),
-    ))
+    )
 
 
 def test_store_holds_rows_not_live_objects() -> None:
@@ -203,7 +181,7 @@ def test_store_holds_rows_not_live_objects() -> None:
             for link in original.links
         ),
     ))
-    found = _find(repo, "0123456789abcdef")
+    found = repo.find(campaign_repository.FindCampaignRequest(campaign_id="0123456789abcdef"))
     match found.outcome:
         case campaign_repository.CampaignLookup.FOUND:
             record = found.campaigns[0]
@@ -222,7 +200,7 @@ def test_store_holds_rows_not_live_objects() -> None:
         )),
     ))
     loaded.add_short_link(short_link.ShortLinkSpec(slug="extra", target_url="https://ok.example/e", active=True))
-    found = _find(repo, "0123456789abcdef")
+    found = repo.find(campaign_repository.FindCampaignRequest(campaign_id="0123456789abcdef"))
     match found.outcome:
         case campaign_repository.CampaignLookup.FOUND:
             record = found.campaigns[0]
@@ -240,7 +218,7 @@ def test_store_holds_rows_not_live_objects() -> None:
             for link in record.links
         )),
     ))
-    assert request_tuple(campaign_repository.SaveCampaignRequest(
+    assert campaign_repository.SaveCampaignRequest(
         id=str(reloaded.id),
         budget=campaign_repository.MoneyRecord(
             amount=str(reloaded.budget.amount), currency=str(reloaded.budget.currency)
@@ -251,7 +229,7 @@ def test_store_holds_rows_not_live_objects() -> None:
             )
             for link in reloaded.links
         ),
-    )) == request_tuple(campaign_repository.SaveCampaignRequest(
+    ) == campaign_repository.SaveCampaignRequest(
         id=str(original.id),
         budget=campaign_repository.MoneyRecord(
             amount=str(original.budget.amount), currency=str(original.budget.currency)
@@ -262,7 +240,7 @@ def test_store_holds_rows_not_live_objects() -> None:
             )
             for link in original.links
         ),
-    ))
+    )
 
 
 def test_load_reruns_invariants_on_stale_rows() -> None:
@@ -288,7 +266,7 @@ def test_load_reruns_invariants_on_stale_rows() -> None:
     )
     repo._rows["0123456789abcdef"] = stale
     with pytest.raises(errors.DomainError):
-        found = _find(repo, "0123456789abcdef")
+        found = repo.find(campaign_repository.FindCampaignRequest(campaign_id="0123456789abcdef"))
         match found.outcome:
             case campaign_repository.CampaignLookup.FOUND:
                 record = found.campaigns[0]
