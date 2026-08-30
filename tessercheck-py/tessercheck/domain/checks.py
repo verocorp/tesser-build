@@ -4012,6 +4012,11 @@ class Codebase(ts.AggregateRoot):
     @staticmethod
     def _is_container_annotation(node: ast.expr) -> bool:
         head = node
+        if isinstance(head, ast.Constant) and isinstance(head.value, str):
+            try:
+                head = ast.parse(head.value, mode="eval").body
+            except SyntaxError:
+                return False
         if isinstance(head, ast.Subscript):
             head = head.value
         if isinstance(head, ast.Attribute):

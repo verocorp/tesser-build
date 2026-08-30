@@ -12343,6 +12343,8 @@ def test_a_domain_method_takes_one_primitive_spec_or_domain_object() -> None:
                 "        self._line = other\n"
                 "    def load(self, lines: tuple[Line, ...]) -> None:\n"
                 "        self._line = lines[0]\n"
+                "    def restock(self, lines: 'tuple[Line, ...]') -> None:\n"
+                "        self._line = lines[0]\n"
                 "    def apply(self, request: wire.AskRequest) -> None:\n"
                 "        self._line = Line(LineSpec(request.text))\n"
                 "    def anything(self, *rest: str) -> None:\n"
@@ -12366,6 +12368,12 @@ def test_a_domain_method_takes_one_primitive_spec_or_domain_object() -> None:
     )
     assert any(
         "Order.load parameter 'lines' is a container; a domain object's method takes one "
+        "primitive, one spec, or one domain object, because a collection handed in is a "
+        "type the domain has not named" in f
+        for f in findings
+    )
+    assert any(
+        "Order.restock parameter 'lines' is a container; a domain object's method takes one "
         "primitive, one spec, or one domain object, because a collection handed in is a "
         "type the domain has not named" in f
         for f in findings
