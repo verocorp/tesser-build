@@ -308,6 +308,43 @@ where it lands.
   checker should flag it (a TB062-family row for the exported package), and
   `widget.py`'s `Label` field goes when it lands.
 
+## Foreign types at the analyzer's door (2026-08-30, deferred rule)
+
+The TB051 burn-down of `tessercheck/domain/checks.py` decomposes `Codebase`'s
+methods into domain objects that wrap Python syntax: `Annotation`, `Field`,
+`Method`, `ClassDecl`, `Scope`, `Names`, `Symbols`. Every one conforms to the
+rules as written except at one point: an `ast.*` node crossing a constructor
+or a spec field. A node is not a primitive and cannot decompose into one, so
+`TB080` fires on the four wrapper constructors that take one. Each carries
+`# tesser:debt TB080` — the debt names the unruled question at the one place
+the answer would change code, and it is bounded by the number of wrapper
+*types*, not call sites.
+
+The hunch under test: a **foreign type** is a value the tree does not define
+and cannot decompose; it may appear only as the constructor parameter of a
+domain object whose sole job is to be a valid tesser object wrapping it, and
+that object exposes it through nothing but its own methods.
+
+- [ ] **Rule the entry half.** `TB080`'s two allowlists (value-object
+  constructor parameter; spec field) admit types declared foreign per tree —
+  a `.tesser-root` line following the `stdlib <module>` precedent. Evidence:
+  the VO-family slice (this commit) — 40 findings on the first cut, 4 after
+  conforming to the existing vocabulary, all four the foreign parameter.
+- [ ] **Build the exit half.** Nothing catches a wrapper that stores a raw
+  node and hands it back: a probe VO with `_node: ast.expr` and
+  `def node(self) -> ast.expr` passes the analyzer clean today, because
+  `TB010`'s pass-through test knows only `PRIMITIVES`. The door is only a
+  door once a foreign type is a finding in a field annotation, a return
+  annotation, or a non-constructor parameter. Until then the exit is
+  review-only.
+- [ ] **Storage is settled by evidence, not yet by rule.** `ts.ValueObject`
+  equality reads `__dict__` and `ast` nodes compare by identity, so a wrapper
+  storing the node is equal only to itself; storing `ast.dump(node)` (no
+  attributes, so positions drop out) restores value equality across
+  re-parses and line moves. A quoted annotation (`"dict[str, int]"`) and the
+  bare expression are the same annotation to the checker, so the wrapper's
+  constructor unquotes before canonicalizing.
+
 ## Sibling-reference rule: three open sub-rulings (2026-08-23, v0.0.76.0)
 
 TB051's structural clause (a method may not reference a sibling method; direct

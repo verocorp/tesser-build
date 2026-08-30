@@ -960,6 +960,614 @@ class Comment(ts.ValueObject):
         object.__setattr__(self, "_text", Text(spec.text))
 
 
+class Names(ts.ValueObject):
+
+    _items: tuple[str, ...]
+
+    def __init__(self, items: tuple[str, ...]) -> None:
+        object.__setattr__(self, "_items", tuple(sorted(frozenset(items))))
+
+    def __and__(self, other: "Names") -> "Names":
+        return Names(tuple(item for item in self._items if item in other._items))
+
+    def __sub__(self, other: "Names") -> "Names":
+        return Names(tuple(item for item in self._items if item not in other._items))
+
+    def __bool__(self) -> bool:
+        return bool(self._items)
+
+    def __contains__(self, item: object) -> bool:
+        return item in self._items
+
+    def __iter__(self) -> typing.Iterator[str]:
+        return iter(self._items)
+
+
+SCALAR_NAMES: typing.Final[Names] = Names(tuple(WRAPPABLE_SCALARS | NON_WRAPPABLE_SCALARS))
+
+WRAPPABLE_NAMES: typing.Final[Names] = Names(tuple(WRAPPABLE_SCALARS))
+
+CONSTRUCTOR_DECORATORS: typing.Final[Names] = Names(("classmethod", "staticmethod"))
+
+
+class SymbolsSpec(ts.Spec):
+
+    def __init__(self, items: tuple[SymbolSpec, ...]) -> None:
+        self.items = items
+
+
+class Symbols(ts.ValueObject):
+
+    _items: tuple[Symbol, ...]
+
+    def __init__(self, spec: SymbolsSpec) -> None:
+        object.__setattr__(self, "_items", tuple(Symbol(item) for item in spec.items))
+
+    def __and__(self, other: "Symbols") -> "Symbols":
+        return Symbols(SymbolsSpec(tuple(
+            SymbolSpec(str(item.module()), str(item.name()))
+            for item in self._items
+            if item in other._items
+        )))
+
+    def __bool__(self) -> bool:
+        return bool(self._items)
+
+
+class ImportSpec(ts.Spec):
+
+    def __init__(self, local: str, target: str, original: str) -> None:
+        self.local = local
+        self.target = target
+        self.original = original
+
+
+class Import(ts.ValueObject):
+
+    _local: Text
+    _target: Text
+    _original: Text
+
+    def __init__(self, spec: ImportSpec) -> None:
+        object.__setattr__(self, "_local", Text(spec.local))
+        object.__setattr__(self, "_target", Text(spec.target))
+        object.__setattr__(self, "_original", Text(spec.original))
+
+    def local(self) -> Text:
+        return self._local
+
+    def target(self) -> Text:
+        return self._target
+
+    def original(self) -> Text:
+        return self._original
+
+
+class AliasSpec(ts.Spec):
+
+    def __init__(self, alias: str, package: str) -> None:
+        self.alias = alias
+        self.package = package
+
+
+class Alias(ts.ValueObject):
+
+    _alias: Text
+    _package: Text
+
+    def __init__(self, spec: AliasSpec) -> None:
+        object.__setattr__(self, "_alias", Text(spec.alias))
+        object.__setattr__(self, "_package", Text(spec.package))
+
+    def alias(self) -> Text:
+        return self._alias
+
+    def package(self) -> Text:
+        return self._package
+
+
+class ScopeSpec(ts.Spec):
+
+    def __init__(
+        self,
+        module: str,
+        imported: tuple[ImportSpec, ...],
+        packages: tuple[AliasSpec, ...],
+        classes: tuple[str, ...],
+    ) -> None:
+        self.module = module
+        self.imported = imported
+        self.packages = packages
+        self.classes = classes
+
+
+class Scope(ts.ValueObject):
+
+    _module: Text
+    _imported: tuple[Import, ...]
+    _packages: tuple[Alias, ...]
+    _classes: Names
+
+    def __init__(self, spec: ScopeSpec) -> None:
+        object.__setattr__(self, "_module", Text(spec.module))
+        object.__setattr__(self, "_imported", tuple(Import(item) for item in spec.imported))
+        object.__setattr__(self, "_packages", tuple(Alias(item) for item in spec.packages))
+        object.__setattr__(self, "_classes", Names(spec.classes))
+
+    def symbols(self, annotation: "Annotation") -> Symbols:
+        found: list[tuple[str, str]] = []
+        for ref in annotation.refs():
+            if "." in ref:
+                prefix, attr = ref.rsplit(".", 1)
+                for alias in self._packages:
+                    if str(alias.alias()) == prefix:
+                        found.append((str(alias.package()), attr))
+                continue
+            for binding in self._imported:
+                if str(binding.local()) == ref:
+                    found.append((str(binding.target()), str(binding.original())))
+            if ref in self._classes:
+                found.append((str(self._module), ref))
+        return Symbols(SymbolsSpec(tuple(SymbolSpec(module_name, name) for module_name, name in found)))
+
+
+class Annotation(ts.ValueObject):
+
+    _dump: Text
+    _head: Text | None
+    _scalars: Names
+    _refs: Names
+    _produced: Names
+
+    def __init__(self, node: ast.expr) -> None:  # tesser:debt TB080
+        cursor: ast.expr | None = node
+        head: str | None = None
+        while cursor is not None:
+            if isinstance(cursor, ast.Name):
+                head = cursor.id
+                break
+            if isinstance(cursor, ast.Attribute):
+                head = cursor.attr
+                break
+            if isinstance(cursor, ast.Subscript):
+                cursor = cursor.value
+                continue
+            if isinstance(cursor, ast.Constant) and isinstance(cursor.value, str):
+                try:
+                    parsed = ast.parse(cursor.value, mode="eval").body
+                except SyntaxError:
+                    break
+                cursor = None if isinstance(parsed, ast.Constant) else parsed
+                continue
+            break
+        names: set[str] = set()
+        refs: set[str] = set()
+        stack: list[ast.AST] = [node]
+        while stack:
+            top = stack.pop()
+            for sub in ast.walk(top):
+                if isinstance(sub, ast.Name):
+                    names.add(sub.id)
+                    refs.add(sub.id)
+                elif isinstance(sub, ast.Attribute):
+                    names.add(sub.attr)
+                    if isinstance(sub.value, (ast.Name, ast.Attribute)):
+                        refs.add(f"{ast.unparse(sub.value)}.{sub.attr}")
+                elif isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+                    try:
+                        quoted = ast.parse(sub.value, mode="eval").body
+                    except SyntaxError:
+                        continue
+                    if not isinstance(quoted, ast.Constant):
+                        stack.append(quoted)
+        produced: set[str] = set()
+        walk_stack: list[ast.expr] = [node]
+        while walk_stack:
+            walked = walk_stack.pop()
+            if isinstance(walked, ast.Subscript):
+                inner: ast.expr = walked.value
+                while isinstance(inner, ast.Subscript):
+                    inner = inner.value
+                inner_head = (
+                    inner.id
+                    if isinstance(inner, ast.Name)
+                    else inner.attr
+                    if isinstance(inner, ast.Attribute)
+                    else None
+                )
+                if inner_head not in ("type", "Type", "Callable"):
+                    walk_stack.append(walked.slice)
+                continue
+            if isinstance(walked, ast.Constant):
+                if isinstance(walked.value, str):
+                    try:
+                        parsed_walk = ast.parse(walked.value, mode="eval")
+                    except SyntaxError:
+                        continue
+                    if not isinstance(parsed_walk.body, ast.Constant):
+                        walk_stack.append(parsed_walk.body)
+                continue
+            if isinstance(walked, ast.Attribute):
+                produced.add(walked.attr)
+                continue
+            if isinstance(walked, ast.Name):
+                produced.add(walked.id)
+                continue
+            walk_stack.extend(
+                child for child in ast.iter_child_nodes(walked) if isinstance(child, ast.expr)
+            )
+        object.__setattr__(self, "_dump", Text(ast.dump(node)))
+        object.__setattr__(self, "_head", Text(head) if head else None)
+        object.__setattr__(
+            self, "_scalars", Names(tuple(names - RETURN_WRAPPERS - SELF_NAMES))
+        )
+        object.__setattr__(self, "_refs", Names(tuple(refs)))
+        object.__setattr__(self, "_produced", Names(tuple(produced)))
+
+    def head(self) -> Text | None:
+        return self._head
+
+    def scalars(self) -> Names:
+        return self._scalars
+
+    def refs(self) -> Names:
+        return self._refs
+
+    def produced(self) -> Names:
+        return self._produced
+
+
+class FieldSpec(ts.Spec):
+
+    def __init__(self, name: str, node: ast.expr, lineno: int) -> None:  # tesser:debt TB080
+        self.name = name
+        self.node = node
+        self.lineno = lineno
+
+
+class Field(ts.ValueObject):
+
+    _name: Text
+    _annotation: Annotation
+    _lineno: Line
+
+    def __init__(self, spec: FieldSpec) -> None:
+        object.__setattr__(self, "_name", Text(spec.name))
+        object.__setattr__(self, "_annotation", Annotation(spec.node))
+        object.__setattr__(self, "_lineno", Line(spec.lineno))
+
+    def name(self) -> Text:
+        return self._name
+
+    def annotation(self) -> Annotation:
+        return self._annotation
+
+    def lineno(self) -> Line:
+        return self._lineno
+
+
+class MethodSpec(ts.Spec):
+
+    def __init__(self, node: ast.FunctionDef | ast.AsyncFunctionDef, owner: str) -> None:  # tesser:debt TB080
+        self.node = node
+        self.owner = owner
+
+
+class Method(ts.Entity):
+
+    _identity: Text
+    _name: Text
+    _lineno: Line
+    _decorators: Names
+    _returns: Annotation | None
+    _bare_self_attr: Text | None
+    _delegated: Text | None
+    _constructs: Names
+
+    def __init__(self, spec: MethodSpec) -> None:
+        node = spec.node
+        object.__setattr__(self, "_identity", Text(f"{spec.owner}.{node.name}"))
+        object.__setattr__(self, "_name", Text(node.name))
+        object.__setattr__(self, "_lineno", Line(node.lineno))
+        decorators: set[str] = set()
+        for decorator in node.decorator_list:
+            target = decorator.func if isinstance(decorator, ast.Call) else decorator
+            if isinstance(target, ast.Name):
+                decorators.add(target.id)
+        object.__setattr__(self, "_decorators", Names(tuple(decorators)))
+        object.__setattr__(
+            self, "_returns", Annotation(node.returns) if node.returns is not None else None
+        )
+        bare = node.body[0].value if len(node.body) == 1 and isinstance(node.body[0], ast.Return) else None
+        bare_self_attr: str | None = None
+        delegated: str | None = None
+        if isinstance(bare, ast.Attribute) and isinstance(bare.value, ast.Name) and bare.value.id == "self":
+            bare_self_attr = bare.attr
+        if isinstance(bare, ast.Call) and len(bare.args) == 1:
+            delegated = (
+                bare.func.id
+                if isinstance(bare.func, ast.Name)
+                else bare.func.attr
+                if isinstance(bare.func, ast.Attribute)
+                else None
+            )
+            if not (
+                isinstance(bare.args[0], ast.Attribute)
+                and isinstance(bare.args[0].value, ast.Name)
+                and bare.args[0].value.id == "self"
+            ):
+                delegated = None
+        object.__setattr__(self, "_bare_self_attr", Text(bare_self_attr) if bare_self_attr else None)
+        object.__setattr__(self, "_delegated", Text(delegated) if delegated else None)
+        object.__setattr__(
+            self,
+            "_constructs",
+            Names(tuple(
+                call.func.id
+                for call in ast.walk(node)
+                if isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Name)
+                and call.func.id in ("cls", spec.owner)
+            )),
+        )
+
+    @property
+    def identity(self) -> Text:
+        return self._identity
+
+    def name(self) -> Text:
+        return self._name
+
+    def lineno(self) -> Line:
+        return self._lineno
+
+    def decorators(self) -> Names:
+        return self._decorators
+
+    def returns(self) -> Annotation | None:
+        return self._returns
+
+    def bare_self_attr(self) -> Text | None:
+        return self._bare_self_attr
+
+    def delegated(self) -> Text | None:
+        return self._delegated
+
+    def constructs(self) -> Names:
+        return self._constructs
+
+
+class ClassDeclSpec(ts.Spec):
+
+    def __init__(self, node: ast.ClassDef, module: str, path: str, scope: ScopeSpec) -> None:  # tesser:debt TB080
+        self.node = node
+        self.module = module
+        self.path = path
+        self.scope = scope
+
+
+class ClassDecl(ts.Entity):
+
+    _identity: Text
+    _module: Text
+    _path: Path
+    _name: Text
+    _lineno: Line
+    _scope: Scope
+    _fields: tuple[Field, ...]
+    _methods: tuple[Method, ...]
+    _leaf: Text | None
+
+    def __init__(self, spec: ClassDeclSpec) -> None:
+        node = spec.node
+        object.__setattr__(self, "_identity", Text(f"{spec.module}.{node.name}"))
+        object.__setattr__(self, "_module", Text(spec.module))
+        object.__setattr__(self, "_path", Path(spec.path))
+        object.__setattr__(self, "_name", Text(node.name))
+        object.__setattr__(self, "_lineno", Line(node.lineno))
+        object.__setattr__(self, "_scope", Scope(spec.scope))
+        fields: list[Field] = []
+        methods: list[Method] = []
+        for stmt in node.body:
+            if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
+                fields.append(Field(FieldSpec(stmt.target.id, stmt.annotation, stmt.lineno)))
+            elif isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                methods.append(Method(MethodSpec(stmt, node.name)))
+        object.__setattr__(self, "_fields", tuple(fields))
+        object.__setattr__(self, "_methods", tuple(methods))
+        stored = [field for field in fields if str(field.annotation().head()) != "ClassVar"]
+        leaf: str | None = None
+        if len(stored) == 1:
+            head = str(stored[0].annotation().head())
+            if head in WRAPPABLE_SCALARS or head in NON_WRAPPABLE_SCALARS:
+                leaf = head
+        object.__setattr__(self, "_leaf", Text(leaf) if leaf else None)
+
+    @property
+    def identity(self) -> Text:
+        return self._identity
+
+    def vo_field_violations(self) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for field in self._fields:
+            if str(field.annotation().head()) in MUTABLE_COLLECTIONS:
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(field.lineno()),
+                        "TB002",
+                        f"{self._module}.{self._name} field {field.name()} is a mutable collection; "
+                        "a value object's field is hashable — a tuple or frozenset, never "
+                        "a mutable collection",
+                    ))
+                )
+        return tuple(found)
+
+    def exposure_violations(self, enums: Symbols) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        stored = [field for field in self._fields if str(field.annotation().head()) != "ClassVar"]
+        by_name = {str(field.name()): field.annotation() for field in stored}
+        for field in stored:
+            if str(field.name()).startswith("_"):
+                continue
+            annotation = field.annotation()
+            if annotation.scalars() & SCALAR_NAMES or self._scope.symbols(annotation) & enums:
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(field.lineno()),
+                        "TB010",
+                        f"{self._module}.{self._name} exposes field {field.name()}; "
+                        "a value object hides its representation — a public field belongs on a spec",
+                    ))
+                )
+        for method in self._methods:
+            if str(method.name()).startswith("_") and str(method.name()) != PUBLIC_CALL:
+                continue
+            attr = method.bare_self_attr()
+            if attr is None:
+                continue
+            returned = method.returns() if method.returns() is not None else by_name.get(str(attr))
+            if returned is None:
+                continue
+            if returned.scalars() & SCALAR_NAMES or self._scope.symbols(returned) & enums:
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(method.lineno()),
+                        "TB010",
+                        f"{self._module}.{self._name}.{method.name()} passes the raw primitive through; "
+                        "a value object's accessor returns a value object — "
+                        "the canonical exit is the only primitive exit",
+                    ))
+                )
+        return tuple(found)
+
+    def composition_violations(self) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        stored = [field for field in self._fields if str(field.annotation().head()) != "ClassVar"]
+        for field in stored:
+            head = str(field.annotation().head())
+            if head in NON_WRAPPABLE_SCALARS:
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(field.lineno()),
+                        "TB016",
+                        f"{self._module}.{self._name} field {field.name()} is a {head}; "
+                        "bool and complex are not value-object material — "
+                        "model the raw value or reach for an enum",
+                    ))
+                )
+        if len(stored) >= 2:
+            for field in stored:
+                if field.annotation().scalars() & WRAPPABLE_NAMES:
+                    found.append(
+                        Violation(ViolationSpec(
+                            str(self._path),
+                            int(field.lineno()),
+                            "TB016",
+                            f"{self._module}.{self._name} field {field.name()} is a bare primitive; "
+                            "a compound backs itself with child value objects",
+                        ))
+                    )
+        return tuple(found)
+
+    def construction_path_violations(self) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for method in self._methods:
+            if not method.decorators() & CONSTRUCTOR_DECORATORS:
+                continue
+            returns = method.returns()
+            produced = returns.produced() if returns is not None else Names(())
+            second_path = bool(produced & Names((str(self._name), "Self")))
+            if not produced and method.constructs():
+                second_path = True
+            if second_path:
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(method.lineno()),
+                        "TB017",
+                        f"{self._module}.{self._name}.{method.name()} is a second construction path; "
+                        "a value object has one construction path — its own __init__",
+                    ))
+                )
+        return tuple(found)
+
+    def exit_violations(self) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        conversions = [method for method in self._methods if str(method.name()) in CONVERSION_DUNDERS]
+        leaf = str(self._leaf) if self._leaf is not None else None
+        if leaf is not None and leaf in WRAPPABLE_SCALARS:
+            expected = CANONICAL_EXIT[leaf]
+            helper = CANONICAL_HELPER.get(leaf)
+            for method in conversions:
+                delegated = method.delegated()
+                if str(method.name()) != expected:
+                    found.append(
+                        Violation(ViolationSpec(
+                            str(self._path),
+                            int(method.lineno()),
+                            "TB015",
+                            f"{self._module}.{self._name}.{method.name()} is a mismatched exit; "
+                            "a leaf defines exactly its backing type's conversion dunder",
+                        ))
+                    )
+                elif helper is not None and (delegated is None or str(delegated) != helper):
+                    found.append(
+                        Violation(ViolationSpec(
+                            str(self._path),
+                            int(method.lineno()),
+                            "TB018",
+                            f"{self._module}.{self._name}.{method.name()} hand-rolls its exit; "
+                            "a canonical exit is a one-line delegation to its canonical_* policy",
+                        ))
+                    )
+            return tuple(found)
+        for method in conversions:
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(method.lineno()),
+                    "TB015",
+                    f"{self._module}.{self._name}.{method.name()} is a primitive exit; "
+                    "a structured domain object has no primitive exit — "
+                    "decompose through leaf components",
+                ))
+            )
+        return tuple(found)
+
+    def copy_violations(self) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        by_name = {
+            str(field.name()): field.annotation()
+            for field in self._fields
+            if str(field.annotation().head()) != "ClassVar"
+        }
+        for method in self._methods:
+            if str(method.name()).startswith("_"):
+                continue
+            attr = method.bare_self_attr()
+            if attr is None:
+                continue
+            returns = method.returns()
+            returned = returns.head() if returns is not None else None
+            if returned is None and str(attr) in by_name:
+                returned = by_name[str(attr)].head()
+            if returned is not None and str(returned) in MUTABLE_COLLECTIONS:
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(method.lineno()),
+                        "TB011",
+                        f"{self._module}.{self._name}.{method.name()} hands back its backing collection; "
+                        "an accessor returns a defensive copy, never the backing store",
+                    ))
+                )
+        return tuple(found)
+
+
 class ModuleSpec(ts.Spec):
 
     def __init__(self, path: str, name: str, source: str, is_package: bool) -> None:
@@ -1102,6 +1710,19 @@ class Module(ts.Entity):
         self._bound_names: tuple[tuple[str, str, str], ...] = tuple(
             (local, target, original) for local, (target, original) in self._imported.items()
         )
+
+        scope = ScopeSpec(
+            self._name,
+            tuple(ImportSpec(local, target, original) for local, (target, original) in self._imported.items()),
+            tuple(AliasSpec(alias, package) for alias, package in self._package_aliases.items()),
+            tuple(self._classes),
+        )
+        self._class_decls: tuple[ClassDecl, ...] = tuple(
+            ClassDecl(ClassDeclSpec(node, self._name, self._path, scope)) for node in self._class_defs
+        )
+
+    def class_decls(self) -> tuple[ClassDecl, ...]:
+        return self._class_decls
 
     def name(self) -> str:
         return self._name
@@ -1372,6 +1993,9 @@ class Codebase(ts.AggregateRoot):
             if (module.name(), stmt.name) not in blocks
             and self._enum_base(module, stmt) is not None  # tesser:debt TB051
         )
+        enums = Symbols(SymbolsSpec(tuple(
+            SymbolSpec(module_name, class_name) for module_name, class_name in sorted(self._domain_enums)
+        )))
         self._spec_makers = {}
         checked = [
             module
@@ -1439,7 +2063,7 @@ class Codebase(ts.AggregateRoot):
                 module.name(), module.is_package(), contexts, self._export
             ) == "test":
                 continue
-            for cls in module.class_defs():
+            for cls, decl in zip(module.class_defs(), module.class_decls()):
                 block = blocks.get((module.name(), cls.name))
                 if block == "aggregate":
                     found.extend(self._constructor_violations(module, cls, blocks, "an aggregate"))  # tesser:debt TB051
@@ -1453,7 +2077,7 @@ class Codebase(ts.AggregateRoot):
                     found.extend(self._app_config_violations(module, cls, blocks))  # tesser:debt TB051
                 elif block == "valueobject":
                     found.extend(self._valueobject_violations(module, cls, blocks))  # tesser:debt TB051
-                    found.extend(self._vo_field_violations(module, cls))  # tesser:debt TB051
+                    found.extend(decl.vo_field_violations())
                 elif block == OUTCOME_BLOCK:
                     found.extend(self._outcome_violations(module, cls))  # tesser:debt TB051
                 if block in DOMAIN_BLOCKS:
@@ -1470,14 +2094,12 @@ class Codebase(ts.AggregateRoot):
                         if head in WRAPPABLE_SCALARS or head in NON_WRAPPABLE_SCALARS:
                             leaf = head
                     if block == "valueobject":
-                        found.extend(self._exposure_violations(module, cls, fields))  # tesser:debt TB051
-                        found.extend(
-                            self._composition_violations(module, cls, fields, leaf)  # tesser:debt TB051
-                        )
-                        found.extend(self._construction_path_violations(module, cls))  # tesser:debt TB051
-                        found.extend(self._exit_violations(module, cls, leaf))  # tesser:debt TB051
+                        found.extend(decl.exposure_violations(enums))
+                        found.extend(decl.composition_violations())
+                        found.extend(decl.construction_path_violations())
+                        found.extend(decl.exit_violations())
                     else:
-                        found.extend(self._copy_violations(module, cls, fields))  # tesser:debt TB051
+                        found.extend(decl.copy_violations())
                         found.extend(
                             self._held_root_violations(module, cls, fields, blocks)  # tesser:debt TB051
                         )
@@ -3670,246 +4292,6 @@ class Codebase(ts.AggregateRoot):
                     )
         return tuple(found)
 
-    def _vo_field_violations(self, module: Module, cls: ast.ClassDef) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for stmt in cls.body:
-            if not isinstance(stmt, ast.AnnAssign) or not isinstance(stmt.target, ast.Name):
-                continue
-            if self._annotation_head(stmt.annotation) in MUTABLE_COLLECTIONS:  # tesser:debt TB051
-                field = stmt.target.id
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        stmt.lineno,
-                        "TB002",
-                        f"{module.name()}.{cls.name} field {field} is a mutable collection; "
-                        "a value object's field is hashable — a tuple or frozenset, never "
-                        "a mutable collection",
-                    ))
-                )
-        return tuple(found)
-
-    def _exposure_violations(
-        self,
-        module: Module,
-        cls: ast.ClassDef,
-        fields: list[tuple[str, ast.expr, int]],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        by_name = {name: ann for name, ann, _ in fields}
-        for field, ann, lineno in fields:
-            if field.startswith("_"):
-                continue
-            if self._annotation_scalar_names(ann) & (
-                WRAPPABLE_SCALARS | NON_WRAPPABLE_SCALARS
-            ) or self._names_a_domain_enum(module, ann):  # tesser:debt TB051
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB010",
-                        f"{module.name()}.{cls.name} exposes field {field}; "
-                        "a value object hides its representation — a public field belongs on a spec",
-                    ))
-                )
-        for item in cls.body:
-            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) or (
-                item.name.startswith("_") and item.name != PUBLIC_CALL
-            ):
-                continue
-            bare = item.body[0].value if len(item.body) == 1 and isinstance(item.body[0], ast.Return) else None
-            if not (
-                isinstance(bare, ast.Attribute)
-                and isinstance(bare.value, ast.Name)
-                and bare.value.id == "self"
-            ):
-                continue
-            attr = bare.attr
-            returned_ann = item.returns if item.returns is not None else by_name.get(attr)
-            if returned_ann is None:
-                continue
-            if self._annotation_scalar_names(returned_ann) & (
-                WRAPPABLE_SCALARS | NON_WRAPPABLE_SCALARS
-            ) or self._names_a_domain_enum(module, returned_ann):  # tesser:debt TB051
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        item.lineno,
-                        "TB010",
-                        f"{module.name()}.{cls.name}.{item.name} passes the raw primitive through; "
-                        "a value object's accessor returns a value object — "
-                        "the canonical exit is the only primitive exit",
-                    ))
-                )
-        return tuple(found)
-
-    def _composition_violations(
-        self,
-        module: Module,
-        cls: ast.ClassDef,
-        fields: list[tuple[str, ast.expr, int]],
-        leaf: str | None,
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for field, ann, lineno in fields:
-            head = self._annotation_head(ann)  # tesser:debt TB051
-            if head in NON_WRAPPABLE_SCALARS:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB016",
-                        f"{module.name()}.{cls.name} field {field} is a {head}; "
-                        "bool and complex are not value-object material — "
-                        "model the raw value or reach for an enum",
-                    ))
-                )
-        if len(fields) >= 2:
-            for field, ann, lineno in fields:
-                if self._annotation_scalar_names(ann) & WRAPPABLE_SCALARS:
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            lineno,
-                            "TB016",
-                            f"{module.name()}.{cls.name} field {field} is a bare primitive; "
-                            "a compound backs itself with child value objects",
-                        ))
-                    )
-        return tuple(found)
-
-    def _construction_path_violations(self, module: Module, cls: ast.ClassDef) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for item in cls.body:
-            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                continue
-            decorators = {
-                target.id
-                for decorator in item.decorator_list
-                if isinstance(target := (decorator.func if isinstance(decorator, ast.Call) else decorator), ast.Name)
-            }
-            if not decorators & {"classmethod", "staticmethod"}:
-                continue
-            produced: frozenset[str] = frozenset()
-            if item.returns is not None:
-                produced_pairs: list[tuple[str, ast.expr]] = []
-                walk_stack: list[ast.expr] = [item.returns]
-                while walk_stack:
-                    walked = walk_stack.pop()
-                    if isinstance(walked, ast.Subscript):
-                        if self._annotation_head(walked.value) not in (  # tesser:debt TB051
-                            "type",
-                            "Type",
-                            "Callable",
-                        ):
-                            walk_stack.append(walked.slice)
-                        continue
-                    if isinstance(walked, ast.Constant):
-                        if isinstance(walked.value, str):
-                            try:
-                                parsed = ast.parse(walked.value, mode="eval")
-                            except SyntaxError:
-                                continue
-                            if not isinstance(parsed.body, ast.Constant):
-                                walk_stack.append(parsed.body)
-                        continue
-                    if isinstance(walked, ast.Attribute):
-                        produced_pairs.append((walked.attr, walked))
-                        continue
-                    if isinstance(walked, ast.Name):
-                        produced_pairs.append((walked.id, walked))
-                        continue
-                    walk_stack.extend(
-                        child
-                        for child in ast.iter_child_nodes(walked)
-                        if isinstance(child, ast.expr)
-                    )
-                produced = frozenset(name for name, _ in produced_pairs)
-            second_path = bool(produced & {cls.name, "Self"})
-            if not produced and any(
-                isinstance(node.func, ast.Name) and node.func.id in ("cls", cls.name)
-                for node in ast.walk(item)
-                if isinstance(node, ast.Call)
-            ):
-                second_path = True
-            if second_path:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        item.lineno,
-                        "TB017",
-                        f"{module.name()}.{cls.name}.{item.name} is a second construction path; "
-                        "a value object has one construction path — its own __init__",
-                    ))
-                )
-        return tuple(found)
-
-    def _exit_violations(
-        self,
-        module: Module,
-        cls: ast.ClassDef,
-        leaf: str | None,
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        conversions = [
-            item
-            for item in cls.body
-            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name in CONVERSION_DUNDERS
-        ]
-        if leaf is not None and leaf in WRAPPABLE_SCALARS:
-            expected = CANONICAL_EXIT[leaf]
-            helper = CANONICAL_HELPER.get(leaf)
-            for item in conversions:
-                returned = item.body[0].value if len(item.body) == 1 and isinstance(item.body[0], ast.Return) else None
-                delegated = None
-                if isinstance(returned, ast.Call) and len(returned.args) == 1:
-                    delegated = (
-                        returned.func.id
-                        if isinstance(returned.func, ast.Name)
-                        else returned.func.attr
-                        if isinstance(returned.func, ast.Attribute)
-                        else None
-                    )
-                    if not (
-                        isinstance(returned.args[0], ast.Attribute)
-                        and isinstance(returned.args[0].value, ast.Name)
-                        and returned.args[0].value.id == "self"
-                    ):
-                        delegated = None
-                if item.name != expected:
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            item.lineno,
-                            "TB015",
-                            f"{module.name()}.{cls.name}.{item.name} is a mismatched exit; "
-                            "a leaf defines exactly its backing type's conversion dunder",
-                        ))
-                    )
-                elif helper is not None and delegated != helper:
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            item.lineno,
-                            "TB018",
-                            f"{module.name()}.{cls.name}.{item.name} hand-rolls its exit; "
-                            "a canonical exit is a one-line delegation to its canonical_* policy",
-                        ))
-                    )
-            return tuple(found)
-        for item in conversions:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    item.lineno,
-                    "TB015",
-                    f"{module.name()}.{cls.name}.{item.name} is a primitive exit; "
-                    "a structured domain object has no primitive exit — "
-                    "decompose through leaf components",
-                ))
-            )
-        return tuple(found)
-
     def _structured_exit_violations(
         self, module: Module, cls: ast.ClassDef
     ) -> tuple[Violation, ...]:
@@ -3925,42 +4307,6 @@ class Codebase(ts.AggregateRoot):
             for item in cls.body
             if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name in CONVERSION_DUNDERS
         )
-
-    def _copy_violations(
-        self,
-        module: Module,
-        cls: ast.ClassDef,
-        fields: list[tuple[str, ast.expr, int]],
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        by_name = {name: ann for name, ann, _ in fields}
-        for item in cls.body:
-            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) or item.name.startswith("_"):
-                continue
-            bare = item.body[0].value if len(item.body) == 1 and isinstance(item.body[0], ast.Return) else None
-            if not (
-                isinstance(bare, ast.Attribute)
-                and isinstance(bare.value, ast.Name)
-                and bare.value.id == "self"
-            ):
-                continue
-            attr = bare.attr
-            returned = (
-                self._annotation_head(item.returns) if item.returns is not None else None  # tesser:debt TB051
-            )
-            if returned is None and attr in by_name:
-                returned = self._annotation_head(by_name[attr])  # tesser:debt TB051
-            if returned in MUTABLE_COLLECTIONS:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        item.lineno,
-                        "TB011",
-                        f"{module.name()}.{cls.name}.{item.name} hands back its backing collection; "
-                        "an accessor returns a defensive copy, never the backing store",
-                    ))
-                )
-        return tuple(found)
 
     def _held_root_violations(
         self,
