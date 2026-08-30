@@ -1,13 +1,21 @@
 from __future__ import annotations
 
+import os
+
 import alpha.client.client as alpha_client
 import app.loader as loader
 import beta.client.client as beta_client
+import pgdatabase.database as pgdatabase
 
 
 class TestLoadedApp:
 
     async def test_the_loaded_app_writes_and_reads_both_contexts(self) -> None:
+        database = pgdatabase.Database(pgdatabase.DatabaseRequest(os.environ["ALPHA_STORAGE"]))
+        await database.open()
+        async with database.acquire() as connection:
+            await connection.execute("DROP TABLE IF EXISTS widgets")
+        await database.close()
         app = loader.load()
         await app.open()
         held = await app.beta.client.hold(beta_client.HoldRequest(key="e2e-held"))

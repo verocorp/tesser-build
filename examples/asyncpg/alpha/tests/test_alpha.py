@@ -36,6 +36,8 @@ class TestAlphaContext:
         cfg = config.Config(config.Spec(storage=os.environ["ALPHA_STORAGE"]))
         database = pgdatabase.Database(cfg.database)
         await database.open()
+        async with database.acquire() as connection:
+            await connection.execute("DROP TABLE IF EXISTS widgets")
         wired = component.Alpha(cfg, database, FakeBetaCheck())
         response = await cli.Handler(wired.client).add(protocol_cli.CliRequest(args=("ctx-alpha", "p")))
         found = await wired.client.find(client.FindRequest(name="ctx-alpha"))
@@ -50,6 +52,8 @@ class TestAlphaContext:
         cfg = config.Config(config.Spec(storage=os.environ["ALPHA_STORAGE"]))
         database = pgdatabase.Database(cfg.database)
         await database.open()
+        async with database.acquire() as connection:
+            await connection.execute("DROP TABLE IF EXISTS widgets")
         wired = component.Alpha(cfg, database, FakeBetaCheck())
         await wired.client.add(client.AddRequest(name="ctx-alpha-taken", part="p"))
         taken = await wired.client.take(client.TakeRequest(name="ctx-alpha-taken", part="q"))
@@ -63,6 +67,8 @@ class TestAlphaContext:
         cfg = config.Config(config.Spec(storage=os.environ["ALPHA_STORAGE"]))
         database = pgdatabase.Database(cfg.database)
         await database.open()
+        async with database.acquire() as connection:
+            await connection.execute("DROP TABLE IF EXISTS widgets")
         wired = component.Alpha(cfg, database, FakeRefusingBetaCheck())
         released = await wired.client.add(
             client.AddRequest(name="ctx-alpha-twice", part="ctx-alpha-twice")

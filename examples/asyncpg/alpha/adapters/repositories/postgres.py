@@ -13,7 +13,7 @@ import tesser.errors as errors
 
 _SCHEMA: typing.Final[str] = (
     "CREATE TABLE IF NOT EXISTS widgets "
-    "(name text PRIMARY KEY, part text NOT NULL, standing text NOT NULL)"
+    "(name text PRIMARY KEY, part text NOT NULL, standing text NOT NULL DEFAULT 'kept')"
 )
 _SCHEMA_STANDING: typing.Final[str] = (
     "ALTER TABLE widgets ADD COLUMN IF NOT EXISTS standing text NOT NULL DEFAULT 'kept'"
