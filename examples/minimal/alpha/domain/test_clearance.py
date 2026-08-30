@@ -21,6 +21,18 @@ class TestClearance:
     def test_string_is_the_canonical_exit(self) -> None:
         assert str(clearance.Clearance(clearance.ClearanceSpec(verdict="refused"))) == "refused"
 
+    def test_an_ok_verdict_decides_cleared(self) -> None:
+        assert (
+            clearance.Clearance(clearance.ClearanceSpec(verdict="ok")).decide()
+            is clearance.Verdict.CLEARED
+        )
+
+    def test_a_refused_verdict_decides_refused(self) -> None:
+        assert (
+            clearance.Clearance(clearance.ClearanceSpec(verdict="refused")).decide()
+            is clearance.Verdict.REFUSED
+        )
+
 
 class TestStanding:
 

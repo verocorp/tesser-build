@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+import enum
+
 import tesser.domain as ts
 
 import tesser.errors as errors
 import tesser.serialization as serialization
+
+
+class Verdict(ts.Outcome):
+    CLEARED = enum.auto()
+    REFUSED = enum.auto()
 
 
 class ClearanceSpec(ts.Spec):
@@ -20,6 +27,11 @@ class Clearance(ts.ValueObject):
         if spec.verdict not in ("ok", "refused"):
             raise errors.invalid("invalid_verdict", f"verdict {spec.verdict!r} is not a verdict")
         object.__setattr__(self, "_verdict", spec.verdict)
+
+    def decide(self) -> Verdict:
+        if self._verdict == "ok":
+            return Verdict.CLEARED
+        return Verdict.REFUSED
 
     def __str__(self) -> str:
         return serialization.canonical_str(self._verdict)

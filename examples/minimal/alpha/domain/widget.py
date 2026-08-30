@@ -46,9 +46,6 @@ class Taken(ts.Outcome):
     HELD = enum.auto()
 
 
-_CLEARED: typing.Final[clearance.Clearance] = clearance.Clearance(
-    clearance.ClearanceSpec(verdict="ok")
-)
 _KEPT: typing.Final[clearance.Standing] = clearance.Standing("kept")
 _RELEASED: typing.Final[clearance.Standing] = clearance.Standing("released")
 
@@ -90,7 +87,10 @@ class Widget(ts.AggregateRoot):
 
     def clear(self, spec: clearance.ClearanceSpec) -> None:
         cleared = clearance.Clearance(spec)
-        if cleared == _CLEARED:
-            self._standing = _KEPT
-        else:
-            self._standing = _RELEASED
+        match cleared.decide():
+            case clearance.Verdict.CLEARED:
+                self._standing = _KEPT
+            case clearance.Verdict.REFUSED:
+                self._standing = _RELEASED
+            case _ as never:
+                typing.assert_never(never)
