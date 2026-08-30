@@ -915,6 +915,22 @@ class ImportEdge(ts.ValueObject):
         object.__setattr__(self, "_path", Path(spec.path) if spec.path else None)
         object.__setattr__(self, "_module", Text(spec.module) if spec.module else None)
 
+    def form_violations(self) -> tuple[Violation, ...]:
+        module_name = str(self._module)
+        target = str(self._target)
+        if str(self._form) == "bare":
+            return (
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(self._lineno),
+                    "TB053",
+                    f"{module_name} imports {target} without an alias; "
+                    "a context module is imported as an aliased module — the analyzer "
+                    "resolves a name as attribute over alias",
+                )),
+            )
+        return ()
+
     def member_form_violations(self) -> tuple[Violation, ...]:
         name = str(self._module)
         target = str(self._target)
@@ -3816,14 +3832,396 @@ APP_CLIENT_METHOD: typing.Final[SignaturePolicy] = SignaturePolicy(SignaturePoli
 ))
 
 
+class TesserImportPolicySpec(ts.Spec):
+
+    def __init__(
+        self,
+        subject: str,
+        package: str,
+        only_clause: str,
+        once_clause: str,
+        absent_clause: str | None,
+        norms: tuple[str, ...] = (),
+    ) -> None:
+        self.subject = subject
+        self.package = package
+        self.only_clause = only_clause
+        self.once_clause = once_clause
+        self.absent_clause = absent_clause
+        self.norms = norms
+
+
+class TesserImportPolicy(ts.ValueObject):
+
+    _subject: Text
+    _package: Text
+    _only_clause: Text
+    _once_clause: Text
+    _absent_clause: Text | None
+    _norms: Names
+
+    def __init__(self, spec: TesserImportPolicySpec) -> None:
+        object.__setattr__(self, "_subject", Text(spec.subject))
+        object.__setattr__(self, "_package", Text(spec.package))
+        object.__setattr__(self, "_only_clause", Text(spec.only_clause))
+        object.__setattr__(self, "_once_clause", Text(spec.once_clause))
+        object.__setattr__(self, "_absent_clause", Text(spec.absent_clause) if spec.absent_clause else None)
+        object.__setattr__(self, "_norms", Names(spec.norms))
+
+    def violations(self, module: "Module") -> tuple[Violation, ...]:
+        package = str(self._package)
+        only_clause = str(self._only_clause)
+        once_clause = str(self._once_clause)
+        absent_clause = str(self._absent_clause) if self._absent_clause is not None else None
+        module_name = module.name()
+        path = module.path()
+        found: list[Violation] = []
+        seen_own = False
+        seen_any = False
+        for imp in module.tesser_imports():
+            target = str(imp._target)
+            lineno = int(imp._lineno)
+            if target in self._norms:
+                if str(imp._form) == "bare":
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            lineno,
+                            "TB050",
+                            f"{module_name} imports {target} without an alias; a norm "
+                            "module is imported as an aliased module — a bare import binds "
+                            "the whole tesser package, and the ts alias belongs to the "
+                            "placement's own package",
+                        ))
+                    )
+                continue
+            seen_any = True
+            if target != package:
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        lineno,
+                        "TB050",
+                        f"{module_name} imports {target}; {only_clause}",
+                    ))
+                )
+            elif seen_own:
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        lineno,
+                        "TB050",
+                        f"{module_name} imports {target} again; {once_clause}",
+                    ))
+                )
+            else:
+                seen_own = True
+                if str(imp._form) == "from":
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            lineno,
+                            "TB050",
+                            f"{module_name} imports names from {target}; {once_clause}",
+                        ))
+                    )
+                elif str(imp._form) in ("alias", "bare"):
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            lineno,
+                            "TB050",
+                            f"{module_name} imports {target} without the ts alias; {once_clause}",
+                        ))
+                    )
+        if absent_clause is not None and not seen_any:
+            found.append(
+                Violation(ViolationSpec(
+                    path,
+                    1,
+                    "TB050",
+                    f"{module_name} never imports {package}; {absent_clause}",
+                ))
+            )
+        return tuple(found)
+
+
+class StatementPolicySpec(ts.Spec):
+
+    def __init__(self, subject: str, loose_clause: str, entry: str | None) -> None:
+        self.subject = subject
+        self.loose_clause = loose_clause
+        self.entry = entry
+
+
+class StatementPolicy(ts.ValueObject):
+
+    _subject: Text
+    _loose_clause: Text
+    _entry: Text | None
+
+    def __init__(self, spec: StatementPolicySpec) -> None:
+        object.__setattr__(self, "_subject", Text(spec.subject))
+        object.__setattr__(self, "_loose_clause", Text(spec.loose_clause))
+        object.__setattr__(self, "_entry", Text(spec.entry) if spec.entry else None)
+
+    def violations(self, module: "Module") -> tuple[Violation, ...]:
+        subject = str(self._subject)
+        loose_clause = str(self._loose_clause)
+        entry = str(self._entry) if self._entry is not None else None
+        module_name = module.name()
+        path = module.path()
+        scope = module.scope()
+        found: list[Violation] = []
+        for stmt in module.body():
+            if isinstance(stmt, (ast.Import, ast.ImportFrom, ast.ClassDef)):
+                continue
+            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if (
+                entry is not None
+                and isinstance(stmt, ast.If)
+                and isinstance(stmt.test, ast.Compare)
+                and isinstance(stmt.test.left, ast.Name)
+                and stmt.test.left.id == "__name__"
+                and len(stmt.test.ops) == 1
+                and isinstance(stmt.test.ops[0], ast.Eq)
+                and len(stmt.test.comparators) == 1
+                and isinstance(stmt.test.comparators[0], ast.Constant)
+                and stmt.test.comparators[0].value == "__main__"
+            ):
+                callee = (
+                    Annotation(stmt.body[0].value.func).primary()
+                    if len(stmt.body) == 1
+                    and isinstance(stmt.body[0], ast.Expr)
+                    and isinstance(stmt.body[0].value, ast.Call)
+                    else None
+                )
+                resolved = scope.resolve(callee) if callee is not None else None
+                if not (
+                    not stmt.orelse
+                    and resolved is not None
+                    and resolved == Symbol(SymbolSpec(TESSER_ENTRY[0], TESSER_ENTRY[1]))
+                ):
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            stmt.lineno,
+                            "TB051",
+                            f"{module_name} has a __main__ guard holding more than "
+                            f"{entry}(run); a srv module's entry point is {entry}(run) "
+                            "and nothing else",
+                        ))
+                    )
+                continue
+            if isinstance(stmt, ast.AnnAssign):
+                annotation = ast.unparse(stmt.annotation)
+                if not (
+                    annotation in ("Final", "typing.Final")
+                    or annotation.startswith(("Final[", "typing.Final["))
+                ):
+                    found.append(
+                        Violation(ViolationSpec(
+                            path,
+                            stmt.lineno,
+                            "TB051",
+                            f"{module_name} declares a module constant without Final; "
+                            f"{subject} constants are Final",
+                        ))
+                    )
+            elif isinstance(stmt, ast.Assign):
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        stmt.lineno,
+                        "TB051",
+                        f"{module_name} declares a module constant without Final; "
+                        f"{subject} constants are Final",
+                    ))
+                )
+            else:
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        stmt.lineno,
+                        "TB051",
+                        f"{module_name} has a loose module-level statement; {loose_clause}",
+                    ))
+                )
+        return tuple(found)
+
+
+class ModuleFunctionPolicySpec(ts.Spec):
+
+    def __init__(self, subject: str) -> None:
+        self.subject = subject
+
+
+class ModuleFunctionPolicy(ts.ValueObject):
+
+    _subject: Text
+
+    def __init__(self, spec: ModuleFunctionPolicySpec) -> None:
+        object.__setattr__(self, "_subject", Text(spec.subject))
+
+    def violations(self, module: "Module") -> tuple[Violation, ...]:
+        subject = str(self._subject)
+        module_name = module.name()
+        found: list[Violation] = []
+        for stmt in module.body():
+            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                found.append(
+                    Violation(ViolationSpec(
+                        module.path(),
+                        stmt.lineno,
+                        "TB051",
+                        f"{module_name}.{stmt.name} is a module function; "
+                        f"a {subject} module holds classes, never functions",
+                    ))
+                )
+        return tuple(found)
+
+
+class PackageInitPolicySpec(ts.Spec):
+
+    def __init__(self, subject: str) -> None:
+        self.subject = subject
+
+
+class PackageInitPolicy(ts.ValueObject):
+
+    _subject: Text
+
+    def __init__(self, spec: PackageInitPolicySpec) -> None:
+        object.__setattr__(self, "_subject", Text(spec.subject))
+
+    def violations(self, module: "Module") -> tuple[Violation, ...]:
+        subject = str(self._subject)
+        module_name = module.name()
+        return tuple(
+            Violation(ViolationSpec(
+                module.path(),
+                stmt.lineno,
+                "TB042",
+                f"{module_name} __init__ declares code; {subject} __init__ is empty",
+            ))
+            for stmt in module.body()
+        )
+
+
+class PlacementSpec(ts.Spec):
+
+    def __init__(self, name: str, is_package: bool, contexts: tuple[str, ...], export: str | None = None) -> None:
+        self.name = name
+        self.is_package = is_package
+        self.contexts = contexts
+        self.export = export
+
+
+class Placement(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, spec: PlacementSpec) -> None:
+        name = spec.name
+        is_package = spec.is_package
+        contexts = frozenset(spec.contexts)
+        export = spec.export
+
+        def locate() -> str:
+            parts = name.split(".")
+            basename = parts[-1]
+            reserved = (
+                basename == "conftest"
+                or basename.startswith("test_")
+                or basename.startswith(EVAL_PREFIX)
+            )
+            inside_application = (
+                len(parts) >= 4 and parts[0] in contexts and parts[1] == PORTS_PARENT_ROLE
+            )
+            if inside_application and parts[2] == PORTS_PACKAGE and reserved:
+                return "ports-stray"
+            if inside_application and parts[2] == APPLICATION_CLIENT_PACKAGE and reserved:
+                return "app-client-stray"
+            if basename == "conftest":
+                return "conftest-root" if len(parts) == 1 else "conftest"
+            if basename.startswith("test_"):
+                return "test"
+            if basename.startswith(EVAL_PREFIX):
+                return "eval"
+            if parts[0] in APP_PACKAGES:
+                if is_package:
+                    return "shell-init"
+                if parts[0] == "srv":
+                    return "shell-srv"
+                return "shell-app"
+            if parts[0] == TESTS_ROLE:
+                return "root-tests"
+            if parts[0] == PROTOCOL_PACKAGE:
+                return "protocol-init" if is_package else "protocol"
+            if parts[0] == KERNEL_PACKAGE or (export is not None and parts[0] == export):
+                if is_package:
+                    return "kernel-init"
+                if len(parts) == 1:
+                    return "kernel-file"
+                return "kernel"
+            if parts[0] not in contexts:
+                return "root"
+            if len(parts) == 1:
+                return "context-init"
+            if parts[1] == TESTS_ROLE:
+                return "context-tests-init" if is_package else "context-tests-stray"
+            if parts[1] in ROLES:
+                if parts[1] == PORTS_PARENT_ROLE and len(parts) >= 3 and parts[2] == PORTS_PACKAGE:
+                    if is_package:
+                        return "ports-init"
+                    return "ports-file" if len(parts) == 3 else "ports"
+                if (
+                    parts[1] == PORTS_PARENT_ROLE
+                    and len(parts) >= 3
+                    and parts[2] == APPLICATION_CLIENT_PACKAGE
+                ):
+                    if is_package:
+                        return "app-client-init"
+                    return "app-client-file" if len(parts) == 3 else "app-client"
+                if (
+                    parts[1] == PORTS_PARENT_ROLE
+                    and len(parts) >= 3
+                    and parts[2] == ORCHESTRATORS_PACKAGE
+                ):
+                    if is_package:
+                        return "orchestrators-init"
+                    return "orchestrators-file" if len(parts) == 3 else "orchestrators"
+                if is_package:
+                    return "role-init"
+                return "role-file" if len(parts) == 2 else "role"
+            return "context-stray"
+
+        object.__setattr__(self, "_value", locate())
+
+    def __str__(self) -> str:
+        return serialization.canonical_str(self._value)
+
+
 class ModuleSpec(ts.Spec):
 
-    def __init__(self, path: str, name: str, source: str, is_package: bool, tops: tuple[str, ...] = ()) -> None:
+    def __init__(
+        self,
+        path: str,
+        name: str,
+        source: str,
+        is_package: bool,
+        tops: tuple[str, ...] = (),
+        contexts: tuple[str, ...] = (),
+        export: str | None = None,
+    ) -> None:
         self.path = path
         self.name = name
         self.source = source
         self.is_package = is_package
         self.tops = tops
+        self.contexts = contexts
+        self.export = export
 
 
 class Module(ts.Entity):
@@ -3976,6 +4374,14 @@ class Module(ts.Entity):
             tuple(sorted(self._functions)),
             self._spoken,
         ))
+
+        self._placement = Placement(PlacementSpec(spec.name, spec.is_package, spec.contexts, spec.export))
+
+    def place(self) -> Placement:
+        return self._placement
+
+    def scope(self) -> Scope:
+        return self._scope
 
     def spoken(self) -> Text | None:
         return Text(self._spoken) if self._spoken else None
@@ -4899,6 +5305,153 @@ class Module(ts.Entity):
         return None
 
 
+KERNEL_TESSER_IMPORTS: typing.Final[TesserImportPolicy] = TesserImportPolicy(TesserImportPolicySpec(
+    "kernel",
+    ROLE_TESSER_PACKAGE["domain"],
+    "a kernel module imports only tesser.domain",
+    "a kernel module imports tesser.domain exactly once, as ts",
+    "a kernel module imports tesser.domain exactly once, as ts",
+    norms=tuple(sorted(NORM_IMPORTS["domain"])),
+))
+
+APP_TESSER_IMPORTS: typing.Final[TesserImportPolicy] = TesserImportPolicy(TesserImportPolicySpec(
+    "app",
+    "tesser.app",
+    "an app module's tesser imports are tesser.app, and tesser.errors",
+    "an app module imports tesser.app exactly once, as ts",
+    "an app module imports tesser.app exactly once, as ts",
+    tuple(sorted(NORM_IMPORTS["app"])),
+))
+
+SRV_TESSER_IMPORTS: typing.Final[TesserImportPolicy] = TesserImportPolicy(TesserImportPolicySpec(
+    "srv",
+    "tesser.srv",
+    "a srv module's tesser imports are tesser.srv, and tesser.errors",
+    "a srv module imports tesser.srv exactly once, as ts",
+    "a srv module imports tesser.srv exactly once, as ts",
+    tuple(sorted(NORM_IMPORTS["srv"])),
+))
+
+PROTOCOL_TESSER_IMPORTS: typing.Final[TesserImportPolicy] = TesserImportPolicy(TesserImportPolicySpec(
+    "protocol",
+    "tesser.srv",
+    "a protocol module imports only tesser.srv",
+    "a protocol module imports tesser.srv exactly once, as ts",
+    "a protocol module imports tesser.srv exactly once, as ts",
+))
+
+APPLICATION_CLIENT_TESSER_IMPORTS: typing.Final[TesserImportPolicy] = TesserImportPolicy(TesserImportPolicySpec(
+    "application client",
+    ROLE_TESSER_PACKAGE[PORTS_PARENT_ROLE],
+    "an application client module imports only tesser.application",
+    "an application client module imports tesser.application exactly once, as ts",
+    "an application client module imports tesser.application exactly once, as ts",
+))
+
+PORTS_TESSER_IMPORTS: typing.Final[TesserImportPolicy] = TesserImportPolicy(TesserImportPolicySpec(
+    "ports",
+    ROLE_TESSER_PACKAGE[PORTS_PARENT_ROLE],
+    "a ports module imports only tesser.application",
+    "a ports module imports tesser.application exactly once, as ts",
+    "a ports module imports tesser.application exactly once, as ts",
+))
+
+TEST_TESSER_IMPORTS: typing.Final[TesserImportPolicy] = TesserImportPolicy(TesserImportPolicySpec(
+    "test",
+    "tesser.testing",
+    "a test module's tesser imports are tesser.testing, tesser.errors, and tesser.serialization",
+    "a test module imports tesser.testing at most once, as ts",
+    None,
+    tuple(sorted(NORM_IMPORTS["test"])),
+))
+
+DOMAIN_TESSER_IMPORTS: typing.Final[TesserImportPolicy] = TesserImportPolicy(TesserImportPolicySpec(
+    "role",
+    ROLE_TESSER_PACKAGE["domain"],
+    "a domain module's tesser imports are tesser.domain, tesser.errors, and tesser.serialization",
+    "a role module imports its tesser package exactly once, as ts",
+    "a role module imports its tesser package exactly once, as ts",
+    tuple(sorted(NORM_IMPORTS["domain"])),
+))
+
+APPLICATION_TESSER_IMPORTS: typing.Final[TesserImportPolicy] = TesserImportPolicy(TesserImportPolicySpec(
+    "role",
+    ROLE_TESSER_PACKAGE["application"],
+    "an application module's tesser imports are tesser.application and tesser.errors",
+    "a role module imports its tesser package exactly once, as ts",
+    "a role module imports its tesser package exactly once, as ts",
+    tuple(sorted(NORM_IMPORTS["application"])),
+))
+
+ADAPTERS_TESSER_IMPORTS: typing.Final[TesserImportPolicy] = TesserImportPolicy(TesserImportPolicySpec(
+    "role",
+    ROLE_TESSER_PACKAGE["adapters"],
+    "an adapters module's tesser imports are tesser.adapters and tesser.errors",
+    "a role module imports its tesser package exactly once, as ts",
+    "a role module imports its tesser package exactly once, as ts",
+    tuple(sorted(NORM_IMPORTS["adapters"])),
+))
+
+COMPONENT_TESSER_IMPORTS: typing.Final[TesserImportPolicy] = TesserImportPolicy(TesserImportPolicySpec(
+    "role",
+    ROLE_TESSER_PACKAGE["component"],
+    "a component module's tesser imports are tesser.component, and tesser.errors",
+    "a role module imports its tesser package exactly once, as ts",
+    "a role module imports its tesser package exactly once, as ts",
+    tuple(sorted(NORM_IMPORTS["component"])),
+))
+
+CLIENT_TESSER_IMPORTS: typing.Final[TesserImportPolicy] = TesserImportPolicy(TesserImportPolicySpec(
+    "role",
+    ROLE_TESSER_PACKAGE["client"],
+    "a role module imports only its own tesser package",
+    "a role module imports its tesser package exactly once, as ts",
+    "a role module imports its tesser package exactly once, as ts",
+))
+
+KERNEL_STATEMENTS: typing.Final[StatementPolicy] = StatementPolicy(StatementPolicySpec(
+    "kernel", "a kernel module holds only imports, classes, and Final constants", None
+))
+
+APP_STATEMENTS: typing.Final[StatementPolicy] = StatementPolicy(StatementPolicySpec(
+    "app", "an app module holds only imports, classes, declared functions, and Final constants", None
+))
+
+SRV_STATEMENTS: typing.Final[StatementPolicy] = StatementPolicy(StatementPolicySpec(
+    "srv", "a srv module holds only imports, declared classes, and Final constants", "ts.main"
+))
+
+PROTOCOL_STATEMENTS: typing.Final[StatementPolicy] = StatementPolicy(StatementPolicySpec(
+    "protocol", "a protocol module holds only imports, declared classes, and Final constants", None
+))
+
+CONTEXT_STATEMENTS: typing.Final[StatementPolicy] = StatementPolicy(StatementPolicySpec(
+    "module", "a context module holds only imports, classes, and Final constants", None
+))
+
+KERNEL_FUNCTIONS: typing.Final[ModuleFunctionPolicy] = ModuleFunctionPolicy(ModuleFunctionPolicySpec("kernel"))
+
+SRV_FUNCTIONS: typing.Final[ModuleFunctionPolicy] = ModuleFunctionPolicy(ModuleFunctionPolicySpec("srv"))
+
+PROTOCOL_FUNCTIONS: typing.Final[ModuleFunctionPolicy] = ModuleFunctionPolicy(ModuleFunctionPolicySpec("protocol"))
+
+CONTEXT_FUNCTIONS: typing.Final[ModuleFunctionPolicy] = ModuleFunctionPolicy(ModuleFunctionPolicySpec("context role"))
+
+CONTEXT_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageInitPolicySpec("a context"))
+
+CONTEXT_TESTS_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageInitPolicySpec("a context tests"))
+
+PROTOCOL_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageInitPolicySpec("a protocol"))
+
+PORTS_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageInitPolicySpec("a ports"))
+
+SHELL_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageInitPolicySpec("a srv or app"))
+
+APPLICATION_CLIENT_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageInitPolicySpec("an application client package"))
+
+ORCHESTRATORS_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageInitPolicySpec("an orchestrators package"))
+
+
 class CodebaseSpec(ts.Spec):
 
     def __init__(
@@ -4931,6 +5484,13 @@ class Codebase(ts.AggregateRoot):
         for path, name, _, _ in spec.sources:
             paths_by_name.setdefault(name, []).append(path)
         tops = tuple(sorted({name.split(".")[0] for _, name, _, _ in spec.sources}))
+        export = spec.exports[0] if len(spec.exports) == 1 else None
+        kernel_tops = (frozenset({KERNEL_PACKAGE}) | (frozenset({export}) if export is not None else frozenset())) & frozenset(tops)
+        contexts = tuple(sorted({
+            name.split(".")[0]
+            for _, name, _, _ in spec.sources
+            if name.split(".")[0] not in kernel_tops and len(name.split(".")) >= 2 and name.split(".")[1] in ROLES
+        }))
         for path, name, source, is_package in spec.sources:
             if path.endswith(STUB_SUFFIX):
                 broken.append(
@@ -4967,7 +5527,7 @@ class Codebase(ts.AggregateRoot):
                 continue
             try:
                 modules.append(
-                    Module(ModuleSpec(path=path, name=name, source=source, is_package=is_package, tops=tops))
+                    Module(ModuleSpec(path=path, name=name, source=source, is_package=is_package, tops=tops, contexts=contexts, export=export))
                 )
             except SyntaxError as error:
                 broken.append(
@@ -5088,9 +5648,7 @@ class Codebase(ts.AggregateRoot):
         contexts = frozenset(named)
         spoken: set[str] = set()
         for module in self._modules:
-            if self._locate(  # tesser:debt TB051
-                module.name(), module.is_package(), contexts, self._export
-            ) in ("app-client", "app-client-file"):
+            if str(module.place()) in ("app-client", "app-client-file"):
                 names_ports = module.spoken()
                 if names_ports is not None:
                     spoken.add(str(names_ports))
@@ -5101,7 +5659,7 @@ class Codebase(ts.AggregateRoot):
             (module.name(), stmt.name)
             for module in self._modules
             if module.name().split(".")[1:2] == ["domain"]
-            and self._locate(module.name(), module.is_package(), contexts, self._export) == "role"  # tesser:debt TB051
+            and str(module.place()) == "role"
             for stmt in module.class_defs()
             if (module.name(), stmt.name) not in blocks
             and self._enum_base(module, stmt) is not None  # tesser:debt TB051
@@ -5121,7 +5679,7 @@ class Codebase(ts.AggregateRoot):
         checked = [
             module
             for module in self._modules
-            if self._locate(module.name(), module.is_package(), contexts, self._export)  # tesser:debt TB051
+            if str(module.place())
             not in TEST_TIER
         ]
         for module in checked:
@@ -5176,13 +5734,11 @@ class Codebase(ts.AggregateRoot):
             found.extend(module.sibling_reference_violations())
             found.extend(module.dynamic_import_violations())
             found.extend(self._module_violations(module, blocks, contexts))  # tesser:debt TB051
-            if self._locate(module.name(), module.is_package(), contexts, self._export) not in TEST_TIER:  # tesser:debt TB051
+            if str(module.place()) not in TEST_TIER:
                 found.extend(self._spec_use_violations(module, blocks))  # tesser:debt TB051
                 found.extend(self._spec_shared_violations(module))  # tesser:debt TB051
                 found.extend(module.outcome_use_violations(registry))
-            if self._export == TESSER and self._locate(  # tesser:debt TB051
-                module.name(), module.is_package(), contexts, self._export
-            ) == "test":
+            if self._export == TESSER and str(module.place()) == "test":
                 continue
             for cls, decl in zip(module.class_defs(), module.class_decls(registry)):
                 block = blocks.get((module.name(), cls.name))
@@ -5229,9 +5785,7 @@ class Codebase(ts.AggregateRoot):
                             found.extend(body.held_context_violations())
                 elif block == "port":
                     found.extend(PORT_RECORDS.violations(decl))
-                    if self._locate(  # tesser:debt TB051
-                        module.name(), module.is_package(), contexts, self._export
-                    ) in (
+                    if str(module.place()) in (
                         "ports",
                         "ports-file",
                     ):
@@ -5241,9 +5795,7 @@ class Codebase(ts.AggregateRoot):
                                 continue
                             found.extend(PORT_METHOD.violations(signature))
                 elif block == "store":
-                    if self._locate(  # tesser:debt TB051
-                        module.name(), module.is_package(), contexts, self._export
-                    ) in (
+                    if str(module.place()) in (
                         "ports",
                         "ports-file",
                     ):
@@ -5284,9 +5836,7 @@ class Codebase(ts.AggregateRoot):
                         found.extend(ORCHESTRATOR_METHOD.violations(body.signature()))
                         found.extend(body.violations())
                         found.extend(body.thread_violations())
-                elif block == "actions_client" and self._locate(  # tesser:debt TB051
-                    module.name(), module.is_package(), contexts, self._export
-                ) in ("app-client", "app-client-file"):
+                elif block == "actions_client" and str(module.place()) in ("app-client", "app-client-file"):
                     found.extend(decl.actions_client_violations())
                     for signature in decl.signatures():
                         if str(signature.name()).startswith("_") and str(signature.name()) != "__call__":
@@ -5338,7 +5888,7 @@ class Codebase(ts.AggregateRoot):
         for module in self._modules:
             parts = module.name().split(".")
             base = parts[-1]
-            place = self._locate(module.name(), module.is_package(), contexts, self._export)  # tesser:debt TB051
+            place = str(module.place())
             parent = ".".join(parts[:-1])
             if place in PAIRED_PLACES and not module.is_package() and base != "__main__":
                 saw_class = False
@@ -5394,114 +5944,6 @@ class Codebase(ts.AggregateRoot):
                     )
         return tuple(found)
 
-    @staticmethod
-    def _locate(
-        name: str,
-        is_package: bool,
-        contexts: frozenset[str],
-        export: str | None = None,
-    ) -> typing.Literal[
-        "conftest-root",
-        "conftest",
-        "test",
-        "eval",
-        "shell-init",
-        "shell-srv",
-        "shell-app",
-        "root-tests",
-        "protocol-init",
-        "protocol",
-        "kernel-init",
-        "kernel-file",
-        "kernel",
-        "root",
-        "context-init",
-        "context-tests-init",
-        "context-tests-stray",
-        "role-init",
-        "role-file",
-        "role",
-        "ports-init",
-        "ports-file",
-        "ports",
-        "ports-stray",
-        "app-client-init",
-        "app-client-file",
-        "app-client",
-        "app-client-stray",
-        "orchestrators-init",
-        "orchestrators-file",
-        "orchestrators",
-        "context-stray",
-    ]:
-        parts = name.split(".")
-        basename = parts[-1]
-        reserved = (
-            basename == "conftest"
-            or basename.startswith("test_")
-            or basename.startswith(EVAL_PREFIX)
-        )
-        inside_application = (
-            len(parts) >= 4 and parts[0] in contexts and parts[1] == PORTS_PARENT_ROLE
-        )
-        if inside_application and parts[2] == PORTS_PACKAGE and reserved:
-            return "ports-stray"
-        if inside_application and parts[2] == APPLICATION_CLIENT_PACKAGE and reserved:
-            return "app-client-stray"
-        if basename == "conftest":
-            return "conftest-root" if len(parts) == 1 else "conftest"
-        if basename.startswith("test_"):
-            return "test"
-        if basename.startswith(EVAL_PREFIX):
-            return "eval"
-        if parts[0] in APP_PACKAGES:
-            if is_package:
-                return "shell-init"
-            if parts[0] == "srv":
-                return "shell-srv"
-            return "shell-app"
-        if parts[0] == TESTS_ROLE:
-            return "root-tests"
-        if parts[0] == PROTOCOL_PACKAGE:
-            return "protocol-init" if is_package else "protocol"
-        if parts[0] == KERNEL_PACKAGE or (export is not None and parts[0] == export):
-            if is_package:
-                return "kernel-init"
-            if len(parts) == 1:
-                return "kernel-file"
-            return "kernel"
-        if parts[0] not in contexts:
-            return "root"
-        if len(parts) == 1:
-            return "context-init"
-        if parts[1] == TESTS_ROLE:
-            return "context-tests-init" if is_package else "context-tests-stray"
-        if parts[1] in ROLES:
-            if parts[1] == PORTS_PARENT_ROLE and len(parts) >= 3 and parts[2] == PORTS_PACKAGE:
-                if is_package:
-                    return "ports-init"
-                return "ports-file" if len(parts) == 3 else "ports"
-            if (
-                parts[1] == PORTS_PARENT_ROLE
-                and len(parts) >= 3
-                and parts[2] == APPLICATION_CLIENT_PACKAGE
-            ):
-                if is_package:
-                    return "app-client-init"
-                return "app-client-file" if len(parts) == 3 else "app-client"
-            if (
-                parts[1] == PORTS_PARENT_ROLE
-                and len(parts) >= 3
-                and parts[2] == ORCHESTRATORS_PACKAGE
-            ):
-                if is_package:
-                    return "orchestrators-init"
-                return "orchestrators-file" if len(parts) == 3 else "orchestrators"
-            if is_package:
-                return "role-init"
-            return "role-file" if len(parts) == 2 else "role"
-        return "context-stray"
-
     def _module_violations(
         self,
         module: Module,
@@ -5509,7 +5951,7 @@ class Codebase(ts.AggregateRoot):
         contexts: frozenset[str],
     ) -> tuple[Violation, ...]:
         parts = module.name().split(".")
-        place = self._locate(module.name(), module.is_package(), contexts, self._export)  # tesser:debt TB051
+        place = str(module.place())
         if place == "conftest-root":
             return self._conftest_leaf_violations(module)  # tesser:debt TB051
         if place == "conftest":
@@ -5560,7 +6002,7 @@ class Codebase(ts.AggregateRoot):
         if place == "eval":
             return self._eval_module_violations(module, blocks, contexts)  # tesser:debt TB051
         if place == "shell-init":
-            return self._app_init_violations(module)  # tesser:debt TB051
+            return SHELL_INIT.violations(module)
         if place == "shell-srv":
             return self._srv_module_violations(module, blocks) + self._app_import_violations(  # tesser:debt TB051
                 module, parts[0], contexts, blocks
@@ -5572,7 +6014,7 @@ class Codebase(ts.AggregateRoot):
         if place == "root-tests":
             return self._tests_package_violations(module, contexts)  # tesser:debt TB051
         if place == "protocol-init":
-            return self._protocol_init_violations(module)  # tesser:debt TB051
+            return PROTOCOL_INIT.violations(module)
         if place == "protocol":
             return self._protocol_module_violations(module, blocks, contexts)  # tesser:debt TB051
         if place == "root":
@@ -5598,9 +6040,9 @@ class Codebase(ts.AggregateRoot):
                 module
             )
         if place == "context-init":
-            return self._context_init_violations(module)  # tesser:debt TB051
+            return CONTEXT_INIT.violations(module)
         if place == "context-tests-init":
-            return self._context_tests_init_violations(module)  # tesser:debt TB051
+            return CONTEXT_TESTS_INIT.violations(module)
         if place == "context-tests-stray":
             return (
                 Violation(ViolationSpec(
@@ -5623,7 +6065,7 @@ class Codebase(ts.AggregateRoot):
                 )),
             )
         if place == "ports-init":
-            return self._ports_init_violations(module)  # tesser:debt TB051
+            return PORTS_INIT.violations(module)
         if place == "ports-file":
             return (
                 Violation(ViolationSpec(
@@ -5649,7 +6091,7 @@ class Codebase(ts.AggregateRoot):
                 )),
             )
         if place == "app-client-init":
-            return self._package_init_violations(module, "an application client package")  # tesser:debt TB051
+            return APPLICATION_CLIENT_INIT.violations(module)
         if place == "app-client-file":
             return (
                 Violation(ViolationSpec(
@@ -5663,7 +6105,7 @@ class Codebase(ts.AggregateRoot):
         if place == "app-client":
             return self._application_client_module_violations(module, blocks)  # tesser:debt TB051
         if place == "orchestrators-init":
-            return self._package_init_violations(module, "an orchestrators package")  # tesser:debt TB051
+            return ORCHESTRATORS_INIT.violations(module)
         if place == "orchestrators-file":
             return (
                 Violation(ViolationSpec(
@@ -5699,28 +6141,6 @@ class Codebase(ts.AggregateRoot):
                 f"{module.name()} is not a context module; "
                 "a context holds only domain, application, client, adapters, component, and tests modules",
             )),
-        )
-
-    def _context_init_violations(self, module: Module) -> tuple[Violation, ...]:
-        return tuple(
-            Violation(ViolationSpec(
-                module.path(),
-                stmt.lineno,
-                "TB042",
-                f"{module.name()} __init__ declares code; a context __init__ is empty",
-            ))
-            for stmt in module.body()
-        )
-
-    def _protocol_init_violations(self, module: Module) -> tuple[Violation, ...]:
-        return tuple(
-            Violation(ViolationSpec(
-                module.path(),
-                stmt.lineno,
-                "TB042",
-                f"{module.name()} __init__ declares code; a protocol __init__ is empty",
-            ))
-            for stmt in module.body()
         )
 
     def _declaration_violations(self) -> tuple[Violation, ...]:
@@ -6003,17 +6423,6 @@ class Codebase(ts.AggregateRoot):
             )),
         ) + self._test_placement_violations(module, "", ROOT_TESTS_TIER, contexts)  # tesser:debt TB051
 
-    def _context_tests_init_violations(self, module: Module) -> tuple[Violation, ...]:
-        return tuple(
-            Violation(ViolationSpec(
-                module.path(),
-                stmt.lineno,
-                "TB042",
-                f"{module.name()} __init__ declares code; a context tests __init__ is empty",
-            ))
-            for stmt in module.body()
-        )
-
     def _role_init_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
         for stmt in module.body():
@@ -6041,7 +6450,7 @@ class Codebase(ts.AggregateRoot):
                     ))
                 )
             found.extend(edge.member_form_violations())
-            found.extend(self._form_violations(module, edge))  # tesser:debt TB051
+            found.extend(edge.form_violations())
         return tuple(found)
 
     def _tesser_init_violations(self, module: Module) -> tuple[Violation, ...]:
@@ -6175,33 +6584,14 @@ class Codebase(ts.AggregateRoot):
                             "value objects, entities, aggregates, and specs",
                         ))
                     )
-        found.extend(
-            self._module_function_violations(module, "kernel")  # tesser:debt TB051
-        )
-        found.extend(
-            self._statement_violations(  # tesser:debt TB051
-                module,
-                "kernel",
-                "a kernel module holds only imports, classes, and Final constants",
-                None,
-            )
-        )
+        found.extend(KERNEL_FUNCTIONS.violations(module))
+        found.extend(KERNEL_STATEMENTS.violations(module))
         return tuple(found)
 
     def _kernel_import_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
         found.extend(module.stray_import_violations())
-        found.extend(
-            self._tesser_import_violations(  # tesser:debt TB051
-                module,
-                "kernel",
-                ROLE_TESSER_PACKAGE["domain"],
-                "a kernel module imports only tesser.domain",
-                "a kernel module imports tesser.domain exactly once, as ts",
-                "a kernel module imports tesser.domain exactly once, as ts",
-                norms=NORM_IMPORTS["domain"],
-            )
-        )
+        found.extend(KERNEL_TESSER_IMPORTS.violations(module))
         own = (
             frozenset({self._export})
             if module.name().split(".")[0] == self._export
@@ -6240,191 +6630,6 @@ class Codebase(ts.AggregateRoot):
                     "kernel, tesser.domain, declared kernels, and the pure stdlib",
                 ))
             )
-        return tuple(found)
-
-    def _app_init_violations(self, module: Module) -> tuple[Violation, ...]:
-        return tuple(
-            Violation(ViolationSpec(
-                module.path(),
-                stmt.lineno,
-                "TB042",
-                f"{module.name()} __init__ declares code; a srv or app __init__ is empty",
-            ))
-            for stmt in module.body()
-        )
-
-    @staticmethod
-    def _tesser_import_violations(
-        module: Module,
-        subject: str,
-        package: str,
-        only_clause: str,
-        once_clause: str,
-        absent_clause: str | None,
-        norms: frozenset[str] = frozenset(),
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        seen_own = False
-        seen_any = False
-        for imp in module.tesser_imports():
-            target = str(imp._target)
-            lineno = int(imp._lineno)
-            if target in norms:
-                if str(imp._form) == "bare":
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            lineno,
-                            "TB050",
-                            f"{module.name()} imports {target} without an alias; a norm "
-                            "module is imported as an aliased module — a bare import binds "
-                            "the whole tesser package, and the ts alias belongs to the "
-                            "placement's own package",
-                        ))
-                    )
-                continue
-            seen_any = True
-            if target != package:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB050",
-                        f"{module.name()} imports {target}; {only_clause}",
-                    ))
-                )
-            elif seen_own:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lineno,
-                        "TB050",
-                        f"{module.name()} imports {target} again; {once_clause}",
-                    ))
-                )
-            else:
-                seen_own = True
-                if str(imp._form) == "from":
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            lineno,
-                            "TB050",
-                            f"{module.name()} imports names from {target}; {once_clause}",
-                        ))
-                    )
-                elif str(imp._form) in ("alias", "bare"):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            lineno,
-                            "TB050",
-                            f"{module.name()} imports {target} without the ts alias; {once_clause}",
-                        ))
-                    )
-        if absent_clause is not None and not seen_any:
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    1,
-                    "TB050",
-                    f"{module.name()} never imports {package}; {absent_clause}",
-                ))
-            )
-        return tuple(found)
-
-    def _module_function_violations(self, module: Module, subject: str) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for stmt in module.body():
-            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        stmt.lineno,
-                        "TB051",
-                        f"{module.name()}.{stmt.name} is a module function; "
-                        f"a {subject} module holds classes, never functions",
-                    ))
-                )
-        return tuple(found)
-
-    def _statement_violations(
-        self,
-        module: Module,
-        subject: str,
-        loose_clause: str,
-        entry: str | None,
-    ) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for stmt in module.body():
-            if isinstance(stmt, (ast.Import, ast.ImportFrom, ast.ClassDef)):
-                continue
-            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                continue
-            if (
-                entry is not None
-                and isinstance(stmt, ast.If)
-                and isinstance(stmt.test, ast.Compare)
-                and isinstance(stmt.test.left, ast.Name)
-                and stmt.test.left.id == "__name__"
-                and len(stmt.test.ops) == 1
-                and isinstance(stmt.test.ops[0], ast.Eq)
-                and len(stmt.test.comparators) == 1
-                and isinstance(stmt.test.comparators[0], ast.Constant)
-                and stmt.test.comparators[0].value == "__main__"
-            ):
-                if not (
-                    not stmt.orelse
-                    and len(stmt.body) == 1
-                    and isinstance(stmt.body[0], ast.Expr)
-                    and isinstance(stmt.body[0].value, ast.Call)
-                    and module._resolve(stmt.body[0].value.func) == TESSER_ENTRY
-                ):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            stmt.lineno,
-                            "TB051",
-                            f"{module.name()} has a __main__ guard holding more than "
-                            f"{entry}(run); a srv module's entry point is {entry}(run) "
-                            "and nothing else",
-                        ))
-                    )
-                continue
-            if isinstance(stmt, ast.AnnAssign):
-                annotation = ast.unparse(stmt.annotation)
-                if not (
-                    annotation in ("Final", "typing.Final")
-                    or annotation.startswith(("Final[", "typing.Final["))
-                ):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            stmt.lineno,
-                            "TB051",
-                            f"{module.name()} declares a module constant without Final; "
-                            f"{subject} constants are Final",
-                        ))
-                    )
-            elif isinstance(stmt, ast.Assign):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        stmt.lineno,
-                        "TB051",
-                        f"{module.name()} declares a module constant without Final; "
-                        f"{subject} constants are Final",
-                    ))
-                )
-            else:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        stmt.lineno,
-                        "TB051",
-                        f"{module.name()} has a loose module-level statement; {loose_clause}",
-                    ))
-                )
         return tuple(found)
 
     @staticmethod
@@ -6948,18 +7153,7 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         found.extend(module.stray_import_violations())
-        found.extend(
-            self._tesser_import_violations(  # tesser:debt TB051
-                module,
-                "app",
-                "tesser.app",
-                "an app module's tesser imports are tesser.app, "
-                "and tesser.errors",
-                "an app module imports tesser.app exactly once, as ts",
-                "an app module imports tesser.app exactly once, as ts",
-                NORM_IMPORTS["app"],
-            )
-        )
+        found.extend(APP_TESSER_IMPORTS.violations(module))
         for stmt in module.body():
             if isinstance(stmt, ast.FunctionDef) and not (any(
                         key is not None and TESSER_DECORATORS.get(key) == ("load")
@@ -6998,14 +7192,7 @@ class Codebase(ts.AggregateRoot):
                             "app module",
                         ))
                     )
-        found.extend(
-            self._statement_violations(  # tesser:debt TB051
-                module,
-                "app",
-                "an app module holds only imports, classes, declared functions, and Final constants",
-                None,
-            )
-        )
+        found.extend(APP_STATEMENTS.violations(module))
         return tuple(found)
 
     def _srv_module_violations(
@@ -7015,18 +7202,7 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         found.extend(module.stray_import_violations())
-        found.extend(
-            self._tesser_import_violations(  # tesser:debt TB051
-                module,
-                "srv",
-                "tesser.srv",
-                "a srv module's tesser imports are tesser.srv, "
-                "and tesser.errors",
-                "a srv module imports tesser.srv exactly once, as ts",
-                "a srv module imports tesser.srv exactly once, as ts",
-                NORM_IMPORTS["srv"],
-            )
-        )
+        found.extend(SRV_TESSER_IMPORTS.violations(module))
         for stmt in module.body():
             if isinstance(stmt, ast.ClassDef):
                 block = blocks.get((module.name(), stmt.name))
@@ -7049,17 +7225,8 @@ class Codebase(ts.AggregateRoot):
                             f"{where} is {KIND_NAME[block]}; only a host class lives in a srv module",
                         ))
                     )
-        found.extend(
-            self._module_function_violations(module, "srv")  # tesser:debt TB051
-        )
-        found.extend(
-            self._statement_violations(  # tesser:debt TB051
-                module,
-                "srv",
-                "a srv module holds only imports, declared classes, and Final constants",
-                "ts.main",
-            )
-        )
+        found.extend(SRV_FUNCTIONS.violations(module))
+        found.extend(SRV_STATEMENTS.violations(module))
         return tuple(found)
 
     def _protocol_module_violations(
@@ -7070,16 +7237,7 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         found.extend(module.stray_import_violations())
-        found.extend(
-            self._tesser_import_violations(  # tesser:debt TB051
-                module,
-                "protocol",
-                "tesser.srv",
-                "a protocol module imports only tesser.srv",
-                "a protocol module imports tesser.srv exactly once, as ts",
-                "a protocol module imports tesser.srv exactly once, as ts",
-            )
-        )
+        found.extend(PROTOCOL_TESSER_IMPORTS.violations(module))
         for edge in module.import_edges():
             target = str(edge._target)
             lineno = int(edge._lineno)
@@ -7137,17 +7295,8 @@ class Codebase(ts.AggregateRoot):
                             "protocol rejections, protocol requests, and protocol responses live in a protocol module",
                         ))
                     )
-        found.extend(
-            self._module_function_violations(module, "protocol")  # tesser:debt TB051
-        )
-        found.extend(
-            self._statement_violations(  # tesser:debt TB051
-                module,
-                "protocol",
-                "a protocol module holds only imports, declared classes, and Final constants",
-                None,
-            )
-        )
+        found.extend(PROTOCOL_FUNCTIONS.violations(module))
+        found.extend(PROTOCOL_STATEMENTS.violations(module))
         return tuple(found)
 
     @classmethod
@@ -7185,28 +7334,6 @@ class Codebase(ts.AggregateRoot):
             return node.attr in ("Optional", "Union")
         return False
 
-    def _ports_init_violations(self, module: Module) -> tuple[Violation, ...]:
-        return tuple(
-            Violation(ViolationSpec(
-                module.path(),
-                stmt.lineno,
-                "TB042",
-                f"{module.name()} __init__ declares code; a ports __init__ is empty",
-            ))
-            for stmt in module.body()
-        )
-
-    def _package_init_violations(self, module: Module, subject: str) -> tuple[Violation, ...]:
-        return tuple(
-            Violation(ViolationSpec(
-                module.path(),
-                stmt.lineno,
-                "TB042",
-                f"{module.name()} __init__ declares code; {subject} __init__ is empty",
-            ))
-            for stmt in module.body()
-        )
-
     def _application_client_module_violations(
         self,
         module: Module,
@@ -7214,16 +7341,7 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         found.extend(module.stray_import_violations())
-        found.extend(
-            self._tesser_import_violations(  # tesser:debt TB051
-                module,
-                "application client",
-                ROLE_TESSER_PACKAGE[PORTS_PARENT_ROLE],
-                "an application client module imports only tesser.application",
-                "an application client module imports tesser.application exactly once, as ts",
-                "an application client module imports tesser.application exactly once, as ts",
-            )
-        )
+        found.extend(APPLICATION_CLIENT_TESSER_IMPORTS.violations(module))
         tops = frozenset(each.name().split(".")[0] for each in self._modules)
         spoken = 0
         for edge in module.import_edges():
@@ -7247,7 +7365,7 @@ class Codebase(ts.AggregateRoot):
                             ))
                         )
                     else:
-                        found.extend(self._form_violations(module, edge))  # tesser:debt TB051
+                        found.extend(edge.form_violations())
                     continue
                 found.append(
                     Violation(ViolationSpec(
@@ -7518,16 +7636,7 @@ class Codebase(ts.AggregateRoot):
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
         found.extend(module.stray_import_violations())
-        found.extend(
-            self._tesser_import_violations(  # tesser:debt TB051
-                module,
-                "ports",
-                ROLE_TESSER_PACKAGE[PORTS_PARENT_ROLE],
-                "a ports module imports only tesser.application",
-                "a ports module imports tesser.application exactly once, as ts",
-                "a ports module imports tesser.application exactly once, as ts",
-            )
-        )
+        found.extend(PORTS_TESSER_IMPORTS.violations(module))
         for edge in module.import_edges():
             target = str(edge._target)
             lineno = int(edge._lineno)
@@ -8014,17 +8123,8 @@ class Codebase(ts.AggregateRoot):
                             "a kind lives only in its role module",
                         ))
                     )
-        found.extend(
-            self._module_function_violations(module, "context role")  # tesser:debt TB051
-        )
-        found.extend(
-            self._statement_violations(  # tesser:debt TB051
-                module,
-                "module",
-                "a context module holds only imports, classes, and Final constants",
-                None,
-            )
-        )
+        found.extend(CONTEXT_FUNCTIONS.violations(module))
+        found.extend(CONTEXT_STATEMENTS.violations(module))
         if role == "adapters":
             kinds = {
                 blocks.get((module.name(), cls.name)) for cls in module.class_defs()
@@ -8074,68 +8174,15 @@ class Codebase(ts.AggregateRoot):
                     blocks.get((module.name(), cls.name)) == ("gateway") for cls in module.class_defs()
                 ))
         if role == "domain":
-            found.extend(
-                self._tesser_import_violations(  # tesser:debt TB051
-                    module,
-                    "role",
-                    ROLE_TESSER_PACKAGE[role],
-                    "a domain module's tesser imports are tesser.domain, "
-                    "tesser.errors, and tesser.serialization",
-                    "a role module imports its tesser package exactly once, as ts",
-                    "a role module imports its tesser package exactly once, as ts",
-                    NORM_IMPORTS[role],
-                )
-            )
+            found.extend(DOMAIN_TESSER_IMPORTS.violations(module))
         elif role == "application":
-            found.extend(
-                self._tesser_import_violations(  # tesser:debt TB051
-                    module,
-                    "role",
-                    ROLE_TESSER_PACKAGE[role],
-                    "an application module's tesser imports are "
-                    "tesser.application and tesser.errors",
-                    "a role module imports its tesser package exactly once, as ts",
-                    "a role module imports its tesser package exactly once, as ts",
-                    NORM_IMPORTS[role],
-                )
-            )
+            found.extend(APPLICATION_TESSER_IMPORTS.violations(module))
         elif role == "adapters":
-            found.extend(
-                self._tesser_import_violations(  # tesser:debt TB051
-                    module,
-                    "role",
-                    ROLE_TESSER_PACKAGE[role],
-                    "an adapters module's tesser imports are "
-                    "tesser.adapters and tesser.errors",
-                    "a role module imports its tesser package exactly once, as ts",
-                    "a role module imports its tesser package exactly once, as ts",
-                    NORM_IMPORTS[role],
-                )
-            )
+            found.extend(ADAPTERS_TESSER_IMPORTS.violations(module))
         elif role == "component":
-            found.extend(
-                self._tesser_import_violations(  # tesser:debt TB051
-                    module,
-                    "role",
-                    ROLE_TESSER_PACKAGE[role],
-                    "a component module's tesser imports are tesser.component, "
-                    "and tesser.errors",
-                    "a role module imports its tesser package exactly once, as ts",
-                    "a role module imports its tesser package exactly once, as ts",
-                    NORM_IMPORTS[role],
-                )
-            )
+            found.extend(COMPONENT_TESSER_IMPORTS.violations(module))
         else:
-            found.extend(
-                self._tesser_import_violations(  # tesser:debt TB051
-                    module,
-                    "role",
-                    ROLE_TESSER_PACKAGE[role],
-                    "a role module imports only its own tesser package",
-                    "a role module imports its tesser package exactly once, as ts",
-                    "a role module imports its tesser package exactly once, as ts",
-                )
-            )
+            found.extend(CLIENT_TESSER_IMPORTS.violations(module))
         for edge in module.import_edges():
             target = str(edge._target)
             lineno = int(edge._lineno)
@@ -8211,7 +8258,7 @@ class Codebase(ts.AggregateRoot):
                     )
                 found.extend(denied)
                 if not denied:
-                    found.extend(self._form_violations(module, edge))  # tesser:debt TB051
+                    found.extend(edge.form_violations())
             elif pieces[0] in ((
                         frozenset({KERNEL_PACKAGE})
                         | (frozenset({self._export}) if self._export is not None else frozenset())
@@ -8310,7 +8357,7 @@ class Codebase(ts.AggregateRoot):
                     )
                 found.extend(denied)
                 if not denied:
-                    found.extend(self._form_violations(module, edge))  # tesser:debt TB051
+                    found.extend(edge.form_violations())
             elif package == "app" and pieces[0] == "srv":
                 found.append(
                     Violation(ViolationSpec(
@@ -8636,20 +8683,9 @@ class Codebase(ts.AggregateRoot):
         found.extend(self._test_placement_violations(module, placement[0], placement[1], contexts))  # tesser:debt TB051
         for edge in module.import_edges():
             if str(edge._target).split(".")[0] in contexts:
-                found.extend(self._form_violations(module, edge))  # tesser:debt TB051
+                found.extend(edge.form_violations())
         if self._export != TESSER:
-            found.extend(
-                self._tesser_import_violations(  # tesser:debt TB051
-                    module,
-                    "test",
-                    "tesser.testing",
-                    "a test module's tesser imports are tesser.testing, "
-                    "tesser.errors, and tesser.serialization",
-                    "a test module imports tesser.testing at most once, as ts",
-                    None,
-                    NORM_IMPORTS["test"],
-                )
-            )
+            found.extend(TEST_TESSER_IMPORTS.violations(module))
         for stmt in module.body():
             if isinstance(stmt, (ast.Import, ast.ImportFrom)):
                 continue
@@ -9461,23 +9497,6 @@ class Codebase(ts.AggregateRoot):
             return False
         key = module._resolve(node)
         return key is not None and blocks.get(key) == OUTCOME_BLOCK
-
-    @staticmethod
-    def _form_violations(module: Module, edge: ImportEdge) -> tuple[Violation, ...]:
-        target = str(edge._target)
-        lineno = int(edge._lineno)
-        if str(edge._form) == "bare":
-            return (
-                Violation(ViolationSpec(
-                    module.path(),
-                    lineno,
-                    "TB053",
-                    f"{module.name()} imports {target} without an alias; "
-                    "a context module is imported as an aliased module — the analyzer "
-                    "resolves a name as attribute over alias",
-                )),
-            )
-        return ()
 
     def _allowed_annotation(
         self,

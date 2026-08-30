@@ -178,7 +178,7 @@ def test_locate_is_the_single_routing_decision() -> None:
         ("kernel.conftest", False, "conftest"),
     )
     for name, is_package, expected in table:
-        got = checks.Codebase._locate(name, is_package, contexts)
+        got = str(checks.Placement(checks.PlacementSpec(name, is_package, tuple(sorted(contexts)))))
         assert got == expected, (
             f"_locate({name!r}, is_package={is_package}) = {got!r}, expected {expected!r}"
         )
@@ -190,16 +190,16 @@ def test_locate_is_the_single_routing_decision() -> None:
         ("shells.test_base", False, "test"),
     )
     for name, is_package, expected in exported:
-        got = checks.Codebase._locate(name, is_package, contexts, "shells")
+        got = str(checks.Placement(checks.PlacementSpec(name, is_package, tuple(sorted(contexts)), "shells")))
         assert got == expected, (
             f"_locate({name!r}, is_package={is_package}, export='shells') = {got!r}, "
             f"expected {expected!r}"
         )
-    assert checks.Codebase._locate("shells.thing", False, contexts) == "root", (
+    assert str(checks.Placement(checks.PlacementSpec("shells.thing", False, tuple(sorted(contexts))))) == "root", (
         "an undeclared export directory must classify as it always did"
     )
     locate_tree = ast.parse(
-        textwrap.dedent(inspect.getsource(checks.Codebase._locate))
+        textwrap.dedent(inspect.getsource(checks.Placement.__init__))
     )
     locate = next(
         node for node in locate_tree.body if isinstance(node, ast.FunctionDef)
@@ -221,7 +221,7 @@ def test_locate_is_the_single_routing_decision() -> None:
 
 def test_every_location_token_has_a_dispatch_arm() -> None:
     locate_tree = ast.parse(
-        textwrap.dedent(inspect.getsource(checks.Codebase._locate))
+        textwrap.dedent(inspect.getsource(checks.Placement.__init__))
     )
     locate = next(
         node for node in locate_tree.body if isinstance(node, ast.FunctionDef)
