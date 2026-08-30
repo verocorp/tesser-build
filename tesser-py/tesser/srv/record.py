@@ -7,10 +7,15 @@ def _is_field(annotation: object) -> bool:
     return not str(annotation).replace("typing.", "").startswith(_NOT_A_FIELD)
 
 
+def _own_annotations(cls: type) -> dict[str, object]:
+    annotations: dict[str, object] = getattr(cls, "__annotations__", {})
+    return annotations
+
+
 def _declared_fields(cls: type) -> set[str]:
     fields: set[str] = set()
     for base in cls.__mro__:
-        for name, annotation in getattr(base, "__annotations__", {}).items():
+        for name, annotation in _own_annotations(base).items():
             if _is_field(annotation):
                 fields.add(name)
     return fields
@@ -34,7 +39,7 @@ class Record:
                         f"{cls.__name__} must not override {name}: "
                         "Record owns the record contract"
                     )
-            for name, annotation in base.__dict__.get("__annotations__", {}).items():
+            for name, annotation in _own_annotations(base).items():
                 if name in base.__dict__ and _is_field(annotation):
                     raise TypeError(
                         f"{cls.__name__} gives field {name!r} a class-level default: "

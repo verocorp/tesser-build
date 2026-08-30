@@ -16,5 +16,7 @@ dist/
 build/
 *.egg-info/
 
-# Local verify environment (scripts/install-dev).
-.venv/
+# Local verify environments (scripts/install-dev). The glob, not just .venv/:
+# the tesser-py matrix runs three interpreters, so verifying it locally means
+# three environments side by side.
+.venv*/
