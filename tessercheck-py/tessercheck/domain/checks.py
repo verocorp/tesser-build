@@ -885,11 +885,15 @@ class Debt(ts.ValueObject):
 
 class ImportEdgeSpec(ts.Spec):
 
-    def __init__(self, target: str, lineno: int, member_form: bool, aliased: bool) -> None:
+    def __init__(
+        self, target: str, lineno: int, member_form: bool, aliased: bool, path: str = "", module: str = ""
+    ) -> None:
         self.target = target
         self.lineno = lineno
         self.member_form = member_form
         self.aliased = aliased
+        self.path = path
+        self.module = module
 
 
 class ImportEdge(ts.ValueObject):
@@ -897,6 +901,8 @@ class ImportEdge(ts.ValueObject):
     _target: Target
     _lineno: Line
     _form: EdgeForm
+    _path: Path | None
+    _module: Text | None
 
     def __init__(self, spec: ImportEdgeSpec) -> None:
         object.__setattr__(self, "_target", Target(spec.target))
@@ -906,6 +912,25 @@ class ImportEdge(ts.ValueObject):
             "_form",
             EdgeForm("member" if spec.member_form else "aliased" if spec.aliased else "bare"),
         )
+        object.__setattr__(self, "_path", Path(spec.path) if spec.path else None)
+        object.__setattr__(self, "_module", Text(spec.module) if spec.module else None)
+
+    def member_form_violations(self) -> tuple[Violation, ...]:
+        name = str(self._module)
+        target = str(self._target)
+        if str(self._form) != "member" or target == FUTURE_MODULE:
+            return ()
+        return (
+            Violation(ViolationSpec(
+                str(self._path),
+                int(self._lineno),
+                "TB053",
+                f"{name} imports names from {target}; "
+                "every import is a module import — import x or import x as name, "
+                "never from x import name",
+            )),
+        )
+
 
 
 class TesserImportSpec(ts.Spec):
@@ -3890,7 +3915,7 @@ class Module(ts.Entity):
                     if id(node) in top_level:
                         self._package_aliases[alias.asname or alias.name] = alias.name
                     edges.append(
-                        ImportEdge(ImportEdgeSpec(alias.name, node.lineno, False, alias.asname is not None))
+                        ImportEdge(ImportEdgeSpec(alias.name, node.lineno, False, alias.asname is not None, spec.path, spec.name))
                     )
             elif isinstance(node, ast.ImportFrom):
                 if node.level > len(self._package):
@@ -3907,13 +3932,13 @@ class Module(ts.Entity):
                         target = ".".join(base + (alias.name,))
                         if id(node) in top_level:
                             self._package_aliases[alias.asname or alias.name] = target
-                        edges.append(ImportEdge(ImportEdgeSpec(target, node.lineno, True, False)))
+                        edges.append(ImportEdge(ImportEdgeSpec(target, node.lineno, True, False, spec.path, spec.name)))
                     continue
                 target = ".".join(base + (node.module,))
                 for alias in node.names:
                     if id(node) in top_level:
                         self._imported[alias.asname or alias.name] = (target, alias.name)
-                edges.append(ImportEdge(ImportEdgeSpec(target, node.lineno, True, False)))
+                edges.append(ImportEdge(ImportEdgeSpec(target, node.lineno, True, False, spec.path, spec.name)))
                 if target.split(".")[0] == TESSER:
                     if id(node) in top_level:
                         tesser_imports.append(TesserImport(TesserImportSpec(target, node.lineno, False, True)))
@@ -3956,7 +3981,7 @@ class Module(ts.Entity):
         return Text(self._spoken) if self._spoken else None
 
     def outcome_use_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
-        name = self._name
+        module_name = self._name
         path = self._path
         kinds = Registry(registry).kinds()
         scope = self._scope
@@ -4089,7 +4114,7 @@ class Module(ts.Entity):
                                 path,
                                 node.lineno,
                                 "TB084",
-                                f"{name}.{taker} takes an outcome; an outcome is returned "
+                                f"{module_name}.{taker} takes an outcome; an outcome is returned "
                                 "and matched, never passed on, because it lives between the return "
                                 "and the match",
                             ))
@@ -4105,7 +4130,7 @@ class Module(ts.Entity):
                             path,
                             node.lineno,
                             "TB084",
-                            f"{name} keeps an outcome on {kept}; "
+                            f"{module_name} keeps an outcome on {kept}; "
                             "an outcome is returned and matched, never kept, because what must "
                             "be kept is state, on a spec with an exit",
                         ))
@@ -4175,7 +4200,7 @@ class Module(ts.Entity):
                                     path,
                                     assignment.lineno,
                                     "TB084",
-                                    f"{name} keeps an outcome on {kept}; "
+                                    f"{module_name} keeps an outcome on {kept}; "
                                     "an outcome is returned and matched, never kept, because what must "
                                     "be kept is state, on a spec with an exit",
                                 ))
@@ -4190,7 +4215,7 @@ class Module(ts.Entity):
                             path,
                             node.lineno,
                             "TB084",
-                            f"{name} reads {sunder}; an outcome is matched, never read, "
+                            f"{module_name} reads {sunder}; an outcome is matched, never read, "
                             "because its value and name are the exhaustiveness the type checker "
                             "cannot see",
                         ))
@@ -4215,7 +4240,7 @@ class Module(ts.Entity):
                                 path,
                                 case.pattern.lineno,
                                 "TB084",
-                                f"{name} mixes a pattern into an outcome match; "
+                                f"{module_name} mixes a pattern into an outcome match; "
                                 "every arm before the closer names members, because a class, "
                                 "capture, or guarded arm swallows a member added later",
                             ))
@@ -4226,7 +4251,7 @@ class Module(ts.Entity):
                             path,
                             node.lineno,
                             "TB084",
-                            f"{name} matches an outcome without closing on assert_never; "
+                            f"{module_name} matches an outcome without closing on assert_never; "
                             "a match on an outcome ends in `case _ as never: assert_never(never)`, "
                             "because a member added later is otherwise a silent site",
                         ))
@@ -4246,7 +4271,7 @@ class Module(ts.Entity):
                     path,
                     node.lineno,
                     "TB084",
-                    f"{name} names {outcome}.{member} outside a match; "
+                    f"{module_name} names {outcome}.{member} outside a match; "
                     "an outcome member is read only by a match, because a member compared "
                     "anywhere else is a branch the type checker cannot exhaust",
                 ))
@@ -4263,11 +4288,539 @@ class Module(ts.Entity):
                     path,
                     node.lineno,
                     "TB084",
-                    f"{name} reaches into {outcome}; an outcome class is named only "
+                    f"{module_name} reaches into {outcome}; an outcome class is named only "
                     "in an annotation, a return, or a case pattern, because indexing, getattr, "
                     "and iteration read members the type checker cannot exhaust",
                 ))
             )
+        return tuple(found)
+
+    def comment_violations(self) -> tuple[Violation, ...]:
+        module_name = self._name
+        found: list[Violation] = []
+        for comment in self._comments:
+            if DIRECTIVE.match(str(comment._text)):
+                continue
+            if int(comment._line) <= 2 and CODING_DECL.match(str(comment._text)):
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    int(comment._line),
+                    "TB020",
+                    f"{module_name} carries a code comment; code speaks for itself — "
+                    "comments, docstrings, and loose strings belong in the doc layer",
+                ))
+            )
+        doc_ids: set[int] = set()
+        body = self._body
+        if body and (isinstance((body[0]), ast.Expr)
+                    and isinstance((body[0]).value, ast.Constant)
+                    and isinstance((body[0]).value.value, str)):
+            doc_ids.add(id(body[0]))
+        for stmt in body:
+            for node in ast.walk(stmt):
+                if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                    if node.body and (isinstance((node.body[0]), ast.Expr)
+                                and isinstance((node.body[0]).value, ast.Constant)
+                                and isinstance((node.body[0]).value.value, str)):
+                        doc_ids.add(id(node.body[0]))
+        for stmt in body:
+            for node in ast.walk(stmt):
+                if not (isinstance(node, ast.Expr)
+                            and isinstance(node.value, ast.Constant)
+                            and isinstance(node.value.value, str)):
+                    continue
+                kind = "a docstring" if id(node) in doc_ids else "a bare string statement"
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        node.lineno,
+                        "TB020",
+                        f"{module_name} carries {kind}; code speaks for itself — "
+                        "comments, docstrings, and loose strings belong in the doc layer",
+                    ))
+                )
+        return tuple(found)
+
+    def double_violations(self) -> tuple[Violation, ...]:
+        module_name = self._name
+        found: list[Violation] = []
+        for stmt in self._body:
+            for node in ast.walk(stmt):
+                if isinstance(node, ast.ImportFrom):
+                    target = node.module or ""
+                    if (any(
+                                target == banned or target.startswith(banned + ".") for banned in MOCK_MODULES
+                            )) or (
+                        target == "unittest" and any(alias.name == "mock" for alias in node.names)
+                    ):
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                node.lineno,
+                                "TB030",
+                                f"{module_name} imports a mocking library; a test double is "
+                                "a hand-written fake, never a mocking library or a runtime patcher",
+                            ))
+                        )
+                    elif target in ("pytest", "_pytest.monkeypatch") and any(
+                        alias.name == "MonkeyPatch" for alias in node.names
+                    ):
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                node.lineno,
+                                "TB030",
+                                f"{module_name} reaches for pytest MonkeyPatch; a test double is "
+                                "a hand-written fake, never a mocking library or a runtime patcher",
+                            ))
+                        )
+                elif isinstance(node, ast.Import):
+                    if any((any(
+                                alias.name == banned or alias.name.startswith(banned + ".") for banned in MOCK_MODULES
+                            )) for alias in node.names):
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                node.lineno,
+                                "TB030",
+                                f"{module_name} imports a mocking library; a test double is "
+                                "a hand-written fake, never a mocking library or a runtime patcher",
+                            ))
+                        )
+                elif isinstance(node, ast.Attribute):
+                    if (
+                        node.attr == "mock"
+                        and isinstance(node.value, ast.Name)
+                        and node.value.id == "unittest"
+                    ):
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                node.lineno,
+                                "TB030",
+                                f"{module_name} imports a mocking library; a test double is "
+                                "a hand-written fake, never a mocking library or a runtime patcher",
+                            ))
+                        )
+                    elif (
+                        node.attr == "MonkeyPatch"
+                        and isinstance(node.value, ast.Name)
+                        and node.value.id == "pytest"
+                    ):
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                node.lineno,
+                                "TB030",
+                                f"{module_name} reaches for pytest MonkeyPatch; a test double is "
+                                "a hand-written fake, never a mocking library or a runtime patcher",
+                            ))
+                        )
+                elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    if not (
+                        node.name.startswith("test_")
+                        or any(
+                            (
+                                isinstance(target, ast.Attribute)
+                                and target.attr == "fixture"
+                            )
+                            or (isinstance(target, ast.Name) and target.id == "fixture")
+                            for target in (
+                                decorator.func
+                                if isinstance(decorator, ast.Call)
+                                else decorator
+                                for decorator in node.decorator_list
+                            )
+                        )
+                    ):
+                        continue
+                    args = node.args
+                    for arg in (*args.posonlyargs, *args.args, *args.kwonlyargs):
+                        if arg.arg in PATCHER_FIXTURES:
+                            found.append(
+                                Violation(ViolationSpec(
+                                    self._path,
+                                    arg.lineno,
+                                    "TB030",
+                                    f"{module_name}.{node.name} takes the {arg.arg} fixture; "
+                                    "a test double is a hand-written fake, never a mocking "
+                                    "library or a runtime patcher",
+                                ))
+                            )
+        return tuple(found)
+
+    def shadowing_violations(self) -> tuple[Violation, ...]:
+        module_name = self._name
+        found: list[Violation] = []
+        scopes: list[tuple[ast.AST | None, list[ast.AST]]] = [
+            (None, [stmt for stmt in self._body])
+        ]
+        for stmt in self._body:
+            for node in ast.walk(stmt):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    scopes.append((node, list(node.body)))
+                elif isinstance(node, ast.Lambda):
+                    scopes.append((node, [node.body]))
+        for holder, roots in scopes:
+            items: list[ast.AST] = []
+            stack: list[ast.AST] = list(roots)
+            while stack:
+                item = stack.pop()
+                if isinstance(
+                    item,
+                    (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda),
+                ):
+                    continue
+                items.append(item)
+                stack.extend(ast.iter_child_nodes(item))
+            shadowed: set[str] = set()
+            if isinstance(
+                holder, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+            ):
+                args = holder.args
+                for arg in (*args.posonlyargs, *args.args, *args.kwonlyargs):
+                    if arg.arg in BUILTIN_NAMES:
+                        shadowed.add(arg.arg)
+                for extra in (args.vararg, args.kwarg):
+                    if extra is not None and extra.arg in BUILTIN_NAMES:
+                        shadowed.add(extra.arg)
+            elsewhere: set[str] = set()
+            for child in items:
+                if isinstance(child, (ast.Global, ast.Nonlocal)):
+                    elsewhere.update(child.names)
+                if (
+                    isinstance(child, ast.ExceptHandler)
+                    and child.name is not None
+                    and child.name in BUILTIN_NAMES
+                ):
+                    shadowed.add(child.name)
+            for child in items:
+                targets: list[ast.expr] = []
+                if isinstance(child, ast.Assign):
+                    targets = list(child.targets)
+                elif isinstance(child, (ast.AnnAssign, ast.AugAssign)):
+                    targets = [child.target]
+                elif isinstance(child, (ast.For, ast.AsyncFor)):
+                    targets = [child.target]
+                elif isinstance(child, ast.NamedExpr):
+                    targets = [child.target]
+                elif isinstance(child, ast.withitem):
+                    targets = [child.optional_vars] if child.optional_vars else []
+                for target in targets:
+                    for name in ast.walk(target):
+                        if (
+                            isinstance(name, ast.Name)
+                            and isinstance(name.ctx, ast.Store)
+                            and name.id in BUILTIN_NAMES
+                        ):
+                            shadowed.add(name.id)
+            bound = frozenset(shadowed - elsewhere)
+            if not bound:
+                continue
+            for child in items:
+                if (
+                    isinstance(child, ast.Call)
+                    and isinstance(child.func, ast.Name)
+                    and child.func.id in bound
+                ):
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            child.lineno,
+                            "TB033",
+                            f"{module_name} binds {child.func.id} and calls it in the same "
+                            "scope; a shadowed builtin is never called — rename the binding",
+                        ))
+                    )
+        return tuple(found)
+
+    def string_equality_violations(self) -> tuple[Violation, ...]:
+        module_name = self._name
+        found: list[Violation] = []
+        for stmt in self._body:
+            for node in ast.walk(stmt):
+                if not isinstance(node, ast.Compare) or len(node.ops) != 1:
+                    continue
+                right = node.comparators[0]
+                if (
+                    isinstance(node.ops[0], ast.Eq)
+                    and (isinstance(node.left, ast.Call) and (
+                                (
+                                    isinstance(node.left.func, ast.Name)
+                                    and node.left.func.id == "str"
+                                    and len(node.left.args) == 1
+                                )
+                                or (isinstance(node.left.func, ast.Attribute) and node.left.func.attr == "__str__")
+                            ))
+                    and (isinstance(right, ast.Call) and (
+                                (
+                                    isinstance(right.func, ast.Name)
+                                    and right.func.id == "str"
+                                    and len(right.args) == 1
+                                )
+                                or (isinstance(right.func, ast.Attribute) and right.func.attr == "__str__")
+                            ))
+                ):
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            node.lineno,
+                            "TB004",
+                            f"{module_name} equates two str() calls; compare value objects "
+                            "by value, never by their string form",
+                        ))
+                    )
+        return tuple(found)
+
+    def sibling_reference_violations(self) -> tuple[Violation, ...]:
+        module_name = self._name
+        def declared(body: list[ast.stmt]) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
+            out: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+            stack: list[ast.AST] = list(body)
+            while stack:
+                cur = stack.pop()
+                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    out.append(cur)
+                    continue
+                if isinstance(cur, (ast.ClassDef, ast.Lambda)):
+                    continue
+                stack.extend(ast.iter_child_nodes(cur))
+            return out
+
+        def receiver(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
+            names = {d.id for d in fn.decorator_list if isinstance(d, ast.Name)}
+            if "staticmethod" in names:
+                return None
+            args = fn.args.posonlyargs + fn.args.args
+            if not args:
+                return None
+            return args[0].arg
+
+        def rebinds(fn: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda, name: str) -> bool:
+            args = fn.args
+            bound = {a.arg for a in args.posonlyargs + args.args + args.kwonlyargs}
+            if args.vararg is not None:
+                bound.add(args.vararg.arg)
+            if args.kwarg is not None:
+                bound.add(args.kwarg.arg)
+            return name in bound
+
+        def reads(fn: ast.FunctionDef | ast.AsyncFunctionDef, name: str) -> list[ast.Attribute]:
+            hits: list[ast.Attribute] = []
+            stack: list[ast.AST] = list(ast.iter_child_nodes(fn))
+            while stack:
+                cur = stack.pop()
+                if isinstance(cur, ast.ClassDef):
+                    continue
+                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                    if rebinds(cur, name):
+                        continue
+                    stack.extend(ast.iter_child_nodes(cur))
+                    continue
+                if isinstance(cur, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
+                    targets = {
+                        t.id
+                        for comp in cur.generators
+                        for t in ast.walk(comp.target)
+                        if isinstance(t, ast.Name)
+                    }
+                    if name in targets:
+                        continue
+                    stack.extend(ast.iter_child_nodes(cur))
+                    continue
+                if (
+                    isinstance(cur, ast.Attribute)
+                    and isinstance(cur.ctx, ast.Load)
+                    and isinstance(cur.value, ast.Name)
+                    and cur.value.id == name
+                ):
+                    hits.append(cur)
+                stack.extend(ast.iter_child_nodes(cur))
+            return hits
+
+        def recurs(fn: ast.FunctionDef | ast.AsyncFunctionDef, name: str | None) -> bool:
+            if name is None:
+                return False
+            stack: list[ast.AST] = list(ast.iter_child_nodes(fn))
+            while stack:
+                cur = stack.pop()
+                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+                    continue
+                if (
+                    isinstance(cur, ast.Call)
+                    and isinstance(cur.func, ast.Attribute)
+                    and isinstance(cur.func.value, ast.Name)
+                    and cur.func.value.id == name
+                    and cur.func.attr == fn.name
+                ):
+                    return True
+                stack.extend(ast.iter_child_nodes(cur))
+            return False
+
+        found: list[Violation] = []
+        for stmt in self._body:
+            for node in ast.walk(stmt):
+                if not isinstance(node, ast.ClassDef):
+                    continue
+                methods = declared(node.body)
+                names = {method.name for method in methods}
+                recursive = {method.name for method in methods if recurs(method, receiver(method))}
+                for member in methods:
+                    own = receiver(member)
+                    if own is None:
+                        continue
+                    for inner in reads(member, own):
+                        sibling = inner.attr
+                        if sibling not in names:
+                            continue
+                        if sibling == member.name or sibling in recursive:
+                            continue
+                        if sibling.startswith("__") and sibling.endswith("__"):
+                            continue
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                inner.lineno,
+                                "TB051",
+                                f"{module_name}.{node.name}.{member.name} reaches sibling "
+                                f"{sibling}; a method is for outsiders — a class reaches "
+                                "into itself only for direct recursion",
+                            ))
+                        )
+        return tuple(found)
+
+    def dynamic_import_violations(self) -> tuple[Violation, ...]:
+        module_name = self._name
+        found: list[Violation] = []
+        bound: set[str] = set()
+        for assignment in self._assignments:
+            assigned = assignment.value
+            if assigned is None:
+                continue
+            assigned_reaches = False
+            if isinstance(assigned, ast.Attribute) and isinstance(assigned.value, ast.Name):
+                package = self._package_aliases.get(assigned.value.id)
+                assigned_reaches = package == IMPORTLIB or (
+                    package == BUILTINS and assigned.attr == BUILTIN_IMPORT
+                )
+            elif isinstance(assigned, ast.Name):
+                origin = self._imported.get(assigned.id)
+                assigned_reaches = (
+                    assigned.id == BUILTIN_IMPORT
+                    and assigned.id not in self._functions
+                ) or (
+                    origin is not None
+                    and (
+                        origin[0] == IMPORTLIB
+                        or (origin[0] == BUILTINS and origin[1] == BUILTIN_IMPORT)
+                    )
+                )
+            elif isinstance(assigned, ast.Call):
+                assigned_reaches = (
+                    isinstance(assigned.func, ast.Name)
+                    and assigned.func.id == "getattr"
+                    and bool(assigned.args)
+                    and isinstance(assigned.args[0], ast.Name)
+                    and self._package_aliases.get(assigned.args[0].id) == IMPORTLIB
+                )
+            if not assigned_reaches:
+                continue
+            targets = (
+                assignment.targets
+                if isinstance(assignment, ast.Assign)
+                else [assignment.target]
+            )
+            bound.update(t.id for t in targets if isinstance(t, ast.Name))
+        rebound = frozenset(bound)
+        for lookup in self._subscripts:
+            if (
+                isinstance(lookup.value, ast.Attribute)
+                and lookup.value.attr == "modules"
+                and (isinstance(lookup.value.value, ast.Name)
+                            and self._package_aliases.get(lookup.value.value.id) == SYS_MODULE)
+            ):
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lookup.lineno,
+                        "TB068",
+                        f"{module_name} imports dynamically through sys.modules; "
+                        "an import is a statement the walk can read, never a call",
+                    ))
+                )
+        for node in self._calls:
+            callee = node.func
+            callee_reaches = False
+            if isinstance(callee, ast.Attribute) and isinstance(callee.value, ast.Name):
+                package = self._package_aliases.get(callee.value.id)
+                callee_reaches = package == IMPORTLIB or (
+                    package == BUILTINS and callee.attr == BUILTIN_IMPORT
+                )
+            elif isinstance(callee, ast.Name):
+                origin = self._imported.get(callee.id)
+                callee_reaches = (
+                    callee.id == BUILTIN_IMPORT
+                    and callee.id not in self._functions
+                ) or (
+                    origin is not None
+                    and (
+                        origin[0] == IMPORTLIB
+                        or (origin[0] == BUILTINS and origin[1] == BUILTIN_IMPORT)
+                    )
+                )
+            elif isinstance(callee, ast.Call):
+                callee_reaches = (
+                    isinstance(callee.func, ast.Name)
+                    and callee.func.id == "getattr"
+                    and bool(callee.args)
+                    and isinstance(callee.args[0], ast.Name)
+                    and self._package_aliases.get(callee.args[0].id) == IMPORTLIB
+                )
+            if isinstance(callee, ast.Name) and callee.id in rebound:
+                named: str | None = f"{IMPORTLIB}.{callee.id}"
+            elif callee_reaches:
+                named = f"{IMPORTLIB}.{ast.unparse(callee).rsplit('.', 1)[-1]}"
+            else:
+                named = None
+            if named is not None:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        node.lineno,
+                        "TB068",
+                        f"{module_name} imports dynamically through {named}; "
+                        "an import is a statement the walk can read, never a call",
+                    ))
+                )
+        return tuple(found)
+
+    def stray_import_violations(self) -> tuple[Violation, ...]:
+        module_name = self._name
+        found: list[Violation] = []
+        for target, lineno in self._nested_tesser:
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    lineno,
+                    "TB050",
+                    f"{module_name} imports {target} inside a function; "
+                    "a tesser import is module-level",
+                ))
+            )
+        for target, lineno in self._broken_relatives:
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    lineno,
+                    "TB043",
+                    f"{module_name} imports {target} beyond the package root; "
+                    "a relative import resolves inside the tree",
+                ))
+            )
+        for edge in self._edges:
+            found.extend(edge.member_form_violations())
         return tuple(found)
 
     def class_decls(self, registry: RegistrySpec) -> tuple[ClassDecl, ...]:
@@ -4616,12 +5169,12 @@ class Codebase(ts.AggregateRoot):
         self._spec_methods = {name: made for name, made in returning.items() if made is not None}
         self._spec_shared.sort(key=lambda entry: entry[:3])
         for module in self._modules:
-            found.extend(self._comment_violations(module))  # tesser:debt TB051
-            found.extend(self._double_violations(module))  # tesser:debt TB051
-            found.extend(self._shadowing_violations(module))  # tesser:debt TB051
-            found.extend(self._string_equality_violations(module))  # tesser:debt TB051
-            found.extend(self._sibling_reference_violations(module))  # tesser:debt TB051
-            found.extend(self._dynamic_import_violations(module))  # tesser:debt TB051
+            found.extend(module.comment_violations())
+            found.extend(module.double_violations())
+            found.extend(module.shadowing_violations())
+            found.extend(module.string_equality_violations())
+            found.extend(module.sibling_reference_violations())
+            found.extend(module.dynamic_import_violations())
             found.extend(self._module_violations(module, blocks, contexts))  # tesser:debt TB051
             if self._locate(module.name(), module.is_package(), contexts, self._export) not in TEST_TIER:  # tesser:debt TB051
                 found.extend(self._spec_use_violations(module, blocks))  # tesser:debt TB051
@@ -5000,7 +5553,7 @@ class Codebase(ts.AggregateRoot):
             return tuple(
                 violation
                 for edge in module.import_edges()
-                for violation in self._member_form_violations(module, edge)  # tesser:debt TB051
+                for violation in edge.member_form_violations()
             ) + self._test_placement_violations(module, placement[0], placement[1], contexts)  # tesser:debt TB051
         if place == "test":
             return self._test_module_violations(module, blocks, contexts)  # tesser:debt TB051
@@ -5169,110 +5722,6 @@ class Codebase(ts.AggregateRoot):
             ))
             for stmt in module.body()
         )
-
-    def _dynamic_import_violations(self, module: Module) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        bound: set[str] = set()
-        for assignment in module.assignments():
-            assigned = assignment.value
-            if assigned is None:
-                continue
-            assigned_reaches = False
-            if isinstance(assigned, ast.Attribute) and isinstance(assigned.value, ast.Name):
-                package = module._package_aliases.get(assigned.value.id)
-                assigned_reaches = package == IMPORTLIB or (
-                    package == BUILTINS and assigned.attr == BUILTIN_IMPORT
-                )
-            elif isinstance(assigned, ast.Name):
-                origin = module._imported.get(assigned.id)
-                assigned_reaches = (
-                    assigned.id == BUILTIN_IMPORT
-                    and assigned.id not in module.function_names()
-                ) or (
-                    origin is not None
-                    and (
-                        origin[0] == IMPORTLIB
-                        or (origin[0] == BUILTINS and origin[1] == BUILTIN_IMPORT)
-                    )
-                )
-            elif isinstance(assigned, ast.Call):
-                assigned_reaches = (
-                    isinstance(assigned.func, ast.Name)
-                    and assigned.func.id == "getattr"
-                    and bool(assigned.args)
-                    and isinstance(assigned.args[0], ast.Name)
-                    and module._package_aliases.get(assigned.args[0].id) == IMPORTLIB
-                )
-            if not assigned_reaches:
-                continue
-            targets = (
-                assignment.targets
-                if isinstance(assignment, ast.Assign)
-                else [assignment.target]
-            )
-            bound.update(t.id for t in targets if isinstance(t, ast.Name))
-        rebound = frozenset(bound)
-        for lookup in module.subscripts():
-            if (
-                isinstance(lookup.value, ast.Attribute)
-                and lookup.value.attr == "modules"
-                and (isinstance(lookup.value.value, ast.Name)
-                            and module._package_aliases.get(lookup.value.value.id) == SYS_MODULE)
-            ):
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        lookup.lineno,
-                        "TB068",
-                        f"{module.name()} imports dynamically through sys.modules; "
-                        "an import is a statement the walk can read, never a call",
-                    ))
-                )
-        for node in module.calls():
-            callee = node.func
-            callee_reaches = False
-            if isinstance(callee, ast.Attribute) and isinstance(callee.value, ast.Name):
-                package = module._package_aliases.get(callee.value.id)
-                callee_reaches = package == IMPORTLIB or (
-                    package == BUILTINS and callee.attr == BUILTIN_IMPORT
-                )
-            elif isinstance(callee, ast.Name):
-                origin = module._imported.get(callee.id)
-                callee_reaches = (
-                    callee.id == BUILTIN_IMPORT
-                    and callee.id not in module.function_names()
-                ) or (
-                    origin is not None
-                    and (
-                        origin[0] == IMPORTLIB
-                        or (origin[0] == BUILTINS and origin[1] == BUILTIN_IMPORT)
-                    )
-                )
-            elif isinstance(callee, ast.Call):
-                callee_reaches = (
-                    isinstance(callee.func, ast.Name)
-                    and callee.func.id == "getattr"
-                    and bool(callee.args)
-                    and isinstance(callee.args[0], ast.Name)
-                    and module._package_aliases.get(callee.args[0].id) == IMPORTLIB
-                )
-            if isinstance(callee, ast.Name) and callee.id in rebound:
-                named: str | None = f"{IMPORTLIB}.{callee.id}"
-            elif callee_reaches:
-                named = f"{IMPORTLIB}.{ast.unparse(callee).rsplit('.', 1)[-1]}"
-            else:
-                named = None
-            if named is not None:
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        node.lineno,
-                        "TB068",
-                        f"{module.name()} imports dynamically through {named}; "
-                        "an import is a statement the walk can read, never a call",
-                    ))
-                )
-        return tuple(found)
 
     def _declaration_violations(self) -> tuple[Violation, ...]:
         found: list[Violation] = []
@@ -5512,7 +5961,7 @@ class Codebase(ts.AggregateRoot):
         return tuple(
             violation
             for edge in module.import_edges()
-            for violation in self._member_form_violations(module, edge)  # tesser:debt TB051
+            for violation in edge.member_form_violations()
         ) + tuple(
             Violation(ViolationSpec(
                 module.path(),
@@ -5591,7 +6040,7 @@ class Codebase(ts.AggregateRoot):
                         "a role __init__ only re-exports from its own role",
                     ))
                 )
-            found.extend(self._member_form_violations(module, edge))  # tesser:debt TB051
+            found.extend(edge.member_form_violations())
             found.extend(self._form_violations(module, edge))  # tesser:debt TB051
         return tuple(found)
 
@@ -5640,7 +6089,7 @@ class Codebase(ts.AggregateRoot):
 
     def _tesser_shell_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        found.extend(self._stray_import_violations(module))  # tesser:debt TB051
+        found.extend(module.stray_import_violations())
         parts = module.name().split(".")
         if not parts[1].startswith(DO_NOT_USE_PREFIX) and parts[1] not in TESSER_NAMESPACES:
             found.append(
@@ -5741,7 +6190,7 @@ class Codebase(ts.AggregateRoot):
 
     def _kernel_import_violations(self, module: Module) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        found.extend(self._stray_import_violations(module))  # tesser:debt TB051
+        found.extend(module.stray_import_violations())
         found.extend(
             self._tesser_import_violations(  # tesser:debt TB051
                 module,
@@ -5976,360 +6425,6 @@ class Codebase(ts.AggregateRoot):
                         f"{module.name()} has a loose module-level statement; {loose_clause}",
                     ))
                 )
-        return tuple(found)
-
-    def _sibling_reference_violations(self, module: Module) -> tuple[Violation, ...]:
-        def declared(body: list[ast.stmt]) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
-            out: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
-            stack: list[ast.AST] = list(body)
-            while stack:
-                cur = stack.pop()
-                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    out.append(cur)
-                    continue
-                if isinstance(cur, (ast.ClassDef, ast.Lambda)):
-                    continue
-                stack.extend(ast.iter_child_nodes(cur))
-            return out
-
-        def receiver(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
-            names = {d.id for d in fn.decorator_list if isinstance(d, ast.Name)}
-            if "staticmethod" in names:
-                return None
-            args = fn.args.posonlyargs + fn.args.args
-            if not args:
-                return None
-            return args[0].arg
-
-        def rebinds(fn: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda, name: str) -> bool:
-            args = fn.args
-            bound = {a.arg for a in args.posonlyargs + args.args + args.kwonlyargs}
-            if args.vararg is not None:
-                bound.add(args.vararg.arg)
-            if args.kwarg is not None:
-                bound.add(args.kwarg.arg)
-            return name in bound
-
-        def reads(fn: ast.FunctionDef | ast.AsyncFunctionDef, name: str) -> list[ast.Attribute]:
-            hits: list[ast.Attribute] = []
-            stack: list[ast.AST] = list(ast.iter_child_nodes(fn))
-            while stack:
-                cur = stack.pop()
-                if isinstance(cur, ast.ClassDef):
-                    continue
-                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
-                    if rebinds(cur, name):
-                        continue
-                    stack.extend(ast.iter_child_nodes(cur))
-                    continue
-                if isinstance(cur, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
-                    targets = {
-                        t.id
-                        for comp in cur.generators
-                        for t in ast.walk(comp.target)
-                        if isinstance(t, ast.Name)
-                    }
-                    if name in targets:
-                        continue
-                    stack.extend(ast.iter_child_nodes(cur))
-                    continue
-                if (
-                    isinstance(cur, ast.Attribute)
-                    and isinstance(cur.ctx, ast.Load)
-                    and isinstance(cur.value, ast.Name)
-                    and cur.value.id == name
-                ):
-                    hits.append(cur)
-                stack.extend(ast.iter_child_nodes(cur))
-            return hits
-
-        def recurs(fn: ast.FunctionDef | ast.AsyncFunctionDef, name: str | None) -> bool:
-            if name is None:
-                return False
-            stack: list[ast.AST] = list(ast.iter_child_nodes(fn))
-            while stack:
-                cur = stack.pop()
-                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
-                    continue
-                if (
-                    isinstance(cur, ast.Call)
-                    and isinstance(cur.func, ast.Attribute)
-                    and isinstance(cur.func.value, ast.Name)
-                    and cur.func.value.id == name
-                    and cur.func.attr == fn.name
-                ):
-                    return True
-                stack.extend(ast.iter_child_nodes(cur))
-            return False
-
-        found: list[Violation] = []
-        for stmt in module.body():
-            for node in ast.walk(stmt):
-                if not isinstance(node, ast.ClassDef):
-                    continue
-                methods = declared(node.body)
-                names = {method.name for method in methods}
-                recursive = {method.name for method in methods if recurs(method, receiver(method))}
-                for member in methods:
-                    own = receiver(member)
-                    if own is None:
-                        continue
-                    for inner in reads(member, own):
-                        sibling = inner.attr
-                        if sibling not in names:
-                            continue
-                        if sibling == member.name or sibling in recursive:
-                            continue
-                        if sibling.startswith("__") and sibling.endswith("__"):
-                            continue
-                        found.append(
-                            Violation(ViolationSpec(
-                                module.path(),
-                                inner.lineno,
-                                "TB051",
-                                f"{module.name()}.{node.name}.{member.name} reaches sibling "
-                                f"{sibling}; a method is for outsiders — a class reaches "
-                                "into itself only for direct recursion",
-                            ))
-                        )
-        return tuple(found)
-
-    def _comment_violations(self, module: Module) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for comment in module.comments():
-            if DIRECTIVE.match(str(comment._text)):
-                continue
-            if int(comment._line) <= 2 and CODING_DECL.match(str(comment._text)):
-                continue
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    int(comment._line),
-                    "TB020",
-                    f"{module.name()} carries a code comment; code speaks for itself — "
-                    "comments, docstrings, and loose strings belong in the doc layer",
-                ))
-            )
-        doc_ids: set[int] = set()
-        body = module.body()
-        if body and (isinstance((body[0]), ast.Expr)
-                    and isinstance((body[0]).value, ast.Constant)
-                    and isinstance((body[0]).value.value, str)):
-            doc_ids.add(id(body[0]))
-        for stmt in body:
-            for node in ast.walk(stmt):
-                if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
-                    if node.body and (isinstance((node.body[0]), ast.Expr)
-                                and isinstance((node.body[0]).value, ast.Constant)
-                                and isinstance((node.body[0]).value.value, str)):
-                        doc_ids.add(id(node.body[0]))
-        for stmt in body:
-            for node in ast.walk(stmt):
-                if not (isinstance(node, ast.Expr)
-                            and isinstance(node.value, ast.Constant)
-                            and isinstance(node.value.value, str)):
-                    continue
-                kind = "a docstring" if id(node) in doc_ids else "a bare string statement"
-                found.append(
-                    Violation(ViolationSpec(
-                        module.path(),
-                        node.lineno,
-                        "TB020",
-                        f"{module.name()} carries {kind}; code speaks for itself — "
-                        "comments, docstrings, and loose strings belong in the doc layer",
-                    ))
-                )
-        return tuple(found)
-
-    def _double_violations(self, module: Module) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for stmt in module.body():
-            for node in ast.walk(stmt):
-                if isinstance(node, ast.ImportFrom):
-                    target = node.module or ""
-                    if (any(
-                                target == banned or target.startswith(banned + ".") for banned in MOCK_MODULES
-                            )) or (
-                        target == "unittest" and any(alias.name == "mock" for alias in node.names)
-                    ):
-                        found.append(
-                            Violation(ViolationSpec(
-                                module.path(),
-                                node.lineno,
-                                "TB030",
-                                f"{module.name()} imports a mocking library; a test double is "
-                                "a hand-written fake, never a mocking library or a runtime patcher",
-                            ))
-                        )
-                    elif target in ("pytest", "_pytest.monkeypatch") and any(
-                        alias.name == "MonkeyPatch" for alias in node.names
-                    ):
-                        found.append(
-                            Violation(ViolationSpec(
-                                module.path(),
-                                node.lineno,
-                                "TB030",
-                                f"{module.name()} reaches for pytest MonkeyPatch; a test double is "
-                                "a hand-written fake, never a mocking library or a runtime patcher",
-                            ))
-                        )
-                elif isinstance(node, ast.Import):
-                    if any((any(
-                                alias.name == banned or alias.name.startswith(banned + ".") for banned in MOCK_MODULES
-                            )) for alias in node.names):
-                        found.append(
-                            Violation(ViolationSpec(
-                                module.path(),
-                                node.lineno,
-                                "TB030",
-                                f"{module.name()} imports a mocking library; a test double is "
-                                "a hand-written fake, never a mocking library or a runtime patcher",
-                            ))
-                        )
-                elif isinstance(node, ast.Attribute):
-                    if (
-                        node.attr == "mock"
-                        and isinstance(node.value, ast.Name)
-                        and node.value.id == "unittest"
-                    ):
-                        found.append(
-                            Violation(ViolationSpec(
-                                module.path(),
-                                node.lineno,
-                                "TB030",
-                                f"{module.name()} imports a mocking library; a test double is "
-                                "a hand-written fake, never a mocking library or a runtime patcher",
-                            ))
-                        )
-                    elif (
-                        node.attr == "MonkeyPatch"
-                        and isinstance(node.value, ast.Name)
-                        and node.value.id == "pytest"
-                    ):
-                        found.append(
-                            Violation(ViolationSpec(
-                                module.path(),
-                                node.lineno,
-                                "TB030",
-                                f"{module.name()} reaches for pytest MonkeyPatch; a test double is "
-                                "a hand-written fake, never a mocking library or a runtime patcher",
-                            ))
-                        )
-                elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    if not (
-                        node.name.startswith("test_")
-                        or any(
-                            (
-                                isinstance(target, ast.Attribute)
-                                and target.attr == "fixture"
-                            )
-                            or (isinstance(target, ast.Name) and target.id == "fixture")
-                            for target in (
-                                decorator.func
-                                if isinstance(decorator, ast.Call)
-                                else decorator
-                                for decorator in node.decorator_list
-                            )
-                        )
-                    ):
-                        continue
-                    args = node.args
-                    for arg in (*args.posonlyargs, *args.args, *args.kwonlyargs):
-                        if arg.arg in PATCHER_FIXTURES:
-                            found.append(
-                                Violation(ViolationSpec(
-                                    module.path(),
-                                    arg.lineno,
-                                    "TB030",
-                                    f"{module.name()}.{node.name} takes the {arg.arg} fixture; "
-                                    "a test double is a hand-written fake, never a mocking "
-                                    "library or a runtime patcher",
-                                ))
-                            )
-        return tuple(found)
-
-    def _shadowing_violations(self, module: Module) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        scopes: list[tuple[ast.AST | None, list[ast.AST]]] = [
-            (None, [stmt for stmt in module.body()])
-        ]
-        for stmt in module.body():
-            for node in ast.walk(stmt):
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                    scopes.append((node, list(node.body)))
-                elif isinstance(node, ast.Lambda):
-                    scopes.append((node, [node.body]))
-        for holder, roots in scopes:
-            items: list[ast.AST] = []
-            stack: list[ast.AST] = list(roots)
-            while stack:
-                item = stack.pop()
-                if isinstance(
-                    item,
-                    (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda),
-                ):
-                    continue
-                items.append(item)
-                stack.extend(ast.iter_child_nodes(item))
-            shadowed: set[str] = set()
-            if isinstance(
-                holder, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
-            ):
-                args = holder.args
-                for arg in (*args.posonlyargs, *args.args, *args.kwonlyargs):
-                    if arg.arg in BUILTIN_NAMES:
-                        shadowed.add(arg.arg)
-                for extra in (args.vararg, args.kwarg):
-                    if extra is not None and extra.arg in BUILTIN_NAMES:
-                        shadowed.add(extra.arg)
-            elsewhere: set[str] = set()
-            for child in items:
-                if isinstance(child, (ast.Global, ast.Nonlocal)):
-                    elsewhere.update(child.names)
-                if (
-                    isinstance(child, ast.ExceptHandler)
-                    and child.name is not None
-                    and child.name in BUILTIN_NAMES
-                ):
-                    shadowed.add(child.name)
-            for child in items:
-                targets: list[ast.expr] = []
-                if isinstance(child, ast.Assign):
-                    targets = list(child.targets)
-                elif isinstance(child, (ast.AnnAssign, ast.AugAssign)):
-                    targets = [child.target]
-                elif isinstance(child, (ast.For, ast.AsyncFor)):
-                    targets = [child.target]
-                elif isinstance(child, ast.NamedExpr):
-                    targets = [child.target]
-                elif isinstance(child, ast.withitem):
-                    targets = [child.optional_vars] if child.optional_vars else []
-                for target in targets:
-                    for name in ast.walk(target):
-                        if (
-                            isinstance(name, ast.Name)
-                            and isinstance(name.ctx, ast.Store)
-                            and name.id in BUILTIN_NAMES
-                        ):
-                            shadowed.add(name.id)
-            bound = frozenset(shadowed - elsewhere)
-            if not bound:
-                continue
-            for child in items:
-                if (
-                    isinstance(child, ast.Call)
-                    and isinstance(child.func, ast.Name)
-                    and child.func.id in bound
-                ):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            child.lineno,
-                            "TB033",
-                            f"{module.name()} binds {child.func.id} and calls it in the same "
-                            "scope; a shadowed builtin is never called — rename the binding",
-                        ))
-                    )
         return tuple(found)
 
     @staticmethod
@@ -6785,43 +6880,6 @@ class Codebase(ts.AggregateRoot):
             )
         return tuple(sorted(found, key=lambda v: int(v.line())))
 
-    def _string_equality_violations(self, module: Module) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for stmt in module.body():
-            for node in ast.walk(stmt):
-                if not isinstance(node, ast.Compare) or len(node.ops) != 1:
-                    continue
-                right = node.comparators[0]
-                if (
-                    isinstance(node.ops[0], ast.Eq)
-                    and (isinstance(node.left, ast.Call) and (
-                                (
-                                    isinstance(node.left.func, ast.Name)
-                                    and node.left.func.id == "str"
-                                    and len(node.left.args) == 1
-                                )
-                                or (isinstance(node.left.func, ast.Attribute) and node.left.func.attr == "__str__")
-                            ))
-                    and (isinstance(right, ast.Call) and (
-                                (
-                                    isinstance(right.func, ast.Name)
-                                    and right.func.id == "str"
-                                    and len(right.args) == 1
-                                )
-                                or (isinstance(right.func, ast.Attribute) and right.func.attr == "__str__")
-                            ))
-                ):
-                    found.append(
-                        Violation(ViolationSpec(
-                            module.path(),
-                            node.lineno,
-                            "TB004",
-                            f"{module.name()} equates two str() calls; compare value objects "
-                            "by value, never by their string form",
-                        ))
-                    )
-        return tuple(found)
-
     @staticmethod
     def _names_bool(node: ast.expr | None) -> bool:
         if node is None:
@@ -6889,7 +6947,7 @@ class Codebase(ts.AggregateRoot):
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        found.extend(self._stray_import_violations(module))  # tesser:debt TB051
+        found.extend(module.stray_import_violations())
         found.extend(
             self._tesser_import_violations(  # tesser:debt TB051
                 module,
@@ -6956,7 +7014,7 @@ class Codebase(ts.AggregateRoot):
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        found.extend(self._stray_import_violations(module))  # tesser:debt TB051
+        found.extend(module.stray_import_violations())
         found.extend(
             self._tesser_import_violations(  # tesser:debt TB051
                 module,
@@ -7011,7 +7069,7 @@ class Codebase(ts.AggregateRoot):
         contexts: frozenset[str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        found.extend(self._stray_import_violations(module))  # tesser:debt TB051
+        found.extend(module.stray_import_violations())
         found.extend(
             self._tesser_import_violations(  # tesser:debt TB051
                 module,
@@ -7155,7 +7213,7 @@ class Codebase(ts.AggregateRoot):
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        found.extend(self._stray_import_violations(module))  # tesser:debt TB051
+        found.extend(module.stray_import_violations())
         found.extend(
             self._tesser_import_violations(  # tesser:debt TB051
                 module,
@@ -7459,7 +7517,7 @@ class Codebase(ts.AggregateRoot):
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        found.extend(self._stray_import_violations(module))  # tesser:debt TB051
+        found.extend(module.stray_import_violations())
         found.extend(
             self._tesser_import_violations(  # tesser:debt TB051
                 module,
@@ -8008,7 +8066,7 @@ class Codebase(ts.AggregateRoot):
         blocks: dict[tuple[str, str], str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        found.extend(self._stray_import_violations(module))  # tesser:debt TB051
+        found.extend(module.stray_import_violations())
         own = module.name().split(".")
         kind_package = own[2] if len(own) >= 4 and own[1] == "adapters" else None
         kind_reach = ADAPTER_KIND_REACH.get(kind_package or "")
@@ -8537,7 +8595,7 @@ class Codebase(ts.AggregateRoot):
         contexts: frozenset[str],
     ) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        found.extend(self._stray_import_violations(module))  # tesser:debt TB051
+        found.extend(module.stray_import_violations())
         tier_parts = module.name().split(".")
         tier_tops = (
             frozenset({KERNEL_PACKAGE})
@@ -9403,49 +9461,6 @@ class Codebase(ts.AggregateRoot):
             return False
         key = module._resolve(node)
         return key is not None and blocks.get(key) == OUTCOME_BLOCK
-
-    @staticmethod
-    def _stray_import_violations(module: Module) -> tuple[Violation, ...]:
-        found: list[Violation] = []
-        for target, lineno in module.nested_tesser_imports():
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    lineno,
-                    "TB050",
-                    f"{module.name()} imports {target} inside a function; "
-                    "a tesser import is module-level",
-                ))
-            )
-        for target, lineno in module.broken_relative_imports():
-            found.append(
-                Violation(ViolationSpec(
-                    module.path(),
-                    lineno,
-                    "TB043",
-                    f"{module.name()} imports {target} beyond the package root; "
-                    "a relative import resolves inside the tree",
-                ))
-            )
-        for edge in module.import_edges():
-            found.extend(Codebase._member_form_violations(module, edge))
-        return tuple(found)
-
-    @staticmethod
-    def _member_form_violations(module: Module, edge: ImportEdge) -> tuple[Violation, ...]:
-        target = str(edge._target)
-        if str(edge._form) != "member" or target == FUTURE_MODULE:
-            return ()
-        return (
-            Violation(ViolationSpec(
-                module.path(),
-                int(edge._lineno),
-                "TB053",
-                f"{module.name()} imports names from {target}; "
-                "every import is a module import — import x or import x as name, "
-                "never from x import name",
-            )),
-        )
 
     @staticmethod
     def _form_violations(module: Module, edge: ImportEdge) -> tuple[Violation, ...]:
