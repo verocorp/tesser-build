@@ -1305,15 +1305,21 @@ class Codebase(ts.AggregateRoot):
                 if target_key is not None and blocks.get(target_key) in DATA_BLOCKS:
                     self._mapper_target[(module.name(), cls.name)] = target_key
         answered: dict[tuple[str, str], set[str]] = {}
+        declared: dict[tuple[str, str], frozenset[str]] = {}
         inherits: dict[tuple[str, str], list[tuple[str, str]]] = {}
         for module in self._modules:
             for cls in module.class_defs():
+                declared[(module.name(), cls.name)] = frozenset(
+                    item.name
+                    for item in cls.body
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                )
                 answered[(module.name(), cls.name)] = {
                     item.name
                     for item in cls.body
                     if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
                     and item.returns is not None
-                    and self._names_outcome(module, item.returns, blocks)  # tesser:debt TB051
+                    and self._returns_outcome(module, item.returns, blocks)  # tesser:debt TB051
                 }
                 inherits[(module.name(), cls.name)] = [
                     resolved
@@ -1326,8 +1332,11 @@ class Codebase(ts.AggregateRoot):
             for key, base_keys in inherits.items():
                 for base_key in base_keys:
                     handed = answered.get(base_key)
-                    if handed is not None and not handed <= answered[key]:
-                        answered[key] |= handed
+                    if handed is None:
+                        continue
+                    inherited = handed - declared[key]
+                    if not inherited <= answered[key]:
+                        answered[key] |= inherited
                         changed = True
         self._outcome_methods = frozenset(
             (key[0], key[1], name) for key, names in answered.items() for name in names
@@ -8631,6 +8640,20 @@ class Codebase(ts.AggregateRoot):
                 if not isinstance(quoted, ast.Constant) and Codebase._names_outcome(module, quoted, blocks):
                     return True
         return False
+
+    @staticmethod
+    def _returns_outcome(
+        module: Module, node: ast.expr, blocks: dict[tuple[str, str], str]
+    ) -> bool:
+        while isinstance(node, ast.Constant) and isinstance(node.value, str):
+            try:
+                node = ast.parse(node.value, mode="eval").body
+            except SyntaxError:
+                return False
+        if not isinstance(node, (ast.Name, ast.Attribute)):
+            return False
+        key = module._resolve(node)
+        return key is not None and blocks.get(key) == OUTCOME_BLOCK
 
     @staticmethod
     def _is_member_pattern(

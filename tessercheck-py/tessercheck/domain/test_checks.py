@@ -12962,6 +12962,190 @@ def test_a_match_subject_names_a_method_annotated_to_answer_an_outcome() -> None
     ), findings
 
 
+
+def test_a_match_subject_names_a_method_whose_annotation_is_itself_an_outcome() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/answer.py",
+                "shop.domain.answer",
+                "import enum\n"
+                "import tesser.domain as ts\n"
+                "class Reply(ts.Outcome):\n"
+                "    YES = enum.auto()\n"
+                "    NO = enum.auto()\n"
+                "class AnswerSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Answer(ts.AggregateRoot):\n"
+                "    def __init__(self, spec: AnswerSpec) -> None:\n"
+                "        self.text = spec.text\n"
+                "    def decide(self) -> Reply:\n"
+                "        return Reply.YES\n"
+                "    def quoted(self) -> 'Reply':\n"
+                "        return Reply.YES\n"
+                "    def several(self) -> tuple[Reply, ...]:\n"
+                "        return (Reply.YES,)\n"
+                "    def maybe(self) -> Reply | None:\n"
+                "        return Reply.YES\n",
+                False,
+            ),
+            (
+                "shop/domain/test_answer.py",
+                "shop.domain.test_answer",
+                "def test_answer_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "shop/headed.py",
+                "shop.headed",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.domain.answer as answer\n"
+                "from shop.client.client import AskRequest, AskResponse\n"
+                "class HeadedService(ts.ApplicationService):\n"
+                "    def declared(self, request: AskRequest) -> AskResponse:\n"
+                "        asked = answer.Answer(answer.AnswerSpec(text=request.text))\n"
+                "        match asked.decide():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n"
+                "    def quotedly(self, request: AskRequest) -> AskResponse:\n"
+                "        asked = answer.Answer(answer.AnswerSpec(text=request.text))\n"
+                "        match asked.quoted():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n"
+                "    def severally(self, request: AskRequest) -> AskResponse:\n"
+                "        asked = answer.Answer(answer.AnswerSpec(text=request.text))\n"
+                "        match asked.several():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n"
+                "    def maybely(self, request: AskRequest) -> AskResponse:\n"
+                "        asked = answer.Answer(answer.AnswerSpec(text=request.text))\n"
+                "        match asked.maybe():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n",
+                False,
+            ),
+        ))).violations()
+               )
+    for wrapped in ("severally", "maybely"):
+        assert any(
+            f"HeadedService.{wrapped} match subject is not a call on a domain object; "
+            "a service method matches the outcome a domain object handed back" in f
+            for f in findings
+        ), (wrapped, findings)
+    for named in ("declared", "quotedly"):
+        assert not any(
+            f"HeadedService.{named}" in f and " TB082 " in f for f in findings
+        ), (named, findings)
+
+
+def test_an_override_replaces_the_outcome_answer_it_inherits() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/domain/answer.py",
+                "shop.domain.answer",
+                "import enum\n"
+                "import tesser.domain as ts\n"
+                "class Reply(ts.Outcome):\n"
+                "    YES = enum.auto()\n"
+                "    NO = enum.auto()\n"
+                "class AnswerSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Base(ts.AggregateRoot):\n"
+                "    def __init__(self, spec: AnswerSpec) -> None:\n"
+                "        self.text = spec.text\n"
+                "    def decide(self) -> Reply:\n"
+                "        return Reply.YES\n"
+                "class Inherits(Base):\n"
+                "    pass\n"
+                "class Retypes(Base):\n"
+                "    def decide(self) -> Reply:\n"
+                "        return Reply.NO\n"
+                "class Widens(Base):\n"
+                "    def decide(self) -> str:\n"
+                "        return self.text\n",
+                False,
+            ),
+            (
+                "shop/domain/test_answer.py",
+                "shop.domain.test_answer",
+                "def test_answer_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "shop/overridden.py",
+                "shop.overridden",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.domain.answer as answer\n"
+                "from shop.client.client import AskRequest, AskResponse\n"
+                "class OverriddenService(ts.ApplicationService):\n"
+                "    def inherits(self, request: AskRequest) -> AskResponse:\n"
+                "        asked = answer.Inherits(answer.AnswerSpec(text=request.text))\n"
+                "        match asked.decide():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n"
+                "    def retypes(self, request: AskRequest) -> AskResponse:\n"
+                "        asked = answer.Retypes(answer.AnswerSpec(text=request.text))\n"
+                "        match asked.decide():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case answer.Reply.NO:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n"
+                "    def widens(self, request: AskRequest) -> AskResponse:\n"
+                "        asked = answer.Widens(answer.AnswerSpec(text=request.text))\n"
+                "        match asked.decide():\n"
+                "            case answer.Reply.YES:\n"
+                "                pass\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n"
+                "        return AskResponse(text='')\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "OverriddenService.widens match subject is not a call on a domain object; "
+        "a service method matches the outcome a domain object handed back" in f
+        for f in findings
+    ), findings
+    for kept in ("inherits", "retypes"):
+        assert not any(
+            f"OverriddenService.{kept}" in f and " TB082 " in f for f in findings
+        ), (kept, findings)
+
+
 def test_one_decision_in_a_branch_test_is_one_finding() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
