@@ -308,6 +308,35 @@ where it lands.
   checker should flag it (a TB062-family row for the exported package), and
   `widget.py`'s `Label` field goes when it lands.
 
+## checks.py after the TB051 burn-down (2026-08-30)
+
+`tessercheck/domain/checks.py` carries zero `# tesser:debt TB051` markers:
+`Codebase` is `__init__` plus `violations()`, and every rule lives on the
+object that owns its facts (`Module`, `ClassDecl`, `Method`, `Body`,
+`Annotation`, `ImportEdge`, `Declaration`) or on a literal-only policy value
+object whose module-level `Final` constant is the rulebook's binding source.
+Two things the burn-down left behind, deliberately:
+
+- [ ] **Self-check wall time 2.2s → 4.1s on this tree.** Every `ClassDecl`
+  rebuilds a `Registry` (a sorted `KindTable`), a `SpecReader`, and four
+  `AnnotationPolicy` objects from the same two specs, because a spec may
+  carry primitives and child specs but never a value object, so nothing
+  built once can be handed down. The cost is linear in classes × kinds.
+  Options when it matters: a `KindTableSpec` that is already sorted so the
+  table constructor stops sorting; one `AnnotationPolicy` per class taking
+  its slot as the argument; or a ruling that a tree-level value object may
+  be passed whole to a constructor. The last is the honest one and is the
+  same question as the foreign-type ruling above.
+- [ ] **Equality tests for the new value objects** (convention rule 2, not
+  machine-enforced): `Annotation`, `Names`, `Symbols`, `KindTable`,
+  `Scope`, `Registry`, `Signature`, `Slot`, `Fact`, `Body`, `Placement`,
+  `Declaration`, `SpecReader`, `EnumShape`, and the policy classes. The
+  load-bearing one is `Annotation` — two parses of one annotation must be
+  equal, and the whole design rests on that.
+- [ ] **The seven `TB080` markers** (`Annotation`, `FieldSpec`, `ParamSpec`,
+  `MethodSpec`, `ClassDeclSpec`, `BodySpec`, `EnumShapeSpec`) are the
+  foreign-type ruling's whole footprint — see the section below.
+
 ## Foreign types at the analyzer's door (2026-08-30, deferred rule)
 
 The TB051 burn-down of `tessercheck/domain/checks.py` decomposes `Codebase`'s
