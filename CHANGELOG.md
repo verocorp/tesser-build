@@ -98,6 +98,29 @@ tree's zero-findings gate is green.
   own source. Measured: last-doubling exponent 2.04 → 1.45 (fitted 1.17
   vs main's 1.14), 800 synthetic modules 14.5s → 1.2s, all 11 gated trees
   11.0s → 5.5s (main 3.7s), findings identical everywhere.
+- **The four-audit differential wave's restorations.** Four adversarial
+  slice audits (method bodies, placement, spec/rulebook, per-class)
+  diffed main's `checks.py` against this one; everything they measured
+  outside the two open rulings is restored, with 18 new tests (each
+  behavior-restoring one verified to fail against the pre-fix tree): the
+  quoted `ts.JobContext` return finding; `Refs`, an order-preserving
+  sibling of `Names`, so a signature names the first domain object its
+  annotation walks; the annotated `self` scan; enum extras keyed by body
+  position, so `A = 1; del A` no longer flags the member; the rulebook
+  extractor's posonlyargs/kwonlyargs alignment; nine emission-order
+  regressions back to main's order (provenance first, the second-match
+  pass, module functions and statements before the adapters block,
+  helpers and application-client classes emitted inline through new
+  `Helper` and `ClientClass` value objects, class-body statements merged
+  into the method loop by source position, signature policies inside the
+  per-method loop, `.tesser-root` declaration order for TB044); a reverse
+  totality guard over the rulebook's `APPLIES_TO`
+  (`RulebookSpec(total=True)`, locked over the real tree); and a
+  duplicate-symbol guard on `KindTable`. The differential sweep is
+  byte-identical on 16 of 18 trees — the two exceptions are the intended
+  `ts.Mapper`/`ts.Serde` base change — and RULES.md matches main's 299
+  rows modulo line numbers, row order, four cell-list orderings, and the
+  new tests' fixture column.
 
 ### Known
 - **Two measured divergences from main are open rulings, not fixed

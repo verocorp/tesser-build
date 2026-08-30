@@ -289,6 +289,59 @@ def test_an_empty_string_binding_drops_the_row() -> None:
     assert "the kept tail" in rendered
 
 
+def test_a_positional_only_spec_parameter_keeps_the_defaults_aligned() -> None:
+    checks_text = (
+        "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
+        "class ThingSpec:\n"
+        "    def __init__(self, first: str, /, where: str = '') -> None:\n"
+        "        self.first = first\n"
+        "        self.where = where\n"
+        "class Module:\n"
+        "    def __init__(self, spec: ThingSpec) -> None:\n"
+        "        pass\n"
+        "    def stray_violations(self) -> None:\n"
+        "        Violation(ViolationSpec('p', 1, 'TB040', f'{where} is wrong; the aligned tail'))\n"
+        "        Violation(ViolationSpec('p', 1, 'TB041', 'a head; the aligned kept tail'))\n"
+        "THING = ThingSpec('first')\n"
+    )
+    rendered = str(rulebook.Rulebook(rulebook.RulebookSpec(checks_text)))
+    assert "the aligned tail" not in rendered
+    assert "the aligned kept tail" in rendered
+
+
+def test_a_keyword_only_spec_parameter_binds_its_default() -> None:
+    checks_text = (
+        "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
+        "class ThingSpec:\n"
+        "    def __init__(self, *, named: str = '') -> None:\n"
+        "        self.named = named\n"
+        "class Module:\n"
+        "    def __init__(self, spec: ThingSpec) -> None:\n"
+        "        pass\n"
+        "    def stray_violations(self) -> None:\n"
+        "        Violation(ViolationSpec('p', 1, 'TB040', f'{named} is wrong; the keyword tail'))\n"
+        "        Violation(ViolationSpec('p', 1, 'TB041', 'a head; the keyword kept tail'))\n"
+        "THING = ThingSpec()\n"
+    )
+    rendered = str(rulebook.Rulebook(rulebook.RulebookSpec(checks_text)))
+    assert "the keyword tail" not in rendered
+    assert "the keyword kept tail" in rendered
+
+
+def test_an_applies_to_row_nothing_produces_is_a_loud_failure() -> None:
+    checks_text = (
+        "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
+        "class Module:\n"
+        "    def stray_violations(self) -> None:\n"
+        "        Violation(ViolationSpec('p', 1, 'TB040', 'a shape; the rendered tail'))\n"
+    )
+    with pytest.raises(RuntimeError, match="APPLIES_TO rows nothing produces"):
+        rulebook.Rulebook(rulebook.RulebookSpec(checks_text, total=True))
+
+
 def test_a_spec_without_an_init_binds_nothing_and_does_not_crash() -> None:
     checks_text = (
         "TS_NAME_BY_BLOCK: dict = {}\n"

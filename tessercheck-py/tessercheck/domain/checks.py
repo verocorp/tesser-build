@@ -1064,6 +1064,20 @@ class Names(ts.ValueObject):
         return iter(self._items)
 
 
+class Refs(ts.ValueObject):
+
+    _items: tuple[str, ...]
+
+    def __init__(self, items: tuple[str, ...]) -> None:
+        object.__setattr__(self, "_items", tuple(dict.fromkeys(items)))
+
+    def __bool__(self) -> bool:
+        return bool(self._items)
+
+    def __iter__(self) -> typing.Iterator[str]:
+        return iter(self._items)
+
+
 SCALAR_NAMES: typing.Final[Names] = Names(tuple(WRAPPABLE_SCALARS | NON_WRAPPABLE_SCALARS))
 
 WRAPPABLE_NAMES: typing.Final[Names] = Names(tuple(WRAPPABLE_SCALARS))
@@ -1114,7 +1128,11 @@ class KindTable(ts.ValueObject):
     _entries: tuple[tuple[str, str, str], ...]
 
     def __init__(self, spec: KindTableSpec) -> None:
-        object.__setattr__(self, "_entries", tuple(sorted(spec.entries)))
+        ordered = tuple(sorted(spec.entries))
+        for earlier, later in zip(ordered, ordered[1:]):
+            if earlier[:2] == later[:2]:
+                raise ValueError("a kind table names one block per symbol")
+        object.__setattr__(self, "_entries", ordered)
 
     def blocks_in(self, module: Text) -> Names:
         wanted = str(module)
@@ -1603,6 +1621,7 @@ class EnumShape(ts.ValueObject):
 
     _base: Text | None
     _extras: tuple[Line, ...]
+    _positions: tuple[Line, ...]
     _mixed: Names
     _decorated: Names
 
@@ -1634,7 +1653,8 @@ class EnumShape(ts.ValueObject):
             return False
 
         extras: list[int] = []
-        for item in node.body:
+        positions: list[int] = []
+        for position, item in enumerate(node.body, start=1):
             if isinstance(item, ast.Pass):
                 continue
             member_target: ast.expr | None = None
@@ -1659,8 +1679,10 @@ class EnumShape(ts.ValueObject):
             )
             if not is_member:
                 extras.append(item.lineno)
+                positions.append(position)
         object.__setattr__(self, "_base", Text(base_name) if base_name else None)
         object.__setattr__(self, "_extras", tuple(Line(line) for line in extras))
+        object.__setattr__(self, "_positions", tuple(Line(position) for position in positions))
         object.__setattr__(self, "_mixed", Names(("mixed",) if len(node.bases) > 1 else ()))
         object.__setattr__(self, "_decorated", Names(("decorated",) if node.decorator_list or node.keywords else ()))
 
@@ -1669,6 +1691,9 @@ class EnumShape(ts.ValueObject):
 
     def extras(self) -> tuple[Line, ...]:
         return self._extras
+
+    def positions(self) -> tuple[Line, ...]:
+        return self._positions
 
     def mixed(self) -> Names:
         return self._mixed
@@ -1683,7 +1708,7 @@ class Annotation(ts.ValueObject):
     _head: Text | None
     _container: Text | None
     _scalars: Names
-    _refs: Names
+    _refs: Refs
     _produced: Names
     _produced_refs: Names
     _leaves: Names | None
@@ -1880,18 +1905,18 @@ class Annotation(ts.ValueObject):
             elif isinstance(probe, ast.Name) and probe.id in CONTAINER_NAMES:
                 container = probe.id
         names: set[str] = set()
-        refs: set[str] = set()
+        refs: list[str] = []
         stack: list[ast.AST] = [node]
         while stack:
             top = stack.pop()
             for sub in ast.walk(top):
                 if isinstance(sub, ast.Name):
                     names.add(sub.id)
-                    refs.add(sub.id)
+                    refs.append(sub.id)
                 elif isinstance(sub, ast.Attribute):
                     names.add(sub.attr)
                     if isinstance(sub.value, (ast.Name, ast.Attribute)):
-                        refs.add(f"{ast.unparse(sub.value)}.{sub.attr}")
+                        refs.append(f"{ast.unparse(sub.value)}.{sub.attr}")
                 elif isinstance(sub, ast.Constant) and isinstance(sub.value, str):
                     try:
                         quoted = ast.parse(sub.value, mode="eval").body
@@ -1978,7 +2003,7 @@ class Annotation(ts.ValueObject):
         object.__setattr__(
             self, "_scalars", Names(tuple(names - RETURN_WRAPPERS - SELF_NAMES))
         )
-        object.__setattr__(self, "_refs", Names(tuple(refs)))
+        object.__setattr__(self, "_refs", Refs(tuple(refs)))
         object.__setattr__(self, "_produced", Names(tuple(produced)))
         object.__setattr__(self, "_produced_refs", Names(tuple(produced_refs)))
         object.__setattr__(self, "_leaves", Names(tuple(leaves)) if leaves is not None else None)
@@ -2002,7 +2027,7 @@ class Annotation(ts.ValueObject):
     def scalars(self) -> Names:
         return self._scalars
 
-    def refs(self) -> Names:
+    def refs(self) -> Refs:
         return self._refs
 
     def produced(self) -> Names:
@@ -2093,11 +2118,13 @@ class SlotSpec(ts.Spec):
         name: str,
         block: str | None,
         touched: tuple[str, ...],
+        context: bool,
         symbol: SymbolSpec | None = None,
     ) -> None:
         self.name = name
         self.block = block
         self.touched = touched
+        self.context = context
         self.symbol = symbol
 
 
@@ -2106,12 +2133,14 @@ class Slot(ts.ValueObject):
     _name: Text
     _block: Text | None
     _touched: tuple[Text, ...]
+    _context: Names
     _symbol: Symbol | None
 
     def __init__(self, spec: SlotSpec) -> None:
         object.__setattr__(self, "_name", Text(spec.name))
         object.__setattr__(self, "_block", Text(spec.block) if spec.block else None)
         object.__setattr__(self, "_touched", tuple(Text(block) for block in spec.touched))
+        object.__setattr__(self, "_context", Names((JOB_CONTEXT_BLOCK,) if spec.context else ()))
         object.__setattr__(self, "_symbol", Symbol(spec.symbol) if spec.symbol is not None else None)
 
     def symbol(self) -> Symbol | None:
@@ -2126,6 +2155,9 @@ class Slot(ts.ValueObject):
     def touched(self) -> tuple[Text, ...]:
         return self._touched
 
+    def context(self) -> Names:
+        return self._context
+
 
 class SignatureSpec(ts.Spec):
 
@@ -2138,6 +2170,7 @@ class SignatureSpec(ts.Spec):
         open: tuple[str, ...],
         params: tuple[SlotSpec, ...],
         returns: SlotSpec | None,
+        leading: SlotSpec | None,
     ) -> None:
         self.where = where
         self.path = path
@@ -2146,6 +2179,7 @@ class SignatureSpec(ts.Spec):
         self.open = open
         self.params = params
         self.returns = returns
+        self.leading = leading
 
 
 class Signature(ts.ValueObject):
@@ -2157,6 +2191,7 @@ class Signature(ts.ValueObject):
     _open: Names
     _params: tuple[Slot, ...]
     _returns: Slot | None
+    _leading: Slot | None
 
     def __init__(self, spec: SignatureSpec) -> None:
         object.__setattr__(self, "_where", Text(spec.where))
@@ -2166,6 +2201,7 @@ class Signature(ts.ValueObject):
         object.__setattr__(self, "_open", Names(spec.open))
         object.__setattr__(self, "_params", tuple(Slot(item) for item in spec.params))
         object.__setattr__(self, "_returns", Slot(spec.returns) if spec.returns is not None else None)
+        object.__setattr__(self, "_leading", Slot(spec.leading) if spec.leading is not None else None)
 
     def where(self) -> Text:
         return self._where
@@ -2187,6 +2223,9 @@ class Signature(ts.ValueObject):
 
     def returns(self) -> Slot | None:
         return self._returns
+
+    def leading(self) -> Slot | None:
+        return self._leading
 
 
 class SignaturePolicySpec(ts.Spec):
@@ -2257,7 +2296,7 @@ class SignaturePolicy(ts.ValueObject):
                     ))
                 )
         returns = signature.returns()
-        if returns is not None and str(returns.block()) == JOB_CONTEXT_BLOCK:
+        if returns is not None and returns.context():
             found.append(
                 Violation(ViolationSpec(
                     path,
@@ -2363,7 +2402,7 @@ class RecordSignaturePolicy(ts.ValueObject):
                         ))
                     )
             returns = signature.returns()
-            if returns is not None and str(returns.block()) == JOB_CONTEXT_BLOCK:
+            if returns is not None and returns.context():
                 found.append(
                     Violation(ViolationSpec(
                         path,
@@ -2373,7 +2412,8 @@ class RecordSignaturePolicy(ts.ValueObject):
                         "the leading parameter of an action port call and nowhere else",
                     ))
                 )
-            slots = list(signature.params())
+            first = signature.leading()
+            slots = ([first] if first is not None else []) + list(signature.params())
             if returns is not None:
                 slots.append(returns)
             for slot in slots:
@@ -2796,7 +2836,6 @@ class Body(ts.ValueObject):
         where = str(self._where)
         path = str(self._path)
         found: list[Violation] = []
-        first_match = True
         for fact in self._facts:
             kind = str(fact.kind())
             line = int(fact.lineno())
@@ -2821,7 +2860,10 @@ class Body(ts.ValueObject):
                         "a value crossing into a port has passed through a domain type",
                     ))
                 )
-            elif kind == "accessor":
+        for fact in self._facts:
+            kind = str(fact.kind())
+            line = int(fact.lineno())
+            if kind == "accessor":
                 found.append(
                     Violation(ViolationSpec(
                         path,
@@ -2932,43 +2974,43 @@ class Body(ts.ValueObject):
                             "domain collection should own",
                         ))
                     )
-            elif kind == "match":
-                if not first_match:
-                    found.append(
-                        Violation(ViolationSpec(
-                            path,
-                            line,
-                            "TB082",
-                            f"{where} matches a second time; a service method decides once, because "
-                            "a second decision in one method is a rule about their order that no "
-                            "domain object owns",
-                        ))
-                    )
-                first_match = False
-                if "answers" not in fact.traits():
-                    found.append(
-                        Violation(ViolationSpec(
-                            path,
-                            line,
-                            "TB082",
-                            f"{where} match subject is not a call on a domain object; "
-                            "a service method matches the outcome a domain object handed "
-                            "back, because a port answer, a string, or an attribute is a "
-                            "rule the service would be reading for itself",
-                        ))
-                    )
-                elif "members" not in fact.traits():
-                    found.append(
-                        Violation(ViolationSpec(
-                            path,
-                            line,
-                            "TB084",
-                            f"{where} matches a domain call whose arms name no outcome "
-                            "member; a match on what a domain object answered names outcome "
-                            "members and closes on assert_never, because string arms hide a "
-                            "member added later from the type checker",
-                        ))
-                    )
+        matched = [fact for fact in self._facts if str(fact.kind()) == "match"]
+        for fact in matched[1:]:
+            found.append(
+                Violation(ViolationSpec(
+                    path,
+                    int(fact.lineno()),
+                    "TB082",
+                    f"{where} matches a second time; a service method decides once, because "
+                    "a second decision in one method is a rule about their order that no "
+                    "domain object owns",
+                ))
+            )
+        for fact in matched:
+            if "answers" not in fact.traits():
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        int(fact.lineno()),
+                        "TB082",
+                        f"{where} match subject is not a call on a domain object; "
+                        "a service method matches the outcome a domain object handed "
+                        "back, because a port answer, a string, or an attribute is a "
+                        "rule the service would be reading for itself",
+                    ))
+                )
+            elif "members" not in fact.traits():
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        int(fact.lineno()),
+                        "TB084",
+                        f"{where} matches a domain call whose arms name no outcome "
+                        "member; a match on what a domain object answered names outcome "
+                        "members and closes on assert_never, because string arms hide a "
+                        "member added later from the type checker",
+                    ))
+                )
         return tuple(found)
 
     def port_call_violations(self) -> tuple[Violation, ...]:
@@ -3021,6 +3063,198 @@ class Body(ts.ValueObject):
                     "invocation's job context",
                 ))
             )
+        return tuple(found)
+
+
+class ClientClassSpec(ts.Spec):
+
+    def __init__(self, node: ast.ClassDef, where: str, path: str) -> None:  # tesser:debt TB080
+        self.node = node
+        self.where = where
+        self.path = path
+
+
+class ClientClass(ts.ValueObject):
+
+    _where: Text
+    _path: Path
+    _facts: tuple[Fact, ...]
+
+    def __init__(self, spec: ClientClassSpec) -> None:
+        stmt = spec.node
+        members = [
+            item
+            for item in stmt.body
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+        computed: list[ast.expr] = list(stmt.bases)
+        for item in members:
+            computed.extend(
+                arg.annotation
+                for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
+                if arg.annotation is not None
+            )
+            if item.returns is not None:
+                computed.append(item.returns)
+            computed.extend(item.args.defaults)
+            computed.extend(value for value in item.args.kw_defaults if value is not None)
+        runs = (
+            bool(stmt.decorator_list)
+            or bool(stmt.keywords)
+            or any(item.decorator_list for item in members)
+            or any(
+                isinstance(inner, (ast.Call, ast.Lambda, ast.Await, ast.NamedExpr))
+                or isinstance(
+                    inner, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+                )
+                for node in computed
+                for inner in ast.walk(node)
+            )
+        )
+        rows: list[tuple[int, str, str | None, tuple[str, ...]]] = []
+        if runs:
+            rows.append((stmt.lineno, "runs", None, ()))
+        for held in stmt.body:
+            if isinstance(held, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Pass)):
+                continue
+            rows.append((held.lineno, "held", None, ()))
+        object.__setattr__(self, "_where", Text(spec.where))
+        object.__setattr__(self, "_path", Path(spec.path))
+        object.__setattr__(self, "_facts", tuple(Fact(FactSpec(*row)) for row in rows))
+
+    def violations(self) -> tuple[Violation, ...]:
+        where = str(self._where)
+        path = str(self._path)
+        found: list[Violation] = []
+        for fact in self._facts:
+            if str(fact.kind()) == "runs":
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        int(fact.lineno()),
+                        "TB051",
+                        f"{where} runs an expression at import; an application client module "
+                        "holds no expression that runs at import, because a job imports it",
+                    ))
+                )
+            else:
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        int(fact.lineno()),
+                        "TB051",
+                        f"{where} carries a class-level statement; an application client "
+                        "module declares calls and nothing else",
+                    ))
+                )
+        return tuple(found)
+
+
+class HelperSpec(ts.Spec):
+
+    def __init__(  # tesser:debt TB080
+        self,
+        node: ast.FunctionDef | ast.AsyncFunctionDef,
+        where: str,
+        path: str,
+        scope: ScopeSpec,
+        registry: RegistrySpec,
+    ) -> None:
+        self.node = node
+        self.where = where
+        self.path = path
+        self.scope = scope
+        self.registry = registry
+
+
+class Helper(ts.ValueObject):
+
+    _where: Text
+    _path: Path
+    _facts: tuple[Fact, ...]
+
+    def __init__(self, spec: HelperSpec) -> None:
+        fn = spec.node
+        facts = Registry(spec.registry)
+        kinds = facts.kinds()
+        scope = Scope(spec.scope)
+        policy = AnnotationPolicy(
+            AnnotationPolicySpec((), tuple(sorted(PRIMITIVES)), (), spec.scope, spec.registry)
+        )
+        line = fn.lineno
+        rows: list[tuple[int, str, str | None, tuple[str, ...]]] = []
+        for arg in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs:
+            if arg.annotation is None or policy.disallowed(Annotation(arg.annotation)):
+                rows.append((line, "parameter", arg.arg, ()))
+        positional = fn.args.posonlyargs + fn.args.args
+        undefaulted = positional[: len(positional) - len(fn.args.defaults)]
+        missing = [arg for arg in undefaulted] + [
+            arg for arg, default in zip(fn.args.kwonlyargs, fn.args.kw_defaults) if default is None
+        ]
+        for arg in missing:
+            rows.append((line, "default", arg.arg, ()))
+        returned_ref = Annotation(fn.returns).primary() if fn.returns is not None else None
+        symbol = scope.resolve(returned_ref) if returned_ref is not None else None
+        block = kinds.block_of(symbol) if symbol is not None else None
+        if symbol is not None and block is not None and str(block) == "mapper":
+            symbol = facts.mapper_target(symbol)
+            block = kinds.block_of(symbol) if symbol is not None else None
+        if block is None or str(block) not in DATA_BLOCKS:
+            rows.append((line, "data", None, ()))
+        for node in ast.walk(fn):
+            if isinstance(node, (ast.If, ast.Match, ast.For, ast.While, ast.Try)):
+                rows.append((node.lineno, "control", None, ()))
+        object.__setattr__(self, "_where", Text(spec.where))
+        object.__setattr__(self, "_path", Path(spec.path))
+        object.__setattr__(self, "_facts", tuple(Fact(FactSpec(*row)) for row in rows))
+
+    def violations(self) -> tuple[Violation, ...]:
+        where = str(self._where)
+        path = str(self._path)
+        found: list[Violation] = []
+        for fact in self._facts:
+            kind = str(fact.kind())
+            line = int(fact.lineno())
+            if kind == "parameter":
+                arg = str(fact.detail())
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB073",
+                        f"{where} parameter {arg!r} is not a primitive; "
+                        "a helper takes only defaulted primitives",
+                    ))
+                )
+            elif kind == "default":
+                arg = str(fact.detail())
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB073",
+                        f"{where} parameter {arg!r} has no default; "
+                        "a helper takes only defaulted primitives",
+                    ))
+                )
+            elif kind == "data":
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB073",
+                        f"{where} returns no construction data; a helper builds a spec or a DTO",
+                    ))
+                )
+            else:
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB073",
+                        f"{where} has control flow; a helper only constructs",
+                    ))
+                )
         return tuple(found)
 
 
@@ -3124,9 +3358,9 @@ class Declaration(ts.ValueObject):
     _declared: Text
     _exports: Names
     _export: Text | None
-    _imports: Names
+    _imports: Refs
     _stdlib: Names
-    _pure_stdlib: Names
+    _pure_stdlib: Refs
     _nested: Names
     _symlinked: Names
     _module_names: Names
@@ -3136,18 +3370,18 @@ class Declaration(ts.ValueObject):
         object.__setattr__(self, "_declared", Text(spec.declared))
         object.__setattr__(self, "_exports", Names(spec.exports))
         object.__setattr__(self, "_export", Text(spec.exports[0]) if len(spec.exports) == 1 else None)
-        object.__setattr__(self, "_imports", Names(spec.imports))
+        object.__setattr__(self, "_imports", Refs(spec.imports))
         object.__setattr__(self, "_stdlib", Names(spec.stdlib))
-        object.__setattr__(self, "_pure_stdlib", Names(spec.pure_stdlib))
+        object.__setattr__(self, "_pure_stdlib", Refs(spec.pure_stdlib))
         object.__setattr__(self, "_nested", Names(spec.nested))
         object.__setattr__(self, "_symlinked", Names(spec.symlinked))
         object.__setattr__(self, "_module_names", Names(spec.module_names))
         object.__setattr__(self, "_package_names", Names(spec.package_names))
 
     def violations(self) -> tuple[Violation, ...]:
-        declared = str(self._declared)
+        tree_kind = str(self._declared)
         found: list[Violation] = []
-        if declared == DECLARED_MISSING:
+        if tree_kind == DECLARED_MISSING:
             found.append(
                 Violation(ViolationSpec(
                     TREE_DECLARATION,
@@ -3157,7 +3391,7 @@ class Declaration(ts.ValueObject):
                     ".tesser-root file containing 'app' at its root",
                 ))
             )
-        elif declared == DECLARED_UNREADABLE:
+        elif tree_kind == DECLARED_UNREADABLE:
             found.append(
                 Violation(ViolationSpec(
                     TREE_DECLARATION,
@@ -3178,7 +3412,7 @@ class Declaration(ts.ValueObject):
                     "'export <dir>' line",
                 ))
             )
-        elif declared != DECLARED_APP:
+        elif tree_kind != DECLARED_APP:
             found.append(
                 Violation(ViolationSpec(
                     TREE_DECLARATION,
@@ -3240,9 +3474,8 @@ class Declaration(ts.ValueObject):
                         ))
                     )
                 found.extend(exported[:1])
-            for declared_import in self._imports:
-                head = declared_import.split(".")[0]
-                declared = declared_import
+            for declared in self._imports:
+                head = declared.split(".")[0]
                 if head == KERNEL_PACKAGE or head in SHELL_PACKAGES or head in tops:
                     found.append(
                         Violation(ViolationSpec(
@@ -3265,9 +3498,8 @@ class Declaration(ts.ValueObject):
                             "rest of it is never a kernel",
                         ))
                     )
-            for declared_stdlib in self._pure_stdlib:
-                head = declared_stdlib.split(".")[0]
-                declared = declared_stdlib
+            for declared in self._pure_stdlib:
+                head = declared.split(".")[0]
                 if head not in self._stdlib:
                     found.append(
                         Violation(ViolationSpec(
@@ -3408,6 +3640,7 @@ class Method(ts.Entity):
     _lineno: Line
     _decorators: Names
     _returns: Annotation | None
+    _leading: Param | None
     _params: tuple[Param, ...]
     _open: Names
     _bare_self_attr: Text | None
@@ -3582,8 +3815,15 @@ class Method(ts.Entity):
             self, "_returns", Annotation(node.returns) if node.returns is not None else None
         )
         positional = list(node.args.posonlyargs) + list(node.args.args)
+        leading: ast.arg | None = None
         if positional and (positional[0].arg == "self" or (positional[0].arg == "cls" and "classmethod" in decorators)):
+            leading = positional[0]
             positional = positional[1:]
+        object.__setattr__(
+            self,
+            "_leading",
+            Param(ParamSpec(leading.arg, leading.annotation, leading.lineno)) if leading is not None else None,
+        )
         object.__setattr__(
             self,
             "_params",
@@ -3646,6 +3886,9 @@ class Method(ts.Entity):
 
     def returns(self) -> Annotation | None:
         return self._returns
+
+    def leading(self) -> Param | None:
+        return self._leading
 
     def params(self) -> tuple[Param, ...]:
         return self._params
@@ -3749,35 +3992,45 @@ class ClassDecl(ts.Entity):
         scope = self._scope
         kinds = self._registry.kinds()
 
-        SlotRow = tuple[str, str | None, tuple[str, ...], tuple[str, str] | None]
+        SlotRow = tuple[str, str | None, tuple[str, ...], tuple[str, str] | None, bool]
 
         def slot(name: str, annotation: Annotation | None, unquote: bool) -> SlotRow:
             if annotation is None:
-                return (name, None, (), None)
+                return (name, None, (), None, False)
             block: str | None = None
             resolved: Symbol | None = None
             primary = annotation.primary()
+            named = scope.resolve(primary) if primary is not None else None
+            named_block = kinds.block_of(named) if named is not None else None
             if primary is not None and (unquote or not annotation.quoted()):
-                resolved = scope.resolve(primary)
-                block_text = kinds.block_of(resolved) if resolved is not None else None
-                block = str(block_text) if block_text is not None else None
+                resolved = named
+                block = str(named_block) if named_block is not None else None
             touched: list[str] = []
             for symbol in scope.symbols(annotation):
-                named = kinds.block_of(symbol)
-                if named is not None:
-                    touched.append(str(named))
+                found_block = kinds.block_of(symbol)
+                if found_block is not None:
+                    touched.append(str(found_block))
             return (
                 name,
                 block,
                 tuple(touched),
                 (str(resolved.module()), str(resolved.name())) if resolved is not None else None,
+                named_block is not None and str(named_block) == JOB_CONTEXT_BLOCK,
             )
 
-        SignatureRow = tuple[str, str, int, str, tuple[str, ...], tuple[SlotRow, ...], SlotRow | None]
+        SignatureRow = tuple[
+            str, str, int, str, tuple[str, ...], tuple[SlotRow, ...], SlotRow | None, SlotRow | None
+        ]
 
         def slot_spec(row: SlotRow) -> SlotSpec:
             symbol = row[3]
-            return SlotSpec(row[0], row[1], row[2], SymbolSpec(symbol[0], symbol[1]) if symbol is not None else None)
+            return SlotSpec(
+                row[0],
+                row[1],
+                row[2],
+                row[4],
+                SymbolSpec(symbol[0], symbol[1]) if symbol is not None else None,
+            )
 
         def signature_spec(row: SignatureRow) -> SignatureSpec:
             return SignatureSpec(
@@ -3788,10 +4041,12 @@ class ClassDecl(ts.Entity):
                 row[4],
                 tuple(slot_spec(item) for item in row[5]),
                 slot_spec(row[6]) if row[6] is not None else None,
+                slot_spec(row[7]) if row[7] is not None else None,
             )
 
         signature_rows: list[SignatureRow] = []
         for method in methods:
+            first = method.leading()
             signature_rows.append((
                 f"{spec.module}.{node.name}.{method.name()}",
                 spec.path,
@@ -3800,6 +4055,7 @@ class ClassDecl(ts.Entity):
                 tuple(method.open()),
                 tuple(slot(str(param.name()), param.annotation(), True) for param in method.params()),
                 slot("return", method.returns(), False) if method.returns() is not None else None,
+                slot(str(first.name()), first.annotation(), True) if first is not None else None,
             ))
         object.__setattr__(self, "_signatures", tuple(Signature(signature_spec(row)) for row in signature_rows))
         own_block = kinds.block_of(Symbol(SymbolSpec(spec.module, node.name)))
@@ -4143,8 +4399,9 @@ class ClassDecl(ts.Entity):
 
     def spec_violations(self) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        for fact in self._statements:
-            found.append(
+        pending = [
+            (
+                int(fact.lineno()),
                 Violation(ViolationSpec(
                     str(self._path),
                     int(fact.lineno()),
@@ -4152,10 +4409,16 @@ class ClassDecl(ts.Entity):
                     f"{self._module}.{self._name} carries a class-level statement; "
                     "a spec declares its fields as __init__ parameters, "
                     "where the field rules can read them",
-                ))
+                )),
             )
+            for fact in self._statements
+        ]
+        index = 0
         init_seen = False
         for method in self._methods:
+            while index < len(pending) and pending[index][0] < int(method.lineno()):
+                found.append(pending[index][1])
+                index += 1
             where = f"{self._module}.{self._name}.{method.name()}"
             if str(method.name()) != "__init__":
                 found.append(
@@ -4191,6 +4454,8 @@ class ClassDecl(ts.Entity):
                             "a spec field is a primitive or a child spec, never a value object",
                         ))
                     )
+        for line, violation in pending[index:]:
+            found.append(violation)
         if not init_seen:
             found.append(
                 Violation(ViolationSpec(
@@ -4208,19 +4473,25 @@ class ClassDecl(ts.Entity):
         own = str(self._block) if self._block is not None else None
         port_dto = own in ("port_request", "port_response")
         policy = self._port_dto_policy if port_dto else self._client_dto_policy
-        if port_dto:
-            for fact in self._statements:
-                found.append(
-                    Violation(ViolationSpec(
-                        str(self._path),
-                        int(fact.lineno()),
-                        "TB080",
-                        f"{self._module}.{self._name} carries a class-level statement; "
-                        "a port DTO declares its fields as __init__ parameters, "
-                        "where the field rules can read them",
-                    ))
-                )
+        pending = [
+            (
+                int(fact.lineno()),
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(fact.lineno()),
+                    "TB080",
+                    f"{self._module}.{self._name} carries a class-level statement; "
+                    "a port DTO declares its fields as __init__ parameters, "
+                    "where the field rules can read them",
+                )),
+            )
+            for fact in self._statements
+        ] if port_dto else []
+        index = 0
         for method in self._methods:
+            while index < len(pending) and pending[index][0] < int(method.lineno()):
+                found.append(pending[index][1])
+                index += 1
             where = f"{self._module}.{self._name}.{method.name()}"
             if str(method.name()) == "__init__" and method.open():
                 found.append(
@@ -4298,6 +4569,8 @@ class ClassDecl(ts.Entity):
                             "a DTO field is a primitive or another DTO",
                         ))
                     )
+        for line, violation in pending[index:]:
+            found.append(violation)
         return tuple(found)
 
     def serde_violations(self) -> tuple[Violation, ...]:
@@ -4328,19 +4601,25 @@ class ClassDecl(ts.Entity):
                     "deserialize and nothing else, because those two are what the engine calls",
                 ))
             )
-        for fact in self._statements:
-            if "pass" in fact.traits():
-                continue
-            found.append(
+        pending = [
+            (
+                int(fact.lineno()),
                 Violation(ViolationSpec(
                     str(self._path),
                     int(fact.lineno()),
                     "TB081",
                     f"{where} carries a class-level statement; a serde holds its two "
                     "calls and the target type it is built with, and nothing else",
-                ))
+                )),
             )
+            for fact in self._statements
+            if "pass" not in fact.traits()
+        ]
+        index = 0
         for method in self._methods:
+            while index < len(pending) and pending[index][0] < int(method.lineno()):
+                found.append(pending[index][1])
+                index += 1
             if str(method.name()) in SERDE_METHODS or str(method.name()) == "__init__":
                 continue
             found.append(
@@ -4352,6 +4631,8 @@ class ClassDecl(ts.Entity):
                     "deserialize and nothing else, because those two are what the engine calls",
                 ))
             )
+        for line, violation in pending[index:]:
+            found.append(violation)
         for fact in self._serde_facts:
             if str(fact.kind()) == "init_param":
                 arg = str(fact.detail())
@@ -4565,19 +4846,25 @@ class ClassDecl(ts.Entity):
                         "calls super().__init__ exactly once, because that call is the mapping",
                     ))
                 )
-        for fact in self._statements:
-            if "pass" in fact.traits():
-                continue
-            found.append(
+        pending = [
+            (
+                int(fact.lineno()),
                 Violation(ViolationSpec(
                     str(self._path),
                     int(fact.lineno()),
                     "TB080",
                     f"{where} carries a class-level statement; a mapper stores nothing "
                     "but its target's fields, so its body is one __init__",
-                ))
+                )),
             )
+            for fact in self._statements
+            if "pass" not in fact.traits()
+        ]
+        index = 0
         for method in self._methods:
+            while index < len(pending) and pending[index][0] < int(method.lineno()):
+                found.append(pending[index][1])
+                index += 1
             if str(method.name()) == "__init__":
                 continue
             found.append(
@@ -4589,13 +4876,15 @@ class ClassDecl(ts.Entity):
                     "because it is its target and the target already carries the fields",
                 ))
             )
+        for line, violation in pending[index:]:
+            found.append(violation)
         return tuple(found)
 
-    def port_violations(self) -> tuple[Violation, ...]:
+    def port_violations(self, policy: SignaturePolicy) -> tuple[Violation, ...]:
         found: list[Violation] = []
         declared = self._scope.classes()
         kinds = self._registry.kinds()
-        for method in self._methods:
+        for method, signature in zip(self._methods, self._signatures):
             where = f"{self._module}.{self._name}.{method.name()}"
             if not method.form():
                 found.append(
@@ -4619,6 +4908,7 @@ class ClassDecl(ts.Entity):
                     ))
                 )
                 continue
+            found.extend(policy.violations(signature))
             annotations = [param.annotation() for param in method.params()] + [method.returns()]
             for annotation in annotations:
                 if annotation is not None and "." not in str(annotation.source()) and str(annotation.source()) in declared:
@@ -4878,7 +5168,7 @@ class ClassDecl(ts.Entity):
                 )
         return tuple(found)
 
-    def actions_violations(self) -> tuple[Violation, ...]:
+    def actions_violations(self, policy: DependencyPolicy) -> tuple[Violation, ...]:
         found: list[Violation] = []
         init = next((item for item in self._signatures if str(item.name()) == "__init__"), None)
         if init is None:
@@ -4903,9 +5193,10 @@ class ClassDecl(ts.Entity):
                     "a class of actions takes exactly one port",
                 ))
             )
+        found.extend(policy.violations(init))
         return tuple(found)
 
-    def orchestrator_violations(self) -> tuple[Violation, ...]:
+    def orchestrator_violations(self, policy: DependencyPolicy) -> tuple[Violation, ...]:
         found: list[Violation] = []
         init = next((item for item in self._signatures if str(item.name()) == "__init__"), None)
         if init is None:
@@ -4921,6 +5212,7 @@ class ClassDecl(ts.Entity):
             )
         else:
             where = str(init.where())
+            found.extend(policy.violations(init))
             taken = [slot for slot in init.params() if str(slot.block()) == JOB_CONTEXT_BLOCK]
             if len(taken) != 1:
                 found.append(
@@ -7579,62 +7871,73 @@ class Module(ts.Entity):
                             "a kind lives only in its role module",
                         ))
                     )
-        if role == "adapters":
-            present = {
-                str(kinds.block_of(Symbol(SymbolSpec(module_name, cls.name))) or "")
-                for cls in self._class_defs
-            } & ADAPTER_BLOCKS
-            if len(present) > 1:
-                found.append(
-                    Violation(ViolationSpec(
-                        self._path,
-                        1,
-                        "TB052",
-                        f"{module_name} mixes adapter kinds; an adapters module holds one adapter kind",
-                    ))
-                )
-            expected = ADAPTER_KIND_PACKAGES.get(kind_package or "", frozenset())
-            for cls in self._class_defs:
-                named = kinds.block_of(Symbol(SymbolSpec(module_name, cls.name)))
-                block = str(named) if named is not None else None
-                if block is None:
-                    continue
-                where = f"{module_name}.{cls.name}"
-                undeclared_base = False
-                for base in cls.bases:
-                    base_ref = Annotation(base).primary()
-                    base_symbol = scope.resolve(base_ref) if base_ref is not None else None
-                    if base_symbol is None or kinds.block_of(base_symbol) is None:
-                        undeclared_base = True
-                if (
-                    block != SERDE_BLOCK
-                    and block in (ADAPTER_PLACED_BLOCKS | frozenset({"mapper"}))
-                    and undeclared_base
-                ):
-                    found.append(
-                        Violation(ViolationSpec(
-                            self._path,
-                            cls.lineno,
-                            "TB052",
-                            f"{where} subclasses a base the tree does not declare; only a "
-                            "serde subclasses a base from outside the tree, because the "
-                            "engine is the caller and the serde is the shape it calls",
-                        ))
-                    )
-                if block not in ADAPTER_PLACED_BLOCKS or block in expected:
-                    continue
-                if not expected:
-                    continue
+        return tuple(found)
+
+    def adapter_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        parts = module_name.split(".")
+        role = parts[1]
+        if role != "adapters":
+            return ()
+        kinds = Registry(registry).kinds()
+        scope = self._scope
+        kind_package = parts[2] if len(parts) >= 4 else None
+        found: list[Violation] = []
+        present = {
+            str(kinds.block_of(Symbol(SymbolSpec(module_name, cls.name))) or "")
+            for cls in self._class_defs
+        } & ADAPTER_BLOCKS
+        if len(present) > 1:
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    1,
+                    "TB052",
+                    f"{module_name} mixes adapter kinds; an adapters module holds one adapter kind",
+                ))
+            )
+        expected = ADAPTER_KIND_PACKAGES.get(kind_package or "", frozenset())
+        for cls in self._class_defs:
+            named = kinds.block_of(Symbol(SymbolSpec(module_name, cls.name)))
+            block = str(named) if named is not None else None
+            if block is None:
+                continue
+            where = f"{module_name}.{cls.name}"
+            undeclared_base = False
+            for base in cls.bases:
+                base_ref = Annotation(base).primary()
+                base_symbol = scope.resolve(base_ref) if base_ref is not None else None
+                if base_symbol is None or kinds.block_of(base_symbol) is None:
+                    undeclared_base = True
+            if (
+                block != SERDE_BLOCK
+                and block in (ADAPTER_PLACED_BLOCKS | frozenset({"mapper"}))
+                and undeclared_base
+            ):
                 found.append(
                     Violation(ViolationSpec(
                         self._path,
                         cls.lineno,
                         "TB052",
-                        f"{where} is {KIND_NAME[block]}, and its "
-                        "package names another kind; an adapters module holds the kind "
-                        "of its kind package, because the package is what carries its reach",
+                        f"{where} subclasses a base the tree does not declare; only a "
+                        "serde subclasses a base from outside the tree, because the "
+                        "engine is the caller and the serde is the shape it calls",
                     ))
                 )
+            if block not in ADAPTER_PLACED_BLOCKS or block in expected:
+                continue
+            if not expected:
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    cls.lineno,
+                    "TB052",
+                    f"{where} is {KIND_NAME[block]}, and its "
+                    "package names another kind; an adapters module holds the kind "
+                    "of its kind package, because the package is what carries its reach",
+                ))
+            )
         return tuple(found)
 
     def import_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
@@ -7934,6 +8237,7 @@ class Module(ts.Entity):
                         "module declares its protocol at module level",
                     ))
                 )
+            found.extend(ClientClass(ClientClassSpec(stmt, where, self._path)).violations())
         if len(protocols) != 1 and self._class_defs:
             found.append(
                 Violation(ViolationSpec(
@@ -7945,64 +8249,6 @@ class Module(ts.Entity):
                     "and nothing else",
                 ))
             )
-        return tuple(found)
-
-    def application_client_class_violations(self) -> tuple[Violation, ...]:
-        module_name = self._name
-        found: list[Violation] = []
-        for stmt in self._class_defs:
-            where = f"{module_name}.{stmt.name}"
-            members = [
-                item
-                for item in stmt.body
-                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
-            ]
-            computed: list[ast.expr] = list(stmt.bases)
-            for item in members:
-                computed.extend(
-                    arg.annotation
-                    for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
-                    if arg.annotation is not None
-                )
-                if item.returns is not None:
-                    computed.append(item.returns)
-                computed.extend(item.args.defaults)
-                computed.extend(value for value in item.args.kw_defaults if value is not None)
-            runs = (
-                bool(stmt.decorator_list)
-                or bool(stmt.keywords)
-                or any(item.decorator_list for item in members)
-                or any(
-                    isinstance(inner, (ast.Call, ast.Lambda, ast.Await, ast.NamedExpr))
-                    or isinstance(
-                        inner, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
-                    )
-                    for node in computed
-                    for inner in ast.walk(node)
-                )
-            )
-            if runs:
-                found.append(
-                    Violation(ViolationSpec(
-                        self._path,
-                        stmt.lineno,
-                        "TB051",
-                        f"{where} runs an expression at import; an application client module "
-                        "holds no expression that runs at import, because a job imports it",
-                    ))
-                )
-            for held in stmt.body:
-                if isinstance(held, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Pass)):
-                    continue
-                found.append(
-                    Violation(ViolationSpec(
-                        self._path,
-                        held.lineno,
-                        "TB051",
-                        f"{where} carries a class-level statement; an application client "
-                        "module declares calls and nothing else",
-                    ))
-                )
         return tuple(found)
 
     def ports_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
@@ -8364,16 +8610,16 @@ class Module(ts.Entity):
         for holder in self._class_defs:
             shape = EnumShape(EnumShapeSpec(holder, scope_spec))
             enum_member = shape.base() is not None
-            enum_extras = frozenset(int(line) for line in shape.extras())
+            enum_extras = frozenset(int(position) for position in shape.positions())
             for base in holder.bases:
                 if not readable(base):
                     found.extend(unreadable(f"{module_name}.{holder.name}", base))
-            for item in holder.body:
+            for position, item in enumerate(holder.body, start=1):
                 where = f"{module_name}.{holder.name}"
                 if isinstance(item, ast.Pass):
                     continue
                 if enum_member:
-                    if item.lineno in enum_extras:
+                    if position in enum_extras:
                         found.extend(unreadable(where, item))
                     continue
                 if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -8408,6 +8654,15 @@ class Module(ts.Entity):
         export = str(facts.export()) if facts.export() is not None else None
         contexts = frozenset(facts.contexts())
         scope = self._scope
+        scope_spec = ScopeSpec(
+            self._name,
+            tuple(ImportSpec(local, target, original) for local, (target, original) in self._imported.items()),
+            tuple(AliasSpec(alias, package) for alias, package in self._package_aliases.items()),
+            tuple(self._classes),
+            tuple(sorted(self._functions)),
+            self._spoken,
+            self._enums,
+        )
         found: list[Violation] = []
         for edge in self._edges:
             if str(edge._target).split(".")[0] in contexts:
@@ -8431,6 +8686,9 @@ class Module(ts.Entity):
                 if stmt.name.startswith("test_"):
                     continue
                 if decorated_as(stmt, "helper"):
+                    found.extend(
+                        Helper(HelperSpec(stmt, where, self._path, scope_spec, registry)).violations()
+                    )
                     continue
                 found.append(
                     Violation(ViolationSpec(
@@ -8521,89 +8779,6 @@ class Module(ts.Entity):
                         "a test module holds only imports, tests, helpers, and fakes",
                     ))
                 )
-        return tuple(found)
-
-    def helper_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
-        module_name = self._name
-        facts = Registry(registry)
-        kinds = facts.kinds()
-        scope = self._scope
-        scope_spec = ScopeSpec(
-            self._name,
-            tuple(ImportSpec(local, target, original) for local, (target, original) in self._imported.items()),
-            tuple(AliasSpec(alias, package) for alias, package in self._package_aliases.items()),
-            tuple(self._classes),
-            tuple(sorted(self._functions)),
-            self._spoken,
-            self._enums,
-        )
-        policy = AnnotationPolicy(AnnotationPolicySpec((), tuple(sorted(PRIMITIVES)), (), scope_spec, registry))
-        found: list[Violation] = []
-        for fn in self._body:
-            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) or fn.name.startswith("test_"):
-                continue
-            declared_helper = False
-            for decorator in fn.decorator_list:
-                ref = Annotation(decorator).primary()
-                symbol = scope.resolve(ref) if ref is not None else None
-                if symbol is not None and TESSER_DECORATORS.get((str(symbol.module()), str(symbol.name()))) == "helper":
-                    declared_helper = True
-            if not declared_helper:
-                continue
-            where = f"{module_name}.{fn.name}"
-            line = fn.lineno
-            params = fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs
-            for arg in params:
-                if arg.annotation is None or policy.disallowed(Annotation(arg.annotation)):
-                    found.append(
-                        Violation(ViolationSpec(
-                            self._path,
-                            line,
-                            "TB073",
-                            f"{where} parameter {arg.arg!r} is not a primitive; "
-                            "a helper takes only defaulted primitives",
-                        ))
-                    )
-            positional = fn.args.posonlyargs + fn.args.args
-            undefaulted = positional[: len(positional) - len(fn.args.defaults)]
-            missing = [arg for arg in undefaulted] + [
-                arg for arg, default in zip(fn.args.kwonlyargs, fn.args.kw_defaults) if default is None
-            ]
-            for arg in missing:
-                found.append(
-                    Violation(ViolationSpec(
-                        self._path,
-                        line,
-                        "TB073",
-                        f"{where} parameter {arg.arg!r} has no default; "
-                        "a helper takes only defaulted primitives",
-                    ))
-                )
-            returned_ref = Annotation(fn.returns).primary() if fn.returns is not None else None
-            helper_symbol = scope.resolve(returned_ref) if returned_ref is not None else None
-            helper_block = kinds.block_of(helper_symbol) if helper_symbol is not None else None
-            if helper_symbol is not None and helper_block is not None and str(helper_block) == "mapper":
-                helper_symbol = facts.mapper_target(helper_symbol)
-                helper_block = kinds.block_of(helper_symbol) if helper_symbol is not None else None
-            if helper_block is None or str(helper_block) not in DATA_BLOCKS:
-                found.append(
-                    Violation(ViolationSpec(
-                        self._path,
-                        line,
-                        "TB073",
-                        f"{where} returns no construction data; a helper builds a spec or a DTO",
-                    ))
-                )
-            for node in ast.walk(fn):
-                if isinstance(node, (ast.If, ast.Match, ast.For, ast.While, ast.Try)):
-                    found.append(
-                        Violation(ViolationSpec(
-                            self._path,
-                            node.lineno,
-                            "TB073",
-                            f"{where} has control flow; a helper only constructs",
-                        ))
-                    )
         return tuple(found)
 
     def placement_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
@@ -9919,7 +10094,6 @@ class Codebase(ts.AggregateRoot):
                 found.extend(module.stray_import_violations())
                 found.extend(module.placement_violations(registry))
                 found.extend(module.test_violations(registry))
-                found.extend(module.helper_violations(registry))
             elif place == "eval":
                 misplaced = module.eval_violations(registry)
                 if misplaced:
@@ -9928,7 +10102,6 @@ class Codebase(ts.AggregateRoot):
                     found.extend(module.stray_import_violations())
                     found.extend(module.placement_violations(registry))
                     found.extend(module.test_violations(registry))
-                    found.extend(module.helper_violations(registry))
             elif place == "shell-init":
                 found.extend(SHELL_INIT.violations(module))
             elif place == "shell-srv":
@@ -10005,12 +10178,10 @@ class Codebase(ts.AggregateRoot):
                 found.extend(module.stray_import_violations())
                 found.extend(APPLICATION_CLIENT_TESSER_IMPORTS.violations(module))
                 found.extend(module.application_client_violations(registry))
-                found.extend(module.application_client_class_violations())
             elif place == "app-client":
                 found.extend(module.stray_import_violations())
                 found.extend(APPLICATION_CLIENT_TESSER_IMPORTS.violations(module))
                 found.extend(module.application_client_violations(registry))
-                found.extend(module.application_client_class_violations())
             elif place == "orchestrators-init":
                 found.extend(ORCHESTRATORS_INIT.violations(module))
             elif place == "orchestrators-file":
@@ -10018,6 +10189,7 @@ class Codebase(ts.AggregateRoot):
                 found.extend(module.role_violations(registry))
                 found.extend(CONTEXT_FUNCTIONS.violations(module))
                 found.extend(CONTEXT_STATEMENTS.violations(module))
+                found.extend(module.adapter_violations(registry))
                 found.extend(module.stray_import_violations())
                 found.extend(ROLE_TESSER_IMPORTS.get(parts[1], CLIENT_TESSER_IMPORTS).violations(module))
                 found.extend(module.import_violations(registry))
@@ -10026,6 +10198,7 @@ class Codebase(ts.AggregateRoot):
                 found.extend(module.role_violations(registry))
                 found.extend(CONTEXT_FUNCTIONS.violations(module))
                 found.extend(CONTEXT_STATEMENTS.violations(module))
+                found.extend(module.adapter_violations(registry))
                 found.extend(module.stray_import_violations())
                 found.extend(ROLE_TESSER_IMPORTS.get(parts[1], CLIENT_TESSER_IMPORTS).violations(module))
                 found.extend(module.import_violations(registry))
@@ -10038,6 +10211,7 @@ class Codebase(ts.AggregateRoot):
                 found.extend(module.role_violations(registry))
                 found.extend(CONTEXT_FUNCTIONS.violations(module))
                 found.extend(CONTEXT_STATEMENTS.violations(module))
+                found.extend(module.adapter_violations(registry))
                 found.extend(module.stray_import_violations())
                 found.extend(ROLE_TESSER_IMPORTS.get(parts[1], CLIENT_TESSER_IMPORTS).violations(module))
                 found.extend(module.import_violations(registry))
@@ -10098,11 +10272,7 @@ class Codebase(ts.AggregateRoot):
                         "ports",
                         "ports-file",
                     ):
-                        found.extend(decl.port_violations())
-                        for signature in decl.signatures():
-                            if str(signature.name()).startswith("_") and str(signature.name()) != PUBLIC_CALL:
-                                continue
-                            found.extend(PORT_METHOD.violations(signature))
+                        found.extend(decl.port_violations(PORT_METHOD))
                 elif block == "store":
                     if str(module.place()) in (
                         "ports",
@@ -10124,11 +10294,10 @@ class Codebase(ts.AggregateRoot):
                 elif block == SERDE_BLOCK:
                     found.extend(decl.serde_violations())
                 elif block == "actions":
-                    found.extend(decl.actions_violations())
+                    found.extend(decl.actions_violations(ACTIONS_DEPENDENCIES))
                     for body in decl.bodies():
                         found.extend(body.delegation_violations())
                         if str(body.name()) == "__init__":
-                            found.extend(ACTIONS_DEPENDENCIES.violations(body.signature()))
                             continue
                         if str(body.name()).startswith("_") and str(body.name()) != PUBLIC_CALL:
                             continue
@@ -10136,11 +10305,10 @@ class Codebase(ts.AggregateRoot):
                         found.extend(body.violations())
                         found.extend(body.port_call_violations())
                 elif block == "orchestrator":
-                    found.extend(decl.orchestrator_violations())
+                    found.extend(decl.orchestrator_violations(ORCHESTRATOR_DEPENDENCIES))
                     for body in decl.bodies():
                         found.extend(body.delegation_violations())
                         if str(body.name()) == "__init__":
-                            found.extend(ORCHESTRATOR_DEPENDENCIES.violations(body.signature()))
                             continue
                         if str(body.name()).startswith("_") and str(body.name()) != PUBLIC_CALL:
                             continue

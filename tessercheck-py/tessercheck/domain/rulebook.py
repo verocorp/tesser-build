@@ -142,7 +142,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Module.ports_violations": "ports module",
     "ClassDecl.port_violations": "port protocol method",
     "Module.application_client_violations": "application client module",
-    "Module.application_client_class_violations": "application client class",
+    "ClientClass.violations": "application client class",
     "Module.orchestrators_violations": "orchestrators module",
     "ClassDecl.actions_violations": "actions class",
     "ClassDecl.orchestrator_violations": "orchestrator class",
@@ -152,6 +152,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Body.held_context_violations": "repository or gateway class",
     "ClassDecl.store_violations": "store protocol method",
     "Module.role_violations": "context role module",
+    "Module.adapter_violations": "context role module",
     "Module.import_violations": "context role module",
     "Module.app_import_violations": "srv / app module",
     "Module.test_violations": "test module",
@@ -174,7 +175,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "test": "test module",
     "ImportEdge.member_form_violations": "every import in every governed module",
     "Module.stray_import_violations": "role, srv/app, or test module",
-    "Module.helper_violations": "@ts.helper function",
+    "Helper.violations": "@ts.helper function",
     "Module.pairing_violations": "implementation module and its sibling test file",
     "ClassDecl.valueobject_violations": "value object `__init__`",
     "ClassDecl.component_violations": "component class",
@@ -250,10 +251,12 @@ class RulebookSpec(ts.Spec):
         checks_text: str,
         test_modules: tuple[tuple[str, str], ...] = (),
         contracts_text: str = "",
+        total: bool = False,
     ) -> None:
         self.checks_text = checks_text
         self.test_modules = test_modules
         self.contracts_text = contracts_text
+        self.total = total
 
 
 class Rulebook(ts.ValueObject):
@@ -261,6 +264,7 @@ class Rulebook(ts.ValueObject):
     _value: str
 
     def __init__(self, spec: RulebookSpec) -> None:
+        subjects: set[str] = set()
         def spec_fields(call: ast.Call) -> dict[str, ast.expr] | None:
             if call.keywords or len(call.args) != 1:
                 return None
@@ -367,8 +371,9 @@ class Rulebook(ts.ValueObject):
                     ) if spec_cls is not None else None
                     if spec_init is None:
                         continue
-                    spec_params = [a.arg for a in spec_init.args.args[1:]]
+                    spec_params = [a.arg for a in spec_init.args.posonlyargs + spec_init.args.args][1:]
                     defaulted = spec_params[len(spec_params) - len(spec_init.args.defaults):]
+                    spec_keywords = [a.arg for a in spec_init.args.kwonlyargs]
                     for node in ast.walk(tree):
                         if not (
                             isinstance(node, ast.Call)
@@ -382,6 +387,11 @@ class Rulebook(ts.ValueObject):
                                 default.value is None or isinstance(default.value, str)
                             ):
                                 spec_bound[name] = default.value
+                        for name, kw_default in zip(spec_keywords, spec_init.args.kw_defaults):
+                            if isinstance(kw_default, ast.Constant) and (
+                                kw_default.value is None or isinstance(kw_default.value, str)
+                            ):
+                                spec_bound[name] = kw_default.value
                         for name, arg in zip(spec_params, node.args):
                             if isinstance(arg, ast.Constant) and (arg.value is None or isinstance(arg.value, str)):
                                 spec_bound[name] = arg.value
@@ -501,6 +511,7 @@ class Rulebook(ts.ValueObject):
                             raise RuntimeError(
                                 f"no APPLIES_TO entry for {key!r}; extend the map"
                             )
+                        subjects.add(key)
                         if clause not in codes:
                             order.append(clause)
                             codes[clause] = code
@@ -611,6 +622,13 @@ class Rulebook(ts.ValueObject):
             "architecture violation-injection test).",
             "",
         ]
+        if spec.total:
+            dead = tuple(sorted(key for key in APPLIES_TO if key not in subjects))
+            if dead:
+                raise RuntimeError(
+                    f"APPLIES_TO rows nothing produces: {', '.join(dead)}; "
+                    "drop the row or fix its key"
+                )
         object.__setattr__(self, "_value", "\n".join(lines))
 
     def __str__(self) -> str:

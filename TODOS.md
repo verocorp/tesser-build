@@ -402,12 +402,36 @@ Two things the burn-down left behind, deliberately:
      of 2,200 `KindTable`s built per run only 1,360 were ever read, and
      `mapper_target`/`outcome_methods`/`action_ports` were built 2,200
      times and read zero times.
-  Smaller, recorded: `EnumShape` keys its extras by line where main keyed
-  by node identity, so two statements sharing a line via `;` in an enum
-  body cross-contaminate; a VO `__init__(this, value)` (first slot named
-  neither `self` nor `cls`) gains two `TB080`s where main dropped slot 0
-  by position; the component check's "annotation precedes store" is now
-  by line number where main's was `ast.walk` (breadth-first) order.
+  Smaller: a VO `__init__(this, value)` (first slot named neither `self`
+  nor `cls`) gains two `TB080`s where main dropped slot 0 by position —
+  the same leading-parameter question as `cls` under `@classmethod`. The
+  enum-extras line keying and the component annotation order were
+  restored by the audit wave below.
+- [x] **The four-audit differential wave (2026-08-30) and its
+  restorations.** Four slice audits (method bodies, placement,
+  spec/rulebook, per-class) ran main's `checks.py` against this one over
+  synthetic and real trees; every divergence they measured outside the
+  two open rulings was restored, each with a pinning test verified to
+  fail against the pre-fix tree: the quoted `ts.JobContext` return
+  finding; walk-order `Refs` (a signature names the first domain object
+  its annotation walks again); the annotated `self` scan; enum extras
+  keyed by body position (`A = 1; del A` no longer flags the member); the
+  rulebook extractor's posonlyargs/kwonlyargs alignment; nine
+  emission-order regressions back to main's order (provenance first, the
+  second-match pass, module functions and statements before the adapters
+  block, helpers and application-client classes emitted inline through
+  new `Helper` and `ClientClass` value objects, class-body statements
+  merged into the method loop by source position, signature policies
+  inside the per-method loop, `.tesser-root` declaration order for
+  TB044); a reverse totality guard over the rulebook's `APPLIES_TO`
+  (`RulebookSpec(total=True)`, locked over the real tree); and a
+  duplicate-symbol guard on `KindTable`. The differential sweep is
+  byte-identical on 16 of 18 trees — the two exceptions are the intended
+  `ts.Mapper`/`ts.Serde` base change — and every remaining synthetic
+  divergence is one of the two rulings above. Left open: `ScopeSpec` is
+  built identically in four places on `Module`; deduplicating it needs a
+  spec parameter threaded from `violations()` or a ruling, because TB083
+  forbids keeping the spec and TB051 forbids a builder self-call.
 - [ ] **A deep annotation crashes the run.** `Annotation.__init__`'s
   closures recurse over `|` chains and nested subscripts with no depth
   bound; `x: int | int | ...` a few thousand deep parses but raises
@@ -417,9 +441,10 @@ Two things the burn-down left behind, deliberately:
   runs on main and exits `unexpected error` here (both fail at 1200). It
   fails closed — the tree goes unchecked, nothing is bypassed. Catch it
   beside `SyntaxError` or walk iteratively.
-- [ ] **The seven `TB080` markers** (`Annotation`, `FieldSpec`, `ParamSpec`,
-  `MethodSpec`, `ClassDeclSpec`, `BodySpec`, `EnumShapeSpec`) are the
-  foreign-type ruling's whole footprint — see the section below.
+- [ ] **The nine `TB080` markers** (`Annotation`, `FieldSpec`, `ParamSpec`,
+  `MethodSpec`, `ClassDeclSpec`, `BodySpec`, `EnumShapeSpec`,
+  `HelperSpec`, `ClientClassSpec`) are the foreign-type ruling's whole
+  footprint — see the section below.
 
 ## Foreign types at the analyzer's door (2026-08-30, deferred rule)
 
@@ -428,7 +453,7 @@ methods into domain objects that wrap Python syntax: `Annotation`, `Field`,
 `Method`, `ClassDecl`, `Scope`, `Names`, `Symbols`. Every one conforms to the
 rules as written except at one point: an `ast.*` node crossing a constructor
 or a spec field. A node is not a primitive and cannot decompose into one, so
-`TB080` fires on the seven wrapper constructors that take one. Each carries
+`TB080` fires on the nine wrapper constructors that take one. Each carries
 `# tesser:debt TB080` — the debt names the unruled question at the one place
 the answer would change code, and it is bounded by the number of wrapper
 *types*, not call sites.
