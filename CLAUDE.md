@@ -149,7 +149,10 @@ filesystem reader, a client, and `srv/cli` entry points, gated at the same
 bar as every other tree). Run by `scripts/verify` as step 0 and by its own CI
 job, it fails when the directories on disk, the manifest, the `.tesser-root`
 files, and the CI jobs disagree in any direction, including a
-`requirements-dev.txt` at any depth outside an `app` row. **Do not create a new top-level directory (or
+`requirements-dev.txt` at any depth outside an `app` row and a stated Python
+floor that is not **3.12** (`requires-python`, ruff `target-version`, and every
+`python-version:` pin in the workflow; the floor is the `FLOOR` constant in
+`layout/repo/domain/rules.py`). **Do not create a new top-level directory (or
 `examples/` subdirectory) without adding its manifest row**; the check exists
 precisely to make that impossible to do silently. `scripts/verify` reads its
 tree list from the manifest, so a new `app` row must come with a `run_*` arm

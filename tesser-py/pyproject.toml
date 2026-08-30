@@ -6,8 +6,9 @@ build-backend = "setuptools.build_meta"
 name = "tesser"
 version = "0.1.0"
 description = "Runtime library for the tesser-build domain-construction conventions (Python)"
-# typing.assert_never (tesser.errors' exhaustive kind mappers) landed in 3.11.
-requires-python = ">=3.11"
+# PEP 695 type parameters (tesser.application.JobContext and the trees that use
+# it) are a SyntaxError before 3.12, so 3.11 could never import this package.
+requires-python = ">=3.12"
 dependencies = []
 
 [tool.setuptools.packages.find]

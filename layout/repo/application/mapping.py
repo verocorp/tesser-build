@@ -65,6 +65,29 @@ class MapToRepoSpec(ts.Mapper, domain.RepoSpec):
                 listed.append((entry_record.name, entry_form))
             listings.append(tuple(listed))
         top, examples = listings
+        stated: list[tuple[str, str, str, str]] = []
+        for floor_record in read.floors:
+            match floor_record.key:
+                case repo_reader.FloorKey.REQUIRES_PYTHON:
+                    floor_key = domain.REQUIRES_PYTHON
+                case repo_reader.FloorKey.TARGET_VERSION:
+                    floor_key = domain.TARGET_VERSION
+                case _ as unreachable_key:
+                    typing.assert_never(unreachable_key)
+            match floor_record.state:
+                case repo_reader.FloorState.READ:
+                    floor_state = domain.READ
+                case repo_reader.FloorState.UNDECLARED:
+                    floor_state = domain.UNDECLARED
+                case repo_reader.FloorState.UNREADABLE:
+                    floor_state = domain.UNREADABLE
+                case repo_reader.FloorState.MALFORMED:
+                    floor_state = domain.MALFORMED
+                case _ as unreachable_floor:
+                    typing.assert_never(unreachable_floor)
+            stated.append(
+                (floor_record.path, floor_key, floor_state, floor_record.value)
+            )
         super().__init__(
             manifest=(manifest_state, manifest_rows, read.manifest.note),
             verify=(verify_state, read.verify.text),
@@ -73,4 +96,5 @@ class MapToRepoSpec(ts.Mapper, domain.RepoSpec):
             examples=examples,
             declarations=tuple(declared),
             requirements=read.requirements,
+            floors=tuple(stated),
         )
