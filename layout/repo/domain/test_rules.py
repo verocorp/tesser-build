@@ -386,9 +386,171 @@ def test_problem_equality() -> None:
     )
 
 
-def test_problem_rejects_an_empty_subject() -> None:
-    with pytest.raises(ValueError):
-        rules.Problem(rules.ProblemSpec(rules.Rule.NO_CI_JOB, ""))
+def test_an_empty_manifest_key_is_a_row_without_a_directory_not_a_crash() -> None:
+    rows = _spec().manifest[1] + (("", "ungated"),)
+    repo = rules.Repo(_spec(manifest=("read", rows, "")))
+
+    presence = repo.presence(rules.ProblemSpec(rules.Rule.ROW_WITHOUT_DIRECTORY, ""))
+
+    assert presence is rules.Presence.ONLY
+    assert tuple(str(tree) for tree in repo.trees()) == ("appone", "libby")
+
+
+@pytest.mark.parametrize(
+    ("rule", "subject", "note", "sentence"),
+    [
+        (rules.Rule.MANIFEST_MISSING, "manifest.json", "", "manifest.json is missing"),
+        (rules.Rule.MANIFEST_UNREADABLE, "manifest.json", "", "manifest.json is unreadable"),
+        (
+            rules.Rule.MANIFEST_MALFORMED,
+            "manifest.json",
+            "Expecting value",
+            "manifest.json is unreadable: Expecting value",
+        ),
+        (
+            rules.Rule.MANIFEST_MISSHAPEN,
+            "manifest.json",
+            "",
+            "manifest.json is not a flat object of directory-path to kind strings",
+        ),
+        (
+            rules.Rule.UNKNOWN_KIND,
+            "libby",
+            "python-library",
+            "manifest.json row 'libby' declares unknown kind 'python-library'; "
+            "the kinds are 'app' and 'ungated'",
+        ),
+        (
+            rules.Rule.UNREGISTERED_TOP_LEVEL,
+            "utils",
+            "",
+            "top-level directory 'utils' has no manifest.json row; "
+            "every top-level directory declares what it is",
+        ),
+        (
+            rules.Rule.UNREGISTERED_EXAMPLE,
+            "examples/newthing",
+            "",
+            "examples/newthing has no manifest.json row",
+        ),
+        (
+            rules.Rule.ROW_WITHOUT_DIRECTORY,
+            "examples/demo",
+            "",
+            "manifest.json row 'examples/demo' names no directory on disk",
+        ),
+        (
+            rules.Rule.SYMLINKED_DIRECTORY,
+            "appone",
+            "",
+            "appone is a symlinked directory; a declared directory is a real one",
+        ),
+        (rules.Rule.VERIFY_UNAVAILABLE, "scripts/verify", "missing", "scripts/verify is missing"),
+        (
+            rules.Rule.WORKFLOW_UNAVAILABLE,
+            ".github/workflows/test.yml",
+            "unreadable",
+            ".github/workflows/test.yml is unreadable",
+        ),
+        (
+            rules.Rule.SHARED_GATE_NAME,
+            "libby",
+            "examples/libby",
+            "'libby' and 'examples/libby' share the gate name 'libby'; scripts/verify "
+            "picks its steps by that name, so app directory names must be unique",
+        ),
+        (
+            rules.Rule.NO_VERIFY_ARM,
+            "examples/libby",
+            "",
+            "examples/libby has no scripts/verify case arm for 'libby'",
+        ),
+        (
+            rules.Rule.NO_CI_JOB,
+            "libby",
+            "",
+            "libby has no CI job step 'run: scripts/verify libby'",
+        ),
+        (
+            rules.Rule.DECLARATION_UNCHECKED,
+            "libby/.tesser-root",
+            "",
+            "libby/.tesser-root declares a tree whose scripts/verify steps do not run tessercheck",
+        ),
+        (
+            rules.Rule.DECLARATION_MISSING,
+            "appone/.tesser-root",
+            "",
+            "appone/.tesser-root is missing; a tree that tessercheck runs on "
+            "declares itself with .tesser-root",
+        ),
+        (
+            rules.Rule.DECLARATION_UNAVAILABLE,
+            "appone/.tesser-root",
+            "unreadable",
+            "appone/.tesser-root does not declare 'app': unreadable",
+        ),
+        (
+            rules.Rule.DECLARATION_NOT_APP,
+            "appone/.tesser-root",
+            "",
+            "appone/.tesser-root does not declare 'app': first line is not 'app'",
+        ),
+        (
+            rules.Rule.REQUIREMENTS_OUTSIDE_APP,
+            "docs",
+            "",
+            "docs holds a requirements-dev.txt but is not an app row; "
+            "a Python tree cannot sit outside the gates",
+        ),
+        (
+            rules.Rule.REQUIRES_PYTHON_UNDECLARED,
+            "libby/pyproject.toml",
+            "",
+            "libby/pyproject.toml declares a distribution without requires-python; "
+            "every distribution states the Python floor as '>=3.12'",
+        ),
+        (
+            rules.Rule.TARGET_VERSION_UNDECLARED,
+            "libby/ruff.toml",
+            "",
+            "libby/ruff.toml declares a distribution without target-version; "
+            "every distribution states the Python floor as 'py312'",
+        ),
+        (
+            rules.Rule.FLOOR_FILE_UNAVAILABLE,
+            "libby/pyproject.toml",
+            "malformed",
+            "libby/pyproject.toml is malformed",
+        ),
+        (
+            rules.Rule.REQUIRES_PYTHON_BELOW_FLOOR,
+            "libby/pyproject.toml",
+            ">=3.11",
+            "libby/pyproject.toml states requires-python = '>=3.11'; the Python floor "
+            "is 3.12, so it reads '>=3.12'",
+        ),
+        (
+            rules.Rule.TARGET_VERSION_BELOW_FLOOR,
+            "libby/ruff.toml",
+            "py311",
+            "libby/ruff.toml states target-version = 'py311'; the Python floor "
+            "is 3.12, so it reads 'py312'",
+        ),
+        (
+            rules.Rule.WORKFLOW_PIN_BELOW_FLOOR,
+            ".github/workflows/test.yml",
+            "3.11",
+            ".github/workflows/test.yml pins python-version 3.11, below the Python floor 3.12",
+        ),
+    ],
+)
+def test_every_rule_renders_its_sentence(
+    rule: rules.Rule, subject: str, note: str, sentence: str
+) -> None:
+    problem = rules.Problem(rules.ProblemSpec(rule, subject, note))
+
+    assert str(problem.text()) == sentence
 
 
 @pytest.mark.parametrize("rule", list(rules.Rule))
@@ -433,6 +595,17 @@ def test_a_distribution_without_a_requires_python_is_a_problem() -> None:
 
     presence = repo.presence(
         rules.ProblemSpec(rules.Rule.REQUIRES_PYTHON_UNDECLARED, "libby/pyproject.toml")
+    )
+
+    assert presence is rules.Presence.ONLY
+
+
+def test_a_distribution_without_a_target_version_is_a_problem() -> None:
+    floors = (("libby/ruff.toml", "target-version", "undeclared", ""),)
+    repo = rules.Repo(_spec(floors=floors))
+
+    presence = repo.presence(
+        rules.ProblemSpec(rules.Rule.TARGET_VERSION_UNDECLARED, "libby/ruff.toml")
     )
 
     assert presence is rules.Presence.ONLY
@@ -515,3 +688,20 @@ def test_a_matrix_at_and_above_the_floor_is_clean() -> None:
     )
 
     assert rules.Repo(_spec(workflow=workflow)).health() is rules.Health.CLEAN
+
+
+def test_a_repeated_problem_is_still_the_only_problem() -> None:
+    workflow = (
+        "read",
+        _spec().workflow[1] + "        python-version: ['3.11']\n"
+        "          python-version: '3.11'\n",
+    )
+    repo = rules.Repo(_spec(workflow=workflow))
+
+    presence = repo.presence(
+        rules.ProblemSpec(
+            rules.Rule.WORKFLOW_PIN_BELOW_FLOOR, ".github/workflows/test.yml", "3.11"
+        )
+    )
+
+    assert presence is rules.Presence.ONLY

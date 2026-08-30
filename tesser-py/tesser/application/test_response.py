@@ -1,3 +1,5 @@
+import pytest
+
 import tesser.application.response as response
 
 
@@ -50,3 +52,26 @@ def test_a_nested_response_compares_through_its_children() -> None:
 
     assert Parent(Child("x"), (Child("y"),)) == Parent(Child("x"), (Child("y"),))
     assert Parent(Child("x"), (Child("y"),)) != Parent(Child("x"), (Child("z"),))
+
+
+def test_a_response_with_an_unhashable_field_cannot_be_hashed() -> None:
+    class Concrete(response.Response):
+        def __init__(self, items: list[str]) -> None:
+            self.items = items
+
+    with pytest.raises(TypeError):
+        hash(Concrete(["a"]))
+
+
+def test_a_response_subclass_may_not_redefine_equality_or_hashing() -> None:
+    with pytest.raises(TypeError):
+
+        class BadEq(response.Response):
+            def __eq__(self, other: object) -> bool:
+                return True
+
+    with pytest.raises(TypeError):
+
+        class BadHash(response.Response):
+            def __hash__(self) -> int:
+                return 0

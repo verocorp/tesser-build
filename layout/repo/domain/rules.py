@@ -117,6 +117,17 @@ class Text(ts.ValueObject):
         return serialization.canonical_str(self._value)
 
 
+class Subject(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return serialization.canonical_str(self._value)
+
+
 class Note(ts.ValueObject):
 
     _value: str
@@ -139,15 +150,15 @@ class ProblemSpec(ts.Spec):
 class Problem(ts.ValueObject):
 
     _rule: Rule
-    _subject: Text
+    _subject: Subject
     _note: Note
 
     def __init__(self, spec: ProblemSpec) -> None:
         object.__setattr__(self, "_rule", spec.rule)
-        object.__setattr__(self, "_subject", Text(spec.subject))
+        object.__setattr__(self, "_subject", Subject(spec.subject))
         object.__setattr__(self, "_note", Note(spec.note))
 
-    def subject(self) -> Text:
+    def subject(self) -> Subject:
         return self._subject
 
     def note(self) -> Note:
@@ -356,7 +367,7 @@ class Repo(ts.AggregateRoot):
                     if "tessercheck_tree" in (arm.group(1) if arm else ""):
                         checked.add(f"{key}/{DECLARATION}")
                 if not re.search(
-                    rf"^\s*run: scripts/verify {re.escape(tree)}\s*$",
+                    rf"^\s*run: {re.escape(VERIFY)} {re.escape(tree)}\s*$",
                     workflow_text,
                     re.MULTILINE,
                 ):
@@ -407,14 +418,14 @@ class Repo(ts.AggregateRoot):
             )
         self._problems = tuple(found)
 
-
     def health(self) -> Health:
         return Health.PROBLEMS if self._problems else Health.CLEAN
 
     def presence(self, spec: ProblemSpec) -> Presence:
-        if Problem(spec) not in self._problems:
+        sought = Problem(spec)
+        if sought not in self._problems:
             return Presence.ABSENT
-        if len(self._problems) == 1:
+        if all(problem == sought for problem in self._problems):
             return Presence.ONLY
         return Presence.AMONG
 

@@ -1,5 +1,14 @@
 class Request:
 
+    def __init_subclass__(cls, **kwargs: object) -> None:
+        super().__init_subclass__(**kwargs)
+        for name in ("__eq__", "__hash__"):
+            if name in cls.__dict__:
+                raise TypeError(
+                    f"{cls.__name__} must not override {name}: "
+                    "Request owns the identity contract"
+                )
+
     def __eq__(self, other: object) -> bool:
         if type(self) is not type(other):
             return NotImplemented
