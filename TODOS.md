@@ -2,6 +2,27 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Raw roadmap reminders (2026-09-03, Chris)
+
+Unexpanded, in Chris's words — each needs its own entry (or a `roadmap/`
+registry row) before work starts. Kept raw on purpose; expand one when it is
+picked up, not before.
+
+- [ ] Semantics.
+- [ ] Updating the skill for writing code — evals?
+- [ ] JTBD + obligations.
+- [ ] Protocol: is a bytestream a primitive?
+- [ ] Migrations.
+- [ ] Provision / deploy / release.
+- [ ] Performance / benchmarks.
+- [ ] Chaos.
+- [ ] Port the checks to a React app.
+- [ ] Smaller, specialized agents — Chris tried training a smaller model on a
+  GPU (AWS) to write an application service.
+- [ ] Variable naming.
+- [ ] `tesser:instruction` — human-written instructions to agents, carried
+  alongside the code.
+
 ## Left open by the v0.0.89.0 adversarial pass (2026-08-29, PR #148)
 
 Seventeen bypass probes were run against the new clauses — twelve mine, five
