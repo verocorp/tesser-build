@@ -9,6 +9,10 @@ registry row) before work starts. Kept raw on purpose; expand one when it is
 picked up, not before.
 
 - [ ] Semantics.
+- [ ] AI evals + general configuration (related to the semantics item).
+  Config might live in a repo hardcoded, in a YAML file, or in a database —
+  and the tests/evals over that config and/or prompts should run **on save**,
+  not just on code commit.
 - [ ] Updating the skill for writing code — evals?
 - [ ] JTBD + obligations.
 - [ ] Protocol: is a bytestream a primitive?
