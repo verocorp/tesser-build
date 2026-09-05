@@ -1146,6 +1146,14 @@ class KindTable(ts.ValueObject):
         wanted = str(module)
         return Names(tuple(block for owner, _, block in self._entries if owner == wanted))
 
+    def blocks_under(self, module: Text) -> Names:
+        wanted = str(module)
+        return Names(tuple(
+            block
+            for owner, _, block in self._entries
+            if owner == wanted or owner.startswith(wanted + ".")
+        ))
+
     def block_of(self, symbol: Symbol) -> Text | None:
         wanted_module = str(symbol.module())
         wanted_name = str(symbol.name())
@@ -1533,6 +1541,35 @@ class Alias(ts.ValueObject):
         return self._package
 
 
+class ReexportSpec(ts.Spec):
+
+    def __init__(self, package: str, exported: str, defining: str, original: str) -> None:
+        self.package = package
+        self.exported = exported
+        self.defining = defining
+        self.original = original
+
+
+class Reexport(ts.ValueObject):
+
+    _package: Text
+    _exported: Text
+    _defining: Text
+    _original: Text
+
+    def __init__(self, spec: ReexportSpec) -> None:
+        object.__setattr__(self, "_package", Text(spec.package))
+        object.__setattr__(self, "_exported", Text(spec.exported))
+        object.__setattr__(self, "_defining", Text(spec.defining))
+        object.__setattr__(self, "_original", Text(spec.original))
+
+    def exports(self) -> Symbol:
+        return Symbol(SymbolSpec(str(self._package), str(self._exported)))
+
+    def defines(self) -> Symbol:
+        return Symbol(SymbolSpec(str(self._defining), str(self._original)))
+
+
 class ScopeSpec(ts.Spec):
 
     def __init__(
@@ -1565,7 +1602,7 @@ class Scope(ts.ValueObject):
     _functions: Names
     _spoken: Text | None
     _enums: Names
-    _reexports: tuple[tuple[str, str, str, str], ...]
+    _reexports: tuple[Reexport, ...]
 
     def __init__(self, spec: ScopeSpec) -> None:
         object.__setattr__(self, "_module", Text(spec.module))
@@ -1575,7 +1612,10 @@ class Scope(ts.ValueObject):
         object.__setattr__(self, "_functions", Names(spec.functions))
         object.__setattr__(self, "_spoken", Text(spec.spoken) if spec.spoken else None)
         object.__setattr__(self, "_enums", Names(spec.enums))
-        object.__setattr__(self, "_reexports", spec.reexports)
+        object.__setattr__(self, "_reexports", tuple(
+            Reexport(ReexportSpec(package, exported, defining, original))
+            for package, exported, defining, original in spec.reexports
+        ))
 
     def enums(self) -> Names:
         return self._enums
@@ -1622,11 +1662,11 @@ class Scope(ts.ValueObject):
                 found = (str(self._module), wanted)
         if found is None:
             return None
-        for package, exported, defining, original in self._reexports:
-            if (package, exported) == found:
-                found = (defining, original)
-                break
-        return Symbol(SymbolSpec(found[0], found[1]))
+        named = Symbol(SymbolSpec(found[0], found[1]))
+        for reexport in self._reexports:
+            if reexport.exports() == named:
+                return reexport.defines()
+        return named
 
     def symbols(self, annotation: Annotation) -> Symbols:
         found: list[tuple[str, str]] = []
@@ -1642,15 +1682,17 @@ class Scope(ts.ValueObject):
                     found.append((str(binding.target()), str(binding.original())))
             if ref in self._classes:
                 found.append((str(self._module), ref))
-        canonical: list[tuple[str, str]] = []
-        for item in found:
-            named = item
-            for package, exported, defining, original in self._reexports:
-                if (package, exported) == item:
-                    named = (defining, original)
+        canonical: list[Symbol] = []
+        for module_name, name in found:
+            named = Symbol(SymbolSpec(module_name, name))
+            for reexport in self._reexports:
+                if reexport.exports() == named:
+                    named = reexport.defines()
                     break
             canonical.append(named)
-        return Symbols(SymbolsSpec(tuple(SymbolSpec(module_name, name) for module_name, name in canonical)))
+        return Symbols(SymbolsSpec(tuple(
+            SymbolSpec(str(item.module()), str(item.name())) for item in canonical
+        )))
 
 
 class EnumShapeSpec(ts.Spec):
@@ -5024,7 +5066,7 @@ class ClassDecl(ts.Entity):
                 primary = annotation.primary() if annotation is not None else None
                 symbol = self._scope.resolve(primary) if primary is not None else None
                 if symbol is not None and spoken is not None and (
-                    str(symbol.module()) == str(spoken)
+                    symbol.module() == spoken
                     or str(symbol.module()).startswith(str(spoken) + ".")
                 ):
                     continue
@@ -7421,19 +7463,30 @@ class Module(ts.Entity):
                     ))
                 )
             found.extend(edge.form_violations())
-        for _, original, asname, lineno in self._members:
-            exported = asname or original
-            if asname != original:
+        for _, original, exported, lineno in self._members:
+            if not exported:
                 found.append(
                     Violation(ViolationSpec(
                         self._path,
                         lineno,
                         "TB042",
-                        f"{module_name} re-exports {original} as {exported}; a role "
-                        "__init__ re-exports under the name the module defines — "
+                        f"{module_name} imports {original} without repeating the name; "
+                        "a role __init__ re-exports under the name the module defines — "
                         "from x import Y as Y, the form mypy --strict reads as an export",
                     ))
                 )
+            elif exported != original:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB042",
+                        f"{module_name} re-exports {original} as {exported}; "
+                        "a role __init__ re-exports under the name the module defines — "
+                        "from x import Y as Y, the form mypy --strict reads as an export",
+                    ))
+                )
+            exported = exported or original
             if (module_name, exported) not in named:
                 found.append(
                     Violation(ViolationSpec(
@@ -7441,19 +7494,44 @@ class Module(ts.Entity):
                         lineno,
                         "TB042",
                         f"{module_name} re-exports {exported}, which no module outside "
-                        "the role names; a role __init__ re-exports only what a module "
+                        "the role reads; a role __init__ re-exports only what a module "
                         "outside its role reads",
                     ))
                 )
         return tuple(found)
 
-    def package_attrs(self) -> tuple[tuple[str, str], ...]:
+    def spoken_shapes(self) -> Symbols:
+        found: list[tuple[str, str]] = []
+        for cls in self._class_defs:
+            for item in cls.body:
+                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                annotations = [
+                    arg.annotation
+                    for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
+                ] + [item.returns]
+                for node in annotations:
+                    if node is None:
+                        continue
+                    primary = Annotation(node).primary()
+                    if primary is None:
+                        continue
+                    symbol = self._scope.resolve(primary)
+                    if symbol is not None:
+                        found.append((str(symbol.module()), str(symbol.name())))
+        return Symbols(SymbolsSpec(tuple(
+            SymbolSpec(module_name, name) for module_name, name in found
+        )))
+
+    def package_attrs(self) -> Symbols:
         found: set[tuple[str, str]] = set()
         for node in self._attributes:
             package = self._package_aliases.get(ast.unparse(node.value))
             if package is not None:
                 found.add((package, node.attr))
-        return tuple(sorted(found))
+        return Symbols(SymbolsSpec(tuple(
+            SymbolSpec(package, attr) for package, attr in sorted(found)
+        )))
 
     def role_package_import_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
@@ -7485,9 +7563,9 @@ class Module(ts.Entity):
                     self._path,
                     lineno,
                     "TB060",
-                    f"{module_name} imports {target}; a module outside a role package "
-                    f"imports {holder}, the package, because the role __init__ is the "
-                    "list of what the outside may name",
+                    f"{module_name} imports {target}, a module of {holder}; "
+                    "a module outside a role package imports the package, because "
+                    "the role __init__ is the list of what the outside may name",
                 ))
             )
         return tuple(found)
@@ -7724,7 +7802,7 @@ class Module(ts.Entity):
             tail = pieces[1] if len(pieces) > 1 else ""
             if pieces[0] in contexts:
                 denied: list[Violation] = []
-                hosts = kinds.blocks_in(Text(target)) & Names(tuple(HOST_KINDS))
+                hosts = kinds.blocks_under(Text(target)) & Names(tuple(HOST_KINDS))
                 if package == "srv" and not (tail == "adapters" and hosts):
                     denied.append(
                         Violation(ViolationSpec(
@@ -9810,13 +9888,8 @@ CONTEXT_TESTS_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageI
 
 PROTOCOL_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageInitPolicySpec("a protocol"))
 
-PORTS_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageInitPolicySpec("a ports"))
-
 SHELL_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageInitPolicySpec("a srv or app"))
 
-APPLICATION_CLIENT_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageInitPolicySpec("an application client package"))
-
-ORCHESTRATORS_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageInitPolicySpec("an orchestrators package"))
 
 
 ROLE_TESSER_IMPORTS: typing.Final[dict[str, TesserImportPolicy]] = {
@@ -10042,14 +10115,10 @@ class Codebase(ts.AggregateRoot):
         spoken: set[str] = set()
         for module in self._modules:
             if str(module.place()) in ("app-client", "app-client-file"):
-                names_ports = module.spoken()
-                if names_ports is not None:
-                    spoken.add(str(names_ports))
+                for shape in module.spoken_shapes():
+                    spoken.add(str(shape.module()))
         self._action_ports: frozenset[tuple[str, str]] = frozenset(
-            key
-            for key, block in blocks.items()
-            if block == "port"
-            and any(key[0] == named or key[0].startswith(named + ".") for named in spoken)
+            key for key, block in blocks.items() if block == "port" and key[0] in spoken
         )
         self._domain_enums = frozenset(
             (module.name(), stmt.name)
@@ -10074,10 +10143,11 @@ class Codebase(ts.AggregateRoot):
             if each.is_package() and str(each.place()) in ROLE_PACKAGE_PLACES
         ))
         package_attr_rows = tuple(sorted({
-            (package, attr)
+            (str(symbol.module()), str(symbol.name()))
             for each in self._modules
-            for package, attr in each.package_attrs()
-            if each.name() != package and not each.name().startswith(package + ".")
+            for symbol in each.package_attrs()
+            if each.name() != str(symbol.module())
+            and not each.name().startswith(str(symbol.module()) + ".")
         }))
         mapper_target_rows = tuple(
             (source[0], source[1], target[0], target[1]) for source, target in sorted(self._mapper_target.items())

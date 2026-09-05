@@ -2585,7 +2585,7 @@ def test_role_init_only_reexports_its_own_role() -> None:
         ))).violations()
                )
     assert any(
-        "pkg.domain imports tesser.domain; a role __init__ only re-exports from its own role" in f
+        "pkg.domain imports tesser.domain; a role __init__ only re-exports a module of its own role" in f
         for f in findings
     )
     assert any(
@@ -2594,16 +2594,10 @@ def test_role_init_only_reexports_its_own_role() -> None:
         for f in findings
     )
     assert not any("imports pkg.domain.vo" in f for f in findings)
-    assert any(
-        "pkg.domain imports names from pkg.domain.vo; every import is a "
-        "module import — import x or import x as name, never from x "
-        "import name" in f
-        for f in findings
-    )
-    assert len([f for f in findings if "TB053" in f]) == 1, findings
+    assert not any("TB053" in f and "pkg.domain:" in f for f in findings)
 
 
-def test_a_role_init_may_import_a_module_but_never_a_class() -> None:
+def test_a_role_init_re_exports_under_the_name_the_module_defines() -> None:
     vo = (
         "mod/domain/vo.py",
         "mod.domain.vo",
@@ -2613,44 +2607,146 @@ def test_a_role_init_may_import_a_module_but_never_a_class() -> None:
         "        object.__setattr__(self, '_text', text)\n",
         False,
     )
-    client = (
+    reader = (
         "mod/client/client.py",
         "mod.client.client",
         "import tesser.context as ts\n"
+        "import mod.domain as domain\n"
         "class AskRequest(ts.Request):\n"
         "    def __init__(self, text: str) -> None:\n"
-        "        self.text = text\n",
+        "        self.text = text\n"
+        "class Asked(ts.Response):\n"
+        "    def __init__(self, tag: domain.Tag) -> None:\n"
+        "        self.tag = tag\n",
         False,
     )
     client_init = ("mod/client/__init__.py", "mod.client", "", True)
-    module_form = (
+
+    def run(init: tuple[str, str, str, bool]) -> tuple[str, ...]:
+        return tuple(
+            f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+            for v in checks.Codebase(_spec(sources=(vo, init, reader, client_init))).violations()
+        )
+
+    clean = run((
         "mod/domain/__init__.py",
         "mod.domain",
-        "import mod.domain.vo as vo\n",
+        "from mod.domain.vo import Tag as Tag\n",
         True,
-    )
-    class_form = (
+    ))
+    assert not any("mod.domain:" in f for f in clean), clean
+
+    bare = run((
         "mod/domain/__init__.py",
         "mod.domain",
         "from mod.domain.vo import Tag\n",
         True,
-    )
-    assert not any(
-        "mod.domain:" in f for f in tuple(
-                                        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                                        for v in checks.Codebase(_spec(sources=(vo, module_form, client, client_init))).violations()
-                                    )
-    )
-
+    ))
     assert any(
-        "mod.domain imports names from mod.domain.vo; every import is a "
-        "module import — import x or import x as name, never from x "
-        "import name" in f
-        for f in tuple(
-                     f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                     for v in checks.Codebase(_spec(sources=(vo, class_form, client, client_init))).violations()
-                 )
+        "mod.domain imports Tag without repeating the name; a role __init__ "
+        "re-exports under the name the module defines — from x import Y as Y, "
+        "the form mypy --strict reads as an export" in f
+        for f in bare
+    ), bare
+
+    renamed = run((
+        "mod/domain/__init__.py",
+        "mod.domain",
+        "from mod.domain.vo import Tag as Label\n",
+        True,
+    ))
+    assert any(
+        "mod.domain re-exports Tag as Label; a role __init__ "
+        "re-exports under the name the module defines — from x import Y as Y, "
+        "the form mypy --strict reads as an export" in f
+        for f in renamed
+    ), renamed
+
+
+def test_a_role_init_re_exports_only_what_the_outside_reads() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "mod/domain/vo.py",
+                "mod.domain.vo",
+                "import tesser.domain as ts\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_text', text)\n"
+                "class Hidden(ts.ValueObject):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_text', text)\n",
+                False,
+            ),
+            (
+                "mod/domain/__init__.py",
+                "mod.domain",
+                "from mod.domain.vo import Hidden as Hidden\n"
+                "from mod.domain.vo import Tag as Tag\n",
+                True,
+            ),
+            (
+                "mod/client/client.py",
+                "mod.client.client",
+                "import tesser.context as ts\n"
+                "import mod.domain as domain\n"
+                "class Asked(ts.Response):\n"
+                "    def __init__(self, tag: domain.Tag) -> None:\n"
+                "        self.tag = tag\n",
+                False,
+            ),
+            ("mod/client/__init__.py", "mod.client", "", True),
+        ))).violations()
     )
+    assert any(
+        "mod.domain re-exports Hidden, which no module outside the role reads; "
+        "a role __init__ re-exports only what a module outside its role reads" in f
+        for f in findings
+    ), findings
+    assert not any("re-exports Tag" in f for f in findings), findings
+
+
+def test_a_module_outside_a_role_package_imports_the_package() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "mod/domain/vo.py",
+                "mod.domain.vo",
+                "import tesser.domain as ts\n"
+                "import mod.domain as domain\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_text', text)\n",
+                False,
+            ),
+            ("mod/domain/__init__.py", "mod.domain", "", True),
+            (
+                "mod/client/client.py",
+                "mod.client.client",
+                "import tesser.context as ts\n"
+                "import mod.domain.vo as vo\n"
+                "class Asked(ts.Response):\n"
+                "    def __init__(self, tag: vo.Tag) -> None:\n"
+                "        self.tag = tag\n",
+                False,
+            ),
+            ("mod/client/__init__.py", "mod.client", "", True),
+        ))).violations()
+    )
+    assert any(
+        "mod.client.client imports mod.domain.vo, a module of mod.domain; "
+        "a module outside a role package imports the package, because the role "
+        "__init__ is the list of what the outside may name" in f
+        for f in findings
+    ), findings
+    assert any(
+        "mod.domain.vo imports mod.domain; a module inside a role package imports "
+        "its siblings as modules, never its own package, because the package "
+        "imports the module back" in f
+        for f in findings
+    ), findings
 
 
 def test_srv_and_app_statement_totality() -> None:
@@ -3069,16 +3165,16 @@ def test_relative_imports_resolve_against_the_package() -> None:
             ),
         ))).violations()
                )
-    assert not any("rel.domain" in f and "a role __init__ only re-exports from its own role" in f for f in findings)
+    assert not any("rel.domain" in f and "a role __init__ only re-exports a module of its own role" in f for f in findings)
     assert any(
         "rel.adapters.beyond imports ...domain.money beyond the package root; "
         "a relative import resolves inside the tree" in f
         for f in findings
     )
     assert any(
-        "rel.domain imports names from rel.domain.money; every import is a "
-        "module import — import x or import x as name, never from x "
-        "import name" in f
+        "rel.domain imports Money without repeating the name; a role __init__ "
+        "re-exports under the name the module defines — from x import Y as Y, "
+        "the form mypy --strict reads as an export" in f
         for f in findings
     )
     assert any(
@@ -4206,7 +4302,13 @@ def test_a_handler_sibling_fakes_only_the_client() -> None:
                 "    assert True\n",
                 False,
             ),
-            ("shop/adapters/gateways/__init__.py", "shop.adapters.gateways", "", True),
+            (
+            "shop/adapters/gateways/__init__.py",
+            "shop.adapters.gateways",
+            "from shop.adapters.gateways.catalog import CatalogGateway as CatalogGateway\n"
+            "from shop.adapters.gateways.quotes import QuoteGateway as QuoteGateway\n",
+            True,
+        ),
         ))).violations()
                )
     assert any(
@@ -4398,7 +4500,7 @@ def test_a_component_sibling_test_mirrors_production_component_reach() -> None:
                 "shop/component/test_component.py",
                 "shop.component.test_component",
                 "import shop.application.service as service\n"
-                "import far.client.client as farclient\n"
+                "import far.client as farclient\n"
                 "import shop.domain.thing as thing\n"
                 "def test_x() -> None:\n"
                 "    assert True\n",
@@ -4589,7 +4691,7 @@ def test_a_context_tier_test_reaches_its_whole_context_and_a_neighbours_applicat
             "near/tests/test_wiring.py",
             "near.tests.test_wiring",
             "import tesser.testing as ts\n"
-            "import near.domain.thing as thing\n"
+            "import near.domain as domain\n"
             "import shop.application.service as neighbour\n"
             "def test_x() -> None:\n"
             "    assert True\n",
@@ -6236,7 +6338,7 @@ def test_ports_is_a_package_never_a_module() -> None:
     )
 
 
-def test_a_ports_init_is_empty() -> None:
+def test_a_ports_init_is_a_role_init() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
@@ -6249,7 +6351,8 @@ def test_a_ports_init_is_empty() -> None:
         ))).violations()
                )
     assert any(
-        "shop.application.ports __init__ declares code; a ports __init__ is empty" in f
+        "shop.application.ports __init__ declares code; "
+        "a role __init__ only re-exports from its own role" in f
         for f in findings
     )
 
@@ -11317,7 +11420,17 @@ def _kinds_spec(
             "    def ask(self, request: AskRequest) -> AskResponse: ...\n",
             False,
         ),
-        ("shop/application/ports/__init__.py", "shop.application.ports", "", True),
+        (
+            "shop/application/ports/__init__.py",
+            "shop.application.ports",
+            "from shop.application.ports.catalog import Catalog as Catalog\n"
+            "from shop.application.ports.catalog import LookupRequest as LookupRequest\n"
+            "from shop.application.ports.catalog import LookupResponse as LookupResponse\n"
+            "from shop.application.ports.quotes import QuoteRequest as QuoteRequest\n"
+            "from shop.application.ports.quotes import QuoteResponse as QuoteResponse\n"
+            "from shop.application.ports.quotes import Quotes as Quotes\n",
+            True,
+        ),
         (
             "shop/application/ports/quotes.py",
             "shop.application.ports.quotes",
@@ -11349,34 +11462,38 @@ def _kinds_spec(
             "    def lookup(self, request: LookupRequest) -> LookupResponse: ...\n",
             False,
         ),
-        ("shop/application/client/__init__.py", "shop.application.client", "", True),
+        (
+            "shop/application/client/__init__.py",
+            "shop.application.client",
+            "from shop.application.client.quotes import Client as Client\n",
+            True,
+        ),
         (
             "shop/application/client/quotes.py",
             "shop.application.client.quotes",
             "import typing\n"
             "import tesser.application as ts\n"
-            "import shop.application.ports.quotes as quotes\n"
+            "import shop.application.ports as ports\n"
             "class Client(ts.Client, typing.Protocol):\n"
-            "    def quote(self, request: quotes.QuoteRequest) -> quotes.QuoteResponse: ...\n",
+            "    def quote(self, request: ports.QuoteRequest) -> ports.QuoteResponse: ...\n",
             False,
         ),
         (
             "shop/application/quotes.py",
             "shop.application.quotes",
             "import tesser.application as ts\n"
-            "import shop.application.ports.catalog as catalog\n"
-            "import shop.application.ports.quotes as quotes\n"
+            "import shop.application.ports as ports\n"
             "import shop.domain.thing as thing\n"
-            "class MapToLookupRequest(ts.Mapper, catalog.LookupRequest):\n"
+            "class MapToLookupRequest(ts.Mapper, ports.LookupRequest):\n"
             "    def __init__(self, named: thing.Name) -> None:\n"
             "        super().__init__(text=str(named))\n"
-            "class MapToQuoteResponse(ts.Mapper, quotes.QuoteResponse):\n"
+            "class MapToQuoteResponse(ts.Mapper, ports.QuoteResponse):\n"
             "    def __init__(self, named: thing.Name) -> None:\n"
             "        super().__init__(text=str(named))\n"
             "class Quotes(ts.Actions):\n"
-            "    def __init__(self, listing: catalog.Catalog) -> None:\n"
+            "    def __init__(self, listing: ports.Catalog) -> None:\n"
             "        self._listing = listing\n"
-            "    def quote(self, request: quotes.QuoteRequest) -> quotes.QuoteResponse:\n"
+            "    def quote(self, request: ports.QuoteRequest) -> ports.QuoteResponse:\n"
             "        named = thing.Name(request.text)\n"
             "        self._listing.lookup(MapToLookupRequest(named))\n"
             "        return MapToQuoteResponse(named)\n",
@@ -11409,29 +11526,30 @@ def _kinds_spec(
         (
             "shop/application/orchestrators/__init__.py",
             "shop.application.orchestrators",
-            "",
+            "from shop.application.orchestrators.flow import Flow as Flow\n"
+            "from shop.application.orchestrators.flow import FlowResponse as FlowResponse\n",
             True,
         ),
         (
             "shop/application/orchestrators/flow.py",
             "shop.application.orchestrators.flow",
             "import tesser.application as ts\n"
-            "import shop.application.ports.quotes as quotes\n"
+            "import shop.application.ports as ports\n"
             "import shop.domain.thing as thing\n"
             "class FlowResponse(ts.Response):\n"
             "    def __init__(self, text: str) -> None:\n"
             "        self.text = text\n"
-            "class MapToQuoteRequest(ts.Mapper, quotes.QuoteRequest):\n"
+            "class MapToQuoteRequest(ts.Mapper, ports.QuoteRequest):\n"
             "    def __init__(self, named: thing.Name) -> None:\n"
             "        super().__init__(text=str(named))\n"
             "class MapToFlowResponse(ts.Mapper, FlowResponse):\n"
-            "    def __init__(self, quoted: quotes.QuoteResponse) -> None:\n"
+            "    def __init__(self, quoted: ports.QuoteResponse) -> None:\n"
             "        super().__init__(text=quoted.text)\n"
             "class Flow(ts.Orchestrator):\n"
-            "    def __init__(self, job: ts.JobContext, quoting: quotes.Quotes) -> None:\n"
+            "    def __init__(self, job: ts.JobContext, quoting: ports.Quotes) -> None:\n"
             "        self._job = job\n"
             "        self._quoting = quoting\n"
-            "    async def run(self, request: quotes.QuoteRequest) -> FlowResponse:\n"
+            "    async def run(self, request: ports.QuoteRequest) -> FlowResponse:\n"
             "        named = thing.Name(request.text)\n"
             "        quoted = await self._quoting.quote(self._job, MapToQuoteRequest(named))\n"
             "        return MapToFlowResponse(quoted)\n",
@@ -11456,11 +11574,11 @@ def _kinds_spec(
             "shop/adapters/gateways/quotes.py",
             "shop.adapters.gateways.quotes",
             "import tesser.adapters as ts\n"
-            "import shop.application.ports.quotes as quotes\n"
+            "import shop.application.ports as ports\n"
             "class QuoteGateway(ts.Gateway):\n"
-            "    async def quote(self, job: ts.JobContext, request: quotes.QuoteRequest)"
-            " -> quotes.QuoteResponse:\n"
-            "        return quotes.QuoteResponse(text=request.text)\n",
+            "    async def quote(self, job: ts.JobContext, request: ports.QuoteRequest)"
+            " -> ports.QuoteResponse:\n"
+            "        return ports.QuoteResponse(text=request.text)\n",
             False,
         ),
         (
@@ -11474,10 +11592,10 @@ def _kinds_spec(
             "shop/adapters/gateways/catalog.py",
             "shop.adapters.gateways.catalog",
             "import tesser.adapters as ts\n"
-            "import shop.application.ports.catalog as catalog\n"
+            "import shop.application.ports as ports\n"
             "class CatalogGateway(ts.Gateway):\n"
-            "    def lookup(self, request: catalog.LookupRequest) -> catalog.LookupResponse:\n"
-            "        return catalog.LookupResponse(text=request.text)\n",
+            "    def lookup(self, request: ports.LookupRequest) -> ports.LookupResponse:\n"
+            "        return ports.LookupResponse(text=request.text)\n",
             False,
         ),
         (
@@ -11505,24 +11623,29 @@ def _kinds_spec(
             "    assert True\n",
             False,
         ),
-        ("shop/adapters/jobs/__init__.py", "shop.adapters.jobs", "", True),
+        (
+            "shop/adapters/jobs/__init__.py",
+            "shop.adapters.jobs",
+            "from shop.adapters.jobs.engine import EngineJob as EngineJob\n",
+            True,
+        ),
         (
             "shop/adapters/jobs/engine.py",
             "shop.adapters.jobs.engine",
             "import tesser.adapters as ts\n"
             "import shop.adapters.jobs.context as context\n"
-            "import shop.application.client.quotes as quotes_client\n"
-            "import shop.application.orchestrators.flow as flow\n"
-            "import shop.application.ports.quotes as quotes\n"
+            "import shop.application.client as application_client\n"
+            "import shop.application.orchestrators as orchestrators\n"
+            "import shop.application.ports as ports\n"
             "class EngineJob(ts.Job):\n"
-            "    def __init__(self, actions: quotes_client.Client, quoting: quotes.Quotes) -> None:\n"
+            "    def __init__(self, actions: application_client.Client, quoting: ports.Quotes) -> None:\n"
             "        self._actions = actions\n"
             "        self._quoting = quoting\n"
-            "    def quote(self, request: quotes.QuoteRequest) -> quotes.QuoteResponse:\n"
+            "    def quote(self, request: ports.QuoteRequest) -> ports.QuoteResponse:\n"
             "        return self._actions.quote(request)\n"
-            "    async def run(self, inner: object, request: quotes.QuoteRequest)"
-            " -> flow.FlowResponse:\n"
-            "        return await flow.Flow(context.EngineJobContext(inner), self._quoting)"
+            "    async def run(self, inner: object, request: ports.QuoteRequest)"
+            " -> orchestrators.FlowResponse:\n"
+            "        return await orchestrators.Flow(context.EngineJobContext(inner), self._quoting)"
             ".run(request)\n",
             False,
         ),
@@ -11555,20 +11678,19 @@ def _kinds_spec(
             "shop/component/component.py",
             "shop.component.component",
             "import tesser.component as ts\n"
-            "import shop.adapters.gateways.catalog as catalog_gateway\n"
-            "import shop.adapters.gateways.quotes as quote_gateway\n"
-            "import shop.adapters.jobs.engine as engine\n"
+            "import shop.adapters.gateways as gateways\n"
+            "import shop.adapters.jobs as jobs\n"
             "import shop.application.quotes as quote_actions\n"
             "import shop.application.service as service\n"
             "import shop.client.client as client\n"
             "class Shop(ts.Component):\n"
             "    def __init__(self) -> None:\n"
-            "        self._quotes = quote_gateway.QuoteGateway()\n"
-            "        self._listing = catalog_gateway.CatalogGateway()\n"
+            "        self._quotes = gateways.QuoteGateway()\n"
+            "        self._listing = gateways.CatalogGateway()\n"
             "        self._actions = quote_actions.Quotes(self._listing)\n"
             "        self.client: client.Client = service.AskService()\n"
-            "        self.jobs: tuple[engine.EngineJob, ...] = (\n"
-            "            engine.EngineJob(self._actions, self._quotes),\n"
+            "        self.jobs: tuple[jobs.EngineJob, ...] = (\n"
+            "            jobs.EngineJob(self._actions, self._quotes),\n"
             "        )\n"
             "    def close(self) -> None:\n"
             "        return None\n",
@@ -11585,8 +11707,8 @@ def _kinds_spec(
             "srv/main.py",
             "srv.main",
             "import tesser.srv as ts\n"
-            "import shop.adapters.handlers.http as http\n"
-            "import shop.adapters.jobs.engine as engine\n"
+            "import shop.adapters.handlers as handlers\n"
+            "import shop.adapters.jobs as jobs\n"
             "class Host(ts.Host):\n"
             "    def run(self, argv: list[str]) -> int:\n"
             "        return 0\n",
@@ -11672,7 +11794,7 @@ def test_the_application_client_and_the_orchestrators_are_packages_never_modules
     )
 
 
-def test_the_new_application_packages_carry_empty_inits() -> None:
+def test_the_new_application_packages_carry_role_inits() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in checks.Codebase(_spec(base=(), sources=(
@@ -11692,12 +11814,12 @@ def test_the_new_application_packages_carry_empty_inits() -> None:
     )
     assert any(
         "shop.application.client __init__ declares code; "
-        "an application client package __init__ is empty" in f
+        "a role __init__ only re-exports from its own role" in f
         for f in findings
     )
     assert any(
         "shop.application.orchestrators __init__ declares code; "
-        "an orchestrators package __init__ is empty" in f
+        "a role __init__ only re-exports from its own role" in f
         for f in findings
     )
 
@@ -11756,7 +11878,7 @@ def test_an_application_client_module_speaks_one_ports_module() -> None:
                 "shop.application.client.two_ports",
                 "import typing\n"
                 "import tesser.application as ts\n"
-                "import shop.application.ports.quotes as quotes\n"
+                "import shop.application.ports as quotes\n"
                 "import shop.application.ports.other as other\n"
                 "class Client(ts.Client, typing.Protocol):\n"
                 "    def quote(self, request: quotes.QuoteRequest) -> quotes.QuoteResponse: ...\n",
@@ -11775,19 +11897,19 @@ def test_an_application_client_module_speaks_one_ports_module() -> None:
         ))).violations()
     )
     assert any(
-        "shop.application.client.two_ports imports a second ports module "
+        "shop.application.client.two_ports imports a second ports package "
         "shop.application.ports.other; an application client module speaks the "
-        "DTOs of exactly one ports module" in f
+        "DTOs of exactly one ports package" in f
         for f in findings
     )
     assert any(
         "shop.application.client.reaching imports shop.domain.thing; an application "
-        "client module speaks the DTOs of exactly one ports module" in f
+        "client module speaks the DTOs of exactly one ports package" in f
         for f in findings
     )
     assert any(
-        "shop.application.client.reaching imports no ports module; an application "
-        "client module speaks the DTOs of exactly one ports module" in f
+        "shop.application.client.reaching imports no ports package; an application "
+        "client module speaks the DTOs of exactly one ports package" in f
         for f in findings
     )
 
@@ -11828,7 +11950,7 @@ def test_an_application_client_module_holds_only_imports_and_one_protocol() -> N
     )
     assert any(
         "shop.application.client.loose imports os; an application client module "
-        "imports only tesser.application, one ports module, and the pure stdlib" in f
+        "imports only tesser.application, one ports package, and the pure stdlib" in f
         for f in findings
     )
     assert any(
