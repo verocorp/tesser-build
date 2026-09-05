@@ -33,8 +33,8 @@ class PartSpec(ts.Spec):
 
 class Part(ts.Entity):
 
-    def __init__(self, spec: PartSpec) -> None:
-        self._id = identity.Identity(spec.id)
+    def __init__(self, part_spec: PartSpec) -> None:
+        self._id = identity.Identity(part_spec.id)
 
     @property
     def identity(self) -> identity.Identity:
@@ -60,11 +60,11 @@ class WidgetSpec(ts.Spec):
 
 class Widget(ts.AggregateRoot):
 
-    def __init__(self, spec: WidgetSpec) -> None:
-        self._name = Name(spec.name)
-        self._part = Part(spec.part)
-        self._label = label.Label(spec.name)
-        self._standing = clearance.Standing(spec.standing)
+    def __init__(self, widget_spec: WidgetSpec) -> None:
+        self._name = Name(widget_spec.name)
+        self._part = Part(widget_spec.part)
+        self._label = label.Label(widget_spec.name)
+        self._standing = clearance.Standing(widget_spec.standing)
 
     @property
     def identity(self) -> Name:
@@ -78,16 +78,16 @@ class Widget(ts.AggregateRoot):
     def standing(self) -> clearance.Standing:
         return self._standing
 
-    def take(self, spec: PartSpec) -> Taken:
-        part = Part(spec)
+    def take(self, part_spec: PartSpec) -> Taken:
+        part = Part(part_spec)
         if part == self._part:
             return Taken.HELD
         self._part = part
         return Taken.TAKEN
 
-    def clear(self, spec: clearance.ClearanceSpec) -> None:
-        cleared = clearance.Clearance(spec)
-        match cleared.decide():
+    def clear(self, clearance_spec: clearance.ClearanceSpec) -> None:
+        domain_clearance = clearance.Clearance(clearance_spec)
+        match domain_clearance.decide():
             case clearance.Verdict.CLEARED:
                 self._standing = _KEPT
             case clearance.Verdict.REFUSED:

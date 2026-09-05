@@ -3,19 +3,19 @@ from __future__ import annotations
 import tesser.adapters as ts
 
 import alpha.adapters.jobs.inline_context as inline_context
-import alpha.application.client.widget_actions as widget_actions_client
-import alpha.application.orchestrators.widget_flow as widget_flow
-import alpha.application.ports.quoting as quoting
+import alpha.application.client as client
+import alpha.application.orchestrators as orchestrators
+import alpha.application.ports as ports
 
 
 class EngineJob(ts.Job):
 
-    def __init__(self, actions: widget_actions_client.Client, quotes: quoting.Quoting) -> None:
-        self._actions = actions
-        self._quotes = quotes
+    def __init__(self, application_client: client.Client, quoting: ports.Quoting) -> None:
+        self._application_client = application_client
+        self._quoting = quoting
 
-    def quote(self, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
-        return self._actions.quote(request)
+    def quote(self, quote_request: ports.QuoteRequest) -> ports.QuoteResponse:
+        return self._application_client.quote(quote_request)
 
-    def flow(self, request: quoting.QuoteRequest) -> widget_flow.FlowResponse:
-        return widget_flow.WidgetFlow(inline_context.InlineJobContext(), self._quotes).run(request)
+    def flow(self, quote_request: ports.QuoteRequest) -> orchestrators.FlowResponse:
+        return orchestrators.WidgetFlow(inline_context.InlineJobContext(), self._quoting).run(quote_request)

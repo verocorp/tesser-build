@@ -3,15 +3,15 @@ from __future__ import annotations
 import tesser.testing as ts
 
 import alpha.adapters.handlers.cli as cli
-import alpha.client.client as client
+import alpha.client as client
 import protocol.cli as protocol_cli
 
 
 @ts.fake
 class FakeClient(client.Client):
 
-    def add(self, request: client.AddRequest) -> client.AddResponse:
-        return client.AddResponse(name=request.name, standing="kept")
+    def add(self, add_request: client.AddRequest) -> client.AddResponse:
+        return client.AddResponse(name=add_request.name, standing="kept")
 
 
 class TestHandler:

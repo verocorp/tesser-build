@@ -23,10 +23,10 @@ class Clearance(ts.ValueObject):
 
     _verdict: str
 
-    def __init__(self, spec: ClearanceSpec) -> None:
-        if spec.verdict not in ("ok", "refused"):
-            raise errors.invalid("invalid_verdict", f"verdict {spec.verdict!r} is not a verdict")
-        object.__setattr__(self, "_verdict", spec.verdict)
+    def __init__(self, clearance_spec: ClearanceSpec) -> None:
+        if clearance_spec.verdict not in ("ok", "refused"):
+            raise errors.invalid("invalid_verdict", f"verdict {clearance_spec.verdict!r} is not a verdict")
+        object.__setattr__(self, "_verdict", clearance_spec.verdict)
 
     def decide(self) -> Verdict:
         if self._verdict == "ok":

@@ -8228,7 +8228,7 @@ class Module(ts.Entity):
             if pieces[0] == TESSER:
                 continue
             if pieces[0] in tops:
-                if pieces[1:3] == [PORTS_PARENT_ROLE, PORTS_PACKAGE] and len(pieces) >= 4:
+                if pieces[1:3] == [PORTS_PARENT_ROLE, PORTS_PACKAGE]:
                     spoken += 1
                     if spoken > 1:
                         found.append(
@@ -8236,9 +8236,9 @@ class Module(ts.Entity):
                                 self._path,
                                 lineno,
                                 "TB067",
-                                f"{module_name} imports a second ports module {target}; "
+                                f"{module_name} imports a second ports package {target}; "
                                 "an application client module speaks the DTOs of exactly "
-                                "one ports module",
+                                "one ports package",
                             ))
                         )
                     else:
@@ -8250,7 +8250,7 @@ class Module(ts.Entity):
                         lineno,
                         "TB067",
                         f"{module_name} imports {target}; an application client module "
-                        "speaks the DTOs of exactly one ports module",
+                        "speaks the DTOs of exactly one ports package",
                     ))
                 )
             elif target not in PORTS_STDLIB and pieces[0] not in PORTS_STDLIB:
@@ -8260,7 +8260,7 @@ class Module(ts.Entity):
                         lineno,
                         "TB067",
                         f"{module_name} imports {target}; an application client module "
-                        "imports only tesser.application, one ports module, and the pure stdlib",
+                        "imports only tesser.application, one ports package, and the pure stdlib",
                     ))
                 )
         if spoken == 0 and self._class_defs:
@@ -8269,8 +8269,8 @@ class Module(ts.Entity):
                     self._path,
                     1,
                     "TB067",
-                    f"{module_name} imports no ports module; an application client "
-                    "module speaks the DTOs of exactly one ports module",
+                    f"{module_name} imports no ports package; an application client "
+                    "module speaks the DTOs of exactly one ports package",
                 ))
             )
         for stmt in self._body:

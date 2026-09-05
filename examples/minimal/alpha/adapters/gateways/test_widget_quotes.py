@@ -6,7 +6,7 @@ import typing
 import tesser.testing as ts
 
 import alpha.adapters.gateways.widget_quotes as widget_quotes
-import alpha.application.ports.quoting as quoting
+import alpha.application.ports as ports
 
 
 @ts.fake
@@ -22,6 +22,6 @@ class TestWidgetQuoteGateway:
 
     def test_a_quote_answers_the_name_it_was_asked_for(self) -> None:
         quoted = widget_quotes.WidgetQuoteGateway().quote(
-            FakeJobContext(), quoting.QuoteRequest(name="a")
+            FakeJobContext(), ports.QuoteRequest(name="a")
         )
         assert quoted.name == "a"

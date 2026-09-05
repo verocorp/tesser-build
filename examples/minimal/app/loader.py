@@ -8,11 +8,11 @@ import app.config_repository as config_repository
 
 class AppLoader(ts.Loader):
 
-    def __init__(self, configs: config_repository.ConfigRepository) -> None:
-        self._configs = configs
+    def __init__(self, app_config_repository: config_repository.ConfigRepository) -> None:
+        self._app_config_repository = app_config_repository
 
     def load(self) -> app.App:
-        return app.App(self._configs.get())
+        return app.App(self._app_config_repository.get())
 
 
 @ts.load

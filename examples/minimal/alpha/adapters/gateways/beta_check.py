@@ -2,23 +2,23 @@ from __future__ import annotations
 
 import tesser.adapters as ts
 
-import alpha.application.ports.beta_check as beta_check
-import beta.client.client as beta_client
+import alpha.application.ports as ports
+import beta.client as client
 
 
-class MapToCheckResponse(ts.Mapper, beta_check.CheckResponse):
+class MapToCheckResponse(ts.Mapper, ports.CheckResponse):
 
-    def __init__(self, answer: beta_client.CheckResponse) -> None:
+    def __init__(self, check_response: client.CheckResponse) -> None:
         super().__init__(
-            verdict=beta_check.Verdict.OK if answer.held == "yes" else beta_check.Verdict.REFUSED
+            verdict=ports.Verdict.OK if check_response.held == "yes" else ports.Verdict.REFUSED
         )
 
 
 class BetaCheckGateway(ts.Gateway):
 
-    def __init__(self, beta: beta_client.Client) -> None:
-        self._beta = beta
+    def __init__(self, beta_client: client.Client) -> None:
+        self._beta_client = beta_client
 
-    def check(self, request: beta_check.CheckRequest) -> beta_check.CheckResponse:
-        answer = self._beta.check(beta_client.CheckRequest(key=request.name))
+    def check(self, check_request: ports.CheckRequest) -> ports.CheckResponse:
+        answer = self._beta_client.check(client.CheckRequest(key=check_request.name))
         return MapToCheckResponse(answer)

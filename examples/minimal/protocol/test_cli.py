@@ -8,6 +8,6 @@ import protocol.cli as cli
 class TestCliRequest:
 
     def test_a_missing_argument_is_a_usage_error(self) -> None:
-        request = cli.CliRequest(args=())
+        cli_request = cli.CliRequest(args=())
         with pytest.raises(cli.UsageError):
-            request.arg(0, "name", "usage: add <name>")
+            cli_request.arg(0, "name", "usage: add <name>")

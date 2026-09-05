@@ -2,23 +2,23 @@ from __future__ import annotations
 
 import tesser.application as ts
 
-import beta.application.ports.key_repository as key_repository
-import beta.client.client as client
-import beta.domain.key as key
+import beta.application.ports as ports
+import beta.client as client
+import beta.domain as domain
 
 
-class MapToHasKeyRequest(ts.Mapper, key_repository.HasKeyRequest):
+class MapToHasKeyRequest(ts.Mapper, ports.HasKeyRequest):
 
-    def __init__(self, checked_key: key.Key) -> None:
-        super().__init__(key=str(checked_key))
+    def __init__(self, key: domain.Key) -> None:
+        super().__init__(key=str(key))
 
 
 class BetaService(ts.ApplicationService):
 
-    def __init__(self, keys: key_repository.KeyRepository) -> None:
-        self._keys = keys
+    def __init__(self, key_repository: ports.KeyRepository) -> None:
+        self._key_repository = key_repository
 
-    def check(self, request: client.CheckRequest) -> client.CheckResponse:
-        checked_key = key.Key(request.key)
-        answer = self._keys.has(MapToHasKeyRequest(checked_key))
+    def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
+        key = domain.Key(check_request.key)
+        answer = self._key_repository.has(MapToHasKeyRequest(key))
         return client.CheckResponse(held=answer.held.value)

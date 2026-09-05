@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import tesser.app as ts
 
-import alpha.component.config as alpha_config
-import beta.component.config as beta_config
+import alpha.component as alpha_component
+import beta.component as beta_component
 
 
 class Spec(ts.Spec):
 
-    def __init__(self, alpha: alpha_config.Config, beta: beta_config.Config) -> None:
+    def __init__(self, alpha: alpha_component.Config, beta: beta_component.Config) -> None:
         self.alpha = alpha
         self.beta = beta
 

@@ -5,8 +5,8 @@ import typing
 
 import tesser.app as ts
 
-import alpha.component.config as alpha_config
-import beta.component.config as beta_config
+import alpha.component as alpha_component
+import beta.component as beta_component
 import tesser.errors as errors
 
 import app.config as config
@@ -28,7 +28,7 @@ class EnvConfigRepository(ConfigRepository):
             raise errors.invalid("missing_env", "BETA_KEY is required")
         return config.Config(
             config.Spec(
-                alpha=alpha_config.Config(alpha_config.Spec(storage=storage)),
-                beta=beta_config.Config(beta_config.Spec(key=key)),
+                alpha=alpha_component.Config(alpha_component.Spec(storage=storage)),
+                beta=beta_component.Config(beta_component.Spec(key=key)),
             )
         )

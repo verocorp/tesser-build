@@ -7,5 +7,5 @@ class TestConfig:
 
     def test_a_config_carries_its_spec(self) -> None:
         spec = config.Spec(storage="memory")
-        cfg = config.Config(spec)
-        assert cfg.storage == spec.storage
+        component_config = config.Config(spec)
+        assert component_config.storage == spec.storage

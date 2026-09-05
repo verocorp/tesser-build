@@ -2,19 +2,19 @@ from __future__ import annotations
 
 import tesser.app as ts
 
-import alpha.adapters.gateways.beta_check as beta_check
-import alpha.component.component as alpha_component
-import beta.component.component as beta_component
+import alpha.adapters.gateways as gateways
+import alpha.component as alpha_component
+import beta.component as beta_component
 
 import app.config as config
 
 
 class App(ts.App):
 
-    def __init__(self, cfg: config.Config) -> None:
-        beta = beta_component.Beta(cfg.beta)
+    def __init__(self, app_config: config.Config) -> None:
+        beta = beta_component.Beta(app_config.beta)
         try:
-            alpha = alpha_component.Alpha(cfg.alpha, beta_check.BetaCheckGateway(beta.client))
+            alpha = alpha_component.Alpha(app_config.alpha, gateways.BetaCheckGateway(beta.client))
         except Exception:
             beta.close()
             raise
