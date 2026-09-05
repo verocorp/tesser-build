@@ -57,8 +57,8 @@ class AlphaService(ts.ApplicationService):
             case domain.Taken.TAKEN:
                 pass
             case domain.Taken.HELD:
-                answer = self._beta_check.check(MapToCheckRequest(widget))
-                widget.clear(MapToClearanceSpec(answer))
+                check_response = self._beta_check.check(MapToCheckRequest(widget))
+                widget.clear(MapToClearanceSpec(check_response))
             case _ as never:
                 typing.assert_never(never)
         self._widget_repository.save(MapToSaveRequest(widget))
