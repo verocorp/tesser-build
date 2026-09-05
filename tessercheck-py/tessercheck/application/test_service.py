@@ -2,23 +2,22 @@ from __future__ import annotations
 
 import tesser.testing as ts
 
-import tessercheck.application.ports.rulebook_sources as rulebook_sources
-import tessercheck.application.ports.source_reader as source_reader
+import tessercheck.application.ports as ports
 import tessercheck.application.service as service
-import tessercheck.client.client as client
+import tessercheck.client as client
 
 
 @ts.fake
-class FakeSourceReader(source_reader.SourceReader):
-    def __init__(self, root: source_reader.RootForm) -> None:
+class FakeSourceReader(ports.SourceReader):
+    def __init__(self, root: ports.RootForm) -> None:
         self.form = root
         self.roots: list[str] = []
 
     def sources(
-        self, request: source_reader.ReadSourcesRequest
-    ) -> source_reader.ReadSourcesResponse:
+        self, request: ports.ReadSourcesRequest
+    ) -> ports.ReadSourcesResponse:
         self.roots.append(request.tree)
-        return source_reader.ReadSourcesResponse(
+        return ports.ReadSourcesResponse(
             root=self.form,
             nested=(),
             symlinked=(),
@@ -31,16 +30,16 @@ class FakeSourceReader(source_reader.SourceReader):
 
 
 @ts.fake
-class FakeRulebookSources(rulebook_sources.RulebookSources):
+class FakeRulebookSources(ports.RulebookSources):
     def __init__(self, checks_text: str) -> None:
         self.checks_text = checks_text
         self.roots: list[str] = []
 
     def read(
-        self, request: rulebook_sources.ReadRulebookRequest
-    ) -> rulebook_sources.ReadRulebookResponse:
+        self, request: ports.ReadRulebookRequest
+    ) -> ports.ReadRulebookResponse:
         self.roots.append(request.tree)
-        return rulebook_sources.ReadRulebookResponse(
+        return ports.ReadRulebookResponse(
             checks_text=self.checks_text,
             test_modules=(),
             contracts_text="[importlinter:contract:pure]\nname = domain stays pure\n",
@@ -48,7 +47,7 @@ class FakeRulebookSources(rulebook_sources.RulebookSources):
 
 
 def test_the_requested_root_reaches_the_source_reader() -> None:
-    reader = FakeSourceReader(source_reader.RootForm.APP)
+    reader = FakeSourceReader(ports.RootForm.APP)
     checker = service.TessercheckService(reader, FakeRulebookSources(""))
     checker.check(client.CheckRequest(tree="some/tree"))
     assert reader.roots == ["some/tree"]
@@ -56,7 +55,7 @@ def test_the_requested_root_reaches_the_source_reader() -> None:
 
 def test_a_declared_empty_tree_answers_with_no_findings() -> None:
     checker = service.TessercheckService(
-        FakeSourceReader(source_reader.RootForm.APP), FakeRulebookSources("")
+        FakeSourceReader(ports.RootForm.APP), FakeRulebookSources("")
     )
     response = checker.check(client.CheckRequest(tree="."))
     assert response.findings == ()
@@ -64,7 +63,7 @@ def test_a_declared_empty_tree_answers_with_no_findings() -> None:
 
 def test_an_undeclared_tree_answers_with_the_declaration_finding() -> None:
     checker = service.TessercheckService(
-        FakeSourceReader(source_reader.RootForm.MISSING), FakeRulebookSources("")
+        FakeSourceReader(ports.RootForm.MISSING), FakeRulebookSources("")
     )
     response = checker.check(client.CheckRequest(tree="."))
     assert len(response.findings) == 1
@@ -72,7 +71,7 @@ def test_an_undeclared_tree_answers_with_the_declaration_finding() -> None:
 
 
 def test_the_rulebook_never_reaches_the_source_reader() -> None:
-    reader = FakeSourceReader(source_reader.RootForm.APP)
+    reader = FakeSourceReader(ports.RootForm.APP)
     sources = FakeRulebookSources(
         "TS_NAME_BY_BLOCK: dict = {}\n"
         "PROTOCOL_PACKAGE: str = 'protocol'\n"
@@ -95,7 +94,7 @@ def test_the_rulebook_answer_carries_the_rendered_rules_and_contracts() -> None:
         "        Violation(ViolationSpec('p', 1, 'TB020', 'a shape; the served tail'))\n"
     )
     checker = service.TessercheckService(
-        FakeSourceReader(source_reader.RootForm.APP), sources
+        FakeSourceReader(ports.RootForm.APP), sources
     )
     response = checker.rulebook(client.RulebookRequest(tree="."))
     assert "| TB020 | the served tail | every module |" in response.rendered

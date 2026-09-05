@@ -2,19 +2,19 @@ import ast
 import pathlib
 import re
 
-import tessercheck.adapters.repositories.rulebook_sources as rulebook_repository
-import tessercheck.application.ports.rulebook_sources as rulebook_sources
-import tessercheck.domain.rulebook as rulebook
+import tessercheck.adapters.repositories as repositories
+import tessercheck.application.ports as ports
+import tessercheck.domain as domain
 
 
 def test_rules_md_is_current() -> None:
     root = pathlib.Path(__file__).resolve().parents[2]
-    read = rulebook_repository.FilesystemRulebookSources().read(
-        rulebook_sources.ReadRulebookRequest(tree=str(root))
+    read = repositories.FilesystemRulebookSources().read(
+        ports.ReadRulebookRequest(tree=str(root))
     )
     rendered = str(
-        rulebook.Rulebook(
-            rulebook.RulebookSpec(
+        domain.Rulebook(
+            domain.RulebookSpec(
                 read.checks_text,
                 tuple((module.name, module.text) for module in read.test_modules),
                 read.contracts_text,
@@ -30,11 +30,11 @@ def test_rules_md_is_current() -> None:
 
 def test_every_applies_to_row_is_reached_by_a_violation() -> None:
     root = pathlib.Path(__file__).resolve().parents[2]
-    read = rulebook_repository.FilesystemRulebookSources().read(
-        rulebook_sources.ReadRulebookRequest(tree=str(root))
+    read = repositories.FilesystemRulebookSources().read(
+        ports.ReadRulebookRequest(tree=str(root))
     )
-    rulebook.Rulebook(
-        rulebook.RulebookSpec(
+    domain.Rulebook(
+        domain.RulebookSpec(
             read.checks_text,
             tuple((module.name, module.text) for module in read.test_modules),
             read.contracts_text,
@@ -45,12 +45,12 @@ def test_every_applies_to_row_is_reached_by_a_violation() -> None:
 
 def test_every_rule_has_a_fixture() -> None:
     root = pathlib.Path(__file__).resolve().parents[2]
-    read = rulebook_repository.FilesystemRulebookSources().read(
-        rulebook_sources.ReadRulebookRequest(tree=str(root))
+    read = repositories.FilesystemRulebookSources().read(
+        ports.ReadRulebookRequest(tree=str(root))
     )
     rendered = str(
-        rulebook.Rulebook(
-            rulebook.RulebookSpec(
+        domain.Rulebook(
+            domain.RulebookSpec(
                 read.checks_text,
                 tuple((module.name, module.text) for module in read.test_modules),
                 read.contracts_text,
@@ -67,8 +67,8 @@ def test_every_rule_has_a_fixture() -> None:
 
 def test_every_violation_site_yields_a_rulebook_row() -> None:
     root = pathlib.Path(__file__).resolve().parents[2]
-    read = rulebook_repository.FilesystemRulebookSources().read(
-        rulebook_sources.ReadRulebookRequest(tree=str(root))
+    read = repositories.FilesystemRulebookSources().read(
+        ports.ReadRulebookRequest(tree=str(root))
     )
     sites = [
         node
@@ -80,8 +80,8 @@ def test_every_violation_site_yields_a_rulebook_row() -> None:
         )
     ]
     rendered = str(
-        rulebook.Rulebook(
-            rulebook.RulebookSpec(
+        domain.Rulebook(
+            domain.RulebookSpec(
                 read.checks_text,
                 tuple((module.name, module.text) for module in read.test_modules),
                 read.contracts_text,

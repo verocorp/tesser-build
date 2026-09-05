@@ -6,9 +6,9 @@ import typing
 
 import tesser.srv as ts
 
-import tessercheck.adapters.handlers.cli as cli
 import app.loader as loader
 import protocol.cli as protocol_cli
+import tessercheck.adapters.handlers as handlers
 
 _USAGE: typing.Final[str] = "usage: python -m srv.cli.rules [tree] [--check]"
 
@@ -24,7 +24,7 @@ class RulesHost(ts.Host):
         args = [arg for arg in argv if arg != "--check"]
         app = loader.load()
         try:
-            handler = cli.Handler(app.tessercheck.client)
+            handler = handlers.Handler(app.tessercheck.client)
             try:
                 resp = handler.rulebook(protocol_cli.CliRequest(args=tuple(args)))
             except protocol_cli.UsageError as e:

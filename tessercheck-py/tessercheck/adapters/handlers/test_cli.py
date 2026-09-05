@@ -3,9 +3,9 @@ from __future__ import annotations
 import pytest
 import tesser.testing as ts
 
-import tessercheck.adapters.handlers.cli as cli
-import tessercheck.client.client as client
 import protocol.cli as protocol_cli
+import tessercheck.adapters.handlers.cli as cli
+import tessercheck.client as client
 
 
 @ts.fake

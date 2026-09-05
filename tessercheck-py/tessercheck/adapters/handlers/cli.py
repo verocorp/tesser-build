@@ -4,8 +4,8 @@ import typing
 
 import tesser.adapters as ts
 
-import tessercheck.client.client as client
 import protocol.cli as cli
+import tessercheck.client as client
 
 _CHECK_USAGE: typing.Final[str] = "usage: check [tree]"
 

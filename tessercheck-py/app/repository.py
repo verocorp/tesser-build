@@ -4,7 +4,7 @@ import typing
 
 import tesser.app as ts
 
-import tessercheck.component.config as tessercheck_config
+import tessercheck.component as component
 
 import app.config as config
 
@@ -19,6 +19,6 @@ class EnvConfigRepository(ConfigRepository):
     def get(self) -> config.Config:
         return config.Config(
             config.Spec(
-                tessercheck=tessercheck_config.Config(tessercheck_config.Spec()),
+                tessercheck=component.Config(component.Spec()),
             )
         )

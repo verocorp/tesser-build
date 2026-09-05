@@ -5,7 +5,7 @@ import tesser.testing as ts
 import app.config as config
 import app.loader as loader
 import app.repository as repository
-import tessercheck.component.config as component_config
+import tessercheck.component as component
 
 
 @ts.fake
@@ -17,7 +17,7 @@ class FakeConfigRepository(repository.ConfigRepository):
     def get(self) -> config.Config:
         self.reads += 1
         return config.Config(
-            config.Spec(tessercheck=component_config.Config(component_config.Spec()))
+            config.Spec(tessercheck=component.Config(component.Spec()))
         )
 
 

@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import tessercheck.application.mapping as mapping
-import tessercheck.application.ports.source_reader as source_reader
+import tessercheck.application.ports as ports
 
 
 def test_a_declared_tree_of_conforming_modules_yields_no_findings() -> None:
-    read = source_reader.ReadSourcesResponse(
-        root=source_reader.RootForm.APP,
+    read = ports.ReadSourcesResponse(
+        root=ports.RootForm.APP,
         nested=(),
         symlinked=(),
         sources=(
-            source_reader.SourceFile(
+            ports.SourceFile(
                 path="shop/domain/thing.py",
                 name="shop.domain.thing",
                 text=(
@@ -22,15 +22,15 @@ def test_a_declared_tree_of_conforming_modules_yields_no_findings() -> None:
                     "    def __init__(self, spec: ThingSpec) -> None:\n"
                     "        self.text = spec.text\n"
                 ),
-                state=source_reader.SourceState.READ,
-                form=source_reader.ModuleForm.MODULE,
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.MODULE,
             ),
-            source_reader.SourceFile(
+            ports.SourceFile(
                 path="shop/domain/test_thing.py",
                 name="shop.domain.test_thing",
                 text=("def test_thing_exists() -> None:\n    assert True\n"),
-                state=source_reader.SourceState.READ,
-                form=source_reader.ModuleForm.MODULE,
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.MODULE,
             ),
         ),
         exports=(),
@@ -42,17 +42,17 @@ def test_a_declared_tree_of_conforming_modules_yields_no_findings() -> None:
 
 
 def test_an_undeclared_tree_is_the_only_thing_reported() -> None:
-    read = source_reader.ReadSourcesResponse(
-        root=source_reader.RootForm.MISSING,
+    read = ports.ReadSourcesResponse(
+        root=ports.RootForm.MISSING,
         nested=(),
         symlinked=(),
         sources=(
-            source_reader.SourceFile(
+            ports.SourceFile(
                 path="shop/domain/thing.py",
                 name="shop.domain.thing",
                 text="import os\n",
-                state=source_reader.SourceState.READ,
-                form=source_reader.ModuleForm.MODULE,
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.MODULE,
             ),
         ),
         exports=(),
@@ -67,11 +67,11 @@ def test_an_undeclared_tree_is_the_only_thing_reported() -> None:
 
 def test_every_root_form_other_than_app_is_reported() -> None:
     for form in (
-        source_reader.RootForm.MISSING,
-        source_reader.RootForm.UNREADABLE,
-        source_reader.RootForm.UNRECOGNIZED,
+        ports.RootForm.MISSING,
+        ports.RootForm.UNREADABLE,
+        ports.RootForm.UNRECOGNIZED,
     ):
-        read = source_reader.ReadSourcesResponse(
+        read = ports.ReadSourcesResponse(
             root=form,
             nested=(),
             symlinked=(),
@@ -87,8 +87,8 @@ def test_every_root_form_other_than_app_is_reported() -> None:
 
 
 def test_a_symlinked_directory_from_the_read_is_reported() -> None:
-    read = source_reader.ReadSourcesResponse(
-        root=source_reader.RootForm.APP,
+    read = ports.ReadSourcesResponse(
+        root=ports.RootForm.APP,
         nested=(),
         symlinked=("app/vendored",),
         sources=(),
@@ -102,8 +102,8 @@ def test_a_symlinked_directory_from_the_read_is_reported() -> None:
 
 
 def test_a_nested_declaration_from_the_read_is_reported() -> None:
-    read = source_reader.ReadSourcesResponse(
-        root=source_reader.RootForm.APP,
+    read = ports.ReadSourcesResponse(
+        root=ports.RootForm.APP,
         nested=("app/.tesser-root",),
         symlinked=(),
         sources=(),
@@ -117,17 +117,17 @@ def test_a_nested_declaration_from_the_read_is_reported() -> None:
 
 
 def test_a_finding_reads_path_line_code_then_message() -> None:
-    read = source_reader.ReadSourcesResponse(
-        root=source_reader.RootForm.APP,
+    read = ports.ReadSourcesResponse(
+        root=ports.RootForm.APP,
         nested=(),
         symlinked=(),
         sources=(
-            source_reader.SourceFile(
+            ports.SourceFile(
                 path="shop/domain/thing.py",
                 name="shop.domain.thing",
                 text="import os\n",
-                state=source_reader.SourceState.READ,
-                form=source_reader.ModuleForm.MODULE,
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.MODULE,
             ),
         ),
         exports=(),
@@ -143,17 +143,17 @@ def test_a_finding_reads_path_line_code_then_message() -> None:
 
 
 def test_an_unreadable_source_is_reported_rather_than_read_as_empty() -> None:
-    read = source_reader.ReadSourcesResponse(
-        root=source_reader.RootForm.APP,
+    read = ports.ReadSourcesResponse(
+        root=ports.RootForm.APP,
         nested=(),
         symlinked=(),
         sources=(
-            source_reader.SourceFile(
+            ports.SourceFile(
                 path="shop/domain/thing.py",
                 name="shop.domain.thing",
                 text="",
-                state=source_reader.SourceState.UNREADABLE,
-                form=source_reader.ModuleForm.MODULE,
+                state=ports.SourceState.UNREADABLE,
+                form=ports.ModuleForm.MODULE,
             ),
         ),
         exports=(),
@@ -166,17 +166,17 @@ def test_an_unreadable_source_is_reported_rather_than_read_as_empty() -> None:
 
 
 def test_the_package_form_of_a_source_changes_the_judgement() -> None:
-    as_package = source_reader.ReadSourcesResponse(
-        root=source_reader.RootForm.APP,
+    as_package = ports.ReadSourcesResponse(
+        root=ports.RootForm.APP,
         nested=(),
         symlinked=(),
         sources=(
-            source_reader.SourceFile(
+            ports.SourceFile(
                 path="shop/domain/__init__.py",
                 name="shop.domain",
                 text="",
-                state=source_reader.SourceState.READ,
-                form=source_reader.ModuleForm.PACKAGE,
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.PACKAGE,
             ),
         ),
         exports=(),
@@ -184,17 +184,17 @@ def test_the_package_form_of_a_source_changes_the_judgement() -> None:
         stdlib=(),
         pure_stdlib=(),
     )
-    as_module = source_reader.ReadSourcesResponse(
-        root=source_reader.RootForm.APP,
+    as_module = ports.ReadSourcesResponse(
+        root=ports.RootForm.APP,
         nested=(),
         symlinked=(),
         sources=(
-            source_reader.SourceFile(
+            ports.SourceFile(
                 path="shop/domain/__init__.py",
                 name="shop.domain",
                 text="",
-                state=source_reader.SourceState.READ,
-                form=source_reader.ModuleForm.MODULE,
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.MODULE,
             ),
         ),
         exports=(),

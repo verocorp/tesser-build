@@ -1,0 +1,1 @@
+from tessercheck.application.service import TessercheckService as TessercheckService
