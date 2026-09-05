@@ -17,7 +17,9 @@ class RunResponse(ts.Response):
 class MapToOrderSpec(ts.Mapper, order.OrderSpec):
 
     def __init__(self, request: order_workflow.StartRequest) -> None:
-        super().__init__(order_id=request.order_id, sku=request.sku, quantity=request.quantity)
+        super().__init__(
+            order_id=request.order_id, sku=request.sku, quantity=request.quantity, note=request.note
+        )
 
 
 class MapToQuoteRequest(ts.Mapper, quoting.QuoteRequest):

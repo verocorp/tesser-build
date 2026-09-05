@@ -25,7 +25,7 @@ class TestWiredApp:
             with pytest.raises(errors.InfraError):
                 asyncio.run(
                     app.ordering.client.place(
-                        client.PlaceRequest(order_id="o1", sku="widget", quantity=2)
+                        client.PlaceRequest(order_id="o1", sku="widget", quantity=2, note="gift")
                     )
                 )
         finally:

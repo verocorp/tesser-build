@@ -45,6 +45,19 @@ class Quantity(ts.ValueObject):
         return serialization.canonical_int(self._value)
 
 
+class Note(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        if not value:
+            raise errors.invalid("empty_note", "a note is never empty")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return serialization.canonical_str(self._value)
+
+
 class PriceSpec(ts.Spec):
 
     def __init__(self, cents: int) -> None:
@@ -69,10 +82,11 @@ class Price(ts.ValueObject):
 
 class OrderSpec(ts.Spec):
 
-    def __init__(self, order_id: str, sku: str, quantity: int) -> None:
+    def __init__(self, order_id: str, sku: str, quantity: int, note: str) -> None:
         self.order_id = order_id
         self.sku = sku
         self.quantity = quantity
+        self.note = note
 
 
 class Order(ts.AggregateRoot):
@@ -81,6 +95,7 @@ class Order(ts.AggregateRoot):
         self._id = OrderId(spec.order_id)
         self._sku = Sku(spec.sku)
         self._quantity = Quantity(spec.quantity)
+        self._note = Note(spec.note)
 
     @property
     def identity(self) -> OrderId:
@@ -93,6 +108,10 @@ class Order(ts.AggregateRoot):
     @property
     def quantity(self) -> Quantity:
         return self._quantity
+
+    @property
+    def note(self) -> Note:
+        return self._note
 
     def total(self, spec: PriceSpec) -> Price:
         return Price(spec).times(self._quantity)

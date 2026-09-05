@@ -19,6 +19,7 @@ class Handler(ts.Handler):
                 order_id=request.text("order_id"),
                 sku=request.text("sku"),
                 quantity=request.integer("quantity"),
+                note=request.text("note"),
             )
         )
         return http.HttpResponse(

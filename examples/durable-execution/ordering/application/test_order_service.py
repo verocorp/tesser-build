@@ -21,8 +21,10 @@ class FakeOrderWorkflow(order_workflow.OrderWorkflow):
 
 
 @ts.helper
-def place_request(order_id: str = "o1", sku: str = "widget", quantity: int = 2) -> client.PlaceRequest:
-    return client.PlaceRequest(order_id=order_id, sku=sku, quantity=quantity)
+def place_request(
+    order_id: str = "o1", sku: str = "widget", quantity: int = 2, note: str = "gift"
+) -> client.PlaceRequest:
+    return client.PlaceRequest(order_id=order_id, sku=sku, quantity=quantity, note=note)
 
 
 class TestOrderService:
@@ -34,5 +36,11 @@ class TestOrderService:
 
     def test_placing_starts_the_workflow_for_the_order(self) -> None:
         workflows = FakeOrderWorkflow()
-        asyncio.run(order_service.OrderService(workflows).place(place_request(order_id="o2", sku="gadget", quantity=3)))
-        assert [(s.order_id, s.sku, s.quantity) for s in workflows.started] == [("o2", "gadget", 3)]
+        asyncio.run(
+            order_service.OrderService(workflows).place(
+                place_request(order_id="o2", sku="gadget", quantity=3, note="fragile")
+            )
+        )
+        assert [(s.order_id, s.sku, s.quantity, s.note) for s in workflows.started] == [
+            ("o2", "gadget", 3, "fragile")
+        ]
