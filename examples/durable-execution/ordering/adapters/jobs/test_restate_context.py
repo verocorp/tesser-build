@@ -6,7 +6,7 @@ import typing
 import restate
 
 import ordering.adapters.jobs.restate_context as restate_context
-import ordering.application.ports.quoting as quoting
+import ordering.application.relays.quoting as quoting
 
 
 class TestRestateJobContext:

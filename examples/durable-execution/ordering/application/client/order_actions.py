@@ -4,7 +4,7 @@ import typing
 
 import tesser.application as ts
 
-import ordering.application.ports.quoting as quoting
+import ordering.application.relays.quoting as quoting
 
 
 class Client(ts.Client, typing.Protocol):

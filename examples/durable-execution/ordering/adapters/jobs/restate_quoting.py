@@ -6,7 +6,7 @@ import typing
 import tesser.adapters as ts
 import restate
 
-import ordering.application.ports.quoting as quoting
+import ordering.application.relays.quoting as quoting
 import tesser.errors as errors
 
 

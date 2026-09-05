@@ -6,7 +6,7 @@ import restate
 import restate.client
 import restate.context
 
-import ordering.application.ports.order_workflow as order_workflow
+import ordering.application.relays.order_workflow as order_workflow
 import tesser.errors as errors
 
 
@@ -21,11 +21,10 @@ class RestateOrderWorkflow(ts.Gateway):
         self._run = run
 
     async def start(self, request: order_workflow.StartRequest) -> order_workflow.StartResponse:
+        keyed = str(request.order.identity)
         try:
             async with httpx.AsyncClient(base_url=self._ingress) as http:
-                await restate.client.Client(http).workflow_send(
-                    self._run, key=request.order_id, arg=request
-                )
+                await restate.client.Client(http).workflow_send(self._run, key=keyed, arg=request)
         except (restate.HttpError, httpx.TransportError) as e:
             raise errors.InfraError(f"restate ingress refused the workflow: {e}") from e
-        return order_workflow.StartResponse(order_id=request.order_id)
+        return order_workflow.StartResponse(order_id=keyed)

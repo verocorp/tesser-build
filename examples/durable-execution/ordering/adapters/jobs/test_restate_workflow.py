@@ -5,28 +5,32 @@ import json
 import socket
 import threading
 
+import tesser.testing as ts
 import pytest
 import restate
-import restate.serde
 
-import ordering.adapters.gateways.restate_workflow as restate_workflow
-import ordering.application.ports.order_workflow as order_workflow
+import ordering.adapters.jobs.restate as restate_jobs
+import ordering.adapters.jobs.restate_workflow as restate_workflow
+import ordering.application.relays.order_workflow as order_workflow
+import ordering.domain.order as order
 import tesser.errors as errors
+
+
+@ts.helper
+def placed(
+    order_id: str = "o1", sku: str = "widget", quantity: int = 2
+) -> order_workflow.StartRequest:
+    return order_workflow.StartRequest(
+        order=order.Order(order.OrderSpec(order_id=order_id, sku=sku, quantity=quantity))
+    )
 
 
 class TestRestateOrderWorkflow:
 
     def test_starting_sends_the_order_to_the_workflow_keyed_by_its_id(self) -> None:
-        class Body(restate.serde.Serde[order_workflow.StartRequest]):
-            def serialize(self, obj: order_workflow.StartRequest | None) -> bytes:
-                return b"" if obj is None else json.dumps(vars(obj)).encode()
-
-            def deserialize(self, buf: bytes) -> order_workflow.StartRequest | None:
-                return None if not buf else order_workflow.StartRequest(**json.loads(buf))
-
         workflow = restate.Workflow("Ordering")
 
-        @workflow.main(input_serde=Body())
+        @workflow.main(input_serde=restate_jobs.Snapshot(order_workflow.StartRequest))
         async def run(
             ctx: restate.WorkflowContext, request: order_workflow.StartRequest
         ) -> order_workflow.StartResponse:
@@ -63,7 +67,7 @@ class TestRestateOrderWorkflow:
 
         async def start() -> order_workflow.StartResponse:
             workflows = restate_workflow.RestateOrderWorkflow(f"http://127.0.0.1:{port}", run)
-            return await workflows.start(order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2))
+            return await workflows.start(placed())
 
         thread = threading.Thread(target=ingress)
         thread.start()
@@ -75,19 +79,14 @@ class TestRestateOrderWorkflow:
 
         assert started.order_id == "o1"
         assert seen[0].split(b"\r\n")[0] == b"POST /Ordering/o1/run/send HTTP/1.1"
-        assert json.loads(seen[1]) == {"order_id": "o1", "sku": "widget", "quantity": 2}
+        assert json.loads(seen[1]) == {
+            "order": {"_id": {"_value": "o1"}, "_sku": {"_value": "widget"}, "_quantity": {"_value": 2}}
+        }
 
     def test_a_refused_send_is_an_infra_error(self) -> None:
-        class Body(restate.serde.Serde[order_workflow.StartRequest]):
-            def serialize(self, obj: order_workflow.StartRequest | None) -> bytes:
-                return b"" if obj is None else json.dumps(vars(obj)).encode()
-
-            def deserialize(self, buf: bytes) -> order_workflow.StartRequest | None:
-                return None if not buf else order_workflow.StartRequest(**json.loads(buf))
-
         workflow = restate.Workflow("Ordering")
 
-        @workflow.main(input_serde=Body())
+        @workflow.main(input_serde=restate_jobs.Snapshot(order_workflow.StartRequest))
         async def run(
             ctx: restate.WorkflowContext, request: order_workflow.StartRequest
         ) -> order_workflow.StartResponse:
@@ -107,7 +106,7 @@ class TestRestateOrderWorkflow:
 
         async def start() -> order_workflow.StartResponse:
             workflows = restate_workflow.RestateOrderWorkflow(f"http://127.0.0.1:{port}", run)
-            return await workflows.start(order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2))
+            return await workflows.start(placed())
 
         thread = threading.Thread(target=ingress)
         thread.start()
@@ -119,16 +118,9 @@ class TestRestateOrderWorkflow:
             listener.close()
 
     def test_an_unreachable_ingress_is_an_infra_error(self) -> None:
-        class Body(restate.serde.Serde[order_workflow.StartRequest]):
-            def serialize(self, obj: order_workflow.StartRequest | None) -> bytes:
-                return b"" if obj is None else json.dumps(vars(obj)).encode()
-
-            def deserialize(self, buf: bytes) -> order_workflow.StartRequest | None:
-                return None if not buf else order_workflow.StartRequest(**json.loads(buf))
-
         workflow = restate.Workflow("Ordering")
 
-        @workflow.main(input_serde=Body())
+        @workflow.main(input_serde=restate_jobs.Snapshot(order_workflow.StartRequest))
         async def run(
             ctx: restate.WorkflowContext, request: order_workflow.StartRequest
         ) -> order_workflow.StartResponse:
@@ -140,7 +132,7 @@ class TestRestateOrderWorkflow:
 
         async def start() -> order_workflow.StartResponse:
             workflows = restate_workflow.RestateOrderWorkflow(f"http://127.0.0.1:{port}", run)
-            return await workflows.start(order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2))
+            return await workflows.start(placed())
 
         with pytest.raises(errors.InfraError):
             asyncio.run(start())

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import tesser.component as ts
 
-import ordering.adapters.gateways.restate_quoting as restate_quoting
-import ordering.adapters.gateways.restate_workflow as restate_workflow
 import ordering.adapters.jobs.restate as restate_jobs
+import ordering.adapters.jobs.restate_quoting as restate_quoting
+import ordering.adapters.jobs.restate_workflow as restate_workflow
 import ordering.adapters.repositories.memory as memory
 import ordering.application.order_actions as order_actions
 import ordering.application.order_service as order_service

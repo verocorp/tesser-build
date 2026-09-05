@@ -2,22 +2,19 @@ from __future__ import annotations
 
 import tesser.application as ts
 
-import ordering.application.ports.order_workflow as order_workflow
-import ordering.application.ports.quoting as quoting
+import ordering.application.relays.order_workflow as order_workflow
+import ordering.application.relays.quoting as quoting
 import ordering.domain.order as order
 
 
 class RunResponse(ts.Response):
 
+    order_id: str
+    total_cents: int
+
     def __init__(self, order_id: str, total_cents: int) -> None:
         self.order_id = order_id
         self.total_cents = total_cents
-
-
-class MapToOrderSpec(ts.Mapper, order.OrderSpec):
-
-    def __init__(self, request: order_workflow.StartRequest) -> None:
-        super().__init__(order_id=request.order_id, sku=request.sku, quantity=request.quantity)
 
 
 class MapToQuoteRequest(ts.Mapper, quoting.QuoteRequest):
@@ -45,7 +42,7 @@ class OrderOrchestrator(ts.Orchestrator):
         self._quotes = quotes
 
     async def run(self, request: order_workflow.StartRequest) -> RunResponse:
-        running = order.Order(MapToOrderSpec(request))
+        running = request.order
         quoted = await self._quotes.quote(self._job, MapToQuoteRequest(running))
         total = running.total(MapToPriceSpec(quoted))
         return MapToRunResponse(running, total)

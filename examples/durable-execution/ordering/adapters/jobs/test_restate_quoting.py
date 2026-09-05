@@ -8,8 +8,8 @@ import tesser.testing as ts
 import pytest
 import restate
 
-import ordering.adapters.gateways.restate_quoting as restate_quoting
-import ordering.application.ports.quoting as quoting
+import ordering.adapters.jobs.restate_quoting as restate_quoting
+import ordering.application.relays.quoting as quoting
 import tesser.errors as errors
 
 

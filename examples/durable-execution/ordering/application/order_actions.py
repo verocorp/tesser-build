@@ -3,7 +3,7 @@ from __future__ import annotations
 import tesser.application as ts
 
 import ordering.application.ports.catalog_repository as catalog_repository
-import ordering.application.ports.quoting as quoting
+import ordering.application.relays.quoting as quoting
 import ordering.domain.order as order
 
 

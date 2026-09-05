@@ -4,7 +4,7 @@ import tesser.testing as ts
 
 import ordering.application.order_actions as actions
 import ordering.application.ports.catalog_repository as catalog_repository
-import ordering.application.ports.quoting as quoting
+import ordering.application.relays.quoting as quoting
 
 
 @ts.fake

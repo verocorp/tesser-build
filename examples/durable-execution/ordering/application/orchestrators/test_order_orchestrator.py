@@ -7,8 +7,9 @@ import typing
 import tesser.testing as ts
 
 import ordering.application.orchestrators.order_orchestrator as order_orchestrator
-import ordering.application.ports.order_workflow as order_workflow
-import ordering.application.ports.quoting as quoting
+import ordering.application.relays.order_workflow as order_workflow
+import ordering.application.relays.quoting as quoting
+import ordering.domain.order as order
 
 
 @ts.fake
@@ -35,7 +36,9 @@ class FakeQuoting(quoting.Quoting):
 def start_request(
     order_id: str = "o1", sku: str = "widget", quantity: int = 3
 ) -> order_workflow.StartRequest:
-    return order_workflow.StartRequest(order_id=order_id, sku=sku, quantity=quantity)
+    return order_workflow.StartRequest(
+        order=order.Order(order.OrderSpec(order_id=order_id, sku=sku, quantity=quantity))
+    )
 
 
 class TestOrderOrchestrator:

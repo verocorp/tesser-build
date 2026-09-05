@@ -5,3 +5,4 @@ from tesser.adapters.mapper import Mapper as Mapper
 from tesser.adapters.repository import Repository as Repository
 from tesser.adapters.serde import Serde as Serde
 from tesser.application.job_context import JobContext as JobContext
+from tesser.application.relay import Relay as Relay
