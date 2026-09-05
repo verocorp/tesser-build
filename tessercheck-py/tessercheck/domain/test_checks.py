@@ -14565,3 +14565,400 @@ def test_a_store_yields_exactly_one_port() -> None:
         ))).violations()
     )
     assert any("Pair.transaction" in f for f in findings), findings
+
+
+@ts.helper
+def _reexport_spec(
+    sources: tuple[tuple[str, str, str | None, bool], ...] = (),
+    base: tuple[tuple[str, str, str | None, bool], ...] = (
+        (
+            "mod/domain/tag.py",
+            "mod.domain.tag",
+            "import enum\n"
+            "import tesser.domain as ts\n"
+            "import tesser.serialization as serialization\n"
+            "class Verdict(ts.Outcome):\n"
+            "    OK = enum.auto()\n"
+            "    NO = enum.auto()\n"
+            "class PartSpec(ts.Spec):\n"
+            "    def __init__(self, code: str) -> None:\n"
+            "        self.code = code\n"
+            "class TagSpec(ts.Spec):\n"
+            "    def __init__(self, value: str, part: PartSpec) -> None:\n"
+            "        self.value = value\n"
+            "        self.part = part\n"
+            "class Part(ts.ValueObject):\n"
+            "    _code: str\n"
+            "    def __init__(self, spec: PartSpec) -> None:\n"
+            "        object.__setattr__(self, '_code', spec.code)\n"
+            "    def __str__(self) -> str:\n"
+            "        return serialization.canonical_str(self._code)\n"
+            "class Tag(ts.ValueObject):\n"
+            "    _part: Part\n"
+            "    def __init__(self, spec: TagSpec) -> None:\n"
+            "        object.__setattr__(self, '_part', Part(spec.part))\n"
+            "    def decide(self) -> Verdict:\n"
+            "        return Verdict.OK\n",
+            False,
+        ),
+        (
+            "mod/domain/test_tag.py",
+            "mod.domain.test_tag",
+            "def test_tag_exists() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+        (
+            "mod/domain/__init__.py",
+            "mod.domain",
+            "from mod.domain.tag import PartSpec as PartSpec\n"
+            "from mod.domain.tag import Tag as Tag\n"
+            "from mod.domain.tag import TagSpec as TagSpec\n"
+            "from mod.domain.tag import Verdict as Verdict\n",
+            True,
+        ),
+        (
+            "mod/client/client.py",
+            "mod.client.client",
+            "import typing\n"
+            "import tesser.context as ts\n"
+            "class AskRequest(ts.Request):\n"
+            "    def __init__(self, value: str) -> None:\n"
+            "        self.value = value\n"
+            "class AskResponse(ts.Response):\n"
+            "    def __init__(self, value: str) -> None:\n"
+            "        self.value = value\n"
+            "class Client(ts.Client, typing.Protocol):\n"
+            "    def ask(self, request: AskRequest) -> AskResponse: ...\n",
+            False,
+        ),
+        (
+            "mod/client/test_client.py",
+            "mod.client.test_client",
+            "def test_client_exists() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+        (
+            "mod/client/__init__.py",
+            "mod.client",
+            "from mod.client.client import AskRequest as AskRequest\n"
+            "from mod.client.client import AskResponse as AskResponse\n",
+            True,
+        ),
+        (
+            "mod/application/test_service.py",
+            "mod.application.test_service",
+            "def test_service_exists() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+    ),
+) -> checks.CodebaseSpec:
+    return checks.CodebaseSpec(
+        sources=base + sources,
+        declared="app",
+        nested=(),
+        symlinked=(),
+    )
+
+
+@ts.helper
+def _ports_sources(
+    quotes: str = "mod.application.ports.quotes",
+    other: str = "mod.application.ports.other",
+) -> checks.CodebaseSpec:
+    return checks.CodebaseSpec(
+        sources=(
+            (
+                "mod/application/ports/quotes.py",
+                quotes,
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class QuoteRequest(ts.Request):\n"
+                "    def __init__(self, value: str) -> None:\n"
+                "        self.value = value\n"
+                "class QuoteResponse(ts.Response):\n"
+                "    def __init__(self, value: str) -> None:\n"
+                "        self.value = value\n"
+                "class Quotes(ts.Port, typing.Protocol):\n"
+                "    def quote(self, job: ts.JobContext, request: QuoteRequest)"
+                " -> QuoteResponse: ...\n",
+                False,
+            ),
+            (
+                "mod/application/ports/other.py",
+                other,
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class OtherRequest(ts.Request):\n"
+                "    def __init__(self, value: str) -> None:\n"
+                "        self.value = value\n"
+                "class OtherResponse(ts.Response):\n"
+                "    def __init__(self, value: str) -> None:\n"
+                "        self.value = value\n"
+                "class Other(ts.Port, typing.Protocol):\n"
+                "    def other(self, request: OtherRequest) -> OtherResponse: ...\n",
+                False,
+            ),
+            (
+                "mod/application/ports/__init__.py",
+                "mod.application.ports",
+                "from mod.application.ports.other import Other as Other\n"
+                "from mod.application.ports.other import OtherRequest as OtherRequest\n"
+                "from mod.application.ports.other import OtherResponse as OtherResponse\n"
+                "from mod.application.ports.quotes import QuoteRequest as QuoteRequest\n"
+                "from mod.application.ports.quotes import QuoteResponse as QuoteResponse\n"
+                "from mod.application.ports.quotes import Quotes as Quotes\n",
+                True,
+            ),
+            (
+                "mod/application/client/actions.py",
+                "mod.application.client.actions",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import mod.application.ports as ports\n"
+                "class Client(ts.Client, typing.Protocol):\n"
+                "    def quote(self, request: ports.QuoteRequest) -> ports.QuoteResponse: ...\n",
+                False,
+            ),
+            ("mod/application/client/__init__.py", "mod.application.client", "", True),
+            (
+                "mod/application/orchestrators/test_flow.py",
+                "mod.application.orchestrators.test_flow",
+                "def test_flow_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "mod/application/orchestrators/__init__.py",
+                "mod.application.orchestrators",
+                "",
+                True,
+            ),
+        ),
+        declared="app",
+        nested=(),
+        symlinked=(),
+    )
+
+
+def test_an_outcome_match_reads_through_a_re_export() -> None:
+    clean = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_reexport_spec(sources=(
+            (
+                "mod/application/service.py",
+                "mod.application.service",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import mod.client as client\n"
+                "import mod.domain as domain\n"
+                "class MapToPartSpec(ts.Mapper, domain.PartSpec):\n"
+                "    def __init__(self, request: client.AskRequest) -> None:\n"
+                "        super().__init__(code=request.value)\n"
+                "class MapToTagSpec(ts.Mapper, domain.TagSpec):\n"
+                "    def __init__(self, request: client.AskRequest) -> None:\n"
+                "        super().__init__(value=request.value, part=MapToPartSpec(request))\n"
+                "class AskService(ts.ApplicationService):\n"
+                "    def ask(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        tag = domain.Tag(MapToTagSpec(request))\n"
+                "        match tag.decide():\n"
+                "            case domain.Verdict.OK:\n"
+                "                return client.AskResponse(value='y')\n"
+                "            case domain.Verdict.NO:\n"
+                "                return client.AskResponse(value='n')\n"
+                "            case _ as never:\n"
+                "                typing.assert_never(never)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert not any(
+        "a service method matches the outcome a domain object handed back" in f
+        for f in clean
+    ), clean
+
+    stray = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_reexport_spec(sources=(
+            (
+                "mod/application/service.py",
+                "mod.application.service",
+                "import tesser.application as ts\n"
+                "import mod.client as client\n"
+                "import mod.domain as domain\n"
+                "class AskService(ts.ApplicationService):\n"
+                "    def ask(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        match request.value:\n"
+                "            case 'y':\n"
+                "                return client.AskResponse(value='y')\n"
+                "            case _:\n"
+                "                return client.AskResponse(value='n')\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "mod.application.service.AskService.ask match subject is not a call on a "
+        "domain object; a service method matches the outcome a domain object "
+        "handed back" in f
+        for f in stray
+    ), stray
+
+
+def test_an_outcome_member_read_through_a_re_export_is_a_finding() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_reexport_spec(sources=(
+            (
+                "mod/application/service.py",
+                "mod.application.service",
+                "import tesser.application as ts\n"
+                "import mod.client as client\n"
+                "import mod.domain as domain\n"
+                "class AskService(ts.ApplicationService):\n"
+                "    def ask(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        answer = domain.Verdict.OK\n"
+                "        return client.AskResponse(value=str(answer))\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "mod.application.service names Verdict.OK outside a match; an outcome member "
+        "is read only by a match" in f
+        for f in findings
+    ), findings
+
+
+def test_a_spec_read_through_a_re_export_is_a_finding() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_reexport_spec(sources=(
+            (
+                "mod/application/service.py",
+                "mod.application.service",
+                "import tesser.application as ts\n"
+                "import mod.client as client\n"
+                "import mod.domain as domain\n"
+                "class AskService(ts.ApplicationService):\n"
+                "    def ask(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        part = domain.PartSpec(code=request.value)\n"
+                "        return client.AskResponse(value=part.code)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "mod.application.service.AskService.ask reads 'code' of the spec 'part'; "
+        "a spec is only read where it initializes its own object" in f
+        for f in findings
+    ), findings
+
+
+def test_a_mapper_target_read_through_a_re_export_is_a_finding() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_reexport_spec(sources=(
+            (
+                "mod/application/service.py",
+                "mod.application.service",
+                "import tesser.application as ts\n"
+                "import mod.client as client\n"
+                "import mod.domain as domain\n"
+                "class MapToPartSpec(ts.Mapper, domain.PartSpec):\n"
+                "    def __init__(self, request: client.AskRequest) -> None:\n"
+                "        super().__init__(code=request.value)\n"
+                "        self.extra = request.value\n"
+                "class AskService(ts.ApplicationService):\n"
+                "    def ask(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        return client.AskResponse(value=request.value)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "mod.application.service.MapToPartSpec stores 'extra'; a mapper stores "
+        "nothing but its target's fields" in f
+        for f in findings
+    ), findings
+
+
+def test_a_value_object_read_through_a_re_export_is_a_finding() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_reexport_spec(sources=(
+            (
+                "mod/adapters/repositories/store.py",
+                "mod.adapters.repositories.store",
+                "import tesser.adapters as ts\n"
+                "import mod.domain as domain\n"
+                "class TagRepository(ts.Repository):\n"
+                "    def load(self, key: str) -> domain.Tag: ...\n",
+                False,
+            ),
+            (
+                "mod/adapters/repositories/test_store.py",
+                "mod.adapters.repositories.test_store",
+                "def test_store_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            ("mod/adapters/repositories/__init__.py", "mod.adapters.repositories", "", True),
+        ))).violations()
+    )
+    assert any(
+        "mod.adapters.repositories.store.TagRepository.load carries a value object "
+        "in its signature; an adapter speaks records, never domain objects" in f
+        for f in findings
+    ), findings
+
+
+def test_an_action_port_read_through_a_re_export() -> None:
+    good = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_reexport_spec(sources=_ports_sources().sources + (
+            (
+                "mod/application/orchestrators/flow.py",
+                "mod.application.orchestrators.flow",
+                "import tesser.application as ts\n"
+                "import mod.application.ports as ports\n"
+                "class Flow(ts.Orchestrator):\n"
+                "    def __init__(self, job: ts.JobContext, quoting: ports.Quotes) -> None:\n"
+                "        self._job = job\n"
+                "        self._quoting = quoting\n"
+                "    def run(self, request: ports.QuoteRequest) -> ports.QuoteResponse:\n"
+                "        return self._quoting.quote(self._job, request)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert not any(
+        "an orchestrator depends only on action ports" in f for f in good
+    ), good
+
+    bad = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_reexport_spec(sources=_ports_sources().sources + (
+            (
+                "mod/application/orchestrators/flow.py",
+                "mod.application.orchestrators.flow",
+                "import tesser.application as ts\n"
+                "import mod.application.ports as ports\n"
+                "class Flow(ts.Orchestrator):\n"
+                "    def __init__(self, job: ts.JobContext, other: ports.Other) -> None:\n"
+                "        self._job = job\n"
+                "        self._other = other\n"
+                "    def run(self, request: ports.OtherRequest) -> ports.OtherResponse:\n"
+                "        return self._other.other(request)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "mod.application.orchestrators.flow.Flow.__init__ parameter 'other' is a "
+        "port no application client speaks; an orchestrator depends only on "
+        "action ports" in f
+        for f in bad
+    ), bad
