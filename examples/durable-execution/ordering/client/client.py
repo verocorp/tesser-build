@@ -7,10 +7,11 @@ import tesser.context as ts
 
 class PlaceRequest(ts.Request):
 
-    def __init__(self, order_id: str, sku: str, quantity: int) -> None:
+    def __init__(self, order_id: str, sku: str, quantity: int, note: str) -> None:
         self.order_id = order_id
         self.sku = sku
         self.quantity = quantity
+        self.note = note
 
 
 class PlaceResponse(ts.Response):

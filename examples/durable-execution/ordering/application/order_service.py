@@ -10,14 +10,19 @@ import ordering.domain.order as order
 class MapToOrderSpec(ts.Mapper, order.OrderSpec):
 
     def __init__(self, request: client.PlaceRequest) -> None:
-        super().__init__(order_id=request.order_id, sku=request.sku, quantity=request.quantity)
+        super().__init__(
+            order_id=request.order_id, sku=request.sku, quantity=request.quantity, note=request.note
+        )
 
 
 class MapToStartRequest(ts.Mapper, order_workflow.StartRequest):
 
     def __init__(self, placed: order.Order) -> None:
         super().__init__(
-            order_id=str(placed.identity), sku=str(placed.sku), quantity=int(placed.quantity)
+            order_id=str(placed.identity),
+            sku=str(placed.sku),
+            quantity=int(placed.quantity),
+            note=str(placed.note),
         )
 
 

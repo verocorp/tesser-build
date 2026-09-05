@@ -63,7 +63,9 @@ class TestRestateOrderWorkflow:
 
         async def start() -> order_workflow.StartResponse:
             workflows = restate_workflow.RestateOrderWorkflow(f"http://127.0.0.1:{port}", run)
-            return await workflows.start(order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2))
+            return await workflows.start(
+                order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2, note="gift")
+            )
 
         thread = threading.Thread(target=ingress)
         thread.start()
@@ -75,7 +77,7 @@ class TestRestateOrderWorkflow:
 
         assert started.order_id == "o1"
         assert seen[0].split(b"\r\n")[0] == b"POST /Ordering/o1/run/send HTTP/1.1"
-        assert json.loads(seen[1]) == {"order_id": "o1", "sku": "widget", "quantity": 2}
+        assert json.loads(seen[1]) == {"order_id": "o1", "sku": "widget", "quantity": 2, "note": "gift"}
 
     def test_a_refused_send_is_an_infra_error(self) -> None:
         class Body(restate.serde.Serde[order_workflow.StartRequest]):
@@ -107,7 +109,9 @@ class TestRestateOrderWorkflow:
 
         async def start() -> order_workflow.StartResponse:
             workflows = restate_workflow.RestateOrderWorkflow(f"http://127.0.0.1:{port}", run)
-            return await workflows.start(order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2))
+            return await workflows.start(
+                order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2, note="gift")
+            )
 
         thread = threading.Thread(target=ingress)
         thread.start()
@@ -140,7 +144,9 @@ class TestRestateOrderWorkflow:
 
         async def start() -> order_workflow.StartResponse:
             workflows = restate_workflow.RestateOrderWorkflow(f"http://127.0.0.1:{port}", run)
-            return await workflows.start(order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2))
+            return await workflows.start(
+                order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2, note="gift")
+            )
 
         with pytest.raises(errors.InfraError):
             asyncio.run(start())

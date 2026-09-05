@@ -268,7 +268,7 @@ docker run -d --name restate -p 18080:8080 -p 19070:9070 \
 PYTHONPATH=.:../../tesser-py RESTATE_INGRESS=http://localhost:18080 \
   python -m srv.http.main 0.0.0.0:8000 &            # the API and the Restate endpoint
 curl -X POST localhost:19070/deployments --json '{"uri":"http://host.docker.internal:8000/restate"}'
-curl -X POST localhost:8000/orders --json '{"order_id":"o1","sku":"gadget","quantity":2}'
+curl -X POST localhost:8000/orders --json '{"order_id":"o1","sku":"gadget","quantity":2,"note":"gift"}'
                                                     # 202 {"order_id": "o1"}
 curl localhost:18080/restate/workflow/Ordering/o1/output
                                                     # {"order_id": "o1", "total_cents": 2000}
@@ -280,7 +280,7 @@ kinds the handler and the application can raise:
 ```
 curl -X POST localhost:8000/orders --json '{"order_id":"o1"}'
    # 400 {"detail": "sku must be a string"}
-curl -X POST localhost:8000/orders --json '{"order_id":"o2","sku":"gadget","quantity":0}'
+curl -X POST localhost:8000/orders --json '{"order_id":"o2","sku":"gadget","quantity":0,"note":"gift"}'
    # 422 {"detail": "an order is for at least one unit"}          errors.status_for(VALIDATION)
    #     with the ingress down, a well-formed order is 503 {"detail": "unavailable"}
 ```

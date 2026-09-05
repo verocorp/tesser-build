@@ -26,16 +26,18 @@ class TestHandler:
 
     def test_a_placed_order_is_accepted_with_its_id(self) -> None:
         handler = http_handlers.Handler(FakeClient())
-        body = b'{"order_id": "o1", "sku": "widget", "quantity": 2}'
+        body = b'{"order_id": "o1", "sku": "widget", "quantity": 2, "note": "gift"}'
         response = asyncio.run(handler.place(http.HttpRequest(body=body)))
         assert response.status_code == 202
         assert json.loads(response.body) == {"order_id": "o1"}
 
     def test_place_carries_the_body_fields_to_the_client(self) -> None:
         fake = FakeClient()
-        body = b'{"order_id": "o1", "sku": "widget", "quantity": 2}'
+        body = b'{"order_id": "o1", "sku": "widget", "quantity": 2, "note": "gift"}'
         asyncio.run(http_handlers.Handler(fake).place(http.HttpRequest(body=body)))
-        assert [(p.order_id, p.sku, p.quantity) for p in fake.placed] == [("o1", "widget", 2)]
+        assert [(p.order_id, p.sku, p.quantity, p.note) for p in fake.placed] == [
+            ("o1", "widget", 2, "gift")
+        ]
 
     def test_a_missing_field_is_a_bad_request(self) -> None:
         handler = http_handlers.Handler(FakeClient())

@@ -16,6 +16,10 @@ class TestOrderingContext:
         wired = component.Ordering(config.Config(config.Spec(ingress="http://127.0.0.1:9")))
         try:
             with pytest.raises(errors.InfraError):
-                asyncio.run(wired.client.place(client.PlaceRequest(order_id="o1", sku="widget", quantity=2)))
+                asyncio.run(
+                    wired.client.place(
+                        client.PlaceRequest(order_id="o1", sku="widget", quantity=2, note="gift")
+                    )
+                )
         finally:
             wired.close()

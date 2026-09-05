@@ -68,8 +68,8 @@ class TestHttpHost:
         try:
             for body in (
                 b'{"order_id": "o1"}',
-                b'{"order_id": "o1", "sku": "gadget", "quantity": 0}',
-                b'{"order_id": "o1", "sku": "gadget", "quantity": 2}',
+                b'{"order_id": "o1", "sku": "gadget", "quantity": 0, "note": "gift"}',
+                b'{"order_id": "o1", "sku": "gadget", "quantity": 2, "note": "gift"}',
             ):
                 order = urllib.request.Request(
                     f"http://127.0.0.1:{port}/orders",

@@ -33,9 +33,9 @@ class FakeQuoting(quoting.Quoting):
 
 @ts.helper
 def start_request(
-    order_id: str = "o1", sku: str = "widget", quantity: int = 3
+    order_id: str = "o1", sku: str = "widget", quantity: int = 3, note: str = "gift"
 ) -> order_workflow.StartRequest:
-    return order_workflow.StartRequest(order_id=order_id, sku=sku, quantity=quantity)
+    return order_workflow.StartRequest(order_id=order_id, sku=sku, quantity=quantity, note=note)
 
 
 class TestOrderOrchestrator:
