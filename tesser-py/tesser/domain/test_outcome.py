@@ -99,7 +99,7 @@ def test_a_metaclass_cannot_skip_the_gate_it_inherits() -> None:
             cls: str,
             bases: tuple[type, ...],
             classdict: enum._EnumDict,
-            **kwargs: typing.Any,
+            **kwargs: typing.Any,  # tesser:debt TB022
         ) -> Skipping:
             return enum.EnumMeta.__new__(metacls, cls, bases, classdict, **kwargs)
 

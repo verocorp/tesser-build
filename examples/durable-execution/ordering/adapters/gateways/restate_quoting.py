@@ -14,7 +14,7 @@ class RestateQuoting(ts.Gateway):
 
     def __init__(
         self,
-        quote: abc.Callable[[typing.Any, quoting.QuoteRequest], abc.Awaitable[quoting.QuoteResponse]],
+        quote: abc.Callable[[typing.Any, quoting.QuoteRequest], abc.Awaitable[quoting.QuoteResponse]],  # tesser:debt TB022
     ) -> None:
         self._quote = quote
 

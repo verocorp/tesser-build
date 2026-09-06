@@ -5,6 +5,50 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.97.0] - 2026-09-06
+
+A type names what the value is. `TB022` reports `Any`, `Callable` and
+`Awaitable` wherever a module names them. This is the checker half only: the
+21 sites in this repo that name one carry a site-level `# tesser:debt TB022`,
+and making them conformant is the follow-up.
+
+### Added
+- **`TB022` — a type names what the value is.** `Module.type_name_violations`
+  walks every module and reports an `ast.Name` or `ast.Attribute` whose
+  trailing segment is `Any`, `Callable`, or `Awaitable`, at the line it is
+  written. Matching the trailing segment rather than a resolved import path is
+  what makes `typing.Any`, `abc.Callable` and a bare `Any` all report from one
+  rule, and it means the check is not confined to the positions the annotation
+  reader walks — a base class, a `TypeVar` bound and a `typing.cast` argument
+  are read the same way. Each of the three names a mechanism where a type
+  should name a value: `Any` turns the checker off, so nothing downstream of
+  it is checked; `Callable` says a function arrives without saying what it
+  answers, which is a `ts.Port` declared anonymously and therefore a
+  dependency no import rule can see; `Awaitable` names the waiting rather than
+  the answer, where `async def f() -> X` already says both.
+- **The async protocols the store contract needs stay legal, deliberately.**
+  `typing.AsyncContextManager` is what `TB081` *requires* a
+  `ts.Store.transaction` to return, and `typing.AsyncIterator` is what the
+  implementation yields. Neither is an escape from naming a value, so neither
+  is in `BANNED_TYPES`; `examples/asyncpg`, which is built out of both, draws
+  no `TB022` finding. Recorded in `TODOS.md` so a later reading of "the async
+  family" cannot sweep them in silently.
+- **21 `# tesser:debt TB022` markers**, one per nonconformant line, across
+  `tesser-py` (10), `examples/durable-execution` (4), `examples/minimal` (3),
+  `examples/llmport` (3), `examples/python-app` (1) and `tessercheck-py` (1).
+  Most are the one shape: the `ts.JobContext.step` signature, `step:
+  abc.Callable[[typing.Any, I], abc.Awaitable[O]]`, which draws all three
+  names on one line and is copied into every job-context fake. `checks.py`
+  itself is clean — its `"Callable"` and `"Any"` are string constants.
+- **The rest of each family is an open ruling** (`TODOS.md`): `Coroutine` and
+  `AnyStr` (the one-token evasions), `object` in type position, `typing.cast`
+  and `# type: ignore`, and `lambda` as the `Callable` literal.
+- **Renderings** (`docs/skill-authoring.md` P5): `skills/tesser-build/python.md`
+  gains "A type names what the value is" beside the unquoted-annotation rule
+  (skill-version 66 → 67); `rationale/coverage.md` gains the `TB022`
+  enforcement row and its skill-materializations row; `roadmap/registry.json`
+  adds `TB022` to `norm-annotations`, which regenerates `ROADMAP.md`.
+
 ## [0.0.96.0] - 2026-08-30
 
 An annotation is written unquoted. `TB021` reports a string in type position

@@ -480,6 +480,44 @@ too — so today the analyzer reports a metadata string as a quoted type.
   `test_a_client_dto_bool_is_read_through_the_annotations_that_wrap_it`
   locks the present behaviour so a change is visible.
 
+## How far TB022's families reach (2026-09-06, v0.0.97.0)
+
+`TB022` bans exactly three names — `Any`, `Callable`, `Awaitable` — wherever a
+module names them. Each sits at the head of a family, and the rest of each
+family is unruled. The 21 debt-marked sites are the migration this ban owes;
+these are the questions about whether the ban should be wider before that
+migration runs.
+
+- [ ] **`Coroutine` and `AnyStr` — the one-token evasions.** `typing.Coroutine[Any, Any, X]`
+  is `Awaitable[X]` with two more `Any`s, and `AnyStr` is `Any` constrained to
+  two types. *For adding:* no gated tree names either, so the cost is zero and
+  a ban without them can be sidestepped by a rename. *Against:* the ruling
+  named three, and `Coroutine`'s third slot is the answer type, so it is
+  strictly more informative than `Awaitable` — the argument that it names the
+  waiting is weaker there.
+- [ ] **`object` in type position.** The checked top type: `dict[str, object]`
+  and `abc.Callable[..., object]` appear in `tesser-py` and `llmport`. *For:*
+  it is `Any` that survives `--strict`, and it names no value either.
+  *Against:* unlike `Any` it does not switch the checker off — a caller must
+  narrow before using it — and `object.__setattr__` is the value-object
+  idiom, so the check would have to tell the annotation apart from the
+  builtin.
+- [ ] **`typing.cast` and `# type: ignore`.** Both assert a type the checker
+  cannot verify — the same silent site as `Any`, written as a promise instead
+  of a hole. Three `cast` sites (all at an engine boundary: `restate.Context`,
+  `hypercorn` ASGI) and seven `type: ignore` sites today. `# type: ignore` is
+  currently *exempt* from `TB020` as a machine directive, so banning it means
+  reading a comment the comments norm agreed not to read.
+- [ ] **`lambda`.** A lambda is a `Callable` literal — banning the type and
+  allowing the value is the annotation-shaped half of one rule. *Against:*
+  `sorted(key=lambda ...)` is 8 of the 12 sites, including inside
+  `checks.py` itself, so this is a real wave rather than a free one.
+- [ ] **The async protocols stay legal, and that needs saying.**
+  `AsyncContextManager` is *required* by `TB081` as a `ts.Store.transaction`
+  return, and `AsyncIterator` is what the implementation yields. Neither is an
+  escape from naming a value, so neither is a candidate — recorded here so a
+  later "ban the async family" reading does not sweep them in.
+
 ## Foreign types at the analyzer's door (2026-08-30, deferred rule)
 
 The TB051 burn-down of `tessercheck/domain/checks.py` decomposes `Codebase`'s

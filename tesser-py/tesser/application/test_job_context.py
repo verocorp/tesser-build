@@ -10,7 +10,7 @@ import tesser.application.job_context as job_context
 class FakeJobContext(job_context.JobContext):
 
     async def call[I, O](
-        self, step: typing.Callable[[typing.Any, I], typing.Awaitable[O]], request: I
+        self, step: typing.Callable[[typing.Any, I], typing.Awaitable[O]], request: I  # tesser:debt TB022
     ) -> O:
         return await step(None, request)
 

@@ -538,6 +538,8 @@ TYPING_MODULE: typing.Final[str] = "typing"
 
 LITERAL: typing.Final[str] = "Literal"
 
+BANNED_TYPES: typing.Final[frozenset[str]] = frozenset({"Any", "Callable", "Awaitable"})
+
 SPEC_BLOCKS: typing.Final[frozenset[str]] = frozenset({"spec", "component_spec", "app_spec"})
 
 PUBLIC_CALL: typing.Final[str] = "__call__"
@@ -6558,6 +6560,30 @@ class Module(ts.Entity):
             )
         return tuple(found)
 
+    def type_name_violations(self) -> tuple[Violation, ...]:
+        module_name = self._name
+        sites: list[tuple[int, int, str]] = []
+        for stmt in self._body:
+            for node in ast.walk(stmt):
+                if isinstance(node, ast.Name) and node.id in BANNED_TYPES:
+                    sites.append((node.lineno, node.col_offset, node.id))
+                elif isinstance(node, ast.Attribute) and node.attr in BANNED_TYPES:
+                    sites.append((node.lineno, node.col_offset, ast.unparse(node)))
+        found: list[Violation] = []
+        for line, _, banned in sorted(sites):
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    line,
+                    "TB022",
+                    f"{module_name} names {banned}; a type names what the value is — "
+                    "Any names nothing, Callable names a function where a port would "
+                    "name what it answers, and Awaitable names the waiting instead of "
+                    "the answer",
+                ))
+            )
+        return tuple(found)
+
     def comment_violations(self) -> tuple[Violation, ...]:
         module_name = self._name
         found: list[Violation] = []
@@ -10035,6 +10061,7 @@ class Codebase(ts.AggregateRoot):
         )
         for module in self._modules:
             found.extend(module.annotation_violations())
+            found.extend(module.type_name_violations())
             found.extend(module.comment_violations())
             found.extend(module.double_violations())
             found.extend(module.shadowing_violations())

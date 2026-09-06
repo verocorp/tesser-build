@@ -73,6 +73,24 @@ a rule pass; it makes the rule blind, which is why the quoting itself is what
 gets reported. Strings inside `typing.Literal[...]` are data, not types, and
 are left alone.
 
+**A type names what the value is** (TB022, maintainer ruling 2026-09-06).
+`Any`, `Callable`, and `Awaitable` are findings wherever the module names
+them — an annotation, a base class, a `TypeVar` bound, a `typing.cast`
+argument. Each names a mechanism where a type should name a value. `Any`
+turns the checker off, so nothing downstream of it is checked and the change
+you were relying on the checker to catch is silent. `Callable` says a
+function arrives without saying what it answers; the way to declare "someone
+else supplies this behavior" is a `ts.Port` in `application/ports/`, which
+names its request and its response and which the import rules can see —
+a bare `Callable` is that same dependency written so nothing can read it.
+`Awaitable` names the waiting rather than the answer, and `async def
+f() -> X` already says both. Fix by naming the thing: the concrete type for
+`Any`, a port protocol for `Callable`, and the awaited type on an `async def`
+for `Awaitable`. The async protocols the store contract needs stay legal —
+`typing.AsyncContextManager[...]` is what a `ts.Store.transaction` returns,
+and `typing.AsyncIterator[...]` is what its implementation yields; both name a
+shape the caller can use.
+
 **What the shell buys, once.** `ts.ValueObject` owns immutability and value
 equality at runtime: assignment and deletion raise, `__eq__`/`__hash__`
 compare by type and content, and a subclass that tries to override

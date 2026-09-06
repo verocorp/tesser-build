@@ -74,7 +74,7 @@ def conforming_tree(root: pathlib.Path) -> None:
     )
 
 
-def function_tree(func: abc.Callable[..., object]) -> ast.FunctionDef:
+def function_tree(func: abc.Callable[..., object]) -> ast.FunctionDef:  # tesser:debt TB022
     tree = ast.parse(textwrap.dedent(inspect.getsource(func)))
     node = next(n for n in tree.body if isinstance(n, ast.FunctionDef))
     return node

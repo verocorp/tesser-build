@@ -16,7 +16,7 @@ _GENERATED: typing.Final[frozenset[str]] = frozenset(_Machinery.__dict__)
 
 
 def _gate(cls: type) -> None:
-    members: dict[str, typing.Any] = cls.__dict__.get("_member_map_", {})
+    members: dict[str, typing.Any] = cls.__dict__.get("_member_map_", {})  # tesser:debt TB022
     if cls.__bases__ != (Outcome,):
         bases = ", ".join(base.__name__ for base in cls.__bases__)
         raise TypeError(
@@ -67,7 +67,7 @@ class _OutcomeMeta(enum.EnumMeta):
         cls: str,
         bases: tuple[type, ...],
         classdict: enum._EnumDict,
-        **kwargs: typing.Any,
+        **kwargs: typing.Any,  # tesser:debt TB022
     ) -> _OutcomeMeta:
         made = super().__new__(metacls, cls, bases, classdict, **kwargs)
         for base in bases:

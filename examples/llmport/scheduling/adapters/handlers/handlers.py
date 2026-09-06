@@ -26,7 +26,7 @@ class LlmToolHandler(ts.Handler):
         self._booking_id = booking_id
         self._declarations: dict[
             str,
-            tuple[str, abc.Callable[[client.BookingStateResponse], dict[str, object]]],
+            tuple[str, abc.Callable[[client.BookingStateResponse], dict[str, object]]],  # tesser:debt TB022
         ] = {
             PROVIDE_NAME: (
                 "Record the caller's full name.",

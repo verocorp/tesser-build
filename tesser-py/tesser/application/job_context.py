@@ -5,5 +5,5 @@ import typing
 class JobContext(typing.Protocol):
 
     async def call[I, O](
-        self, step: abc.Callable[[typing.Any, I], abc.Awaitable[O]], request: I
+        self, step: abc.Callable[[typing.Any, I], abc.Awaitable[O]], request: I  # tesser:debt TB022
     ) -> O: ...

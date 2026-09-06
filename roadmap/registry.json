@@ -367,7 +367,8 @@
       "go_example": [],
       "go_analyzers": [],
       "py_checks": [
-        "TB021"
+        "TB021",
+        "TB022"
       ],
       "rationale": []
     },

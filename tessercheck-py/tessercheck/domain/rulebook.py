@@ -78,6 +78,7 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "owner": "⟨module⟩.⟨class⟩",
     "module_name": "⟨module⟩",
     "written.source()": "⟨annotation⟩",
+    "banned": "⟨type⟩",
     "type_params": "⟨count⟩",
 }
 
@@ -92,6 +93,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Module.tesser_shell_violations": "tesser distribution module",
     "Module.kernel_import_violations": "kernel module",
     "Module.annotation_violations": "every module",
+    "Module.type_name_violations": "every module",
     "Module.comment_violations": "every module",
     "Module.double_violations": "every module",
     "Module.shadowing_violations": "every module",

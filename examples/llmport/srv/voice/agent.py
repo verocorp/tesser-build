@@ -15,7 +15,7 @@ class ToolAgent(agents.Agent, ts.Host):
         self,
         surface: voice.ToolSurface,
         routes: tuple[voice.Route, ...],
-        halt: abc.Callable[[], abc.Awaitable[None]],
+        halt: abc.Callable[[], abc.Awaitable[None]],  # tesser:debt TB022
     ) -> None:
         super().__init__(instructions=surface.instructions())
         self._surface = surface
@@ -35,7 +35,7 @@ class ToolAgent(agents.Agent, ts.Host):
             [agents.function_tool(self._shim(tool.name), raw_schema=tool.schema()) for tool in turn.tools]  # tesser:debt TB051
         )
 
-    def _shim(self, name: str) -> abc.Callable[..., abc.Awaitable[str]]:
+    def _shim(self, name: str) -> abc.Callable[..., abc.Awaitable[str]]:  # tesser:debt TB022
         async def call(raw_arguments: dict[str, object]) -> str:
             async with self._lock:
                 route: voice.Route | None = None

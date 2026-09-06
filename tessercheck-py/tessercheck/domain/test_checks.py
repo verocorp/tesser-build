@@ -12770,6 +12770,60 @@ def test_a_literal_string_in_an_annotation_is_data_not_a_quoted_type() -> None:
     assert not any("TB021" in f for f in findings)
 
 
+def test_any_callable_and_awaitable_are_findings_wherever_they_are_named() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/gateways/loose.py",
+                "shop.adapters.gateways.loose",
+                "import collections.abc as abc\n"
+                "import typing\n"
+                "from typing import Any\n"
+                "import tesser.adapters as ts\n"
+                "Loose = dict[str, Any]\n"
+                "class LooseGateway(ts.Gateway):\n"
+                "    def run(self, step: abc.Callable[[typing.Any], abc.Awaitable[int]]) -> None:\n"
+                "        return None\n"
+                "    def held(self) -> typing.AsyncContextManager[int]: ...\n"
+                "    def anything(self, value: Anywhere) -> None:\n"
+                "        return None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "loose.py:5: TB022 shop.adapters.gateways.loose names Any; a type names what "
+        "the value is — Any names nothing, Callable names a function where a port "
+        "would name what it answers, and Awaitable names the waiting instead of the "
+        "answer" in f
+        for f in findings
+    )
+    assert any(
+        "loose.py:7: TB022 shop.adapters.gateways.loose names abc.Callable; a type "
+        "names what the value is — Any names nothing, Callable names a function where "
+        "a port would name what it answers, and Awaitable names the waiting instead "
+        "of the answer" in f
+        for f in findings
+    )
+    assert any(
+        "loose.py:7: TB022 shop.adapters.gateways.loose names typing.Any; a type "
+        "names what the value is — Any names nothing, Callable names a function where "
+        "a port would name what it answers, and Awaitable names the waiting instead "
+        "of the answer" in f
+        for f in findings
+    )
+    assert any(
+        "loose.py:7: TB022 shop.adapters.gateways.loose names abc.Awaitable; a type "
+        "names what the value is — Any names nothing, Callable names a function where "
+        "a port would name what it answers, and Awaitable names the waiting instead "
+        "of the answer" in f
+        for f in findings
+    )
+    assert not any("loose.py:9: TB022" in f for f in findings)
+    assert not any("names Anywhere" in f for f in findings)
+
+
 def test_a_gateway_never_holds_an_invocations_job_context() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
