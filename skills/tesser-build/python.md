@@ -344,7 +344,7 @@ norm (`logging.md`).
 **Each rule lives on the type that owns it** — the child's `__init__` guards
 the child; the compound's methods guard only cross-field relations — so no
 construction path can skip a rule, and no rule has two homes. Verified impl:
-`examples/python-app/campaign/domain/money.py`.
+`examples/python-app/campaign/domain/campaign.py`.
 
 **Construction (ruled 2026-08-24, superseding the 2026-08-23
 primitives-and-specs ruling, the 2026-07-20 (b)-uniform ruling, and the

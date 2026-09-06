@@ -120,7 +120,7 @@ The conventions the nesting carries:
 - **A context with nothing to configure still owns an (empty) `Config`** —
   the nesting stays total, and a future coordinate lands in the context's
   wiring instead of as a bootstrap special case (verified impl:
-  `examples/python-app/reports/component/config.py`).
+  `examples/python-app/reports/component/component.py`).
 
 ## Lifecycle
 
