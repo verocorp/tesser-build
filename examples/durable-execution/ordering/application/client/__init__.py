@@ -1,0 +1,1 @@
+from ordering.application.client.order_actions import OrderingApplicationClient as OrderingApplicationClient

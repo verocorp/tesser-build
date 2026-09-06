@@ -1,17 +1,28 @@
 from __future__ import annotations
 
+import collections.abc as abc
 import json
+import typing
 
 import tesser.adapters as ts
 import restate
 import restate.serde
 
-import ordering.adapters.jobs.restate_context as restate_context
-import ordering.application.client.order_actions as order_actions_client
-import ordering.application.orchestrators.order_orchestrator as order_orchestrator
-import ordering.application.ports.order_workflow as order_workflow
-import ordering.application.ports.quoting as quoting
+import ordering.application.client as client
+import ordering.application.orchestrators as orchestrators
+import ordering.application.ports as ports
 import tesser.errors as errors
+
+
+class RestateJobContext(ts.JobContext):
+
+    def __init__(self, ctx: restate.Context) -> None:
+        self._ctx = ctx
+
+    async def call[I, O](
+        self, step: abc.Callable[[typing.Any, I], abc.Awaitable[O]], request: I
+    ) -> O:
+        return await self._ctx.service_call(step, request)
 
 
 class RecordSerde[T](ts.Serde, restate.serde.Serde[T]):
@@ -32,16 +43,16 @@ class RecordSerde[T](ts.Serde, restate.serde.Serde[T]):
 
 class RestateActionJobs(ts.Job):
 
-    def __init__(self, actions: order_actions_client.Client) -> None:
+    def __init__(self, ordering_application_client: client.OrderingApplicationClient) -> None:
         self.service = restate.Service("OrderingActions")
 
         @self.service.handler(
-            input_serde=RecordSerde(quoting.QuoteRequest),
-            output_serde=RecordSerde(quoting.QuoteResponse),
+            input_serde=RecordSerde(ports.QuoteRequest),
+            output_serde=RecordSerde(ports.QuoteResponse),
         )
-        async def quote(ctx: restate.Context, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
+        async def quote(ctx: restate.Context, request: ports.QuoteRequest) -> ports.QuoteResponse:
             try:
-                return actions.quote(request)
+                return ordering_application_client.quote(request)
             except errors.DomainError as e:
                 raise restate.TerminalError(e.message, status_code=errors.status_for(e.kind)) from e
 
@@ -53,21 +64,19 @@ class RestateActionJobs(ts.Job):
 
 class RestateWorkflowJobs(ts.Job):
 
-    def __init__(self, quotes: quoting.Quoting) -> None:
+    def __init__(self, quoting: ports.Quoting) -> None:
         self.workflow = restate.Workflow("Ordering")
 
         @self.workflow.main(
-            input_serde=RecordSerde(order_workflow.StartRequest),
-            output_serde=RecordSerde(order_orchestrator.RunResponse),
+            input_serde=RecordSerde(ports.StartRequest),
+            output_serde=RecordSerde(orchestrators.RunResponse),
         )
         async def run(
-            ctx: restate.WorkflowContext, request: order_workflow.StartRequest
-        ) -> order_orchestrator.RunResponse:
-            orchestrator = order_orchestrator.OrderOrchestrator(
-                restate_context.RestateJobContext(ctx), quotes
-            )
+            ctx: restate.WorkflowContext, request: ports.StartRequest
+        ) -> orchestrators.RunResponse:
+            order_orchestrator = orchestrators.OrderOrchestrator(RestateJobContext(ctx), quoting)
             try:
-                return await orchestrator.run(request)
+                return await order_orchestrator.run(request)
             except errors.DomainError as e:
                 raise restate.TerminalError(e.message, status_code=errors.status_for(e.kind)) from e
 
