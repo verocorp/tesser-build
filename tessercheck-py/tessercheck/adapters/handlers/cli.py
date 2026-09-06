@@ -11,6 +11,8 @@ _CHECK_USAGE: typing.Final[str] = "usage: check [tree]"
 
 _RULES_USAGE: typing.Final[str] = "usage: rules [tree]"
 
+_RENAME_USAGE: typing.Final[str] = "usage: rename [tree]"
+
 _HERE: typing.Final[str] = "."
 
 
@@ -27,6 +29,20 @@ class Handler(ts.Handler):
             1 if check_response.findings else 0,
             stdout="\n".join(check_response.findings),
             stderr="",
+        )
+
+    def rename(self, cli_request: protocol.CliRequest) -> protocol.CliResponse:
+        root = cli_request.arg(0, _HERE)
+        cli_request.no_extra_args(1, _RENAME_USAGE)
+        rename_response = self._tessercheck_client.rename(client.RenameRequest(tree=root))
+        told = [f"renamed {rename_response.files} file(s)"]
+        if rename_response.remaining:
+            told.append(
+                f"{len(rename_response.remaining)} finding(s) this cannot repair:"
+            )
+            told.extend(rename_response.remaining)
+        return protocol.CliResponse(
+            1 if rename_response.remaining else 0, stdout="\n".join(told), stderr=""
         )
 
     def rulebook(self, cli_request: protocol.CliRequest) -> protocol.CliResponse:

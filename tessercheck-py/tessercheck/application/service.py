@@ -7,7 +7,7 @@ import tessercheck.client as client
 import tessercheck.domain as domain
 
 
-class MapToCheckResponse(ts.Mapper, client.CheckResponse):
+class MapToCodebaseSpec(ts.Mapper, domain.CodebaseSpec):
 
     def __init__(self, read_sources_response: ports.ReadSourcesResponse) -> None:
         rows: list[tuple[str, str, str | None, bool]] = []
@@ -38,18 +38,22 @@ class MapToCheckResponse(ts.Mapper, client.CheckResponse):
                 declared = domain.DECLARED_UNRECOGNIZED
             case _ as unreachable_root:
                 typing.assert_never(unreachable_root)
-        codebase = domain.Codebase(
-            domain.CodebaseSpec(
-                sources=tuple(rows),
-                declared=declared,
-                nested=read_sources_response.nested,
-                symlinked=read_sources_response.symlinked,
-                exports=read_sources_response.exports,
-                imports=read_sources_response.imports,
-                stdlib=read_sources_response.stdlib,
-                pure_stdlib=read_sources_response.pure_stdlib,
-            )
+        super().__init__(
+            sources=tuple(rows),
+            declared=declared,
+            nested=read_sources_response.nested,
+            symlinked=read_sources_response.symlinked,
+            exports=read_sources_response.exports,
+            imports=read_sources_response.imports,
+            stdlib=read_sources_response.stdlib,
+            pure_stdlib=read_sources_response.pure_stdlib,
         )
+
+
+class MapToCheckResponse(ts.Mapper, client.CheckResponse):
+
+    def __init__(self, read_sources_response: ports.ReadSourcesResponse) -> None:
+        codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response))
         super().__init__(
             findings=tuple(
                 f"{violation.path()}:{int(violation.line())}: "
@@ -59,14 +63,75 @@ class MapToCheckResponse(ts.Mapper, client.CheckResponse):
         )
 
 
+class MapToRenamingSpec(ts.Mapper, domain.RenamingSpec):
+
+    def __init__(
+        self,
+        read_sources_response: ports.ReadSourcesResponse,
+        codebase: domain.Codebase,
+    ) -> None:
+        renames: list[tuple[str, int, str, str]] = []
+        for violation in codebase.violations():
+            rename = violation.rename()
+            if rename is None:
+                continue
+            renames.append((
+                str(violation.path()),
+                int(violation.line()),
+                str(rename.actual()),
+                str(rename.derived()),
+            ))
+        super().__init__(
+            sources=tuple(
+                (source.path, source.text) for source in read_sources_response.sources
+            ),
+            renames=tuple(renames),
+        )
+
+
+class MapToWriteSourcesRequest(ts.Mapper, ports.WriteSourcesRequest):
+
+    def __init__(self, tree_root: domain.TreeRoot, renaming: domain.Renaming) -> None:
+        super().__init__(
+            tree=str(tree_root),
+            sources=tuple(
+                ports.RewrittenSource(path=str(module.path()), text=str(module.text()))
+                for module in renaming.rewritten()
+            ),
+        )
+
+
+class MapToRenameResponse(ts.Mapper, client.RenameResponse):
+
+    def __init__(
+        self,
+        write_sources_response: ports.WriteSourcesResponse,
+        codebase: domain.Codebase,
+    ) -> None:
+        remaining: list[str] = []
+        for violation in codebase.violations():
+            rename = violation.rename()
+            if rename is not None:
+                continue
+            remaining.append(
+                f"{violation.path()}:{int(violation.line())}: "
+                f"{violation.code()} {violation.text()}"
+            )
+        super().__init__(
+            files=write_sources_response.written, remaining=tuple(sorted(remaining))
+        )
+
+
 class TessercheckService(ts.ApplicationService):
 
     def __init__(
         self,
         source_reader: ports.SourceReader,
+        source_writer: ports.SourceWriter,
         rulebook_sources: ports.RulebookSources,
     ) -> None:
         self._source_reader = source_reader
+        self._source_writer = source_writer
         self._rulebook_sources = rulebook_sources
 
     def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
@@ -74,6 +139,17 @@ class TessercheckService(ts.ApplicationService):
         tree = str(tree_root)
         read_sources_response = self._source_reader.sources(ports.ReadSourcesRequest(tree=tree))
         return MapToCheckResponse(read_sources_response)
+
+    def rename(self, rename_request: client.RenameRequest) -> client.RenameResponse:
+        tree_root = domain.TreeRoot(rename_request.tree)
+        tree = str(tree_root)
+        read_sources_request = ports.ReadSourcesRequest(tree=tree)
+        read_sources_response = self._source_reader.sources(read_sources_request)
+        codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response))
+        renaming = domain.Renaming(MapToRenamingSpec(read_sources_response, codebase))
+        write_sources_request = MapToWriteSourcesRequest(tree_root, renaming)
+        write_sources_response = self._source_writer.write(write_sources_request)
+        return MapToRenameResponse(write_sources_response, codebase)
 
     def rulebook(self, rulebook_request: client.RulebookRequest) -> client.RulebookResponse:
         tree_root = domain.TreeRoot(rulebook_request.tree)

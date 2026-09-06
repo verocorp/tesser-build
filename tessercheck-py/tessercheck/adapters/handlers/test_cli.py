@@ -18,6 +18,10 @@ class FakeCheckClient(client.TessercheckClient):
         self.roots.append(check_request.tree)
         return client.CheckResponse(findings=self.findings)
 
+    def rename(self, rename_request: client.RenameRequest) -> client.RenameResponse:
+        self.roots.append(rename_request.tree)
+        return client.RenameResponse(files=0, remaining=self.findings)
+
     def rulebook(self, rulebook_request: client.RulebookRequest) -> client.RulebookResponse:
         self.roots.append(rulebook_request.tree)
         return client.RulebookResponse(rendered="| rendered |")

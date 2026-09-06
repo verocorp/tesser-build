@@ -9,3 +9,7 @@ from tessercheck.application.ports.source_reader import RootForm as RootForm
 from tessercheck.application.ports.source_reader import SourceFile as SourceFile
 from tessercheck.application.ports.source_reader import SourceReader as SourceReader
 from tessercheck.application.ports.source_reader import SourceState as SourceState
+from tessercheck.application.ports.source_writer import RewrittenSource as RewrittenSource
+from tessercheck.application.ports.source_writer import SourceWriter as SourceWriter
+from tessercheck.application.ports.source_writer import WriteSourcesRequest as WriteSourcesRequest
+from tessercheck.application.ports.source_writer import WriteSourcesResponse as WriteSourcesResponse

@@ -90,8 +90,8 @@ when someone has a real performance problem):
 
 `tessercheck-cli` is the one `ungated` row that holds production Python, and
 it is worth saying why rather than leaving it to look like an oversight. It is
-the console entry point for the analyzer — the `tessercheck-check` command a
-consumer repo installs. It cannot be part of `tessercheck-py`, because the
+the console entry point for the analyzer — the `tessercheck-check` and
+`tessercheck-rename` commands a consumer repo installs. It cannot be part of `tessercheck-py`, because the
 analyzer's own host is `srv/cli/main.py` and it imports `app.loader` and
 `protocol.cli`: TB040 mandates those names, every tesser app has its own set,
 and a wheel that put them in site-packages would give a consumer two of each,
@@ -108,7 +108,9 @@ happened. The packaging job builds the three distributions from a pristine
 copy (setuptools does not prune `build/lib`, so a package dropped from
 `pyproject.toml` still ships from the stale duplicate), installs them into a
 clean virtualenv with no source tree on the path, imports everything shipped,
-and runs `tessercheck-check` for real against a clean tree and a dirty one.
+and runs `tessercheck-check` for real against a clean tree and a dirty one,
+and `tessercheck-rename` against a tree holding a repairable local — checking
+the file came back rewritten, not merely that the command started.
 
 Earlier drafts had eleven kinds; nine were labels that nothing read, so they
 could rot without anything noticing. And a word in a file can be typo'd, so

@@ -208,6 +208,8 @@ VIOLATION_SPEC: typing.Final[str] = "ViolationSpec"
 
 VIOLATION_FIELDS: typing.Final[tuple[str, ...]] = ("path", "line", "code", "message")
 
+OPTIONAL_VIOLATION_FIELDS: typing.Final[tuple[str, ...]] = ("rename",)
+
 
 class RuleRowSpec(ts.Spec):
 
@@ -301,8 +303,10 @@ class Rulebook(ts.ValueObject):
                 if keyword.arg is None or keyword.arg in bound:
                     return None
                 bound[keyword.arg] = keyword.value
-            if set(bound) != set(VIOLATION_FIELDS):
+            if set(bound) - set(OPTIONAL_VIOLATION_FIELDS) != set(VIOLATION_FIELDS):
                 return None
+            for optional in OPTIONAL_VIOLATION_FIELDS:
+                bound.pop(optional, None)
             return bound
 
         tree = ast.parse(spec.checks_text)

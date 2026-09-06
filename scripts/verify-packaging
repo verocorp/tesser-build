@@ -97,6 +97,38 @@ if [ $? -ne 1 ]; then
   exit 1
 fi
 
+# The renamer must actually rewrite the file, not merely start. A clean tree
+# stays byte-identical; a tree with a repairable name comes back repaired.
+step "tessercheck-rename repairs a local it can name"
+RENAMEABLE="$VENV/renameable"
+mkdir -p "$RENAMEABLE/mod/domain" || exit 1
+printf 'app\n' > "$RENAMEABLE/.tesser-root"
+: > "$RENAMEABLE/mod/__init__.py"
+cat > "$RENAMEABLE/mod/domain/__init__.py" <<'INIT'
+from mod.domain.tag import Tag as Tag
+from mod.domain.tag import TagSpec as TagSpec
+INIT
+cat > "$RENAMEABLE/mod/domain/tag.py" <<'TAG'
+import tesser.domain as ts
+class TagSpec(ts.Spec):
+    def __init__(self, text: str) -> None:
+        self.text = text
+class Tag(ts.ValueObject):
+    def __init__(self, spec: TagSpec) -> None:
+        object.__setattr__(self, "_text", spec.text)
+TAG
+cat > "$RENAMEABLE/mod/domain/test_tag.py" <<'TEST'
+import mod.domain as domain
+def test_a_tag_is_built_from_its_spec() -> None:
+    made = domain.TagSpec("a")
+    assert domain.Tag(made) is not None
+TEST
+(cd "$VENV" && "$VENV/venv/bin/tessercheck-rename" "$RENAMEABLE" >/dev/null 2>&1)
+if ! grep -q 'tag_spec = domain.TagSpec' "$RENAMEABLE/mod/domain/test_tag.py"; then
+  echo "tessercheck-rename did not repair a local the analyzer can name" >&2
+  exit 1
+fi
+
 step "usage"
 (cd "$VENV" && "$VENV/venv/bin/tessercheck-check" a b >/dev/null 2>&1)
 if [ $? -ne 2 ]; then

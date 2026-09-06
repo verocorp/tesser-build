@@ -27,8 +27,23 @@ class RulebookResponse(ts.Response):
         self.rendered = rendered
 
 
+class RenameRequest(ts.Request):
+
+    def __init__(self, tree: str) -> None:
+        self.tree = tree
+
+
+class RenameResponse(ts.Response):
+
+    def __init__(self, files: int, remaining: tuple[str, ...]) -> None:
+        self.files = files
+        self.remaining = remaining
+
+
 class TessercheckClient(ts.Client, typing.Protocol):
 
     def check(self, check_request: CheckRequest) -> CheckResponse: ...
+
+    def rename(self, rename_request: RenameRequest) -> RenameResponse: ...
 
     def rulebook(self, rulebook_request: RulebookRequest) -> RulebookResponse: ...

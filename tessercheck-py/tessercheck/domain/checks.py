@@ -904,13 +904,44 @@ SPEC_ONE: typing.Final[SpecShape] = SpecShape("one")
 SPEC_MANY: typing.Final[SpecShape] = SpecShape("many")
 
 
+class RenameSpec(ts.Spec):
+
+    def __init__(self, actual: str, derived: str) -> None:
+        self.actual = actual
+        self.derived = derived
+
+
+class Rename(ts.ValueObject):
+
+    _actual: Text
+    _derived: Text
+
+    def __init__(self, spec: RenameSpec) -> None:
+        object.__setattr__(self, "_actual", Text(spec.actual))
+        object.__setattr__(self, "_derived", Text(spec.derived))
+
+    def actual(self) -> Text:
+        return self._actual
+
+    def derived(self) -> Text:
+        return self._derived
+
+
 class ViolationSpec(ts.Spec):
 
-    def __init__(self, path: str, line: int, code: str, message: str) -> None:
+    def __init__(
+        self,
+        path: str,
+        line: int,
+        code: str,
+        message: str,
+        rename: tuple[str, str] | None = None,
+    ) -> None:
         self.path = path
         self.line = line
         self.code = code
         self.message = message
+        self.rename = rename
 
 
 class Violation(ts.ValueObject):
@@ -919,12 +950,18 @@ class Violation(ts.ValueObject):
     _line: Line
     _code: Code
     _text: Text
+    _rename: Rename | None
 
     def __init__(self, spec: ViolationSpec) -> None:
         object.__setattr__(self, "_path", Path(spec.path))
         object.__setattr__(self, "_line", Line(spec.line))
         object.__setattr__(self, "_code", Code(spec.code))
         object.__setattr__(self, "_text", Text(spec.message))
+        object.__setattr__(
+            self,
+            "_rename",
+            None if spec.rename is None else Rename(RenameSpec(spec.rename[0], spec.rename[1])),
+        )
 
     def path(self) -> Path:
         return self._path
@@ -937,6 +974,118 @@ class Violation(ts.ValueObject):
 
     def text(self) -> Text:
         return self._text
+
+    def rename(self) -> Rename | None:
+        return self._rename
+
+
+class RewriteSpec(ts.Spec):
+
+    def __init__(self, text: str, renames: tuple[tuple[int, str, str], ...]) -> None:
+        self.text = text
+        self.renames = renames
+
+
+class Rewrite(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, spec: RewriteSpec) -> None:
+        tree = ast.parse(spec.text)
+        functions: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                functions.append(node)
+        edits: list[tuple[int, int, int, str]] = []
+        for line, actual, derived in spec.renames:
+            holder: ast.FunctionDef | ast.AsyncFunctionDef | None = None
+            for function in functions:
+                if not function.lineno <= line <= (function.end_lineno or function.lineno):
+                    continue
+                if holder is None or function.lineno > holder.lineno:
+                    holder = function
+            if holder is None:
+                continue
+            taken: set[str] = set()
+            sites: list[tuple[int, int, int, str]] = []
+            for node in ast.walk(holder):
+                if isinstance(node, ast.Name):
+                    taken.add(node.id)
+                    if node.id == actual:
+                        sites.append(
+                            (node.lineno, node.col_offset, node.end_col_offset or 0, derived)
+                        )
+                elif isinstance(node, ast.arg):
+                    taken.add(node.arg)
+            if derived in taken or not sites:
+                continue
+            edits.extend(sites)
+        lines = spec.text.splitlines(keepends=True)
+        for line, start, end, derived in sorted(edits, reverse=True):
+            row = lines[line - 1]
+            lines[line - 1] = row[:start] + derived + row[end:]
+        object.__setattr__(self, "_value", "".join(lines))
+
+    def __str__(self) -> str:
+        return serialization.canonical_str(self._value)
+
+
+class RewrittenModuleSpec(ts.Spec):
+
+    def __init__(self, path: str, text: str) -> None:
+        self.path = path
+        self.text = text
+
+
+class RewrittenModule(ts.ValueObject):
+
+    _path: Path
+    _text: Text
+
+    def __init__(self, spec: RewrittenModuleSpec) -> None:
+        object.__setattr__(self, "_path", Path(spec.path))
+        object.__setattr__(self, "_text", Text(spec.text))
+
+    def path(self) -> Path:
+        return self._path
+
+    def text(self) -> Text:
+        return self._text
+
+
+class RenamingSpec(ts.Spec):
+
+    def __init__(
+        self,
+        sources: tuple[tuple[str, str], ...],
+        renames: tuple[tuple[str, int, str, str], ...],
+    ) -> None:
+        self.sources = sources
+        self.renames = renames
+
+
+class Renaming(ts.ValueObject):
+
+    _rewritten: tuple[RewrittenModule, ...]
+
+    def __init__(self, spec: RenamingSpec) -> None:
+        held: dict[str, list[tuple[int, str, str]]] = {}
+        for path, line, actual, derived in spec.renames:
+            held.setdefault(path, []).append((line, actual, derived))
+        texts = dict(spec.sources)
+        rewritten: list[RewrittenModule] = []
+        for path, renames in sorted(held.items()):
+            text = texts.get(path)
+            if text is None:
+                continue
+            rewrite = Rewrite(RewriteSpec(text=text, renames=tuple(renames)))
+            if str(rewrite) == text:
+                continue
+            rewritten.append(RewrittenModule(RewrittenModuleSpec(path, str(rewrite))))
+        object.__setattr__(self, "_rewritten", tuple(rewritten))
+
+    def rewritten(self) -> tuple[RewrittenModule, ...]:
+        return self._rewritten
 
 
 class DebtSpec(ts.Spec):
@@ -8008,7 +8157,7 @@ class Module(ts.Entity):
             )
         found: list[Violation] = []
         for fn, block, owner in functions:
-            claims: list[tuple[int, str, str]] = []
+            claims: list[tuple[int, str, str, bool]] = []
             unread: list[tuple[int, str]] = []
             counted: dict[str, int] = {}
             typed: dict[str, Symbol] = {}
@@ -8040,7 +8189,7 @@ class Module(ts.Entity):
                 derived = str(DerivedName(str(symbol.name())))
                 counted[derived] = counted.get(derived, 0) + 1
                 if not fields_only:
-                    claims.append((arg.lineno, arg.arg, derived))
+                    claims.append((arg.lineno, arg.arg, derived, False))
             calls: list[tuple[ast.Name, ast.Call]] = []
             for node in ast.walk(fn):
                 bound = None
@@ -8087,7 +8236,7 @@ class Module(ts.Entity):
                         continue
                     derived = str(DerivedName(str(symbol.name())))
                     counted[derived] = counted.get(derived, 0) + 1
-                    claims.append((bound.lineno, bound.id, derived))
+                    claims.append((bound.lineno, bound.id, derived, True))
                     continue
                 key = ""
                 head = built.func
@@ -8160,8 +8309,8 @@ class Module(ts.Entity):
                     continue
                 derived = str(DerivedName(str(answered.name())))
                 counted[derived] = counted.get(derived, 0) + 1
-                claims.append((bound.lineno, bound.id, derived))
-            for lineno, actual, derived in claims:
+                claims.append((bound.lineno, bound.id, derived, True))
+            for lineno, actual, derived, local in claims:
                 if actual == derived or counted[derived] > 1:
                     continue
                 found.append(
@@ -8175,6 +8324,7 @@ class Module(ts.Entity):
                         "the field, parameter, or module function a call is made on, "
                         "because a name the analyzer cannot check is a name it is not "
                         "checking",
+                        rename=(actual, derived) if local else None,
                     ))
                 )
             for lineno, actual in unread:
