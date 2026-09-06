@@ -588,23 +588,39 @@ response, its `add` transitions).
   the export list is held up entirely by the assertions, and the analyzer
   says so the moment they stop naming the types. `mypy --strict` clean,
   70 passed.
-  Three ways out, each with a cost measured or named:
+  Two ways out, and one that turned out to be a bypass:
   1. **Export, as today.** One line per value object, and `TB042` keeps the
-     list honest — an export nothing reads is a finding. Cost: the export
-     list of a domain package is partly a test artifact, and #172 counts that
-     line as one of the places a required field lands.
-  2. **Compare against the object that was sent.** No export, still equality
-     by value. Cost, measured: the local holding the sent message must be
-     named for its class (`TB085`), which is `order_orchestrator_request` —
-     the same name as the module-level `@ts.helper` that builds it, so
-     `order_orchestrator_request = order_orchestrator_request(...)` raises
-     `UnboundLocalError`. Needs a convention for naming a local that holds
-     what a same-named helper returns, or a carve-out.
-  3. **Compare through the canonical exit** (`str(back.note) == "fragile"`),
+     list honest — an export nothing reads is a finding. Cost: #172 counts
+     that line as one of the places a required field lands. Under the ruling
+     below this stops being a test artifact and becomes the honest surface:
+     the test depends on the type either way, and the export is what says so.
+  2. **Compare through the canonical exit** (`str(back.note) == "fragile"`),
      which `ordering/domain/test_order.py` already does one file over. No
      export, legal (`stringequality` fires only when both sides are `.String()`
      calls, so a literal compare is left alone by design), but it compares
      representations, which convention 3 pushes against for value comparison.
+  - **Not a way out: comparing against the object that was sent**
+    (`back.sku == order.sku`). Chris ruled 2026-09-06 that an assertion like
+    that should only be possible when the type is exported, and the reason it
+    is possible today is a hole, not a permission. `package_read_violations`
+    (`domain/checks.py:7989`) counts a read only when an attribute node's value
+    is a **package alias** — `if package is None: continue` — so `order.sku`,
+    whose value is an object local, is not a read of `Sku` in either `TB042`
+    direction: not for "reads a name the package does not export", and not for
+    "re-exports a name no module outside the role reads". The assertion
+    exercises `Sku.__eq__` from another role while the domain never declares
+    `Sku` on its surface. Same shape as the `domain.widget.Clearance` hiding
+    bypass closed by #167 (v0.0.99.0): a dependency the analyzer's notion of a
+    read does not cover is a silent pass. Measured: the rewrite drops `Note`,
+    `OrderId`, and `Quantity` out of the export list with `mypy --strict`
+    clean and 70 passing, which is exactly the outcome the ruling says should
+    not be reachable. Closing it means resolving `order.sku` to `Order.sku`'s
+    return annotation and counting that as a read of `Sku` — the same
+    machinery `TB085` already uses to name a local from the return annotation
+    of the call it was bound from, one hop further. **Measure first**: how many
+    existing assertions across the eleven gated trees compare two objects'
+    fields where the field's type is not exported, because each becomes a new
+    finding.
   Not an option: asserting the aggregate whole. `Entity.__eq__` compares
   `identity` only and `Entity.__init_subclass__` raises `TypeError` if a
   subclass declares `__eq__` or `__hash__`, so `back == order` passes with
