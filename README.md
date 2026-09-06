@@ -85,7 +85,7 @@ The Python analog ([`tessercheck-py/`](tessercheck-py/)): a zero-dependency,
 stdlib-`ast` conformance analyzer for the `ts.*`-shell conventions in
 [`skills/tesser-build/python.md`](skills/tesser-build/python.md).
 Classification is declared, never inferred — a class is judged by the
-`tesser` base it names. The 44 shipped codes cover value-object shape and
+`tesser` base it names. The 47 shipped codes cover value-object shape and
 serialization (`TB002`–`TB019` — value equality only, no representation
 leak, one construction path, one canonical exit per backing type, domain
 objects out of public behavior and one primitive, spec, or domain object
@@ -99,6 +99,10 @@ spec, a spec initializes only its own object, a mapper *is* the spec or
 DTO it maps to, and control flow comes back as a `ts.Outcome` a service
 matches exhaustively, exactly once per method), and the
 tree-wide **norm checks** with no test exemption: zero comments (`TB020`),
+annotations written unquoted (`TB021`), a type that names what the value is
+(`TB022` — `Any`, `Callable`, and `Awaitable` are findings wherever a module
+names them), a function declared at module level or as a method (`TB023` — no
+`lambda` anywhere, no `def` inside another function),
 fakes-only test doubles (`TB030`), no called shadowed builtin (`TB033`), and
 debt-marker hygiene (`TB090` — a
 suppression that suppresses nothing is itself a finding). The full per-code
