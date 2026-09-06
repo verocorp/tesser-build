@@ -2,25 +2,12 @@ from __future__ import annotations
 
 import tesser.application as ts
 
-import ordering.application.ports.order_workflow as order_workflow
-import ordering.application.ports.quoting as quoting
+import ordering.application.relays.order_job_context as order_job_context
+import ordering.application.relays.order_relay as order_relay
 import ordering.domain.order as order
 
 
-class RunResponse(ts.Response):
-
-    def __init__(self, order_id: str, total_cents: int) -> None:
-        self.order_id = order_id
-        self.total_cents = total_cents
-
-
-class MapToOrderSpec(ts.Mapper, order.OrderSpec):
-
-    def __init__(self, request: order_workflow.StartRequest) -> None:
-        super().__init__(order_id=request.order_id, sku=request.sku, quantity=request.quantity)
-
-
-class MapToQuoteRequest(ts.Mapper, quoting.QuoteRequest):
+class MapToQuoteRequest(ts.Mapper, order_job_context.QuoteRequest):
 
     def __init__(self, running: order.Order) -> None:
         super().__init__(sku=str(running.sku))
@@ -28,11 +15,11 @@ class MapToQuoteRequest(ts.Mapper, quoting.QuoteRequest):
 
 class MapToPriceSpec(ts.Mapper, order.PriceSpec):
 
-    def __init__(self, quoted: quoting.QuoteResponse) -> None:
+    def __init__(self, quoted: order_job_context.QuoteResponse) -> None:
         super().__init__(cents=quoted.cents)
 
 
-class MapToRunResponse(ts.Mapper, RunResponse):
+class MapToRunResponse(ts.Mapper, order_relay.RunResponse):
 
     def __init__(self, running: order.Order, total: order.Price) -> None:
         super().__init__(order_id=str(running.identity), total_cents=int(total))
@@ -40,12 +27,11 @@ class MapToRunResponse(ts.Mapper, RunResponse):
 
 class OrderOrchestrator(ts.Orchestrator):
 
-    def __init__(self, job: ts.JobContext, quotes: quoting.Quoting) -> None:
+    def __init__(self, job: order_job_context.OrderJobContext) -> None:
         self._job = job
-        self._quotes = quotes
 
-    async def run(self, request: order_workflow.StartRequest) -> RunResponse:
-        running = order.Order(MapToOrderSpec(request))
-        quoted = await self._quotes.quote(self._job, MapToQuoteRequest(running))
+    async def run(self, request: order_relay.StartRequest) -> order_relay.RunResponse:
+        running = request.order
+        quoted = await self._job.quote(MapToQuoteRequest(running))
         total = running.total(MapToPriceSpec(quoted))
         return MapToRunResponse(running, total)
