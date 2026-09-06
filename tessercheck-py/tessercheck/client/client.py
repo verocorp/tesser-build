@@ -27,7 +27,7 @@ class RulebookResponse(ts.Response):
         self.rendered = rendered
 
 
-class Client(ts.Client, typing.Protocol):
+class TessercheckClient(ts.Client, typing.Protocol):
 
     def check(self, request: CheckRequest) -> CheckResponse: ...
 

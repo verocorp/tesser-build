@@ -11,7 +11,7 @@ class Spec(ts.Spec):
         self.tessercheck = tessercheck
 
 
-class Config(ts.Config):
+class AppConfig(ts.Config):
 
     def __init__(self, spec: Spec) -> None:
         self.tessercheck = spec.tessercheck

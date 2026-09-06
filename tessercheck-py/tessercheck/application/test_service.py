@@ -99,3 +99,206 @@ def test_the_rulebook_answer_carries_the_rendered_rules_and_contracts() -> None:
     response = checker.rulebook(client.RulebookRequest(tree="."))
     assert "| TB020 | the served tail | every module |" in response.rendered
     assert "| pure | domain stays pure |" in response.rendered
+
+
+def test_a_declared_tree_of_conforming_modules_yields_no_findings() -> None:
+    read = ports.ReadSourcesResponse(
+        root=ports.RootForm.APP,
+        nested=(),
+        symlinked=(),
+        sources=(
+            ports.SourceFile(
+                path="shop/domain/thing.py",
+                name="shop.domain.thing",
+                text=(
+                    "import tesser.domain as ts\n"
+                    "class ThingSpec(ts.Spec):\n"
+                    "    def __init__(self, text: str) -> None:\n"
+                    "        self.text = text\n"
+                    "class Thing(ts.AggregateRoot):\n"
+                    "    def __init__(self, spec: ThingSpec) -> None:\n"
+                    "        self.text = spec.text\n"
+                ),
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.MODULE,
+            ),
+            ports.SourceFile(
+                path="shop/domain/test_thing.py",
+                name="shop.domain.test_thing",
+                text=("def test_thing_exists() -> None:\n    assert True\n"),
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.MODULE,
+            ),
+        ),
+        exports=(),
+        imports=(),
+        stdlib=(),
+        pure_stdlib=(),
+    )
+    assert service.MapToCheckResponse(read=read).findings == ()
+
+
+def test_an_undeclared_tree_is_the_only_thing_reported() -> None:
+    read = ports.ReadSourcesResponse(
+        root=ports.RootForm.MISSING,
+        nested=(),
+        symlinked=(),
+        sources=(
+            ports.SourceFile(
+                path="shop/domain/thing.py",
+                name="shop.domain.thing",
+                text="import os\n",
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.MODULE,
+            ),
+        ),
+        exports=(),
+        imports=(),
+        stdlib=("os",),
+        pure_stdlib=(),
+    )
+    found = service.MapToCheckResponse(read=read).findings
+    assert len(found) == 1
+    assert "TB044" in found[0]
+
+
+def test_every_root_form_other_than_app_is_reported() -> None:
+    for form in (
+        ports.RootForm.MISSING,
+        ports.RootForm.UNREADABLE,
+        ports.RootForm.UNRECOGNIZED,
+    ):
+        read = ports.ReadSourcesResponse(
+            root=form,
+            nested=(),
+            symlinked=(),
+            sources=(),
+            exports=(),
+            imports=(),
+            stdlib=(),
+            pure_stdlib=(),
+        )
+        found = service.MapToCheckResponse(read=read).findings
+        assert len(found) == 1
+        assert "TB044" in found[0]
+
+
+def test_a_symlinked_directory_from_the_read_is_reported() -> None:
+    read = ports.ReadSourcesResponse(
+        root=ports.RootForm.APP,
+        nested=(),
+        symlinked=("app/vendored",),
+        sources=(),
+        exports=(),
+        imports=(),
+        stdlib=(),
+        pure_stdlib=(),
+    )
+    found = service.MapToCheckResponse(read=read).findings
+    assert any("TB045" in finding and "app/vendored" in finding for finding in found)
+
+
+def test_a_nested_declaration_from_the_read_is_reported() -> None:
+    read = ports.ReadSourcesResponse(
+        root=ports.RootForm.APP,
+        nested=("app/.tesser-root",),
+        symlinked=(),
+        sources=(),
+        exports=(),
+        imports=(),
+        stdlib=(),
+        pure_stdlib=(),
+    )
+    found = service.MapToCheckResponse(read=read).findings
+    assert any("app/.tesser-root" in finding for finding in found)
+
+
+def test_a_finding_reads_path_line_code_then_message() -> None:
+    read = ports.ReadSourcesResponse(
+        root=ports.RootForm.APP,
+        nested=(),
+        symlinked=(),
+        sources=(
+            ports.SourceFile(
+                path="shop/domain/thing.py",
+                name="shop.domain.thing",
+                text="import os\n",
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.MODULE,
+            ),
+        ),
+        exports=(),
+        imports=(),
+        stdlib=("os",),
+        pure_stdlib=(),
+    )
+    found = service.MapToCheckResponse(read=read).findings
+    assert found != ()
+    head, _, rest = found[0].partition(": ")
+    assert head == "shop/domain/thing.py:1"
+    assert rest.split(" ")[0].startswith("TB0")
+
+
+def test_an_unreadable_source_is_reported_rather_than_read_as_empty() -> None:
+    read = ports.ReadSourcesResponse(
+        root=ports.RootForm.APP,
+        nested=(),
+        symlinked=(),
+        sources=(
+            ports.SourceFile(
+                path="shop/domain/thing.py",
+                name="shop.domain.thing",
+                text="",
+                state=ports.SourceState.UNREADABLE,
+                form=ports.ModuleForm.MODULE,
+            ),
+        ),
+        exports=(),
+        imports=(),
+        stdlib=(),
+        pure_stdlib=(),
+    )
+    found = service.MapToCheckResponse(read=read).findings
+    assert any("shop/domain/thing.py" in finding for finding in found)
+
+
+def test_the_package_form_of_a_source_changes_the_judgement() -> None:
+    as_package = ports.ReadSourcesResponse(
+        root=ports.RootForm.APP,
+        nested=(),
+        symlinked=(),
+        sources=(
+            ports.SourceFile(
+                path="shop/domain/__init__.py",
+                name="shop.domain",
+                text="",
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.PACKAGE,
+            ),
+        ),
+        exports=(),
+        imports=(),
+        stdlib=(),
+        pure_stdlib=(),
+    )
+    as_module = ports.ReadSourcesResponse(
+        root=ports.RootForm.APP,
+        nested=(),
+        symlinked=(),
+        sources=(
+            ports.SourceFile(
+                path="shop/domain/__init__.py",
+                name="shop.domain",
+                text="",
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.MODULE,
+            ),
+        ),
+        exports=(),
+        imports=(),
+        stdlib=(),
+        pure_stdlib=(),
+    )
+    assert service.MapToCheckResponse(read=as_package).findings == ()
+    assert service.MapToCheckResponse(read=as_module).findings != ()
+

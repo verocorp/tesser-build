@@ -11,10 +11,10 @@ class AppLoader(ts.Loader):
     def __init__(self, configs: repository.ConfigRepository) -> None:
         self._configs = configs
 
-    def load(self) -> app.App:
-        return app.App(self._configs.get())
+    def load(self) -> app.TessercheckApp:
+        return app.TessercheckApp(self._configs.get())
 
 
 @ts.load
-def load() -> app.App:
+def load() -> app.TessercheckApp:
     return AppLoader(repository.EnvConfigRepository()).load()

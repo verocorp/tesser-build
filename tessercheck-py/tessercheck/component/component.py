@@ -5,13 +5,24 @@ import tesser.component as ts
 import tessercheck.adapters.repositories as repositories
 import tessercheck.application as application
 import tessercheck.client as client
-import tessercheck.component.config as config
+
+
+class Spec(ts.Spec):
+
+    def __init__(self) -> None:
+        return None
+
+
+class Config(ts.Config):
+
+    def __init__(self, spec: Spec) -> None:
+        return None
 
 
 class Tessercheck(ts.Component):
 
-    def __init__(self, cfg: config.Config) -> None:
-        self.client: client.Client = application.TessercheckService(
+    def __init__(self, config: Config) -> None:
+        self.client: client.TessercheckClient = application.TessercheckService(
             repositories.FilesystemSourceReader(),
             repositories.FilesystemRulebookSources(),
         )

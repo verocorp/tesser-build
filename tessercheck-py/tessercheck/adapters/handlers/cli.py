@@ -16,7 +16,7 @@ _HERE: typing.Final[str] = "."
 
 class Handler(ts.Handler):
 
-    def __init__(self, client: client.Client) -> None:
+    def __init__(self, client: client.TessercheckClient) -> None:
         self._client = client
 
     def check(self, req: cli.CliRequest) -> cli.CliResponse:

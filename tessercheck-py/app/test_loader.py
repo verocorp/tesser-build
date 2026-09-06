@@ -14,9 +14,9 @@ class FakeConfigRepository(repository.ConfigRepository):
     def __init__(self) -> None:
         self.reads = 0
 
-    def get(self) -> config.Config:
+    def get(self) -> config.AppConfig:
         self.reads += 1
-        return config.Config(
+        return config.AppConfig(
             config.Spec(tessercheck=component.Config(component.Spec()))
         )
 

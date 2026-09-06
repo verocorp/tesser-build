@@ -7,9 +7,9 @@ import tessercheck.component as component
 import app.config as config
 
 
-class App(ts.App):
+class TessercheckApp(ts.App):
 
-    def __init__(self, cfg: config.Config) -> None:
+    def __init__(self, cfg: config.AppConfig) -> None:
         self.tessercheck = component.Tessercheck(cfg.tessercheck)
 
     def close(self) -> None:

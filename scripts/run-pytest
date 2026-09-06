@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Local helper: run tessercheck-py's pytest with the worktree venv.
+set -uo pipefail
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+export PATH="$ROOT/.venv/bin:$PATH"
+export PYTHONPATH="$ROOT/tessercheck-py:$ROOT/tesser-py"
+cd "$ROOT/tessercheck-py" || exit 1
+exec python3 -m pytest "$@"

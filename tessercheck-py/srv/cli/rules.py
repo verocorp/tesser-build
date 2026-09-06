@@ -7,7 +7,7 @@ import typing
 import tesser.srv as ts
 
 import app.loader as loader
-import protocol.cli as protocol_cli
+import protocol.cli as cli
 import tessercheck.adapters.handlers as handlers
 
 _USAGE: typing.Final[str] = "usage: python -m srv.cli.rules [tree] [--check]"
@@ -26,11 +26,11 @@ class RulesHost(ts.Host):
         try:
             handler = handlers.Handler(app.tessercheck.client)
             try:
-                resp = handler.rulebook(protocol_cli.CliRequest(args=tuple(args)))
-            except protocol_cli.UsageError as e:
-                resp = protocol_cli.CliResponse(2, stdout="", stderr=f"{e}\n{_USAGE}")
+                resp = handler.rulebook(cli.CliRequest(args=tuple(args)))
+            except cli.UsageError as e:
+                resp = cli.CliResponse(2, stdout="", stderr=f"{e}\n{_USAGE}")
             except Exception:
-                resp = protocol_cli.CliResponse(1, stdout="", stderr="unexpected error")
+                resp = cli.CliResponse(1, stdout="", stderr="unexpected error")
             if resp.exit_code != 0:
                 if resp.stderr:
                     print(resp.stderr, file=sys.stderr)

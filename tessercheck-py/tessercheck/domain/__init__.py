@@ -8,9 +8,9 @@ from tessercheck.domain.checks import KERNEL_PACKAGE as KERNEL_PACKAGE
 from tessercheck.domain.checks import Placement as Placement
 from tessercheck.domain.checks import PlacementSpec as PlacementSpec
 from tessercheck.domain.checks import ROLES as ROLES
+from tessercheck.domain.checks import Rulebook as Rulebook
+from tessercheck.domain.checks import RulebookSpec as RulebookSpec
 from tessercheck.domain.checks import TESSER as TESSER
 from tessercheck.domain.checks import TESSER_NAMESPACES as TESSER_NAMESPACES
 from tessercheck.domain.checks import TESSER_STDLIB as TESSER_STDLIB
 from tessercheck.domain.checks import TreeRoot as TreeRoot
-from tessercheck.domain.rulebook import Rulebook as Rulebook
-from tessercheck.domain.rulebook import RulebookSpec as RulebookSpec
