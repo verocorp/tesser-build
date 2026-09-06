@@ -94,6 +94,61 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   the analyzer cannot check" hole the clause exists to close. Decide (a)+underscore
   handling or (b) before the markers are cleared.
 
+- [ ] **A mapper's local restates the mapper, and every tree says so.** This is
+  the one finding all seven migrated trees reported independently. `TB085`
+  derives a local from the class the call returns, and a `ts.Mapper` class name
+  is a verb phrase, so `spec = MapToRepoSpec(read)` becomes `map_to_repo_spec =
+  application.MapToRepoSpec(read)` — the local names the transform, not the
+  value it holds, and the next line reads `map_to_repo_spec.name` where it used
+  to read `spec.name`. Sites: `layout/repo/application/test_layout_service.py`
+  (7), `examples/ports/catalog/application/test_catalog_service.py` (7),
+  `examples/llmport/.../test_booking_service.py` (5),
+  `examples/asyncpg/alpha/application/test_alpha_service.py` (6),
+  `examples/errorspy/campaign/application/service.py` (3 plus 6 in tests). The
+  mapper *is* its target (the 2026-08 is-a ruling), so the honest derived name
+  is the target's, not the mapper's: `MapToRepoSpec` holds a `RepoSpec` and
+  would read `repo_spec`. Deriving a `ts.Mapper` local from its declared target
+  instead of its own class name is one clause and would fix every site.
+
+- [ ] **A test double's local now carries `fake_`.** A `@ts.fake` class is named
+  `FakeCampaignRepository`, so the derived local is `fake_campaign_repository`
+  where it was `repo` — 21 sites in errorspy, 15 of `fake_campaign_client`, 11
+  of `fake_scheduling_client_scripted` in llmport, plus
+  `fake_committed_widget_store` and `fake_refused_beta_check` in asyncpg. The
+  prefix says where the object came from, not what it stands for, and it is now
+  in the body of every test rather than only at the declaration. Two candidate
+  clauses: derive a `@ts.fake` local from the class or protocol it fakes, or
+  drop the `Fake` prefix from the derived name. Both are rulings.
+
+- [ ] **A mapper is public API because its sibling test names it.** Under the
+  2026-09-06 ruling a test's reads justify an export, and a mapper's unit test
+  sits beside it, so `alpha/application/__init__.py` now exports twelve `MapTo*`
+  classes of which eleven are read by nothing but that test. `examples/minimal`
+  does not show this because it has no mapper tests. Either mapper unit tests go
+  (the mappers are exercised through the service either way), or the export list
+  stops being the same list for a test and for a caller.
+
+- [ ] **Annotating the local does not clear an unreadable call.** `python.md`
+  said the fix for "names X from a call it cannot read" was to annotate the
+  method *or* the local; the analyzer only honours the first. The `AnnAssign`
+  branch records the annotation into `typed` and then still resolves the call
+  and reports it, so `route.endpoint(...)` on a callable-typed field stays a
+  finding however the local is annotated, and the only fix is to stop binding
+  the result. The doc now says what the code does. The open question is the
+  other direction: a local annotated with a class the analyzer resolves *is* a
+  checkable name, so honouring it would cost one branch and would make the rule
+  match what a reader expects.
+
+- [ ] **Hiding a value object costs it its direct tests.** `examples/asyncpg`
+  went 99 tests to 95: five of the eight `test_clearance.py` tests survive
+  through `Widget` and four new ones were added, but Clearance equality,
+  Clearance's `__str__` canonical exit, and Standing equality cannot be asserted
+  at all once the domain `__init__` stops exporting those classes.
+  `examples/minimal` made the same trade. Exporting them for the test's sake is
+  legal under the same ruling and hands the application two types it should not
+  name — which is the whole point of hiding them. Decide whether an equality
+  test is owed for a hidden value object, and if so how it is written.
+
 ## Left open by the v0.0.89.0 adversarial pass (2026-08-29, PR #148)
 
 Seventeen bypass probes were run against the new clauses — twelve mine, five

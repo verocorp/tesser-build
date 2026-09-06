@@ -177,8 +177,12 @@ link (`minimal_app.alpha.client.add(...)` reads `MinimalApp.alpha` to `Alpha`,
 return that is a primitive, a container, a union, or a type from outside the
 tree leaves the name free. **A call whose receiver is one of those four and
 whose method declares no return the analyzer can read is a finding**, because
-a name the analyzer cannot check is a name it is not checking — annotate the
-method, or annotate the local.
+a name the analyzer cannot check is a name it is not checking. The fix is to
+annotate the **method's return**. Annotating the local does not clear it: the
+analyzer records the annotation, then still resolves the call and reports what
+it cannot read there. Where no return annotation is possible — a field holding
+a callable, a decorator that hands back its own argument — stop binding the
+result and assert on the call itself.
 
 Exempt, each for a reason worth knowing: `self` and `cls`; **a constructor's
 one spec, which is named `spec`** (TB080 names it, so TB085 does not derive
