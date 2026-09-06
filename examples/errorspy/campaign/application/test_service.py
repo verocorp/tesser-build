@@ -438,17 +438,17 @@ def test_a_found_record_becomes_the_parts_a_campaign_is_rebuilt_from() -> None:
             ),
         ),
     )
-    map_to_campaign_spec = application.MapToCampaignSpec(
+    campaign_spec = application.MapToCampaignSpec(
         find_campaign_request=ports.FindCampaignRequest(campaign_id="c1"),
         find_campaign_response=find_campaign_response,
     )
-    assert map_to_campaign_spec.id == "c1"
+    assert campaign_spec.id == "c1"
     assert (
-        map_to_campaign_spec.window.start,
-        map_to_campaign_spec.window.end,
+        campaign_spec.window.start,
+        campaign_spec.window.end,
     ) == ("2026-01-01", "2026-02-01")
     assert tuple(
-        (link.slug, link.target_url) for link in map_to_campaign_spec.links
+        (link.slug, link.target_url) for link in campaign_spec.links
     ) == (("spring-sale", "https://x.com"),)
 
 
@@ -477,11 +477,11 @@ def test_a_record_with_a_corrupt_slug_still_exposes_the_slug_the_repository_gave
             ),
         ),
     )
-    map_to_campaign_spec = application.MapToCampaignSpec(
+    campaign_spec = application.MapToCampaignSpec(
         find_campaign_request=ports.FindCampaignRequest(campaign_id="c1"),
         find_campaign_response=find_campaign_response,
     )
-    assert map_to_campaign_spec.links[0].slug == "BAD SLUG"
+    assert campaign_spec.links[0].slug == "BAD SLUG"
 
 
 def test_a_sound_record_exposes_every_link_it_carried_in_order() -> None:
@@ -498,11 +498,11 @@ def test_a_sound_record_exposes_every_link_it_carried_in_order() -> None:
             ),
         ),
     )
-    map_to_campaign_spec = application.MapToCampaignSpec(
+    campaign_spec = application.MapToCampaignSpec(
         find_campaign_request=ports.FindCampaignRequest(campaign_id="c1"),
         find_campaign_response=find_campaign_response,
     )
-    assert tuple(link.slug for link in map_to_campaign_spec.links) == (
+    assert tuple(link.slug for link in campaign_spec.links) == (
         "alpha-one",
         "beta-two",
     )

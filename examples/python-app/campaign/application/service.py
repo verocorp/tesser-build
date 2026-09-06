@@ -235,10 +235,10 @@ class CampaignService(ts.ApplicationService):
             issue_campaign_identity_response=issue_campaign_identity_response,
             short_links_spec=domain.ShortLinksSpec(links=()),
         ))
-        map_to_save_campaign_request = MapToSaveCampaignRequest(campaign=campaign)
-        self._campaign_repository.save(map_to_save_campaign_request)
+        save_campaign_request = MapToSaveCampaignRequest(campaign=campaign)
+        self._campaign_repository.save(save_campaign_request)
         find_campaign_view_request = ports.FindCampaignViewRequest(
-            campaign_id=map_to_save_campaign_request.id,
+            campaign_id=save_campaign_request.id,
         )
         find_campaign_view_response = self._campaign_queries.find_view(
             find_campaign_view_request
@@ -259,7 +259,7 @@ class CampaignService(ts.ApplicationService):
         slug_taken_response = self._campaign_repository.slug_taken(
             MapToSlugTakenRequest(slug=slug)
         )
-        map_to_short_link_spec = MapToShortLinkSpec(
+        short_link_spec = MapToShortLinkSpec(
             add_link_request=add_link_request,
             check_target_response=check_target_response,
             slug_taken_response=slug_taken_response,
@@ -270,7 +270,7 @@ class CampaignService(ts.ApplicationService):
             find_campaign_request=find_campaign_request,
             find_campaign_response=find_campaign_response,
         ))
-        campaign.add_short_link(map_to_short_link_spec)
+        campaign.add_short_link(short_link_spec)
         self._campaign_repository.save(MapToSaveCampaignRequest(campaign=campaign))
         find_campaign_view_request = ports.FindCampaignViewRequest(
             campaign_id=campaign_id_text,

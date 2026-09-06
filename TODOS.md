@@ -94,21 +94,27 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   the analyzer cannot check" hole the clause exists to close. Decide (a)+underscore
   handling or (b) before the markers are cleared.
 
-- [ ] **A mapper's local restates the mapper, and every tree says so.** This is
-  the one finding all seven migrated trees reported independently. `TB085`
-  derives a local from the class the call returns, and a `ts.Mapper` class name
-  is a verb phrase, so `spec = MapToRepoSpec(read)` becomes `map_to_repo_spec =
-  application.MapToRepoSpec(read)` — the local names the transform, not the
-  value it holds, and the next line reads `map_to_repo_spec.name` where it used
-  to read `spec.name`. Sites: `layout/repo/application/test_layout_service.py`
-  (7), `examples/ports/catalog/application/test_catalog_service.py` (7),
-  `examples/llmport/.../test_booking_service.py` (5),
-  `examples/asyncpg/alpha/application/test_alpha_service.py` (6),
-  `examples/errorspy/campaign/application/service.py` (3 plus 6 in tests). The
-  mapper *is* its target (the 2026-08 is-a ruling), so the honest derived name
-  is the target's, not the mapper's: `MapToRepoSpec` holds a `RepoSpec` and
-  would read `repo_spec`. Deriving a `ts.Mapper` local from its declared target
-  instead of its own class name is one clause and would fix every site.
+- [x] **A mapper's local restates the mapper, and every tree says so.** CLOSED
+  2026-09-06 (Chris ruling), v0.0.100.0. This was the one finding all seven
+  migrated trees reported independently. `TB085` derived a local from the class
+  the call returns, and a `ts.Mapper` class name is a verb phrase, so
+  `map_to_repo_spec = application.MapToRepoSpec(read)` named the transform
+  rather than the value, and the next line read `map_to_repo_spec.name`.
+
+  **Ruled: a mapper local derives from its declared target.** A mapper *is* its
+  target (the 2026-08 is-a ruling), so the class the local carries is the target:
+  `MapToRepoSpec` holds a `RepoSpec` and reads `repo_spec`. One clause in
+  `naming_violations` — when a resolved symbol's block is `mapper`, rebind
+  through `registry.mapper_target`, the idiom `checks.py` already uses at two
+  other sites. The local is typed as the target too, so attribute reads on it
+  resolve through the target's fields.
+
+  **47 sites, five trees**: `examples/python-app` (12), `examples/llmport` (9),
+  `examples/errorspy` (7), `examples/ports` (7), `layout` (7),
+  `examples/asyncpg` (5). Two are production services. The clearest gain is at
+  a domain call: `campaign.add_short_link(short_link_spec)` where it used to say
+  `add_short_link(map_to_short_link_spec)` — the argument now says it is a spec
+  rather than a transform.
 
 - [ ] **A test double's local now carries `fake_`.** A `@ts.fake` class is named
   `FakeCampaignRepository`, so the derived local is `fake_campaign_repository`
@@ -858,12 +864,12 @@ measured:
   `checks.py:6762` `key=lambda item: (item.lineno, item.col_offset)` →
   `operator.attrgetter("lineno", "col_offset")`, `checks.py:2901`
   `key=lambda node: node.lineno` → `operator.attrgetter("lineno")`, and
-  `checks.py:11006` `key=lambda entry: entry[:3]` →
+  `checks.py:11010` `key=lambda entry: entry[:3]` →
   `operator.itemgetter(0, 1, 2)` — which costs one `stdlib operator` line in
   `tessercheck-py/.tesser-root`, exactly as `bisect` is widened today. The
   v0.0.98.0/v0.0.99.0 merge added two more `key=` sites that belong in the same
   ruling: `source_reader.py:132` `key=lambda source: source.path`, which
-  `operator.attrgetter("path")` replaces, and `checks.py:10436`
+  `operator.attrgetter("path")` replaces, and `checks.py:10440`
   `key=lambda v: int(v.line())`, which does not — it reads through a method and
   needs either a named function or an ordering on `Violation` itself.
 - [ ] **`TB022` is unsatisfiable for `ts.JobContext.call`, and that is the

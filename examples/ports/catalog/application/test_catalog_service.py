@@ -147,10 +147,10 @@ def test_a_found_lookup_carries_a_view_per_row() -> None:
         outcome=ports.ItemLookup.FOUND,
         items=(ports.ItemView(id="a1", name="Anvil"),),
     )
-    map_to_get_item_response = application.MapToGetItemResponse(
+    get_item_response = application.MapToGetItemResponse(
         find_item_response=find_item_response
     )
-    assert tuple((view.id, view.name) for view in map_to_get_item_response.items) == (
+    assert tuple((view.id, view.name) for view in get_item_response.items) == (
         ("a1", "Anvil"),
     )
 
@@ -160,30 +160,30 @@ def test_an_archived_lookup_carries_nothing_even_though_it_carries_a_row() -> No
         outcome=ports.ItemLookup.ARCHIVED,
         items=(ports.ItemView(id="a1", name="Anvil"),),
     )
-    map_to_get_item_response = application.MapToGetItemResponse(
+    get_item_response = application.MapToGetItemResponse(
         find_item_response=find_item_response
     )
-    assert map_to_get_item_response.items == ()
+    assert get_item_response.items == ()
 
 
 def test_a_missing_lookup_carries_nothing() -> None:
     find_item_response = ports.FindItemResponse(outcome=ports.ItemLookup.MISSING, items=())
-    map_to_get_item_response = application.MapToGetItemResponse(
+    get_item_response = application.MapToGetItemResponse(
         find_item_response=find_item_response
     )
-    assert map_to_get_item_response.items == ()
+    assert get_item_response.items == ()
 
 
 def test_an_allowed_name_carries_the_item_and_the_policys_empty_reason() -> None:
     item = domain.Item(domain.ItemSpec(id="a1", name="Anvil"))
     check_name_response = ports.CheckNameResponse(verdict=ports.NameVerdict.ALLOWED, reason="")
-    map_to_add_item_response = application.MapToAddItemResponse(
+    add_item_response = application.MapToAddItemResponse(
         item=item, check_name_response=check_name_response
     )
-    assert tuple((view.id, view.name) for view in map_to_add_item_response.items) == (
+    assert tuple((view.id, view.name) for view in add_item_response.items) == (
         ("a1", "Anvil"),
     )
-    assert map_to_add_item_response.reason == ""
+    assert add_item_response.reason == ""
 
 
 def test_a_reserved_name_carries_no_item_and_the_reason_the_policy_gave() -> None:
@@ -191,21 +191,21 @@ def test_a_reserved_name_carries_no_item_and_the_reason_the_policy_gave() -> Non
     check_name_response = ports.CheckNameResponse(
         verdict=ports.NameVerdict.RESERVED, reason="name is reserved"
     )
-    map_to_add_item_response = application.MapToAddItemResponse(
+    add_item_response = application.MapToAddItemResponse(
         item=item, check_name_response=check_name_response
     )
-    assert map_to_add_item_response.items == ()
-    assert map_to_add_item_response.reason == "name is reserved"
+    assert add_item_response.items == ()
+    assert add_item_response.reason == "name is reserved"
 
 
 def test_a_repository_row_becomes_the_clients_item_view() -> None:
-    map_to_item_view = application.MapToItemView(
+    item_view = application.MapToItemView(
         item_view=ports.ItemView(id="a1", name="Anvil")
     )
-    assert (map_to_item_view.id, map_to_item_view.name) == ("a1", "Anvil")
+    assert (item_view.id, item_view.name) == ("a1", "Anvil")
 
 
 def test_an_added_item_becomes_the_clients_item_view() -> None:
     item = domain.Item(domain.ItemSpec(id="b2", name="Bellows"))
-    map_to_added_item_view = application.MapToAddedItemView(item=item)
-    assert (map_to_added_item_view.id, map_to_added_item_view.name) == ("b2", "Bellows")
+    item_view = application.MapToAddedItemView(item=item)
+    assert (item_view.id, item_view.name) == ("b2", "Bellows")

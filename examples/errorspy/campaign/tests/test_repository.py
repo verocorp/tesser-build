@@ -23,12 +23,12 @@ def test_save_then_find_roundtrip() -> None:
     )
     find_campaign_request = ports.FindCampaignRequest(campaign_id="c1")
     find_campaign_response = storage_campaign_repository.find(find_campaign_request)
-    map_to_campaign_spec = application.MapToCampaignSpec(
+    campaign_spec = application.MapToCampaignSpec(
         find_campaign_request=find_campaign_request,
         find_campaign_response=find_campaign_response,
     )
-    assert map_to_campaign_spec.id == "c1"
-    assert map_to_campaign_spec.links[0].slug == "spring-sale"
+    assert campaign_spec.id == "c1"
+    assert campaign_spec.links[0].slug == "spring-sale"
 
 
 def test_missing_is_domain_not_found() -> None:

@@ -790,10 +790,10 @@ class CampaignService(ts.ApplicationService):
             issue_campaign_identity_response=issue_campaign_identity_response,
             short_links_spec=domain.ShortLinksSpec(links=()),
         ))
-        map_to_save_campaign_request = MapToSaveCampaignRequest(campaign=campaign)
-        self._campaign_repository.save(map_to_save_campaign_request)
+        save_campaign_request = MapToSaveCampaignRequest(campaign=campaign)
+        self._campaign_repository.save(save_campaign_request)
         find_campaign_view_request = ports.FindCampaignViewRequest(
-            campaign_id=map_to_save_campaign_request.id,
+            campaign_id=save_campaign_request.id,
         )
         find_campaign_view_response = self._campaign_queries.find_view(
             find_campaign_view_request
@@ -993,6 +993,14 @@ superseding the 2026-08-17 accessor mapper, whose every field the service
 had to re-name at the construction site). A spec built by a mapper is still
 a spec — bind it, pass it whole, never read its fields in the service
 (TB083 types the local as the target).
+
+**A mapper's local is named for the target, not for the mapper** (TB085,
+maintainer ruling 2026-09-06). A mapper *is* its target, so the class the
+local carries is the target: `save_campaign_request =
+MapToSaveCampaignRequest(campaign=campaign)`, never
+`map_to_save_campaign_request`. The mapper's own name is a verb phrase and
+says how the value was made; the local says what it is, and the next line
+reads `save_campaign_request.id`.
 
 An adapter maps too, and it has its own base: `tesser.adapters.Mapper`,
 same contract, declared beside the gateway or repository that uses it so a

@@ -505,26 +505,26 @@ def _missing_campaign_view() -> ports.FindCampaignViewResponse:
 
 
 def test_the_campaign_view_mapper_is_the_view_built_from_the_row() -> None:
-    map_to_campaign_view = application.MapToCampaignView(
+    campaign_view = application.MapToCampaignView(
         find_campaign_view_request=ports.FindCampaignViewRequest(
             campaign_id="0123456789abcdef"
         ),
         find_campaign_view_response=_found_campaign_view(),
     )
-    assert isinstance(map_to_campaign_view, client.CampaignView)
-    assert map_to_campaign_view.campaign_id == "0123456789abcdef"
-    assert map_to_campaign_view.budget_amount == "10.00"
-    assert map_to_campaign_view.budget_currency == "USD"
-    assert [link.slug for link in map_to_campaign_view.links] == ["promo"]
-    assert [link.status for link in map_to_campaign_view.links] == ["inactive"]
+    assert isinstance(campaign_view, client.CampaignView)
+    assert campaign_view.campaign_id == "0123456789abcdef"
+    assert campaign_view.budget_amount == "10.00"
+    assert campaign_view.budget_currency == "USD"
+    assert [link.slug for link in campaign_view.links] == ["promo"]
+    assert [link.status for link in campaign_view.links] == ["inactive"]
 
 
 def test_the_link_view_mapper_is_the_view_built_from_the_row() -> None:
-    map_to_link_view = application.MapToLinkView(link_view_row=ports.LinkViewRow(
+    link_view = application.MapToLinkView(link_view_row=ports.LinkViewRow(
         slug="promo", target_url="https://ok.example/x", status="inactive"
     ))
-    assert isinstance(map_to_link_view, client.LinkView)
-    assert (map_to_link_view.slug, map_to_link_view.target_url, map_to_link_view.status) == (
+    assert isinstance(link_view, client.LinkView)
+    assert (link_view.slug, link_view.target_url, link_view.status) == (
         "promo", "https://ok.example/x", "inactive"
     )
 
@@ -549,13 +549,13 @@ def test_the_save_request_mapper_stringifies_the_aggregate_into_the_request() ->
             domain.ShortLinkSpec(slug="old", target_url="https://ok.example/y", active=False),
         )),
     ))
-    map_to_save_campaign_request = application.MapToSaveCampaignRequest(campaign=campaign)
-    assert isinstance(map_to_save_campaign_request, ports.SaveCampaignRequest)
-    assert map_to_save_campaign_request.id == "0123456789abcdef"
-    assert map_to_save_campaign_request.budget.amount == "10.00"
-    assert map_to_save_campaign_request.budget.currency == "USD"
-    assert [record.slug for record in map_to_save_campaign_request.links] == ["promo", "old"]
-    assert [record.status for record in map_to_save_campaign_request.links] == ["active", "inactive"]
+    save_campaign_request = application.MapToSaveCampaignRequest(campaign=campaign)
+    assert isinstance(save_campaign_request, ports.SaveCampaignRequest)
+    assert save_campaign_request.id == "0123456789abcdef"
+    assert save_campaign_request.budget.amount == "10.00"
+    assert save_campaign_request.budget.currency == "USD"
+    assert [record.slug for record in save_campaign_request.links] == ["promo", "old"]
+    assert [record.status for record in save_campaign_request.links] == ["active", "inactive"]
 
 
 def test_the_save_request_mapper_maps_no_links_to_no_records() -> None:
@@ -564,15 +564,15 @@ def test_the_save_request_mapper_maps_no_links_to_no_records() -> None:
         budget=domain.MoneySpec(amount="10.00", currency="USD"),
         links=domain.ShortLinksSpec(links=()),
     ))
-    map_to_save_campaign_request = application.MapToSaveCampaignRequest(campaign=campaign)
-    assert map_to_save_campaign_request.links == ()
+    save_campaign_request = application.MapToSaveCampaignRequest(campaign=campaign)
+    assert save_campaign_request.links == ()
 
 
 def test_the_campaign_spec_mapper_takes_the_id_from_the_issued_identity_and_the_links_whole() -> None:
     short_links_spec = domain.ShortLinksSpec(
         links=(domain.ShortLinkSpec(slug="promo", target_url="https://ok.example/x", active=True),)
     )
-    map_to_campaign_spec = application.MapToCampaignSpec(
+    campaign_spec = application.MapToCampaignSpec(
         create_campaign_request=client.CreateCampaignRequest(
             budget_amount="10.00", budget_currency="USD"
         ),
@@ -581,13 +581,13 @@ def test_the_campaign_spec_mapper_takes_the_id_from_the_issued_identity_and_the_
         ),
         short_links_spec=short_links_spec,
     )
-    assert isinstance(map_to_campaign_spec, domain.CampaignSpec)
-    assert map_to_campaign_spec.id == "0123456789abcdef"
-    assert map_to_campaign_spec.links is short_links_spec
+    assert isinstance(campaign_spec, domain.CampaignSpec)
+    assert campaign_spec.id == "0123456789abcdef"
+    assert campaign_spec.links is short_links_spec
 
 
 def test_the_campaign_spec_mapper_nests_the_money_spec_from_the_request() -> None:
-    map_to_campaign_spec = application.MapToCampaignSpec(
+    campaign_spec = application.MapToCampaignSpec(
         create_campaign_request=client.CreateCampaignRequest(
             budget_amount="10.00", budget_currency="USD"
         ),
@@ -596,21 +596,21 @@ def test_the_campaign_spec_mapper_nests_the_money_spec_from_the_request() -> Non
         ),
         short_links_spec=domain.ShortLinksSpec(links=()),
     )
-    assert isinstance(map_to_campaign_spec.budget, domain.MoneySpec)
-    assert map_to_campaign_spec.budget.amount == "10.00"
-    assert map_to_campaign_spec.budget.currency == "USD"
-    assert str(domain.Campaign(map_to_campaign_spec).budget.amount) == "10.00"
+    assert isinstance(campaign_spec.budget, domain.MoneySpec)
+    assert campaign_spec.budget.amount == "10.00"
+    assert campaign_spec.budget.currency == "USD"
+    assert str(domain.Campaign(campaign_spec).budget.amount) == "10.00"
 
 
 def test_the_link_record_mapper_stringifies_the_entity() -> None:
     short_link = domain.ShortLink(domain.ShortLinkSpec(
         slug="promo", target_url="https://ok.example/x", active=True
     ))
-    map_to_link_record = application.MapToLinkRecord(short_link=short_link)
-    assert isinstance(map_to_link_record, ports.LinkRecord)
-    assert map_to_link_record.slug == "promo"
-    assert map_to_link_record.target_url == "https://ok.example/x"
-    assert map_to_link_record.status == "active"
+    link_record = application.MapToLinkRecord(short_link=short_link)
+    assert isinstance(link_record, ports.LinkRecord)
+    assert link_record.slug == "promo"
+    assert link_record.target_url == "https://ok.example/x"
+    assert link_record.status == "active"
 
 
 def test_the_campaign_spec_mapper_from_a_record_rebuilds_the_links_it_was_given() -> None:
@@ -625,13 +625,13 @@ def test_the_campaign_spec_mapper_from_a_record_rebuilds_the_links_it_was_given(
     find_campaign_response = ports.FindCampaignResponse(
         outcome=ports.CampaignLookup.FOUND, campaigns=(campaign_record,)
     )
-    map_to_campaign_spec_from_record = application.MapToCampaignSpecFromRecord(
+    campaign_spec = application.MapToCampaignSpecFromRecord(
         find_campaign_request=find_campaign_request, find_campaign_response=find_campaign_response
     )
-    assert isinstance(map_to_campaign_spec_from_record, domain.CampaignSpec)
-    assert map_to_campaign_spec_from_record.id == "0123456789abcdef"
-    assert (map_to_campaign_spec_from_record.budget.amount, map_to_campaign_spec_from_record.budget.currency) == ("10.00", "USD")
-    assert [(link.slug, link.active) for link in map_to_campaign_spec_from_record.links.links] == [("promo", False)]
+    assert isinstance(campaign_spec, domain.CampaignSpec)
+    assert campaign_spec.id == "0123456789abcdef"
+    assert (campaign_spec.budget.amount, campaign_spec.budget.currency) == ("10.00", "USD")
+    assert [(link.slug, link.active) for link in campaign_spec.links.links] == [("promo", False)]
 
 
 def test_deactivate_link_refuses_a_malformed_campaign_id_before_the_repository_is_touched() -> None:
@@ -661,17 +661,17 @@ def test_a_found_slug_lookup_is_the_spec_the_campaign_is_rebuilt_from() -> None:
         ),
     )
 
-    map_to_campaign_spec_from_slug_lookup = application.MapToCampaignSpecFromSlugLookup(
+    campaign_spec = application.MapToCampaignSpecFromSlugLookup(
         find_campaign_by_slug_request=ports.FindCampaignBySlugRequest(
             slug="promo"
         ),
         find_campaign_response=find_campaign_response,
     )
 
-    assert map_to_campaign_spec_from_slug_lookup.id == "0123456789abcdef"
-    assert (map_to_campaign_spec_from_slug_lookup.budget.amount, map_to_campaign_spec_from_slug_lookup.budget.currency) == ("100.00", "USD")
+    assert campaign_spec.id == "0123456789abcdef"
+    assert (campaign_spec.budget.amount, campaign_spec.budget.currency) == ("100.00", "USD")
     assert tuple(
-        (link.slug, link.target_url, link.active) for link in map_to_campaign_spec_from_slug_lookup.links.links
+        (link.slug, link.target_url, link.active) for link in campaign_spec.links.links
     ) == (("promo", "https://ok.example/x", True),)
 
 
@@ -711,11 +711,11 @@ def test_a_deactivated_link_still_reaches_the_mapper_because_the_store_does_not_
         ),
     )
 
-    map_to_campaign_spec_from_slug_lookup = application.MapToCampaignSpecFromSlugLookup(
+    campaign_spec = application.MapToCampaignSpecFromSlugLookup(
         find_campaign_by_slug_request=ports.FindCampaignBySlugRequest(
             slug="promo"
         ),
         find_campaign_response=find_campaign_response,
     )
 
-    assert map_to_campaign_spec_from_slug_lookup.links.links[0].active is False
+    assert campaign_spec.links.links[0].active is False

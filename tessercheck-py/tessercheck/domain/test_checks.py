@@ -15984,6 +15984,87 @@ def test_a_name_is_derived_from_the_type_it_carries() -> None:
     assert not any("mod.domain.tag.__init__" in f for f in findings), findings
 
 
+def test_a_mapper_local_is_named_for_the_target_the_mapper_is() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(
+            (
+                "mod/domain/__init__.py",
+                "mod.domain",
+                "from mod.domain.tag import Tag as Tag\n"
+                "from mod.domain.tag import TagSpec as TagSpec\n",
+                True,
+            ),
+            (
+                "mod/domain/tag.py",
+                "mod.domain.tag",
+                "import tesser.domain as ts\n"
+                "class TagSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, spec: TagSpec) -> None:\n"
+                "        object.__setattr__(self, '_text', spec.text)\n",
+                False,
+            ),
+            (
+                "mod/client/__init__.py",
+                "mod.client",
+                "from mod.client.client import Asked as Asked\n",
+                True,
+            ),
+            (
+                "mod/client/client.py",
+                "mod.client.client",
+                "import tesser.context as ts\n"
+                "class Asked(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        super().__init__(text=text)\n"
+                "    text: str\n",
+                False,
+            ),
+            (
+                "mod/application/__init__.py",
+                "mod.application",
+                "from mod.application.service import MapToTagSpec as MapToTagSpec\n",
+                True,
+            ),
+            (
+                "mod/application/service.py",
+                "mod.application.service",
+                "import tesser.application as ts\n"
+                "import mod.client as client\n"
+                "import mod.domain as domain\n"
+                "class MapToTagSpec(ts.Mapper, domain.TagSpec):\n"
+                "    def __init__(self, asked: client.Asked) -> None:\n"
+                "        super().__init__(text=asked.text)\n",
+                False,
+            ),
+            (
+                "mod/application/test_service.py",
+                "mod.application.test_service",
+                "import mod.application as application\n"
+                "import mod.client as client\n"
+                "def test_a_mapper_carries_the_text_it_was_asked_for() -> None:\n"
+                "    map_to_tag_spec = application.MapToTagSpec(client.Asked('a'))\n"
+                "    assert map_to_tag_spec.text == 'a'\n"
+                "def test_a_target_named_local_is_left_alone() -> None:\n"
+                "    tag_spec = application.MapToTagSpec(client.Asked('b'))\n"
+                "    assert tag_spec.text == 'b'\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "mod.application.test_service.test_a_mapper_carries_the_text_it_was_asked_for "
+        "names map_to_tag_spec for a tag_spec" in f
+        for f in findings
+    ), findings
+    assert not any(
+        "test_a_target_named_local_is_left_alone" in f for f in findings
+    ), findings
+
+
 def test_a_call_the_analyzer_cannot_read_is_a_finding() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
