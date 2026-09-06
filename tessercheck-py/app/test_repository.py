@@ -9,6 +9,6 @@ def test_the_env_repository_reads_a_config() -> None:
 
 
 def test_each_read_returns_its_own_config() -> None:
-    reader = repository.EnvConfigRepository()
+    env_config_repository = repository.EnvConfigRepository()
 
-    assert reader.get() is not reader.get()
+    assert env_config_repository.get() is not env_config_repository.get()

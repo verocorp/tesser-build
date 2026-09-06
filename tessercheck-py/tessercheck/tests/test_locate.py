@@ -29,7 +29,7 @@ def test_every_place_is_earned_by_a_checked_tree_or_is_a_finding() -> None:
     finding_places = frozenset(expected for _, _, expected in finding_rows)
     repo = pathlib.Path(__file__).resolve().parents[3]
     manifest = json.loads((repo / "manifest.json").read_text(encoding="utf-8"))
-    reader = repositories.FilesystemSourceReader()
+    filesystem_source_reader = repositories.FilesystemSourceReader()
     exercised: set[str] = set()
     checked_trees = 0
     exporting_trees = 0
@@ -37,7 +37,7 @@ def test_every_place_is_earned_by_a_checked_tree_or_is_a_finding() -> None:
         if kind != "app" or not (repo / key / ".tesser-root").is_file():
             continue
         checked_trees += 1
-        read = reader.sources(ports.ReadSourcesRequest(tree=str(repo / key)))
+        read = filesystem_source_reader.sources(ports.ReadSourcesRequest(tree=str(repo / key)))
         names = [
             (s.name, s.form is ports.ModuleForm.PACKAGE) for s in read.sources
         ]

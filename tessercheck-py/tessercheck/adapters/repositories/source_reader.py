@@ -40,9 +40,9 @@ STDLIB_DIRECTIVE: typing.Final[str] = "stdlib"
 class FilesystemSourceReader(ts.Repository):
 
     def sources(
-        self, request: ports.ReadSourcesRequest
+        self, read_sources_request: ports.ReadSourcesRequest
     ) -> ports.ReadSourcesResponse:
-        base = pathlib.Path(request.tree)
+        base = pathlib.Path(read_sources_request.tree)
         root = ports.RootForm.APP
         skips: set[str] = set()
         exports: list[str] = []

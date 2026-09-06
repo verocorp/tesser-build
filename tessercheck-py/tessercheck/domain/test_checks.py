@@ -28,8 +28,8 @@ def _spec(
             "    def __init__(self, text: str) -> None:\n"
             "        self.text = text\n"
             "class Thing(ts.AggregateRoot):\n"
-            "    def __init__(self, spec: ThingSpec) -> None:\n"
-            "        self.text = spec.text\n",
+            "    def __init__(self, thing_spec: ThingSpec) -> None:\n"
+            "        self.text = thing_spec.text\n",
             False,
         ),
         (
@@ -64,8 +64,8 @@ def _spec(
             "import tesser.application as ts\n"
             "import shop.client.client as client\n"
             "class AskService(ts.ApplicationService):\n"
-            "    def ask(self, request: client.AskRequest) -> client.AskResponse:\n"
-            "        return client.AskResponse(text=request.text)\n",
+            "    def ask(self, ask_request: client.AskRequest) -> client.AskResponse:\n"
+            "        return client.AskResponse(text=ask_request.text)\n",
             False,
         ),
     ),
@@ -2117,19 +2117,19 @@ def test_a_spec_reference_is_a_symbol_with_a_shape() -> None:
     assert str(checks.SpecShape("one")) == "one"
     assert checks.SpecShape("many") == checks.SPEC_MANY
     assert checks.SpecShape("one") != checks.SPEC_MANY
-    one = checks.SpecRef(checks.SpecRefSpec(checks.SymbolSpec("shop.domain.money", "MoneySpec"), "one"))
-    assert one.shape() == checks.SPEC_ONE
-    assert one.many().shape() == checks.SPEC_MANY
-    assert one.many().one() == one
-    assert one.many().symbol() == one.symbol()
-    assert one.many() != one
+    spec_ref = checks.SpecRef(checks.SpecRefSpec(checks.SymbolSpec("shop.domain.money", "MoneySpec"), "one"))
+    assert spec_ref.shape() == checks.SPEC_ONE
+    assert spec_ref.many().shape() == checks.SPEC_MANY
+    assert spec_ref.many().one() == spec_ref
+    assert spec_ref.many().symbol() == spec_ref.symbol()
+    assert spec_ref.many() != spec_ref
     same = checks.Symbol(checks.SymbolSpec("shop.domain.money", "MoneySpec"))
     other = checks.Symbol(checks.SymbolSpec("shop.domain.money", "PriceSpec"))
-    assert same == one.symbol()
-    assert hash(same) == hash(one.symbol())
+    assert same == spec_ref.symbol()
+    assert hash(same) == hash(spec_ref.symbol())
     assert same != other
-    assert {same: "owner"}[one.symbol()] == "owner"
-    assert one.symbol() != ("shop.domain.money", "MoneySpec")
+    assert {same: "owner"}[spec_ref.symbol()] == "owner"
+    assert spec_ref.symbol() != ("shop.domain.money", "MoneySpec")
 
 
 def test_optional_construction_data_is_the_only_union() -> None:
@@ -4229,8 +4229,8 @@ def test_any_role_but_client_may_import_tesser_errors_as_a_module() -> None:
                 "import shop.client.client as client\n"
                 "import tesser.errors as errors\n"
                 "class ViewService(ts.ApplicationService):\n"
-                "    def ask(self, request: client.AskRequest) -> client.AskResponse:\n"
-                "        raise errors.not_found(\"no_row\", request.text)\n",
+                "    def ask(self, ask_request: client.AskRequest) -> client.AskResponse:\n"
+                "        raise errors.not_found(\"no_row\", ask_request.text)\n",
                 False,
             ),
             (
@@ -7040,8 +7040,8 @@ def test_a_conforming_ports_module_is_silent() -> None:
                 "    def __init__(self) -> None:\n"
                 "        return None\n"
                 "class Sink(ts.Port, typing.Protocol):\n"
-                "    def save(self, request: SaveRequest) -> SaveResponse: ...\n"
-                "    def all(self, request: ListRequest) -> SaveResponse: ...\n",
+                "    def save(self, save_request: SaveRequest) -> SaveResponse: ...\n"
+                "    def all(self, list_request: ListRequest) -> SaveResponse: ...\n",
                 False,
             ),
         ))).violations()
@@ -11603,7 +11603,7 @@ def _kinds_spec(
             "    def __init__(self, text: str) -> None:\n"
             "        self.text = text\n"
             "class Client(ts.Client, typing.Protocol):\n"
-            "    def ask(self, request: AskRequest) -> AskResponse: ...\n",
+            "    def ask(self, ask_request: AskRequest) -> AskResponse: ...\n",
             False,
         ),
         (
@@ -11629,7 +11629,7 @@ def _kinds_spec(
             "    def __init__(self, text: str) -> None:\n"
             "        self.text = text\n"
             "class Quotes(ts.Port, typing.Protocol):\n"
-            "    async def quote(self, job: ts.JobContext, request: QuoteRequest)"
+            "    async def quote(self, job_context: ts.JobContext, quote_request: QuoteRequest)"
             " -> QuoteResponse: ...\n",
             False,
         ),
@@ -11645,7 +11645,7 @@ def _kinds_spec(
             "    def __init__(self, text: str) -> None:\n"
             "        self.text = text\n"
             "class Catalog(ts.Port, typing.Protocol):\n"
-            "    def lookup(self, request: LookupRequest) -> LookupResponse: ...\n",
+            "    def lookup(self, lookup_request: LookupRequest) -> LookupResponse: ...\n",
             False,
         ),
         (
@@ -11661,7 +11661,7 @@ def _kinds_spec(
             "import tesser.application as ts\n"
             "import shop.application.ports as ports\n"
             "class ShopApplicationClient(ts.Client, typing.Protocol):\n"
-            "    def quote(self, request: ports.QuoteRequest) -> ports.QuoteResponse: ...\n",
+            "    def quote(self, quote_request: ports.QuoteRequest) -> ports.QuoteResponse: ...\n",
             False,
         ),
         (
@@ -11671,18 +11671,18 @@ def _kinds_spec(
             "import shop.application.ports as ports\n"
             "import shop.domain.thing as thing\n"
             "class MapToLookupRequest(ts.Mapper, ports.LookupRequest):\n"
-            "    def __init__(self, named: thing.Name) -> None:\n"
-            "        super().__init__(text=str(named))\n"
+            "    def __init__(self, name: thing.Name) -> None:\n"
+            "        super().__init__(text=str(name))\n"
             "class MapToQuoteResponse(ts.Mapper, ports.QuoteResponse):\n"
-            "    def __init__(self, named: thing.Name) -> None:\n"
-            "        super().__init__(text=str(named))\n"
+            "    def __init__(self, name: thing.Name) -> None:\n"
+            "        super().__init__(text=str(name))\n"
             "class Quotes(ts.Actions):\n"
-            "    def __init__(self, listing: ports.Catalog) -> None:\n"
-            "        self._listing = listing\n"
-            "    def quote(self, request: ports.QuoteRequest) -> ports.QuoteResponse:\n"
-            "        named = thing.Name(request.text)\n"
-            "        self._listing.lookup(MapToLookupRequest(named))\n"
-            "        return MapToQuoteResponse(named)\n",
+            "    def __init__(self, catalog: ports.Catalog) -> None:\n"
+            "        self._catalog = catalog\n"
+            "    def quote(self, quote_request: ports.QuoteRequest) -> ports.QuoteResponse:\n"
+            "        name = thing.Name(quote_request.text)\n"
+            "        self._catalog.lookup(MapToLookupRequest(name))\n"
+            "        return MapToQuoteResponse(name)\n",
             False,
         ),
         (
@@ -11698,8 +11698,8 @@ def _kinds_spec(
             "import tesser.application as ts\n"
             "import shop.client.client as client\n"
             "class AskService(ts.ApplicationService):\n"
-            "    def ask(self, request: client.AskRequest) -> client.AskResponse:\n"
-            "        return client.AskResponse(text=request.text)\n",
+            "    def ask(self, ask_request: client.AskRequest) -> client.AskResponse:\n"
+            "        return client.AskResponse(text=ask_request.text)\n",
             False,
         ),
         (
@@ -11726,18 +11726,18 @@ def _kinds_spec(
             "    def __init__(self, text: str) -> None:\n"
             "        self.text = text\n"
             "class MapToQuoteRequest(ts.Mapper, ports.QuoteRequest):\n"
-            "    def __init__(self, named: thing.Name) -> None:\n"
-            "        super().__init__(text=str(named))\n"
+            "    def __init__(self, name: thing.Name) -> None:\n"
+            "        super().__init__(text=str(name))\n"
             "class MapToFlowResponse(ts.Mapper, FlowResponse):\n"
-            "    def __init__(self, quoted: ports.QuoteResponse) -> None:\n"
-            "        super().__init__(text=quoted.text)\n"
+            "    def __init__(self, quote_response: ports.QuoteResponse) -> None:\n"
+            "        super().__init__(text=quote_response.text)\n"
             "class Flow(ts.Orchestrator):\n"
-            "    def __init__(self, job: ts.JobContext, quoting: ports.Quotes) -> None:\n"
-            "        self._job = job\n"
-            "        self._quoting = quoting\n"
-            "    async def run(self, request: ports.QuoteRequest) -> FlowResponse:\n"
-            "        named = thing.Name(request.text)\n"
-            "        quoted = await self._quoting.quote(self._job, MapToQuoteRequest(named))\n"
+            "    def __init__(self, job_context: ts.JobContext, quotes: ports.Quotes) -> None:\n"
+            "        self._job_context = job_context\n"
+            "        self._quotes = quotes\n"
+            "    async def run(self, quote_request: ports.QuoteRequest) -> FlowResponse:\n"
+            "        name = thing.Name(quote_request.text)\n"
+            "        quoted = await self._quotes.quote(self._job_context, MapToQuoteRequest(name))\n"
             "        return MapToFlowResponse(quoted)\n",
             False,
         ),
@@ -11762,9 +11762,9 @@ def _kinds_spec(
             "import tesser.adapters as ts\n"
             "import shop.application.ports as ports\n"
             "class QuoteGateway(ts.Gateway):\n"
-            "    async def quote(self, job: ts.JobContext, request: ports.QuoteRequest)"
+            "    async def quote(self, job_context: ts.JobContext, quote_request: ports.QuoteRequest)"
             " -> ports.QuoteResponse:\n"
-            "        return ports.QuoteResponse(text=request.text)\n",
+            "        return ports.QuoteResponse(text=quote_request.text)\n",
             False,
         ),
         (
@@ -11780,8 +11780,8 @@ def _kinds_spec(
             "import tesser.adapters as ts\n"
             "import shop.application.ports as ports\n"
             "class CatalogGateway(ts.Gateway):\n"
-            "    def lookup(self, request: ports.LookupRequest) -> ports.LookupResponse:\n"
-            "        return ports.LookupResponse(text=request.text)\n",
+            "    def lookup(self, lookup_request: ports.LookupRequest) -> ports.LookupResponse:\n"
+            "        return ports.LookupResponse(text=lookup_request.text)\n",
             False,
         ),
         (
@@ -11828,15 +11828,15 @@ def _kinds_spec(
             "    async def call(self, step: object, request: object) -> object:\n"
             "        return request\n"
             "class EngineJob(ts.Job):\n"
-            "    def __init__(self, actions: client.ShopApplicationClient, quoting: ports.Quotes) -> None:\n"
-            "        self._actions = actions\n"
-            "        self._quoting = quoting\n"
-            "    def quote(self, request: ports.QuoteRequest) -> ports.QuoteResponse:\n"
-            "        return self._actions.quote(request)\n"
-            "    async def run(self, inner: object, request: ports.QuoteRequest)"
+            "    def __init__(self, shop_application_client: client.ShopApplicationClient, quotes: ports.Quotes) -> None:\n"
+            "        self._shop_application_client = shop_application_client\n"
+            "        self._quotes = quotes\n"
+            "    def quote(self, quote_request: ports.QuoteRequest) -> ports.QuoteResponse:\n"
+            "        return self._shop_application_client.quote(quote_request)\n"
+            "    async def run(self, inner: object, quote_request: ports.QuoteRequest)"
             " -> orchestrators.FlowResponse:\n"
-            "        return await orchestrators.Flow(EngineJobContext(inner), self._quoting)"
-            ".run(request)\n",
+            "        return await orchestrators.Flow(EngineJobContext(inner), self._quotes)"
+            ".run(quote_request)\n",
             False,
         ),
         (
@@ -14647,12 +14647,12 @@ def test_kind_table_equality_and_lookup() -> None:
         ("shop.domain.order", "Order", "aggregate"),
         ("shop.domain.aaa", "Aaa", "spec"),
     )
-    table = checks.KindTable(checks.KindTableSpec(entries))
-    assert table == checks.KindTable(checks.KindTableSpec(tuple(reversed(entries))))
-    assert str(table.block_of(checks.Symbol(checks.SymbolSpec("shop.domain.order", "Order")))) == "aggregate"
-    assert str(table.block_of(checks.Symbol(checks.SymbolSpec("shop.domain.aaa", "Aaa")))) == "spec"
-    assert table.block_of(checks.Symbol(checks.SymbolSpec("shop.domain.zzz", "Zzz"))) is None
-    assert table.block_of(checks.Symbol(checks.SymbolSpec("shop.domain.money", "Other"))) is None
+    kind_table = checks.KindTable(checks.KindTableSpec(entries))
+    assert kind_table == checks.KindTable(checks.KindTableSpec(tuple(reversed(entries))))
+    assert str(kind_table.block_of(checks.Symbol(checks.SymbolSpec("shop.domain.order", "Order")))) == "aggregate"
+    assert str(kind_table.block_of(checks.Symbol(checks.SymbolSpec("shop.domain.aaa", "Aaa")))) == "spec"
+    assert kind_table.block_of(checks.Symbol(checks.SymbolSpec("shop.domain.zzz", "Zzz"))) is None
+    assert kind_table.block_of(checks.Symbol(checks.SymbolSpec("shop.domain.money", "Other"))) is None
     assert checks.KindTable(checks.KindTableSpec(())).block_of(checks.Symbol(checks.SymbolSpec("a", "B"))) is None
 
 
@@ -14891,7 +14891,7 @@ def _ports_sources(
                 "import tesser.application as ts\n"
                 "import mod.application.ports as ports\n"
                 "class Client(ts.Client, typing.Protocol):\n"
-                "    def quote(self, request: ports.QuoteRequest) -> ports.QuoteResponse: ...\n",
+                "    def quote(self, quote_request: ports.QuoteRequest) -> ports.QuoteResponse: ...\n",
                 False,
             ),
             ("mod/application/client/__init__.py", "mod.application.client", "", True),
@@ -15888,3 +15888,170 @@ def test_a_two_hop_re_export_chain_resolves_to_the_defining_module() -> None:
         "already takes; a spec constructs exactly one object" in f
         for f in findings
     ), findings
+
+def test_a_name_is_derived_from_the_type_it_carries() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "mod/domain/__init__.py",
+                "mod.domain",
+                "from mod.domain.tag import Tag as Tag\n"
+                "from mod.domain.tag import TagSpec as TagSpec\n",
+                True,
+            ),
+            (
+                "mod/domain/tag.py",
+                "mod.domain.tag",
+                "import tesser.domain as ts\n"
+                "class TagSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, spec: TagSpec) -> None:\n"
+                "        object.__setattr__(self, '_text', spec.text)\n",
+                False,
+            ),
+            (
+                "mod/domain/test_tag.py",
+                "mod.domain.test_tag",
+                "import mod.domain.tag as tag\n"
+                "def test_a_tag_is_built_from_its_spec() -> None:\n"
+                "    made = tag.TagSpec('a')\n"
+                "    assert tag.Tag(made) is not None\n"
+                "def test_two_specs_of_one_type_keep_their_places() -> None:\n"
+                "    first = tag.TagSpec('a')\n"
+                "    second = tag.TagSpec('a')\n"
+                "    assert tag.Tag(first) == tag.Tag(second)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "mod.domain.tag.__init__ names spec for a tag_spec; a name is derived from "
+        "the type it carries, in snake_case, because a reader who knows the type then "
+        "knows the name" in f
+        for f in findings
+    ), findings
+    assert any(
+        "mod.domain.test_tag.test_a_tag_is_built_from_its_spec names made for a "
+        "tag_spec" in f
+        for f in findings
+    ), findings
+    assert not any(
+        "test_two_specs_of_one_type_keep_their_places" in f for f in findings
+    ), findings
+    assert not any(
+        "mod.domain.tag.__init__ names text" in f for f in findings
+    ), findings
+
+
+def test_an_init_keeps_its_parameters_name_in_the_field_it_sets() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "mod/application/__init__.py",
+                "mod.application",
+                "from mod.application.service import AskService as AskService\n",
+                True,
+            ),
+            (
+                "mod/application/service.py",
+                "mod.application.service",
+                "import tesser.application as ts\n"
+                "import mod.application.ports as ports\n"
+                "class AskService(ts.ApplicationService):\n"
+                "    def __init__(self, sink: ports.Sink) -> None:\n"
+                "        self._store = sink\n",
+                False,
+            ),
+            (
+                "mod/application/test_service.py",
+                "mod.application.test_service",
+                "def test_service() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "mod/application/ports/__init__.py",
+                "mod.application.ports",
+                "from mod.application.ports.sink import SaveRequest as SaveRequest\n"
+                "from mod.application.ports.sink import SaveResponse as SaveResponse\n"
+                "from mod.application.ports.sink import Sink as Sink\n",
+                True,
+            ),
+            (
+                "mod/application/ports/sink.py",
+                "mod.application.ports.sink",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class SaveRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class SaveResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Sink(ts.Port, typing.Protocol):\n"
+                "    def save(self, save_request: SaveRequest) -> SaveResponse: ...\n",
+                False,
+            ),
+            (
+                "mod/application/ports/test_sink.py",
+                "mod.application.ports.test_sink",
+                "def test_sink() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "mod.application.service.__init__ keeps _store for a sink; an __init__ keeps "
+        "its parameter's name in the field it sets, because the two are the same value"
+        in f
+        for f in findings
+    ), findings
+    assert not any(
+        "mod.application.ports.sink" in f and "TB085" in f for f in findings
+    ), findings
+
+
+def test_a_spec_and_a_dto_take_field_names_and_a_module_alias_keeps_its_name() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "mod/domain/__init__.py",
+                "mod.domain",
+                "from mod.domain.tag import PartSpec as PartSpec\n"
+                "from mod.domain.tag import Tag as Tag\n"
+                "from mod.domain.tag import TagSpec as TagSpec\n",
+                True,
+            ),
+            (
+                "mod/domain/tag.py",
+                "mod.domain.tag",
+                "import tesser.domain as ts\n"
+                "class PartSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class TagSpec(ts.Spec):\n"
+                "    def __init__(self, part: PartSpec) -> None:\n"
+                "        self.part = part\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, tag_spec: TagSpec) -> None:\n"
+                "        object.__setattr__(self, '_text', tag_spec.part.text)\n",
+                False,
+            ),
+            (
+                "mod/domain/test_tag.py",
+                "mod.domain.test_tag",
+                "import mod.domain.tag as tag\n"
+                "def test_a_tag_reads_its_part() -> None:\n"
+                "    domain_tag = tag.Tag(tag.TagSpec(tag.PartSpec('a')))\n"
+                "    assert domain_tag is not None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert not any("mod.domain" in f and "TB085" in f for f in findings), findings

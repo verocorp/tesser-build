@@ -8,9 +8,9 @@ import tessercheck.application.ports as ports
 class FilesystemRulebookSources(ts.Repository):
 
     def read(
-        self, request: ports.ReadRulebookRequest
+        self, read_rulebook_request: ports.ReadRulebookRequest
     ) -> ports.ReadRulebookResponse:
-        base = pathlib.Path(request.tree)
+        base = pathlib.Path(read_rulebook_request.tree)
         modules = [
             base / "tessercheck" / "tests" / "test_checks.py",
             *sorted((base / "tessercheck" / "domain").glob("test_*.py")),

@@ -9,8 +9,8 @@ import app.config as config
 
 class TessercheckApp(ts.App):
 
-    def __init__(self, cfg: config.AppConfig) -> None:
-        self.tessercheck = component.Tessercheck(cfg.tessercheck)
+    def __init__(self, app_config: config.AppConfig) -> None:
+        self.tessercheck = component.Tessercheck(app_config.tessercheck)
 
     def close(self) -> None:
         self.tessercheck.close()

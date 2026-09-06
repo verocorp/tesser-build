@@ -11,9 +11,9 @@ def test_a_missing_positional_argument_falls_back_to_the_default() -> None:
 
 
 def test_a_present_positional_argument_wins_over_the_default() -> None:
-    req = cli.CliRequest(args=("some/tree", "second"))
-    assert req.arg(0, ".") == "some/tree"
-    assert req.arg(1, ".") == "second"
+    cli_request = cli.CliRequest(args=("some/tree", "second"))
+    assert cli_request.arg(0, ".") == "some/tree"
+    assert cli_request.arg(1, ".") == "second"
 
 
 def test_the_expected_number_of_arguments_is_accepted_silently() -> None:
@@ -34,7 +34,7 @@ def test_a_request_that_takes_no_arguments_rejects_the_first_one() -> None:
 
 
 def test_a_response_carries_the_exit_code_and_both_streams() -> None:
-    resp = cli.CliResponse(2, stdout="out", stderr="err")
-    assert resp.exit_code == 2
-    assert resp.stdout == "out"
-    assert resp.stderr == "err"
+    cli_response = cli.CliResponse(2, stdout="out", stderr="err")
+    assert cli_response.exit_code == 2
+    assert cli_response.stdout == "out"
+    assert cli_response.stderr == "err"

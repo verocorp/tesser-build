@@ -22,11 +22,11 @@ class FakeConfigRepository(repository.ConfigRepository):
 
 
 def test_a_loader_reads_its_repository_once_per_load() -> None:
-    configs = FakeConfigRepository()
+    fake_config_repository = FakeConfigRepository()
 
-    loader.AppLoader(configs).load()
+    loader.AppLoader(fake_config_repository).load()
 
-    assert configs.reads == 1
+    assert fake_config_repository.reads == 1
 
 
 def test_a_loader_returns_an_app_built_from_what_the_repository_gave_it() -> None:

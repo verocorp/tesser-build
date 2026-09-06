@@ -23,14 +23,14 @@ def test_each_component_gets_its_own_client() -> None:
 
 
 def test_a_component_closes_what_it_built() -> None:
-    built = component.Tessercheck(component.Config(component.Spec()))
+    tessercheck = component.Tessercheck(component.Config(component.Spec()))
 
-    built.close()
+    tessercheck.close()
 
-    assert built.client is not None
+    assert tessercheck.client is not None
 
 
 def test_a_component_takes_the_config_it_is_given() -> None:
-    built = component.Tessercheck(component.Config(component.Spec()))
+    tessercheck = component.Tessercheck(component.Config(component.Spec()))
 
-    assert built.client is not None
+    assert tessercheck.client is not None

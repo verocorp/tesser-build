@@ -6,19 +6,19 @@ import tessercheck.component as component
 
 
 def test_an_app_builds_one_component_per_slice() -> None:
-    cfg = config.AppConfig(
+    app_config = config.AppConfig(
         config.Spec(tessercheck=component.Config(component.Spec()))
     )
 
-    assert app.TessercheckApp(cfg).tessercheck.client is not None
+    assert app.TessercheckApp(app_config).tessercheck.client is not None
 
 
 def test_an_app_closes_its_components() -> None:
-    cfg = config.AppConfig(
+    app_config = config.AppConfig(
         config.Spec(tessercheck=component.Config(component.Spec()))
     )
-    built = app.TessercheckApp(cfg)
+    tessercheck_app = app.TessercheckApp(app_config)
 
-    built.close()
+    tessercheck_app.close()
 
-    assert built.tessercheck.client is not None
+    assert tessercheck_app.tessercheck.client is not None

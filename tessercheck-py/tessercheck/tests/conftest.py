@@ -17,8 +17,8 @@ def check_tree(root: pathlib.Path) -> tuple[str, ...]:
 
 
 def check_raw(root: pathlib.Path) -> tuple[str, ...]:
-    service = application.TessercheckService(repositories.FilesystemSourceReader(), repositories.FilesystemRulebookSources())
-    return service.check(client.CheckRequest(tree=str(root))).findings
+    tessercheck_service = application.TessercheckService(repositories.FilesystemSourceReader(), repositories.FilesystemRulebookSources())
+    return tessercheck_service.check(client.CheckRequest(tree=str(root))).findings
 
 
 def write_module(root: pathlib.Path, rel: str, source: str) -> None:
@@ -36,8 +36,8 @@ def conforming_tree(root: pathlib.Path) -> None:
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n"
         "class Thing(ts.AggregateRoot):\n"
-        "    def __init__(self, spec: ThingSpec) -> None:\n"
-        "        self.text = spec.text\n",
+        "    def __init__(self, thing_spec: ThingSpec) -> None:\n"
+        "        self.text = thing_spec.text\n",
     )
     write_module(
         root,
@@ -68,8 +68,8 @@ def conforming_tree(root: pathlib.Path) -> None:
         "import tesser.application as ts\n"
         "import shop.client.client as client\n"
         "class AskService(ts.ApplicationService):\n"
-        "    def ask(self, request: client.AskRequest) -> client.AskResponse:\n"
-        "        return client.AskResponse(text=request.text)\n",
+        "    def ask(self, ask_request: client.AskRequest) -> client.AskResponse:\n"
+        "        return client.AskResponse(text=ask_request.text)\n",
     )
 
 

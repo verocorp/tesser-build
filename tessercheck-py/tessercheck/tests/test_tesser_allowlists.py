@@ -9,11 +9,11 @@ import tessercheck.domain as domain
 def test_every_tesser_allowlist_entry_is_earned_by_the_shipped_distribution() -> None:
     repo = pathlib.Path(__file__).resolve().parents[3]
     manifest = json.loads((repo / "manifest.json").read_text(encoding="utf-8"))
-    reader = repositories.FilesystemSourceReader()
+    filesystem_source_reader = repositories.FilesystemSourceReader()
     for key, kind in sorted(manifest.items()):
         if kind != "app" or not (repo / key / ".tesser-root").is_file():
             continue
-        read = reader.sources(ports.ReadSourcesRequest(tree=str(repo / key)))
+        read = filesystem_source_reader.sources(ports.ReadSourcesRequest(tree=str(repo / key)))
         if read.exports != (domain.TESSER,):
             continue
         names = [source.name for source in read.sources]

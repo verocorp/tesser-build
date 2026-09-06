@@ -8,11 +8,11 @@ import app.repository as repository
 
 class AppLoader(ts.Loader):
 
-    def __init__(self, configs: repository.ConfigRepository) -> None:
-        self._configs = configs
+    def __init__(self, config_repository: repository.ConfigRepository) -> None:
+        self._config_repository = config_repository
 
     def load(self) -> app.TessercheckApp:
-        return app.TessercheckApp(self._configs.get())
+        return app.TessercheckApp(self._config_repository.get())
 
 
 @ts.load

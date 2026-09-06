@@ -7,9 +7,9 @@ import tessercheck.component as component
 def test_a_config_carries_the_slice_its_component_reads() -> None:
     slice_ = component.Config(component.Spec())
 
-    cfg = config.AppConfig(config.Spec(tessercheck=slice_))
+    app_config = config.AppConfig(config.Spec(tessercheck=slice_))
 
-    assert cfg.tessercheck is slice_
+    assert app_config.tessercheck is slice_
 
 
 def test_each_config_carries_its_own_slice() -> None:

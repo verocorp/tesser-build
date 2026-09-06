@@ -16,21 +16,21 @@ _HERE: typing.Final[str] = "."
 
 class Handler(ts.Handler):
 
-    def __init__(self, client: client.TessercheckClient) -> None:
-        self._client = client
+    def __init__(self, tessercheck_client: client.TessercheckClient) -> None:
+        self._tessercheck_client = tessercheck_client
 
-    def check(self, req: cli.CliRequest) -> cli.CliResponse:
-        root = req.arg(0, _HERE)
-        req.no_extra_args(1, _CHECK_USAGE)
-        view = self._client.check(client.CheckRequest(tree=root))
+    def check(self, cli_request: cli.CliRequest) -> cli.CliResponse:
+        root = cli_request.arg(0, _HERE)
+        cli_request.no_extra_args(1, _CHECK_USAGE)
+        view = self._tessercheck_client.check(client.CheckRequest(tree=root))
         return cli.CliResponse(
             1 if view.findings else 0,
             stdout="\n".join(view.findings),
             stderr="",
         )
 
-    def rulebook(self, req: cli.CliRequest) -> cli.CliResponse:
-        root = req.arg(0, _HERE)
-        req.no_extra_args(1, _RULES_USAGE)
-        view = self._client.rulebook(client.RulebookRequest(tree=root))
+    def rulebook(self, cli_request: cli.CliRequest) -> cli.CliResponse:
+        root = cli_request.arg(0, _HERE)
+        cli_request.no_extra_args(1, _RULES_USAGE)
+        view = self._tessercheck_client.rulebook(client.RulebookRequest(tree=root))
         return cli.CliResponse(0, stdout=view.rendered, stderr="")
