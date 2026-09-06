@@ -46,10 +46,12 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
 
 @ts.helper
 def order_orchestrator_request(
-    order_id: str = "o1", sku: str = "widget", quantity: int = 2
+    order_id: str = "o1", sku: str = "widget", quantity: int = 2, note: str = "gift"
 ) -> relays.OrderOrchestratorRequest:
     return relays.OrderOrchestratorRequest(
-        order=domain.Order(domain.OrderSpec(order_id=order_id, sku=sku, quantity=quantity))
+        order=domain.Order(
+            domain.OrderSpec(order_id=order_id, sku=sku, quantity=quantity, note=note)
+        )
     )
 
 

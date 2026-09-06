@@ -26,9 +26,9 @@ class FakeOrderOrchestratorRunner(relays.OrderOrchestratorRunner):  # tesser:deb
 
 @ts.helper
 def place_order_request(
-    order_id: str = "o1", sku: str = "widget", quantity: int = 2
+    order_id: str = "o1", sku: str = "widget", quantity: int = 2, note: str = "gift"
 ) -> client.PlaceOrderRequest:
-    return client.PlaceOrderRequest(order_id=order_id, sku=sku, quantity=quantity)
+    return client.PlaceOrderRequest(order_id=order_id, sku=sku, quantity=quantity, note=note)
 
 
 class TestOrderService:
@@ -45,10 +45,10 @@ class TestOrderService:
         fake_order_orchestrator_runner = FakeOrderOrchestratorRunner()  # tesser:debt TB085
         asyncio.run(
             application.OrderService(fake_order_orchestrator_runner).place_order(
-                place_order_request(order_id="o2", sku="gadget", quantity=3)
+                place_order_request(order_id="o2", sku="gadget", quantity=3, note="fragile")
             )
         )
         assert [
-            (str(s.order.identity), str(s.order.sku), int(s.order.quantity))
+            (str(s.order.identity), str(s.order.sku), int(s.order.quantity), str(s.order.note))
             for s in fake_order_orchestrator_runner.started
-        ] == [("o2", "gadget", 3)]
+        ] == [("o2", "gadget", 3, "fragile")]

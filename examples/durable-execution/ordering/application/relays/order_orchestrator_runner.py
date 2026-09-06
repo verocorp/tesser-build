@@ -17,6 +17,7 @@ class OrderSnapshot(ts.Serde):  # tesser:debt TB052
                 "order_id": str(order.identity),
                 "sku": str(order.sku),
                 "quantity": int(order.quantity),
+                "note": str(order.note),
             }
         ).encode()
 
@@ -28,13 +29,17 @@ class OrderSnapshot(ts.Serde):  # tesser:debt TB052
             and isinstance(snapshot.get("sku"), str)
             and isinstance(snapshot.get("quantity"), int)
             and not isinstance(snapshot.get("quantity"), bool)
+            and isinstance(snapshot.get("note"), str)
         ):
-            raise errors.invalid("malformed_order_snapshot", "an order snapshot is order_id, sku, and quantity")
+            raise errors.invalid(
+                "malformed_order_snapshot", "an order snapshot is order_id, sku, quantity, and note"
+            )
         return domain.Order(
             domain.OrderSpec(
                 order_id=snapshot["order_id"],
                 sku=snapshot["sku"],
                 quantity=snapshot["quantity"],
+                note=snapshot["note"],
             )
         )
 
