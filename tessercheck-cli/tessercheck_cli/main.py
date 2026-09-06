@@ -3,9 +3,8 @@ from __future__ import annotations
 import sys
 from typing import Final
 
-import tessercheck.client.client as client
-import tessercheck.component.component as component
-import tessercheck.component.config as config
+import tessercheck.client as client
+import tessercheck.component as component
 
 _USAGE: Final[str] = "usage: tessercheck-check [tree]"
 
@@ -23,11 +22,11 @@ def main() -> int:
         print(f"unexpected extra arguments\n{_USAGE}", file=sys.stderr)
         return 2
     tree = args[0] if args else _HERE
-    checker = component.Tessercheck(config.Config(config.Spec()))
+    tessercheck = component.Tessercheck(component.Config(component.Spec()))
     try:
-        view = checker.client.check(client.CheckRequest(tree=tree))
+        check_response = tessercheck.client.check(client.CheckRequest(tree=tree))
     finally:
-        checker.close()
-    for finding in view.findings:
+        tessercheck.close()
+    for finding in check_response.findings:
         print(finding)
-    return 1 if view.findings else 0
+    return 1 if check_response.findings else 0
