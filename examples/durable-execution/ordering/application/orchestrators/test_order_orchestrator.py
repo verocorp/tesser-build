@@ -3,10 +3,12 @@ from __future__ import annotations
 import asyncio
 
 import tesser.testing as ts
+import pytest
 
 import ordering.application.orchestrators as orchestrators
 import ordering.application.relays as relays  # tesser:debt TB070
 import ordering.domain as domain
+import tesser.errors as errors
 
 
 @ts.fake
@@ -20,6 +22,15 @@ class FakeOrderActionsRunner(relays.OrderActionsRunner):
     ) -> relays.PrepareQuoteResponse:
         self.quoted.append(prepare_quote_request.sku)
         return relays.PrepareQuoteResponse(cents=250)
+
+
+@ts.fake
+class FakeRefusingOrderActionsRunner(relays.OrderActionsRunner):
+
+    async def run_prepare_quote(
+        self, prepare_quote_request: relays.PrepareQuoteRequest
+    ) -> relays.PrepareQuoteResponse:
+        raise errors.not_found("unknown_sku", f"no price for sku {prepare_quote_request.sku!r}")
 
 
 @ts.helper
@@ -50,3 +61,12 @@ class TestOrderOrchestrator:
             )
         )
         assert fake_order_actions_runner.quoted == ["gadget"]
+
+    def test_a_refused_quote_ends_the_run_with_the_actions_error(self) -> None:
+        with pytest.raises(errors.DomainError) as excinfo:
+            asyncio.run(
+                orchestrators.OrderOrchestrator(FakeRefusingOrderActionsRunner()).run(
+                    order_orchestrator_request(sku="nothing")
+                )
+            )
+        assert excinfo.value.kind is errors.Kind.NOT_FOUND
