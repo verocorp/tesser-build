@@ -5,6 +5,79 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.98.0] - 2026-09-06
+
+A package is the unit you import, and a variable is named for the type it
+carries. The two rulings are one change: the naming rule needs `widget` to be
+free, and it only is once `alpha.domain` rather than `alpha.domain.widget` is
+what a module imports. Every gated tree in the repo now reads that way — eleven
+of them, from 2,227 findings to zero.
+
+### Added
+- **A package is the unit you import** (`TB060`). Outside an exporting package
+  you import the package; inside one, a module imports the packages around it
+  and never a module beside it, its sibling test included. Two modules of one
+  package that need each other become one module. An exporting package is every
+  role package plus `app/`, `srv/`, `srv/<host>/` and `protocol/`; a kernel and
+  a bare container are not, and the reasons are recorded.
+- **The alias is the package's last segment** (`TB053`), and where two imported
+  packages share that segment each takes its context as a prefix.
+- **A package never exports a class of its own name** (`TB042`), because the
+  local derived from that class would rebind the package's alias. `Client`
+  becomes `AlphaClient`, `App` becomes `LayoutApp`, `Config` becomes `AppConfig`.
+- **A role `__init__` is the export list**, and only the export list: a module
+  import in one exports nothing, and an export nobody outside reads is a finding.
+- **A kernel is domain, and only domain reaches it** (`TB062`, `TB063`). A root
+  kernel is imported by exactly one kind of module, a context's own
+  `domain/kernel/` package, so a domain module names exactly one `kernel` and
+  never knows which scope a type came from.
+- **`TB085` — a name is derived from the type it carries.** A parameter takes
+  its annotation's class name in snake_case; a local assigned from a call takes
+  the class the call declares it returns, with the receiver read through a
+  field, a parameter, a constructor-built local, or a package alias; an
+  `__init__` keeps its parameter's name in the field it sets. A call the
+  analyzer cannot read is itself a finding, because a name it cannot check is a
+  name it is not checking.
+- **`TB080` — a constructor's one spec is named `spec`**, since the annotation
+  already says which spec it is.
+
+### Changed
+- **All eleven gated trees migrated**: the eight `examples/*` app trees, plus
+  `layout`, `tesser-py` and `tessercheck-py`. Where the sibling ban forced two
+  modules together their tests merged with them, and no test was lost in any
+  merge. `examples/minimal` and `examples/python-app` are the worked examples.
+- **A sibling test is no longer exempt.** A test imports the packages around it
+  like any module, a class the `__init__` hides is asserted through the object
+  that owns it, and a test's reads justify an export.
+- `layout`'s `testpaths` omitted `app` and `protocol`, so eighteen tests never
+  ran under its own gate. 171 tests, now 189.
+- The skill docs, `rationale/coverage.md` and the roadmap registry follow every
+  file the merges moved.
+
+### Fixed
+- **A local from a module function was typed as the function, not its return**,
+  so `minimal_app = app.load()` made every later call on that local report "from
+  a call it cannot read" — a false positive on the pattern the docs teach.
+- **The alias-collision clause could not see a collision**: it counted over a
+  dict keyed by the alias, so two packages bound to one name left one entry and
+  drew nothing.
+- **The keeps-its-name clause was dead on every frozen value object**, which
+  writes `object.__setattr__` rather than an assignment. It now matches both
+  forms, and every tree stays at zero because the convention was already being
+  followed.
+- `tessercheck-cli`'s console script imported a module the merges removed, which
+  would have shipped a wheel that could not start.
+- `examples/minimal` regains the one test of `InlineJobContext.call`, lost when
+  its module merged.
+
+### Known
+`python.md` no longer claims a class the `__init__` hides "cannot be reached
+from outside at all". Python binds an imported submodule as an attribute of its
+package, so `domain.widget.Clearance` still resolves and neither the analyzer
+nor `mypy --strict` reports it. The boundary is a convention the import rules
+enforce, not something the interpreter refuses; the clause that would close it,
+and the measurement showing it would cost no migration, are recorded.
+
 ## [0.0.96.0] - 2026-08-30
 
 An annotation is written unquoted. `TB021` reports a string in type position
