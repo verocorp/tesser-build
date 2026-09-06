@@ -48,7 +48,15 @@ class TestRestateOrderOrchestratorRunner:
                 raw = b""
                 while b"\r\n\r\n" not in raw:
                     raw += conn.recv(4096)
-                seen.append(raw.partition(b"\r\n\r\n")[0])
+                head, _, body = raw.partition(b"\r\n\r\n")
+                declared = 0
+                for line in head.split(b"\r\n"):
+                    if line.lower().startswith(b"content-length:"):
+                        declared = int(line.split(b":", 1)[1])
+                while len(body) < declared:
+                    body += conn.recv(4096)
+                seen.append(head)
+                seen.append(body)
                 answer = b'{"invocationId": "inv_1", "status": "Accepted"}'
                 conn.sendall(
                     b"HTTP/1.1 202 Accepted\r\ncontent-type: application/json\r\ncontent-length: "
@@ -72,6 +80,9 @@ class TestRestateOrderOrchestratorRunner:
 
         assert start_order_orchestrator_response.order_id == "o1"
         assert seen[0].split(b"\r\n")[0] == b"POST /OrderOrchestrator/o1/run/send HTTP/1.1"
+        assert seen[1] == relays.OrderOrchestratorRequestSnapshot().serialize(
+            order_orchestrator_request()
+        )
 
     def test_a_refused_send_is_an_infra_error(self) -> None:
         listener = socket.socket()

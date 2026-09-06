@@ -21,3 +21,11 @@ class TestMemoryProductCatalogRepository:
                 ports.GetProductPriceRequest(sku="nothing")
             )
         assert excinfo.value.kind is errors.Kind.NOT_FOUND
+
+    def test_a_closed_catalog_prices_nothing(self) -> None:
+        memory_product_catalog_repository = repositories.MemoryProductCatalogRepository()
+        memory_product_catalog_repository.close()
+        with pytest.raises(errors.DomainError):
+            memory_product_catalog_repository.get_product_price(
+                ports.GetProductPriceRequest(sku="widget")
+            )

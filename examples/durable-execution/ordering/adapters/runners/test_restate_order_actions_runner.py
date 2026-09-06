@@ -66,3 +66,5 @@ class TestRestateOrderActionsRunner:
                 ).run_prepare_quote(relays.PrepareQuoteRequest(sku="nothing"))
             )
         assert excinfo.value.kind is errors.Kind.NOT_FOUND
+        assert excinfo.value.code == "action_rejected"
+        assert excinfo.value.message == "no such sku"

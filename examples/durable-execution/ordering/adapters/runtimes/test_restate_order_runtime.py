@@ -146,6 +146,18 @@ class TestRestateSerdes:
             restate_order_orchestrator_response_serde.serialize(order_orchestrator_response)
         ) == order_orchestrator_response
 
+    def test_the_request_shim_rebuilds_the_order_it_carried(self) -> None:
+        restate_order_orchestrator_request_serde = runtimes.RestateOrderOrchestratorRequestSerde()
+        back = restate_order_orchestrator_request_serde.deserialize(
+            restate_order_orchestrator_request_serde.serialize(
+                order_orchestrator_request(order_id="o7", sku="gadget", quantity=3)
+            )
+        )
+        assert back is not None
+        assert back.order.identity == domain.OrderId("o7")
+        assert back.order.sku == domain.Sku("gadget")
+        assert back.order.quantity == domain.Quantity(3)
+
     def test_an_empty_body_is_no_message_on_every_shim(self) -> None:
         for serde in (
             runtimes.RestateOrderOrchestratorRequestSerde(),
