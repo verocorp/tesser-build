@@ -5,6 +5,59 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.103.0] - 2026-09-06
+
+The analyzer repairs the names it can. `tessercheck-rename` (`python -m
+srv.cli.rename` from a checkout) rewrites every local `TB085` can name, so a
+naming-rule migration stops being agents editing files by hand.
+
+### Added
+- **A finding can carry its repair.** `ViolationSpec` takes an optional
+  `rename`, and `Violation.rename()` answers a `Rename` value object or `None`.
+  Only a `TB085` claim on a **local** carries one. A tool therefore parses no
+  prose and holds no policy of its own: what is mechanically fixable is the
+  analyzer's decision, not the tool's.
+- **`Rewrite` and `Renaming`** (`tessercheck/domain/checks.py`). `Rewrite`
+  rewrites one module's text from the AST, touching `ast.Name` nodes only — a
+  string, a comment, an attribute of the same spelling, and a keyword argument
+  are structurally out of reach. It refuses a rename whose new name is already
+  bound in that function. `Renaming` groups repairs by module and answers the
+  rewritten ones.
+- **`srv/cli/rename.py`** and the packaged **`tessercheck-rename`** console
+  entry point, with a `SourceWriter` port and its filesystem adapter.
+- `scripts/verify-packaging` runs `tessercheck-rename` against a tree holding a
+  repairable local and asserts the file came back rewritten, so the gate cannot
+  pass on a command that merely starts.
+
+### Fixed
+- **`Rewrite` renamed a `global`/`nonlocal` name without its declaration.** A
+  name declared `global` or `nonlocal` lives on `ast.Global`/`ast.Nonlocal` as a
+  bare string, not a `Name` node, so `global counter` stayed put while
+  `counter = counter + 1` became `tally = tally + 1` — the function now writes a
+  local and raises `UnboundLocalError`, with a dangling declaration above it.
+  Found by property-testing `Rewrite` over 3,816 renames in `rich`, `pydantic`
+  and `aiohttp`; no tree in this repo declares one. `Rewrite` now refuses.
+- **`Rewrite` counted columns the way strings do, not the way `ast` does.**
+  `col_offset` and `end_col_offset` are UTF-8 **byte** offsets, so a rename on a
+  line containing any multi-byte character spliced mid-token and silently
+  corrupted the source: `made.text` became `matag_specext` past two `ǁ`
+  characters. Found by sweeping all eleven trees rather than the three ASCII ones
+  — `tesser-py` is the only tree with non-ASCII source. The rewrite now slices
+  the encoded line.
+- `srv/cli/rules.py` swallowed a `FileNotFoundError` from the writer as
+  `unexpected error` during development. The writer now joins the tree root, and
+  the fix shipped in v0.0.100.0 is what surfaced the cause.
+
+### Known
+- **A parameter is never repaired.** A parameter name is part of the call
+  contract through keyword arguments, so renaming one means editing call sites in
+  other modules. Measured: perturbing 50 names including parameters and applying
+  every repair left `mypy --strict` with 14 errors, because callers still passed
+  the old keyword. Restricted to locals, the same test converges to zero findings
+  with `mypy --strict` clean. Parameter claims therefore carry no repair.
+- `TB085` still governs one binding form out of seven (`TODOS.md`), so a
+  `for` target or a tuple unpack is neither flagged nor repaired.
+
 ## [0.0.102.0] - 2026-09-06
 
 The `Order` aggregate now crosses Restate whole. Adding a required field to

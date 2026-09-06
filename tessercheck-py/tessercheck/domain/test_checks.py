@@ -15984,6 +15984,173 @@ def test_a_name_is_derived_from_the_type_it_carries() -> None:
     assert not any("mod.domain.tag.__init__" in f for f in findings), findings
 
 
+def test_a_rewrite_renames_every_reading_of_the_local_it_is_given() -> None:
+    rewrite = domain.Rewrite(domain.RewriteSpec(
+        text=(
+            "def build() -> None:\n"
+            "    made = TagSpec('a')\n"
+            "    assert made.text == 'a'\n"
+            "    other = 'made'\n"
+        ),
+        renames=((2, "made", "tag_spec"),),
+    ))
+    assert "tag_spec = TagSpec('a')" in str(rewrite)
+    assert "assert tag_spec.text == 'a'" in str(rewrite)
+
+
+def test_a_rewrite_leaves_a_string_of_the_same_spelling_alone() -> None:
+    rewrite = domain.Rewrite(domain.RewriteSpec(
+        text=(
+            "def build() -> None:\n"
+            "    made = TagSpec('a')\n"
+            "    other = 'made'\n"
+        ),
+        renames=((2, "made", "tag_spec"),),
+    ))
+    assert "other = 'made'" in str(rewrite)
+
+
+def test_a_rewrite_refuses_a_name_already_bound_in_the_scope() -> None:
+    rewrite = domain.Rewrite(domain.RewriteSpec(
+        text=(
+            "def build() -> None:\n"
+            "    made = TagSpec('a')\n"
+            "    other = TagSpec('b')\n"
+        ),
+        renames=((2, "made", "other"),),
+    ))
+    assert "made = TagSpec('a')" in str(rewrite)
+
+
+def test_a_rewrite_counts_columns_the_way_ast_does_past_a_multibyte_character() -> None:
+    rewrite = domain.Rewrite(domain.RewriteSpec(
+        text=(
+            "def build() -> None:\n"
+            "    made = TagSpec('a')\n"
+            "    assert 'x\u01c1y\u01c1z' in made.text\n"
+        ),
+        renames=((2, "made", "tag_spec"),),
+    ))
+    assert "assert 'x\u01c1y\u01c1z' in tag_spec.text" in str(rewrite)
+
+
+def test_a_rewrite_refuses_a_name_the_function_declares_global() -> None:
+    rewrite = domain.Rewrite(domain.RewriteSpec(
+        text=(
+            "counter = 0\n"
+            "def bump() -> None:\n"
+            "    global counter\n"
+            "    counter = counter + 1\n"
+        ),
+        renames=((4, "counter", "tally"),),
+    ))
+    assert "    counter = counter + 1" in str(rewrite)
+    assert "tally" not in str(rewrite)
+
+
+def test_a_rewrite_refuses_a_name_the_function_declares_nonlocal() -> None:
+    rewrite = domain.Rewrite(domain.RewriteSpec(
+        text=(
+            "def outer() -> None:\n"
+            "    total = 0\n"
+            "    def inner() -> None:\n"
+            "        nonlocal total\n"
+            "        total = total + 1\n"
+        ),
+        renames=((5, "total", "tally"),),
+    ))
+    assert "        total = total + 1" in str(rewrite)
+    assert "tally" not in str(rewrite)
+
+
+def test_a_rewrite_outside_any_function_changes_nothing() -> None:
+    rewrite = domain.Rewrite(domain.RewriteSpec(
+        text="made = 1\n", renames=((1, "made", "tag_spec"),)
+    ))
+    assert str(rewrite) == "made = 1\n"
+
+
+def test_a_renaming_rewrites_only_the_modules_a_rename_names() -> None:
+    renaming = domain.Renaming(domain.RenamingSpec(
+        sources=(
+            ("mod/a.py", "def build() -> None:\n    made = TagSpec('a')\n"),
+            ("mod/b.py", "def build() -> None:\n    made = TagSpec('a')\n"),
+        ),
+        renames=(("mod/a.py", 2, "made", "tag_spec"),),
+    ))
+    rewritten = renaming.rewritten()
+    assert len(rewritten) == 1
+    assert str(rewritten[0].path()) == "mod/a.py"
+    assert "tag_spec = TagSpec('a')" in str(rewritten[0].text())
+
+
+def test_a_renaming_naming_no_module_it_holds_rewrites_nothing() -> None:
+    renaming = domain.Renaming(domain.RenamingSpec(
+        sources=(("mod/a.py", "def build() -> None:\n    made = TagSpec('a')\n"),),
+        renames=(("mod/gone.py", 2, "made", "tag_spec"),),
+    ))
+    assert renaming.rewritten() == ()
+
+
+def test_a_rewritten_module_carries_the_path_and_the_text() -> None:
+    rewritten_module = domain.RewrittenModule(
+        domain.RewrittenModuleSpec("mod/a.py", "made = 1\n")
+    )
+    assert str(rewritten_module.path()) == "mod/a.py"
+    assert str(rewritten_module.text()) == "made = 1\n"
+
+
+def test_a_local_violation_carries_its_repair_and_a_parameter_does_not() -> None:
+    violations = domain.Codebase(_spec(sources=(
+        (
+            "mod/domain/__init__.py",
+            "mod.domain",
+            "from mod.domain.tag import Tag as Tag\n"
+            "from mod.domain.tag import TagSpec as TagSpec\n",
+            True,
+        ),
+        (
+            "mod/domain/tag.py",
+            "mod.domain.tag",
+            "import tesser.domain as ts\n"
+            "class TagSpec(ts.Spec):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n"
+            "class Tag(ts.ValueObject):\n"
+            "    def __init__(self, spec: TagSpec) -> None:\n"
+            "        object.__setattr__(self, '_text', spec.text)\n"
+            "    def blend(self, wrong: TagSpec) -> Tag:\n"
+            "        return Tag(wrong)\n",
+            False,
+        ),
+        (
+            "mod/domain/test_tag.py",
+            "mod.domain.test_tag",
+            "import mod.domain as domain\n"
+            "def test_a_tag_is_built_from_its_spec() -> None:\n"
+            "    made = domain.TagSpec('a')\n"
+            "    assert domain.Tag(made) is not None\n",
+            False,
+        ),
+    ))).violations()
+    repaired = [
+        violation for violation in violations
+        if str(violation.code()) == "TB085" and violation.rename() is not None
+    ]
+    parameters = [
+        violation for violation in violations
+        if str(violation.code()) == "TB085"
+        and violation.rename() is None
+        and "names wrong" in str(violation.text())
+    ]
+    assert len(repaired) == 1, [str(v.text()) for v in violations]
+    rename = repaired[0].rename()
+    assert rename is not None
+    assert str(rename.actual()) == "made"
+    assert str(rename.derived()) == "tag_spec"
+    assert parameters, [str(v.text()) for v in violations]
+
+
 def test_a_mapper_local_is_named_for_the_target_the_mapper_is() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"

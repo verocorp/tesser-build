@@ -11,6 +11,7 @@ dependencies = ["tessercheck-py"]
 
 [project.scripts]
 tessercheck-check = "tessercheck_cli.main:main"
+tessercheck-rename = "tessercheck_cli.rename:main"
 
 [tool.setuptools]
 packages = ["tessercheck_cli"]

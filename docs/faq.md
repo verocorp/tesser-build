@@ -160,6 +160,15 @@ totality guard
 (`python -m srv.cli.main path/to/tree` from a checkout, or `tessercheck-check
 path/to/tree` from the packaged CLI).
 
+A `TB085` finding on a **local** carries its own repair, so the analyzer can
+apply it: `python -m srv.cli.rename path/to/tree` (or `tessercheck-rename`)
+rewrites every local the rule can name and reports what it could not. It edits
+`ast.Name` nodes only, so a string, a comment, an attribute of the same
+spelling, and a keyword argument are all untouched, and it refuses a rename
+whose new name is already bound in that function. A **parameter** name is part
+of the call contract, so a parameter finding carries no repair and is left for
+a person.
+
 ## 13. Where does business logic go — the service, or the domain?
 
 The domain, always. An **application service coordinates a use case** and holds

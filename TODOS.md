@@ -171,6 +171,32 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `add_short_link(map_to_short_link_spec)` — the argument now says it is a spec
   rather than a transform.
 
+- [ ] **TB085 governs one binding form out of seven.** Found by the
+  auto-rename spike (2026-09-06), not by any gate. `naming_violations` collects
+  candidates by walking for `ast.Assign` and `ast.AnnAssign` only, so every
+  other way Python binds a name is unchecked. Probed one construct at a time on
+  `examples/minimal`, each binding a `domain.Name` under the name `wrong`:
+
+  | binding form | flagged |
+  |---|---|
+  | plain assignment (control) | **yes** |
+  | `for wrong in ...` | no |
+  | `with ... as wrong` | no |
+  | `[... for wrong in ...]` | no |
+  | `if (wrong := ...)` | no |
+  | `except ... as wrong` | no |
+  | `wrong, other = ...` | no |
+
+  The control fires, so the probe is valid. A `for` target holding a domain
+  object is the one that will actually bite — it is ordinary code, and no tree
+  writes one today only because the trees are small. Tuple unpack matters too:
+  `first, second = MapToA(x), MapToB(x)` names nothing derived.
+
+  This is the under-firing blind spot again: eleven trees at zero findings said
+  nothing about it, because a zero-findings gate can only see over-firing. The
+  spike found it by asking a different question — perturb a clean tree, then
+  check whether the analyzer notices.
+
 - [ ] **A test double's local now carries `fake_`.** A `@ts.fake` class is named
   `FakeCampaignRepository`, so the derived local is `fake_campaign_repository`
   where it was `repo` — 21 sites in errorspy, 15 of `fake_campaign_client`, 11
