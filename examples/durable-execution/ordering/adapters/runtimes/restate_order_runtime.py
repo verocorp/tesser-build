@@ -24,7 +24,7 @@ class RestateOrderOrchestratorRequestSerde(  # tesser:debt TB081
 
     def deserialize(self, buf: bytes) -> relays.OrderOrchestratorRequest | None:
         if not buf:
-            return None
+            raise errors.invalid("empty_message", "a message crosses the engine with a body")
         return relays.OrderOrchestratorRequestSnapshot().deserialize(buf)
 
 
@@ -41,7 +41,7 @@ class RestateOrderOrchestratorResponseSerde(  # tesser:debt TB081
 
     def deserialize(self, buf: bytes) -> relays.OrderOrchestratorResponse | None:
         if not buf:
-            return None
+            raise errors.invalid("empty_message", "a message crosses the engine with a body")
         return relays.OrderOrchestratorResponseSnapshot().deserialize(buf)
 
 
@@ -54,7 +54,7 @@ class RestatePrepareQuoteRequestSerde(ts.Serde, restate.serde.Serde[relays.Prepa
 
     def deserialize(self, buf: bytes) -> relays.PrepareQuoteRequest | None:
         if not buf:
-            return None
+            raise errors.invalid("empty_message", "a message crosses the engine with a body")
         return relays.PrepareQuoteRequestSnapshot().deserialize(buf)
 
 
@@ -69,7 +69,7 @@ class RestatePrepareQuoteResponseSerde(  # tesser:debt TB081
 
     def deserialize(self, buf: bytes) -> relays.PrepareQuoteResponse | None:
         if not buf:
-            return None
+            raise errors.invalid("empty_message", "a message crosses the engine with a body")
         return relays.PrepareQuoteResponseSnapshot().deserialize(buf)
 
 

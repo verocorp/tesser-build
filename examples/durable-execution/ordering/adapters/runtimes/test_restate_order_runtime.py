@@ -158,7 +158,7 @@ class TestRestateSerdes:
         assert back.order.sku == domain.Sku("gadget")
         assert back.order.quantity == domain.Quantity(3)
 
-    def test_an_empty_body_is_no_message_on_every_shim(self) -> None:
+    def test_no_message_writes_an_empty_body_and_an_empty_body_is_refused_on_every_shim(self) -> None:
         for serde in (
             runtimes.RestateOrderOrchestratorRequestSerde(),
             runtimes.RestateOrderOrchestratorResponseSerde(),
@@ -166,4 +166,6 @@ class TestRestateSerdes:
             runtimes.RestatePrepareQuoteResponseSerde(),
         ):
             assert serde.serialize(None) == b""
-            assert serde.deserialize(b"") is None
+            with pytest.raises(errors.DomainError) as excinfo:
+                serde.deserialize(b"")
+            assert excinfo.value.kind is errors.Kind.VALIDATION

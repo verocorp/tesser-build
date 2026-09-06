@@ -275,7 +275,11 @@ The SDK cannot serialize a `ts.Request` on its own — `restate.serde.DefaultSer
 handles msgspec Structs, Pydantic models, and dataclasses; anything else falls
 through to `json.dumps(obj)` — so the runtime module carries four compatibility
 shims, one per message the SDK moves. A shim does two things and no more:
-answer the SDK's `None`/empty convention, and delegate to the relay's snapshot.
+answer the SDK's `None`/empty convention on the way out, refuse an empty body
+on the way in, and delegate to the relay's snapshot. A body that does not
+exist is not a message: handing `None` to a handler declared over a message
+raised an `AttributeError` there, which is not terminal, and Restate retries a
+non-terminal failure without bound.
 
 ```python
 class RestatePrepareQuoteRequestSerde(ts.Serde, restate.serde.Serde[relays.PrepareQuoteRequest]):
