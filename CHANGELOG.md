@@ -5,6 +5,30 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.100.0] - 2026-09-06
+
+A mapper's local is named for the target, not for the mapper. This was the one
+finding every migrated tree reported independently in v0.0.98.0.
+
+### Changed
+- **A `ts.Mapper` local derives from its declared target** (`TB085`, maintainer
+  ruling 2026-09-06). A mapper *is* its target under the 2026-08 is-a ruling, so
+  the class the local carries is the target, not the transform:
+  `save_campaign_request = MapToSaveCampaignRequest(campaign=campaign)`, never
+  `map_to_save_campaign_request`. The mapper's own name is a verb phrase and says
+  how the value was made; the local says what it is, and the next line reads
+  `save_campaign_request.id`.
+
+  The hop follows the idiom already in `checks.py` at two other sites: when a
+  resolved symbol's block is `mapper`, rebind it through
+  `registry.mapper_target`. The local is also *typed* as the target, so
+  attribute reads on it resolve through the target's fields.
+
+  **47 sites across five trees**: `examples/python-app` (12),
+  `examples/llmport` (9), `examples/errorspy` (7), `examples/ports` (7),
+  `layout` (7), `examples/asyncpg` (5). Two are production services; the rest
+  are tests.
+
 ## [0.0.99.0] - 2026-09-06
 
 The export list is also the read list. `TB060` said which package you may

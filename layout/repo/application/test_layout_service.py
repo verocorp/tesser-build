@@ -135,32 +135,32 @@ def test_an_examples_entry_form_maps_to_its_domain_constant() -> None:
 
 
 def test_the_spec_carries_the_rows_and_note_the_reader_gave() -> None:
-    map_to_repo_spec = application.MapToRepoSpec(_read())
-    assert map_to_repo_spec.manifest[1] == (("layout", domain.KIND_APP),)
-    assert map_to_repo_spec.manifest[2] == "note"
+    repo_spec = application.MapToRepoSpec(_read())
+    assert repo_spec.manifest[1] == (("layout", domain.KIND_APP),)
+    assert repo_spec.manifest[2] == "note"
 
 
 def test_the_spec_carries_the_file_text_the_reader_gave() -> None:
-    map_to_repo_spec = application.MapToRepoSpec(_read())
-    assert map_to_repo_spec.verify[1] == "verify body"
-    assert map_to_repo_spec.workflow[1] == "workflow body"
+    repo_spec = application.MapToRepoSpec(_read())
+    assert repo_spec.verify[1] == "verify body"
+    assert repo_spec.workflow[1] == "workflow body"
 
 
 def test_the_spec_carries_the_declaration_path_text_and_requirements() -> None:
-    map_to_repo_spec = application.MapToRepoSpec(_read())
-    assert map_to_repo_spec.declarations == (("layout/.tesser-root", domain.READ, "app\n"),)
-    assert map_to_repo_spec.requirements == ("layout",)
+    repo_spec = application.MapToRepoSpec(_read())
+    assert repo_spec.declarations == (("layout/.tesser-root", domain.READ, "app\n"),)
+    assert repo_spec.requirements == ("layout",)
 
 
 def test_the_spec_carries_the_entry_names_the_reader_gave() -> None:
-    map_to_repo_spec = application.MapToRepoSpec(_read())
-    assert map_to_repo_spec.top == (("layout", domain.DIRECTORY),)
-    assert map_to_repo_spec.examples == (("ports", domain.DIRECTORY),)
+    repo_spec = application.MapToRepoSpec(_read())
+    assert repo_spec.top == (("layout", domain.DIRECTORY),)
+    assert repo_spec.examples == (("ports", domain.DIRECTORY),)
 
 
 def test_the_mapper_is_a_repo_spec_a_repo_builds_from() -> None:
-    map_to_repo_spec = application.MapToRepoSpec(_read())
-    repo = domain.Repo(map_to_repo_spec)
+    repo_spec = application.MapToRepoSpec(_read())
+    repo = domain.Repo(repo_spec)
     assert repo.trees() == (domain.Text("layout"),)
 
 
@@ -178,11 +178,11 @@ def test_empty_collections_map_to_empty_tuples() -> None:
         floors=(),
     )
 
-    map_to_repo_spec = application.MapToRepoSpec(read_repo_response)
+    repo_spec = application.MapToRepoSpec(read_repo_response)
 
-    assert map_to_repo_spec.manifest == (domain.READ, (), "")
-    assert (map_to_repo_spec.top, map_to_repo_spec.examples, map_to_repo_spec.declarations, map_to_repo_spec.requirements) == ((), (), (), ())
-    assert map_to_repo_spec.floors == ()
+    assert repo_spec.manifest == (domain.READ, (), "")
+    assert (repo_spec.top, repo_spec.examples, repo_spec.declarations, repo_spec.requirements) == ((), (), (), ())
+    assert repo_spec.floors == ()
 
 
 def test_every_floor_key_maps_to_its_domain_constant() -> None:
@@ -216,8 +216,8 @@ def test_every_floor_state_maps_to_its_domain_constant() -> None:
 
 
 def test_the_spec_carries_the_floor_path_and_value_the_reader_gave() -> None:
-    map_to_repo_spec = application.MapToRepoSpec(_read())
-    assert map_to_repo_spec.floors == (
+    repo_spec = application.MapToRepoSpec(_read())
+    assert repo_spec.floors == (
         ("layout/pyproject.toml", domain.REQUIRES_PYTHON, domain.READ, ">=3.12"),
     )
 

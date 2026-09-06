@@ -210,10 +210,10 @@ class TestAlphaServiceOverAFailedTransaction:
 class TestAlphaServiceMappers:
 
     def test_an_add_request_maps_to_a_widget_spec_holding_its_own_name_as_the_part(self) -> None:
-        map_to_widget_spec = application.MapToWidgetSpec(client.AddRequest(name="a", part="p"))
-        assert map_to_widget_spec.name == "a"
-        assert map_to_widget_spec.part.id == "a"
-        assert map_to_widget_spec.standing == "kept"
+        widget_spec = application.MapToWidgetSpec(client.AddRequest(name="a", part="p"))
+        assert widget_spec.name == "a"
+        assert widget_spec.part.id == "a"
+        assert widget_spec.standing == "kept"
 
     def test_an_add_request_maps_to_the_part_it_names(self) -> None:
         assert application.MapToPartSpec(client.AddRequest(name="a", part="p")).id == "p"
@@ -222,19 +222,19 @@ class TestAlphaServiceMappers:
         assert application.MapToTakenPartSpec(client.TakeRequest(name="a", part="q")).id == "q"
 
     def test_a_loaded_widget_maps_to_a_spec_carrying_its_stored_part(self) -> None:
-        map_to_loaded_widget_spec = application.MapToLoadedWidgetSpec(
+        widget_spec = application.MapToLoadedWidgetSpec(
             ports.LoadWidgetResponse(name="a", part="p", standing="released")
         )
-        assert map_to_loaded_widget_spec.name == "a"
-        assert map_to_loaded_widget_spec.part.id == "p"
-        assert map_to_loaded_widget_spec.standing == "released"
+        assert widget_spec.name == "a"
+        assert widget_spec.part.id == "p"
+        assert widget_spec.standing == "released"
 
     def test_a_widget_maps_to_a_save_request_carrying_its_name_and_part(self) -> None:
         widget = domain.Widget(application.MapToWidgetSpec(client.AddRequest(name="a", part="p")))
-        map_to_save_widget_request = application.MapToSaveWidgetRequest(widget)
-        assert map_to_save_widget_request.name == "a"
-        assert map_to_save_widget_request.part == "a"
-        assert map_to_save_widget_request.standing == "kept"
+        save_widget_request = application.MapToSaveWidgetRequest(widget)
+        assert save_widget_request.name == "a"
+        assert save_widget_request.part == "a"
+        assert save_widget_request.standing == "kept"
 
     def test_a_name_maps_to_a_load_request(self) -> None:
         assert application.MapToLoadWidgetRequest(domain.Name("a")).name == "a"
@@ -258,15 +258,15 @@ class TestAlphaServiceMappers:
 
     def test_a_widget_maps_to_an_add_widget_request(self) -> None:
         widget = domain.Widget(application.MapToWidgetSpec(client.AddRequest(name="a", part="p")))
-        map_to_add_widget_request = application.MapToAddWidgetRequest(widget)
-        assert map_to_add_widget_request.name == "a"
-        assert map_to_add_widget_request.part == "a"
-        assert map_to_add_widget_request.standing == "kept"
+        add_widget_request = application.MapToAddWidgetRequest(widget)
+        assert add_widget_request.name == "a"
+        assert add_widget_request.part == "a"
+        assert add_widget_request.standing == "kept"
 
     def test_a_widget_maps_to_a_take_response_carrying_the_part_it_now_holds(self) -> None:
         widget = domain.Widget(application.MapToWidgetSpec(client.AddRequest(name="a", part="p")))
         widget.take(application.MapToTakenPartSpec(client.TakeRequest(name="a", part="q")))
-        map_to_take_response = application.MapToTakeResponse(widget)
-        assert map_to_take_response.name == "a"
-        assert map_to_take_response.part == "q"
-        assert map_to_take_response.standing == "kept"
+        take_response = application.MapToTakeResponse(widget)
+        assert take_response.name == "a"
+        assert take_response.part == "q"
+        assert take_response.standing == "kept"
