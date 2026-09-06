@@ -69,6 +69,31 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   concerns in one file rather than separating them. Undone; the debt marker
   stands until the service exists.
 
+- [ ] **TB085 cannot read a constructor of a class that has no `ts.*` base.**
+  The naming rule says a local is read "through the annotation of the parameter,
+  the constructor, or the field, parameter, or module function a call is made
+  on", but the constructor path only fires for a class the kind table knows —
+  a `ts.*` block. A call to a plain class the analyzer resolves in the tree
+  falls through to the declared-return table, which has no row for a class, so
+  it reports "names X from a call it cannot read" and no rename can satisfy it.
+  Four sites in `tesser-py` hit it, all of them classes that are base-less **on
+  purpose** because base-lessness is the thing under test (`_Structural`,
+  `_StructuralSaver`, `_WriteOnceAsk`); each carries `# tesser:debt TB085`, and
+  that is the ledger entry. A fifth site, `decorated = testing.helper(target)`,
+  is a different shape: the decorator returns its argument, so no class name
+  exists to derive from at all.
+
+  Two candidate fixes, neither taken because both are rulings:
+  (a) `_declared_returns` emits a row per class def — `("", ClassName, module,
+  ClassName)` — so a bare constructor call reads as its own class. Three lines,
+  and it matches the rule's own words. But `DerivedName("_Structural")` is
+  `_structural`, so a private class would force a leading-underscore *local*,
+  which no other rule asks for; stripping the underscore is a second ruling.
+  (b) A class with no `ts.*` base is outside the naming rule's reach, and the
+  call stays unread without being a finding — which quietly widens the "a name
+  the analyzer cannot check" hole the clause exists to close. Decide (a)+underscore
+  handling or (b) before the markers are cleared.
+
 ## Left open by the v0.0.89.0 adversarial pass (2026-08-29, PR #148)
 
 Seventeen bypass probes were run against the new clauses — twelve mine, five
