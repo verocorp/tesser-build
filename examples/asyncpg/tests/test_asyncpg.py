@@ -18,7 +18,7 @@ class TestLoadedApp:
         await database.close()
         asyncpg_app = app.load()
         await asyncpg_app.open()
-        held = await asyncpg_app.beta.client.hold(beta_client.HoldRequest(key="e2e-held"))
+        hold_response = await asyncpg_app.beta.client.hold(beta_client.HoldRequest(key="e2e-held"))
         checked = await asyncpg_app.beta.client.check(beta_client.CheckRequest(key="e2e-held"))
         unheld = await asyncpg_app.beta.client.check(beta_client.CheckRequest(key="e2e-never-held"))
         taken = await asyncpg_app.alpha.client.add(alpha_client.AddRequest(name="e2e-taken", part="p"))
@@ -37,7 +37,7 @@ class TestLoadedApp:
             alpha_client.TakeRequest(name="e2e-taken", part="q")
         )
         await asyncpg_app.close()
-        assert held.key == "e2e-held"
+        assert hold_response.key == "e2e-held"
         assert checked.held == "yes"
         assert unheld.held == "no"
         assert taken.name == "e2e-taken"

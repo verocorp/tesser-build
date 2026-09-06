@@ -6270,6 +6270,7 @@ class Module(ts.Entity):
         self._package: tuple[str, ...] = tuple(parts if spec.is_package else parts[:-1])
         self._body: tuple[ast.stmt, ...] = tuple(tree.body)
         self._package_aliases: dict[str, str] = {}
+        self._alias_bindings: list[tuple[str, str, int]] = []
         self._imported: dict[str, tuple[str, str]] = {}
         self._classes: dict[str, ast.ClassDef] = {}
         self._calls: tuple[ast.Call, ...] = tuple(
@@ -6310,6 +6311,9 @@ class Module(ts.Entity):
                             nested_tesser.append((alias.name, node.lineno))
                     if id(node) in top_level:
                         self._package_aliases[alias.asname or alias.name] = alias.name
+                        self._alias_bindings.append(
+                            (alias.asname or alias.name, alias.name, node.lineno)
+                        )
                     edges.append(
                         ImportEdge(ImportEdgeSpec(alias.name, node.lineno, False, alias.asname is not None, spec.path, spec.name))
                     )
@@ -7971,9 +7975,8 @@ class Module(ts.Entity):
                 (True, each, made) for each, made in calls
             ]:
                 symbol = scope.resolve(Text(ast.unparse(built.func)))
-                if symbol is not None:
-                    typed.setdefault(bound.id, symbol)
                 if symbol is not None and kind_table.block_of(symbol) is not None:
+                    typed.setdefault(bound.id, symbol)
                     if not reading:
                         continue
                     derived = str(DerivedName(str(symbol.name())))
@@ -8118,14 +8121,11 @@ class Module(ts.Entity):
         tops = frozenset(registry.tops())
         walked = frozenset(registry.module_names())
         inside: list[tuple[str, str, int]] = []
-        for local, package in self._package_aliases.items():
+        for local, package, lineno in self._alias_bindings:
             head = package.split(".")[0]
             if head == TESSER or head not in tops or package not in walked:
                 continue
-            for edge in self._edges:
-                if str(edge._target) == package and str(edge._form) != "member":
-                    inside.append((local, package, int(edge._lineno)))
-                    break
+            inside.append((local, package, lineno))
         claimed: dict[str, int] = {}
         for _, package, _ in inside:
             claimed[package.split(".")[-1]] = claimed.get(package.split(".")[-1], 0) + 1

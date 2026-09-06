@@ -15219,6 +15219,75 @@ def test_a_package_is_imported_under_its_last_segment() -> None:
     assert not any("tests.test_one imports mod.domain as" in f for f in findings), findings
 
 
+def test_two_packages_bound_to_one_alias_are_both_findings() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(
+            (
+                "mod/domain/__init__.py",
+                "mod.domain",
+                "from mod.domain.tag import Tag as Tag\n",
+                True,
+            ),
+            (
+                "mod/domain/tag.py",
+                "mod.domain.tag",
+                "import tesser.domain as ts\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_text', text)\n",
+                False,
+            ),
+            (
+                "mod/domain/test_tag.py",
+                "mod.domain.test_tag",
+                "def test_tag() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "two/domain/__init__.py",
+                "two.domain",
+                "from two.domain.tag import Label as Label\n",
+                True,
+            ),
+            (
+                "two/domain/tag.py",
+                "two.domain.tag",
+                "import tesser.domain as ts\n"
+                "class Label(ts.ValueObject):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_text', text)\n",
+                False,
+            ),
+            (
+                "two/domain/test_tag.py",
+                "two.domain.test_tag",
+                "def test_tag() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "tests/test_both.py",
+                "tests.test_both",
+                "import mod.domain as domain\n"
+                "import two.domain as domain\n"
+                "def test_both() -> None:\n"
+                "    assert domain.Label('a') is not None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "tests.test_both imports mod.domain as domain, not mod_domain" in f
+        for f in findings
+    ), findings
+    assert any(
+        "tests.test_both imports two.domain as domain, not two_domain" in f
+        for f in findings
+    ), findings
+
+
 def test_a_package_never_exports_a_class_of_its_own_name() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
@@ -15650,6 +15719,74 @@ def test_a_call_the_analyzer_cannot_read_is_a_finding() -> None:
         "is a name it is not checking" in f
         for f in findings
     ), findings
+
+
+def test_a_local_from_a_module_function_carries_the_declared_return() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(
+            (
+                "mod/domain/__init__.py",
+                "mod.domain",
+                "from mod.domain.tag import Lid as Lid\n"
+                "from mod.domain.tag import Tag as Tag\n",
+                True,
+            ),
+            (
+                "mod/domain/tag.py",
+                "mod.domain.tag",
+                "import tesser.domain as ts\n"
+                "class Lid(ts.ValueObject):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_text', text)\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_text', text)\n"
+                "    def cap(self) -> Lid:\n"
+                "        return Lid('a')\n",
+                False,
+            ),
+            (
+                "mod/domain/test_tag.py",
+                "mod.domain.test_tag",
+                "import mod.domain as domain\n"
+                "def test_tag() -> None:\n"
+                "    tag = domain.Tag('a')\n"
+                "    lid = tag.cap()\n"
+                "    assert lid is not None\n",
+                False,
+            ),
+            (
+                "app/__init__.py",
+                "app",
+                "from app.app import make as make\n",
+                True,
+            ),
+            (
+                "app/app.py",
+                "app.app",
+                "import mod.domain as domain\n"
+                "def make() -> domain.Tag:\n"
+                "    return domain.Tag('a')\n",
+                False,
+            ),
+            (
+                "app/test_app.py",
+                "app.test_app",
+                "import app as app\n"
+                "def test_make() -> None:\n"
+                "    tag = app.make()\n"
+                "    thing = tag.cap()\n"
+                "    assert thing is not None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "app.test_app.test_make names thing for a lid" in f for f in findings
+    ), findings
+    assert not any("names thing from a call it cannot read" in f for f in findings), findings
+    assert not any("names tag from a call it cannot read" in f for f in findings), findings
 
 
 def test_a_constructors_one_spec_is_named_spec() -> None:
