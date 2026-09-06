@@ -123,7 +123,10 @@ checker half only: the 146 lines in this repo that carry one draw a site-level
 - **Renderings** (`docs/skill-authoring.md` P5): `skills/tesser-build/python.md`
   gains "A type names what the value is" and "A function is declared at module
   level or as a method" beside the unquoted-annotation rule
-  (skill-version 66 → 69);
+  (skill-version 66 → 71, the last bump carrying the universal-checks list in
+  `testing.md`, which named `TB004`/`TB020`/`TB030`/`TB033` and not the three
+  every-module codes — this branch proved it incomplete by marking
+  `conftest.py:77`);
   `rationale/coverage.md` gains both enforcement rows and both
   skill-materializations rows; `roadmap/registry.json` adds `TB022` to
   `norm-annotations` and a new `norm-function-placement` row for `TB023`, which
