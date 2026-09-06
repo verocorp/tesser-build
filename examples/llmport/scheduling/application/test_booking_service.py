@@ -295,12 +295,12 @@ def test_the_mapper_exposes_every_field_of_the_one_row_the_repository_found() ->
         ),
     )
 
-    map_to_booking_spec = application.MapToBookingSpec(find_booking_response)
+    booking_spec = application.MapToBookingSpec(find_booking_response)
 
-    assert map_to_booking_spec.step == "confirm"
-    assert map_to_booking_spec.name == "Ada Lovelace"
-    assert map_to_booking_spec.chosen == "mon-9am"
-    assert map_to_booking_spec.offered == ("mon-9am", "tue-2pm")
+    assert booking_spec.step == "confirm"
+    assert booking_spec.name == "Ada Lovelace"
+    assert booking_spec.chosen == "mon-9am"
+    assert booking_spec.offered == ("mon-9am", "tue-2pm")
 
 
 def test_the_mapper_refuses_a_booking_the_repository_does_not_hold() -> None:
@@ -317,12 +317,12 @@ def test_the_begun_mapper_opens_a_fresh_booking_when_none_is_stored() -> None:
         presence=ports.BookingPresence.ABSENT, bookings=()
     )
 
-    map_to_begun_booking_spec = application.MapToBegunBookingSpec(find_booking_response)
+    booking_spec = application.MapToBegunBookingSpec(find_booking_response)
 
-    assert map_to_begun_booking_spec.step == "collect_name"
-    assert map_to_begun_booking_spec.name == ""
-    assert map_to_begun_booking_spec.chosen == ""
-    assert map_to_begun_booking_spec.offered == ()
+    assert booking_spec.step == "collect_name"
+    assert booking_spec.name == ""
+    assert booking_spec.chosen == ""
+    assert booking_spec.offered == ()
 
 
 def test_the_begun_mapper_resumes_the_booking_already_stored() -> None:
@@ -335,12 +335,12 @@ def test_the_begun_mapper_resumes_the_booking_already_stored() -> None:
         ),
     )
 
-    map_to_begun_booking_spec = application.MapToBegunBookingSpec(find_booking_response)
+    booking_spec = application.MapToBegunBookingSpec(find_booking_response)
 
-    assert map_to_begun_booking_spec.step == "choose_slot"
-    assert map_to_begun_booking_spec.name == "Ada"
-    assert map_to_begun_booking_spec.chosen == ""
-    assert map_to_begun_booking_spec.offered == ("mon-9am",)
+    assert booking_spec.step == "choose_slot"
+    assert booking_spec.name == "Ada"
+    assert booking_spec.chosen == ""
+    assert booking_spec.offered == ("mon-9am",)
 
 
 def test_a_stored_booking_maps_to_a_resumption_that_resumes() -> None:
@@ -377,9 +377,9 @@ def test_a_reserved_slot_hands_the_booking_no_reoffer_at_all() -> None:
         outcome=ports.ReservationOutcome.RESERVED, available=()
     )
 
-    map_to_reoffers_spec = application.MapToReoffersSpec(reserve_slot_response)
+    reoffers_spec = application.MapToReoffersSpec(reserve_slot_response)
 
-    assert map_to_reoffers_spec.offered == ()
+    assert reoffers_spec.offered == ()
 
 
 def test_a_taken_slot_hands_the_booking_one_reoffer_of_the_slots_still_open() -> None:
@@ -387,9 +387,9 @@ def test_a_taken_slot_hands_the_booking_one_reoffer_of_the_slots_still_open() ->
         outcome=ports.ReservationOutcome.SLOT_TAKEN, available=("tue-2pm",)
     )
 
-    map_to_reoffers_spec = application.MapToReoffersSpec(reserve_slot_response)
+    reoffers_spec = application.MapToReoffersSpec(reserve_slot_response)
 
-    assert map_to_reoffers_spec.offered == (("tue-2pm",),)
+    assert reoffers_spec.offered == (("tue-2pm",),)
 
 
 def test_a_taken_slot_with_nothing_open_still_hands_the_booking_a_reoffer() -> None:
@@ -397,9 +397,9 @@ def test_a_taken_slot_with_nothing_open_still_hands_the_booking_a_reoffer() -> N
         outcome=ports.ReservationOutcome.SLOT_TAKEN, available=()
     )
 
-    map_to_reoffers_spec = application.MapToReoffersSpec(reserve_slot_response)
+    reoffers_spec = application.MapToReoffersSpec(reserve_slot_response)
 
-    assert map_to_reoffers_spec.offered == ((),)
+    assert reoffers_spec.offered == ((),)
 
 
 def test_a_reserved_slot_leaves_the_confirmed_booking_alone() -> None:
@@ -460,13 +460,13 @@ def test_a_taken_slot_settles_the_booking_as_reoffered() -> None:
 
 
 def test_a_provide_name_request_maps_to_a_naming_of_the_slots_still_open() -> None:
-    map_to_naming_spec = application.MapToNamingSpec(
+    naming_spec = application.MapToNamingSpec(
         client.ProvideNameRequest(booking_id="b-1", name="Ada"),
         ports.AvailableSlotsResponse(slots=("mon-9am", "tue-2pm")),
     )
 
-    assert map_to_naming_spec.name == "Ada"
-    assert map_to_naming_spec.offered.labels == ("mon-9am", "tue-2pm")
+    assert naming_spec.name == "Ada"
+    assert naming_spec.offered.labels == ("mon-9am", "tue-2pm")
 
 
 def test_a_booking_that_has_not_been_named_yet_saves_a_blank_name_and_choice() -> None:
@@ -474,15 +474,15 @@ def test_a_booking_that_has_not_been_named_yet_saves_a_blank_name_and_choice() -
         domain.BookingSpec(step="collect_name", name="", chosen="", offered=())
     )
 
-    map_to_save_booking_request = application.MapToSaveBookingRequest(
+    save_booking_request = application.MapToSaveBookingRequest(
         booking, domain.BookingID("b-1")
     )
 
-    assert map_to_save_booking_request.booking_id == "b-1"
-    assert map_to_save_booking_request.step == "collect_name"
-    assert map_to_save_booking_request.name == ""
-    assert map_to_save_booking_request.chosen == ""
-    assert map_to_save_booking_request.offered == ()
+    assert save_booking_request.booking_id == "b-1"
+    assert save_booking_request.step == "collect_name"
+    assert save_booking_request.name == ""
+    assert save_booking_request.chosen == ""
+    assert save_booking_request.offered == ()
 
 
 def test_a_booking_that_chose_a_slot_saves_the_name_the_choice_and_the_offer() -> None:
@@ -494,11 +494,11 @@ def test_a_booking_that_chose_a_slot_saves_the_name_the_choice_and_the_offer() -
     )
     booking.choose_slot(domain.Slot("mon-9am"))
 
-    map_to_save_booking_request = application.MapToSaveBookingRequest(
+    save_booking_request = application.MapToSaveBookingRequest(
         booking, domain.BookingID("b-1")
     )
 
-    assert map_to_save_booking_request.step == "confirm"
-    assert map_to_save_booking_request.name == "Ada"
-    assert map_to_save_booking_request.chosen == "mon-9am"
-    assert map_to_save_booking_request.offered == ("mon-9am", "tue-2pm")
+    assert save_booking_request.step == "confirm"
+    assert save_booking_request.name == "Ada"
+    assert save_booking_request.chosen == "mon-9am"
+    assert save_booking_request.offered == ("mon-9am", "tue-2pm")

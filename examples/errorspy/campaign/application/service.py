@@ -84,12 +84,12 @@ class CampaignService(ts.ApplicationService):
         campaign_id_text = str(campaign_id)
         find_campaign_request = ports.FindCampaignRequest(campaign_id=campaign_id_text)
         find_campaign_response = self._campaign_repository.find(find_campaign_request)
-        map_to_campaign_spec = MapToCampaignSpec(
+        campaign_spec = MapToCampaignSpec(
             find_campaign_request=find_campaign_request,
             find_campaign_response=find_campaign_response,
         )
         try:
-            campaign = domain.Campaign(map_to_campaign_spec)
+            campaign = domain.Campaign(campaign_spec)
         except errors.DomainError as e:
             raise errors.InfraError(
                 f"corrupted campaign record {campaign_id_text!r}: {e}"
@@ -107,12 +107,12 @@ class CampaignService(ts.ApplicationService):
         campaign_id_text = str(campaign_id)
         find_campaign_request = ports.FindCampaignRequest(campaign_id=campaign_id_text)
         find_campaign_response = self._campaign_repository.find(find_campaign_request)
-        map_to_campaign_spec = MapToCampaignSpec(
+        campaign_spec = MapToCampaignSpec(
             find_campaign_request=find_campaign_request,
             find_campaign_response=find_campaign_response,
         )
         try:
-            campaign = domain.Campaign(map_to_campaign_spec)
+            campaign = domain.Campaign(campaign_spec)
         except errors.DomainError as e:
             raise errors.InfraError(
                 f"corrupted campaign record {campaign_id_text!r}: {e}"
@@ -146,12 +146,12 @@ class CampaignService(ts.ApplicationService):
         campaign_id_text = str(campaign_id)
         find_campaign_request = ports.FindCampaignRequest(campaign_id=campaign_id_text)
         find_campaign_response = self._campaign_repository.find(find_campaign_request)
-        map_to_campaign_spec = MapToCampaignSpec(
+        campaign_spec = MapToCampaignSpec(
             find_campaign_request=find_campaign_request,
             find_campaign_response=find_campaign_response,
         )
         try:
-            campaign = domain.Campaign(map_to_campaign_spec)
+            campaign = domain.Campaign(campaign_spec)
         except errors.DomainError as e:
             raise errors.InfraError(
                 f"corrupted campaign record {campaign_id_text!r}: {e}"

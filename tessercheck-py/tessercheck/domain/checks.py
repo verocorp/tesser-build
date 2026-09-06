@@ -8007,6 +8007,10 @@ class Module(ts.Entity):
             ]:
                 symbol = scope.resolve(Text(ast.unparse(built.func)))
                 if symbol is not None and kind_table.block_of(symbol) is not None:
+                    if str(kind_table.block_of(symbol)) == "mapper":
+                        symbol = registry.mapper_target(symbol)
+                    if symbol is None:
+                        continue
                     typed.setdefault(bound.id, symbol)
                     if not reading:
                         continue
