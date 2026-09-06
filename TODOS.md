@@ -185,30 +185,34 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   learns a finer scope than a file, or the merge rule needs an escape for a
   module a linter exemption names.
 
-- [ ] **A package alias still reaches the modules the init hides.** The import
-  form exists to let a domain package hide its internal entities and value
-  objects from the application, and the import rules do enforce that: no module
-  outside `alpha/domain/` may write `import alpha.domain.widget`. But Python
-  binds an imported submodule as an attribute of its package, so after
-  `import alpha.domain as domain` the expression `domain.widget.Clearance`
-  resolves at runtime — and **neither the analyzer nor `mypy --strict` reports
-  it.** Probed on a copy of `examples/minimal` (2026-09-06, Codex review): a
-  test asserting `domain.widget.Clearance is not None` produced zero tessercheck
-  findings and `Success: no issues found in 41 source files` from mypy.
-  `Clearance` is a real class that `alpha/domain/__init__.py` deliberately does
-  not export.
+- [x] **A package alias still reaches the modules the init hides.** CLOSED
+  2026-09-06 (Chris ruling). The import form exists to let a domain package hide
+  its internal entities and value objects from the application, and the import
+  rules did enforce half of it: no module outside `alpha/domain/` may write
+  `import alpha.domain.widget`. But Python binds an imported submodule as an
+  attribute of its package, so after `import alpha.domain as domain` the
+  expression `domain.widget.Clearance` resolves at runtime, and `mypy --strict`
+  accepts it. The analyzer was silent because `Scope.resolve` splits on the last
+  dot, finds no alias named `domain.widget`, and returns `None` — an unresolved
+  name is a silent pass.
 
-  The rule that would close it: in an attribute chain headed by a package alias,
-  a first attribute that names a module of that package is a finding — the
-  outside names what the `__init__` exports, never a module through the package.
-  **Migration cost is zero**: a scan of every gated tree found no site that
-  writes `alias.module.Name`; the only matches are fully-qualified names inside
-  the analyzer's own expected-message strings. So this is cheap to adopt, and it
-  is the difference between "the rules say do not" and "you cannot".
+  **Closed by making the export list the read list.** `Module.package_read_violations`
+  flags any name read off a package alias that the package's `__init__` does not
+  re-export, which catches both `domain.widget.Standing` (`widget` is not
+  exported) and `domain.Standing` (`Standing` is not). The second was previously
+  caught only by mypy; the first by nothing.
 
-  Until it lands, `python.md` says the boundary is a convention the import rules
-  enforce rather than something the interpreter refuses, because that is what is
-  true.
+  **Ruled: no exemption for the sibling test.** It is the one module inside an
+  exporting package that legally holds an alias to its own package (TB060 exempts
+  `test_*`), and so the one place a hidden class could be reached deliberately.
+  It does not get to. A class the `__init__` does not re-export gets no direct
+  tests and is tested through the object that owns it. This is the same answer as
+  the open ruling on whether a direct unit test makes a class public API: if a
+  value object deserves its own tests, export it.
+
+  **Migration cost was zero, measured twice.** A standalone scan checked 7,408
+  alias reads against 206 export lists across all eleven trees with no
+  violations, and the shipped clause reports zero findings on all eleven.
 
 - [ ] **Two classes of one name in one module: one is invisible, and the order
   decides which.** `Module._classes` is a dict keyed by class name, so the last

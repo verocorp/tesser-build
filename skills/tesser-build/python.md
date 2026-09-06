@@ -58,12 +58,14 @@ decides what the outside may name — a class the init does not re-export has no
 name the outside is allowed to write, which is how `alpha/domain/` keeps
 `Clearance` and `Standing` off the application layer while handing it `Widget`.
 
-Read that as a convention the import rules enforce, not as a wall Python builds.
-Importing a package binds its imported submodules as attributes of it, so
-`domain.widget.Clearance` still *resolves* at runtime, and today neither the
-analyzer nor `mypy --strict` reports it. Closing that is an open ruling
-(`TODOS.md`); until it lands, the boundary holds because the rules say where a
-name may come from, not because the interpreter refuses.
+The export list is also the **read** list (TB042, maintainer ruling
+2026-09-06). Python itself does not hide anything: importing a package binds
+its imported submodules as attributes of it, so `domain.widget.Clearance`
+resolves at runtime and `mypy --strict` accepts it. The analyzer checks every
+name read off a package alias against that package's export list, which is what
+makes the boundary hold. There is **no exemption for the sibling test**: a class
+the `__init__` does not re-export gets no direct tests, and is tested through
+the object that owns it — `Clearance` through `Widget.clear()`.
 
 An **exporting package** is every role package (`domain`, `application`,
 `application/ports`, `application/client`, `application/orchestrators`,

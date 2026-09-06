@@ -29,6 +29,28 @@ def test_a_usage_error_becomes_exit_code_two_with_the_usage_line(
     assert not (tmp_path / "RULES.md").exists()
 
 
+def test_a_rulebook_diagnostic_reaches_the_maintainer(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "tessercheck" / "domain").mkdir(parents=True)
+    (tmp_path / "tessercheck" / "domain" / "checks.py").write_text(
+        "TS_NAME_BY_BLOCK: dict = {}\n"
+        "PROTOCOL_PACKAGE: str = 'protocol'\n"
+        "class Module:\n"
+        "    def comment_violations(self) -> None:\n"
+        "        Violation(ViolationSpec('p', 1, 'TB020', f'{surprise} a shape; a tail'))\n"
+    )
+    (tmp_path / "tessercheck" / "tests").mkdir(parents=True)
+    (tmp_path / "tessercheck" / "tests" / "test_checks.py").write_text("")
+    (tmp_path / ".importlinter").write_text("")
+    assert cli.RulesHost().run([str(tmp_path)]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "no reader name for message hole {surprise}; extend HOLE_NAMES" in captured.err
+    assert "unexpected error" not in captured.err
+    assert not (tmp_path / "RULES.md").exists()
+
+
 def test_the_host_never_leaks_internals_on_the_unexpected_path(
     tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -5,9 +5,12 @@ import re
 import typing
 
 import tesser.domain as ts
+import tesser.errors as errors
 import tesser.serialization as serialization
 
 import tessercheck.domain.checks as checks  # tesser:debt TB060
+
+_UNREADABLE: typing.Final[str] = "rulebook_unreadable"
 
 HOLE_NAMES: typing.Final[dict[str, str]] = {
     "where": "⟨module.Class.method⟩",
@@ -87,6 +90,7 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "actual": "⟨name⟩",
     "derived": "⟨name⟩",
     "fn.name": "⟨function⟩",
+    "read": "⟨name⟩",
 }
 
 APPLIES_TO: typing.Final[dict[str, str]] = {
@@ -105,6 +109,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Module.shadowing_violations": "every module",
     "Module.string_equality_violations": "every module",
     "Module.sibling_reference_violations": "every class, in every module",
+    "Module.package_read_violations": "every module, in every module kind",
     "Module.spec_use_violations": "every function that holds a spec, in every module",
     "Module.spec_shared_violations": "domain object `__init__`",
     "ClassDecl.vo_field_violations": "value object class",
@@ -333,7 +338,7 @@ class Rulebook(ts.ValueObject):
                         ts_map[ts_key.value] = ts_value.value
                 break
         if ts_map is None:
-            raise RuntimeError("TS_NAME_BY_BLOCK not found in checks.py")
+            raise errors.invalid(_UNREADABLE, "TS_NAME_BY_BLOCK not found in checks.py")
         order: list[str] = []
         codes: dict[str, str] = {}
         applies: dict[str, list[str]] = {}
@@ -416,7 +421,8 @@ class Rulebook(ts.ValueObject):
                     for call in calls:
                         fields = spec_fields(call)
                         if fields is None:
-                            raise RuntimeError(
+                            raise errors.invalid(
+                                _UNREADABLE,
                                 f"checks.py:{call.lineno}: Violation takes exactly the four "
                                 "spec fields (path, line, code, message), as one ViolationSpec"
                             )
@@ -428,7 +434,8 @@ class Rulebook(ts.ValueObject):
                         elif isinstance(code_expr, ast.Name) and code_expr.id in binding:
                             code = binding[code_expr.id]
                         else:
-                            raise RuntimeError(
+                            raise errors.invalid(
+                                _UNREADABLE,
                                 f"checks.py:{call.lineno}: violation code is neither a literal nor a "
                                 "literally-bound parameter"
                             )
@@ -442,7 +449,8 @@ class Rulebook(ts.ValueObject):
                             message = str(message_node.value)
                         else:
                             if not isinstance(message_node, ast.JoinedStr):
-                                raise RuntimeError(
+                                raise errors.invalid(
+                                    _UNREADABLE,
                                     f"checks.py:{call.lineno}: violation message is not a literal or f-string"
                                 )
                             parts: list[str] = []
@@ -478,11 +486,13 @@ class Rulebook(ts.ValueObject):
                                 ):
                                     param = expr.slice.id
                                 if param is None:
-                                    raise RuntimeError(
+                                    raise errors.invalid(
+                                        _UNREADABLE,
                                         f"checks.py:{call.lineno}: no reader name for message hole {{{text}}}; extend HOLE_NAMES"
                                     )
                                 if param not in binding:
-                                    raise RuntimeError(
+                                    raise errors.invalid(
+                                        _UNREADABLE,
                                         f"checks.py:{call.lineno}: hole {{{text}}} depends on caller argument {param!r} that is not a literal"
                                     )
                                 block = binding[param]
@@ -494,12 +504,14 @@ class Rulebook(ts.ValueObject):
                                 continue
                             message = "".join(parts)
                         if "; " not in message:
-                            raise RuntimeError(
+                            raise errors.invalid(
+                                _UNREADABLE,
                                 f"checks.py:{call.lineno}: violation message lacks a '; <normative clause>' tail"
                             )
                         head, clause = message.rsplit("; ", 1)
                         if "⟨" in clause:
-                            raise RuntimeError(
+                            raise errors.invalid(
+                                _UNREADABLE,
                                 f"checks.py:{call.lineno}: the normative clause after ';' is not a literal"
                             )
                         shape = WHERE_PREFIX.sub("", head)
@@ -516,7 +528,8 @@ class Rulebook(ts.ValueObject):
                             else f"{cls.name}.{method.name}"
                         )
                         if key not in APPLIES_TO:
-                            raise RuntimeError(
+                            raise errors.invalid(
+                                _UNREADABLE,
                                 f"no APPLIES_TO entry for {key!r}; extend the map"
                             )
                         subjects.add(key)
@@ -527,7 +540,8 @@ class Rulebook(ts.ValueObject):
                             shapes[clause] = []
                             linenos[clause] = []
                         if codes[clause] != code:
-                            raise RuntimeError(
+                            raise errors.invalid(
+                                _UNREADABLE,
                                 f"checks.py:{call.lineno}: clause {clause!r} carries code {code}, "
                                 f"but an earlier site carries {codes[clause]}; one clause has one code"
                             )
@@ -590,7 +604,7 @@ class Rulebook(ts.ValueObject):
                 package = str(node.value.value)
                 break
         if package is None:
-            raise RuntimeError("PROTOCOL_PACKAGE not found in checks.py")
+            raise errors.invalid(_UNREADABLE, "PROTOCOL_PACKAGE not found in checks.py")
         lines += [
             "",
             "## Named exemptions (carve-outs the code makes on purpose, not rules)",
@@ -633,7 +647,8 @@ class Rulebook(ts.ValueObject):
         if spec.total:
             dead = tuple(sorted(key for key in APPLIES_TO if key not in subjects))
             if dead:
-                raise RuntimeError(
+                raise errors.invalid(
+                    _UNREADABLE,
                     f"APPLIES_TO rows nothing produces: {', '.join(dead)}; "
                     "drop the row or fix its key"
                 )

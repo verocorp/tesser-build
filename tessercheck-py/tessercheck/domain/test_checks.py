@@ -2816,6 +2816,102 @@ def test_a_module_outside_a_role_package_imports_the_package() -> None:
     ), findings
 
 
+def test_a_read_names_only_what_the_package_exports() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(
+            (
+                "mod/domain/vo.py",
+                "mod.domain.vo",
+                "import enum\n"
+                "import tesser.domain as ts\n"
+                "class Taken(ts.Outcome):\n"
+                "    TAKEN = enum.auto()\n"
+                "class Hidden(ts.ValueObject):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_text', text)\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_text', text)\n",
+                False,
+            ),
+            (
+                "mod/domain/__init__.py",
+                "mod.domain",
+                "from mod.domain.vo import Tag as Tag\n"
+                "from mod.domain.vo import Taken as Taken\n",
+                True,
+            ),
+            (
+                "mod/application/service.py",
+                "mod.application.service",
+                "import tesser.application as ts\n"
+                "import mod.domain as domain\n"
+                "class Service(ts.ApplicationService):\n"
+                "    def read(self, tag: domain.Tag) -> domain.Taken:\n"
+                "        hidden = domain.vo.Hidden('a')\n"
+                "        assert hidden is not None\n"
+                "        return domain.Taken.TAKEN\n",
+                False,
+            ),
+            ("mod/application/__init__.py", "mod.application", "", True),
+        ))).violations()
+    )
+    assert any(
+        "mod.application.service reads domain.vo, a name mod.domain does not export; "
+        "a package __init__ is the list of what the outside may name, and importing "
+        "a package binds its submodules on it, so the list holds only where a "
+        "read is checked against it" in f
+        for f in findings
+    ), findings
+    assert not any(
+        "reads domain.Tag" in f or "reads domain.Taken" in f for f in findings
+    ), findings
+
+
+def test_a_sibling_test_reads_only_what_its_own_package_exports() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(
+            (
+                "mod/domain/vo.py",
+                "mod.domain.vo",
+                "import tesser.domain as ts\n"
+                "class Hidden(ts.ValueObject):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_text', text)\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_text', text)\n",
+                False,
+            ),
+            (
+                "mod/domain/__init__.py",
+                "mod.domain",
+                "from mod.domain.vo import Tag as Tag\n",
+                True,
+            ),
+            (
+                "mod/domain/test_vo.py",
+                "mod.domain.test_vo",
+                "import mod.domain as domain\n"
+                "def test_a_tag_equals_itself() -> None:\n"
+                "    assert domain.Tag('a') == domain.Tag('a')\n"
+                "def test_a_hidden_equals_itself() -> None:\n"
+                "    assert domain.vo.Hidden('a') == domain.vo.Hidden('a')\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "mod.domain.test_vo reads domain.vo, a name mod.domain does not export; "
+        "a package __init__ is the list of what the outside may name, and importing "
+        "a package binds its submodules on it, so the list holds only where a "
+        "read is checked against it" in f
+        for f in findings
+    ), findings
+
+
 def test_a_module_in_a_role_package_never_imports_a_module_beside_it() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"

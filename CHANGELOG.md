@@ -5,6 +5,47 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.99.0] - 2026-09-06
+
+The export list is also the read list. `TB060` said which package you may
+import; nothing said what you may read off it, and Python binds an imported
+submodule as an attribute of its package, so `domain.widget.Clearance` reached
+straight past a class `alpha/domain/__init__.py` deliberately hides. The
+analyzer was silent and `mypy --strict` was clean.
+
+### Added
+- **A read names only what the package exports** (`TB042`). Every name read off
+  a package alias is checked against that package's `__init__` re-export list.
+  This catches `domain.widget.Standing`, where `widget` is not an exported name,
+  and `domain.Standing`, where `Standing` is not — the second was previously
+  caught by `mypy` alone, the first by nothing.
+
+### Changed
+- **No exemption for the sibling test** (maintainer ruling 2026-09-06). A test
+  module is the one module inside an exporting package that legally holds an
+  alias to its own package, and therefore the one place a hidden class could be
+  reached on purpose. It does not get to. A class the `__init__` does not
+  re-export gets no direct tests and is tested through the object that owns it.
+- `skills/tesser-build/python.md` no longer describes the boundary as a
+  convention the interpreter does not enforce, because the analyzer now checks
+  it at every read site.
+
+### Fixed
+- **The rulebook's diagnostics reach the maintainer.** `srv/cli/rules.py`
+  collapsed every non-usage exception into the string `unexpected error`, so an
+  authored diagnostic like `checks.py:7781: no reader name for message hole
+  {node.value.id}; extend HOLE_NAMES` was discarded and the only way to read it
+  was to construct `Rulebook` by hand. Those twelve `RuntimeError`s are now
+  `errors.invalid(...)`, and the host grows the `DomainError` and `InfraError`
+  arms that `examples/minimal/srv/cli/main.py` already teaches. The bare
+  `except Exception` arm stays, so an incidental crash still reports
+  `unexpected error` and leaks no internals.
+
+### Known
+- The clause has nothing to check against a package whose `__init__` is empty,
+  since an empty export list produces no rows. `TB042`'s existing clauses govern
+  that case.
+
 ## [0.0.98.0] - 2026-09-06
 
 A package is the unit you import, and a variable is named for the type it
