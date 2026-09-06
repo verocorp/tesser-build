@@ -124,6 +124,36 @@ class TestRestateOrderOrchestratorRunner:
             b"POST /OrderOrchestrator/..%2Fadmin%3Fx%3D1%23f/run/send HTTP/1.1"
         )
 
+    def test_an_order_already_started_is_a_conflict(self) -> None:
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        port = listener.getsockname()[1]
+
+        def ingress() -> None:  # tesser:debt TB023
+            conn, _ = listener.accept()
+            with conn:
+                while b"\r\n\r\n" not in conn.recv(4096):
+                    continue
+                conn.sendall(b"HTTP/1.1 409 Conflict\r\ncontent-length: 0\r\n\r\n")
+
+        thread = threading.Thread(target=ingress)
+        thread.start()
+        try:
+            with pytest.raises(errors.DomainError) as excinfo:
+                asyncio.run(
+                    runners.RestateOrderOrchestratorRunner(
+                        f"http://127.0.0.1:{port}",
+                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
+                    ).start_order_orchestrator(order_orchestrator_request())
+                )
+        finally:
+            thread.join(5)
+            listener.close()
+
+        assert excinfo.value.kind is errors.Kind.CONFLICT
+        assert excinfo.value.code == "order_already_started"
+
     def test_a_refused_send_is_an_infra_error(self) -> None:
         listener = socket.socket()
         listener.bind(("127.0.0.1", 0))

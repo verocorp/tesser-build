@@ -26,14 +26,15 @@ class FakeOrderingApplicationClient(client.OrderingApplicationClient):
 @ts.fake
 class FakeRestateWorkflowContext:  # tesser:debt TB072
 
-    def __init__(self, refusal: str = "") -> None:
+    def __init__(self, refusal: str = "", status_code: int = 404) -> None:
         self._refusal = refusal
+        self._status_code = status_code
         self.called: list[tuple[object, object]] = []
 
     async def service_call(self, tpe: object, arg: object) -> object:
         self.called.append((tpe, arg))
         if self._refusal:
-            raise restate.TerminalError(self._refusal, status_code=404)
+            raise restate.TerminalError(self._refusal, status_code=self._status_code)
         return relays.PrepareQuoteResponse(cents=250)
 
 
@@ -68,3 +69,31 @@ class TestRestateOrderActionsRunner:
         assert excinfo.value.kind is errors.Kind.NOT_FOUND
         assert excinfo.value.code == "action_rejected"
         assert excinfo.value.message == "no such sku"
+
+    def test_each_terminal_status_comes_back_as_its_kind(self) -> None:
+        restate_order_runtime = runtimes.RestateOrderRuntime(FakeOrderingApplicationClient())
+        for status_code, kind in ((422, errors.Kind.VALIDATION), (409, errors.Kind.CONFLICT)):
+            with pytest.raises(errors.DomainError) as excinfo:
+                asyncio.run(
+                    runners.RestateOrderActionsRunner(
+                        typing.cast(
+                            restate.WorkflowContext,
+                            FakeRestateWorkflowContext(refusal="refused", status_code=status_code),
+                        ),
+                        restate_order_runtime,
+                    ).run_prepare_quote(relays.PrepareQuoteRequest(sku="widget"))
+                )
+            assert excinfo.value.kind is kind
+
+    def test_a_terminal_error_of_no_domain_status_stays_terminal(self) -> None:
+        with pytest.raises(restate.TerminalError) as excinfo:
+            asyncio.run(
+                runners.RestateOrderActionsRunner(
+                    typing.cast(
+                        restate.WorkflowContext,
+                        FakeRestateWorkflowContext(refusal="cancelled", status_code=500),
+                    ),
+                    runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
+                ).run_prepare_quote(relays.PrepareQuoteRequest(sku="widget"))
+            )
+        assert excinfo.value.status_code == 500

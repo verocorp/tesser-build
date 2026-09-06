@@ -304,10 +304,20 @@ payload versioning on a durable leg is a rule this tree does not yet make.
 
 A `DomainError` in a handler becomes a `restate.TerminalError` with the kind's
 status — no retry. When the action handler raises it, the actions runner
-receives it as a `TerminalError` from `service_call` and raises it again as a
-`DomainError`, so the orchestrator and the workflow handler see a domain error,
-not an SDK one, and the workflow ends terminally with the action's message.
-Anything else propagates as-is and Restate retries the invocation.
+receives it as a `TerminalError` from `service_call` and maps the status back
+to its kind (`422` → `VALIDATION`, `404` → `NOT_FOUND`, `409` → `CONFLICT`),
+raising a `DomainError` with the action's message, so the orchestrator and the
+workflow handler see a domain error, not an SDK one, and the workflow ends
+terminally with the action's status. A `TerminalError` carrying any other
+status is not the domain's (the SDK's own 500, a cancellation) and is
+re-raised as it is, still terminal. Anything that is not a `TerminalError`
+propagates as-is and Restate retries the invocation.
+
+On the way out, the ingress answering `409` to `workflow_send` means a
+workflow with this key already exists: the orchestrator runner raises
+`DomainError(CONFLICT, "order_already_started")`, which `POST /orders`
+reports as `409`. Every other ingress refusal and every transport failure is an
+`InfraError`, reported as `503`.
 
 ## Tests, and the one thing they fake
 

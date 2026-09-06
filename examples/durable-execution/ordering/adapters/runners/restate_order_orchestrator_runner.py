@@ -29,7 +29,15 @@ class RestateOrderOrchestratorRunner(ts.Gateway):
                     key=urllib.parse.quote(key, safe=""),
                     arg=order_orchestrator_request,
                 )
-        except (restate.HttpError, httpx.TransportError) as transport_error:
+        except restate.HttpError as http_error:
+            if http_error.status_code == 409:
+                raise errors.DomainError(
+                    errors.Kind.CONFLICT, "order_already_started", http_error.message
+                ) from http_error
+            raise errors.InfraError(
+                f"restate ingress refused the workflow: {http_error}"
+            ) from http_error
+        except httpx.TransportError as transport_error:
             raise errors.InfraError(
                 f"restate ingress refused the workflow: {transport_error}"
             ) from transport_error

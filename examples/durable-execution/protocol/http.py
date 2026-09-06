@@ -19,7 +19,7 @@ class HttpRequest(ts.Request):
     def text(self, name: str) -> str:
         try:
             data = json.loads(self.body)
-        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        except ValueError as e:
             raise BadRequest(f"malformed JSON: {e}") from e
         if not isinstance(data, dict):
             raise BadRequest("expected a JSON object")
@@ -31,7 +31,7 @@ class HttpRequest(ts.Request):
     def integer(self, name: str) -> int:
         try:
             data = json.loads(self.body)
-        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        except ValueError as e:
             raise BadRequest(f"malformed JSON: {e}") from e
         if not isinstance(data, dict):
             raise BadRequest("expected a JSON object")

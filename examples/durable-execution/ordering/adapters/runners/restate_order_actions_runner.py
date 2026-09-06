@@ -26,6 +26,13 @@ class RestateOrderActionsRunner(ts.JobContext):
                 self._restate_order_runtime.prepare_quote_handler, prepare_quote_request
             )
         except restate.TerminalError as terminal_error:
-            raise errors.DomainError(
-                errors.Kind.NOT_FOUND, "action_rejected", terminal_error.message
-            ) from terminal_error
+            match terminal_error.status_code:
+                case 422:
+                    kind = errors.Kind.VALIDATION
+                case 404:
+                    kind = errors.Kind.NOT_FOUND
+                case 409:
+                    kind = errors.Kind.CONFLICT
+                case _:
+                    raise
+            raise errors.DomainError(kind, "action_rejected", terminal_error.message) from terminal_error
