@@ -55,7 +55,7 @@ class TestRestateWorkflowJobs:
 
     def test_it_declares_the_workflow_with_its_run_handler(self) -> None:
         actions = restate_jobs.RestateActionJobs(FakeActions())
-        jobs = restate_jobs.RestateWorkflowJobs(actions.quote)
+        jobs = restate_jobs.RestateWorkflowJobs(actions)
         assert [(d.name, sorted(d.handlers)) for d in jobs.definitions()] == [("Ordering", ["run"])]
 
 
@@ -97,7 +97,7 @@ class TestRestateOrderRelay:
 
     def test_starting_sends_the_workflow_keyed_by_the_orders_id(self) -> None:
         actions = restate_jobs.RestateActionJobs(FakeActions())
-        jobs = restate_jobs.RestateWorkflowJobs(actions.quote)
+        jobs = restate_jobs.RestateWorkflowJobs(actions)
 
         listener = socket.socket()
         listener.bind(("127.0.0.1", 0))
@@ -121,7 +121,7 @@ class TestRestateOrderRelay:
                 )
 
         async def start() -> order_relay.StartResponse:
-            relay = restate_jobs.RestateOrderRelay(f"http://127.0.0.1:{port}", jobs.run)
+            relay = restate_jobs.RestateOrderRelay(f"http://127.0.0.1:{port}", jobs)
             return await relay.start(start_request())
 
         thread = threading.Thread(target=ingress)
@@ -137,7 +137,7 @@ class TestRestateOrderRelay:
 
     def test_a_refused_send_is_an_infra_error(self) -> None:
         actions = restate_jobs.RestateActionJobs(FakeActions())
-        jobs = restate_jobs.RestateWorkflowJobs(actions.quote)
+        jobs = restate_jobs.RestateWorkflowJobs(actions)
 
         listener = socket.socket()
         listener.bind(("127.0.0.1", 0))
@@ -152,7 +152,7 @@ class TestRestateOrderRelay:
                 conn.sendall(b"HTTP/1.1 404 Not Found\r\ncontent-length: 0\r\n\r\n")
 
         async def start() -> order_relay.StartResponse:
-            relay = restate_jobs.RestateOrderRelay(f"http://127.0.0.1:{port}", jobs.run)
+            relay = restate_jobs.RestateOrderRelay(f"http://127.0.0.1:{port}", jobs)
             return await relay.start(start_request())
 
         thread = threading.Thread(target=ingress)
@@ -166,14 +166,14 @@ class TestRestateOrderRelay:
 
     def test_an_unreachable_ingress_is_an_infra_error(self) -> None:
         actions = restate_jobs.RestateActionJobs(FakeActions())
-        jobs = restate_jobs.RestateWorkflowJobs(actions.quote)
+        jobs = restate_jobs.RestateWorkflowJobs(actions)
 
         with socket.socket() as closed:
             closed.bind(("127.0.0.1", 0))
             port = closed.getsockname()[1]
 
         async def start() -> order_relay.StartResponse:
-            relay = restate_jobs.RestateOrderRelay(f"http://127.0.0.1:{port}", jobs.run)
+            relay = restate_jobs.RestateOrderRelay(f"http://127.0.0.1:{port}", jobs)
             return await relay.start(start_request())
 
         with pytest.raises(errors.InfraError):

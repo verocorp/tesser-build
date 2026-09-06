@@ -16,13 +16,13 @@ class Ordering(ts.Component):
         self._catalog = memory.MemoryCatalogRepository()
         self._actions = order_actions.OrderActions(self._catalog)
         action_jobs = restate_jobs.RestateActionJobs(self._actions)
-        workflow_jobs = restate_jobs.RestateWorkflowJobs(action_jobs.quote)
+        workflow_jobs = restate_jobs.RestateWorkflowJobs(action_jobs)
         self.jobs: tuple[restate_jobs.RestateActionJobs, restate_jobs.RestateWorkflowJobs] = (
             action_jobs,
             workflow_jobs,
         )
         self.client: client.Client = order_service.OrderService(
-            restate_jobs.RestateOrderRelay(cfg.ingress, workflow_jobs.run)
+            restate_jobs.RestateOrderRelay(cfg.ingress, workflow_jobs)
         )
 
     def close(self) -> None:

@@ -7,11 +7,11 @@ The chain, top to bottom, with where each link lives:
 | an HTTP host takes `POST /orders` | `srv/http/main.py` | `HttpHost`'s `APIRouter` → `ordering/adapters/handlers/http.py` `Handler.place` |
 | the initial application service | `ordering/application/order_service.py` | `OrderService.place` builds the `Order` aggregate |
 | it starts the workflow through the relay | `ordering/application/relays/order_relay.py` | `OrderRelay.start(StartRequest) -> StartResponse`, and `StartRequest` carries the `Order` aggregate itself |
-| the Restate SDK sends the workflow | `ordering/adapters/jobs/restate.py` | `RestateOrderRelay.start` → `client.workflow_send(self._run, key=order_id, arg=request)` — the handler function itself, not a name, and the relay's own `StartRequest` as the body |
+| the Restate SDK sends the workflow | `ordering/adapters/jobs/restate.py` | `RestateOrderRelay.start` → `client.workflow_send(self._workflows.run, key=order_id, arg=request)` — the job object's own handler, not a name, and the relay's own `StartRequest` as the body |
 | Restate's server calls the workflow job | `ordering/adapters/jobs/restate.py` | `RestateWorkflowJobs`'s `@workflow.main()` `run`, mounted at `/restate` by the host |
-| the orchestrator is built **inside the invocation** | `ordering/adapters/jobs/restate.py` | `run` builds `RestateOrderJobContext(ctx, quote)` over *this* invocation's `ctx` and constructs `OrderOrchestrator(job)` over it |
+| the orchestrator is built **inside the invocation** | `ordering/adapters/jobs/restate.py` | `run` builds `RestateOrderJobContext(ctx, actions)` over *this* invocation's `ctx` and constructs `OrderOrchestrator(job)` over it |
 | the orchestrator runs the action through its job context | `ordering/application/relays/order_job_context.py` | `OrderOrchestrator.run` (`application/orchestrators/`) reads the `Order` off the message, then `OrderJobContext.quote(QuoteRequest) -> QuoteResponse` — no context parameter; the invocation *is* the job context |
-| the Restate SDK calls the action durably | `ordering/adapters/jobs/restate.py` | `RestateOrderJobContext.quote(request)` → `self._ctx.service_call(self._quote, request)` |
+| the Restate SDK calls the action durably | `ordering/adapters/jobs/restate.py` | `RestateOrderJobContext.quote(request)` → `self._ctx.service_call(self._actions.quote, request)` |
 | Restate's server calls the action job | `ordering/adapters/jobs/restate.py` | `RestateActionJobs`: `@service.handler()` `quote`, relaying to the application client |
 | the action, a class of actions with one repository lookup | `ordering/application/order_actions.py` | `OrderActions.quote` → `CatalogRepository.price` → `adapters/repositories/memory.py`, behind `application/client/order_actions.py` |
 | the price comes back up the same chain | | `QuoteResponse.cents` → `Order.total(PriceSpec)` → `RunResponse.total_cents` ends the workflow |
@@ -52,12 +52,12 @@ class OrderJobContext(ts.JobContext, typing.Protocol):
 A **`ts.Relay`** is a port whose far side is this context's own application
 code, reached through an engine instead of by a synchronous call. `OrderRelay`
 is one: `OrderService` holds it, it lives as long as the component, and its
-Restate implementation `RestateOrderRelay(ingress, run)` is built once.
+Restate implementation `RestateOrderRelay(ingress, workflow_jobs)` is built once.
 
 A **`ts.JobContext`** is what one invocation may do while it is running.
 `OrderJobContext` is one: `OrderOrchestrator` holds it, it lives exactly as
 long as the invocation, and its Restate implementation
-`RestateOrderJobContext(ctx, quote)` is built inside the workflow handler over
+`RestateOrderJobContext(ctx, action_jobs)` is built inside the workflow handler over
 that handler's own `restate.Context`. The `ctx` is required and is never
 `None` — there is no such thing as a job context outside a job.
 
@@ -123,9 +123,12 @@ calls an application client or constructs an orchestrator.
   invocation and is built per invocation. Both live in `adapters/jobs/`, the
   one adapter package allowed to import a relays module.
 
-**Everything Restate is addressed by a function, not a name.** The gateways
-take the handler *function* and hand it to the SDK — `client.workflow_send(self._run, ...)`
-and `ctx.service_call(self._quote, ...)` — and the SDK reads the service name,
+**Everything Restate is addressed by a function, not a name — and the function
+is reached off the job object that declared it.** Nothing here holds a bare
+callable: `RestateOrderRelay` holds a `RestateWorkflowJobs` and sends
+`client.workflow_send(self._workflows.run, ...)`; `RestateOrderJobContext` holds
+a `RestateActionJobs` and calls
+`ctx.service_call(self._actions.quote, ...)`. The SDK reads the service name,
 the handler name, and both serdes off the decorated object
 (`handler_from_callable`). A rename is a rename; there is no string to keep in
 step, and no address DTO any more. `"Ordering"` and `"OrderingActions"` appear
@@ -134,7 +137,7 @@ constructor calls, one in each job's `__init__`.
 
 **The invocation enters the application as a job context, and as nothing
 else.** A Restate handler is handed a `WorkflowContext`, and only calls made
-through it are journaled. `run` builds `RestateOrderJobContext(ctx, quote)`
+through it are journaled. `run` builds `RestateOrderJobContext(ctx, actions)`
 over *this* ctx and constructs `OrderOrchestrator(job)` over that, per
 invocation. The orchestrator calls `self._job.quote(request)` — a method named
 for what it does, not a generic `call(step, request)` — and never sees the
@@ -150,21 +153,21 @@ orchestrator is unchanged.
 `RestateActionJobs` and `RestateWorkflowJobs` are the Restate service
 modules the Restate docs would have you write, except they are classes so
 their dependencies arrive by constructor instead of by module global. They
-are two classes rather than one because the workflow job needs the action
-handler *function* before it can build a job context. The component wires
-them in dependency order:
+are two classes rather than one because the workflow job needs the action job
+before it can build a job context. The component wires them in dependency
+order, passing whole job objects rather than the handlers off them:
 
 ```python
 action_jobs = restate_jobs.RestateActionJobs(self._actions)
-workflow_jobs = restate_jobs.RestateWorkflowJobs(action_jobs.quote)
+workflow_jobs = restate_jobs.RestateWorkflowJobs(action_jobs)
 self.jobs = (action_jobs, workflow_jobs)
 self.client: client.Client = order_service.OrderService(
-    restate_jobs.RestateOrderRelay(cfg.ingress, workflow_jobs.run)
+    restate_jobs.RestateOrderRelay(cfg.ingress, workflow_jobs)
 )
 ```
 
-— Restate's own Service / Workflow split, then the relay over the workflow's
-own `run` handler. The component publishes both jobs as `jobs` — the only thing
+— Restate's own Service / Workflow split, then the relay over the workflow job.
+The component publishes both jobs as `jobs` — the only thing
 a component publishes besides `client`; the host does
 `api.mount("/restate", restate.app([d for job in app.ordering.jobs for d in job.definitions()]))`
 and knows nothing else about Restate.
@@ -337,8 +340,8 @@ Anything else propagates as-is and Restate retries the invocation.
 
 ## The gateway holds the SDK's client, and nothing sits between
 
-`RestateOrderRelay` takes the ingress URL and the `run` handler function
-itself, and `start` opens its own client per send:
+`RestateOrderRelay` takes the ingress URL and the workflow job itself, and
+`start` opens its own client per send:
 `async with httpx.AsyncClient(base_url=self._ingress)` around
 `restate.client.Client(http).workflow_send(...)`, which is all
 `restate.create_client` does under its context manager. **Nothing async

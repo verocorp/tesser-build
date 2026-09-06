@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-import collections.abc as abc
-import typing
-
 import tesser.adapters as ts
 import httpx
 import restate
 import restate.client
-import restate.context
 import restate.serde
 
 import ordering.application.client.order_actions as order_actions_client
@@ -69,48 +65,6 @@ class RestateQuoteResponseSerde(ts.Serde, restate.serde.Serde[order_job_context.
         return order_job_context.QuoteResponseSnapshot().deserialize(buf)
 
 
-class RestateOrderRelay(ts.Gateway):
-
-    def __init__(
-        self,
-        ingress: str,
-        run: restate.context.HandlerType[order_relay.StartRequest, object],
-    ) -> None:
-        self._ingress = ingress
-        self._run = run
-
-    async def start(self, request: order_relay.StartRequest) -> order_relay.StartResponse:
-        keyed = str(request.order.identity)
-        try:
-            async with httpx.AsyncClient(base_url=self._ingress) as http:
-                await restate.client.Client(http).workflow_send(self._run, key=keyed, arg=request)
-        except (restate.HttpError, httpx.TransportError) as e:
-            raise errors.InfraError(f"restate ingress refused the workflow: {e}") from e
-        return order_relay.StartResponse(keyed)
-
-
-class RestateOrderJobContext(ts.JobContext):
-
-    def __init__(
-        self,
-        ctx: restate.Context,
-        quote: abc.Callable[
-            [typing.Any, order_job_context.QuoteRequest],
-            abc.Awaitable[order_job_context.QuoteResponse],
-        ],
-    ) -> None:
-        self._ctx = ctx
-        self._quote = quote
-
-    async def quote(
-        self, request: order_job_context.QuoteRequest
-    ) -> order_job_context.QuoteResponse:
-        try:
-            return await self._ctx.service_call(self._quote, request)
-        except restate.TerminalError as e:
-            raise errors.DomainError(errors.Kind.NOT_FOUND, "action_rejected", e.message) from e
-
-
 class RestateActionJobs(ts.Job):
 
     def __init__(self, actions: order_actions_client.Client) -> None:
@@ -134,15 +88,24 @@ class RestateActionJobs(ts.Job):
         return [self.service]
 
 
+class RestateOrderJobContext(ts.JobContext):
+
+    def __init__(self, ctx: restate.Context, actions: RestateActionJobs) -> None:
+        self._ctx = ctx
+        self._actions = actions
+
+    async def quote(
+        self, request: order_job_context.QuoteRequest
+    ) -> order_job_context.QuoteResponse:
+        try:
+            return await self._ctx.service_call(self._actions.quote, request)
+        except restate.TerminalError as e:
+            raise errors.DomainError(errors.Kind.NOT_FOUND, "action_rejected", e.message) from e
+
+
 class RestateWorkflowJobs(ts.Job):
 
-    def __init__(
-        self,
-        quote: abc.Callable[
-            [typing.Any, order_job_context.QuoteRequest],
-            abc.Awaitable[order_job_context.QuoteResponse],
-        ],
-    ) -> None:
+    def __init__(self, actions: RestateActionJobs) -> None:
         self.workflow = restate.Workflow("Ordering")
 
         @self.workflow.main(
@@ -153,7 +116,7 @@ class RestateWorkflowJobs(ts.Job):
             ctx: restate.WorkflowContext, request: order_relay.StartRequest
         ) -> order_relay.RunResponse:
             orchestrator = order_orchestrator.OrderOrchestrator(
-                RestateOrderJobContext(ctx, quote)
+                RestateOrderJobContext(ctx, actions)
             )
             try:
                 return await orchestrator.run(request)
@@ -164,3 +127,21 @@ class RestateWorkflowJobs(ts.Job):
 
     def definitions(self) -> list[restate.Workflow | restate.Service]:
         return [self.workflow]
+
+
+class RestateOrderRelay(ts.Gateway):
+
+    def __init__(self, ingress: str, workflows: RestateWorkflowJobs) -> None:
+        self._ingress = ingress
+        self._workflows = workflows
+
+    async def start(self, request: order_relay.StartRequest) -> order_relay.StartResponse:
+        keyed = str(request.order.identity)
+        try:
+            async with httpx.AsyncClient(base_url=self._ingress) as http:
+                await restate.client.Client(http).workflow_send(
+                    self._workflows.run, key=keyed, arg=request
+                )
+        except (restate.HttpError, httpx.TransportError) as e:
+            raise errors.InfraError(f"restate ingress refused the workflow: {e}") from e
+        return order_relay.StartResponse(keyed)
