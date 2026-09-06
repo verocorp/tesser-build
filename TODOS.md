@@ -27,7 +27,9 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `docs/design-app-service-types.md` and `skills/tesser-build/python.md` still
   present `RestateJobContext` / `RestateActionJobs` / `RestateWorkflowJobs` /
   `RecordSerde` / `jobs` + `definitions()` as the verified implementation in
-  this tree; those files no longer exist. Chris ruled 2026-09-06 to leave the
+  this tree, and `rationale/coverage.md`'s serde and jobs rows describe the
+  serde as living in `adapters/jobs/`; those files no longer exist. Chris
+  ruled 2026-09-06 to leave the
   skill until the rulings land rather than encode `runtimes/` and `runners/`
   as convention first.
 - [ ] **Whether a component publishes an engine, and whether the host may know
