@@ -16022,6 +16022,18 @@ def test_a_rewrite_refuses_a_name_already_bound_in_the_scope() -> None:
     assert "made = TagSpec('a')" in str(rewrite)
 
 
+def test_a_rewrite_counts_columns_the_way_ast_does_past_a_multibyte_character() -> None:
+    rewrite = domain.Rewrite(domain.RewriteSpec(
+        text=(
+            "def build() -> None:\n"
+            "    made = TagSpec('a')\n"
+            "    assert 'x\u01c1y\u01c1z' in made.text\n"
+        ),
+        renames=((2, "made", "tag_spec"),),
+    ))
+    assert "assert 'x\u01c1y\u01c1z' in tag_spec.text" in str(rewrite)
+
+
 def test_a_rewrite_outside_any_function_changes_nothing() -> None:
     rewrite = domain.Rewrite(domain.RewriteSpec(
         text="made = 1\n", renames=((1, "made", "tag_spec"),)

@@ -1022,8 +1022,10 @@ class Rewrite(ts.ValueObject):
             edits.extend(sites)
         lines = spec.text.splitlines(keepends=True)
         for line, start, end, derived in sorted(edits, reverse=True):
-            row = lines[line - 1]
-            lines[line - 1] = row[:start] + derived + row[end:]
+            row = lines[line - 1].encode("utf-8")
+            lines[line - 1] = (
+                row[:start] + derived.encode("utf-8") + row[end:]
+            ).decode("utf-8")
         object.__setattr__(self, "_value", "".join(lines))
 
     def __str__(self) -> str:

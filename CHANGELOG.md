@@ -30,6 +30,13 @@ naming-rule migration stops being agents editing files by hand.
   pass on a command that merely starts.
 
 ### Fixed
+- **`Rewrite` counted columns the way strings do, not the way `ast` does.**
+  `col_offset` and `end_col_offset` are UTF-8 **byte** offsets, so a rename on a
+  line containing any multi-byte character spliced mid-token and silently
+  corrupted the source: `made.text` became `matag_specext` past two `ǁ`
+  characters. Found by sweeping all eleven trees rather than the three ASCII ones
+  — `tesser-py` is the only tree with non-ASCII source. The rewrite now slices
+  the encoded line.
 - `srv/cli/rules.py` swallowed a `FileNotFoundError` from the writer as
   `unexpected error` during development. The writer now joins the tree root, and
   the fix shipped in v0.0.100.0 is what surfaced the cause.
