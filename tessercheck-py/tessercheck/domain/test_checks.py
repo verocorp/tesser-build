@@ -16034,6 +16034,35 @@ def test_a_rewrite_counts_columns_the_way_ast_does_past_a_multibyte_character() 
     assert "assert 'x\u01c1y\u01c1z' in tag_spec.text" in str(rewrite)
 
 
+def test_a_rewrite_refuses_a_name_the_function_declares_global() -> None:
+    rewrite = domain.Rewrite(domain.RewriteSpec(
+        text=(
+            "counter = 0\n"
+            "def bump() -> None:\n"
+            "    global counter\n"
+            "    counter = counter + 1\n"
+        ),
+        renames=((4, "counter", "tally"),),
+    ))
+    assert "    counter = counter + 1" in str(rewrite)
+    assert "tally" not in str(rewrite)
+
+
+def test_a_rewrite_refuses_a_name_the_function_declares_nonlocal() -> None:
+    rewrite = domain.Rewrite(domain.RewriteSpec(
+        text=(
+            "def outer() -> None:\n"
+            "    total = 0\n"
+            "    def inner() -> None:\n"
+            "        nonlocal total\n"
+            "        total = total + 1\n"
+        ),
+        renames=((5, "total", "tally"),),
+    ))
+    assert "        total = total + 1" in str(rewrite)
+    assert "tally" not in str(rewrite)
+
+
 def test_a_rewrite_outside_any_function_changes_nothing() -> None:
     rewrite = domain.Rewrite(domain.RewriteSpec(
         text="made = 1\n", renames=((1, "made", "tag_spec"),)

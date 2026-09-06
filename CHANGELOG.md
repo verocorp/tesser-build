@@ -5,7 +5,7 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
-## [0.0.102.0] - 2026-09-06
+## [0.0.103.0] - 2026-09-06
 
 The analyzer repairs the names it can. `tessercheck-rename` (`python -m
 srv.cli.rename` from a checkout) rewrites every local `TB085` can name, so a
@@ -30,6 +30,13 @@ naming-rule migration stops being agents editing files by hand.
   pass on a command that merely starts.
 
 ### Fixed
+- **`Rewrite` renamed a `global`/`nonlocal` name without its declaration.** A
+  name declared `global` or `nonlocal` lives on `ast.Global`/`ast.Nonlocal` as a
+  bare string, not a `Name` node, so `global counter` stayed put while
+  `counter = counter + 1` became `tally = tally + 1` — the function now writes a
+  local and raises `UnboundLocalError`, with a dangling declaration above it.
+  Found by property-testing `Rewrite` over 3,816 renames in `rich`, `pydantic`
+  and `aiohttp`; no tree in this repo declares one. `Rewrite` now refuses.
 - **`Rewrite` counted columns the way strings do, not the way `ast` does.**
   `col_offset` and `end_col_offset` are UTF-8 **byte** offsets, so a rename on a
   line containing any multi-byte character spliced mid-token and silently
@@ -50,6 +57,9 @@ naming-rule migration stops being agents editing files by hand.
   with `mypy --strict` clean. Parameter claims therefore carry no repair.
 - `TB085` still governs one binding form out of seven (`TODOS.md`), so a
   `for` target or a tuple unpack is neither flagged nor repaired.
+
+## [0.0.102.0] - 2026-09-06
+
 The `Order` aggregate now crosses Restate whole. Adding a required field to
 the aggregate in `examples/durable-execution` used to touch a port DTO, two
 mappers that took the aggregate apart and put it back together, and a

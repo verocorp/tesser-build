@@ -1007,6 +1007,7 @@ class Rewrite(ts.ValueObject):
             if holder is None:
                 continue
             taken: set[str] = set()
+            bound_elsewhere: set[str] = set()
             sites: list[tuple[int, int, int, str]] = []
             for node in ast.walk(holder):
                 if isinstance(node, ast.Name):
@@ -1017,7 +1018,9 @@ class Rewrite(ts.ValueObject):
                         )
                 elif isinstance(node, ast.arg):
                     taken.add(node.arg)
-            if derived in taken or not sites:
+                elif isinstance(node, (ast.Global, ast.Nonlocal)):
+                    bound_elsewhere.update(node.names)
+            if derived in taken or actual in bound_elsewhere or not sites:
                 continue
             edits.extend(sites)
         lines = spec.text.splitlines(keepends=True)
