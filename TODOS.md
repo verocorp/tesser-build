@@ -616,6 +616,28 @@ where it lands.
   of those types. Needs a design: what crosses the `Client` on failure (an
   outcome on the response? a single edge-facing rejection?), what the
   handler returns, and what — if anything — the host still maps.
+- [ ] **The wording of a public error belongs to the application, not the
+  handler.** Chris, 2026-09-06, reading #172. `Handler.place_order` in
+  `examples/durable-execution` reads the body one field at a time
+  (`http_request.text("order_id")`, `.integer("quantity")`), and each read is
+  what produces the message the API answers with: `400 {"detail": "sku must
+  be a string"}` is raised by `protocol/http.py`'s `text()`, called from an
+  adapter. So both the field list and the wording of a public rejection sit
+  in `adapters/handlers/`. Every relay message by contrast has a snapshot in
+  `application/relays/` that owns its encoding, and no module under
+  `adapters/runtimes/` or `adapters/runners/` names a field at all — same
+  job, two mechanisms, and only the internal one keeps the field list in the
+  application. **Rule this with the entry above** ("the host should not know
+  the error types"): that one asks what the application decides to surface
+  and what the host may know, this one asks the same of the handler, and a
+  service that owns what is surfaced also owns how it reads. Bears on the
+  wire-payload helper kind (ruling 4 of the field-cost list): a
+  `PlaceOrderRequestSnapshot` beside the client DTO would move the field
+  list and its messages out of `adapters/`, at the cost of `json` in
+  `ordering/client/` — the `TB062` marker
+  `relays/order_orchestrator_runner.py` already carries — and a sibling test
+  the package does not have today. Evidence: #172 counts 11 places a
+  required field lands, and this handler is one of them.
 - [x] **Adapter-side mappers have no home in the rulebook.** Ruled (Chris,
   2026-08-30) and shipped: `tesser.adapters.Mapper` carries the same contract
   as `tesser.application.Mapper` (a mapper is its target), and `KIND_EXTRA_ROLES`
