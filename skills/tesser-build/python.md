@@ -54,9 +54,16 @@ excused moved into the tesser runtime.)
 2026-09-05, widened 2026-09-06). Outside an exporting package you import the
 package, never a module of it: `import alpha.domain as domain`, then
 `domain.Widget`. The `__init__` is that package's export list, and it is what
-decides what the outside may name — a class the init does not re-export cannot
-be reached from outside at all, which is how `alpha/domain/` keeps `Clearance`
-and `Standing` off the application layer while handing it `Widget`.
+decides what the outside may name — a class the init does not re-export has no
+name the outside is allowed to write, which is how `alpha/domain/` keeps
+`Clearance` and `Standing` off the application layer while handing it `Widget`.
+
+Read that as a convention the import rules enforce, not as a wall Python builds.
+Importing a package binds its imported submodules as attributes of it, so
+`domain.widget.Clearance` still *resolves* at runtime, and today neither the
+analyzer nor `mypy --strict` reports it. Closing that is an open ruling
+(`TODOS.md`); until it lands, the boundary holds because the rules say where a
+name may come from, not because the interpreter refuses.
 
 An **exporting package** is every role package (`domain`, `application`,
 `application/ports`, `application/client`, `application/orchestrators`,

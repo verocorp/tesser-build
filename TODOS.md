@@ -175,6 +175,31 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   learns a finer scope than a file, or the merge rule needs an escape for a
   module a linter exemption names.
 
+- [ ] **A package alias still reaches the modules the init hides.** The import
+  form exists to let a domain package hide its internal entities and value
+  objects from the application, and the import rules do enforce that: no module
+  outside `alpha/domain/` may write `import alpha.domain.widget`. But Python
+  binds an imported submodule as an attribute of its package, so after
+  `import alpha.domain as domain` the expression `domain.widget.Clearance`
+  resolves at runtime — and **neither the analyzer nor `mypy --strict` reports
+  it.** Probed on a copy of `examples/minimal` (2026-09-06, Codex review): a
+  test asserting `domain.widget.Clearance is not None` produced zero tessercheck
+  findings and `Success: no issues found in 41 source files` from mypy.
+  `Clearance` is a real class that `alpha/domain/__init__.py` deliberately does
+  not export.
+
+  The rule that would close it: in an attribute chain headed by a package alias,
+  a first attribute that names a module of that package is a finding — the
+  outside names what the `__init__` exports, never a module through the package.
+  **Migration cost is zero**: a scan of every gated tree found no site that
+  writes `alias.module.Name`; the only matches are fully-qualified names inside
+  the analyzer's own expected-message strings. So this is cheap to adopt, and it
+  is the difference between "the rules say do not" and "you cannot".
+
+  Until it lands, `python.md` says the boundary is a convention the import rules
+  enforce rather than something the interpreter refuses, because that is what is
+  true.
+
 ## Left open by the v0.0.89.0 adversarial pass (2026-08-29, PR #148)
 
 Seventeen bypass probes were run against the new clauses — twelve mine, five
