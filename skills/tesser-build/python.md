@@ -49,15 +49,105 @@ else: `import tesser.errors as errors`, then `errors.invalid(...)`. The
 carried are gone — the app-level `errors`/`serialization` root modules they
 excused moved into the tesser runtime.)
 
-**Every import is a module import** (TB053, maintainer ruling 2026-08-24):
-`import x` or `import x as name`, never `from x import name` — the stdlib,
-the tesser norm modules, kernels, and the tree's own modules alike. The one
-form with no module spelling, `from __future__ import annotations`, is the
-one exemption; a kernel or tesser `__init__` that re-exports (`from kernel.slug
-import Slug as Slug`) is TB042's business, not an import — a role `__init__`
-holds module imports or nothing, as it always has. A context module further
-carries an alias (`import campaign.domain.money as money`), because the
-analyzer resolves names as attribute-over-alias.
+**A package is the unit you import** (TB060, TB053, TB042, maintainer rulings
+2026-09-05). Outside a role package you import the package, never a module of
+it: `import alpha.domain as domain`, then `domain.Widget`. The role `__init__`
+is that package's export list, and it is what decides what the outside may
+name — a class the init does not re-export cannot be reached from outside the
+role at all, which is how `alpha/domain/` keeps `Clearance` and `Standing` off
+the application layer while handing it `Widget`.
+
+The rules that follow from it, each with its code:
+
+- **The alias is the package's last segment** (TB053). `import
+  alpha.application.ports as ports`, not `as p` and not `as alpha_ports`. When
+  two imported packages in one module share a last segment, each takes its
+  context as a prefix — `import alpha.component as alpha_component` beside
+  `import beta.component as beta_component`. A single-segment package is
+  imported bare (`import kernel`), because that already binds the name the rule
+  asks for and the redundant `as kernel` is the alias ruff flags. The alias
+  matters because it is the name every reader resolves a type against, and
+  because the naming rule below derives local names from types — an alias that
+  is not the last segment makes both unpredictable.
+
+- **Inside a role package a module imports the packages around it, never a
+  module beside it** (TB060). `alpha/domain/widget.py` cannot import
+  `alpha/domain/clearance.py`, and it cannot import `alpha.domain` either (the
+  package imports the module back). Two modules of one role that need each
+  other are one module; merge them, and merge their sibling tests with them.
+  The one exemption is the sibling test file: `test_widget.py` imports
+  `alpha.domain.widget` — the module TB074 already pairs it with — and nothing
+  else of the package.
+
+- **The init re-exports, and only re-exports** (TB042). `from
+  alpha.domain.widget import Widget as Widget` — the repeated name is what
+  `mypy --strict` reads as an export, so it is required, not style. A module
+  import in a role `__init__` binds a module and exports nothing, so it is a
+  finding. An export nobody outside the role reads is a finding too: the list
+  cannot go stale.
+
+- **A package never exports a class of its own name** (TB042). `alpha/client/`
+  exporting `Client` is a finding, because the local derived from that class is
+  `client`, which is the package's own alias. The context client is
+  `AlphaClient`, the application client `AlphaApplicationClient`. The same
+  hazard in the shell, where modules are still imported as modules, is the same
+  finding: `app/app.py` declares `MinimalApp`, not `App`, and
+  `app/config.py` declares `AppConfig`, not `Config`.
+
+The one `from` form with no module spelling, `from __future__ import
+annotations`, stays exempt. Everything else that is not a package export list
+is still `import x` or `import x as name`, never `from x import name` (TB053).
+
+**A kernel is domain, and only domain reaches it** (TB062, TB063, maintainer
+ruling 2026-09-05). A kernel is domain that two or more domain modules share,
+so the reach is drawn where domain is:
+
+- A root kernel (`kernel/`, and a tree's one exported kernel) is imported by
+  exactly one kind of module: a context's own kernel package. Its `__init__`
+  re-exports its classes the way any export list does (`from kernel.identity
+  import Identity as Identity`).
+- A context that uses a kernel type gets `<context>/domain/kernel/`, a package
+  nested under its domain and named `kernel`, whose `__init__` re-exports what
+  the context takes from the root kernels plus any value object its own domain
+  modules share. A domain module then writes `import alpha.domain.kernel as
+  kernel` and names `kernel.Identity` — exactly one `kernel` in scope, and the
+  module never has to know which kernel a type came from.
+- Nothing else imports a kernel: not `application`, not `client`, not
+  `adapters`, not `component`, not `app`, not `srv`, not `protocol`, not a
+  `conftest`. An application that needs a kernel type names it through the
+  domain `__init__`, which may re-export from the nested kernel package like
+  any other module of its role.
+
+The analyzer follows a re-exported name to the module that defines it, to a
+fixed point, so `alpha.domain.kernel.Identity` resolves to
+`kernel.identity.Identity` through both hops. That matters because the rules
+that key on a symbol's identity — which object a spec constructs, which port an
+application client speaks — would otherwise see two different types where there
+is one.
+
+**A name is derived from the type it carries** (TB085, maintainer ruling
+2026-09-05). This is what the import change exists to make possible: once
+`domain` is the alias, `widget` is free, so `widget = domain.Widget(spec)`
+reads without a suffix. Three shapes:
+
+- A parameter annotated with a class takes that class's name in snake_case:
+  `add_request: client.AddRequest`, `widget_repository: ports.WidgetRepository`,
+  `job_context: ts.JobContext`.
+- A local assigned from a constructor call takes the class's name:
+  `widget = domain.Widget(...)`, `config = component.Config(spec)`.
+- An `__init__` keeps its parameter's name in the field it sets:
+  `self._widget_repository = widget_repository`, never `self._repo`.
+
+Exempt, each for a reason worth knowing: `self` and `cls`; a `ts.Spec` or DTO
+`__init__` parameter, which is a **field** name — renaming
+`WidgetSpec.__init__(part=)` renames the field and breaks every keyword call
+site; two values of one class in one function, where the rule cannot tell them
+apart and `first`/`second` is the honest answer; a derived name already bound in
+the module, because Python has one namespace per module and the module alias
+took the name first; and anything whose annotation is not a bare class
+reference. A local assigned from a **method** call is out of scope in v1 — the
+analyzer has no return-type table for a call on a field, so checking it would
+fire only where the callee happened to resolve.
 
 **An annotation is written unquoted** (TB021, maintainer ruling 2026-08-30). A
 string in type position is a finding, wherever an annotation is read — a
