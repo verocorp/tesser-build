@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import tesser.testing as ts
 
 import alpha.adapters.jobs as jobs
@@ -32,3 +34,12 @@ class TestEngineJob:
         engine_job = jobs.EngineJob(FakeActionsClient(), FakeQuoting())
         flow_response = engine_job.flow(ports.QuoteRequest(name="a"))
         assert flow_response.name == "a"
+
+
+class TestInlineJobContext:
+
+    def test_call_runs_the_step_in_place(self) -> None:
+        async def echo(job_context: object, request: str) -> str:
+            return request
+
+        assert asyncio.run(jobs.InlineJobContext().call(echo, "a")) == "a"

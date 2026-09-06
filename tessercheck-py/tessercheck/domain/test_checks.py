@@ -15843,6 +15843,50 @@ def test_a_constructors_one_spec_is_named_spec() -> None:
     ), findings
 
 
+def test_a_frozen_value_object_keeps_its_parameters_name_through_setattr() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(
+            (
+                "mod/domain/__init__.py",
+                "mod.domain",
+                "from mod.domain.tag import Kept as Kept\n"
+                "from mod.domain.tag import Lost as Lost\n",
+                True,
+            ),
+            (
+                "mod/domain/tag.py",
+                "mod.domain.tag",
+                "import tesser.domain as ts\n"
+                "class Kept(ts.ValueObject):\n"
+                "    _text: str\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_text', text)\n"
+                "class Lost(ts.ValueObject):\n"
+                "    _elsewhere: str\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_elsewhere', text)\n",
+                False,
+            ),
+            (
+                "mod/domain/test_tag.py",
+                "mod.domain.test_tag",
+                "import mod.domain as domain\n"
+                "def test_tag() -> None:\n"
+                "    assert domain.Kept('a') is not None\n"
+                "    assert domain.Lost('a') is not None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "mod.domain.tag.__init__ keeps _elsewhere for a text; an __init__ keeps its "
+        "parameter's name in the field it sets, because the two are the same value" in f
+        for f in findings
+    ), findings
+    assert not any("keeps _text for a text" in f for f in findings), findings
+
+
 def test_an_init_keeps_its_parameters_name_in_the_field_it_sets() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"

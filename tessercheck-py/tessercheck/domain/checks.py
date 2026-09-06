@@ -415,6 +415,8 @@ TESTS_ROLE: typing.Final[str] = "tests"
 
 EVAL_PREFIX: typing.Final[str] = "eval_"
 
+OBJECT_SETATTR: typing.Final[str] = "__setattr__"
+
 TEST_PREFIX: typing.Final[str] = "test_"
 
 
@@ -8088,25 +8090,43 @@ class Module(ts.Entity):
             if fn.name != "__init__":
                 continue
             named_parameters = frozenset(arg.arg for arg in parameters)
+            settings: list[tuple[int, str, str]] = []
             for node in ast.walk(fn):
                 if (
-                    not isinstance(node, ast.Assign)
-                    or len(node.targets) != 1
-                    or not isinstance(node.targets[0], ast.Attribute)
-                    or not isinstance(node.targets[0].value, ast.Name)
-                    or node.targets[0].value.id != "self"
-                    or not isinstance(node.value, ast.Name)
-                    or node.value.id not in named_parameters
+                    isinstance(node, ast.Assign)
+                    and len(node.targets) == 1
+                    and isinstance(node.targets[0], ast.Attribute)
+                    and isinstance(node.targets[0].value, ast.Name)
+                    and node.targets[0].value.id == "self"
+                    and isinstance(node.value, ast.Name)
+                    and node.value.id in named_parameters
+                ):
+                    settings.append((node.lineno, node.targets[0].attr, node.value.id))
+                    continue
+                if (
+                    not isinstance(node, ast.Call)
+                    or not isinstance(node.func, ast.Attribute)
+                    or node.func.attr != OBJECT_SETATTR
+                    or not isinstance(node.func.value, ast.Name)
+                    or node.func.value.id != "object"
+                    or len(node.args) != 3
+                    or not isinstance(node.args[0], ast.Name)
+                    or node.args[0].id != "self"
+                    or not isinstance(node.args[1], ast.Constant)
+                    or not isinstance(node.args[1].value, str)
+                    or not isinstance(node.args[2], ast.Name)
+                    or node.args[2].id not in named_parameters
                 ):
                     continue
-                actual = node.targets[0].attr
-                if actual.lstrip("_") == node.value.id:
+                settings.append((node.lineno, node.args[1].value, node.args[2].id))
+            for lineno, actual, source in settings:
+                if actual.lstrip("_") == source:
                     continue
-                derived = node.value.id
+                derived = source
                 found.append(
                     Violation(ViolationSpec(
                         self._path,
-                        node.lineno,
+                        lineno,
                         "TB085",
                         f"{module_name}.{fn.name} keeps {actual} for a {derived}; an "
                         "__init__ keeps its parameter's name in the field it sets, "
