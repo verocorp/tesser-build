@@ -87,6 +87,7 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "actual": "⟨name⟩",
     "derived": "⟨name⟩",
     "fn.name": "⟨function⟩",
+    "read": "⟨name⟩",
 }
 
 APPLIES_TO: typing.Final[dict[str, str]] = {
@@ -105,6 +106,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Module.shadowing_violations": "every module",
     "Module.string_equality_violations": "every module",
     "Module.sibling_reference_violations": "every class, in every module",
+    "Module.package_read_violations": "every module, in every module kind",
     "Module.spec_use_violations": "every function that holds a spec, in every module",
     "Module.spec_shared_violations": "domain object `__init__`",
     "ClassDecl.vo_field_violations": "value object class",

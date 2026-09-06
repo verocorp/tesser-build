@@ -7761,6 +7761,35 @@ class Module(ts.Entity):
             )
         return tuple(found)
 
+    def package_read_violations(self) -> tuple[Violation, ...]:
+        module_name = self._name
+        listed: dict[str, set[str]] = {}
+        for holder, exported, _, _ in self._reexports:
+            listed.setdefault(holder, set()).add(exported)
+        found: list[Violation] = []
+        for node in self._attributes:
+            if not isinstance(node.value, ast.Name):
+                continue
+            local = node.value.id
+            package = self._package_aliases.get(local)
+            if package is None or package not in listed:
+                continue
+            read = node.attr
+            if read in listed[package]:
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    node.lineno,
+                    "TB042",
+                    f"{module_name} reads {local}.{read}, a name {package} does not "
+                    "export; a package __init__ is the list of what the outside may "
+                    "name, and importing a package binds its submodules on it, so the "
+                    "list holds only where a read is checked against it",
+                ))
+            )
+        return tuple(found)
+
     def _declared_attrs(self) -> tuple[tuple[str, str, str, str], ...]:
         scope = self._scope
         rows: list[tuple[str, str, str, str]] = []
@@ -10961,6 +10990,7 @@ class Codebase(ts.AggregateRoot):
             found.extend(module.sibling_reference_violations())
             found.extend(module.dynamic_import_violations())
             found.extend(module.role_package_import_violations(registry))
+            found.extend(module.package_read_violations())
             found.extend(module.alias_violations(registry))
             found.extend(module.naming_violations(registry))
             place = str(module.place())
