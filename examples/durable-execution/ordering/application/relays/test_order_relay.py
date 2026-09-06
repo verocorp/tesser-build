@@ -42,30 +42,6 @@ class TestStartRequestSnapshot:
         assert back.order.quantity == order.Quantity(3)
 
 
-class TestQuoteRequestSnapshot:
-
-    def test_a_quote_request_is_its_sku(self) -> None:
-        raw = order_relay.QuoteRequestSnapshot().serialize(order_relay.QuoteRequest(sku="widget"))
-        assert raw == b'{"sku": "widget"}'
-
-    def test_a_quote_request_comes_back_equal(self) -> None:
-        snapshot = order_relay.QuoteRequestSnapshot()
-        asked = order_relay.QuoteRequest(sku="gadget")
-        assert snapshot.deserialize(snapshot.serialize(asked)) == asked
-
-
-class TestQuoteResponseSnapshot:
-
-    def test_a_quote_response_is_its_cents(self) -> None:
-        raw = order_relay.QuoteResponseSnapshot().serialize(order_relay.QuoteResponse(cents=250))
-        assert raw == b'{"cents": 250}'
-
-    def test_a_quote_response_comes_back_equal(self) -> None:
-        snapshot = order_relay.QuoteResponseSnapshot()
-        answered = order_relay.QuoteResponse(cents=250)
-        assert snapshot.deserialize(snapshot.serialize(answered)) == answered
-
-
 class TestRunResponseSnapshot:
 
     def test_a_run_response_is_the_order_id_and_the_total(self) -> None:

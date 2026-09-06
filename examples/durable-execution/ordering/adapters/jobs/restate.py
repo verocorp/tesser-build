@@ -12,6 +12,7 @@ import restate.serde
 
 import ordering.application.client.order_actions as order_actions_client
 import ordering.application.orchestrators.order_orchestrator as order_orchestrator
+import ordering.application.relays.order_job_context as order_job_context
 import ordering.application.relays.order_relay as order_relay
 import tesser.errors as errors
 
@@ -29,32 +30,6 @@ class RestateStartRequestSerde(ts.Serde, restate.serde.Serde[order_relay.StartRe
         return order_relay.StartRequestSnapshot().deserialize(buf)
 
 
-class RestateQuoteRequestSerde(ts.Serde, restate.serde.Serde[order_relay.QuoteRequest]):
-
-    def serialize(self, obj: order_relay.QuoteRequest | None) -> bytes:
-        if obj is None:
-            return b""
-        return order_relay.QuoteRequestSnapshot().serialize(obj)
-
-    def deserialize(self, buf: bytes) -> order_relay.QuoteRequest | None:
-        if not buf:
-            return None
-        return order_relay.QuoteRequestSnapshot().deserialize(buf)
-
-
-class RestateQuoteResponseSerde(ts.Serde, restate.serde.Serde[order_relay.QuoteResponse]):
-
-    def serialize(self, obj: order_relay.QuoteResponse | None) -> bytes:
-        if obj is None:
-            return b""
-        return order_relay.QuoteResponseSnapshot().serialize(obj)
-
-    def deserialize(self, buf: bytes) -> order_relay.QuoteResponse | None:
-        if not buf:
-            return None
-        return order_relay.QuoteResponseSnapshot().deserialize(buf)
-
-
 class RestateRunResponseSerde(ts.Serde, restate.serde.Serde[order_relay.RunResponse]):
 
     def serialize(self, obj: order_relay.RunResponse | None) -> bytes:
@@ -68,19 +43,41 @@ class RestateRunResponseSerde(ts.Serde, restate.serde.Serde[order_relay.RunRespo
         return order_relay.RunResponseSnapshot().deserialize(buf)
 
 
+class RestateQuoteRequestSerde(ts.Serde, restate.serde.Serde[order_job_context.QuoteRequest]):
+
+    def serialize(self, obj: order_job_context.QuoteRequest | None) -> bytes:
+        if obj is None:
+            return b""
+        return order_job_context.QuoteRequestSnapshot().serialize(obj)
+
+    def deserialize(self, buf: bytes) -> order_job_context.QuoteRequest | None:
+        if not buf:
+            return None
+        return order_job_context.QuoteRequestSnapshot().deserialize(buf)
+
+
+class RestateQuoteResponseSerde(ts.Serde, restate.serde.Serde[order_job_context.QuoteResponse]):
+
+    def serialize(self, obj: order_job_context.QuoteResponse | None) -> bytes:
+        if obj is None:
+            return b""
+        return order_job_context.QuoteResponseSnapshot().serialize(obj)
+
+    def deserialize(self, buf: bytes) -> order_job_context.QuoteResponse | None:
+        if not buf:
+            return None
+        return order_job_context.QuoteResponseSnapshot().deserialize(buf)
+
+
 class RestateOrderRelay(ts.Gateway):
 
     def __init__(
         self,
         ingress: str,
         run: restate.context.HandlerType[order_relay.StartRequest, object],
-        quote: abc.Callable[[typing.Any, order_relay.QuoteRequest], abc.Awaitable[order_relay.QuoteResponse]],
-        ctx: restate.Context | None,
     ) -> None:
         self._ingress = ingress
         self._run = run
-        self._quote = quote
-        self._ctx = ctx
 
     async def start(self, request: order_relay.StartRequest) -> order_relay.StartResponse:
         keyed = str(request.order.identity)
@@ -91,9 +88,23 @@ class RestateOrderRelay(ts.Gateway):
             raise errors.InfraError(f"restate ingress refused the workflow: {e}") from e
         return order_relay.StartResponse(keyed)
 
-    async def quote(self, request: order_relay.QuoteRequest) -> order_relay.QuoteResponse:
-        if self._ctx is None:
-            raise errors.InfraError("a quote is journaled, so it runs only inside an invocation")
+
+class RestateOrderJobContext(ts.JobContext):
+
+    def __init__(
+        self,
+        ctx: restate.Context,
+        quote: abc.Callable[
+            [typing.Any, order_job_context.QuoteRequest],
+            abc.Awaitable[order_job_context.QuoteResponse],
+        ],
+    ) -> None:
+        self._ctx = ctx
+        self._quote = quote
+
+    async def quote(
+        self, request: order_job_context.QuoteRequest
+    ) -> order_job_context.QuoteResponse:
         try:
             return await self._ctx.service_call(self._quote, request)
         except restate.TerminalError as e:
@@ -110,8 +121,8 @@ class RestateActionJobs(ts.Job):
             output_serde=RestateQuoteResponseSerde(),
         )
         async def quote(
-            ctx: restate.Context, request: order_relay.QuoteRequest
-        ) -> order_relay.QuoteResponse:
+            ctx: restate.Context, request: order_job_context.QuoteRequest
+        ) -> order_job_context.QuoteResponse:
             try:
                 return actions.quote(request)
             except errors.DomainError as e:
@@ -127,8 +138,10 @@ class RestateWorkflowJobs(ts.Job):
 
     def __init__(
         self,
-        ingress: str,
-        quote: abc.Callable[[typing.Any, order_relay.QuoteRequest], abc.Awaitable[order_relay.QuoteResponse]],
+        quote: abc.Callable[
+            [typing.Any, order_job_context.QuoteRequest],
+            abc.Awaitable[order_job_context.QuoteResponse],
+        ],
     ) -> None:
         self.workflow = restate.Workflow("Ordering")
 
@@ -140,7 +153,7 @@ class RestateWorkflowJobs(ts.Job):
             ctx: restate.WorkflowContext, request: order_relay.StartRequest
         ) -> order_relay.RunResponse:
             orchestrator = order_orchestrator.OrderOrchestrator(
-                RestateOrderRelay(ingress, run, quote, ctx)
+                RestateOrderJobContext(ctx, quote)
             )
             try:
                 return await orchestrator.run(request)

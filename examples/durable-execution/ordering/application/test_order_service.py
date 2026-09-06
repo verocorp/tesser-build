@@ -19,9 +19,6 @@ class FakeOrderRelay(order_relay.OrderRelay):
         self.started.append(request)
         return order_relay.StartResponse(order_id=str(request.order.identity))
 
-    async def quote(self, request: order_relay.QuoteRequest) -> order_relay.QuoteResponse:
-        return order_relay.QuoteResponse(cents=250)
-
 
 @ts.helper
 def place_request(order_id: str = "o1", sku: str = "widget", quantity: int = 2) -> client.PlaceRequest:

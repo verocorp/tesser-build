@@ -11,6 +11,7 @@ import restate
 
 import ordering.adapters.jobs.restate as restate_jobs
 import ordering.application.client.order_actions as order_actions_client
+import ordering.application.relays.order_job_context as order_job_context
 import ordering.application.relays.order_relay as order_relay
 import ordering.domain.order as order
 import tesser.errors as errors
@@ -19,8 +20,10 @@ import tesser.errors as errors
 @ts.fake
 class FakeActions(order_actions_client.Client):
 
-    def quote(self, request: order_relay.QuoteRequest) -> order_relay.QuoteResponse:
-        return order_relay.QuoteResponse(cents=250)
+    def quote(
+        self, request: order_job_context.QuoteRequest
+    ) -> order_job_context.QuoteResponse:
+        return order_job_context.QuoteResponse(cents=250)
 
 
 @ts.helper
@@ -41,7 +44,9 @@ class TestRestateActionJobs:
     def test_the_quote_job_relays_to_the_actions_it_was_given(self) -> None:
         jobs = restate_jobs.RestateActionJobs(FakeActions())
         quoted = asyncio.run(
-            jobs.quote(typing.cast(restate.Context, None), order_relay.QuoteRequest(sku="gadget"))
+            jobs.quote(
+                typing.cast(restate.Context, None), order_job_context.QuoteRequest(sku="gadget")
+            )
         )
         assert quoted.cents == 250
 
@@ -50,25 +55,25 @@ class TestRestateWorkflowJobs:
 
     def test_it_declares_the_workflow_with_its_run_handler(self) -> None:
         actions = restate_jobs.RestateActionJobs(FakeActions())
-        jobs = restate_jobs.RestateWorkflowJobs("http://127.0.0.1:8080", actions.quote)
+        jobs = restate_jobs.RestateWorkflowJobs(actions.quote)
         assert [(d.name, sorted(d.handlers)) for d in jobs.definitions()] == [("Ordering", ["run"])]
 
 
 class TestRestateSerdes:
 
     def test_each_shim_writes_what_its_relay_snapshot_writes(self) -> None:
-        asked = order_relay.QuoteRequest(sku="widget")
-        answered = order_relay.QuoteResponse(cents=250)
+        asked = order_job_context.QuoteRequest(sku="widget")
+        answered = order_job_context.QuoteResponse(cents=250)
         ran = order_relay.RunResponse(order_id="o1", total_cents=500)
         started = start_request()
         assert restate_jobs.RestateStartRequestSerde().serialize(started) == order_relay.StartRequestSnapshot().serialize(started)
-        assert restate_jobs.RestateQuoteRequestSerde().serialize(asked) == order_relay.QuoteRequestSnapshot().serialize(asked)
-        assert restate_jobs.RestateQuoteResponseSerde().serialize(answered) == order_relay.QuoteResponseSnapshot().serialize(answered)
         assert restate_jobs.RestateRunResponseSerde().serialize(ran) == order_relay.RunResponseSnapshot().serialize(ran)
+        assert restate_jobs.RestateQuoteRequestSerde().serialize(asked) == order_job_context.QuoteRequestSnapshot().serialize(asked)
+        assert restate_jobs.RestateQuoteResponseSerde().serialize(answered) == order_job_context.QuoteResponseSnapshot().serialize(answered)
 
     def test_each_shim_reads_back_what_it_wrote(self) -> None:
-        asked = order_relay.QuoteRequest(sku="widget")
-        answered = order_relay.QuoteResponse(cents=250)
+        asked = order_job_context.QuoteRequest(sku="widget")
+        answered = order_job_context.QuoteResponse(cents=250)
         ran = order_relay.RunResponse(order_id="o1", total_cents=500)
         request_serde = restate_jobs.RestateQuoteRequestSerde()
         response_serde = restate_jobs.RestateQuoteResponseSerde()
@@ -80,9 +85,9 @@ class TestRestateSerdes:
     def test_an_empty_body_is_no_message_on_every_shim(self) -> None:
         for serde in (
             restate_jobs.RestateStartRequestSerde(),
+            restate_jobs.RestateRunResponseSerde(),
             restate_jobs.RestateQuoteRequestSerde(),
             restate_jobs.RestateQuoteResponseSerde(),
-            restate_jobs.RestateRunResponseSerde(),
         ):
             assert serde.serialize(None) == b""
             assert serde.deserialize(b"") is None
@@ -92,7 +97,7 @@ class TestRestateOrderRelay:
 
     def test_starting_sends_the_workflow_keyed_by_the_orders_id(self) -> None:
         actions = restate_jobs.RestateActionJobs(FakeActions())
-        jobs = restate_jobs.RestateWorkflowJobs("http://127.0.0.1:1", actions.quote)
+        jobs = restate_jobs.RestateWorkflowJobs(actions.quote)
 
         listener = socket.socket()
         listener.bind(("127.0.0.1", 0))
@@ -116,9 +121,7 @@ class TestRestateOrderRelay:
                 )
 
         async def start() -> order_relay.StartResponse:
-            relay = restate_jobs.RestateOrderRelay(
-                f"http://127.0.0.1:{port}", jobs.run, actions.quote, None
-            )
+            relay = restate_jobs.RestateOrderRelay(f"http://127.0.0.1:{port}", jobs.run)
             return await relay.start(start_request())
 
         thread = threading.Thread(target=ingress)
@@ -134,7 +137,7 @@ class TestRestateOrderRelay:
 
     def test_a_refused_send_is_an_infra_error(self) -> None:
         actions = restate_jobs.RestateActionJobs(FakeActions())
-        jobs = restate_jobs.RestateWorkflowJobs("http://127.0.0.1:1", actions.quote)
+        jobs = restate_jobs.RestateWorkflowJobs(actions.quote)
 
         listener = socket.socket()
         listener.bind(("127.0.0.1", 0))
@@ -149,9 +152,7 @@ class TestRestateOrderRelay:
                 conn.sendall(b"HTTP/1.1 404 Not Found\r\ncontent-length: 0\r\n\r\n")
 
         async def start() -> order_relay.StartResponse:
-            relay = restate_jobs.RestateOrderRelay(
-                f"http://127.0.0.1:{port}", jobs.run, actions.quote, None
-            )
+            relay = restate_jobs.RestateOrderRelay(f"http://127.0.0.1:{port}", jobs.run)
             return await relay.start(start_request())
 
         thread = threading.Thread(target=ingress)
@@ -165,26 +166,15 @@ class TestRestateOrderRelay:
 
     def test_an_unreachable_ingress_is_an_infra_error(self) -> None:
         actions = restate_jobs.RestateActionJobs(FakeActions())
-        jobs = restate_jobs.RestateWorkflowJobs("http://127.0.0.1:1", actions.quote)
+        jobs = restate_jobs.RestateWorkflowJobs(actions.quote)
 
         with socket.socket() as closed:
             closed.bind(("127.0.0.1", 0))
             port = closed.getsockname()[1]
 
         async def start() -> order_relay.StartResponse:
-            relay = restate_jobs.RestateOrderRelay(
-                f"http://127.0.0.1:{port}", jobs.run, actions.quote, None
-            )
+            relay = restate_jobs.RestateOrderRelay(f"http://127.0.0.1:{port}", jobs.run)
             return await relay.start(start_request())
 
         with pytest.raises(errors.InfraError):
             asyncio.run(start())
-
-    def test_a_quote_outside_an_invocation_is_an_infra_error(self) -> None:
-        actions = restate_jobs.RestateActionJobs(FakeActions())
-        jobs = restate_jobs.RestateWorkflowJobs("http://127.0.0.1:1", actions.quote)
-        relay = restate_jobs.RestateOrderRelay(
-            "http://127.0.0.1:1", jobs.run, actions.quote, None
-        )
-        with pytest.raises(errors.InfraError):
-            asyncio.run(relay.quote(order_relay.QuoteRequest(sku="widget")))

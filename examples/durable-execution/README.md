@@ -9,9 +9,9 @@ The chain, top to bottom, with where each link lives:
 | it starts the workflow through the relay | `ordering/application/relays/order_relay.py` | `OrderRelay.start(StartRequest) -> StartResponse`, and `StartRequest` carries the `Order` aggregate itself |
 | the Restate SDK sends the workflow | `ordering/adapters/jobs/restate.py` | `RestateOrderRelay.start` → `client.workflow_send(self._run, key=order_id, arg=request)` — the handler function itself, not a name, and the relay's own `StartRequest` as the body |
 | Restate's server calls the workflow job | `ordering/adapters/jobs/restate.py` | `RestateWorkflowJobs`'s `@workflow.main()` `run`, mounted at `/restate` by the host |
-| the orchestrator is built **inside the invocation** | `ordering/adapters/jobs/restate.py` | `run` builds `RestateOrderRelay(ingress, run, quote, ctx)` over *this* invocation's `ctx` and constructs `OrderOrchestrator(relay)` over it |
-| the orchestrator runs the action through the same relay | `ordering/application/relays/order_relay.py` | `OrderOrchestrator.run` (`application/orchestrators/`) reads the `Order` off the message, then `OrderRelay.quote(QuoteRequest) -> QuoteResponse` — no context parameter; the invocation is inside the adapter |
-| the Restate SDK calls the action durably | `ordering/adapters/jobs/restate.py` | `RestateOrderRelay.quote(request)` → `self._ctx.service_call(self._quote, request)` |
+| the orchestrator is built **inside the invocation** | `ordering/adapters/jobs/restate.py` | `run` builds `RestateOrderJobContext(ctx, quote)` over *this* invocation's `ctx` and constructs `OrderOrchestrator(job)` over it |
+| the orchestrator runs the action through its job context | `ordering/application/relays/order_job_context.py` | `OrderOrchestrator.run` (`application/orchestrators/`) reads the `Order` off the message, then `OrderJobContext.quote(QuoteRequest) -> QuoteResponse` — no context parameter; the invocation *is* the job context |
+| the Restate SDK calls the action durably | `ordering/adapters/jobs/restate.py` | `RestateOrderJobContext.quote(request)` → `self._ctx.service_call(self._quote, request)` |
 | Restate's server calls the action job | `ordering/adapters/jobs/restate.py` | `RestateActionJobs`: `@service.handler()` `quote`, relaying to the application client |
 | the action, a class of actions with one repository lookup | `ordering/application/order_actions.py` | `OrderActions.quote` → `CatalogRepository.price` → `adapters/repositories/memory.py`, behind `application/client/order_actions.py` |
 | the price comes back up the same chain | | `QuoteResponse.cents` → `Order.total(PriceSpec)` → `RunResponse.total_cents` ends the workflow |
@@ -21,10 +21,10 @@ accepted — `workflow_send` is fire-and-forget, so the total is read back from
 Restate, not from the response.
 
 The application never touches Restate. `OrderOrchestrator` depends on
-`OrderRelay` and nothing else; `OrderActions` (the class of actions) depends
-on the `CatalogRepository` port and nothing else. Both are plain application
-code. What makes the orchestrator's call to its actions durable is which
-implementation of the relay it was handed.
+`OrderJobContext` and nothing else; `OrderActions` (the class of actions)
+depends on the `CatalogRepository` port and nothing else. Both are plain
+application code. What makes the orchestrator's call to its actions durable is
+which implementation of the job context it was handed.
 
 Restate *does* carry the domain, on the workflow leg only. `StartRequest` is
 a **relay** message — a message whose far side is this same context's own
@@ -32,56 +32,57 @@ application code — so it holds the `Order` aggregate, and `OrderSnapshot`
 writes it to the wire and rebuilds it on the other side through the
 aggregate's own constructor.
 
-## The relay — `OrderRelay`, one protocol, specific methods
+## Two protocols cross the engine, because two lifetimes do
 
-A **`ts.Relay`** (`application/relays/`) is a port whose far side is this
-context's own application code, reached through an engine instead of by a
-synchronous call. There is exactly one here, `OrderRelay`, and it declares
-the two things this context asks the engine to do, by name:
+`application/relays/` holds both, and each declares only what it is for.
 
 ```python
+# ordering/application/relays/order_relay.py
 class OrderRelay(ts.Relay, typing.Protocol):
 
     async def start(self, request: StartRequest) -> StartResponse: ...
 
+
+# ordering/application/relays/order_job_context.py
+class OrderJobContext(ts.JobContext, typing.Protocol):
+
     async def quote(self, request: QuoteRequest) -> QuoteResponse: ...
 ```
+
+A **`ts.Relay`** is a port whose far side is this context's own application
+code, reached through an engine instead of by a synchronous call. `OrderRelay`
+is one: `OrderService` holds it, it lives as long as the component, and its
+Restate implementation `RestateOrderRelay(ingress, run)` is built once.
+
+A **`ts.JobContext`** is what one invocation may do while it is running.
+`OrderJobContext` is one: `OrderOrchestrator` holds it, it lives exactly as
+long as the invocation, and its Restate implementation
+`RestateOrderJobContext(ctx, quote)` is built inside the workflow handler over
+that handler's own `restate.Context`. The `ctx` is required and is never
+`None` — there is no such thing as a job context outside a job.
+
+`ts.JobContext` in tesser-py is a bare marker protocol, like `ts.Port` and
+`ts.Relay`. The generic `call[I, O](step, request)` it used to declare is gone:
+a job context says what *this* context's steps are, by name, on the subclass.
 
 `CatalogRepository` (Postgres, or the in-memory stand-in) stays a `ts.Port`,
 because a store is not us.
 
 The distinction is what may cross. A `ts.Client` faces outsiders and a
-`ts.Port` faces a foreign system, so both stay primitives-only. A relay has
-us on both ends, and Restate pins an invocation to one deployment, so a relay
-message may carry domain objects and they come back whole. Only the engine's
-own adapter package — `adapters/jobs/` — may import a relays module.
+`ts.Port` faces a foreign system, so both stay primitives-only. A relay and a
+job context both have us on both ends, and Restate pins an invocation to one
+deployment, so their messages may carry domain objects and they come back
+whole. Only the engine's own adapter package — `adapters/jobs/` — may import a
+relays module.
 
-**There is no job context any more.** The earlier shape threaded a generic
-`ts.JobContext` with one generic `call[I, O](step, request)` from the job
-through the orchestrator to the gateway, so that the orchestrator could hand
-the invocation back to the adapter that needed it. `OrderRelay.quote` says
-what the call *is*, so the invocation never has to travel through the
-application at all: it stays inside `RestateOrderRelay`, which the workflow
-job builds per invocation over that invocation's `ctx`. `ts.JobContext` still
-exists in tesser-py; this example no longer uses it.
-
-**One relay class, two instances, because the two legs have different
-lifetimes.** `quote` needs the per-invocation `restate.Context`; `start`
-needs the ingress URL and outlives any invocation. `RestateOrderRelay` takes
-both plus the two handler functions, and `ctx` is `None` on the instance the
-component builds once for `OrderService`. Two classes were the alternative
-and were worse: each would still have to declare both protocol methods, so
-each would still have a method that cannot run — the `None` at least says
-which leg an instance is for, at the one place that builds it.
-
-A job hands a relay message on whole and reads nothing off it: both
+A job hands a message on whole and reads nothing off it: both
 `RestateActionJobs.quote` and `RestateWorkflowJobs.run` pass `request` straight
 through. Stronger, and greppable: **no field name of any message or domain
 object appears anywhere in `adapters/jobs/restate.py`** — not `sku`, not
 `cents`, not `quantity`, not `order_id`, not `total_cents`. Every encoding is a
-snapshot in `order_relay.py`, and the module's one remaining read is
-`str(request.order.identity)` in `RestateOrderRelay.start`, for the workflow key
-Restate's ingress requires.
+snapshot beside its message in `relays/`, and the module's one remaining read
+is `str(request.order.identity)` in `RestateOrderRelay.start`, for the workflow
+key Restate's ingress requires.
 
 ## The three application kinds, and where each lives
 
@@ -92,9 +93,9 @@ This tree is the worked example for `docs/design-app-service-types.md`:
   (validates at the door) and starts the workflow through `OrderRelay.start`.
 - `OrderOrchestrator(ts.Orchestrator)` in `application/orchestrators/` —
   not a service. Built per invocation by the job with that invocation's
-  `OrderRelay`; stores nothing but it; takes the relay's own `StartRequest`
-  — reading the `Order` straight off it — and returns the relay's `RunResponse`.
-  It has no job context and no generic call.
+  `OrderJobContext`; stores nothing but it; takes the relay's own
+  `StartRequest` — reading the `Order` straight off it — and returns the
+  relay's `RunResponse`. Exactly one job context in, no generic call.
 - `OrderActions(ts.Actions)` beside the services — a class of actions over
   exactly one port (`CatalogRepository`), each method making exactly one call
   on it. Not on the public client: it is reachable only through
@@ -105,9 +106,10 @@ And the adapter kind that ties them to the engine, all in one module,
 `adapters/jobs/restate.py`: `RestateActionJobs(ts.Job)` declaring the
 `OrderingActions` service over the application client,
 `RestateWorkflowJobs(ts.Job)` declaring the `Ordering` workflow and building
-`RestateOrderRelay` per invocation, and four compatibility shims that know
-nothing but `None` and which relay snapshot to call. A handler calls the context
-client; a job calls an application client or constructs an orchestrator.
+`RestateOrderJobContext` per invocation, `RestateOrderRelay(ts.Gateway)` built
+once by the component, and four compatibility shims that know nothing but
+`None` and which snapshot to call. A handler calls the context client; a job
+calls an application client or constructs an orchestrator.
 
 ## What the engine is, in this anatomy
 
@@ -115,10 +117,11 @@ client; a job calls an application client or constructs an orchestrator.
   `/restate`, which routes to the two jobs: one `Workflow` and one
   `Service`, each with one typed handler taking and returning the relay's own
   request and response — no wire types.
-- **Outbound, it is one gateway over the relay.** `RestateOrderRelay`
-  implements both legs — `start` through the ingress, `quote` through the
-  invocation — and lives in `adapters/jobs/`, the one adapter package
-  allowed to import a relays module.
+- **Outbound, it is two objects with two lifetimes.** `RestateOrderRelay`
+  (`ts.Gateway`) starts the workflow through the ingress and is built once;
+  `RestateOrderJobContext` (`ts.JobContext`) runs the action through the
+  invocation and is built per invocation. Both live in `adapters/jobs/`, the
+  one adapter package allowed to import a relays module.
 
 **Everything Restate is addressed by a function, not a name.** The gateways
 take the handler *function* and hand it to the SDK — `client.workflow_send(self._run, ...)`
@@ -129,19 +132,18 @@ step, and no address DTO any more. `"Ordering"` and `"OrderingActions"` appear
 exactly once each, in the `restate.Workflow(...)` / `restate.Service(...)`
 constructor calls, one in each job's `__init__`.
 
-**The invocation's context never leaves the adapter.** A Restate handler is
-handed a `WorkflowContext`, and only calls made through it are journaled.
-`run` builds `RestateOrderRelay(ingress, run, quote, ctx)` over *this* ctx
-and constructs `OrderOrchestrator(relay)` over that, per invocation. The
-orchestrator calls `self._relay.quote(request)` and never sees the context at
-all. (The SDK does keep the invocation in a `ContextVar`,
+**The invocation enters the application as a job context, and as nothing
+else.** A Restate handler is handed a `WorkflowContext`, and only calls made
+through it are journaled. `run` builds `RestateOrderJobContext(ctx, quote)`
+over *this* ctx and constructs `OrderOrchestrator(job)` over that, per
+invocation. The orchestrator calls `self._job.quote(request)` — a method named
+for what it does, not a generic `call(step, request)` — and never sees the
+`restate.Context` itself. (The SDK does keep the invocation in a `ContextVar`,
 `restate.extensions.current_context()`, but its module docstring says
 "internal extensions apis" and no documented handler code reads it; a
-convention example does not build on an internal name.) The cost is that the
-relay's gateway is built per invocation and holds the ctx — the shape the
-earlier `ts.JobContext` design existed to avoid; on Temporal the same
-`OrderRelay` is implemented over `workflow.execute_activity`, and the
-orchestrator is unchanged either way.
+convention example does not build on an internal name.) On Temporal the same
+`OrderJobContext` is implemented over `workflow.execute_activity` and the
+orchestrator is unchanged.
 
 ## The context declares its Restate service, the host only mounts it
 
@@ -149,12 +151,20 @@ orchestrator is unchanged either way.
 modules the Restate docs would have you write, except they are classes so
 their dependencies arrive by constructor instead of by module global. They
 are two classes rather than one because the workflow job needs the action
-handler *function* before it can build a relay: the component builds
-`RestateActionJobs(actions)`, then
-`RestateWorkflowJobs(cfg.ingress, action_jobs.quote)` — Restate's own Service
-/ Workflow split, in dependency order — and finally
-`RestateOrderRelay(cfg.ingress, workflow_jobs.run, action_jobs.quote, None)`
-for `OrderService`. The component publishes both jobs as `jobs` — the only thing
+handler *function* before it can build a job context. The component wires
+them in dependency order:
+
+```python
+action_jobs = restate_jobs.RestateActionJobs(self._actions)
+workflow_jobs = restate_jobs.RestateWorkflowJobs(action_jobs.quote)
+self.jobs = (action_jobs, workflow_jobs)
+self.client: client.Client = order_service.OrderService(
+    restate_jobs.RestateOrderRelay(cfg.ingress, workflow_jobs.run)
+)
+```
+
+— Restate's own Service / Workflow split, then the relay over the workflow's
+own `run` handler. The component publishes both jobs as `jobs` — the only thing
 a component publishes besides `client`; the host does
 `api.mount("/restate", restate.app([d for job in app.ordering.jobs for d in job.definitions()]))`
 and knows nothing else about Restate.
@@ -172,17 +182,22 @@ function, so the only reader of the string is the SDK.
 
 ### What this shape costs, in rules
 
-The serde kind itself costs nothing at the engine. The 2026-08-30 ruling named
-it: `tesser.adapters.Serde`, admitted in `adapters/jobs/`, declaring exactly
-`serialize` and `deserialize`, holding at most the target type, and branching
-on nothing but the empty payload — and it is the one adapter class allowed a
-base from outside the tree, because the engine is the caller. The four Restate
-shims read `class RestateXSerde(ts.Serde, restate.serde.Serde[X])`.
+**A serde is an application kind now.** `tesser/application/serde.py` is its
+home, and `tesser.adapters` re-exports it the same direction `JobContext` and
+`Relay` already travel. That follows from where the encodings live: a snapshot
+belongs beside the message it serves, and the messages belong to the relay. The
+four Restate shims still read
+`class RestateXSerde(ts.Serde, restate.serde.Serde[X])` — `ts.Serde` in an
+adapters module resolves to the same class.
 
-What does cost is that **`OrderSnapshot` is not at the engine.** It belongs to
-the relay, so it lives in `application/relays/order_relay.py`, and an
-application module can neither name `ts.Serde` (it is an adapters kind) nor
-import `json` (the application stdlib allowlist is `{__future__, typing}`).
+The 2026-08-30 serde ruling still applies to the shims: exactly `serialize` and
+`deserialize`, holding at most the target type, branching on nothing but the
+empty payload — and they are the one adapter class allowed a base from outside
+the tree, because the engine is the caller.
+
+The remaining cost of putting an encoding in the application is `json`: the
+application stdlib allowlist is `{__future__, typing}`, and both relays modules
+import it.
 
 **The relay does cost, and this tree is currently red because of it.** The
 analyzer has no notion of a relay yet, so `application/relays/`, `ts.Relay`, a
@@ -191,23 +206,24 @@ a serde in an application module, and a gateway living in `adapters/jobs/` all
 draw findings. They are recorded rather than suppressed: this branch is a spike
 for the relay rules, not a shape the current rulebook admits.
 
-## Messages are declared once, on the relay
+## Messages are declared once, beside the protocol that speaks them
 
-There are no wire types. Both ends of a relay are us, so the send side and the
-receive side of one message are not independent boundaries: `RunRequest` *is*
-`order_relay.StartRequest`, and the action's `QuoteRequest` / `QuoteResponse`
-are the relay's own. The gateway sends the relay's DTO, the job receives it,
-and `application/client/order_actions.py` speaks the same two shapes to the
-job. The workflow's result, `RunResponse`, is a relay message too — the engine
-stores it and the ingress hands it back — so it lives there with the rest. All
-five exist exactly once, in `application/relays/order_relay.py`.
+There are no wire types. Both ends are us, so the send side and the receive side
+of one message are not independent boundaries.
 
-**Every wire form is an explicit snapshot beside its message, and they all
-belong to the relay.** `order_relay.py` carries five: `OrderSnapshot` for the
-aggregate, and `StartRequestSnapshot`, `QuoteRequestSnapshot`,
-`QuoteResponseSnapshot`, `RunResponseSnapshot` for the messages that cross.
-Each is a `ts.Serde` with exactly `serialize` and `deserialize`, written out
-longhand rather than derived:
+- `order_relay.py` holds `StartRequest`, `StartResponse`, and `RunResponse` —
+  the workflow's input, the start ack, and the workflow's result. `RunResponse`
+  is a relay message even though no method on `OrderRelay` returns it: the
+  engine stores it and the ingress hands it back.
+- `order_job_context.py` holds `QuoteRequest` and `QuoteResponse` — the
+  action's two shapes. `application/client/order_actions.py` and
+  `OrderActions` speak the same two.
+
+**Every wire form is an explicit snapshot beside its message.** Five in all:
+`OrderSnapshot`, `StartRequestSnapshot` and `RunResponseSnapshot` in
+`order_relay.py`; `QuoteRequestSnapshot` and `QuoteResponseSnapshot` in
+`order_job_context.py`. Each is a `ts.Serde` with exactly `serialize` and
+`deserialize`, written out longhand rather than derived:
 
 ```python
 class OrderSnapshot(ts.Serde):
@@ -334,27 +350,29 @@ The sibling test builds the same real client over a real socket listening on
 `127.0.0.1:0`, hands the relay the real `run` handler off a real
 `RestateWorkflowJobs`, and checks the request line the SDK forms from it
 (`POST /Ordering/o1/run/send`). It asserts the route and the key, not the body
-— every payload is pinned once, in `relays/test_order_relay.py`, where the
-snapshots are defined; the Restate tests assert routing, delegation, and the
-SDK's `None`/empty convention, and never a literal body. A transport cannot be
+— every payload is pinned once, in `relays/test_order_relay.py` and
+`relays/test_order_job_context.py`, where the snapshots are defined; the
+Restate tests assert routing, delegation, and the SDK's `None`/empty
+convention, and never a literal body. A transport cannot be
 injected through a base URL any
 more, and inventing a constructor parameter only tests would pass is worse than
 talking to a real socket — so the test talks to a real socket, and the
 unreachable case just points at a closed port.
 
-`RestateOrderRelay.quote` is the one thing whose real call path the suite
-cannot reach: it needs a live `restate.Context`, the SDK's context class is an
-ABC that no `@ts.fake` may implement (a fake must implement a port, a client,
-or a config repository), and the SDK's own `create_test_harness` wants Docker
-and `testcontainers`. Its sibling test covers the no-invocation arm; the
-journaled call and the `TerminalError` → `DomainError` mapping are covered by
-the live run below.
+`RestateOrderJobContext` is the one thing the suite cannot exercise at all: it
+requires a live `restate.Context`, the SDK's context class is an ABC that no
+`@ts.fake` may implement (a fake must implement a port, a client, or a config
+repository), and the SDK's own `create_test_harness` wants Docker and
+`testcontainers`. Its `ctx` is required rather than optional, so there is no
+degenerate arm left to unit-test either — the journaled call and the
+`TerminalError` → `DomainError` mapping are covered only by the live run below.
+That is the honest cost of deleting the `None`.
 
 ## Async everywhere the SDK is
 
 The SDK is async on both sides, so the request path is `async`:
-`OrderRelay`, `OrderService`, `Client.place`, the HTTP handler,
-`OrderOrchestrator`, and both Restate jobs. The
+`OrderRelay`, `OrderJobContext`, `OrderService`, `Client.place`, the HTTP
+handler, `OrderOrchestrator`, and both Restate jobs. The
 class of actions and its repository are sync — plain application code that
 runs inside the action job. There is no `asyncio.run` on the request path at
 all: the one loop is hypercorn's, opened once by `HttpHost.run`.
@@ -439,6 +457,7 @@ SIGKILL afterwards. The host stops on SIGINT; the srv test sends SIGINT.
   the workflow. The result is read back through Restate's ingress, so the API
   has no `GET /orders/{id}` of its own.
 - The Temporal mirror is the next increment: the same context, the same
-  `OrderRelay`, and a `TemporalOrderRelay` whose `start` is `ExecuteWorkflow`
-  and whose `quote` is `ExecuteActivity`, plus a worker host that registers the
-  workflow and the activity.
+  `OrderRelay` and `OrderJobContext`, and a `TemporalOrderRelay` whose `start`
+  is `ExecuteWorkflow` plus a `TemporalOrderJobContext` whose `quote` is
+  `ExecuteActivity`, and a worker host that registers the workflow and the
+  activity.

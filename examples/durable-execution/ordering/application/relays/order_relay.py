@@ -51,36 +51,6 @@ class StartResponse(ts.Response):
         self.order_id = order_id
 
 
-class QuoteRequest(ts.Request):
-
-    def __init__(self, sku: str) -> None:
-        self.sku = sku
-
-
-class QuoteRequestSnapshot(ts.Serde):
-
-    def serialize(self, request: QuoteRequest) -> bytes:
-        return json.dumps({"sku": request.sku}).encode()
-
-    def deserialize(self, buf: bytes) -> QuoteRequest:
-        return QuoteRequest(sku=json.loads(buf)["sku"])
-
-
-class QuoteResponse(ts.Response):
-
-    def __init__(self, cents: int) -> None:
-        self.cents = cents
-
-
-class QuoteResponseSnapshot(ts.Serde):
-
-    def serialize(self, response: QuoteResponse) -> bytes:
-        return json.dumps({"cents": response.cents}).encode()
-
-    def deserialize(self, buf: bytes) -> QuoteResponse:
-        return QuoteResponse(cents=json.loads(buf)["cents"])
-
-
 class RunResponse(ts.Response):
 
     def __init__(self, order_id: str, total_cents: int) -> None:
@@ -105,5 +75,3 @@ class RunResponseSnapshot(ts.Serde):
 class OrderRelay(ts.Relay, typing.Protocol):
 
     async def start(self, request: StartRequest) -> StartResponse: ...
-
-    async def quote(self, request: QuoteRequest) -> QuoteResponse: ...

@@ -4,7 +4,7 @@ import tesser.testing as ts
 
 import ordering.application.order_actions as actions
 import ordering.application.ports.catalog_repository as catalog_repository
-import ordering.application.relays.order_relay as order_relay
+import ordering.application.relays.order_job_context as order_job_context
 
 
 @ts.fake
@@ -22,11 +22,11 @@ class TestOrderActions:
 
     def test_quoting_answers_the_catalog_price(self) -> None:
         quoted = actions.OrderActions(FakeCatalogRepository()).quote(
-            order_relay.QuoteRequest(sku="widget")
+            order_job_context.QuoteRequest(sku="widget")
         )
         assert quoted.cents == 250
 
     def test_quoting_looks_the_sku_up_once(self) -> None:
         catalog = FakeCatalogRepository()
-        actions.OrderActions(catalog).quote(order_relay.QuoteRequest(sku="gadget"))
+        actions.OrderActions(catalog).quote(order_job_context.QuoteRequest(sku="gadget"))
         assert catalog.priced == ["gadget"]

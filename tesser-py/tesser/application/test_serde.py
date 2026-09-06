@@ -1,5 +1,5 @@
-import tesser.adapters.job as job
-import tesser.adapters.serde as serde
+import tesser.application.mapper as mapper
+import tesser.application.serde as serde
 
 
 def test_serde_is_a_plain_marker_base() -> None:
@@ -16,9 +16,9 @@ def test_serde_carries_no_behavior_of_its_own() -> None:
     assert own == set(), own
 
 
-def test_a_serde_is_not_a_job() -> None:
-    assert not issubclass(serde.Serde, job.Job)
-    assert not issubclass(job.Job, serde.Serde)
+def test_a_serde_is_not_a_mapper() -> None:
+    assert not issubclass(serde.Serde, mapper.Mapper)
+    assert not issubclass(mapper.Mapper, serde.Serde)
 
 
 def test_a_serde_composes_with_an_engine_base() -> None:
