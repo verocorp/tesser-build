@@ -7,7 +7,7 @@ import typing
 import tesser.domain as ts
 import tesser.serialization as serialization
 
-import tessercheck.domain.checks as checks
+import tessercheck.domain.checks as checks  # tesser:debt TB060
 
 HOLE_NAMES: typing.Final[dict[str, str]] = {
     "where": "⟨module.Class.method⟩",
@@ -32,6 +32,9 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "inner.name": "⟨class⟩",
     "type(node).__name__": "⟨node⟩",
     "target": "⟨import⟩",
+    "original": "⟨name⟩",
+    "exported": "⟨name⟩",
+    "holder": "⟨package⟩",
     "package": "⟨package⟩",
     "self._export": "⟨export⟩",
     "', '.join(outsiders)": "⟨packages⟩",
@@ -71,14 +74,19 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "field.name()": "⟨field⟩",
     "method.name()": "⟨method⟩",
     "arg": "⟨name⟩",
-    "decl.module()": "⟨module⟩",
-    "decl.name()": "⟨class⟩",
+    "class_decl.module()": "⟨module⟩",
+    "class_decl.name()": "⟨class⟩",
     "delegate": "⟨method⟩",
     "function": "⟨function⟩",
     "owner": "⟨module⟩.⟨class⟩",
     "module_name": "⟨module⟩",
-    "written.source()": "⟨annotation⟩",
+    "annotation.source()": "⟨annotation⟩",
     "type_params": "⟨count⟩",
+    "local": "⟨alias⟩",
+    "wanted": "⟨alias⟩",
+    "actual": "⟨name⟩",
+    "derived": "⟨name⟩",
+    "fn.name": "⟨function⟩",
 }
 
 APPLIES_TO: typing.Final[dict[str, str]] = {
@@ -118,13 +126,8 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "a service": "service `__init__`",
     "a class of actions": "actions `__init__`",
     "an orchestrator": "orchestrator `__init__`",
-    "an application client package": "application client `__init__`",
-    "an orchestrators package": "orchestrators `__init__`",
     "a context": "context `__init__`",
     "a context tests": "context tests `__init__`",
-    "a protocol": "protocol package `__init__`",
-    "a ports": "ports `__init__`",
-    "a srv or app": "srv / app `__init__`",
     "ImportEdge.form_violations": "direction-legal context import (role modules and their __init__, srv/app, test modules)",
     "application client": "application client module",
     "a client method": "client protocol method",
@@ -164,6 +167,9 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Module.conftest_leaf_violations": "conftest module",
     "Module.tests_package_violations": "tests package module",
     "Module.role_init_violations": "role package `__init__`",
+    "Module.role_package_import_violations": "every module, in every module kind",
+    "Module.alias_violations": "every module, in every module kind",
+    "Module.naming_violations": "every function, in every module kind",
     "Module.app_violations": "app module",
     "Module.srv_violations": "srv module",
     "Module.protocol_violations": "protocol module",

@@ -258,8 +258,8 @@ def py_check_codes(root: Path) -> set[str]:
             sys.path.insert(0, str(entry))
     try:
         rulebook = importlib.import_module("tessercheck.domain.rulebook")
-        spec = rulebook.RulebookSpec(checks_path.read_text(encoding="utf-8"))
-        rendered = str(rulebook.Rulebook(spec))
+        rulebook_spec = rulebook.RulebookSpec(checks_path.read_text(encoding="utf-8"))
+        rendered = str(rulebook.Rulebook(rulebook_spec))
         codes = {
             line.split("|")[1].strip()
             for line in rendered.splitlines()

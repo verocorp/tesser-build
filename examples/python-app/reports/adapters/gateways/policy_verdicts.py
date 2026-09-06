@@ -4,35 +4,39 @@ import typing
 
 import tesser.adapters as ts
 
-import linkpolicy.client.client as linkpolicy_client
-import reports.application.ports.verdict_source as verdict_source
+import linkpolicy.client as client
+import reports.application.ports as ports
 import tesser.errors as errors
 
-_DECISION_BY_NAME: typing.Final[dict[str, verdict_source.VerdictDecision]] = {
-    "allowed": verdict_source.VerdictDecision.ALLOWED,
-    "denied": verdict_source.VerdictDecision.DENIED,
+_DECISION_BY_NAME: typing.Final[dict[str, ports.VerdictDecision]] = {
+    "allowed": ports.VerdictDecision.ALLOWED,
+    "denied": ports.VerdictDecision.DENIED,
 }
 
 
 class PolicyVerdictGateway(ts.Gateway):
 
-    def __init__(self, verdicts: linkpolicy_client.Client) -> None:
-        self._verdicts = verdicts
+    def __init__(self, link_policy_client: client.LinkPolicyClient) -> None:
+        self._link_policy_client = link_policy_client
 
-    def verdicts(self, request: verdict_source.ListVerdictsRequest) -> verdict_source.ListVerdictsResponse:
-        resp = self._verdicts.list_verdicts(linkpolicy_client.ListVerdictsRequest())
-        records: list[verdict_source.VerdictRecord] = []
-        for v in resp.verdicts:
+    def verdicts(
+        self, list_verdicts_request: ports.ListVerdictsRequest
+    ) -> ports.ListVerdictsResponse:
+        list_verdicts_response = self._link_policy_client.list_verdicts(
+            client.ListVerdictsRequest()
+        )
+        records: list[ports.VerdictRecord] = []
+        for v in list_verdicts_response.verdicts:
             decision = _DECISION_BY_NAME.get(v.decision)
             if decision is None:
                 raise errors.InfraError(
                     f"link policy answered decision {v.decision!r}, which is not a verdict"
                 )
             records.append(
-                verdict_source.VerdictRecord(
+                ports.VerdictRecord(
                     target_url=v.target_url,
                     decision=decision,
                     reason=v.reason,
                 )
             )
-        return verdict_source.ListVerdictsResponse(verdicts=tuple(records))
+        return ports.ListVerdictsResponse(verdicts=tuple(records))

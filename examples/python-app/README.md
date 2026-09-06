@@ -59,7 +59,7 @@ context's own config lives in its `wiring`, never on the public interface
 (`reports/wiring/config.py` is an empty spec today — the uniform shape a real
 coordinate would land in).
 
-**The host routes; the handler transforms.** `srv/http/host.py` holds the whole
+**The host routes; the handler transforms.** `srv/http/main.py` holds the whole
 URL surface in one route table and does exactly five things per request: match
 `(method, path)`, read the declared body **bytes** off the socket into an
 `HttpRequest`, call the endpoint, map any escaping rejection or domain error to
@@ -71,7 +71,7 @@ It never parses or serializes a body — `req.body` and `HttpResponse.body` are 
 (`HttpResponse.json(...)`), owning its `Content-Type`. That is why the host is
 content-type-agnostic: a `.png` in or out never touches it. Framing is the
 host's call from the headers — `buffered_length` and the size cap live in
-`srv/http/host.py`, not on the record, because how many bytes to trust off the
+`srv/http/main.py`, not on the record, because how many bytes to trust off the
 socket is host policy: a body over the cap is a 413, a
 `Transfer-Encoding: chunked` body a 411 (streaming is a documented boundary,
 not built). Every endpoint has the same `(HttpRequest) -> HttpResponse` signature,

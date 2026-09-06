@@ -3,84 +3,84 @@ from __future__ import annotations
 import pytest
 import tesser.testing as ts
 
-import campaign.adapters.handlers.cli as cli
-import campaign.client.client as campaign_client
+import campaign.adapters.handlers as handlers
+import campaign.client as client
 import tesser.errors as errors
-import protocol.cli as protocol_cli
+import protocol as protocol
 
 
 @ts.fake
-class FakeCampaignClientScripted(campaign_client.Client):
+class FakeCampaignClientScripted(client.CampaignClient):
     def __init__(
-        self, *views: campaign_client.CampaignView, error: Exception | None = None
+        self, *views: client.CampaignView, error: Exception | None = None
     ) -> None:
         self.pending = list(views)
         self.error = error
         self.requests: list[object] = []
 
     def create_campaign(
-        self, req: campaign_client.CreateCampaignRequest
-    ) -> campaign_client.CampaignView:
-        self.requests.append(req)
+        self, create_campaign_request: client.CreateCampaignRequest
+    ) -> client.CampaignView:
+        self.requests.append(create_campaign_request)
         if self.error is not None:
             raise self.error
         return self.pending.pop(0)
 
-    def add_link(self, req: campaign_client.AddLinkRequest) -> campaign_client.CampaignView:
-        self.requests.append(req)
+    def add_link(self, add_link_request: client.AddLinkRequest) -> client.CampaignView:
+        self.requests.append(add_link_request)
         if self.error is not None:
             raise self.error
         return self.pending.pop(0)
 
     def deactivate_link(
-        self, req: campaign_client.DeactivateLinkRequest
-    ) -> campaign_client.CampaignView:
-        self.requests.append(req)
+        self, deactivate_link_request: client.DeactivateLinkRequest
+    ) -> client.CampaignView:
+        self.requests.append(deactivate_link_request)
         if self.error is not None:
             raise self.error
         return self.pending.pop(0)
 
     def get_campaign(
-        self, req: campaign_client.GetCampaignRequest
-    ) -> campaign_client.CampaignView:
-        self.requests.append(req)
+        self, get_campaign_request: client.GetCampaignRequest
+    ) -> client.CampaignView:
+        self.requests.append(get_campaign_request)
         if self.error is not None:
             raise self.error
         return self.pending.pop(0)
 
-    def resolve(self, req: campaign_client.ResolveRequest) -> campaign_client.ResolveResponse:
+    def resolve(self, resolve_request: client.ResolveRequest) -> client.ResolveResponse:
         raise AssertionError("resolve is not part of the CLI surface")
 
     def list_links(
-        self, req: campaign_client.ListLinksRequest
-    ) -> campaign_client.ListLinksResponse:
+        self, list_links_request: client.ListLinksRequest
+    ) -> client.ListLinksResponse:
         raise AssertionError("list_links is not part of the CLI surface")
 
 
 def test_create_campaign_transforms_args_to_a_success_line() -> None:
-    client = FakeCampaignClientScripted(
-        campaign_client.CampaignView("0123456789abcdef", "100.00", "USD", ())
+    fake_campaign_client_scripted = FakeCampaignClientScripted(
+        client.CampaignView("0123456789abcdef", "100.00", "USD", ())
     )
-    resp = cli.Handler(client).create_campaign(protocol_cli.CliRequest(("100.00", "USD")))
-    assert resp.exit_code == 0
-    assert resp.stdout.startswith("created campaign ")
-    assert "budget 100.00 USD" in resp.stdout
-    assert resp.stderr == ""
-    request = client.requests[0]
-    assert isinstance(request, campaign_client.CreateCampaignRequest)
+    cli_response = handlers.CliHandler(fake_campaign_client_scripted).create_campaign(protocol.CliRequest(("100.00", "USD")))
+    assert cli_response.exit_code == 0
+    assert cli_response.stdout.startswith("created campaign ")
+    assert "budget 100.00 USD" in cli_response.stdout
+    assert cli_response.stderr == ""
+    request = fake_campaign_client_scripted.requests[0]
+    assert isinstance(request, client.CreateCampaignRequest)
     assert request.budget_amount == "100.00"
     assert request.budget_currency == "USD"
 
 
 def test_a_missing_argument_raises_a_usage_error() -> None:
-    client = FakeCampaignClientScripted()
-    with pytest.raises(protocol_cli.UsageError):
-        cli.Handler(client).create_campaign(protocol_cli.CliRequest(("100.00",)))
-    assert client.requests == []
+    fake_campaign_client_scripted = FakeCampaignClientScripted()
+    with pytest.raises(protocol.UsageError):
+        handlers.CliHandler(fake_campaign_client_scripted).create_campaign(protocol.CliRequest(("100.00",)))
+    assert fake_campaign_client_scripted.requests == []
 
 
 def test_a_client_failure_propagates_out_of_the_handler() -> None:
-    client = FakeCampaignClientScripted(error=errors.invalid("bad_amount", "must be positive"))
+    fake_campaign_client_scripted = FakeCampaignClientScripted(error=errors.invalid("bad_amount", "must be positive"))
     with pytest.raises(errors.DomainError):
-        cli.Handler(client).create_campaign(protocol_cli.CliRequest(("-5", "USD")))
-    assert len(client.requests) == 1
+        handlers.CliHandler(fake_campaign_client_scripted).create_campaign(protocol.CliRequest(("-5", "USD")))
+    assert len(fake_campaign_client_scripted.requests) == 1

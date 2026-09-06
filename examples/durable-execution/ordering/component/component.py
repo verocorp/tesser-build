@@ -2,31 +2,40 @@ from __future__ import annotations
 
 import tesser.component as ts
 
-import ordering.adapters.gateways.restate_quoting as restate_quoting
-import ordering.adapters.gateways.restate_workflow as restate_workflow
-import ordering.adapters.jobs.restate as restate_jobs
-import ordering.adapters.repositories.memory as memory
-import ordering.application.order_actions as order_actions
-import ordering.application.order_service as order_service
-import ordering.client.client as client
-import ordering.component.config as config
+import ordering.adapters.gateways as gateways
+import ordering.adapters.jobs as jobs
+import ordering.adapters.repositories as repositories
+import ordering.application as application
+import ordering.client as client
+
+
+class Spec(ts.Spec):
+
+    def __init__(self, ingress: str) -> None:
+        self.ingress = ingress
+
+
+class Config(ts.Config):
+
+    def __init__(self, spec: Spec) -> None:
+        self.ingress = spec.ingress
 
 
 class Ordering(ts.Component):
 
-    def __init__(self, cfg: config.Config) -> None:
-        self._catalog = memory.MemoryCatalogRepository()
-        self._actions = order_actions.OrderActions(self._catalog)
-        action_jobs = restate_jobs.RestateActionJobs(self._actions)
-        workflow_jobs = restate_jobs.RestateWorkflowJobs(
-            restate_quoting.RestateQuoting(action_jobs.quote)
+    def __init__(self, config: Config) -> None:
+        self._catalog = repositories.MemoryCatalogRepository()
+        self._actions = application.OrderActions(self._catalog)
+        restate_action_jobs = jobs.RestateActionJobs(self._actions)
+        restate_workflow_jobs = jobs.RestateWorkflowJobs(
+            gateways.RestateQuoting(restate_action_jobs.quote)
         )
-        self.jobs: tuple[restate_jobs.RestateActionJobs, restate_jobs.RestateWorkflowJobs] = (
-            action_jobs,
-            workflow_jobs,
+        self.jobs: tuple[jobs.RestateActionJobs, jobs.RestateWorkflowJobs] = (
+            restate_action_jobs,
+            restate_workflow_jobs,
         )
-        self.client: client.Client = order_service.OrderService(
-            restate_workflow.RestateOrderWorkflow(cfg.ingress, workflow_jobs.run)
+        self.client: client.OrderingClient = application.OrderService(
+            gateways.RestateOrderWorkflow(config.ingress, restate_workflow_jobs.run)
         )
 
     def close(self) -> None:

@@ -4,9 +4,8 @@ import pathlib
 
 import tesser.testing as ts
 
-import repo.client.client as client
-import repo.component.config as config
-import repo.component.component as wire
+import repo.client as client
+import repo.component as component
 
 
 @ts.helper
@@ -39,30 +38,38 @@ def _repo(root: pathlib.Path) -> pathlib.Path:  # tesser:debt TB073
     return root
 
 
+def test_a_config_constructs_from_its_spec() -> None:
+    assert isinstance(component.Config(component.Spec()), component.Config)
+
+
+def test_each_config_is_its_own() -> None:
+    assert component.Config(component.Spec()) is not component.Config(component.Spec())
+
+
 def test_the_built_client_checks_a_clean_repo_off_disk(tmp_path: pathlib.Path) -> None:
-    response = wire.Repo(config.Config(config.Spec())).client.check(client.CheckRequest(repo_root=str(_repo(tmp_path))))
-    assert response.problems == ()
-    assert response.counts == ("3", "1")
+    check_response = component.Repo(component.Config(component.Spec())).client.check(client.CheckRequest(repo_root=str(_repo(tmp_path))))
+    assert check_response.problems == ()
+    assert check_response.counts == ("3", "1")
 
 
 def test_the_built_client_reads_the_filesystem_it_is_pointed_at(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "utils").mkdir()
-    response = wire.Repo(config.Config(config.Spec())).client.check(client.CheckRequest(repo_root=str(tmp_path)))
-    assert any("'utils' has no manifest.json row" in p for p in response.problems)
+    check_response = component.Repo(component.Config(component.Spec())).client.check(client.CheckRequest(repo_root=str(tmp_path)))
+    assert any("'utils' has no manifest.json row" in p for p in check_response.problems)
 
 
 def test_the_built_client_lists_the_app_trees(tmp_path: pathlib.Path) -> None:
-    response = wire.Repo(config.Config(config.Spec())).client.trees(client.TreesRequest(repo_root=str(_repo(tmp_path))))
-    assert response.trees == ("appone",)
+    trees_response = component.Repo(component.Config(component.Spec())).client.trees(client.TreesRequest(repo_root=str(_repo(tmp_path))))
+    assert trees_response.trees == ("appone",)
 
 
 def test_the_built_client_turns_a_missing_root_into_a_problem(tmp_path: pathlib.Path) -> None:
-    response = wire.Repo(config.Config(config.Spec())).client.check(
+    check_response = component.Repo(component.Config(component.Spec())).client.check(
         client.CheckRequest(repo_root=str(tmp_path / "no-such-dir"))
     )
-    assert len(response.problems) == 1
-    assert "is not a directory" in response.problems[0]
+    assert len(check_response.problems) == 1
+    assert "is not a directory" in check_response.problems[0]
 
 
 def test_the_built_client_turns_a_broken_manifest_into_one_problem(
@@ -70,14 +77,14 @@ def test_the_built_client_turns_a_broken_manifest_into_one_problem(
 ) -> None:
     _repo(tmp_path)
     (tmp_path / "manifest.json").write_text("{ truncated")
-    response = wire.Repo(config.Config(config.Spec())).client.check(client.CheckRequest(repo_root=str(tmp_path)))
-    assert len(response.problems) == 1
-    assert "manifest.json is unreadable" in response.problems[0]
+    check_response = component.Repo(component.Config(component.Spec())).client.check(client.CheckRequest(repo_root=str(tmp_path)))
+    assert len(check_response.problems) == 1
+    assert "manifest.json is unreadable" in check_response.problems[0]
 
 
 def test_every_build_hands_back_a_separate_client(tmp_path: pathlib.Path) -> None:
-    first = wire.Repo(config.Config(config.Spec())).client
-    second = wire.Repo(config.Config(config.Spec())).client
+    first = component.Repo(component.Config(component.Spec())).client
+    second = component.Repo(component.Config(component.Spec())).client
     assert first is not second
     assert first.check(
         client.CheckRequest(repo_root=str(_repo(tmp_path)))

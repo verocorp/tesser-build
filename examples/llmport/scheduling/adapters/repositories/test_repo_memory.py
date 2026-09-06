@@ -1,22 +1,24 @@
 from __future__ import annotations
 
-import scheduling.adapters.repositories.repo_memory as repo_memory
-import scheduling.application.ports.booking_repository as booking_repository
+import scheduling.adapters.repositories as repositories
+import scheduling.application.ports as ports
 
 
 def test_an_unknown_booking_comes_back_absent_and_empty() -> None:
-    repository = repo_memory.MemoryBookingRepository()
+    memory_booking_repository = repositories.MemoryBookingRepository()
 
-    found = repository.find(booking_repository.FindBookingRequest(booking_id="ghost"))
+    find_booking_response = memory_booking_repository.find(
+        ports.FindBookingRequest(booking_id="ghost")
+    )
 
-    assert found.presence is booking_repository.BookingPresence.ABSENT
-    assert found.bookings == ()
+    assert find_booking_response.presence is ports.BookingPresence.ABSENT
+    assert find_booking_response.bookings == ()
 
 
 def test_a_saved_booking_comes_back_present_with_every_field() -> None:
-    repository = repo_memory.MemoryBookingRepository()
-    repository.save(
-        booking_repository.SaveBookingRequest(
+    memory_booking_repository = repositories.MemoryBookingRepository()
+    memory_booking_repository.save(
+        ports.SaveBookingRequest(
             booking_id="b1",
             step="confirm",
             name="Ada Lovelace",
@@ -25,11 +27,13 @@ def test_a_saved_booking_comes_back_present_with_every_field() -> None:
         )
     )
 
-    found = repository.find(booking_repository.FindBookingRequest(booking_id="b1"))
+    find_booking_response = memory_booking_repository.find(
+        ports.FindBookingRequest(booking_id="b1")
+    )
 
-    assert found.presence is booking_repository.BookingPresence.PRESENT
-    assert len(found.bookings) == 1
-    view = found.bookings[0]
+    assert find_booking_response.presence is ports.BookingPresence.PRESENT
+    assert len(find_booking_response.bookings) == 1
+    view = find_booking_response.bookings[0]
     assert view.step == "confirm"
     assert view.name == "Ada Lovelace"
     assert view.chosen == "mon-9am"
@@ -37,39 +41,45 @@ def test_a_saved_booking_comes_back_present_with_every_field() -> None:
 
 
 def test_saving_the_same_booking_again_replaces_what_was_there() -> None:
-    repository = repo_memory.MemoryBookingRepository()
-    repository.save(
-        booking_repository.SaveBookingRequest(
+    memory_booking_repository = repositories.MemoryBookingRepository()
+    memory_booking_repository.save(
+        ports.SaveBookingRequest(
             booking_id="b1", step="choose_slot", name="Ada", chosen="", offered=("mon-9am",)
         )
     )
 
-    repository.save(
-        booking_repository.SaveBookingRequest(
+    memory_booking_repository.save(
+        ports.SaveBookingRequest(
             booking_id="b1", step="confirm", name="Ada", chosen="mon-9am", offered=("mon-9am",)
         )
     )
 
-    view = repository.find(booking_repository.FindBookingRequest(booking_id="b1")).bookings[0]
+    view = memory_booking_repository.find(
+        ports.FindBookingRequest(booking_id="b1")
+    ).bookings[0]
     assert view.step == "confirm"
     assert view.chosen == "mon-9am"
 
 
 def test_two_bookings_are_stored_apart() -> None:
-    repository = repo_memory.MemoryBookingRepository()
-    repository.save(
-        booking_repository.SaveBookingRequest(
+    memory_booking_repository = repositories.MemoryBookingRepository()
+    memory_booking_repository.save(
+        ports.SaveBookingRequest(
             booking_id="b1", step="collect_name", name="", chosen="", offered=()
         )
     )
-    repository.save(
-        booking_repository.SaveBookingRequest(
+    memory_booking_repository.save(
+        ports.SaveBookingRequest(
             booking_id="b2", step="booked", name="Grace", chosen="tue-2pm", offered=("tue-2pm",)
         )
     )
 
-    first = repository.find(booking_repository.FindBookingRequest(booking_id="b1")).bookings[0]
-    second = repository.find(booking_repository.FindBookingRequest(booking_id="b2")).bookings[0]
+    first = memory_booking_repository.find(
+        ports.FindBookingRequest(booking_id="b1")
+    ).bookings[0]
+    second = memory_booking_repository.find(
+        ports.FindBookingRequest(booking_id="b2")
+    ).bookings[0]
 
     assert first.step == "collect_name"
     assert second.step == "booked"
@@ -77,14 +87,16 @@ def test_two_bookings_are_stored_apart() -> None:
 
 
 def test_a_booking_with_nothing_recorded_yet_round_trips_as_empty_fields() -> None:
-    repository = repo_memory.MemoryBookingRepository()
-    repository.save(
-        booking_repository.SaveBookingRequest(
+    memory_booking_repository = repositories.MemoryBookingRepository()
+    memory_booking_repository.save(
+        ports.SaveBookingRequest(
             booking_id="b1", step="collect_name", name="", chosen="", offered=()
         )
     )
 
-    view = repository.find(booking_repository.FindBookingRequest(booking_id="b1")).bookings[0]
+    view = memory_booking_repository.find(
+        ports.FindBookingRequest(booking_id="b1")
+    ).bookings[0]
 
     assert view.name == ""
     assert view.chosen == ""
@@ -92,15 +104,17 @@ def test_a_booking_with_nothing_recorded_yet_round_trips_as_empty_fields() -> No
 
 
 def test_finding_a_booking_leaves_it_in_place() -> None:
-    repository = repo_memory.MemoryBookingRepository()
-    repository.save(
-        booking_repository.SaveBookingRequest(
+    memory_booking_repository = repositories.MemoryBookingRepository()
+    memory_booking_repository.save(
+        ports.SaveBookingRequest(
             booking_id="b1", step="booked", name="Ada", chosen="mon-9am", offered=("mon-9am",)
         )
     )
 
-    repository.find(booking_repository.FindBookingRequest(booking_id="b1"))
-    again = repository.find(booking_repository.FindBookingRequest(booking_id="b1"))
+    memory_booking_repository.find(ports.FindBookingRequest(booking_id="b1"))
+    find_booking_response = memory_booking_repository.find(
+        ports.FindBookingRequest(booking_id="b1")
+    )
 
-    assert again.presence is booking_repository.BookingPresence.PRESENT
-    assert again.bookings[0].step == "booked"
+    assert find_booking_response.presence is ports.BookingPresence.PRESENT
+    assert find_booking_response.bookings[0].step == "booked"

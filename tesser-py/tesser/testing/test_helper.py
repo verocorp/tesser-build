@@ -13,7 +13,7 @@ def test_helper_is_a_marker_the_walk_reads_not_behavior() -> None:
     def target(value: int) -> int:
         return value * 2
 
-    decorated = testing.helper(target)
+    decorated = testing.helper(target)  # tesser:debt TB085
 
     assert decorated(3) == 6
     assert decorated.__name__ == "target"

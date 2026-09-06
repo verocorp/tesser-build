@@ -1,2 +1,2 @@
 [tool.pytest.ini_options]
-testpaths = ["repo", "srv", "tests"]
+testpaths = ["app", "protocol", "repo", "srv", "tests"]

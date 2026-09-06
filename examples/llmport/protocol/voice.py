@@ -54,7 +54,7 @@ class ToolTurn(ts.Response):
 
 class ToolEndpoint(ts.Port, typing.Protocol):
 
-    def __call__(self, call: ToolCall, /) -> ToolTurn: ...
+    def __call__(self, tool_call: ToolCall, /) -> ToolTurn: ...
 
 
 class Route(ts.Record):

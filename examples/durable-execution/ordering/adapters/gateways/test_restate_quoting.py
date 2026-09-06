@@ -8,8 +8,8 @@ import tesser.testing as ts
 import pytest
 import restate
 
-import ordering.adapters.gateways.restate_quoting as restate_quoting
-import ordering.application.ports.quoting as quoting
+import ordering.adapters.gateways as gateways
+import ordering.application.ports as ports
 import tesser.errors as errors
 
 
@@ -28,20 +28,22 @@ class TestRestateQuoting:
         service = restate.Service("OrderingActions")
 
         @service.handler()
-        async def quote(ctx: restate.Context, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
-            return quoting.QuoteResponse(cents=250)
+        async def quote(ctx: restate.Context, request: ports.QuoteRequest) -> ports.QuoteResponse:
+            return ports.QuoteResponse(cents=250)
 
-        gateway = restate_quoting.RestateQuoting(quote)
-        quoted = asyncio.run(gateway.quote(FakeJobContext(), quoting.QuoteRequest(sku="widget")))
-        assert quoted.cents == 250
+        restate_quoting = gateways.RestateQuoting(quote)
+        quote_response = asyncio.run(
+            restate_quoting.quote(FakeJobContext(), ports.QuoteRequest(sku="widget"))
+        )
+        assert quote_response.cents == 250
 
     def test_a_terminal_error_from_the_action_becomes_a_domain_error(self) -> None:
         service = restate.Service("OrderingActions")
 
         @service.handler()
-        async def quote(ctx: restate.Context, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
+        async def quote(ctx: restate.Context, request: ports.QuoteRequest) -> ports.QuoteResponse:
             raise restate.TerminalError("no price for sku 'nope'", status_code=404)
 
-        gateway = restate_quoting.RestateQuoting(quote)
+        restate_quoting = gateways.RestateQuoting(quote)
         with pytest.raises(errors.DomainError):
-            asyncio.run(gateway.quote(FakeJobContext(), quoting.QuoteRequest(sku="nope")))
+            asyncio.run(restate_quoting.quote(FakeJobContext(), ports.QuoteRequest(sku="nope")))

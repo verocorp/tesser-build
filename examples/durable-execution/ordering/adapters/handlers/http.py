@@ -4,23 +4,23 @@ import json
 
 import tesser.adapters as ts
 
-import ordering.client.client as client
-import protocol.http as http
+import ordering.client as client
+import protocol as protocol
 
 
 class Handler(ts.Handler):
 
-    def __init__(self, client: client.Client) -> None:
-        self._client = client
+    def __init__(self, ordering_client: client.OrderingClient) -> None:
+        self._ordering_client = ordering_client
 
-    async def place(self, request: http.HttpRequest) -> http.HttpResponse:
-        placed = await self._client.place(
+    async def place(self, http_request: protocol.HttpRequest) -> protocol.HttpResponse:
+        place_response = await self._ordering_client.place(
             client.PlaceRequest(
-                order_id=request.text("order_id"),
-                sku=request.text("sku"),
-                quantity=request.integer("quantity"),
+                order_id=http_request.text("order_id"),
+                sku=http_request.text("sku"),
+                quantity=http_request.integer("quantity"),
             )
         )
-        return http.HttpResponse(
-            status_code=202, body=json.dumps({"order_id": placed.order_id}).encode()
+        return protocol.HttpResponse(
+            status_code=202, body=json.dumps({"order_id": place_response.order_id}).encode()
         )

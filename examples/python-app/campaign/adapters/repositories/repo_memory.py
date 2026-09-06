@@ -2,101 +2,100 @@ from __future__ import annotations
 
 import tesser.adapters as ts
 
-import campaign.application.ports.campaign_queries as campaign_queries
-import campaign.application.ports.campaign_repository as campaign_repository
+import campaign.application.ports as ports
 import tesser.errors as errors
 
 
 class InMemoryCampaignRepository(ts.Repository):
 
     def __init__(self, *, down: bool = False) -> None:
-        self._rows: dict[str, campaign_repository.CampaignRecord] = {}
+        self._rows: dict[str, ports.CampaignRecord] = {}
         self._down = down
         self.close_count = 0
 
     def save(
-        self, request: campaign_repository.SaveCampaignRequest
-    ) -> campaign_repository.SaveCampaignResponse:
+        self, save_campaign_request: ports.SaveCampaignRequest
+    ) -> ports.SaveCampaignResponse:
         if self._down:
             raise errors.InfraError("campaign store unavailable")
-        self._rows[request.id] = campaign_repository.CampaignRecord(
-            id=request.id, budget=request.budget, links=request.links
+        self._rows[save_campaign_request.id] = ports.CampaignRecord(
+            id=save_campaign_request.id, budget=save_campaign_request.budget, links=save_campaign_request.links
         )
-        return campaign_repository.SaveCampaignResponse()
+        return ports.SaveCampaignResponse()
 
     def find_view(
-        self, request: campaign_queries.FindCampaignViewRequest
-    ) -> campaign_queries.FindCampaignViewResponse:
+        self, find_campaign_view_request: ports.FindCampaignViewRequest
+    ) -> ports.FindCampaignViewResponse:
         if self._down:
             raise errors.InfraError("campaign store unavailable")
-        row = self._rows.get(request.campaign_id)
+        row = self._rows.get(find_campaign_view_request.campaign_id)
         if row is None:
-            return campaign_queries.FindCampaignViewResponse(
-                outcome=campaign_queries.CampaignViewLookup.MISSING, campaigns=()
+            return ports.FindCampaignViewResponse(
+                outcome=ports.CampaignViewLookup.MISSING, campaigns=()
             )
-        links: list[campaign_queries.LinkViewRow] = []
+        links: list[ports.LinkViewRow] = []
         for link in row.links:
-            links.append(campaign_queries.LinkViewRow(
+            links.append(ports.LinkViewRow(
                 slug=link.slug,
                 target_url=link.target_url,
                 status=link.status,
             ))
-        view = campaign_queries.CampaignViewRow(
+        campaign_view_row = ports.CampaignViewRow(
             campaign_id=row.id,
             budget_amount=row.budget.amount,
             budget_currency=row.budget.currency,
             links=tuple(links),
         )
-        return campaign_queries.FindCampaignViewResponse(
-            outcome=campaign_queries.CampaignViewLookup.FOUND, campaigns=(view,)
+        return ports.FindCampaignViewResponse(
+            outcome=ports.CampaignViewLookup.FOUND, campaigns=(campaign_view_row,)
         )
 
     def find(
-        self, request: campaign_repository.FindCampaignRequest
-    ) -> campaign_repository.FindCampaignResponse:
+        self, find_campaign_request: ports.FindCampaignRequest
+    ) -> ports.FindCampaignResponse:
         if self._down:
             raise errors.InfraError("campaign store unavailable")
-        row = self._rows.get(request.campaign_id)
+        row = self._rows.get(find_campaign_request.campaign_id)
         if row is None:
-            return campaign_repository.FindCampaignResponse(
-                outcome=campaign_repository.CampaignLookup.MISSING, campaigns=()
+            return ports.FindCampaignResponse(
+                outcome=ports.CampaignLookup.MISSING, campaigns=()
             )
-        return campaign_repository.FindCampaignResponse(
-            outcome=campaign_repository.CampaignLookup.FOUND, campaigns=(row,)
+        return ports.FindCampaignResponse(
+            outcome=ports.CampaignLookup.FOUND, campaigns=(row,)
         )
 
     def find_by_slug(
-        self, request: campaign_repository.FindCampaignBySlugRequest
-    ) -> campaign_repository.FindCampaignResponse:
+        self, find_campaign_by_slug_request: ports.FindCampaignBySlugRequest
+    ) -> ports.FindCampaignResponse:
         if self._down:
             raise errors.InfraError("campaign store unavailable")
         for row in self._rows.values():
-            if any(link.slug == request.slug for link in row.links):
-                return campaign_repository.FindCampaignResponse(
-                    outcome=campaign_repository.CampaignLookup.FOUND, campaigns=(row,)
+            if any(link.slug == find_campaign_by_slug_request.slug for link in row.links):
+                return ports.FindCampaignResponse(
+                    outcome=ports.CampaignLookup.FOUND, campaigns=(row,)
                 )
-        return campaign_repository.FindCampaignResponse(
-            outcome=campaign_repository.CampaignLookup.MISSING, campaigns=()
+        return ports.FindCampaignResponse(
+            outcome=ports.CampaignLookup.MISSING, campaigns=()
         )
 
     def slug_taken(
-        self, request: campaign_repository.SlugTakenRequest
-    ) -> campaign_repository.SlugTakenResponse:
+        self, slug_taken_request: ports.SlugTakenRequest
+    ) -> ports.SlugTakenResponse:
         if self._down:
             raise errors.InfraError("campaign store unavailable")
-        taken = any(link.slug == request.slug for row in self._rows.values() for link in row.links)
-        return campaign_repository.SlugTakenResponse(
-            availability=campaign_repository.SlugAvailability.TAKEN
+        taken = any(link.slug == slug_taken_request.slug for row in self._rows.values() for link in row.links)
+        return ports.SlugTakenResponse(
+            availability=ports.SlugAvailability.TAKEN
             if taken
-            else campaign_repository.SlugAvailability.FREE
+            else ports.SlugAvailability.FREE
         )
 
     def all(
-        self, request: campaign_repository.ListCampaignsRequest
-    ) -> campaign_repository.ListCampaignsResponse:
+        self, list_campaigns_request: ports.ListCampaignsRequest
+    ) -> ports.ListCampaignsResponse:
         if self._down:
             raise errors.InfraError("campaign store unavailable")
-        return campaign_repository.ListCampaignsResponse(campaigns=tuple(self._rows.values()))
+        return ports.ListCampaignsResponse(campaigns=tuple(self._rows.values()))
 
     def close(self) -> None:
         self.close_count += 1

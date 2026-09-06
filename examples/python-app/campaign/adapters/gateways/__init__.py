@@ -1,0 +1,2 @@
+from campaign.adapters.gateways.campaign_identity import SecretsCampaignIdentity as SecretsCampaignIdentity
+from campaign.adapters.gateways.target_policy import LinkPolicyTargetPolicy as LinkPolicyTargetPolicy

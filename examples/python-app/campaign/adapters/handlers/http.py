@@ -2,93 +2,93 @@ from __future__ import annotations
 
 import tesser.adapters as ts
 
-import campaign.client.client as client
-import protocol.http as http
+import campaign.client as client
+import protocol as protocol
 
 
-class Handler(ts.Handler):
-    def __init__(self, client: client.Client) -> None:
-        self._client = client
+class HttpHandler(ts.Handler):
+    def __init__(self, campaign_client: client.CampaignClient) -> None:
+        self._campaign_client = campaign_client
 
-    def create_campaign(self, req: http.HttpRequest) -> http.HttpResponse:
-        body = req.json_body()
+    def create_campaign(self, http_request: protocol.HttpRequest) -> protocol.HttpResponse:
+        body = http_request.json_body()
         budget = body.get("budget")
         if not isinstance(budget, dict):
-            raise http.BadRequest("expected a JSON object field")
+            raise protocol.BadRequest("expected a JSON object field")
         amount = budget.get("amount")
         if not isinstance(amount, str):
-            raise http.BadRequest("expected a string field")
+            raise protocol.BadRequest("expected a string field")
         currency = budget.get("currency")
         if not isinstance(currency, str):
-            raise http.BadRequest("expected a string field")
-        view = self._client.create_campaign(
+            raise protocol.BadRequest("expected a string field")
+        campaign_view = self._campaign_client.create_campaign(
             client.CreateCampaignRequest(budget_amount=amount, budget_currency=currency)
         )
-        return http.HttpResponse.json(201, {
-            "campaign_id": view.campaign_id,
-            "budget": {"amount": view.budget_amount, "currency": view.budget_currency},
+        return protocol.HttpResponse.json(201, {
+            "campaign_id": campaign_view.campaign_id,
+            "budget": {"amount": campaign_view.budget_amount, "currency": campaign_view.budget_currency},
             "links": [
                 {"slug": link.slug, "target_url": link.target_url, "status": link.status}
-                for link in view.links
+                for link in campaign_view.links
             ],
         })
 
-    def add_link(self, req: http.HttpRequest) -> http.HttpResponse:
-        body = req.json_body()
+    def add_link(self, http_request: protocol.HttpRequest) -> protocol.HttpResponse:
+        body = http_request.json_body()
         campaign_id = body.get("campaign_id")
         if not isinstance(campaign_id, str):
-            raise http.BadRequest("expected a string field")
+            raise protocol.BadRequest("expected a string field")
         slug = body.get("slug")
         if not isinstance(slug, str):
-            raise http.BadRequest("expected a string field")
+            raise protocol.BadRequest("expected a string field")
         target_url = body.get("target_url")
         if not isinstance(target_url, str):
-            raise http.BadRequest("expected a string field")
-        view = self._client.add_link(
+            raise protocol.BadRequest("expected a string field")
+        campaign_view = self._campaign_client.add_link(
             client.AddLinkRequest(campaign_id=campaign_id, slug=slug, target_url=target_url)
         )
-        return http.HttpResponse.json(200, {
-            "campaign_id": view.campaign_id,
-            "budget": {"amount": view.budget_amount, "currency": view.budget_currency},
+        return protocol.HttpResponse.json(200, {
+            "campaign_id": campaign_view.campaign_id,
+            "budget": {"amount": campaign_view.budget_amount, "currency": campaign_view.budget_currency},
             "links": [
                 {"slug": link.slug, "target_url": link.target_url, "status": link.status}
-                for link in view.links
+                for link in campaign_view.links
             ],
         })
 
-    def deactivate_link(self, req: http.HttpRequest) -> http.HttpResponse:
-        body = req.json_body()
+    def deactivate_link(self, http_request: protocol.HttpRequest) -> protocol.HttpResponse:
+        body = http_request.json_body()
         campaign_id = body.get("campaign_id")
         if not isinstance(campaign_id, str):
-            raise http.BadRequest("expected a string field")
+            raise protocol.BadRequest("expected a string field")
         slug = body.get("slug")
         if not isinstance(slug, str):
-            raise http.BadRequest("expected a string field")
-        view = self._client.deactivate_link(
+            raise protocol.BadRequest("expected a string field")
+        campaign_view = self._campaign_client.deactivate_link(
             client.DeactivateLinkRequest(campaign_id=campaign_id, slug=slug)
         )
-        return http.HttpResponse.json(200, {
-            "campaign_id": view.campaign_id,
-            "budget": {"amount": view.budget_amount, "currency": view.budget_currency},
+        return protocol.HttpResponse.json(200, {
+            "campaign_id": campaign_view.campaign_id,
+            "budget": {"amount": campaign_view.budget_amount, "currency": campaign_view.budget_currency},
             "links": [
                 {"slug": link.slug, "target_url": link.target_url, "status": link.status}
-                for link in view.links
+                for link in campaign_view.links
             ],
         })
 
-    def get_campaign(self, req: http.HttpRequest) -> http.HttpResponse:
-        view = self._client.get_campaign(
-            client.GetCampaignRequest(campaign_id=req.path_param("campaign_id"))
+    def get_campaign(self, http_request: protocol.HttpRequest) -> protocol.HttpResponse:
+        campaign_view = self._campaign_client.get_campaign(
+            client.GetCampaignRequest(campaign_id=http_request.path_param("campaign_id"))
         )
-        return http.HttpResponse.json(200, {
-            "campaign_id": view.campaign_id,
-            "budget": {"amount": view.budget_amount, "currency": view.budget_currency},
+        return protocol.HttpResponse.json(200, {
+            "campaign_id": campaign_view.campaign_id,
+            "budget": {"amount": campaign_view.budget_amount, "currency": campaign_view.budget_currency},
             "links": [
                 {"slug": link.slug, "target_url": link.target_url, "status": link.status}
-                for link in view.links
+                for link in campaign_view.links
             ],
         })
 
-    def resolve(self, req: http.HttpRequest) -> http.HttpResponse:
-        resp = self._client.resolve(client.ResolveRequest(slug=req.path_param("slug")))
-        return http.HttpResponse.redirect(resp.target_url)
+    def resolve(self, http_request: protocol.HttpRequest) -> protocol.HttpResponse:
+        resolve_response = self._campaign_client.resolve(client.ResolveRequest(slug=http_request.path_param("slug")))
+        return protocol.HttpResponse.redirect(resolve_response.target_url)

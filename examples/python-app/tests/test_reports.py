@@ -1,42 +1,42 @@
 from __future__ import annotations
 
-import app.app as app
-import campaign.client.client as client
-import reports.client.client as reports_client
+import app as app
+import campaign.client as campaign_client
+import reports.client as reports_client
 import tesser.errors as errors
 import tests.support as support
 
 
 def test_report_reads_both_components_in_process() -> None:
-    built = app.App(support.app_config())
+    python_app = app.PythonApp(support.app_config())
     try:
-        view = built.campaign.client.create_campaign(client.CreateCampaignRequest("100.00", "USD"))
-        built.campaign.client.add_link(
-            client.AddLinkRequest(view.campaign_id, "a", "https://ok.example/a")
+        campaign_view = python_app.campaign.client.create_campaign(campaign_client.CreateCampaignRequest("100.00", "USD"))
+        python_app.campaign.client.add_link(
+            campaign_client.AddLinkRequest(campaign_view.campaign_id, "a", "https://ok.example/a")
         )
-        built.campaign.client.add_link(
-            client.AddLinkRequest(view.campaign_id, "b", "https://ok.example/b")
+        python_app.campaign.client.add_link(
+            campaign_client.AddLinkRequest(campaign_view.campaign_id, "b", "https://ok.example/b")
         )
-        rows = built.reports.client.links_by_verdict(reports_client.LinksByVerdictRequest()).links
+        rows = python_app.reports.client.links_by_verdict(reports_client.LinksByVerdictRequest()).links
         assert {r.slug for r in rows} == {"a", "b"}
         assert all(r.decision == "allowed" and r.reason == "ok" for r in rows)
     finally:
-        built.close()
+        python_app.close()
 
 
 def test_blocked_destination_never_becomes_a_link() -> None:
-    built = app.App(support.app_config())
+    python_app = app.PythonApp(support.app_config())
     try:
-        view = built.campaign.client.create_campaign(client.CreateCampaignRequest("100.00", "USD"))
+        campaign_view = python_app.campaign.client.create_campaign(campaign_client.CreateCampaignRequest("100.00", "USD"))
         try:
-            built.campaign.client.add_link(
-                client.AddLinkRequest(view.campaign_id, "bad", "http://ok.example/a")
+            python_app.campaign.client.add_link(
+                campaign_client.AddLinkRequest(campaign_view.campaign_id, "bad", "http://ok.example/a")
             )
         except errors.DomainError:
             pass
         assert (
-            built.reports.client.links_by_verdict(reports_client.LinksByVerdictRequest()).links
+            python_app.reports.client.links_by_verdict(reports_client.LinksByVerdictRequest()).links
             == ()
         )
     finally:
-        built.close()
+        python_app.close()

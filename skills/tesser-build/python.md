@@ -24,10 +24,11 @@ them.
 > subclassing one is a *declaration* of what a class is — and **tessercheck**
 > (`tessercheck-py/`) verifies everything against its declaration, at zero
 > findings in CI. The domain mechanics live in
-> `examples/python-app/campaign/domain/` (leaf value objects in `values.py`,
-> the compound `Money` backed by `decimal.Decimal` in `money.py`, the
-> collection value object `Labels` in `labels.py`, the entity `ShortLink`, the
-> aggregate `Campaign`). The service, repository, public-interface, and
+> `examples/python-app/campaign/domain/` (the leaf value objects, the compound
+> `Money` backed by `decimal.Decimal`, the entity `ShortLink` and the aggregate
+> `Campaign` all in `campaign.py`, since the sibling-module ban puts two modules
+> that need each other in one module; the collection value object `Labels`
+> stands alone in `labels.py`). The service, repository, public-interface, and
 > composition-root mechanics — and the app-level anatomy of `bootstrap` +
 > per-context `client.py`/`wiring` + `srv` hosts + inbound handlers — are
 > `examples/python-app/` end to end (multi-context, self-enforcing tests).
@@ -49,15 +50,161 @@ else: `import tesser.errors as errors`, then `errors.invalid(...)`. The
 carried are gone — the app-level `errors`/`serialization` root modules they
 excused moved into the tesser runtime.)
 
-**Every import is a module import** (TB053, maintainer ruling 2026-08-24):
-`import x` or `import x as name`, never `from x import name` — the stdlib,
-the tesser norm modules, kernels, and the tree's own modules alike. The one
-form with no module spelling, `from __future__ import annotations`, is the
-one exemption; a kernel or tesser `__init__` that re-exports (`from kernel.slug
-import Slug as Slug`) is TB042's business, not an import — a role `__init__`
-holds module imports or nothing, as it always has. A context module further
-carries an alias (`import campaign.domain.money as money`), because the
-analyzer resolves names as attribute-over-alias.
+**A package is the unit you import** (TB060, TB053, TB042, maintainer rulings
+2026-09-05, widened 2026-09-06). Outside an exporting package you import the
+package, never a module of it: `import alpha.domain as domain`, then
+`domain.Widget`. The `__init__` is that package's export list, and it is what
+decides what the outside may name — a class the init does not re-export has no
+name the outside is allowed to write, which is how `alpha/domain/` keeps
+`Clearance` and `Standing` off the application layer while handing it `Widget`.
+
+Read that as a convention the import rules enforce, not as a wall Python builds.
+Importing a package binds its imported submodules as attributes of it, so
+`domain.widget.Clearance` still *resolves* at runtime, and today neither the
+analyzer nor `mypy --strict` reports it. Closing that is an open ruling
+(`TODOS.md`); until it lands, the boundary holds because the rules say where a
+name may come from, not because the interpreter refuses.
+
+An **exporting package** is every role package (`domain`, `application`,
+`application/ports`, `application/client`, `application/orchestrators`,
+`client`, `adapters/<kind>`, `component`) **and** the app shell: `app/`,
+`srv/`, `srv/<host>/`, and `protocol/`. They all carry an export list and are
+all imported whole. The two packages that are **not** import units are a
+kernel (`kernel/`, an exported kernel, and a context's `domain/kernel/`
+re-export aside — a kernel module imports its sibling by design, which is what
+"a kernel imports only its kernel" has always meant) and the bare container
+packages whose `__init__` must stay empty: a context (`alpha/`), an adapters
+package (`alpha/adapters/`), a tests package.
+
+The rules that follow from it, each with its code:
+
+- **The alias is the package's last segment** (TB053). `import
+  alpha.application.ports as ports`, not `as p` and not `as alpha_ports`. When
+  two imported packages in one module share a last segment, each takes its
+  context as a prefix — `import alpha.component as alpha_component` beside
+  `import beta.component as beta_component`. A single-segment package is
+  imported bare (`import kernel`), because that already binds the name the rule
+  asks for and the redundant `as kernel` is the alias ruff flags. The alias
+  matters because it is the name every reader resolves a type against, and
+  because the naming rule below derives local names from types — an alias that
+  is not the last segment makes both unpredictable.
+
+- **Inside an exporting package a module imports the packages around it, never
+  a module beside it** (TB060). A module of `alpha/domain/` cannot import
+  another module of `alpha/domain/`, and it cannot import `alpha.domain`
+  either (the
+  package imports the module back). Two modules of one package that need each
+  other are one module; merge them, and merge their sibling tests with them.
+  In `examples/minimal` that made `app/` one module: `app.py`, `config.py`,
+  `config_repository.py` and `loader.py` were transitively connected, so they
+  are now `app/app.py` with one `app/test_app.py` beside it, and
+  `domain/clearance.py` merged into `domain/widget.py` the same way.
+
+  **A sibling test is not exempt** (2026-09-06). `test_widget.py` imports
+  `alpha.domain`, not `alpha.domain.widget`, and asserts through what the init
+  exports. A class the init hides has no test of its own: `Clearance`,
+  `Standing` and `Verdict` are exercised through `Widget.clear(...)`, which is
+  the only way the application can reach them either. A test *may* import its
+  own package — the init never imports a test back, so there is no cycle — and
+  a test's reads count as an outside reader, so an export a test alone needs is
+  still a legitimate export. If a sibling test wants a name the init does not
+  export, that is the signal: either the init should export it, or the test
+  belongs on the object that owns it.
+
+- **The init re-exports, and only re-exports** (TB042). `from
+  alpha.domain.widget import Widget as Widget` — the repeated name is what
+  `mypy --strict` reads as an export, so it is required, not style. A module
+  import in a role `__init__` binds a module and exports nothing, so it is a
+  finding. An export nobody outside the role reads is a finding too: the list
+  cannot go stale.
+
+- **A package never exports a class of its own name** (TB042). `alpha/client/`
+  exporting `Client` is a finding, because the local derived from that class is
+  `client`, which is the package's own alias. The context client is
+  `AlphaClient`, the application client `AlphaApplicationClient`. The same
+  hazard in the shell, where modules are still imported as modules, is the same
+  finding: `app/app.py` declares `MinimalApp`, not `App`, and the config it
+  holds is `AppConfig`, not `Config`.
+
+The one `from` form with no module spelling, `from __future__ import
+annotations`, stays exempt. Everything else that is not a package export list
+is still `import x` or `import x as name`, never `from x import name` (TB053).
+
+**A kernel is domain, and only domain reaches it** (TB062, TB063, maintainer
+ruling 2026-09-05). A kernel is domain that two or more domain modules share,
+so the reach is drawn where domain is:
+
+- A root kernel (`kernel/`, and a tree's one exported kernel) is imported by
+  exactly one kind of module: a context's own kernel package. Its `__init__`
+  re-exports its classes the way any export list does (`from kernel.identity
+  import Identity as Identity`), and a kernel module still imports its own
+  siblings as modules — a kernel is the one package that is not an import
+  unit, because "a kernel imports only its kernel" has always meant exactly
+  that.
+- A context that uses a kernel type gets `<context>/domain/kernel/`, a package
+  nested under its domain and named `kernel`, whose `__init__` re-exports what
+  the context takes from the root kernels plus any value object its own domain
+  modules share. A domain module then writes `import alpha.domain.kernel as
+  kernel` and names `kernel.Identity` — exactly one `kernel` in scope, and the
+  module never has to know which kernel a type came from.
+- Nothing else imports a kernel: not `application`, not `client`, not
+  `adapters`, not `component`, not `app`, not `srv`, not `protocol`, not a
+  `conftest`. An application that needs a kernel type names it through the
+  domain `__init__`, which may re-export from the nested kernel package like
+  any other module of its role.
+
+The analyzer follows a re-exported name to the module that defines it, to a
+fixed point, so `alpha.domain.kernel.Identity` resolves to
+`kernel.identity.Identity` through both hops. That matters because the rules
+that key on a symbol's identity — which object a spec constructs, which port an
+application client speaks — would otherwise see two different types where there
+is one.
+
+**A name is derived from the type it carries** (TB085, maintainer ruling
+2026-09-05). This is what the import change exists to make possible: once
+`domain` is the alias, `widget` is free, so `widget = domain.Widget(spec)`
+reads without a suffix. Three shapes:
+
+- A parameter annotated with a class takes that class's name in snake_case:
+  `add_request: client.AddRequest`, `widget_repository: ports.WidgetRepository`,
+  `job_context: ts.JobContext`.
+- A local assigned from a **call** takes the name of the class the call
+  declares it returns — a constructor (`widget = domain.Widget(spec)`), a
+  method (`add_response = self._alpha_client.add(...)`,
+  `taken = widget.take(spec)`), or a module-level function
+  (`minimal_app = app.load()`). `await` unwraps first, and a chain headed by a
+  constructor resolves through that constructor's class
+  (`cli_response = handlers.Handler(fake).add(...)`).
+- An `__init__` keeps its parameter's name in the field it sets:
+  `self._widget_repository = widget_repository`, never `self._repo`.
+
+**How a call is read.** The analyzer resolves the receiver through its
+annotation — a field (`self._beta_check`), a parameter, a local built by a
+constructor, or a package alias for a module function — then reads the
+declared return of the method it names. An attribute chain resolves link by
+link (`minimal_app.alpha.client.add(...)` reads `MinimalApp.alpha` to `Alpha`,
+`Alpha.client` to `AlphaClient`, and `AlphaClient.add` to `AddResponse`). A
+return that is a primitive, a container, a union, or a type from outside the
+tree leaves the name free. **A call whose receiver is one of those four and
+whose method declares no return the analyzer can read is a finding**, because
+a name the analyzer cannot check is a name it is not checking. The fix is to
+annotate the **method's return**. Annotating the local does not clear it: the
+analyzer records the annotation, then still resolves the call and reports what
+it cannot read there. Where no return annotation is possible — a field holding
+a callable, a decorator that hands back its own argument — stop binding the
+result and assert on the call itself.
+
+Exempt, each for a reason worth knowing: `self` and `cls`; **a constructor's
+one spec, which is named `spec`** (TB080 names it, so TB085 does not derive
+it — `Widget.__init__(self, spec: WidgetSpec)`, never `widget_spec`; a
+*method*'s spec parameter is derived normally, and so is a service method's one
+request, `add_request`); a `ts.Spec` or DTO `__init__` parameter, which is a
+**field** name — renaming `WidgetSpec.__init__(part=)` renames the field and
+breaks every keyword call site; two values of one class in one function, where
+the rule cannot tell them apart and `first`/`second` is the honest answer; a
+receiver with no annotation at all — a loop variable, a comprehension target, an
+unpacked element — which is none of the four receivers the rule reads; and
+anything whose annotation is not a bare class reference.
 
 **An annotation is written unquoted** (TB021, maintainer ruling 2026-08-30). A
 string in type position is a finding, wherever an annotation is read — a
@@ -91,7 +238,7 @@ family code).
 validate in the one constructor:**
 
 ```python
-# campaign/domain/values.py (verified impl)
+# campaign/domain/campaign.py (verified impl)
 import tesser.domain as ts
 
 import tesser.errors as errors
@@ -143,7 +290,7 @@ child; what remains the compound's own is exactly the **cross-field
 invariants**.
 
 ```python
-# campaign/domain/money.py (verified impl)
+# campaign/domain/campaign.py (verified impl)
 class MoneySpec(ts.Spec):
 
     def __init__(self, amount: str, currency: str) -> None:
@@ -207,7 +354,7 @@ norm (`logging.md`).
 **Each rule lives on the type that owns it** — the child's `__init__` guards
 the child; the compound's methods guard only cross-field relations — so no
 construction path can skip a rule, and no rule has two homes. Verified impl:
-`examples/python-app/campaign/domain/money.py`.
+`examples/python-app/campaign/domain/campaign.py`.
 
 **Construction (ruled 2026-08-24, superseding the 2026-08-23
 primitives-and-specs ruling, the 2026-07-20 (b)-uniform ruling, and the
@@ -340,7 +487,7 @@ with its own invariant, not a second factory on this one.
 ## Entities
 
 ```python
-# campaign/domain/short_link.py (verified impl)
+# campaign/domain/campaign.py (verified impl)
 class ShortLinkSpec(ts.Spec):
 
     def __init__(self, slug: str, target_url: str, active: bool) -> None:
@@ -570,44 +717,52 @@ class CampaignService(ts.ApplicationService):
 
     def __init__(
         self,
-        repo: campaign_repository.CampaignRepository,
-        identity_gateway: campaign_identity.CampaignIdentity,
-        queries: campaign_queries.CampaignQueries,
+        campaign_repository: ports.CampaignRepository,
+        campaign_identity: ports.CampaignIdentity,
+        campaign_queries: ports.CampaignQueries,
     ) -> None:
-        self._repo = repo
-        self._identity_gateway = identity_gateway
-        self._queries = queries
+        self._campaign_repository = campaign_repository
+        self._campaign_identity = campaign_identity
+        self._campaign_queries = campaign_queries
 
-    def create_campaign(self, req: client.CreateCampaignRequest) -> client.CampaignView:
-        issued_campaign_identity = self._identity_gateway.issue(
-            campaign_identity.IssueCampaignIdentityRequest()
+    def create_campaign(
+        self, create_campaign_request: client.CreateCampaignRequest
+    ) -> client.CampaignView:
+        issue_campaign_identity_response = self._campaign_identity.issue(
+            ports.IssueCampaignIdentityRequest()
         )
-        c = campaign.Campaign(MapToCampaignSpec(
-            create_campaign_request=req,
-            issued_campaign_identity=issued_campaign_identity,
-            links=short_links.ShortLinksSpec(links=()),
+        campaign = domain.Campaign(MapToCampaignSpec(
+            create_campaign_request=create_campaign_request,
+            issue_campaign_identity_response=issue_campaign_identity_response,
+            short_links_spec=domain.ShortLinksSpec(links=()),
         ))
-        save_request = MapToSaveCampaignRequest(campaign_aggregate=c)
-        self._repo.save(save_request)
-        find_campaign_view_request = campaign_queries.FindCampaignViewRequest(
-            campaign_id=save_request.id,
+        map_to_save_campaign_request = MapToSaveCampaignRequest(campaign=campaign)
+        self._campaign_repository.save(map_to_save_campaign_request)
+        find_campaign_view_request = ports.FindCampaignViewRequest(
+            campaign_id=map_to_save_campaign_request.id,
         )
-        found_campaign_view = self._queries.find_view(find_campaign_view_request)
+        find_campaign_view_response = self._campaign_queries.find_view(
+            find_campaign_view_request
+        )
         return MapToCampaignView(
             find_campaign_view_request=find_campaign_view_request,
-            found_campaign_view=found_campaign_view,
+            find_campaign_view_response=find_campaign_view_response,
         )
 
-    def get_campaign(self, req: client.GetCampaignRequest) -> client.CampaignView:
-        campaign_id = values.CampaignID(req.campaign_id)
+    def get_campaign(
+        self, get_campaign_request: client.GetCampaignRequest
+    ) -> client.CampaignView:
+        campaign_id = domain.CampaignID(get_campaign_request.campaign_id)
         campaign_id_text = str(campaign_id)
-        find_campaign_view_request = campaign_queries.FindCampaignViewRequest(
+        find_campaign_view_request = ports.FindCampaignViewRequest(
             campaign_id=campaign_id_text,
         )
-        found_campaign_view = self._queries.find_view(find_campaign_view_request)
+        find_campaign_view_response = self._campaign_queries.find_view(
+            find_campaign_view_request
+        )
         return MapToCampaignView(
             find_campaign_view_request=find_campaign_view_request,
-            found_campaign_view=found_campaign_view,
+            find_campaign_view_response=find_campaign_view_response,
         )
 ```
 
@@ -774,10 +929,11 @@ one), matches exhaustively where the port answer has outcomes, and calls
 no other method, and it is named `MapTo` plus its target. A nested target
 is a nested mapper when it needs its own translation
 (`budget=MapToMoneySpec(request)`) or a plain spec constructor when it does
-not (`window=values.DateWindowSpec(start=…, end=…)`); a collection is
-`tuple(MapToLinkRecord(link) for link in c.links)`. The service then reads
-`campaign.Campaign(MapToCampaignSpec(request, found))` and
-`self._repo.save(MapToSaveCampaignRequest(c))`: the mapping is hidden in one
+not (`window=domain.DateWindowSpec(start=…, end=…)`); a collection is
+`tuple(MapToLinkRecord(link) for link in campaign.links)`. The service then reads
+`domain.Campaign(MapToCampaignSpec(find_campaign_request, find_campaign_response))`
+and
+`self._campaign_repository.save(MapToSaveCampaignRequest(campaign))`: the mapping is hidden in one
 place, and the service reads as the use case (maintainer ruling 2026-08-25,
 superseding the 2026-08-17 accessor mapper, whose every field the service
 had to re-name at the construction site). A spec built by a mapper is still
@@ -796,27 +952,28 @@ The application side is unchanged — a mapper there takes whole objects,
 never a field already pulled off one (TB080).
 
 ```python
-# campaign/application/views.py (verified impl: examples/errorspy/)
-class MapToCampaignSpec(ts.Mapper, campaign.CampaignSpec):
+# campaign/application/service.py (verified impl: examples/errorspy/)
+class MapToCampaignSpec(ts.Mapper, domain.CampaignSpec):
 
     def __init__(
         self,
-        find_campaign_request: campaign_repository.FindCampaignRequest,
-        found_campaign: campaign_repository.FindCampaignResponse,
+        find_campaign_request: ports.FindCampaignRequest,
+        find_campaign_response: ports.FindCampaignResponse,
     ) -> None:
-        match found_campaign.outcome:
-            case campaign_repository.CampaignLookup.FOUND:
-                record = found_campaign.campaigns[0]
-            case campaign_repository.CampaignLookup.MISSING:
+        match find_campaign_response.outcome:
+            case ports.CampaignLookup.FOUND:
+                record = find_campaign_response.campaigns[0]
+            case ports.CampaignLookup.MISSING:
                 raise errors.not_found(
-                    "campaign_missing", f"no campaign {find_campaign_request.campaign_id!r}"
+                    "campaign_missing",
+                    f"no campaign {find_campaign_request.campaign_id!r}",
                 )
             case _ as unreachable:
                 typing.assert_never(unreachable)
         super().__init__(
             id=record.id,
-            window=values.DateWindowSpec(start=record.window.start, end=record.window.end),
-            links=tuple(MapToShortLinkSpec(link_record=link) for link in record.links),
+            window=domain.DateWindowSpec(start=record.window.start, end=record.window.end),
+            links=tuple(MapToShortLinkSpec(link) for link in record.links),
         )
 ```
 
@@ -927,7 +1084,7 @@ class RestateQuoting(ts.Gateway):                       # built once; holds the 
         return await job.call(self._quote, request)
 
 
-# ordering/adapters/jobs/restate_context.py (verified impl: examples/durable-execution/)
+# ordering/adapters/jobs/restate.py (verified impl: examples/durable-execution/)
 class RestateJobContext(ts.JobContext):                 # the one per-invocation object
 
     def __init__(self, ctx: restate.Context) -> None:
@@ -1023,42 +1180,51 @@ in — as a request DTO — reconstructed aggregate out, no business logic
 # campaign/adapters/repositories/repo_storage.py (verified impl: examples/errorspy/)
 import tesser.adapters as ts
 
-import campaign.application.ports.campaign_repository as campaign_repository
+import campaign.application.ports as ports
+import tesser.errors as errors
+import storage
 
 
 class StorageCampaignRepository(ts.Repository):
 
-    def __init__(self, storage: FakeStorage) -> None:
-        self._storage = storage
+    def __init__(self, backend: storage.FakeStorage) -> None:
+        self._backend = backend
 
     def save(
-        self, request: campaign_repository.SaveCampaignRequest
-    ) -> campaign_repository.SaveCampaignResponse:
-        self._storage.put(request.id, _to_record(request))
-        return campaign_repository.SaveCampaignResponse()
+        self, save_campaign_request: ports.SaveCampaignRequest
+    ) -> ports.SaveCampaignResponse:
+        record: storage.Record = {...}
+        self._backend.put(save_campaign_request.id, record)
+        return ports.SaveCampaignResponse()
 
     def find(
-        self, request: campaign_repository.FindCampaignRequest
-    ) -> campaign_repository.FindCampaignResponse:
+        self, find_campaign_request: ports.FindCampaignRequest
+    ) -> ports.FindCampaignResponse:
         try:
-            row = self._storage.load(request.campaign_id)
-        except StorageMiss:
-            return campaign_repository.FindCampaignResponse(
-                outcome=campaign_repository.CampaignLookup.MISSING, campaigns=()
+            row = self._backend.load(find_campaign_request.campaign_id)
+        except storage.StorageMiss:
+            return ports.FindCampaignResponse(
+                outcome=ports.CampaignLookup.MISSING, campaigns=()
             )
-        return campaign_repository.FindCampaignResponse(
-            outcome=campaign_repository.CampaignLookup.FOUND,
-            campaigns=(_from_record(request.campaign_id, row),),
+        except storage.StorageUnavailable as e:
+            raise errors.InfraError(
+                f"storage unavailable loading campaign {find_campaign_request.campaign_id!r}"
+            ) from e
+        campaign_record = ports.CampaignRecord(id=find_campaign_request.campaign_id, ...)
+        return ports.FindCampaignResponse(
+            outcome=ports.CampaignLookup.FOUND,
+            campaigns=(campaign_record,),
         )
 ```
 
-- **The import block is the rule made visible** (TB060): the only module this
-  adapter imports from its own context is its ports module. It cannot reach
-  the service, the mapping module, or the domain — so the gateway is decoupled
+- **The import block is the rule made visible** (TB060): the only package this
+  adapter imports from its own context is `application/ports`, and it imports
+  the package, never a module inside it. It cannot reach the service or the
+  domain — so the gateway is decoupled
   from the implementation it serves by the import matrix, not by discipline.
 - **The adapter speaks records** (TB081): port DTOs and primitives cross the
   port; the *application layer* reconstructs the aggregate through its spec
-  (`campaign.Campaign(MapToCampaignSpec(request, found))`), so invariants re-run — never build a
+  (`domain.Campaign(MapToCampaignSpec(find_campaign_request, find_campaign_response))`), so invariants re-run — never build a
   domain object by assigning attributes.
 - **No domain math.** A finder may filter/order (persistence selection);
   summing or rule-checking is a leak.
@@ -1275,14 +1441,14 @@ class Handler(ts.Handler):
   asserts on the returned `HttpResponse`. Only a handler imports its own
   context's client (TB060).
 - **`respond` is the whole error table for the mechanism** (it lives with the
-  host, `srv/http/host.py`): shape guard → 400, domain kind → status through
+  host, `srv/http/main.py`): shape guard → 400, domain kind → status through
   the one pure mapper (`status_for` over the closed `Kind` set), infra → 503,
   unexpected → 500 — plus the host's own framing rejections (413, 411)
   through the same table. `HttpResponse.problem` renders the RFC 9457-shaped
   object — decided once, at this path.
 
 ```python
-# srv/http/host.py (verified impl) — the route table: the whole URL surface, one place
+# srv/http/main.py (verified impl) — the route table: the whole URL surface, one place
 def routes_for(app: App) -> tuple[Route, ...]:
     campaign = http.Handler(app.campaign)         # one handler per exposed context,
     reports = reports_http.Handler(app.reports)   # built once from the single App
@@ -1351,7 +1517,8 @@ if __name__ == "__main__":
   multipart, or content negotiation.
 - **The route table is app-level.** URLs are the app's decision, not a
   context's: one table names every exposed endpoint. Pattern matching lives
-  in `srv/http/router.py` — the only component that knows
+  in the `Router` the host builds from that table (`protocol/http.py`) — the
+  only component that knows
   `/campaigns/{campaign_id}` has a parameter in it. A host reaches a context
   only through its handlers (TB063), and a srv module imports `tesser.srv`
   exactly once, as `ts` (TB050).

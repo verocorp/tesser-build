@@ -116,9 +116,13 @@ candidates for human judgment* — never the definition. A DTO can carry an
 
 - **Constructor rejection:** each validation rule has a test proving invalid
   input returns an error (not a panic).
-- **Equality semantics** (`Test*_Equality` / `test_*_equality`): same value ⇒
-  equal; different value ⇒ not equal; multi-representation values ⇒ equal
-  across representations, native comparison blocked where it would lie.
+- **Equality semantics** (`Test*_Equality` / `test_*_equality`), for every
+  value object the package `__init__` exports: same value ⇒ equal; different
+  value ⇒ not equal; multi-representation values ⇒ equal across
+  representations, native comparison blocked where it would lie. A value
+  object the init hides has no test of its own — a sibling test imports the
+  packages around it, never the module beside it, so a hidden value object is
+  reached and asserted through the object that owns it.
 - **Panic-constructor contract** where the language provides one (`MustNew*`):
   panics on invalid input; used only with known-valid literals in tests.
 - **Canonical round-trip** (leaf VOs): reconstructing from the canonical

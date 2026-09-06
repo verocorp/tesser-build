@@ -1,0 +1,1 @@
+from scheduling.adapters.repositories.repo_memory import MemoryBookingRepository as MemoryBookingRepository

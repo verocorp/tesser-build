@@ -1,0 +1,1 @@
+from alpha.application.client.widget_actions import AlphaApplicationClient as AlphaApplicationClient

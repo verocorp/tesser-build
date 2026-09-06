@@ -2,36 +2,36 @@ from __future__ import annotations
 
 import tesser.application as ts
 
-import beta.application.ports.key_repository as key_repository
-import beta.client.client as client
-import beta.domain.key as key
+import beta.application.ports as ports
+import beta.client as client
+import beta.domain as domain
 
 
-class MapToHasKeyRequest(ts.Mapper, key_repository.HasKeyRequest):
+class MapToHasKeyRequest(ts.Mapper, ports.HasKeyRequest):
 
-    def __init__(self, checked_key: key.Key) -> None:
-        super().__init__(key=str(checked_key))
+    def __init__(self, key: domain.Key) -> None:
+        super().__init__(key=str(key))
 
 
-class MapToPutKeyRequest(ts.Mapper, key_repository.PutKeyRequest):
+class MapToPutKeyRequest(ts.Mapper, ports.PutKeyRequest):
 
-    def __init__(self, held_key: key.Key) -> None:
-        super().__init__(key=str(held_key))
+    def __init__(self, key: domain.Key) -> None:
+        super().__init__(key=str(key))
 
 
 class BetaService(ts.ApplicationService):
 
-    def __init__(self, key_store: key_repository.KeyStore) -> None:
+    def __init__(self, key_store: ports.KeyStore) -> None:
         self._key_store = key_store
 
-    async def check(self, request: client.CheckRequest) -> client.CheckResponse:
-        checked_key = key.Key(request.key)
-        async with self._key_store.transaction() as keys_repo:
-            answer = await keys_repo.has_key(MapToHasKeyRequest(checked_key))
-        return client.CheckResponse(held=answer.held.value)
+    async def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
+        key = domain.Key(check_request.key)
+        async with self._key_store.transaction() as key_repository:
+            has_key_response = await key_repository.has_key(MapToHasKeyRequest(key))
+        return client.CheckResponse(held=has_key_response.held.value)
 
-    async def hold(self, request: client.HoldRequest) -> client.HoldResponse:
-        held_key = key.Key(request.key)
-        async with self._key_store.transaction() as keys_repo:
-            put = await keys_repo.put_key(MapToPutKeyRequest(held_key))
-        return client.HoldResponse(key=put.key)
+    async def hold(self, hold_request: client.HoldRequest) -> client.HoldResponse:
+        key = domain.Key(hold_request.key)
+        async with self._key_store.transaction() as key_repository:
+            put_key_response = await key_repository.put_key(MapToPutKeyRequest(key))
+        return client.HoldResponse(key=put_key_response.key)

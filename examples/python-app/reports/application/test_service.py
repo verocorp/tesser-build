@@ -3,181 +3,180 @@ from __future__ import annotations
 import pytest
 import tesser.testing as ts
 
-import reports.application.ports.link_source as link_source
-import reports.application.ports.verdict_source as verdict_source
-import reports.application.service as service
-import reports.client.client as client
+import reports.application as application
+import reports.application.ports as ports
+import reports.client as client
 import tesser.errors as errors
 
 
 @ts.fake
-class FakeLinkSource(link_source.LinkSource):
+class FakeLinkSource(ports.LinkSource):
     def __init__(
-        self, *records: link_source.LinkRecord, error: Exception | None = None
+        self, *records: ports.LinkRecord, error: Exception | None = None
     ) -> None:
         self.records = records
         self.error = error
-        self.requests: list[link_source.ListLinksRequest] = []
+        self.requests: list[ports.ListLinksRequest] = []
 
-    def links(self, request: link_source.ListLinksRequest) -> link_source.ListLinksResponse:
-        self.requests.append(request)
+    def links(self, list_links_request: ports.ListLinksRequest) -> ports.ListLinksResponse:
+        self.requests.append(list_links_request)
         if self.error is not None:
             raise self.error
-        return link_source.ListLinksResponse(links=self.records)
+        return ports.ListLinksResponse(links=self.records)
 
 
 @ts.fake
-class FakeVerdictSource(verdict_source.VerdictSource):
-    def __init__(self, *records: verdict_source.VerdictRecord) -> None:
+class FakeVerdictSource(ports.VerdictSource):
+    def __init__(self, *records: ports.VerdictRecord) -> None:
         self.records = records
-        self.requests: list[verdict_source.ListVerdictsRequest] = []
+        self.requests: list[ports.ListVerdictsRequest] = []
 
     def verdicts(
-        self, request: verdict_source.ListVerdictsRequest
-    ) -> verdict_source.ListVerdictsResponse:
-        self.requests.append(request)
-        return verdict_source.ListVerdictsResponse(verdicts=self.records)
+        self, list_verdicts_request: ports.ListVerdictsRequest
+    ) -> ports.ListVerdictsResponse:
+        self.requests.append(list_verdicts_request)
+        return ports.ListVerdictsResponse(verdicts=self.records)
 
 
 def test_a_link_is_reported_with_the_verdict_recorded_for_its_target() -> None:
-    links = FakeLinkSource(
-        link_source.LinkRecord(slug="spring-sale", target_url="https://a.example/s")
+    fake_link_source = FakeLinkSource(
+        ports.LinkRecord(slug="spring-sale", target_url="https://a.example/s")
     )
-    verdicts = FakeVerdictSource(
-        verdict_source.VerdictRecord(
+    fake_verdict_source = FakeVerdictSource(
+        ports.VerdictRecord(
             target_url="https://a.example/s",
-            decision=verdict_source.VerdictDecision.DENIED,
+            decision=ports.VerdictDecision.DENIED,
             reason="host blocked",
         )
     )
 
-    resp = service.ReportsService(links, verdicts).links_by_verdict(
+    links_by_verdict_response = application.ReportsService(fake_link_source, fake_verdict_source).links_by_verdict(
         client.LinksByVerdictRequest()
     )
 
-    assert [(view.slug, view.decision, view.reason) for view in resp.links] == [
+    assert [(view.slug, view.decision, view.reason) for view in links_by_verdict_response.links] == [
         ("spring-sale", "denied", "host blocked")
     ]
 
 
 def test_a_link_with_no_recorded_verdict_is_still_reported() -> None:
-    links = FakeLinkSource(
-        link_source.LinkRecord(slug="spring-sale", target_url="https://a.example/s")
+    fake_link_source = FakeLinkSource(
+        ports.LinkRecord(slug="spring-sale", target_url="https://a.example/s")
     )
-    verdicts = FakeVerdictSource()
+    fake_verdict_source = FakeVerdictSource()
 
-    resp = service.ReportsService(links, verdicts).links_by_verdict(
+    links_by_verdict_response = application.ReportsService(fake_link_source, fake_verdict_source).links_by_verdict(
         client.LinksByVerdictRequest()
     )
 
-    assert [view.slug for view in resp.links] == ["spring-sale"]
-    assert resp.links[0].decision == "allowed"
-    assert resp.links[0].reason == "no verdict recorded"
+    assert [view.slug for view in links_by_verdict_response.links] == ["spring-sale"]
+    assert links_by_verdict_response.links[0].decision == "allowed"
+    assert links_by_verdict_response.links[0].reason == "no verdict recorded"
 
 
 def test_a_verdict_for_a_target_nobody_links_to_is_left_out() -> None:
-    links = FakeLinkSource()
-    verdicts = FakeVerdictSource(
-        verdict_source.VerdictRecord(
+    fake_link_source = FakeLinkSource()
+    fake_verdict_source = FakeVerdictSource(
+        ports.VerdictRecord(
             target_url="https://a.example/orphan",
-            decision=verdict_source.VerdictDecision.DENIED,
+            decision=ports.VerdictDecision.DENIED,
             reason="host blocked",
         )
     )
 
-    resp = service.ReportsService(links, verdicts).links_by_verdict(
+    links_by_verdict_response = application.ReportsService(fake_link_source, fake_verdict_source).links_by_verdict(
         client.LinksByVerdictRequest()
     )
 
-    assert resp.links == ()
+    assert links_by_verdict_response.links == ()
 
 
 def test_the_service_asks_both_sources_once_per_report() -> None:
-    links = FakeLinkSource()
-    verdicts = FakeVerdictSource()
+    fake_link_source = FakeLinkSource()
+    fake_verdict_source = FakeVerdictSource()
 
-    service.ReportsService(links, verdicts).links_by_verdict(client.LinksByVerdictRequest())
+    application.ReportsService(fake_link_source, fake_verdict_source).links_by_verdict(client.LinksByVerdictRequest())
 
-    assert len(links.requests) == 1
-    assert len(verdicts.requests) == 1
-    assert isinstance(links.requests[0], link_source.ListLinksRequest)
-    assert isinstance(verdicts.requests[0], verdict_source.ListVerdictsRequest)
+    assert len(fake_link_source.requests) == 1
+    assert len(fake_verdict_source.requests) == 1
+    assert isinstance(fake_link_source.requests[0], ports.ListLinksRequest)
+    assert isinstance(fake_verdict_source.requests[0], ports.ListVerdictsRequest)
 
 
 def test_a_denied_link_is_reported_ahead_of_an_allowed_one() -> None:
-    links = FakeLinkSource(
-        link_source.LinkRecord(slug="allowed-one", target_url="https://a.example/a"),
-        link_source.LinkRecord(slug="denied-one", target_url="https://a.example/d"),
+    fake_link_source = FakeLinkSource(
+        ports.LinkRecord(slug="allowed-one", target_url="https://a.example/a"),
+        ports.LinkRecord(slug="denied-one", target_url="https://a.example/d"),
     )
-    verdicts = FakeVerdictSource(
-        verdict_source.VerdictRecord(
+    fake_verdict_source = FakeVerdictSource(
+        ports.VerdictRecord(
             target_url="https://a.example/d",
-            decision=verdict_source.VerdictDecision.DENIED,
+            decision=ports.VerdictDecision.DENIED,
             reason="host blocked",
         )
     )
 
-    resp = service.ReportsService(links, verdicts).links_by_verdict(
+    links_by_verdict_response = application.ReportsService(fake_link_source, fake_verdict_source).links_by_verdict(
         client.LinksByVerdictRequest()
     )
 
-    assert [view.slug for view in resp.links] == ["denied-one", "allowed-one"]
+    assert [view.slug for view in links_by_verdict_response.links] == ["denied-one", "allowed-one"]
 
 
 def test_a_source_that_is_down_fails_the_report_rather_than_halving_it() -> None:
-    links = FakeLinkSource(error=errors.InfraError("link store unreachable"))
-    verdicts = FakeVerdictSource()
+    fake_link_source = FakeLinkSource(error=errors.InfraError("link store unreachable"))
+    fake_verdict_source = FakeVerdictSource()
 
     with pytest.raises(errors.InfraError):
-        service.ReportsService(links, verdicts).links_by_verdict(
+        application.ReportsService(fake_link_source, fake_verdict_source).links_by_verdict(
             client.LinksByVerdictRequest()
         )
 
 
 def test_a_link_record_the_domain_would_not_accept_fails_the_report() -> None:
-    links = FakeLinkSource(
-        link_source.LinkRecord(slug="spring-sale", target_url="not-a-url")
+    fake_link_source = FakeLinkSource(
+        ports.LinkRecord(slug="spring-sale", target_url="not-a-url")
     )
-    verdicts = FakeVerdictSource()
+    fake_verdict_source = FakeVerdictSource()
 
     with pytest.raises(errors.DomainError):
-        service.ReportsService(links, verdicts).links_by_verdict(
+        application.ReportsService(fake_link_source, fake_verdict_source).links_by_verdict(
             client.LinksByVerdictRequest()
         )
 
 
 def test_an_allowed_verdict_member_is_reported_as_an_allowed_link() -> None:
-    links = FakeLinkSource(
-        link_source.LinkRecord(slug="spring-sale", target_url="https://a.example/s")
+    fake_link_source = FakeLinkSource(
+        ports.LinkRecord(slug="spring-sale", target_url="https://a.example/s")
     )
-    verdicts = FakeVerdictSource(
-        verdict_source.VerdictRecord(
+    fake_verdict_source = FakeVerdictSource(
+        ports.VerdictRecord(
             target_url="https://a.example/s",
-            decision=verdict_source.VerdictDecision.ALLOWED,
+            decision=ports.VerdictDecision.ALLOWED,
             reason="on the allowlist",
         )
     )
 
-    resp = service.ReportsService(links, verdicts).links_by_verdict(
+    links_by_verdict_response = application.ReportsService(fake_link_source, fake_verdict_source).links_by_verdict(
         client.LinksByVerdictRequest()
     )
 
-    assert [(view.slug, view.decision, view.reason) for view in resp.links] == [
+    assert [(view.slug, view.decision, view.reason) for view in links_by_verdict_response.links] == [
         ("spring-sale", "allowed", "on the allowlist")
     ]
 
 
 def test_a_verdict_record_carrying_no_reason_fails_the_report() -> None:
-    links = FakeLinkSource()
-    verdicts = FakeVerdictSource(
-        verdict_source.VerdictRecord(
+    fake_link_source = FakeLinkSource()
+    fake_verdict_source = FakeVerdictSource(
+        ports.VerdictRecord(
             target_url="https://a.example/s",
-            decision=verdict_source.VerdictDecision.ALLOWED,
+            decision=ports.VerdictDecision.ALLOWED,
             reason="",
         )
     )
 
     with pytest.raises(errors.DomainError):
-        service.ReportsService(links, verdicts).links_by_verdict(
+        application.ReportsService(fake_link_source, fake_verdict_source).links_by_verdict(
             client.LinksByVerdictRequest()
         )

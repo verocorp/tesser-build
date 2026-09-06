@@ -3,140 +3,137 @@ from __future__ import annotations
 import pytest
 import tesser.testing as ts
 
-import campaign.application.ports.campaign_identity as campaign_identity
-import campaign.application.ports.campaign_queries as campaign_queries
-import campaign.application.ports.campaign_repository as campaign_repository
-import campaign.application.ports.target_policy as target_policy
-import campaign.application.service as service
-import campaign.client.client as client
+import campaign.application as application
+import campaign.application.ports as ports
+import campaign.client as client
 import tesser.errors as errors
 
 
 @ts.fake
-class FakeCampaignIdentity(campaign_identity.CampaignIdentity):
+class FakeCampaignIdentity(ports.CampaignIdentity):
 
     def __init__(self) -> None:
         self.issued = 0
 
     def issue(
-        self, request: campaign_identity.IssueCampaignIdentityRequest
-    ) -> campaign_identity.IssueCampaignIdentityResponse:
+        self, issue_campaign_identity_request: ports.IssueCampaignIdentityRequest
+    ) -> ports.IssueCampaignIdentityResponse:
         self.issued += 1
         campaign_id = f"{self.issued:016x}"
-        return campaign_identity.IssueCampaignIdentityResponse(campaign_id=campaign_id)
+        return ports.IssueCampaignIdentityResponse(campaign_id=campaign_id)
 
 
 @ts.fake
-class FakeCampaignRepositoryRecording(campaign_repository.CampaignRepository):
+class FakeCampaignRepositoryRecording(ports.CampaignRepository):
     def __init__(self) -> None:
-        budget = campaign_repository.MoneyRecord(amount="100.00", currency="USD")
-        self._record = campaign_repository.CampaignRecord(
-            id="0123456789abcdef", budget=budget, links=()
+        money_record = ports.MoneyRecord(amount="100.00", currency="USD")
+        self._record = ports.CampaignRecord(
+            id="0123456789abcdef", budget=money_record, links=()
         )
-        self.saved: list[campaign_repository.SaveCampaignRequest] = []
+        self.saved: list[ports.SaveCampaignRequest] = []
 
     def save(
-        self, request: campaign_repository.SaveCampaignRequest
-    ) -> campaign_repository.SaveCampaignResponse:
-        self.saved.append(request)
-        self._record = campaign_repository.CampaignRecord(
-            id=request.id, budget=request.budget, links=request.links
+        self, save_campaign_request: ports.SaveCampaignRequest
+    ) -> ports.SaveCampaignResponse:
+        self.saved.append(save_campaign_request)
+        self._record = ports.CampaignRecord(
+            id=save_campaign_request.id, budget=save_campaign_request.budget, links=save_campaign_request.links
         )
-        return campaign_repository.SaveCampaignResponse()
+        return ports.SaveCampaignResponse()
 
     def find(
-        self, request: campaign_repository.FindCampaignRequest
-    ) -> campaign_repository.FindCampaignResponse:
-        if request.campaign_id == self._record.id:
-            return campaign_repository.FindCampaignResponse(
-                outcome=campaign_repository.CampaignLookup.FOUND, campaigns=(self._record,)
+        self, find_campaign_request: ports.FindCampaignRequest
+    ) -> ports.FindCampaignResponse:
+        if find_campaign_request.campaign_id == self._record.id:
+            return ports.FindCampaignResponse(
+                outcome=ports.CampaignLookup.FOUND, campaigns=(self._record,)
             )
-        return campaign_repository.FindCampaignResponse(
-            outcome=campaign_repository.CampaignLookup.MISSING, campaigns=()
+        return ports.FindCampaignResponse(
+            outcome=ports.CampaignLookup.MISSING, campaigns=()
         )
 
     def find_by_slug(
-        self, request: campaign_repository.FindCampaignBySlugRequest
-    ) -> campaign_repository.FindCampaignResponse:
-        return campaign_repository.FindCampaignResponse(
-            outcome=campaign_repository.CampaignLookup.MISSING, campaigns=()
+        self, find_campaign_by_slug_request: ports.FindCampaignBySlugRequest
+    ) -> ports.FindCampaignResponse:
+        return ports.FindCampaignResponse(
+            outcome=ports.CampaignLookup.MISSING, campaigns=()
         )
 
     def slug_taken(
-        self, request: campaign_repository.SlugTakenRequest
-    ) -> campaign_repository.SlugTakenResponse:
-        return campaign_repository.SlugTakenResponse(
-            availability=campaign_repository.SlugAvailability.FREE
+        self, slug_taken_request: ports.SlugTakenRequest
+    ) -> ports.SlugTakenResponse:
+        return ports.SlugTakenResponse(
+            availability=ports.SlugAvailability.FREE
         )
 
     def all(
-        self, request: campaign_repository.ListCampaignsRequest
-    ) -> campaign_repository.ListCampaignsResponse:
-        return campaign_repository.ListCampaignsResponse(campaigns=(self._record,))
+        self, list_campaigns_request: ports.ListCampaignsRequest
+    ) -> ports.ListCampaignsResponse:
+        return ports.ListCampaignsResponse(campaigns=(self._record,))
 
     def find_view(
-        self, request: campaign_queries.FindCampaignViewRequest
-    ) -> campaign_queries.FindCampaignViewResponse:
+        self, find_campaign_view_request: ports.FindCampaignViewRequest
+    ) -> ports.FindCampaignViewResponse:
         row = self._record
-        links: list[campaign_queries.LinkViewRow] = []
+        links: list[ports.LinkViewRow] = []
         for link in row.links:
-            links.append(campaign_queries.LinkViewRow(
+            links.append(ports.LinkViewRow(
                 slug=link.slug, target_url=link.target_url, status=link.status
             ))
-        view = campaign_queries.CampaignViewRow(
+        campaign_view_row = ports.CampaignViewRow(
             campaign_id=row.id,
             budget_amount=row.budget.amount,
             budget_currency=row.budget.currency,
             links=tuple(links),
         )
-        return campaign_queries.FindCampaignViewResponse(
-            outcome=campaign_queries.CampaignViewLookup.FOUND, campaigns=(view,)
+        return ports.FindCampaignViewResponse(
+            outcome=ports.CampaignViewLookup.FOUND, campaigns=(campaign_view_row,)
         )
 
 
 @ts.fake
-class FakeTargetPolicyBlocking(target_policy.TargetPolicy):
-    def check(self, request: target_policy.CheckTargetRequest) -> target_policy.CheckTargetResponse:
-        return target_policy.CheckTargetResponse(
-            verdict=target_policy.PolicyVerdict.BLOCKED, reason="not on the allow-list"
+class FakeTargetPolicyBlocking(ports.TargetPolicy):
+    def check(self, check_target_request: ports.CheckTargetRequest) -> ports.CheckTargetResponse:
+        return ports.CheckTargetResponse(
+            verdict=ports.PolicyVerdict.BLOCKED, reason="not on the allow-list"
         )
 
 
 @ts.fake
-class FakeTargetPolicyOutage(target_policy.TargetPolicy):
-    def check(self, request: target_policy.CheckTargetRequest) -> target_policy.CheckTargetResponse:
+class FakeTargetPolicyOutage(ports.TargetPolicy):
+    def check(self, check_target_request: ports.CheckTargetRequest) -> ports.CheckTargetResponse:
         raise errors.InfraError("linkpolicy unavailable")
 
 
 @ts.fake
-class FakeTargetPolicyAllowAll(target_policy.TargetPolicy):
-    def check(self, request: target_policy.CheckTargetRequest) -> target_policy.CheckTargetResponse:
-        return target_policy.CheckTargetResponse(verdict=target_policy.PolicyVerdict.ALLOWED, reason="ok")
+class FakeTargetPolicyAllowAll(ports.TargetPolicy):
+    def check(self, check_target_request: ports.CheckTargetRequest) -> ports.CheckTargetResponse:
+        return ports.CheckTargetResponse(verdict=ports.PolicyVerdict.ALLOWED, reason="ok")
 
 
 def test_rejection_is_a_conflict_and_creates_nothing() -> None:
-    repo = FakeCampaignRepositoryRecording()
-    svc = service.CampaignService(repo, FakeTargetPolicyBlocking(), FakeCampaignIdentity(), repo)
-    req = client.AddLinkRequest(campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x")
+    fake_campaign_repository_recording = FakeCampaignRepositoryRecording()
+    campaign_service = application.CampaignService(fake_campaign_repository_recording, FakeTargetPolicyBlocking(), FakeCampaignIdentity(), fake_campaign_repository_recording)
+    add_link_request = client.AddLinkRequest(campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x")
     with pytest.raises(errors.DomainError) as caught:
-        svc.add_link(req)
+        campaign_service.add_link(add_link_request)
     assert caught.value.kind is errors.Kind.CONFLICT
-    assert repo.saved == []
+    assert fake_campaign_repository_recording.saved == []
 
 
 def test_outage_propagates_and_creates_nothing() -> None:
-    repo = FakeCampaignRepositoryRecording()
-    svc = service.CampaignService(repo, FakeTargetPolicyOutage(), FakeCampaignIdentity(), repo)
-    req = client.AddLinkRequest(campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x")
+    fake_campaign_repository_recording = FakeCampaignRepositoryRecording()
+    campaign_service = application.CampaignService(fake_campaign_repository_recording, FakeTargetPolicyOutage(), FakeCampaignIdentity(), fake_campaign_repository_recording)
+    add_link_request = client.AddLinkRequest(campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x")
     with pytest.raises(errors.InfraError):
-        svc.add_link(req)
-    assert repo.saved == []
+        campaign_service.add_link(add_link_request)
+    assert fake_campaign_repository_recording.saved == []
 
 
 def test_allowed_verdict_creates_the_link() -> None:
-    repo = FakeCampaignRepositoryRecording()
-    svc = service.CampaignService(repo, FakeTargetPolicyAllowAll(), FakeCampaignIdentity(), repo)
-    req = client.AddLinkRequest(campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x")
-    view = svc.add_link(req)
-    assert [link.slug for link in view.links] == ["promo"]
-    assert len(repo.saved) == 1
+    fake_campaign_repository_recording = FakeCampaignRepositoryRecording()
+    campaign_service = application.CampaignService(fake_campaign_repository_recording, FakeTargetPolicyAllowAll(), FakeCampaignIdentity(), fake_campaign_repository_recording)
+    add_link_request = client.AddLinkRequest(campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x")
+    campaign_view = campaign_service.add_link(add_link_request)
+    assert [link.slug for link in campaign_view.links] == ["promo"]
+    assert len(fake_campaign_repository_recording.saved) == 1

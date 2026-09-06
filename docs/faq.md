@@ -153,8 +153,10 @@ and the skill's `application-services.md` / `repositories.md`. Bounded
 contexts: `strategic-design.md` covers drawing the boundary (one model, one
 language), `map.md#how-contexts-connect` covers how contexts talk (through the
 `Client` + DTOs, one-way dependencies, fail-closed sync calls —
-`gateway-cross-context.md`), and in Python the contexts are *discovered* by
-their `Client` seam and gated by the totality guard
+`gateway-cross-context.md`), and in Python a context is *discovered* by its
+shape — a top-level package carrying a role directory (`domain/`,
+`application/`, `client/`, `adapters/`, `component/`) — and gated by the
+totality guard
 (`python -m srv.cli.main path/to/tree` from a checkout, or `tessercheck-check
 path/to/tree` from the packaged CLI).
 

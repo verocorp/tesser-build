@@ -1,0 +1,1 @@
+from beta.adapters.repositories.memory import MemoryKeyRepository as MemoryKeyRepository

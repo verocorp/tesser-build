@@ -2,25 +2,32 @@ from __future__ import annotations
 
 import tesser.adapters as ts
 
-import scheduling.application.ports.booking_repository as booking_repository
+import scheduling.application.ports as ports
 
 
 class MemoryBookingRepository(ts.Repository):
     def __init__(self) -> None:
-        self.stored: dict[str, booking_repository.BookingView] = {}
+        self.stored: dict[str, ports.BookingView] = {}
 
-    def find(self, request: booking_repository.FindBookingRequest) -> booking_repository.FindBookingResponse:
-        row = self.stored.get(request.booking_id)
+    def find(
+        self, find_booking_request: ports.FindBookingRequest
+    ) -> ports.FindBookingResponse:
+        row = self.stored.get(find_booking_request.booking_id)
         if row is None:
-            return booking_repository.FindBookingResponse(
-                presence=booking_repository.BookingPresence.ABSENT, bookings=()
+            return ports.FindBookingResponse(
+                presence=ports.BookingPresence.ABSENT, bookings=()
             )
-        return booking_repository.FindBookingResponse(
-            presence=booking_repository.BookingPresence.PRESENT, bookings=(row,)
+        return ports.FindBookingResponse(
+            presence=ports.BookingPresence.PRESENT, bookings=(row,)
         )
 
-    def save(self, request: booking_repository.SaveBookingRequest) -> booking_repository.SaveBookingResponse:
-        self.stored[request.booking_id] = booking_repository.BookingView(
-            step=request.step, name=request.name, chosen=request.chosen, offered=request.offered
+    def save(
+        self, save_booking_request: ports.SaveBookingRequest
+    ) -> ports.SaveBookingResponse:
+        self.stored[save_booking_request.booking_id] = ports.BookingView(
+            step=save_booking_request.step,
+            name=save_booking_request.name,
+            chosen=save_booking_request.chosen,
+            offered=save_booking_request.offered,
         )
-        return booking_repository.SaveBookingResponse()
+        return ports.SaveBookingResponse()

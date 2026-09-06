@@ -10,7 +10,7 @@ import time
 import urllib.error
 import urllib.request
 
-import app.loader as loader
+import app as app
 
 
 class TestHttpHost:
@@ -41,11 +41,15 @@ class TestHttpHost:
             except subprocess.TimeoutExpired:
                 host.kill()
                 host.wait()
-        app = loader.load()
+        durable_execution_app = app.load()
         try:
-            declared = {d.name: sorted(d.handlers) for job in app.ordering.jobs for d in job.definitions()}
+            declared = {
+                d.name: sorted(d.handlers)
+                for job in durable_execution_app.ordering.jobs
+                for d in job.definitions()
+            }
         finally:
-            app.close()
+            durable_execution_app.close()
         services = manifest["services"]
         assert isinstance(services, list)
         assert {s["name"] for s in services} == set(declared)

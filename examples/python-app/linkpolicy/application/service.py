@@ -2,37 +2,54 @@ from __future__ import annotations
 
 import tesser.application as ts
 
-import linkpolicy.application.ports.verdict_repository as verdict_repository
-import linkpolicy.client.client as client
-import linkpolicy.domain.policy as policy
+import linkpolicy.application.ports as ports
+import linkpolicy.client as client
+import linkpolicy.domain as domain
+
+
+class MapToRecordVerdictRequest(ts.Mapper, ports.RecordVerdictRequest):
+
+    def __init__(self, verdict: domain.Verdict) -> None:
+        super().__init__(
+            target_url=str(verdict.target_url),
+            decision=ports.VerdictDecision(str(verdict.allowed)),
+            reason=str(verdict.reason),
+        )
+
+
+class MapToCheckResponse(ts.Mapper, client.CheckResponse):
+
+    def __init__(self, verdict: domain.Verdict) -> None:
+        super().__init__(decision=str(verdict.allowed), reason=str(verdict.reason))
+
+
+class MapToVerdictView(ts.Mapper, client.VerdictView):
+
+    def __init__(self, verdict_record: ports.VerdictRecord) -> None:
+        super().__init__(
+            verdict_record.target_url, verdict_record.decision.value, verdict_record.reason
+        )
 
 
 class LinkPolicyService(ts.ApplicationService):
 
-    def __init__(self, repo: verdict_repository.VerdictRepository) -> None:
-        self._repo = repo
-        self._policy = policy.Policy(policy.PolicySpec())
+    def __init__(self, verdict_repository: ports.VerdictRepository) -> None:
+        self._verdict_repository = verdict_repository
+        self._policy = domain.Policy(domain.PolicySpec())
 
-    def check(self, req: client.CheckRequest) -> client.CheckResponse:
-        target_url = policy.TargetURL(req.target_url)
+    def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
+        target_url = domain.TargetURL(check_request.target_url)
         target_url_text = str(target_url)
         verdict = self._policy.evaluate(target_url_text)
-        verdict_target_url = str(verdict.target_url)
-        verdict_reason = str(verdict.reason)
-        verdict_decision = str(verdict.allowed)
-        decision = verdict_repository.VerdictDecision(verdict_decision)
-        record_verdict_request = verdict_repository.RecordVerdictRequest(
-            target_url=verdict_target_url, decision=decision, reason=verdict_reason
-        )
-        self._repo.record(record_verdict_request)
-        return client.CheckResponse(decision=verdict_decision, reason=verdict_reason)
+        self._verdict_repository.record(MapToRecordVerdictRequest(verdict))
+        return MapToCheckResponse(verdict)
 
-    def list_verdicts(self, req: client.ListVerdictsRequest) -> client.ListVerdictsResponse:
-        listed = self._repo.all(verdict_repository.ListVerdictsRequest())
+    def list_verdicts(
+        self, list_verdicts_request: client.ListVerdictsRequest
+    ) -> client.ListVerdictsResponse:
+        list_verdicts_response = self._verdict_repository.all(ports.ListVerdictsRequest())
         views: list[client.VerdictView] = []
-        for record in listed.verdicts:
-            record_decision = record.decision.value
-            view = client.VerdictView(record.target_url, record_decision, record.reason)
-            views.append(view)
+        for record in list_verdicts_response.verdicts:
+            views.append(MapToVerdictView(record))
         listed_views = tuple(views)
         return client.ListVerdictsResponse(verdicts=listed_views)

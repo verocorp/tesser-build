@@ -22,9 +22,9 @@ def exposes_client(pkg_dir: pathlib.Path) -> bool:
         tree = ast.parse(candidate.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
-                if any((alias.asname or alias.name) == "Client" for alias in node.names):
+                if any((alias.asname or alias.name).endswith("Client") for alias in node.names):
                     return True
-            if isinstance(node, ast.ClassDef) and node.name == "Client":
+            if isinstance(node, ast.ClassDef) and node.name.endswith("Client"):
                 return True
     return False
 

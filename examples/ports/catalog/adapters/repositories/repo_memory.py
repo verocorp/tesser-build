@@ -2,27 +2,25 @@ from __future__ import annotations
 
 import tesser.adapters as ts
 
-import catalog.application.ports.item_repository as item_repository
+import catalog.application.ports as ports
 
 
 class MemoryItemRepository(ts.Repository):
 
     def __init__(self) -> None:
-        self._rows: dict[str, item_repository.ItemView] = {}
+        self._rows: dict[str, ports.ItemView] = {}
 
-    def save(self, request: item_repository.SaveItemRequest) -> item_repository.SaveItemResponse:
-        self._rows[request.id] = item_repository.ItemView(id=request.id, name=request.name)
-        return item_repository.SaveItemResponse()
-
-    def find(self, request: item_repository.FindItemRequest) -> item_repository.FindItemResponse:
-        row = self._rows.get(request.id)
-        if row is None:
-            return item_repository.FindItemResponse(
-                outcome=item_repository.ItemLookup.MISSING, items=()
-            )
-        return item_repository.FindItemResponse(
-            outcome=item_repository.ItemLookup.FOUND, items=(row,)
+    def save(self, save_item_request: ports.SaveItemRequest) -> ports.SaveItemResponse:
+        self._rows[save_item_request.id] = ports.ItemView(
+            id=save_item_request.id, name=save_item_request.name
         )
+        return ports.SaveItemResponse()
 
-    def all(self, request: item_repository.ListItemsRequest) -> item_repository.ListItemsResponse:
-        return item_repository.ListItemsResponse(items=tuple(self._rows.values()))
+    def find(self, find_item_request: ports.FindItemRequest) -> ports.FindItemResponse:
+        row = self._rows.get(find_item_request.id)
+        if row is None:
+            return ports.FindItemResponse(outcome=ports.ItemLookup.MISSING, items=())
+        return ports.FindItemResponse(outcome=ports.ItemLookup.FOUND, items=(row,))
+
+    def all(self, list_items_request: ports.ListItemsRequest) -> ports.ListItemsResponse:
+        return ports.ListItemsResponse(items=tuple(self._rows.values()))

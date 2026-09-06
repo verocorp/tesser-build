@@ -4,19 +4,19 @@ import typing
 
 import tesser.adapters as ts
 
-import alpha.client.client as client
-import protocol.cli as cli
+import alpha.client as client
+import protocol
 
 _ADD_USAGE: typing.Final[str] = "usage: add <name> <part>"
 
 
 class Handler(ts.Handler):
 
-    def __init__(self, client: client.Client) -> None:
-        self._client = client
+    def __init__(self, alpha_client: client.AlphaClient) -> None:
+        self._alpha_client = alpha_client
 
-    def add(self, request: cli.CliRequest) -> cli.CliResponse:
-        name = request.arg(0, "name", _ADD_USAGE)
-        part = request.arg(1, "part", _ADD_USAGE)
-        added = self._client.add(client.AddRequest(name=name, part=part))
-        return cli.CliResponse(exit_code=0, line=cli.Line(text=added.name))
+    def add(self, cli_request: protocol.CliRequest) -> protocol.CliResponse:
+        name = cli_request.arg(0, "name", _ADD_USAGE)
+        part = cli_request.arg(1, "part", _ADD_USAGE)
+        add_response = self._alpha_client.add(client.AddRequest(name=name, part=part))
+        return protocol.CliResponse(exit_code=0, line=protocol.Line(text=add_response.name))

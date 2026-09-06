@@ -2,16 +2,18 @@ from __future__ import annotations
 
 import tesser.adapters as ts
 
-import protocol.http as http
-import reports.client.client as client
+import protocol as protocol
+import reports.client as client
 
 
-class Handler(ts.Handler):
-    def __init__(self, client: client.Client) -> None:
-        self._client = client
+class HttpHandler(ts.Handler):
+    def __init__(self, reports_client: client.ReportsClient) -> None:
+        self._reports_client = reports_client
 
-    def links_by_verdict(self, _req: http.HttpRequest) -> http.HttpResponse:
-        resp = self._client.links_by_verdict(client.LinksByVerdictRequest())
+    def links_by_verdict(self, http_request: protocol.HttpRequest) -> protocol.HttpResponse:
+        links_by_verdict_response = self._reports_client.links_by_verdict(
+            client.LinksByVerdictRequest()
+        )
         rows: list[dict[str, object]] = [
             {
                 "slug": view.slug,
@@ -19,6 +21,6 @@ class Handler(ts.Handler):
                 "decision": view.decision,
                 "reason": view.reason,
             }
-            for view in resp.links
+            for view in links_by_verdict_response.links
         ]
-        return http.HttpResponse.json(200, {"links": rows})
+        return protocol.HttpResponse.json(200, {"links": rows})

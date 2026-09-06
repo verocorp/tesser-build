@@ -4,9 +4,9 @@ import typing
 
 import tesser.application as ts
 
-import ordering.application.ports.quoting as quoting
+import ordering.application.ports as ports
 
 
-class Client(ts.Client, typing.Protocol):
+class OrderingApplicationClient(ts.Client, typing.Protocol):
 
-    def quote(self, request: quoting.QuoteRequest) -> quoting.QuoteResponse: ...
+    def quote(self, quote_request: ports.QuoteRequest) -> ports.QuoteResponse: ...

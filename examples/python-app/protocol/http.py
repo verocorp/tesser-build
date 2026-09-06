@@ -112,7 +112,7 @@ class HttpResponse(ts.Response):
 
 class Endpoint(ts.Port, typing.Protocol):
 
-    def __call__(self, request: HttpRequest, /) -> HttpResponse: ...
+    def __call__(self, http_request: HttpRequest, /) -> HttpResponse: ...
 
 
 class Route(ts.Record):

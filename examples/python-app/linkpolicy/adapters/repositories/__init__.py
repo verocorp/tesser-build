@@ -1,0 +1,1 @@
+from linkpolicy.adapters.repositories.repo_memory import InMemoryVerdictRepository as InMemoryVerdictRepository

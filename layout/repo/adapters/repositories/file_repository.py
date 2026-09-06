@@ -7,7 +7,7 @@ import typing
 
 import tesser.adapters as ts
 
-import repo.application.ports.repo_reader as repo_reader
+import repo.application.ports as ports
 
 SKIP_DIRS: typing.Final[frozenset[str]] = frozenset(
     {
@@ -42,20 +42,20 @@ RUFF: typing.Final[str] = "ruff.toml"
 
 class FilesystemRepoReader(ts.Repository):
 
-    def read(self, request: repo_reader.ReadRepoRequest) -> repo_reader.ReadRepoResponse:
-        base = pathlib.Path(request.repo_root)
+    def read(self, read_repo_request: ports.ReadRepoRequest) -> ports.ReadRepoResponse:
+        base = pathlib.Path(read_repo_request.repo_root)
         if not base.is_dir():
-            return repo_reader.ReadRepoResponse(
-                manifest=repo_reader.ManifestRecord(
-                    state=repo_reader.ManifestState.MALFORMED,
+            return ports.ReadRepoResponse(
+                manifest=ports.ManifestRecord(
+                    state=ports.ManifestState.MALFORMED,
                     rows=(),
-                    note=f"{request.repo_root} is not a directory",
+                    note=f"{read_repo_request.repo_root} is not a directory",
                 ),
-                verify=repo_reader.FileRecord(
-                    state=repo_reader.FileState.MISSING, text=""
+                verify=ports.FileRecord(
+                    state=ports.FileState.MISSING, text=""
                 ),
-                workflow=repo_reader.FileRecord(
-                    state=repo_reader.FileState.MISSING, text=""
+                workflow=ports.FileRecord(
+                    state=ports.FileState.MISSING, text=""
                 ),
                 top=(),
                 examples=(),
@@ -63,7 +63,7 @@ class FilesystemRepoReader(ts.Repository):
                 requirements=(),
                 floors=(),
             )
-        declarations: list[repo_reader.DeclarationRecord] = []
+        declarations: list[ports.DeclarationRecord] = []
         requirements: list[str] = []
         configs: list[pathlib.Path] = []
         pending = [base]
@@ -82,15 +82,15 @@ class FilesystemRepoReader(ts.Repository):
                     try:
                         declaration_text = entry.read_text(encoding="utf-8-sig")
                     except FileNotFoundError:
-                        declaration_state = repo_reader.FileState.MISSING
+                        declaration_state = ports.FileState.MISSING
                         declaration_text = ""
                     except (UnicodeDecodeError, OSError):
-                        declaration_state = repo_reader.FileState.UNREADABLE
+                        declaration_state = ports.FileState.UNREADABLE
                         declaration_text = ""
                     else:
-                        declaration_state = repo_reader.FileState.READ
+                        declaration_state = ports.FileState.READ
                     declarations.append(
-                        repo_reader.DeclarationRecord(
+                        ports.DeclarationRecord(
                             path=str(entry.relative_to(base)),
                             state=declaration_state,
                             text=declaration_text,
@@ -100,27 +100,27 @@ class FilesystemRepoReader(ts.Repository):
                     requirements.append(str(entry.parent.relative_to(base)))
                 elif entry.name in (PYPROJECT, RUFF) and not entry.is_dir():
                     configs.append(entry)
-        floors: list[repo_reader.FloorRecord] = []
+        floors: list[ports.FloorRecord] = []
         for config in configs:
             config_path = str(config.relative_to(base))
             try:
                 stated = tomllib.loads(config.read_text(encoding="utf-8-sig"))
             except (UnicodeDecodeError, OSError):
                 floors.append(
-                    repo_reader.FloorRecord(
+                    ports.FloorRecord(
                         path=config_path,
-                        key=repo_reader.FloorKey.REQUIRES_PYTHON,
-                        state=repo_reader.FloorState.UNREADABLE,
+                        key=ports.FloorKey.REQUIRES_PYTHON,
+                        state=ports.FloorState.UNREADABLE,
                         value="",
                     )
                 )
                 continue
             except tomllib.TOMLDecodeError:
                 floors.append(
-                    repo_reader.FloorRecord(
+                    ports.FloorRecord(
                         path=config_path,
-                        key=repo_reader.FloorKey.REQUIRES_PYTHON,
-                        state=repo_reader.FloorState.MALFORMED,
+                        key=ports.FloorKey.REQUIRES_PYTHON,
+                        state=ports.FloorState.MALFORMED,
                         value="",
                     )
                 )
@@ -129,13 +129,13 @@ class FilesystemRepoReader(ts.Repository):
             if isinstance(project, dict):
                 declared = project.get("requires-python")
                 floors.append(
-                    repo_reader.FloorRecord(
+                    ports.FloorRecord(
                         path=config_path,
-                        key=repo_reader.FloorKey.REQUIRES_PYTHON,
+                        key=ports.FloorKey.REQUIRES_PYTHON,
                         state=(
-                            repo_reader.FloorState.READ
+                            ports.FloorState.READ
                             if isinstance(declared, str)
-                            else repo_reader.FloorState.UNDECLARED
+                            else ports.FloorState.UNDECLARED
                         ),
                         value=declared if isinstance(declared, str) else "",
                     )
@@ -149,38 +149,38 @@ class FilesystemRepoReader(ts.Repository):
                 target = ruff.get("target-version")
                 if isinstance(target, str):
                     floors.append(
-                        repo_reader.FloorRecord(
+                        ports.FloorRecord(
                             path=config_path,
-                            key=repo_reader.FloorKey.TARGET_VERSION,
-                            state=repo_reader.FloorState.READ,
+                            key=ports.FloorKey.TARGET_VERSION,
+                            state=ports.FloorState.READ,
                             value=target,
                         )
                     )
         try:
             manifest_text = (base / "manifest.json").read_text(encoding="utf-8-sig")
         except FileNotFoundError:
-            manifest_state = repo_reader.FileState.MISSING
+            manifest_state = ports.FileState.MISSING
             manifest_text = ""
         except (UnicodeDecodeError, OSError):
-            manifest_state = repo_reader.FileState.UNREADABLE
+            manifest_state = ports.FileState.UNREADABLE
             manifest_text = ""
         else:
-            manifest_state = repo_reader.FileState.READ
+            manifest_state = ports.FileState.READ
         match manifest_state:
-            case repo_reader.FileState.MISSING:
-                manifest = repo_reader.ManifestRecord(
-                    state=repo_reader.ManifestState.MISSING, rows=(), note=""
+            case ports.FileState.MISSING:
+                manifest = ports.ManifestRecord(
+                    state=ports.ManifestState.MISSING, rows=(), note=""
                 )
-            case repo_reader.FileState.UNREADABLE:
-                manifest = repo_reader.ManifestRecord(
-                    state=repo_reader.ManifestState.UNREADABLE, rows=(), note=""
+            case ports.FileState.UNREADABLE:
+                manifest = ports.ManifestRecord(
+                    state=ports.ManifestState.UNREADABLE, rows=(), note=""
                 )
-            case repo_reader.FileState.READ:
+            case ports.FileState.READ:
                 try:
                     parsed = json.loads(manifest_text)
                 except json.JSONDecodeError as error:
-                    manifest = repo_reader.ManifestRecord(
-                        state=repo_reader.ManifestState.MALFORMED,
+                    manifest = ports.ManifestRecord(
+                        state=ports.ManifestState.MALFORMED,
                         rows=(),
                         note=str(error),
                     )
@@ -189,14 +189,14 @@ class FilesystemRepoReader(ts.Repository):
                         isinstance(key, str) and isinstance(kind, str)
                         for key, kind in parsed.items()
                     ):
-                        manifest = repo_reader.ManifestRecord(
-                            state=repo_reader.ManifestState.MISSHAPEN, rows=(), note=""
+                        manifest = ports.ManifestRecord(
+                            state=ports.ManifestState.MISSHAPEN, rows=(), note=""
                         )
                     else:
-                        manifest = repo_reader.ManifestRecord(
-                            state=repo_reader.ManifestState.READ,
+                        manifest = ports.ManifestRecord(
+                            state=ports.ManifestState.READ,
                             rows=tuple(
-                                repo_reader.RowRecord(key=key, kind=kind)
+                                ports.RowRecord(key=key, kind=kind)
                                 for key, kind in parsed.items()
                             ),
                             note="",
@@ -206,32 +206,32 @@ class FilesystemRepoReader(ts.Repository):
         try:
             verify_text = (base / "scripts" / "verify").read_text(encoding="utf-8-sig")
         except FileNotFoundError:
-            verify = repo_reader.FileRecord(state=repo_reader.FileState.MISSING, text="")
+            verify = ports.FileRecord(state=ports.FileState.MISSING, text="")
         except (UnicodeDecodeError, OSError):
-            verify = repo_reader.FileRecord(
-                state=repo_reader.FileState.UNREADABLE, text=""
+            verify = ports.FileRecord(
+                state=ports.FileState.UNREADABLE, text=""
             )
         else:
-            verify = repo_reader.FileRecord(
-                state=repo_reader.FileState.READ, text=verify_text
+            verify = ports.FileRecord(
+                state=ports.FileState.READ, text=verify_text
             )
         try:
             workflow_text = (base / ".github" / "workflows" / "test.yml").read_text(
                 encoding="utf-8-sig"
             )
         except FileNotFoundError:
-            workflow = repo_reader.FileRecord(
-                state=repo_reader.FileState.MISSING, text=""
+            workflow = ports.FileRecord(
+                state=ports.FileState.MISSING, text=""
             )
         except (UnicodeDecodeError, OSError):
-            workflow = repo_reader.FileRecord(
-                state=repo_reader.FileState.UNREADABLE, text=""
+            workflow = ports.FileRecord(
+                state=ports.FileState.UNREADABLE, text=""
             )
         else:
-            workflow = repo_reader.FileRecord(
-                state=repo_reader.FileState.READ, text=workflow_text
+            workflow = ports.FileRecord(
+                state=ports.FileState.READ, text=workflow_text
             )
-        top: list[repo_reader.EntryRecord] = []
+        top: list[ports.EntryRecord] = []
         try:
             top_listing = tuple(sorted(base.iterdir()))
         except OSError:
@@ -244,18 +244,18 @@ class FilesystemRepoReader(ts.Repository):
             if entry.is_symlink():
                 if entry.is_dir() or not entry.exists():
                     top.append(
-                        repo_reader.EntryRecord(
-                            name=entry.name, form=repo_reader.EntryForm.SYMLINK
+                        ports.EntryRecord(
+                            name=entry.name, form=ports.EntryForm.SYMLINK
                         )
                     )
             elif entry.is_dir():
                 top.append(
-                    repo_reader.EntryRecord(
-                        name=entry.name, form=repo_reader.EntryForm.DIRECTORY
+                    ports.EntryRecord(
+                        name=entry.name, form=ports.EntryForm.DIRECTORY
                     )
                 )
         examples_base = base / "examples"
-        examples: list[repo_reader.EntryRecord] = []
+        examples: list[ports.EntryRecord] = []
         if examples_base.is_dir():
             try:
                 examples_listing = tuple(sorted(examples_base.iterdir()))
@@ -269,17 +269,17 @@ class FilesystemRepoReader(ts.Repository):
                 if entry.is_symlink():
                     if entry.is_dir() or not entry.exists():
                         examples.append(
-                            repo_reader.EntryRecord(
-                                name=entry.name, form=repo_reader.EntryForm.SYMLINK
+                            ports.EntryRecord(
+                                name=entry.name, form=ports.EntryForm.SYMLINK
                             )
                         )
                 elif entry.is_dir():
                     examples.append(
-                        repo_reader.EntryRecord(
-                            name=entry.name, form=repo_reader.EntryForm.DIRECTORY
+                        ports.EntryRecord(
+                            name=entry.name, form=ports.EntryForm.DIRECTORY
                         )
                     )
-        return repo_reader.ReadRepoResponse(
+        return ports.ReadRepoResponse(
             manifest=manifest,
             verify=verify,
             workflow=workflow,

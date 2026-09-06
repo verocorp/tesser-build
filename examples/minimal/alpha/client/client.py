@@ -19,6 +19,6 @@ class AddResponse(ts.Response):
         self.standing = standing
 
 
-class Client(ts.Client, typing.Protocol):
+class AlphaClient(ts.Client, typing.Protocol):
 
-    def add(self, request: AddRequest) -> AddResponse: ...
+    def add(self, add_request: AddRequest) -> AddResponse: ...

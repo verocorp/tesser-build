@@ -19,7 +19,7 @@ def test_a_config_repository_subclass_stays_a_protocol() -> None:
 
 
 def test_a_structural_implementation_needs_no_marker() -> None:
-    reader: _Reads = _Structural()
+    reader: _Reads = _Structural()  # tesser:debt TB085
 
     assert isinstance(reader.get(), config.Config)
     assert config_repository.ConfigRepository not in type(reader).__mro__

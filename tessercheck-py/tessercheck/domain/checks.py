@@ -74,6 +74,11 @@ TS_NAME_BY_BLOCK: typing.Final[dict[str, str]] = {
 
 ROLES: typing.Final[tuple[str, ...]] = ("domain", "application", "client", "adapters", "component")
 
+EXPORT_PACKAGE_PLACES: typing.Final[frozenset[str]] = frozenset({
+    "role-init", "ports-init", "app-client-init", "orchestrators-init",
+    "shell-init", "protocol-init",
+})
+
 STORE_METHOD: typing.Final[str] = "transaction"
 
 STORE_RETURN: typing.Final[str] = "AsyncContextManager"
@@ -262,6 +267,8 @@ DO_NOT_USE_PREFIX: typing.Final[str] = "do_not_use_"
 
 KERNEL_PACKAGE: typing.Final[str] = "kernel"
 
+CONTEXT_KERNEL_HOME: typing.Final[tuple[str, str]] = ("domain", KERNEL_PACKAGE)
+
 TESSER: typing.Final[str] = "tesser"
 
 TESSER_NAMESPACES: typing.Final[frozenset[str]] = frozenset(
@@ -408,6 +415,15 @@ TESTS_ROLE: typing.Final[str] = "tests"
 
 EVAL_PREFIX: typing.Final[str] = "eval_"
 
+OBJECT_SETATTR: typing.Final[str] = "__setattr__"
+
+TEST_PREFIX: typing.Final[str] = "test_"
+
+
+CAMEL_TAIL: typing.Final[re.Pattern[str]] = re.compile(r"([a-z0-9])([A-Z])")
+
+CAMEL_RUN: typing.Final[re.Pattern[str]] = re.compile(r"([A-Z]+)([A-Z][a-z])")
+
 EVAL_HOME: typing.Final[str] = "gateways"
 
 TEST_TIER_HOME: typing.Final[dict[str, tuple[str, str | None]]] = {
@@ -539,6 +555,23 @@ TYPING_MODULE: typing.Final[str] = "typing"
 LITERAL: typing.Final[str] = "Literal"
 
 SPEC_BLOCKS: typing.Final[frozenset[str]] = frozenset({"spec", "component_spec", "app_spec"})
+
+FIELD_NAME_BLOCKS: typing.Final[frozenset[str]] = SPEC_BLOCKS | frozenset({
+    "request",
+    "response",
+    "port_request",
+    "port_response",
+    "protocol_record",
+    "protocol_request",
+    "protocol_response",
+    "protocol_rejection",
+})
+
+UNNAMED_PARAMETERS: typing.Final[frozenset[str]] = frozenset({"self", "cls"})
+
+SPEC_PARAMETER: typing.Final[str] = "spec"
+
+FREE_RETURN: typing.Final[str] = "-"
 
 PUBLIC_CALL: typing.Final[str] = "__call__"
 
@@ -716,6 +749,19 @@ class Text(ts.ValueObject):
         if not value:
             raise ValueError("text must be non-empty")
         object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return serialization.canonical_str(self._value)
+
+
+class DerivedName(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        object.__setattr__(
+            self, "_value", CAMEL_TAIL.sub(r"\1_\2", CAMEL_RUN.sub(r"\1_\2", value)).lower()
+        )
 
     def __str__(self) -> str:
         return serialization.canonical_str(self._value)
@@ -1049,14 +1095,14 @@ class Names(ts.ValueObject):
     def __init__(self, items: tuple[str, ...]) -> None:
         object.__setattr__(self, "_items", tuple(sorted(frozenset(items))))
 
-    def __and__(self, other: Names) -> Names:
-        return Names(tuple(item for item in self._items if item in other._items))
+    def __and__(self, names: Names) -> Names:
+        return Names(tuple(item for item in self._items if item in names._items))
 
-    def __sub__(self, other: Names) -> Names:
-        return Names(tuple(item for item in self._items if item not in other._items))
+    def __sub__(self, names: Names) -> Names:
+        return Names(tuple(item for item in self._items if item not in names._items))
 
-    def __or__(self, other: Names) -> Names:
-        return Names(self._items + other._items)
+    def __or__(self, names: Names) -> Names:
+        return Names(self._items + names._items)
 
     def __bool__(self) -> bool:
         return bool(self._items)
@@ -1104,11 +1150,11 @@ class Symbols(ts.ValueObject):
     def __init__(self, spec: SymbolsSpec) -> None:
         object.__setattr__(self, "_items", tuple(Symbol(item) for item in spec.items))
 
-    def __and__(self, other: Symbols) -> Symbols:
+    def __and__(self, symbols: Symbols) -> Symbols:
         return Symbols(SymbolsSpec(tuple(
             SymbolSpec(str(item.module()), str(item.name()))
             for item in self._items
-            if item in other._items
+            if item in symbols._items
         )))
 
     def __bool__(self) -> bool:
@@ -1138,9 +1184,17 @@ class KindTable(ts.ValueObject):
                 raise ValueError("a kind table names one block per symbol")
         object.__setattr__(self, "_entries", ordered)
 
-    def blocks_in(self, module: Text) -> Names:
-        wanted = str(module)
+    def blocks_in(self, text: Text) -> Names:
+        wanted = str(text)
         return Names(tuple(block for owner, _, block in self._entries if owner == wanted))
+
+    def blocks_under(self, text: Text) -> Names:
+        wanted = str(text)
+        return Names(tuple(
+            block
+            for owner, _, block in self._entries
+            if owner == wanted or owner.startswith(wanted + ".")
+        ))
 
     def block_of(self, symbol: Symbol) -> Text | None:
         wanted_module = str(symbol.module())
@@ -1208,8 +1262,8 @@ class NameRows(ts.ValueObject):
     def names(self) -> Names:
         return Names(self._items)
 
-    def under(self, target: Text) -> Names:
-        wanted = str(target)
+    def under(self, text: Text) -> Names:
+        wanted = str(text)
         return Names(tuple(
             name for name in self._items if name == wanted or name.startswith(wanted + ".")
         ))
@@ -1244,17 +1298,17 @@ class TargetRows(ts.ValueObject):
     def __init__(self, items: tuple[tuple[str, str, str, str], ...]) -> None:
         object.__setattr__(self, "_items", items)
 
-    def target(self, source: Symbol) -> Symbol | None:
-        wanted_module = str(source.module())
-        wanted_name = str(source.name())
+    def target(self, symbol: Symbol) -> Symbol | None:
+        wanted_module = str(symbol.module())
+        wanted_name = str(symbol.name())
         for module, name, target_module, target_name in self._items:
             if module == wanted_module and name == wanted_name:
                 return Symbol(SymbolSpec(target_module, target_name))
         return None
 
-    def takers(self, source: Symbol) -> Symbols:
-        wanted_module = str(source.module())
-        wanted_name = str(source.name())
+    def takers(self, symbol: Symbol) -> Symbols:
+        wanted_module = str(symbol.module())
+        wanted_name = str(symbol.name())
         return Symbols(SymbolsSpec(tuple(
             SymbolSpec(module, name)
             for spec_module, spec_name, module, name in self._items
@@ -1269,9 +1323,9 @@ class MakerRows(ts.ValueObject):
     def __init__(self, items: tuple[tuple[str, str, str, str, str], ...]) -> None:
         object.__setattr__(self, "_items", items)
 
-    def ref(self, function: Symbol) -> SpecRef | None:
-        wanted_module = str(function.module())
-        wanted_name = str(function.name())
+    def ref(self, symbol: Symbol) -> SpecRef | None:
+        wanted_module = str(symbol.module())
+        wanted_name = str(symbol.name())
         for module, name, spec_module, spec_name, shape in self._items:
             if module == wanted_module and name == wanted_name:
                 return SpecRef(SpecRefSpec(SymbolSpec(spec_module, spec_name), shape))
@@ -1285,8 +1339,8 @@ class MethodRows(ts.ValueObject):
     def __init__(self, items: tuple[tuple[str, str, str, str], ...]) -> None:
         object.__setattr__(self, "_items", items)
 
-    def ref(self, name: Text) -> SpecRef | None:
-        wanted = str(name)
+    def ref(self, text: Text) -> SpecRef | None:
+        wanted = str(text)
         for named, spec_module, spec_name, shape in self._items:
             if named == wanted:
                 return SpecRef(SpecRefSpec(SymbolSpec(spec_module, spec_name), shape))
@@ -1300,11 +1354,41 @@ class FieldRows(ts.ValueObject):
     def __init__(self, items: tuple[tuple[str, str, str, str, str, str], ...]) -> None:
         object.__setattr__(self, "_items", items)
 
-    def ref(self, key: Text) -> SpecRef | None:
-        wanted = str(key)
+    def ref(self, text: Text) -> SpecRef | None:
+        wanted = str(text)
         for module, name, attr, spec_module, spec_name, shape in self._items:
             if f"{module}|{name}|{attr}" == wanted:
                 return SpecRef(SpecRefSpec(SymbolSpec(spec_module, spec_name), shape))
+        return None
+
+
+class AttrRows(ts.ValueObject):
+
+    _items: tuple[tuple[str, str, str, str, str], ...]
+
+    def __init__(self, items: tuple[tuple[str, str, str, str, str], ...]) -> None:
+        object.__setattr__(self, "_items", items)
+
+    def held(self, text: Text) -> Symbol | None:
+        wanted = str(text)
+        for module_name, cls, name, held_module, held_name in self._items:
+            if f"{module_name}|{cls}|{name}" == wanted:
+                return Symbol(SymbolSpec(held_module, held_name))
+        return None
+
+
+class ReturnRows(ts.ValueObject):
+
+    _items: tuple[tuple[str, str, str, str, str], ...]
+
+    def __init__(self, items: tuple[tuple[str, str, str, str, str], ...]) -> None:
+        object.__setattr__(self, "_items", items)
+
+    def returned(self, text: Text) -> Symbol | None:
+        wanted = str(text)
+        for module_name, owner, name, ret_module, ret_name in self._items:
+            if f"{module_name}|{owner}|{name}" == wanted:
+                return Symbol(SymbolSpec(ret_module, ret_name))
         return None
 
 
@@ -1349,7 +1433,15 @@ class RegistrySpec(ts.Spec):
         spec_takers: tuple[tuple[str, str, str, str], ...] = (),
         spec_shared: tuple[tuple[str, str, int, str, str, str, str], ...] = (),
         package_names: tuple[str, ...] = (),
+        export_packages: tuple[str, ...] = (),
+        returns: tuple[tuple[str, str, str, str, str], ...] = (),
+        attrs: tuple[tuple[str, str, str, str, str], ...] = (),
+        package_attrs: tuple[tuple[str, str], ...] = (),
     ) -> None:
+        self.export_packages = export_packages
+        self.returns = returns
+        self.attrs = attrs
+        self.package_attrs = package_attrs
         self.package_names = package_names
         self.spec_makers = spec_makers
         self.spec_methods = spec_methods
@@ -1388,8 +1480,16 @@ class Registry(ts.ValueObject):
     _spec_takers: TargetRows
     _spec_shared: SharedRows
     _package_names: NameRows
+    _export_packages: NameRows
+    _returns: ReturnRows
+    _attrs: AttrRows
+    _package_attrs: SymbolRows
 
     def __init__(self, spec: RegistrySpec) -> None:
+        object.__setattr__(self, "_export_packages", NameRows(spec.export_packages))
+        object.__setattr__(self, "_returns", ReturnRows(spec.returns))
+        object.__setattr__(self, "_attrs", AttrRows(spec.attrs))
+        object.__setattr__(self, "_package_attrs", SymbolRows(spec.package_attrs))
         object.__setattr__(self, "_spec_makers", MakerRows(spec.spec_makers))
         object.__setattr__(self, "_spec_methods", MethodRows(spec.spec_methods))
         object.__setattr__(self, "_spec_fields", FieldRows(spec.spec_fields))
@@ -1414,17 +1514,29 @@ class Registry(ts.ValueObject):
     def package_names(self) -> Names:
         return self._package_names.names()
 
-    def spec_maker(self, function: Symbol) -> SpecRef | None:
-        return self._spec_makers.ref(function)
+    def export_packages(self) -> Names:
+        return self._export_packages.names()
 
-    def spec_method(self, name: Text) -> SpecRef | None:
-        return self._spec_methods.ref(name)
+    def returns(self) -> ReturnRows:
+        return self._returns
 
-    def spec_field(self, key: Text) -> SpecRef | None:
-        return self._spec_fields.ref(key)
+    def attrs(self) -> AttrRows:
+        return self._attrs
 
-    def spec_takers(self, spec: Symbol) -> Symbols:
-        return self._spec_takers.takers(spec)
+    def package_attrs(self) -> Symbols:
+        return self._package_attrs.symbols()
+
+    def spec_maker(self, symbol: Symbol) -> SpecRef | None:
+        return self._spec_makers.ref(symbol)
+
+    def spec_method(self, text: Text) -> SpecRef | None:
+        return self._spec_methods.ref(text)
+
+    def spec_field(self, text: Text) -> SpecRef | None:
+        return self._spec_fields.ref(text)
+
+    def spec_takers(self, symbol: Symbol) -> Symbols:
+        return self._spec_takers.takers(symbol)
 
     def spec_shared(self) -> tuple[SharedSpec, ...]:
         return self._spec_shared.shared()
@@ -1438,8 +1550,8 @@ class Registry(ts.ValueObject):
     def tops(self) -> Names:
         return self._tops.names()
 
-    def modules_under(self, target: Text) -> Names:
-        return self._module_names.under(target)
+    def modules_under(self, text: Text) -> Names:
+        return self._module_names.under(text)
 
     def declared_imports(self) -> Names:
         return self._declared_imports.names()
@@ -1447,8 +1559,8 @@ class Registry(ts.ValueObject):
     def pure_stdlib(self) -> Names:
         return self._pure_stdlib.names()
 
-    def mapper_target(self, mapper: Symbol) -> Symbol | None:
-        return self._mapper_targets.target(mapper)
+    def mapper_target(self, symbol: Symbol) -> Symbol | None:
+        return self._mapper_targets.target(symbol)
 
     def kinds(self) -> KindTable:
         return self._kinds.table()
@@ -1515,6 +1627,35 @@ class Alias(ts.ValueObject):
         return self._package
 
 
+class ReexportSpec(ts.Spec):
+
+    def __init__(self, package: str, exported: str, defining: str, original: str) -> None:
+        self.package = package
+        self.exported = exported
+        self.defining = defining
+        self.original = original
+
+
+class Reexport(ts.ValueObject):
+
+    _package: Text
+    _exported: Text
+    _defining: Text
+    _original: Text
+
+    def __init__(self, spec: ReexportSpec) -> None:
+        object.__setattr__(self, "_package", Text(spec.package))
+        object.__setattr__(self, "_exported", Text(spec.exported))
+        object.__setattr__(self, "_defining", Text(spec.defining))
+        object.__setattr__(self, "_original", Text(spec.original))
+
+    def exports(self) -> Symbol:
+        return Symbol(SymbolSpec(str(self._package), str(self._exported)))
+
+    def defines(self) -> Symbol:
+        return Symbol(SymbolSpec(str(self._defining), str(self._original)))
+
+
 class ScopeSpec(ts.Spec):
 
     def __init__(
@@ -1526,6 +1667,7 @@ class ScopeSpec(ts.Spec):
         functions: tuple[str, ...] = (),
         spoken: str | None = None,
         enums: tuple[str, ...] = (),
+        reexports: tuple[tuple[str, str, str, str], ...] = (),
     ) -> None:
         self.module = module
         self.imported = imported
@@ -1534,6 +1676,7 @@ class ScopeSpec(ts.Spec):
         self.functions = functions
         self.spoken = spoken
         self.enums = enums
+        self.reexports = reexports
 
 
 class Scope(ts.ValueObject):
@@ -1545,6 +1688,7 @@ class Scope(ts.ValueObject):
     _functions: Names
     _spoken: Text | None
     _enums: Names
+    _reexports: tuple[Reexport, ...]
 
     def __init__(self, spec: ScopeSpec) -> None:
         object.__setattr__(self, "_module", Text(spec.module))
@@ -1554,6 +1698,10 @@ class Scope(ts.ValueObject):
         object.__setattr__(self, "_functions", Names(spec.functions))
         object.__setattr__(self, "_spoken", Text(spec.spoken) if spec.spoken else None)
         object.__setattr__(self, "_enums", Names(spec.enums))
+        object.__setattr__(self, "_reexports", tuple(
+            Reexport(ReexportSpec(package, exported, defining, original))
+            for package, exported, defining, original in spec.reexports
+        ))
 
     def enums(self) -> Names:
         return self._enums
@@ -1570,32 +1718,47 @@ class Scope(ts.ValueObject):
     def locals(self) -> Names:
         return Names(tuple(str(binding.local()) for binding in self._imported) + tuple(str(alias.alias()) for alias in self._packages))
 
-    def package_of(self, alias: Text) -> Text | None:
+    def package_of(self, text: Text) -> Text | None:
         for item in self._packages:
-            if item.alias() == alias:
+            if item.alias() == text:
                 return item.package()
         return None
 
-    def import_of(self, local: Text) -> Symbol | None:
+    def import_of(self, text: Text) -> Symbol | None:
         for binding in self._imported:
-            if binding.local() == local:
+            if binding.local() == text:
                 return Symbol(SymbolSpec(str(binding.target()), str(binding.original())))
         return None
 
-    def resolve(self, ref: Text) -> Symbol | None:
-        wanted = str(ref)
+    def resolve(self, text: Text) -> Symbol | None:
+        wanted = str(text)
+        found: tuple[str, str] | None = None
         if "." in wanted:
             prefix, attr = wanted.rsplit(".", 1)
             for alias in self._packages:
                 if str(alias.alias()) == prefix:
-                    return Symbol(SymbolSpec(str(alias.package()), attr))
+                    found = (str(alias.package()), attr)
+                    break
+        else:
+            for binding in self._imported:
+                if str(binding.local()) == wanted:
+                    found = (str(binding.target()), str(binding.original()))
+                    break
+            if found is None and wanted in self._classes:
+                found = (str(self._module), wanted)
+        if found is None:
             return None
-        for binding in self._imported:
-            if str(binding.local()) == wanted:
-                return Symbol(SymbolSpec(str(binding.target()), str(binding.original())))
-        if wanted in self._classes:
-            return Symbol(SymbolSpec(str(self._module), wanted))
-        return None
+        symbol = Symbol(SymbolSpec(found[0], found[1]))
+        for _ in self._reexports:
+            hop: Symbol | None = None
+            for reexport in self._reexports:
+                if reexport.exports() == symbol:
+                    hop = reexport.defines()
+                    break
+            if hop is None:
+                break
+            symbol = hop
+        return symbol
 
     def symbols(self, annotation: Annotation) -> Symbols:
         found: list[tuple[str, str]] = []
@@ -1611,7 +1774,22 @@ class Scope(ts.ValueObject):
                     found.append((str(binding.target()), str(binding.original())))
             if ref in self._classes:
                 found.append((str(self._module), ref))
-        return Symbols(SymbolsSpec(tuple(SymbolSpec(module_name, name) for module_name, name in found)))
+        canonical: list[Symbol] = []
+        for module_name, name in found:
+            symbol = Symbol(SymbolSpec(module_name, name))
+            for _ in self._reexports:
+                hop: Symbol | None = None
+                for reexport in self._reexports:
+                    if reexport.exports() == symbol:
+                        hop = reexport.defines()
+                        break
+                if hop is None:
+                    break
+                symbol = hop
+            canonical.append(symbol)
+        return Symbols(SymbolsSpec(tuple(
+            SymbolSpec(str(item.module()), str(item.name())) for item in canonical
+        )))
 
 
 class EnumShapeSpec(ts.Spec):
@@ -2286,6 +2464,17 @@ class SignaturePolicy(ts.ValueObject):
                         f"{where} parameter {arg!r} is not a {expected}; {taking}",
                     ))
                 )
+            elif param_block in SPEC_BLOCKS and str(slot.name()) != SPEC_PARAMETER:
+                arg = str(slot.name())
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB080",
+                        f"{where} names its spec {arg!r}; a constructor's one spec is "
+                        "named spec, because the annotation already says which spec it is",
+                    ))
+                )
         if return_block is not None and (
             returns is None or str(returns.block()) != return_block
         ):
@@ -2300,16 +2489,16 @@ class SignaturePolicy(ts.ValueObject):
             )
         return tuple(found)
 
-    def missing_constructor_violations(self, decl: ClassDecl) -> tuple[Violation, ...]:
+    def missing_constructor_violations(self, class_decl: ClassDecl) -> tuple[Violation, ...]:
         constructs = str(self._constructs) if self._constructs is not None else ""
-        if decl.constructor() is not None:
+        if class_decl.constructor() is not None:
             return ()
         return (
             Violation(ViolationSpec(
-                str(decl.path()),
-                int(decl.lineno()),
+                str(class_decl.path()),
+                int(class_decl.lineno()),
                 "TB080",
-                f"{decl.module()}.{decl.name()} defines no __init__; "
+                f"{class_decl.module()}.{class_decl.name()} defines no __init__; "
                 f"{constructs} constructs from exactly one ts.Spec",
             )),
         )
@@ -2331,10 +2520,10 @@ class RecordSignaturePolicy(ts.ValueObject):
         object.__setattr__(self, "_subject", Text(spec.subject))
         object.__setattr__(self, "_leading_context", Names(("leading",) if spec.leading_context else ()))
 
-    def violations(self, decl: ClassDecl) -> tuple[Violation, ...]:
+    def violations(self, class_decl: ClassDecl) -> tuple[Violation, ...]:
         subject = str(self._subject)
         found: list[Violation] = []
-        for signature in decl.signatures():
+        for signature in class_decl.signatures():
             where = str(signature.where())
             path = str(signature.path())
             line = int(signature.lineno())
@@ -2459,9 +2648,9 @@ class Body(ts.ValueObject):
         fn = spec.node
         scope = Scope(spec.scope)
         registry = Registry(spec.registry)
-        kinds = registry.kinds()
+        kind_table = registry.kinds()
         class_methods = frozenset(spec.class_methods)
-        functions = scope.functions()
+        names = scope.functions()
         held_ports = frozenset(spec.held_ports)
         held_contexts = frozenset(spec.held_contexts)
         facts: list[tuple[int, str, str | None, tuple[str, ...]]] = []
@@ -2485,7 +2674,7 @@ class Body(ts.ValueObject):
             symbol = scope.resolve(Text(ref))
             if symbol is None:
                 return None
-            block = kinds.block_of(symbol)
+            block = kind_table.block_of(symbol)
             return str(block) if block is not None else None
 
         def symbol_of(node: ast.expr) -> Symbol | None:
@@ -2563,7 +2752,7 @@ class Body(ts.ValueObject):
             symbol = symbol_of(node.func)
             if symbol is None:
                 return None
-            block = kinds.block_of(symbol)
+            block = kind_table.block_of(symbol)
             if block is None or str(block) not in DOMAIN_BLOCKS:
                 return None
             return (str(symbol.module()), str(symbol.name()))
@@ -2646,7 +2835,7 @@ class Body(ts.ValueObject):
                     and callee.attr in class_methods
                 ):
                     facts.append((node.lineno, "delegation", callee.attr, ("self",)))
-                elif isinstance(callee, ast.Name) and callee.id in functions:
+                elif isinstance(callee, ast.Name) and callee.id in names:
                     facts.append((node.lineno, "delegation", callee.id, ("function",)))
                 for value in list(node.args) + [kw.value for kw in node.keywords]:
                     if isinstance(value, ast.Call) and block_of(value.func) is None:
@@ -3126,16 +3315,16 @@ class Helper(ts.ValueObject):
 
     def __init__(self, spec: HelperSpec) -> None:
         fn = spec.node
-        facts = Registry(spec.registry)
-        kinds = facts.kinds()
+        registry = Registry(spec.registry)
+        kind_table = registry.kinds()
         scope = Scope(spec.scope)
-        policy = AnnotationPolicy(
+        annotation_policy = AnnotationPolicy(
             AnnotationPolicySpec((), tuple(sorted(PRIMITIVES)), (), spec.scope, spec.registry)
         )
         line = fn.lineno
         rows: list[tuple[int, str, str | None, tuple[str, ...]]] = []
         for arg in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs:
-            if arg.annotation is None or policy.disallowed(Annotation(arg.annotation)):
+            if arg.annotation is None or annotation_policy.disallowed(Annotation(arg.annotation)):
                 rows.append((line, "parameter", arg.arg, ()))
         positional = fn.args.posonlyargs + fn.args.args
         undefaulted = positional[: len(positional) - len(fn.args.defaults)]
@@ -3146,10 +3335,10 @@ class Helper(ts.ValueObject):
             rows.append((line, "default", arg.arg, ()))
         returned_ref = Annotation(fn.returns).primary() if fn.returns is not None else None
         symbol = scope.resolve(returned_ref) if returned_ref is not None else None
-        block = kinds.block_of(symbol) if symbol is not None else None
+        block = kind_table.block_of(symbol) if symbol is not None else None
         if symbol is not None and block is not None and str(block) == "mapper":
-            symbol = facts.mapper_target(symbol)
-            block = kinds.block_of(symbol) if symbol is not None else None
+            symbol = registry.mapper_target(symbol)
+            block = kind_table.block_of(symbol) if symbol is not None else None
         if block is None or str(block) not in DATA_BLOCKS:
             rows.append((line, "data", None, ()))
         for node in ast.walk(fn):
@@ -3264,16 +3453,16 @@ class SpecReader(ts.ValueObject):
         object.__setattr__(self, "_registry", Registry(spec.registry))
 
     def ref(self, annotation: Annotation) -> SpecRef | None:
-        kinds = self._registry.kinds()
+        kind_table = self._registry.kinds()
         for candidate in annotation.spec_candidates():
             ref, shape = str(candidate).rsplit("|", 1)
             symbol = self._scope.resolve(Text(ref))
             if symbol is None:
                 continue
-            block = kinds.block_of(symbol)
+            block = kind_table.block_of(symbol)
             if block is not None and str(block) == "mapper":
                 symbol = self._registry.mapper_target(symbol)
-                block = kinds.block_of(symbol) if symbol is not None else None
+                block = kind_table.block_of(symbol) if symbol is not None else None
             if symbol is not None and block is not None and str(block) in SPEC_BLOCKS:
                 return SpecRef(SpecRefSpec(SymbolSpec(str(symbol.module()), str(symbol.name())), shape))
         return None
@@ -3495,7 +3684,7 @@ class Declaration(ts.ValueObject):
             )
         return tuple(found)
 
-    def unused_violations(self, used: Names) -> tuple[Violation, ...]:
+    def unused_violations(self, names: Names) -> tuple[Violation, ...]:
         return tuple(
             Violation(ViolationSpec(
                 TREE_DECLARATION,
@@ -3505,7 +3694,7 @@ class Declaration(ts.ValueObject):
                 "an import declaration that legalizes nothing is itself a finding",
             ))
             for declared in self._imports
-            if declared not in used
+            if declared not in names
         ) + tuple(
             Violation(ViolationSpec(
                 TREE_DECLARATION,
@@ -3515,7 +3704,7 @@ class Declaration(ts.ValueObject):
                 "a stdlib declaration that legalizes nothing is itself a finding",
             ))
             for declared in self._pure_stdlib
-            if declared not in used
+            if declared not in names
         )
 
 
@@ -3941,7 +4130,7 @@ class ClassDecl(ts.Entity):
         object.__setattr__(self, "_fields", tuple(fields))
         object.__setattr__(self, "_methods", tuple(methods))
         scope = self._scope
-        kinds = self._registry.kinds()
+        kind_table = self._registry.kinds()
 
         SlotRow = tuple[str, str | None, tuple[str, ...], tuple[str, str] | None, bool]
 
@@ -3950,11 +4139,11 @@ class ClassDecl(ts.Entity):
                 return (name, None, (), None, False)
             primary = annotation.primary()
             resolved = scope.resolve(primary) if primary is not None else None
-            named_block = kinds.block_of(resolved) if resolved is not None else None
+            named_block = kind_table.block_of(resolved) if resolved is not None else None
             block = str(named_block) if named_block is not None else None
             touched: list[str] = []
             for symbol in scope.symbols(annotation):
-                found_block = kinds.block_of(symbol)
+                found_block = kind_table.block_of(symbol)
                 if found_block is not None:
                     touched.append(str(found_block))
             return (
@@ -4005,7 +4194,7 @@ class ClassDecl(ts.Entity):
                 slot(str(first.name()), first.annotation()) if first is not None else None,
             ))
         object.__setattr__(self, "_signatures", tuple(Signature(signature_spec(row)) for row in signature_rows))
-        own_block = kinds.block_of(Symbol(SymbolSpec(spec.module, node.name)))
+        own_block = kind_table.block_of(Symbol(SymbolSpec(spec.module, node.name)))
         init_node = next(
             (
                 item
@@ -4024,7 +4213,7 @@ class ClassDecl(ts.Entity):
                     continue
                 primary = Annotation(arg.annotation).primary()
                 resolved = scope.resolve(primary) if primary is not None else None
-                block = kinds.block_of(resolved) if resolved is not None else None
+                block = kind_table.block_of(resolved) if resolved is not None else None
                 if block is not None and str(block) == kind:
                     named.add(arg.arg)
             kept: set[str] = set()
@@ -4332,6 +4521,16 @@ class ClassDecl(ts.Entity):
                 and annotation is not None
                 and "bare" in annotation.form()
             )
+            if exact and arg != SPEC_PARAMETER:
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(init.lineno()),
+                        "TB080",
+                        f"{where} names its spec {arg!r}; a constructor's one spec is "
+                        "named spec, because the annotation already says which spec it is",
+                    ))
+                )
             if not (plain or exact):
                 found.append(
                     Violation(ViolationSpec(
@@ -4827,10 +5026,10 @@ class ClassDecl(ts.Entity):
             found.append(violation)
         return tuple(found)
 
-    def port_violations(self, policy: SignaturePolicy) -> tuple[Violation, ...]:
+    def port_violations(self, signature_policy: SignaturePolicy) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        declared = self._scope.classes()
-        kinds = self._registry.kinds()
+        names = self._scope.classes()
+        kind_table = self._registry.kinds()
         for method, signature in zip(self._methods, self._signatures):
             where = f"{self._module}.{self._name}.{method.name()}"
             if not method.form():
@@ -4855,14 +5054,14 @@ class ClassDecl(ts.Entity):
                     ))
                 )
                 continue
-            found.extend(policy.violations(signature))
+            found.extend(signature_policy.violations(signature))
             annotations = [param.annotation() for param in method.params()] + [method.returns()]
             for annotation in annotations:
-                if annotation is not None and "." not in str(annotation.source()) and str(annotation.source()) in declared:
+                if annotation is not None and "." not in str(annotation.source()) and str(annotation.source()) in names:
                     continue
                 primary = annotation.primary() if annotation is not None else None
                 symbol = self._scope.resolve(primary) if primary is not None else None
-                block = kinds.block_of(symbol) if symbol is not None else None
+                block = kind_table.block_of(symbol) if symbol is not None else None
                 if block is not None and str(block) == JOB_CONTEXT_BLOCK:
                     continue
                 found.append(
@@ -4879,11 +5078,11 @@ class ClassDecl(ts.Entity):
 
     def store_violations(self) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        kinds = self._registry.kinds()
-        ports = Names(tuple(
+        kind_table = self._registry.kinds()
+        names = Names(tuple(
             name
             for name in self._scope.classes()
-            if str(kinds.block_of(Symbol(SymbolSpec(str(self._module), name)))) == "port"
+            if str(kind_table.block_of(Symbol(SymbolSpec(str(self._module), name)))) == "port"
         ))
         for method in self._methods:
             where = f"{self._module}.{self._name}.{method.name()}"
@@ -4928,7 +5127,7 @@ class ClassDecl(ts.Entity):
                 and "." in str(returns.primary())
                 and len(tuple(returns.slice_names())) == 1
                 and "multi_slice" not in returns.form()
-                and all(name in ports for name in returns.slice_names())
+                and all(name in names for name in returns.slice_names())
             )
             if not yields_port:
                 found.append(
@@ -4984,7 +5183,10 @@ class ClassDecl(ts.Entity):
             for annotation in annotations:
                 primary = annotation.primary() if annotation is not None else None
                 symbol = self._scope.resolve(primary) if primary is not None else None
-                if symbol is not None and spoken is not None and symbol.module() == spoken:
+                if symbol is not None and spoken is not None and (
+                    symbol.module() == spoken
+                    or str(symbol.module()).startswith(str(spoken) + ".")
+                ):
                     continue
                 found.append(
                     Violation(ViolationSpec(
@@ -5000,7 +5202,7 @@ class ClassDecl(ts.Entity):
 
     def component_violations(self) -> tuple[Violation, ...]:
         found: list[Violation] = []
-        kinds = self._registry.kinds()
+        kind_table = self._registry.kinds()
         if not any(str(method.name()) == "close" for method in self._methods):
             found.append(
                 Violation(ViolationSpec(
@@ -5035,13 +5237,13 @@ class ClassDecl(ts.Entity):
             annotation = annotated.get(published)
             primary = annotation.primary() if annotation is not None else None
             symbol = self._scope.resolve(primary) if primary is not None else None
-            block = kinds.block_of(symbol) if symbol is not None else None
+            block = kind_table.block_of(symbol) if symbol is not None else None
             named = block is not None and str(block) == expected
             if not named and expected == "job" and annotation is not None and str(annotation.head()) == "tuple":
                 elements = list(annotation.slice_names())
                 named = bool(elements) and all(
                     element != "?" and (
-                        lambda resolved: resolved is not None and str(kinds.block_of(resolved)) == "job"
+                        lambda resolved: resolved is not None and str(kind_table.block_of(resolved)) == "job"
                     )(self._scope.resolve(Text(element)))
                     for element in elements
                 )
@@ -5115,7 +5317,7 @@ class ClassDecl(ts.Entity):
                 )
         return tuple(found)
 
-    def actions_violations(self, policy: DependencyPolicy) -> tuple[Violation, ...]:
+    def actions_violations(self, dependency_policy: DependencyPolicy) -> tuple[Violation, ...]:
         found: list[Violation] = []
         init = next((item for item in self._signatures if str(item.name()) == "__init__"), None)
         if init is None:
@@ -5140,10 +5342,10 @@ class ClassDecl(ts.Entity):
                     "a class of actions takes exactly one port",
                 ))
             )
-        found.extend(policy.violations(init))
+        found.extend(dependency_policy.violations(init))
         return tuple(found)
 
-    def orchestrator_violations(self, policy: DependencyPolicy) -> tuple[Violation, ...]:
+    def orchestrator_violations(self, dependency_policy: DependencyPolicy) -> tuple[Violation, ...]:
         found: list[Violation] = []
         init = next((item for item in self._signatures if str(item.name()) == "__init__"), None)
         if init is None:
@@ -5159,7 +5361,7 @@ class ClassDecl(ts.Entity):
             )
         else:
             where = str(init.where())
-            found.extend(policy.violations(init))
+            found.extend(dependency_policy.violations(init))
             taken = [slot for slot in init.params() if str(slot.block()) == JOB_CONTEXT_BLOCK]
             if len(taken) != 1:
                 found.append(
@@ -6005,6 +6207,7 @@ class ModuleSpec(ts.Spec):
         tops: tuple[str, ...] = (),
         contexts: tuple[str, ...] = (),
         export: str | None = None,
+        reexports: tuple[tuple[str, str, str, str], ...] = (),
     ) -> None:
         self.path = path
         self.name = name
@@ -6013,6 +6216,7 @@ class ModuleSpec(ts.Spec):
         self.tops = tops
         self.contexts = contexts
         self.export = export
+        self.reexports = reexports
 
 
 class Module(ts.Entity):
@@ -6063,10 +6267,12 @@ class Module(ts.Entity):
         self._debts = tuple(debts)
         self._name = spec.name
         self._is_package = spec.is_package
+        self._reexports: tuple[tuple[str, str, str, str], ...] = spec.reexports
         parts = spec.name.split(".")
         self._package: tuple[str, ...] = tuple(parts if spec.is_package else parts[:-1])
         self._body: tuple[ast.stmt, ...] = tuple(tree.body)
         self._package_aliases: dict[str, str] = {}
+        self._alias_bindings: list[tuple[str, str, int]] = []
         self._imported: dict[str, tuple[str, str]] = {}
         self._classes: dict[str, ast.ClassDef] = {}
         self._calls: tuple[ast.Call, ...] = tuple(
@@ -6075,10 +6281,14 @@ class Module(ts.Entity):
         self._subscripts: tuple[ast.Subscript, ...] = tuple(
             node for node in ast.walk(tree) if isinstance(node, ast.Subscript)
         )
+        self._attributes: tuple[ast.Attribute, ...] = tuple(
+            node for node in ast.walk(tree) if isinstance(node, ast.Attribute)
+        )
         self._assignments: tuple[ast.Assign | ast.AnnAssign, ...] = tuple(
             node for node in ast.walk(tree) if isinstance(node, (ast.Assign, ast.AnnAssign))
         )
         edges: list[ImportEdge] = []
+        members: list[tuple[str, str, str, int]] = []
         tesser_imports: list[TesserImport] = []
         nested_tesser: list[tuple[str, int]] = []
         broken_relatives: list[tuple[str, int]] = []
@@ -6103,6 +6313,9 @@ class Module(ts.Entity):
                             nested_tesser.append((alias.name, node.lineno))
                     if id(node) in top_level:
                         self._package_aliases[alias.asname or alias.name] = alias.name
+                        self._alias_bindings.append(
+                            (alias.asname or alias.name, alias.name, node.lineno)
+                        )
                     edges.append(
                         ImportEdge(ImportEdgeSpec(alias.name, node.lineno, False, alias.asname is not None, spec.path, spec.name))
                     )
@@ -6127,6 +6340,7 @@ class Module(ts.Entity):
                 for alias in node.names:
                     if id(node) in top_level:
                         self._imported[alias.asname or alias.name] = (target, alias.name)
+                        members.append((target, alias.name, alias.asname or "", node.lineno))
                 edges.append(ImportEdge(ImportEdgeSpec(target, node.lineno, True, False, spec.path, spec.name)))
                 if target.split(".")[0] == TESSER:
                     if id(node) in top_level:
@@ -6140,6 +6354,7 @@ class Module(ts.Entity):
             elif isinstance(node, ast.FunctionDef):
                 functions.add(node.name)
         self._edges: tuple[ImportEdge, ...] = tuple(edges)
+        self._members: tuple[tuple[str, str, str, int], ...] = tuple(members)
         self._tesser_imports: tuple[TesserImport, ...] = tuple(tesser_imports)
         self._nested_tesser: tuple[tuple[str, int], ...] = tuple(nested_tesser)
         self._broken_relatives: tuple[tuple[str, int], ...] = tuple(broken_relatives)
@@ -6175,6 +6390,7 @@ class Module(ts.Entity):
             tuple(sorted(self._functions)),
             self._spoken,
             self._enums,
+            self._reexports,
         ))
 
         self._placement = Placement(PlacementSpec(spec.name, spec.is_package, spec.contexts, spec.export))
@@ -6222,10 +6438,10 @@ class Module(ts.Entity):
     def spoken(self) -> Text | None:
         return Text(self._spoken) if self._spoken else None
 
-    def outcome_use_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+    def outcome_use_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
         path = self._path
-        kinds = Registry(registry).kinds()
+        kind_table = Registry(registry_spec).kinds()
         scope = self._scope
 
         def resolve(node: ast.expr) -> tuple[str, str] | None:
@@ -6246,7 +6462,7 @@ class Module(ts.Entity):
             key = resolve(node)
             if key is None:
                 return None
-            block = kinds.block_of(Symbol(SymbolSpec(key[0], key[1])))
+            block = kind_table.block_of(Symbol(SymbolSpec(key[0], key[1])))
             return str(block) if block is not None else None
 
         def names_outcome(node: ast.expr) -> bool:
@@ -6542,15 +6758,15 @@ class Module(ts.Entity):
                     sites.append(node.annotation)
         found: list[Violation] = []
         for site in sorted(sites, key=lambda item: (item.lineno, item.col_offset)):
-            written = Annotation(site)
-            if not written.quoted():
+            annotation = Annotation(site)
+            if not annotation.quoted():
                 continue
             found.append(
                 Violation(ViolationSpec(
                     self._path,
                     site.lineno,
                     "TB021",
-                    f"{module_name} quotes {written.source()}; an annotation is written "
+                    f"{module_name} quotes {annotation.source()}; an annotation is written "
                     "unquoted — a quoted type is a string the analyzer cannot read, and "
                     "from __future__ import annotations is what defers a name the module "
                     "has not defined yet",
@@ -7089,17 +7305,17 @@ class Module(ts.Entity):
     def test_tier(self) -> Text | None:
         return Text(self._tier[1]) if self._tier is not None else None
 
-    def declared_uses(self, registry: RegistrySpec) -> Names:
-        facts = Registry(registry)
+    def declared_uses(self, registry_spec: RegistrySpec) -> Names:
+        registry = Registry(registry_spec)
         place = str(self._placement)
         module_name = self._name
-        export = str(facts.export()) if facts.export() is not None else None
-        tops = frozenset(str(top) for top in facts.tops())
-        contexts = frozenset(str(context) for context in facts.contexts())
+        export = str(registry.export()) if registry.export() is not None else None
+        tops = frozenset(str(top) for top in registry.tops())
+        contexts = frozenset(str(context) for context in registry.contexts())
         kernel_tops = (frozenset({KERNEL_PACKAGE}) | (frozenset({export}) if export is not None else frozenset())) & tops
         own = frozenset({export}) if place == "kernel" and module_name.split(".")[0] == export else kernel_tops
-        declared = tuple(str(name) for name in facts.declared_imports())
-        pure_stdlib = tuple(str(name) for name in facts.pure_stdlib())
+        declared = tuple(str(name) for name in registry.declared_imports())
+        pure_stdlib = tuple(str(name) for name in registry.pure_stdlib())
         domain = place == "kernel" or module_name.split(".")[1:2] == ["domain"]
         used: list[str] = []
         for edge in self._edges:
@@ -7109,7 +7325,7 @@ class Module(ts.Entity):
                 continue
             if place != "kernel" and head in contexts:
                 continue
-            if head in own and facts.modules_under(Text(target)):
+            if head in own and registry.modules_under(Text(target)):
                 continue
             covered = next((name for name in declared if target == name or target.startswith(name + ".")), None)
             if covered is not None:
@@ -7235,6 +7451,19 @@ class Module(ts.Entity):
     def kernel_init_violations(self) -> tuple[Violation, ...]:
         module_name = self._name
         found: list[Violation] = []
+        for _, original, exported, lineno in self._members:
+            exported = exported or original
+            if str(DerivedName(exported)) == module_name.split(".")[-1]:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB042",
+                        f"{module_name} re-exports {exported}; a package never exports a "
+                        "class of its own name, because the name derived from the class "
+                        "rebinds the package's alias",
+                    ))
+                )
         for stmt in self._body:
             if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
                 found.append(
@@ -7336,11 +7565,38 @@ class Module(ts.Entity):
             )
         return tuple(found)
 
-    def role_init_violations(self) -> tuple[Violation, ...]:
+    def role_init_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
+        registry = Registry(registry_spec)
+        modules = frozenset(registry.module_names())
+        packages = frozenset(registry.package_names())
+        export = str(registry.export()) if registry.export() is not None else None
+        kernel_tops = (
+            frozenset({KERNEL_PACKAGE})
+            | (frozenset({export}) if export is not None else frozenset())
+        ) & frozenset(registry.tops())
+        pieces = module_name.split(".")
+        context_kernel = (
+            len(pieces) == 3
+            and pieces[0] in frozenset(registry.contexts())
+            and tuple(pieces[1:]) == CONTEXT_KERNEL_HOME
+        )
+        named = frozenset(
+            (str(symbol.module()), str(symbol.name())) for symbol in registry.package_attrs()
+        )
         found: list[Violation] = []
         for stmt in self._body:
-            if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
+            if isinstance(stmt, ast.Import):
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        stmt.lineno,
+                        "TB042",
+                        f"{module_name} __init__ binds a module; "
+                        "a role __init__ is the export list, and a module import exports nothing",
+                    ))
+                )
+            elif not isinstance(stmt, ast.ImportFrom):
                 found.append(
                     Violation(ViolationSpec(
                         self._path,
@@ -7353,25 +7609,578 @@ class Module(ts.Entity):
         for edge in self._edges:
             target = str(edge._target)
             lineno = int(edge._lineno)
-            if not target.startswith(module_name + "."):
+            root_kernel = (
+                context_kernel and target.split(".")[0] in kernel_tops and target in packages
+            )
+            if not root_kernel and (
+                target.rsplit(".", 1)[0] != module_name or target not in modules
+            ):
                 found.append(
                     Violation(ViolationSpec(
                         self._path,
                         lineno,
                         "TB042",
                         f"{module_name} imports {target}; "
-                        "a role __init__ only re-exports from its own role",
+                        "a role __init__ only re-exports a module of its own role, and a "
+                        "context kernel __init__ also re-exports from a root kernel",
                     ))
                 )
-            found.extend(edge.member_form_violations())
             found.extend(edge.form_violations())
+        for _, original, exported, lineno in self._members:
+            if not exported:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB042",
+                        f"{module_name} imports {original} without repeating the name; "
+                        "a role __init__ re-exports under the name the module defines — "
+                        "from x import Y as Y, the form mypy --strict reads as an export",
+                    ))
+                )
+            elif exported != original:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB042",
+                        f"{module_name} re-exports {original} as {exported}; "
+                        "a role __init__ re-exports under the name the module defines — "
+                        "from x import Y as Y, the form mypy --strict reads as an export",
+                    ))
+                )
+            exported = exported or original
+            if str(DerivedName(exported)) == pieces[-1]:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB042",
+                        f"{module_name} re-exports {exported}; a package never exports a "
+                        "class of its own name, because the name derived from the class "
+                        "rebinds the package's alias",
+                    ))
+                )
+            if (module_name, exported) not in named:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB042",
+                        f"{module_name} re-exports {exported}, which no module outside "
+                        "the role reads; a role __init__ re-exports only what a module "
+                        "outside its role reads",
+                    ))
+                )
         return tuple(found)
 
-    def conftest_leaf_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+    def spoken_shapes(self) -> Symbols:
+        found: list[tuple[str, str]] = []
+        for cls in self._class_defs:
+            for item in cls.body:
+                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                annotations = [
+                    arg.annotation
+                    for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
+                ] + [item.returns]
+                for node in annotations:
+                    if node is None:
+                        continue
+                    primary = Annotation(node).primary()
+                    if primary is None:
+                        continue
+                    symbol = self._scope.resolve(primary)
+                    if symbol is not None:
+                        found.append((str(symbol.module()), str(symbol.name())))
+        return Symbols(SymbolsSpec(tuple(
+            SymbolSpec(module_name, name) for module_name, name in found
+        )))
+
+    def package_attrs(self) -> Symbols:
+        found: set[tuple[str, str]] = set()
+        for node in self._attributes:
+            package = self._package_aliases.get(ast.unparse(node.value))
+            if package is not None:
+                found.add((package, node.attr))
+        return Symbols(SymbolsSpec(tuple(
+            SymbolSpec(package, attr) for package, attr in sorted(found)
+        )))
+
+    def role_package_import_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
-        facts = Registry(registry)
-        export = facts.export()
-        tops = frozenset(facts.tops())
+        packages = frozenset(Registry(registry_spec).export_packages())
+        base_name = module_name.rsplit(".", 1)[1] if "." in module_name else module_name
+        found: list[Violation] = []
+        for edge in self._edges:
+            target = str(edge._target)
+            lineno = int(edge._lineno)
+            if target in packages:
+                if (module_name == target or module_name.startswith(target + ".")) and not (
+                    base_name.startswith(TEST_PREFIX)
+                    or base_name.startswith(EVAL_PREFIX)
+                    or base_name == "conftest"
+                ):
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            lineno,
+                            "TB060",
+                            f"{module_name} imports {target}; a module inside an "
+                            "exporting package never imports its own package, because "
+                            "the package imports the module back",
+                        ))
+                    )
+                continue
+            holder = target.rsplit(".", 1)[0] if "." in target else ""
+            if holder not in packages:
+                continue
+            if module_name == holder:
+                continue
+            if module_name.startswith(holder + "."):
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB060",
+                        f"{module_name} imports {target}, a module beside it; a module "
+                        "in an exporting package imports the packages around it and "
+                        "never a module of its own package, its sibling test included",
+                    ))
+                )
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    lineno,
+                    "TB060",
+                    f"{module_name} imports {target}, a module of {holder}; "
+                    "a module outside an exporting package imports the package, because "
+                    "the package __init__ is the list of what the outside may name",
+                ))
+            )
+        return tuple(found)
+
+    def _declared_attrs(self) -> tuple[tuple[str, str, str, str], ...]:
+        scope = self._scope
+        rows: list[tuple[str, str, str, str]] = []
+        for cls in self._class_defs:
+            held: dict[str, Symbol] = {}
+            for item in cls.body:
+                if (
+                    isinstance(item, ast.AnnAssign)
+                    and isinstance(item.target, ast.Name)
+                ):
+                    stated = Annotation(item.annotation).primary()
+                    named = scope.resolve(stated) if stated is not None else None
+                    if named is not None:
+                        held.setdefault(item.target.id, named)
+                if (
+                    not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    or item.name != "__init__"
+                ):
+                    continue
+                taken: dict[str, Symbol] = {}
+                for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs:
+                    if arg.annotation is None:
+                        continue
+                    annotation = Annotation(arg.annotation)
+                    shape = str(annotation.source())
+                    primary = annotation.primary()
+                    if (
+                        annotation.container() is not None
+                        or "|" in shape
+                        or "[" in shape
+                        or primary is None
+                    ):
+                        continue
+                    symbol = scope.resolve(primary)
+                    if symbol is not None:
+                        taken[arg.arg] = symbol
+                for node in ast.walk(item):
+                    if (
+                        isinstance(node, ast.Assign)
+                        and len(node.targets) == 1
+                        and isinstance(node.targets[0], ast.Name)
+                        and isinstance(node.value, ast.Call)
+                    ):
+                        local = scope.resolve(Text(ast.unparse(node.value.func)))
+                        if local is not None:
+                            taken[node.targets[0].id] = local
+                for node in ast.walk(item):
+                    target = None
+                    kept = None
+                    if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                        target = node.targets[0]
+                        kept = node.value
+                    elif isinstance(node, ast.AnnAssign):
+                        target = node.target
+                        kept = node.value
+                    if (
+                        not isinstance(target, ast.Attribute)
+                        or not isinstance(target.value, ast.Name)
+                        or target.value.id != "self"
+                    ):
+                        continue
+                    if isinstance(node, ast.AnnAssign):
+                        written = Annotation(node.annotation)
+                        shape = str(written.source())
+                        primary = written.primary()
+                        if (
+                            written.container() is None
+                            and "|" not in shape
+                            and "[" not in shape
+                            and primary is not None
+                        ):
+                            declared = scope.resolve(primary)
+                            if declared is not None:
+                                held.setdefault(target.attr, declared)
+                                continue
+                    if isinstance(kept, ast.Name) and kept.id in taken:
+                        held.setdefault(target.attr, taken[kept.id])
+                    elif isinstance(kept, ast.Call):
+                        made = scope.resolve(Text(ast.unparse(kept.func)))
+                        if made is not None:
+                            held.setdefault(target.attr, made)
+            rows.extend(
+                (cls.name, attr, str(symbol.module()), str(symbol.name()))
+                for attr, symbol in sorted(held.items())
+            )
+        return tuple(rows)
+
+    def _declared_returns(self) -> tuple[tuple[str, str, str, str], ...]:
+        scope = self._scope
+        declared: list[tuple[str, ast.FunctionDef | ast.AsyncFunctionDef]] = [
+            ("", stmt)
+            for stmt in self._body
+            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+        for cls in self._class_defs:
+            declared.extend(
+                (cls.name, item)
+                for item in cls.body
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+            )
+        rows: list[tuple[str, str, str, str]] = []
+        for owner, fn in declared:
+            if fn.returns is None:
+                continue
+            annotation = Annotation(fn.returns)
+            shape = str(annotation.source())
+            primary = annotation.primary()
+            symbol = None
+            if (
+                annotation.container() is None
+                and "|" not in shape
+                and "[" not in shape
+                and primary is not None
+            ):
+                symbol = scope.resolve(primary)
+            if symbol is None:
+                rows.append((owner, fn.name, FREE_RETURN, FREE_RETURN))
+            else:
+                rows.append((owner, fn.name, str(symbol.module()), str(symbol.name())))
+        return tuple(rows)
+
+    def naming_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
+        return_rows = registry.returns()
+        walked = frozenset(registry.module_names())
+        tops = frozenset(registry.tops())
+        scope = self._scope
+        attr_rows = registry.attrs()
+        functions: list[
+            tuple[ast.FunctionDef | ast.AsyncFunctionDef, str | None, Symbol | None]
+        ] = [
+            (stmt, None, None)
+            for stmt in self._body
+            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+        for cls in self._class_defs:
+            named = kind_table.block_of(Symbol(SymbolSpec(module_name, cls.name)))
+            block = str(named) if named is not None else None
+            functions.extend(
+                (item, block, Symbol(SymbolSpec(module_name, cls.name)))
+                for item in cls.body
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+            )
+        found: list[Violation] = []
+        for fn, block, owner in functions:
+            claims: list[tuple[int, str, str]] = []
+            unread: list[tuple[int, str]] = []
+            counted: dict[str, int] = {}
+            typed: dict[str, Symbol] = {}
+            foreign: set[str] = set()
+            parameters = fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs
+            fields_only = fn.name == "__init__" and block in FIELD_NAME_BLOCKS
+            spec_taker = fn.name == "__init__" and block in SPEC_READER_BLOCKS
+            for arg in parameters:
+                if arg.arg in UNNAMED_PARAMETERS or arg.annotation is None:
+                    continue
+                annotation = Annotation(arg.annotation)
+                shape = str(annotation.source())
+                primary = annotation.primary()
+                if primary is None:
+                    foreign.add(arg.arg)
+                    continue
+                symbol = scope.resolve(primary)
+                if symbol is None:
+                    foreign.add(arg.arg)
+                    continue
+                typed[arg.arg] = symbol
+                if annotation.container() is not None or "|" in shape or "[" in shape:
+                    continue
+                named = kind_table.block_of(symbol)
+                if named is None:
+                    continue
+                if spec_taker and str(named) in SPEC_BLOCKS:
+                    continue
+                derived = str(DerivedName(str(symbol.name())))
+                counted[derived] = counted.get(derived, 0) + 1
+                if not fields_only:
+                    claims.append((arg.lineno, arg.arg, derived))
+            calls: list[tuple[ast.Name, ast.Call]] = []
+            for node in ast.walk(fn):
+                bound = None
+                built = None
+                if (
+                    isinstance(node, ast.Assign)
+                    and len(node.targets) == 1
+                    and isinstance(node.targets[0], ast.Name)
+                ):
+                    bound = node.targets[0]
+                    built = node.value
+                elif (
+                    isinstance(node, ast.AnnAssign)
+                    and isinstance(node.target, ast.Name)
+                    and node.value is not None
+                ):
+                    bound = node.target
+                    built = node.value
+                if bound is None:
+                    continue
+                if isinstance(node, ast.AnnAssign):
+                    written = Annotation(node.annotation)
+                    stated = written.primary()
+                    declared = scope.resolve(stated) if stated is not None else None
+                    if declared is None:
+                        foreign.add(bound.id)
+                    else:
+                        typed[bound.id] = declared
+                if isinstance(built, ast.Await):
+                    built = built.value
+                if isinstance(built, ast.Call):
+                    calls.append((bound, built))
+            for reading, bound, built in [(False, each, made) for each, made in calls] + [
+                (True, each, made) for each, made in calls
+            ]:
+                symbol = scope.resolve(Text(ast.unparse(built.func)))
+                if symbol is not None and kind_table.block_of(symbol) is not None:
+                    typed.setdefault(bound.id, symbol)
+                    if not reading:
+                        continue
+                    derived = str(DerivedName(str(symbol.name())))
+                    counted[derived] = counted.get(derived, 0) + 1
+                    claims.append((bound.lineno, bound.id, derived))
+                    continue
+                key = ""
+                head = built.func
+                if symbol is not None:
+                    key = f"{symbol.module()}||{symbol.name()}"
+                elif isinstance(head, ast.Name):
+                    if head.id in self._functions:
+                        key = f"{module_name}||{head.id}"
+                    else:
+                        continue
+                elif isinstance(head, ast.Attribute):
+                    chain: list[str] = []
+                    receiver = head.value
+                    while isinstance(receiver, (ast.Attribute, ast.Await)):
+                        if isinstance(receiver, ast.Attribute):
+                            chain.append(receiver.attr)
+                        receiver = receiver.value
+                    chain.reverse()
+                    held: Symbol | None = None
+                    if isinstance(receiver, ast.Call):
+                        held = scope.resolve(Text(ast.unparse(receiver.func)))
+                    elif isinstance(receiver, ast.Name):
+                        if receiver.id == "self":
+                            held = owner
+                        else:
+                            if receiver.id in foreign:
+                                continue
+                            held = typed.get(receiver.id)
+                            if held is None and scope.package_of(Text(receiver.id)) is not None:
+                                continue
+                    for attr in chain:
+                        if held is None:
+                            break
+                        held = attr_rows.held(Text(f"{held.module()}|{held.name()}|{attr}"))
+                    if held is not None:
+                        key = f"{held.module()}|{held.name()}|{head.attr}"
+                else:
+                    continue
+                if key and (
+                    key.split("|")[0] == TESSER or key.split("|")[0] not in walked
+                ):
+                    foreign.add(bound.id)
+                    continue
+                if not key:
+                    rooted = built.func
+                    while isinstance(rooted, (ast.Attribute, ast.Await)):
+                        rooted = rooted.value
+                    if not isinstance(rooted, (ast.Name, ast.Call)):
+                        continue
+                    if isinstance(rooted, ast.Name):
+                        outside = scope.package_of(Text(rooted.id))
+                        if outside is not None and (
+                            str(outside).split(".")[0] == TESSER
+                            or str(outside).split(".")[0] not in tops
+                        ):
+                            continue
+                if not key:
+                    foreign.add(bound.id)
+                    continue
+                answered = return_rows.returned(Text(key))
+                if answered is None:
+                    if reading:
+                        unread.append((bound.lineno, bound.id))
+                    continue
+                if str(answered.module()) == FREE_RETURN:
+                    foreign.add(bound.id)
+                    continue
+                typed.setdefault(bound.id, answered)
+                if kind_table.block_of(answered) is None or not reading:
+                    continue
+                derived = str(DerivedName(str(answered.name())))
+                counted[derived] = counted.get(derived, 0) + 1
+                claims.append((bound.lineno, bound.id, derived))
+            for lineno, actual, derived in claims:
+                if actual == derived or counted[derived] > 1:
+                    continue
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB085",
+                        f"{module_name}.{fn.name} names {actual} for a {derived}; a name "
+                        "is derived from the class it carries, in snake_case, read "
+                        "through the annotation of the parameter, the constructor, or "
+                        "the field, parameter, or module function a call is made on, "
+                        "because a name the analyzer cannot check is a name it is not "
+                        "checking",
+                    ))
+                )
+            for lineno, actual in unread:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB085",
+                        f"{module_name}.{fn.name} names {actual} from a call it cannot "
+                        "read; a name is derived from the class it carries, in "
+                        "snake_case, read through the annotation of the parameter, the "
+                        "constructor, or the field, parameter, or module function a call "
+                        "is made on, because a name the analyzer cannot check is a name "
+                        "it is not checking",
+                    ))
+                )
+            if fn.name != "__init__":
+                continue
+            named_parameters = frozenset(arg.arg for arg in parameters)
+            settings: list[tuple[int, str, str]] = []
+            for node in ast.walk(fn):
+                if (
+                    isinstance(node, ast.Assign)
+                    and len(node.targets) == 1
+                    and isinstance(node.targets[0], ast.Attribute)
+                    and isinstance(node.targets[0].value, ast.Name)
+                    and node.targets[0].value.id == "self"
+                    and isinstance(node.value, ast.Name)
+                    and node.value.id in named_parameters
+                ):
+                    settings.append((node.lineno, node.targets[0].attr, node.value.id))
+                    continue
+                if (
+                    not isinstance(node, ast.Call)
+                    or not isinstance(node.func, ast.Attribute)
+                    or node.func.attr != OBJECT_SETATTR
+                    or not isinstance(node.func.value, ast.Name)
+                    or node.func.value.id != "object"
+                    or len(node.args) != 3
+                    or not isinstance(node.args[0], ast.Name)
+                    or node.args[0].id != "self"
+                    or not isinstance(node.args[1], ast.Constant)
+                    or not isinstance(node.args[1].value, str)
+                    or not isinstance(node.args[2], ast.Name)
+                    or node.args[2].id not in named_parameters
+                ):
+                    continue
+                settings.append((node.lineno, node.args[1].value, node.args[2].id))
+            for lineno, actual, source in settings:
+                if actual.lstrip("_") == source:
+                    continue
+                derived = source
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB085",
+                        f"{module_name}.{fn.name} keeps {actual} for a {derived}; an "
+                        "__init__ keeps its parameter's name in the field it sets, "
+                        "because the two are the same value",
+                    ))
+                )
+        return tuple(found)
+
+    def alias_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        registry = Registry(registry_spec)
+        tops = frozenset(registry.tops())
+        walked = frozenset(registry.module_names())
+        inside: list[tuple[str, str, int]] = []
+        for local, package, lineno in self._alias_bindings:
+            head = package.split(".")[0]
+            if head == TESSER or head not in tops or package not in walked:
+                continue
+            inside.append((local, package, lineno))
+        claimed: dict[str, int] = {}
+        for _, package, _ in inside:
+            claimed[package.split(".")[-1]] = claimed.get(package.split(".")[-1], 0) + 1
+        prefixed: dict[str, int] = {}
+        for _, package, _ in inside:
+            pieces = package.split(".")
+            if claimed[pieces[-1]] > 1:
+                prefixed[f"{pieces[0]}_{pieces[-1]}"] = prefixed.get(f"{pieces[0]}_{pieces[-1]}", 0) + 1
+        found: list[Violation] = []
+        for local, package, lineno in inside:
+            pieces = package.split(".")
+            wanted = pieces[-1]
+            if claimed[wanted] > 1:
+                wanted = f"{pieces[0]}_{pieces[-1]}"
+                if prefixed[wanted] > 1:
+                    wanted = "_".join(pieces)
+            if local == wanted:
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    lineno,
+                    "TB053",
+                    f"{module_name} imports {package} as {local}, not {wanted}; a package "
+                    "is imported under its last segment, and where two imported packages "
+                    "share that segment each takes its context as a prefix",
+                ))
+            )
+        return tuple(found)
+
+    def conftest_leaf_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        registry = Registry(registry_spec)
+        export = registry.export()
+        tops = frozenset(registry.tops())
         if export is None or str(export) != TESSER:
             tops = tops - {TESSER}
         return tuple(
@@ -7416,9 +8225,9 @@ class Module(ts.Entity):
             )),
         )
 
-    def eval_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+    def eval_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
-        contexts = frozenset(Registry(registry).contexts())
+        contexts = frozenset(Registry(registry_spec).contexts())
         parts = module_name.split(".")
         at_home = (
             len(parts) >= 4
@@ -7439,13 +8248,13 @@ class Module(ts.Entity):
             )
         return ()
 
-    def kernel_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+    def kernel_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
-        kinds = Registry(registry).kinds()
+        kind_table = Registry(registry_spec).kinds()
         found: list[Violation] = []
         for stmt in self._body:
             if isinstance(stmt, ast.ClassDef):
-                named = kinds.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
+                named = kind_table.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
                 block = str(named) if named is not None else None
                 where = f"{module_name}.{stmt.name}"
                 if block is None:
@@ -7469,14 +8278,14 @@ class Module(ts.Entity):
                     )
         return tuple(found)
 
-    def kernel_import_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+    def kernel_import_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
-        facts = Registry(registry)
-        export = str(facts.export()) if facts.export() is not None else None
-        tops = frozenset(facts.tops())
+        registry = Registry(registry_spec)
+        export = str(registry.export()) if registry.export() is not None else None
+        tops = frozenset(registry.tops())
         kernel_tops = (frozenset({KERNEL_PACKAGE}) | (frozenset({export}) if export is not None else frozenset())) & tops
-        declared_imports = tuple(facts.declared_imports())
-        pure_stdlib = tuple(facts.pure_stdlib())
+        declared_imports = tuple(registry.declared_imports())
+        pure_stdlib = tuple(registry.pure_stdlib())
         found: list[Violation] = []
         own = frozenset({export}) if module_name.split(".")[0] == export else kernel_tops
         for edge in self._edges:
@@ -7485,7 +8294,7 @@ class Module(ts.Entity):
             pieces = target.split(".")
             if pieces[0] == TESSER:
                 continue
-            if pieces[0] in own and facts.modules_under(Text(target)):
+            if pieces[0] in own and registry.modules_under(Text(target)):
                 continue
             if any(target == declared or target.startswith(declared + ".") for declared in declared_imports):
                 continue
@@ -7505,13 +8314,13 @@ class Module(ts.Entity):
             )
         return tuple(found)
 
-    def srv_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+    def srv_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
-        kinds = Registry(registry).kinds()
+        kind_table = Registry(registry_spec).kinds()
         found: list[Violation] = []
         for stmt in self._body:
             if isinstance(stmt, ast.ClassDef):
-                named = kinds.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
+                named = kind_table.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
                 block = str(named) if named is not None else None
                 where = f"{module_name}.{stmt.name}"
                 if block is None:
@@ -7534,9 +8343,9 @@ class Module(ts.Entity):
                     )
         return tuple(found)
 
-    def app_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+    def app_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
-        kinds = Registry(registry).kinds()
+        kind_table = Registry(registry_spec).kinds()
         scope = self._scope
         found: list[Violation] = []
         for stmt in self._body:
@@ -7558,7 +8367,7 @@ class Module(ts.Entity):
                         ))
                     )
             if isinstance(stmt, ast.ClassDef):
-                named = kinds.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
+                named = kind_table.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
                 block = str(named) if named is not None else None
                 where = f"{module_name}.{stmt.name}"
                 if block is None:
@@ -7584,12 +8393,17 @@ class Module(ts.Entity):
                     )
         return tuple(found)
 
-    def app_import_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+    def app_import_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
-        facts = Registry(registry)
-        kinds = facts.kinds()
-        contexts = frozenset(facts.contexts())
-        tops = frozenset(facts.tops())
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
+        contexts = frozenset(registry.contexts())
+        tops = frozenset(registry.tops())
+        export = str(registry.export()) if registry.export() is not None else None
+        kernel_tops = (
+            frozenset({KERNEL_PACKAGE})
+            | (frozenset({export}) if export is not None else frozenset())
+        ) & tops
         package = module_name.split(".")[0]
         found: list[Violation] = []
         for edge in self._edges:
@@ -7599,7 +8413,7 @@ class Module(ts.Entity):
             tail = pieces[1] if len(pieces) > 1 else ""
             if pieces[0] in contexts:
                 denied: list[Violation] = []
-                hosts = kinds.blocks_in(Text(target)) & Names(tuple(HOST_KINDS))
+                hosts = kind_table.blocks_under(Text(target)) & Names(tuple(HOST_KINDS))
                 if package == "srv" and not (tail == "adapters" and hosts):
                     denied.append(
                         Violation(ViolationSpec(
@@ -7623,6 +8437,17 @@ class Module(ts.Entity):
                 found.extend(denied)
                 if not denied:
                     found.extend(edge.form_violations())
+            elif pieces[0] in kernel_tops:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB063",
+                        f"{module_name} imports {target}; neither an app nor a host "
+                        "imports a kernel, because a kernel is domain and the shell "
+                        "composes components, clients, adapters, and handlers",
+                    ))
+                )
             elif package == "app" and pieces[0] == "srv":
                 found.append(
                     Violation(ViolationSpec(
@@ -7654,12 +8479,12 @@ class Module(ts.Entity):
                 )
         return tuple(found)
 
-    def protocol_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+    def protocol_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
-        facts = Registry(registry)
-        kinds = facts.kinds()
-        contexts = frozenset(facts.contexts())
-        tops = frozenset(facts.tops())
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
+        contexts = frozenset(registry.contexts())
+        tops = frozenset(registry.tops())
         found: list[Violation] = []
         for edge in self._edges:
             target = str(edge._target)
@@ -7697,7 +8522,7 @@ class Module(ts.Entity):
                 )
         for stmt in self._body:
             if isinstance(stmt, ast.ClassDef):
-                named = kinds.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
+                named = kind_table.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
                 block = str(named) if named is not None else None
                 where = f"{module_name}.{stmt.name}"
                 if block is None:
@@ -7721,9 +8546,9 @@ class Module(ts.Entity):
                     )
         return tuple(found)
 
-    def role_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+    def role_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
-        kinds = Registry(registry).kinds()
+        kind_table = Registry(registry_spec).kinds()
         parts = module_name.split(".")
         role = parts[1]
         extra = frozenset({"orchestrator", "port_response"}) if str(self._placement) in ("orchestrators", "orchestrators-file") else frozenset()
@@ -7737,6 +8562,7 @@ class Module(ts.Entity):
             tuple(sorted(self._functions)),
             self._spoken,
             self._enums,
+            self._reexports,
         )
         found: list[Violation] = []
         if role == "adapters" and kind_package not in ADAPTER_KIND_PACKAGES:
@@ -7752,11 +8578,11 @@ class Module(ts.Entity):
             )
         for stmt in self._body:
             if isinstance(stmt, ast.ClassDef):
-                named = kinds.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
+                named = kind_table.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
                 block = str(named) if named is not None else None
                 where = f"{module_name}.{stmt.name}"
-                shape = EnumShape(EnumShapeSpec(stmt, scope_spec))
-                enum_base = str(shape.base()) if shape.base() is not None else None
+                enum_shape = EnumShape(EnumShapeSpec(stmt, scope_spec))
+                enum_base = str(enum_shape.base()) if enum_shape.base() is not None else None
                 if enum_base is not None and block is None and role == "domain":
                     if enum_base not in ENUM_BASES:
                         found.append(
@@ -7769,7 +8595,7 @@ class Module(ts.Entity):
                                 "and reopens the typo the enum closes",
                             ))
                         )
-                    elif shape.mixed():
+                    elif enum_shape.mixed():
                         found.append(
                             Violation(ViolationSpec(
                                 self._path,
@@ -7781,7 +8607,7 @@ class Module(ts.Entity):
                             ))
                         )
                     else:
-                        if shape.decorated():
+                        if enum_shape.decorated():
                             found.append(
                                 Violation(ViolationSpec(
                                     self._path,
@@ -7793,7 +8619,7 @@ class Module(ts.Entity):
                                     "the primitive into a home for behavior",
                                 ))
                             )
-                        for extra_line in shape.extras():
+                        for extra_line in enum_shape.extras():
                             found.append(
                                 Violation(ViolationSpec(
                                     self._path,
@@ -7841,32 +8667,34 @@ class Module(ts.Entity):
                     )
         return tuple(found)
 
-    def adapter_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+    def adapter_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
         parts = module_name.split(".")
         role = parts[1]
         if role != "adapters":
             return ()
-        kinds = Registry(registry).kinds()
+        kind_table = Registry(registry_spec).kinds()
         scope = self._scope
         kind_package = parts[2] if len(parts) >= 4 else None
         found: list[Violation] = []
         present = {
-            str(kinds.block_of(Symbol(SymbolSpec(module_name, cls.name))) or "")
+            str(kind_table.block_of(Symbol(SymbolSpec(module_name, cls.name))) or "")
             for cls in self._class_defs
         } & ADAPTER_BLOCKS
-        if len(present) > 1:
+        expected = ADAPTER_KIND_PACKAGES.get(kind_package or "", frozenset())
+        if len(present) > 1 and not present <= expected:
             found.append(
                 Violation(ViolationSpec(
                     self._path,
                     1,
                     "TB052",
-                    f"{module_name} mixes adapter kinds; an adapters module holds one adapter kind",
+                    f"{module_name} mixes adapter kinds; an adapters module holds the "
+                    "kinds of its own kind package, and only a jobs module holds a job "
+                    "beside the job context it builds",
                 ))
             )
-        expected = ADAPTER_KIND_PACKAGES.get(kind_package or "", frozenset())
         for cls in self._class_defs:
-            named = kinds.block_of(Symbol(SymbolSpec(module_name, cls.name)))
+            named = kind_table.block_of(Symbol(SymbolSpec(module_name, cls.name)))
             block = str(named) if named is not None else None
             if block is None:
                 continue
@@ -7875,7 +8703,7 @@ class Module(ts.Entity):
             for base in cls.bases:
                 base_ref = Annotation(base).primary()
                 base_symbol = scope.resolve(base_ref) if base_ref is not None else None
-                if base_symbol is None or kinds.block_of(base_symbol) is None:
+                if base_symbol is None or kind_table.block_of(base_symbol) is None:
                     undeclared_base = True
             if (
                 block != SERDE_BLOCK
@@ -7908,23 +8736,23 @@ class Module(ts.Entity):
             )
         return tuple(found)
 
-    def import_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+    def import_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
-        facts = Registry(registry)
-        kinds = facts.kinds()
-        export = str(facts.export()) if facts.export() is not None else None
-        contexts = frozenset(facts.contexts())
-        tops = frozenset(facts.tops())
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
+        export = str(registry.export()) if registry.export() is not None else None
+        contexts = frozenset(registry.contexts())
+        tops = frozenset(registry.tops())
         kernel_tops = (frozenset({KERNEL_PACKAGE}) | (frozenset({export}) if export is not None else frozenset())) & tops
-        declared_imports = tuple(facts.declared_imports())
-        pure_stdlib = tuple(facts.pure_stdlib())
+        declared_imports = tuple(registry.declared_imports())
+        pure_stdlib = tuple(registry.pure_stdlib())
         own = module_name.split(".")
         context = own[0]
         role = own[1]
         kind_package = own[2] if len(own) >= 4 and own[1] == "adapters" else None
         kind_reach = ADAPTER_KIND_REACH.get(kind_package or "")
         holds_gateway = any(
-            str(kinds.block_of(Symbol(SymbolSpec(module_name, cls.name))) or "") == "gateway"
+            str(kind_table.block_of(Symbol(SymbolSpec(module_name, cls.name))) or "") == "gateway"
             for cls in self._class_defs
         )
         found: list[Violation] = []
@@ -7942,7 +8770,22 @@ class Module(ts.Entity):
                     inner == entry or inner.startswith(f"{entry}.")
                     for entry in JOB_ONLY_IMPORTS
                 )
-                if pieces[0] == context and job_only and kind_package != "jobs":
+                own_kernel = ".".join((context,) + CONTEXT_KERNEL_HOME)
+                if pieces[0] == context and role != CONTEXT_KERNEL_HOME[0] and (
+                    target == own_kernel or target.startswith(own_kernel + ".")
+                ):
+                    denied.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            lineno,
+                            "TB062",
+                            f"{module_name} imports {target}; a context's domain kernel is "
+                            "imported only by that context's domain modules, because "
+                            "outside the domain a kernel type is named through the domain "
+                            "__init__",
+                        ))
+                    )
+                elif pieces[0] == context and job_only and kind_package != "jobs":
                     denied.append(
                         Violation(ViolationSpec(
                             self._path,
@@ -8004,8 +8847,17 @@ class Module(ts.Entity):
                 found.extend(denied)
                 if not denied:
                     found.extend(edge.form_violations())
-            elif pieces[0] in kernel_tops and facts.modules_under(Text(target)):
-                continue
+            elif pieces[0] in kernel_tops and registry.modules_under(Text(target)):
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB062",
+                        f"{module_name} imports {target}; a kernel is domain that two or "
+                        "more domain modules share, so only a context's domain kernel "
+                        "package imports a root kernel",
+                    ))
+                )
             else:
                 if any(target == declared or target.startswith(declared + ".") for declared in declared_imports):
                     continue
@@ -8050,19 +8902,19 @@ class Module(ts.Entity):
                     )
         return tuple(found)
 
-    def orchestrators_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+    def orchestrators_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
-        kinds = Registry(registry).kinds()
+        kind_table = Registry(registry_spec).kinds()
         found: list[Violation] = []
         held = [
             cls
             for cls in self._class_defs
-            if str(kinds.block_of(Symbol(SymbolSpec(module_name, cls.name))) or "") == "orchestrator"
+            if str(kind_table.block_of(Symbol(SymbolSpec(module_name, cls.name))) or "") == "orchestrator"
         ]
         responses = [
             cls
             for cls in self._class_defs
-            if str(kinds.block_of(Symbol(SymbolSpec(module_name, cls.name))) or "") == "port_response"
+            if str(kind_table.block_of(Symbol(SymbolSpec(module_name, cls.name))) or "") == "port_response"
         ]
         if len(held) != 1 and self._class_defs:
             found.append(
@@ -8088,11 +8940,11 @@ class Module(ts.Entity):
             )
         return tuple(found)
 
-    def application_client_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+    def application_client_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
-        facts = Registry(registry)
-        kinds = facts.kinds()
-        tops = frozenset(facts.tops())
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
+        tops = frozenset(registry.tops())
         found: list[Violation] = []
         spoken = 0
         for edge in self._edges:
@@ -8102,7 +8954,7 @@ class Module(ts.Entity):
             if pieces[0] == TESSER:
                 continue
             if pieces[0] in tops:
-                if pieces[1:3] == [PORTS_PARENT_ROLE, PORTS_PACKAGE] and len(pieces) >= 4:
+                if pieces[1:3] == [PORTS_PARENT_ROLE, PORTS_PACKAGE]:
                     spoken += 1
                     if spoken > 1:
                         found.append(
@@ -8110,9 +8962,9 @@ class Module(ts.Entity):
                                 self._path,
                                 lineno,
                                 "TB067",
-                                f"{module_name} imports a second ports module {target}; "
+                                f"{module_name} imports a second ports package {target}; "
                                 "an application client module speaks the DTOs of exactly "
-                                "one ports module",
+                                "one ports package",
                             ))
                         )
                     else:
@@ -8124,7 +8976,7 @@ class Module(ts.Entity):
                         lineno,
                         "TB067",
                         f"{module_name} imports {target}; an application client module "
-                        "speaks the DTOs of exactly one ports module",
+                        "speaks the DTOs of exactly one ports package",
                     ))
                 )
             elif target not in PORTS_STDLIB and pieces[0] not in PORTS_STDLIB:
@@ -8134,7 +8986,7 @@ class Module(ts.Entity):
                         lineno,
                         "TB067",
                         f"{module_name} imports {target}; an application client module "
-                        "imports only tesser.application, one ports module, and the pure stdlib",
+                        "imports only tesser.application, one ports package, and the pure stdlib",
                     ))
                 )
         if spoken == 0 and self._class_defs:
@@ -8143,8 +8995,8 @@ class Module(ts.Entity):
                     self._path,
                     1,
                     "TB067",
-                    f"{module_name} imports no ports module; an application client "
-                    "module speaks the DTOs of exactly one ports module",
+                    f"{module_name} imports no ports package; an application client "
+                    "module speaks the DTOs of exactly one ports package",
                 ))
             )
         for stmt in self._body:
@@ -8171,7 +9023,7 @@ class Module(ts.Entity):
         protocols: list[ast.ClassDef] = []
         for stmt in self._class_defs:
             where = f"{module_name}.{stmt.name}"
-            named = kinds.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
+            named = kind_table.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
             block = str(named) if named is not None else None
             if block == "actions_client":
                 protocols.append(stmt)
@@ -8219,12 +9071,12 @@ class Module(ts.Entity):
             )
         return tuple(found)
 
-    def ports_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+    def ports_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
         path = self._path
-        facts = Registry(registry)
-        kinds = facts.kinds()
-        tops = frozenset(facts.tops())
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
+        tops = frozenset(registry.tops())
         scope_spec = ScopeSpec(
             self._name,
             tuple(ImportSpec(local, target, original) for local, (target, original) in self._imported.items()),
@@ -8233,11 +9085,12 @@ class Module(ts.Entity):
             tuple(sorted(self._functions)),
             self._spoken,
             self._enums,
+            self._reexports,
         )
         found: list[Violation] = []
 
         def block_named(class_name: str) -> str | None:
-            named = kinds.block_of(Symbol(SymbolSpec(module_name, class_name)))
+            named = kind_table.block_of(Symbol(SymbolSpec(module_name, class_name)))
             return str(named) if named is not None else None
 
         def nested_class_defs(body: list[ast.stmt]) -> list[ast.ClassDef]:
@@ -8615,12 +9468,12 @@ class Module(ts.Entity):
                     found.extend(unreadable(shape_name, body_stmt))
         return tuple(found)
 
-    def test_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+    def test_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
-        facts = Registry(registry)
-        kinds = facts.kinds()
-        export = str(facts.export()) if facts.export() is not None else None
-        contexts = frozenset(facts.contexts())
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
+        export = str(registry.export()) if registry.export() is not None else None
+        contexts = frozenset(registry.contexts())
         scope = self._scope
         scope_spec = ScopeSpec(
             self._name,
@@ -8630,6 +9483,7 @@ class Module(ts.Entity):
             tuple(sorted(self._functions)),
             self._spoken,
             self._enums,
+            self._reexports,
         )
         found: list[Violation] = []
         for edge in self._edges:
@@ -8655,7 +9509,7 @@ class Module(ts.Entity):
                     continue
                 if decorated_as(stmt, "helper"):
                     found.extend(
-                        Helper(HelperSpec(stmt, where, self._path, scope_spec, registry)).violations()
+                        Helper(HelperSpec(stmt, where, self._path, scope_spec, registry_spec)).violations()
                     )
                     continue
                 found.append(
@@ -8716,7 +9570,7 @@ class Module(ts.Entity):
                     for base in stmt.bases:
                         ref = Annotation(base).primary()
                         symbol = scope.resolve(ref) if ref is not None else None
-                        block = kinds.block_of(symbol) if symbol is not None else None
+                        block = kind_table.block_of(symbol) if symbol is not None else None
                         if block is not None and str(block) in (
                             "port",
                             "store",
@@ -8749,11 +9603,11 @@ class Module(ts.Entity):
                 )
         return tuple(found)
 
-    def placement_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+    def placement_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
-        facts = Registry(registry)
-        contexts = frozenset(facts.contexts())
-        tops = frozenset(facts.tops())
+        registry = Registry(registry_spec)
+        contexts = frozenset(registry.contexts())
+        tops = frozenset(registry.tops())
         placement = self._tier if self._tier is not None else ("", STRAY_TIER)
         context, tier = placement
         found: list[Violation] = []
@@ -8967,7 +9821,7 @@ class Module(ts.Entity):
     def enums(self) -> Names:
         return Names(self._enums)
 
-    def spec_reader(self, registry: RegistrySpec) -> SpecReader:
+    def spec_reader(self, registry_spec: RegistrySpec) -> SpecReader:
         return SpecReader(SpecReaderSpec(
             ScopeSpec(
                 self._name,
@@ -8977,14 +9831,15 @@ class Module(ts.Entity):
                 tuple(sorted(self._functions)),
                 self._spoken,
                 self._enums,
+                self._reexports,
             ),
-            registry,
+            registry_spec,
         ))
 
-    def spec_shared_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+    def spec_shared_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
         found: list[Violation] = []
-        for shared in Registry(registry).spec_shared():
+        for shared in Registry(registry_spec).spec_shared():
             if str(shared.module()) != module_name:
                 continue
             shared_class = str(shared.cls())
@@ -9001,11 +9856,11 @@ class Module(ts.Entity):
             )
         return tuple(found)
 
-    def pairing_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+    def pairing_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
-        facts = Registry(registry)
-        kinds = facts.kinds()
-        names = frozenset(facts.module_names()) - frozenset(facts.package_names())
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
+        names = frozenset(registry.module_names()) - frozenset(registry.package_names())
         parts = module_name.split(".")
         base = parts[-1]
         place = str(self._placement)
@@ -9017,7 +9872,7 @@ class Module(ts.Entity):
             for stmt in self._body:
                 if isinstance(stmt, (ast.Import, ast.ImportFrom)):
                     continue
-                block = kinds.block_of(Symbol(SymbolSpec(module_name, stmt.name))) if isinstance(stmt, ast.ClassDef) else None
+                block = kind_table.block_of(Symbol(SymbolSpec(module_name, stmt.name))) if isinstance(stmt, ast.ClassDef) else None
                 if not isinstance(stmt, ast.ClassDef) or block is None or str(block) not in DECLARATION_BLOCKS:
                     declaration_only = False
                     break
@@ -9064,13 +9919,13 @@ class Module(ts.Entity):
                 )
         return tuple(found)
 
-    def spec_use_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+    def spec_use_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
         path = self._path
-        facts = Registry(registry)
-        kinds = facts.kinds()
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
         scope = self._scope
-        reader = SpecReader(SpecReaderSpec(
+        spec_reader = SpecReader(SpecReaderSpec(
             ScopeSpec(
                 self._name,
                 tuple(ImportSpec(local, target, original) for local, (target, original) in self._imported.items()),
@@ -9079,12 +9934,13 @@ class Module(ts.Entity):
                 tuple(sorted(self._functions)),
                 self._spoken,
                 self._enums,
+                self._reexports,
             ),
-            registry,
+            registry_spec,
         ))
 
         def annotation(node: ast.expr | None) -> SpecRef | None:
-            return reader.ref(Annotation(node)) if node is not None else None
+            return spec_reader.ref(Annotation(node)) if node is not None else None
 
         def resolve(node: ast.expr) -> Symbol | None:
             ref = Annotation(node).primary()
@@ -9095,14 +9951,14 @@ class Module(ts.Entity):
             if made is not None:
                 return made
             if isinstance(node, ast.Name):
-                return facts.spec_maker(Symbol(SymbolSpec(module_name, node.id)))
+                return registry.spec_maker(Symbol(SymbolSpec(module_name, node.id)))
             symbol = resolve(node)
             if symbol is not None:
-                known = facts.spec_maker(symbol)
+                known = registry.spec_maker(symbol)
                 if known is not None:
                     return known
             if isinstance(node, ast.Attribute):
-                return facts.spec_method(Text(node.attr))
+                return registry.spec_method(Text(node.attr))
             return None
 
         def typed(node: ast.expr, names: dict[str, SpecRef]) -> SpecRef | None:
@@ -9120,7 +9976,7 @@ class Module(ts.Entity):
             if isinstance(node, ast.Attribute):
                 owner = typed(node.value, names)
                 if owner is not None and owner.shape() == SPEC_ONE:
-                    return facts.spec_field(Text(f"{owner.symbol().module()}|{owner.symbol().name()}|{node.attr}"))
+                    return registry.spec_field(Text(f"{owner.symbol().module()}|{owner.symbol().name()}|{node.attr}"))
                 return None
             if isinstance(node, ast.Subscript):
                 owner = typed(node.value, names)
@@ -9431,7 +10287,7 @@ class Module(ts.Entity):
                 hit = read(cur, names)
                 if hit is not None:
                     spec_name, field, key = hit
-                    licensed = owner_here is not None and owner_here in facts.spec_takers(key)
+                    licensed = owner_here is not None and owner_here in registry.spec_takers(key)
                     if not licensed and (cur.lineno, field, spec_name) not in seen:
                         seen.add((cur.lineno, field, spec_name))
                         found.append(
@@ -9463,7 +10319,7 @@ class Module(ts.Entity):
         module_names = held_in(list(self._body), {})
         scan(list(self._body), module_names, module_name, None, False, True)
         for fn, cls in roots():
-            named_block = kinds.block_of(Symbol(SymbolSpec(module_name, cls.name))) if cls is not None else None
+            named_block = kind_table.block_of(Symbol(SymbolSpec(module_name, cls.name))) if cls is not None else None
             block = str(named_block) if named_block is not None else None
             where = (
                 f"{module_name}.{cls.name}.{fn.name}" if cls is not None else f"{module_name}.{fn.name}"
@@ -9479,8 +10335,8 @@ class Module(ts.Entity):
             )
         return tuple(sorted(found, key=lambda v: int(v.line())))
 
-    def class_decls(self, registry: RegistrySpec) -> tuple[ClassDecl, ...]:
-        scope = ScopeSpec(
+    def class_decls(self, registry_spec: RegistrySpec) -> tuple[ClassDecl, ...]:
+        scope_spec = ScopeSpec(
             self._name,
             tuple(ImportSpec(local, target, original) for local, (target, original) in self._imported.items()),
             tuple(AliasSpec(alias, package) for alias, package in self._package_aliases.items()),
@@ -9488,9 +10344,10 @@ class Module(ts.Entity):
             tuple(sorted(self._functions)),
             self._spoken,
             self._enums,
+            self._reexports,
         )
         return tuple(
-            ClassDecl(ClassDeclSpec(node, self._name, self._path, scope, registry)) for node in self._class_defs
+            ClassDecl(ClassDeclSpec(node, self._name, self._path, scope_spec, registry_spec)) for node in self._class_defs
         )
 
     def name(self) -> str:
@@ -9523,16 +10380,28 @@ class Module(ts.Entity):
     def _resolve(self, node: ast.expr) -> tuple[str, str] | None:
         if isinstance(node, ast.Subscript):
             return self._resolve(node.value)
+        found: tuple[str, str] | None = None
         if isinstance(node, ast.Attribute) and isinstance(node.value, (ast.Name, ast.Attribute)):
             package = self._package_aliases.get(ast.unparse(node.value))
             if package is not None:
-                return (package, node.attr)
-        if isinstance(node, ast.Name):
+                found = (package, node.attr)
+        if found is None and isinstance(node, ast.Name):
             if node.id in self._imported:
-                return self._imported[node.id]
-            if node.id in self._classes:
-                return (self._name, node.id)
-        return None
+                found = self._imported[node.id]
+            elif node.id in self._classes:
+                found = (self._name, node.id)
+        if found is None:
+            return None
+        for _ in self._reexports:
+            hopped: tuple[str, str] | None = None
+            for package, exported, defining, original in self._reexports:
+                if (package, exported) == found:
+                    hopped = (defining, original)
+                    break
+            if hopped is None:
+                break
+            found = hopped
+        return found
 
 
 KERNEL_TESSER_IMPORTS: typing.Final[TesserImportPolicy] = TesserImportPolicy(TesserImportPolicySpec(
@@ -9671,15 +10540,6 @@ CONTEXT_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageInitPol
 
 CONTEXT_TESTS_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageInitPolicySpec("a context tests"))
 
-PROTOCOL_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageInitPolicySpec("a protocol"))
-
-PORTS_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageInitPolicySpec("a ports"))
-
-SHELL_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageInitPolicySpec("a srv or app"))
-
-APPLICATION_CLIENT_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageInitPolicySpec("an application client package"))
-
-ORCHESTRATORS_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageInitPolicySpec("an orchestrators package"))
 
 
 ROLE_TESSER_IMPORTS: typing.Final[dict[str, TesserImportPolicy]] = {
@@ -9776,8 +10636,33 @@ class Codebase(ts.AggregateRoot):
             for _, name, _, _ in parsed
             if name.split(".")[0] not in kernel_tops and len(name.split(".")) >= 2 and name.split(".")[1] in ROLES
         }))
+        reexports: list[tuple[str, str, str, str]] = []
+        for path, name, source, is_package in parsed:
+            if not is_package:
+                continue
+            place = str(Placement(PlacementSpec(name, True, contexts, export)))
+            if place not in EXPORT_PACKAGE_PLACES and place != "kernel-init":
+                continue
+            if export == TESSER and name.split(".")[0] == TESSER:
+                continue
+            pieces = name.split(".")
+            context_kernel = (
+                len(pieces) == 3
+                and pieces[0] in contexts
+                and tuple(pieces[1:]) == CONTEXT_KERNEL_HOME
+            )
+            for stmt in ast.parse(source).body:
+                if not isinstance(stmt, ast.ImportFrom) or stmt.level or stmt.module is None:
+                    continue
+                from_root_kernel = context_kernel and stmt.module.split(".")[0] in kernel_tops
+                if not (stmt.module.startswith(name + ".") or from_root_kernel):
+                    continue
+                for alias in stmt.names:
+                    reexports.append((name, alias.asname or alias.name, stmt.module, alias.name))
+        role_reexports = tuple(sorted(reexports))
+        self._reexports = role_reexports
         self._modules = tuple(
-            Module(ModuleSpec(path=path, name=name, source=source, is_package=is_package, tops=tops, contexts=contexts, export=export))
+            Module(ModuleSpec(path=path, name=name, source=source, is_package=is_package, tops=tops, contexts=contexts, export=export, reexports=role_reexports))
             for path, name, source, is_package in parsed
         )
         self._broken = tuple(broken)
@@ -9890,9 +10775,8 @@ class Codebase(ts.AggregateRoot):
         spoken: set[str] = set()
         for module in self._modules:
             if str(module.place()) in ("app-client", "app-client-file"):
-                names_ports = module.spoken()
-                if names_ports is not None:
-                    spoken.add(str(names_ports))
+                for shape in module.spoken_shapes():
+                    spoken.add(str(shape.module()))
         self._action_ports: frozenset[tuple[str, str]] = frozenset(
             key for key, block in blocks.items() if block == "port" and key[0] in spoken
         )
@@ -9913,6 +10797,33 @@ class Codebase(ts.AggregateRoot):
         top_rows = self._tops
         module_name_rows = tuple(sorted(each.name() for each in self._modules))
         package_name_rows = tuple(sorted(each.name() for each in self._modules if each.is_package()))
+        return_rows = tuple(
+            (each.name(), owner, name, ret_module, ret_name)
+            for each in self._modules
+            for owner, name, ret_module, ret_name in each._declared_returns()
+        )
+        attr_rows = tuple(
+            (each.name(), cls, attr, held_module, held_name)
+            for each in self._modules
+            for cls, attr, held_module, held_name in each._declared_attrs()
+        )
+        export_package_rows = tuple(sorted(
+            each.name()
+            for each in self._modules
+            if each.is_package()
+            and str(each.place()) in EXPORT_PACKAGE_PLACES
+            and not (self._export == TESSER and each.name().split(".")[0] == TESSER)
+        ))
+        package_attr_rows = tuple(sorted({
+            (str(symbol.module()), str(symbol.name()))
+            for each in self._modules
+            for symbol in each.package_attrs()
+            if each.name() != str(symbol.module())
+            and (
+                not each.name().startswith(str(symbol.module()) + ".")
+                or str(each.place()) in TEST_TIER
+            )
+        }))
         mapper_target_rows = tuple(
             (source[0], source[1], target[0], target[1]) for source, target in sorted(self._mapper_target.items())
         )
@@ -9929,6 +10840,10 @@ class Codebase(ts.AggregateRoot):
             pure_stdlib=tuple(self._pure_stdlib),
             mapper_targets=mapper_target_rows,
             package_names=package_name_rows,
+            export_packages=export_package_rows,
+            returns=return_rows,
+            attrs=attr_rows,
+            package_attrs=package_attr_rows,
         )
 
         def constructed(policy: SignaturePolicy, decl: ClassDecl) -> tuple[Violation, ...]:
@@ -10002,6 +10917,10 @@ class Codebase(ts.AggregateRoot):
             pure_stdlib=tuple(self._pure_stdlib),
             mapper_targets=mapper_target_rows,
             package_names=package_name_rows,
+            export_packages=export_package_rows,
+            returns=return_rows,
+            attrs=attr_rows,
+            package_attrs=package_attr_rows,
             spec_makers=tuple(
                 (module_name, fn_name, str(made.symbol().module()), str(made.symbol().name()), str(made.shape()))
                 for (module_name, fn_name), made in sorted(self._spec_makers.items())
@@ -10041,6 +10960,9 @@ class Codebase(ts.AggregateRoot):
             found.extend(module.string_equality_violations())
             found.extend(module.sibling_reference_violations())
             found.extend(module.dynamic_import_violations())
+            found.extend(module.role_package_import_violations(registry))
+            found.extend(module.alias_violations(registry))
+            found.extend(module.naming_violations(registry))
             place = str(module.place())
             parts = module.name().split(".")
             tier = module.test_tier()
@@ -10066,7 +10988,7 @@ class Codebase(ts.AggregateRoot):
                     found.extend(module.placement_violations(registry))
                     found.extend(module.test_violations(registry))
             elif place == "shell-init":
-                found.extend(SHELL_INIT.violations(module))
+                found.extend(module.role_init_violations(registry))
             elif place == "shell-srv":
                 found.extend(module.stray_import_violations())
                 found.extend(SRV_TESSER_IMPORTS.violations(module))
@@ -10085,7 +11007,7 @@ class Codebase(ts.AggregateRoot):
                 if len(parts) > 1:
                     found.extend(module.placement_violations(registry))
             elif place == "protocol-init":
-                found.extend(PROTOCOL_INIT.violations(module))
+                found.extend(module.role_init_violations(registry))
             elif place == "protocol":
                 found.extend(module.stray_import_violations())
                 found.extend(PROTOCOL_TESSER_IMPORTS.violations(module))
@@ -10122,7 +11044,7 @@ class Codebase(ts.AggregateRoot):
             elif place == "ports-stray":
                 found.extend(module.stray_violations())
             elif place == "ports-init":
-                found.extend(PORTS_INIT.violations(module))
+                found.extend(module.role_init_violations(registry))
             elif place == "ports-file":
                 found.extend(module.stray_violations())
                 found.extend(module.stray_import_violations())
@@ -10135,7 +11057,7 @@ class Codebase(ts.AggregateRoot):
             elif place == "app-client-stray":
                 found.extend(module.stray_violations())
             elif place == "app-client-init":
-                found.extend(APPLICATION_CLIENT_INIT.violations(module))
+                found.extend(module.role_init_violations(registry))
             elif place == "app-client-file":
                 found.extend(module.stray_violations())
                 found.extend(module.stray_import_violations())
@@ -10146,7 +11068,7 @@ class Codebase(ts.AggregateRoot):
                 found.extend(APPLICATION_CLIENT_TESSER_IMPORTS.violations(module))
                 found.extend(module.application_client_violations(registry))
             elif place == "orchestrators-init":
-                found.extend(ORCHESTRATORS_INIT.violations(module))
+                found.extend(module.role_init_violations(registry))
             elif place == "orchestrators-file":
                 found.extend(module.stray_violations())
                 found.extend(module.role_violations(registry))
@@ -10167,7 +11089,7 @@ class Codebase(ts.AggregateRoot):
                 found.extend(module.import_violations(registry))
                 found.extend(module.orchestrators_violations(registry))
             elif place == "role-init":
-                found.extend(module.role_init_violations())
+                found.extend(module.role_init_violations(registry))
             elif place == "role-file":
                 found.extend(module.stray_violations())
             elif place == "role":
@@ -10331,4 +11253,3 @@ class Codebase(ts.AggregateRoot):
                         ))
                     )
         return tuple(kept)
-

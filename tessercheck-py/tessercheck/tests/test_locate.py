@@ -1,9 +1,9 @@
 import json
 import pathlib
 
-import tessercheck.adapters.repositories.source_reader as source_repository
-import tessercheck.application.ports.source_reader as source_reader
-import tessercheck.domain.checks as checks
+import tessercheck.adapters.repositories as repositories
+import tessercheck.application.ports as ports
+import tessercheck.domain as domain
 import tessercheck.tests.conftest as conftest
 
 
@@ -22,14 +22,14 @@ def test_every_place_is_earned_by_a_checked_tree_or_is_a_finding() -> None:
     )
     contexts = frozenset({"shop"})
     for name, is_package, expected in finding_rows:
-        got = str(checks.Placement(checks.PlacementSpec(name, is_package, tuple(sorted(contexts)))))
+        got = str(domain.Placement(domain.PlacementSpec(name, is_package, tuple(sorted(contexts)))))
         assert got == expected, (
             f"Placement({name!r}) = {got!r}, expected the finding place {expected!r}"
         )
     finding_places = frozenset(expected for _, _, expected in finding_rows)
     repo = pathlib.Path(__file__).resolve().parents[3]
     manifest = json.loads((repo / "manifest.json").read_text(encoding="utf-8"))
-    reader = source_repository.FilesystemSourceReader()
+    filesystem_source_reader = repositories.FilesystemSourceReader()
     exercised: set[str] = set()
     checked_trees = 0
     exporting_trees = 0
@@ -37,24 +37,24 @@ def test_every_place_is_earned_by_a_checked_tree_or_is_a_finding() -> None:
         if kind != "app" or not (repo / key / ".tesser-root").is_file():
             continue
         checked_trees += 1
-        read = reader.sources(source_reader.ReadSourcesRequest(tree=str(repo / key)))
+        read_sources_response = filesystem_source_reader.sources(ports.ReadSourcesRequest(tree=str(repo / key)))
         names = [
-            (s.name, s.form is source_reader.ModuleForm.PACKAGE) for s in read.sources
+            (s.name, s.form is ports.ModuleForm.PACKAGE) for s in read_sources_response.sources
         ]
-        export = read.exports[0] if len(read.exports) == 1 else None
+        export = read_sources_response.exports[0] if len(read_sources_response.exports) == 1 else None
         if export is not None:
             exporting_trees += 1
         tree_contexts = frozenset(
             name.split(".")[0]
             for name, _ in names
             if len(name.split(".")) >= 2
-            and name.split(".")[1] in checks.ROLES
-            and name.split(".")[0] != checks.KERNEL_PACKAGE
+            and name.split(".")[1] in domain.ROLES
+            and name.split(".")[0] != domain.KERNEL_PACKAGE
             and name.split(".")[0] != export
         )
         for name, is_package in names:
             exercised.add(
-                str(checks.Placement(checks.PlacementSpec(name, is_package, tuple(sorted(tree_contexts)), export)))
+                str(domain.Placement(domain.PlacementSpec(name, is_package, tuple(sorted(tree_contexts)), export)))
             )
     assert checked_trees >= 2, (
         f"only {checked_trees} checked trees found from {repo / 'manifest.json'}; "
@@ -64,7 +64,7 @@ def test_every_place_is_earned_by_a_checked_tree_or_is_a_finding() -> None:
         "no checked tree declares an export; the export branch of Placement is "
         "reachable only from such a tree, so without one it is unearned"
     )
-    tokens = conftest.returned_tokens(conftest.function_tree(checks.Placement.__init__))
+    tokens = conftest.returned_tokens(conftest.function_tree(domain.Placement.__init__))
     assert tokens, "no placement tokens extracted from Placement.__init__; the totality below would pass on an empty set"
     unearned = tokens - exercised - finding_places
     assert unearned == frozenset(), (
