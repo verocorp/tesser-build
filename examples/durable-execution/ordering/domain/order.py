@@ -77,10 +77,6 @@ class OrderSpec(ts.Spec):
 
 class Order(ts.AggregateRoot):
 
-    _id: OrderId
-    _sku: Sku
-    _quantity: Quantity
-
     def __init__(self, spec: OrderSpec) -> None:
         self._id = OrderId(spec.order_id)
         self._sku = Sku(spec.sku)

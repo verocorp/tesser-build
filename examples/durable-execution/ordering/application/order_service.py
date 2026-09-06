@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tesser.application as ts
 
-import ordering.application.relays.order_workflow as order_workflow
+import ordering.application.relays.order_relay as order_relay
 import ordering.client.client as client
 import ordering.domain.order as order
 
@@ -15,16 +15,16 @@ class MapToOrderSpec(ts.Mapper, order.OrderSpec):
 
 class MapToPlaceResponse(ts.Mapper, client.PlaceResponse):
 
-    def __init__(self, started: order_workflow.StartResponse) -> None:
+    def __init__(self, started: order_relay.StartResponse) -> None:
         super().__init__(order_id=started.order_id)
 
 
 class OrderService(ts.ApplicationService):
 
-    def __init__(self, workflows: order_workflow.OrderWorkflow) -> None:
-        self._workflows = workflows
+    def __init__(self, relay: order_relay.OrderRelay) -> None:
+        self._relay = relay
 
     async def place(self, request: client.PlaceRequest) -> client.PlaceResponse:
         placed = order.Order(MapToOrderSpec(request))
-        started = await self._workflows.start(order_workflow.StartRequest(order=placed))
+        started = await self._relay.start(order_relay.StartRequest(order=placed))
         return MapToPlaceResponse(started)
