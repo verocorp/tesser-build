@@ -16,8 +16,8 @@ class TestOrderingContext:
         try:
             with pytest.raises(errors.InfraError):
                 asyncio.run(
-                    ordering.client.place(
-                        client.PlaceRequest(order_id="o1", sku="widget", quantity=2)
+                    ordering.client.place_order(
+                        client.PlaceOrderRequest(order_id="o1", sku="widget", quantity=2)
                     )
                 )
         finally:

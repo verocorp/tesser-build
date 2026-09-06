@@ -34,6 +34,13 @@ class TestHttpRequest:
         with pytest.raises(protocol.BadRequest):
             http_request.integer("quantity")
 
+    def test_an_integer_too_long_to_parse_is_a_bad_request(self) -> None:
+        http_request = protocol.HttpRequest(body=b'{"quantity": ' + b"1" * 4400 + b"}")
+        with pytest.raises(protocol.BadRequest):
+            http_request.integer("quantity")
+        with pytest.raises(protocol.BadRequest):
+            http_request.text("sku")
+
 
 class TestHttpResponse:
 

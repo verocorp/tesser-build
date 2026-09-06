@@ -2,26 +2,11 @@ from __future__ import annotations
 
 import tesser.application as ts
 
-import ordering.application.ports as ports
+import ordering.application.relays as relays
 import ordering.domain as domain
 
 
-class RunResponse(ts.Response):
-
-    def __init__(self, order_id: str, total_cents: int) -> None:
-        self.order_id = order_id
-        self.total_cents = total_cents
-
-
-class MapToOrderSpec(ts.Mapper, domain.OrderSpec):
-
-    def __init__(self, start_request: ports.StartRequest) -> None:
-        super().__init__(
-            order_id=start_request.order_id, sku=start_request.sku, quantity=start_request.quantity
-        )
-
-
-class MapToQuoteRequest(ts.Mapper, ports.QuoteRequest):
+class MapToPrepareQuoteRequest(ts.Mapper, relays.PrepareQuoteRequest):
 
     def __init__(self, order: domain.Order) -> None:
         super().__init__(sku=str(order.sku))
@@ -29,11 +14,11 @@ class MapToQuoteRequest(ts.Mapper, ports.QuoteRequest):
 
 class MapToPriceSpec(ts.Mapper, domain.PriceSpec):
 
-    def __init__(self, quote_response: ports.QuoteResponse) -> None:
-        super().__init__(cents=quote_response.cents)
+    def __init__(self, prepare_quote_response: relays.PrepareQuoteResponse) -> None:
+        super().__init__(cents=prepare_quote_response.cents)
 
 
-class MapToRunResponse(ts.Mapper, RunResponse):
+class MapToOrderOrchestratorResponse(ts.Mapper, relays.OrderOrchestratorResponse):
 
     def __init__(self, order: domain.Order, price: domain.Price) -> None:
         super().__init__(order_id=str(order.identity), total_cents=int(price))
@@ -41,12 +26,15 @@ class MapToRunResponse(ts.Mapper, RunResponse):
 
 class OrderOrchestrator(ts.Orchestrator):
 
-    def __init__(self, job_context: ts.JobContext, quoting: ports.Quoting) -> None:
-        self._job_context = job_context
-        self._quoting = quoting
+    def __init__(self, order_actions_runner: relays.OrderActionsRunner) -> None:
+        self._order_actions_runner = order_actions_runner
 
-    async def run(self, start_request: ports.StartRequest) -> RunResponse:
-        order = domain.Order(MapToOrderSpec(start_request))
-        quote_response = await self._quoting.quote(self._job_context, MapToQuoteRequest(order))
-        price = order.total(MapToPriceSpec(quote_response))
-        return MapToRunResponse(order, price)
+    async def run(
+        self, order_orchestrator_request: relays.OrderOrchestratorRequest
+    ) -> relays.OrderOrchestratorResponse:
+        order = order_orchestrator_request.order  # tesser:debt TB082
+        prepare_quote_response = await self._order_actions_runner.run_prepare_quote(
+            MapToPrepareQuoteRequest(order)
+        )
+        price = order.total(MapToPriceSpec(prepare_quote_response))
+        return MapToOrderOrchestratorResponse(order, price)

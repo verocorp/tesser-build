@@ -1,9 +1,3 @@
-from ordering.application.ports.catalog_repository import CatalogRepository as CatalogRepository
-from ordering.application.ports.catalog_repository import PriceRequest as PriceRequest
-from ordering.application.ports.catalog_repository import PriceResponse as PriceResponse
-from ordering.application.ports.order_workflow import OrderWorkflow as OrderWorkflow
-from ordering.application.ports.order_workflow import StartRequest as StartRequest
-from ordering.application.ports.order_workflow import StartResponse as StartResponse
-from ordering.application.ports.quoting import QuoteRequest as QuoteRequest
-from ordering.application.ports.quoting import QuoteResponse as QuoteResponse
-from ordering.application.ports.quoting import Quoting as Quoting
+from ordering.application.ports.product_catalog_repository import GetProductPriceRequest as GetProductPriceRequest
+from ordering.application.ports.product_catalog_repository import GetProductPriceResponse as GetProductPriceResponse
+from ordering.application.ports.product_catalog_repository import ProductCatalogRepository as ProductCatalogRepository

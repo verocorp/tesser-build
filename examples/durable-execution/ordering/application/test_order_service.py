@@ -5,40 +5,50 @@ import asyncio
 import tesser.testing as ts
 
 import ordering.application as application
-import ordering.application.ports as ports
+import ordering.application.relays as relays
 import ordering.client as client
 
 
 @ts.fake
-class FakeOrderWorkflow(ports.OrderWorkflow):
+class FakeOrderOrchestratorRunner(relays.OrderOrchestratorRunner):  # tesser:debt TB072
 
     def __init__(self) -> None:
-        self.started: list[ports.StartRequest] = []
+        self.started: list[relays.OrderOrchestratorRequest] = []
 
-    async def start(self, start_request: ports.StartRequest) -> ports.StartResponse:
-        self.started.append(start_request)
-        return ports.StartResponse(order_id=start_request.order_id)
+    async def start_order_orchestrator(
+        self, order_orchestrator_request: relays.OrderOrchestratorRequest
+    ) -> relays.StartOrderOrchestratorResponse:
+        self.started.append(order_orchestrator_request)
+        return relays.StartOrderOrchestratorResponse(
+            order_id=str(order_orchestrator_request.order.identity)
+        )
 
 
 @ts.helper
-def place_request(order_id: str = "o1", sku: str = "widget", quantity: int = 2) -> client.PlaceRequest:
-    return client.PlaceRequest(order_id=order_id, sku=sku, quantity=quantity)
+def place_order_request(
+    order_id: str = "o1", sku: str = "widget", quantity: int = 2
+) -> client.PlaceOrderRequest:
+    return client.PlaceOrderRequest(order_id=order_id, sku=sku, quantity=quantity)
 
 
 class TestOrderService:
 
     def test_placing_answers_the_order_id(self) -> None:
-        order_service = application.OrderService(FakeOrderWorkflow())
-        place_response = asyncio.run(order_service.place(place_request()))
-        assert place_response.order_id == "o1"
-
-    def test_placing_starts_the_workflow_for_the_order(self) -> None:
-        fake_order_workflow = FakeOrderWorkflow()
-        asyncio.run(
-            application.OrderService(fake_order_workflow).place(
-                place_request(order_id="o2", sku="gadget", quantity=3)
+        place_order_response = asyncio.run(
+            application.OrderService(FakeOrderOrchestratorRunner()).place_order(
+                place_order_request()
             )
         )
-        assert [(s.order_id, s.sku, s.quantity) for s in fake_order_workflow.started] == [
-            ("o2", "gadget", 3)
-        ]
+        assert place_order_response.order_id == "o1"
+
+    def test_placing_starts_the_orchestrator_for_the_order_it_built(self) -> None:
+        fake_order_orchestrator_runner = FakeOrderOrchestratorRunner()  # tesser:debt TB085
+        asyncio.run(
+            application.OrderService(fake_order_orchestrator_runner).place_order(
+                place_order_request(order_id="o2", sku="gadget", quantity=3)
+            )
+        )
+        assert [
+            (str(s.order.identity), str(s.order.sku), int(s.order.quantity))
+            for s in fake_order_orchestrator_runner.started
+        ] == [("o2", "gadget", 3)]

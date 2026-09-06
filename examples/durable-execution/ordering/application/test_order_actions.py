@@ -1,31 +1,64 @@
 from __future__ import annotations
 
 import tesser.testing as ts
+import pytest
 
 import ordering.application as application
 import ordering.application.ports as ports
+import ordering.application.relays as relays
+import tesser.errors as errors
 
 
 @ts.fake
-class FakeCatalogRepository(ports.CatalogRepository):
+class FakeProductCatalogRepository(ports.ProductCatalogRepository):
 
     def __init__(self) -> None:
         self.priced: list[str] = []
 
-    def price(self, price_request: ports.PriceRequest) -> ports.PriceResponse:
-        self.priced.append(price_request.sku)
-        return ports.PriceResponse(cents=250)
+    def get_product_price(
+        self, get_product_price_request: ports.GetProductPriceRequest
+    ) -> ports.GetProductPriceResponse:
+        self.priced.append(get_product_price_request.sku)
+        return ports.GetProductPriceResponse(cents=250)
+
+
+@ts.fake
+class FakeEmptyProductCatalogRepository(ports.ProductCatalogRepository):
+
+    def get_product_price(
+        self, get_product_price_request: ports.GetProductPriceRequest
+    ) -> ports.GetProductPriceResponse:
+        raise errors.not_found(
+            "unknown_sku", f"no price for sku {get_product_price_request.sku!r}"
+        )
 
 
 class TestOrderActions:
 
-    def test_quoting_answers_the_catalog_price(self) -> None:
-        quote_response = application.OrderActions(FakeCatalogRepository()).quote(
-            ports.QuoteRequest(sku="widget")
-        )
-        assert quote_response.cents == 250
+    def test_preparing_a_quote_answers_the_catalog_price(self) -> None:
+        prepare_quote_response = application.OrderActions(
+            FakeProductCatalogRepository()
+        ).prepare_quote(relays.PrepareQuoteRequest(sku="widget"))
+        assert prepare_quote_response.cents == 250
 
-    def test_quoting_looks_the_sku_up_once(self) -> None:
-        fake_catalog_repository = FakeCatalogRepository()
-        application.OrderActions(fake_catalog_repository).quote(ports.QuoteRequest(sku="gadget"))
-        assert fake_catalog_repository.priced == ["gadget"]
+    def test_preparing_a_quote_looks_the_sku_up_once(self) -> None:
+        fake_product_catalog_repository = FakeProductCatalogRepository()
+        application.OrderActions(fake_product_catalog_repository).prepare_quote(
+            relays.PrepareQuoteRequest(sku="gadget")
+        )
+        assert fake_product_catalog_repository.priced == ["gadget"]
+
+    def test_an_unknown_sku_is_the_catalogs_not_found(self) -> None:
+        with pytest.raises(errors.DomainError) as excinfo:
+            application.OrderActions(FakeEmptyProductCatalogRepository()).prepare_quote(
+                relays.PrepareQuoteRequest(sku="nothing")
+            )
+        assert excinfo.value.kind is errors.Kind.NOT_FOUND
+
+    def test_an_empty_sku_is_refused_before_the_catalog_is_asked(self) -> None:
+        fake_product_catalog_repository = FakeProductCatalogRepository()
+        with pytest.raises(errors.DomainError):
+            application.OrderActions(fake_product_catalog_repository).prepare_quote(
+                relays.PrepareQuoteRequest(sku="")
+            )
+        assert fake_product_catalog_repository.priced == []

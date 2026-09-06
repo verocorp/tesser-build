@@ -3,27 +3,32 @@ from __future__ import annotations
 import tesser.application as ts
 
 import ordering.application.ports as ports
+import ordering.application.relays as relays
 import ordering.domain as domain
 
 
-class MapToPriceRequest(ts.Mapper, ports.PriceRequest):
+class MapToGetProductPriceRequest(ts.Mapper, ports.GetProductPriceRequest):
 
     def __init__(self, sku: domain.Sku) -> None:
         super().__init__(sku=str(sku))
 
 
-class MapToQuoteResponse(ts.Mapper, ports.QuoteResponse):
+class MapToPrepareQuoteResponse(ts.Mapper, relays.PrepareQuoteResponse):
 
-    def __init__(self, price_response: ports.PriceResponse) -> None:
-        super().__init__(cents=price_response.cents)
+    def __init__(self, get_product_price_response: ports.GetProductPriceResponse) -> None:
+        super().__init__(cents=get_product_price_response.cents)
 
 
 class OrderActions(ts.Actions):
 
-    def __init__(self, catalog_repository: ports.CatalogRepository) -> None:
-        self._catalog_repository = catalog_repository
+    def __init__(self, product_catalog_repository: ports.ProductCatalogRepository) -> None:
+        self._product_catalog_repository = product_catalog_repository
 
-    def quote(self, quote_request: ports.QuoteRequest) -> ports.QuoteResponse:
-        sku = domain.Sku(quote_request.sku)
-        price_response = self._catalog_repository.price(MapToPriceRequest(sku))
-        return MapToQuoteResponse(price_response)
+    def prepare_quote(
+        self, prepare_quote_request: relays.PrepareQuoteRequest
+    ) -> relays.PrepareQuoteResponse:
+        sku = domain.Sku(prepare_quote_request.sku)
+        get_product_price_response = self._product_catalog_repository.get_product_price(
+            MapToGetProductPriceRequest(sku)
+        )
+        return MapToPrepareQuoteResponse(get_product_price_response)

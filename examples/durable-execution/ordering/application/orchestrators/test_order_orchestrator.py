@@ -1,55 +1,72 @@
 from __future__ import annotations
 
 import asyncio
-import collections.abc as abc
-import typing
 
 import tesser.testing as ts
+import pytest
 
 import ordering.application.orchestrators as orchestrators
-import ordering.application.ports as ports
+import ordering.application.relays as relays  # tesser:debt TB070
+import ordering.domain as domain
+import tesser.errors as errors
 
 
 @ts.fake
-class FakeJobContext(ts.JobContext):
-
-    async def call[I, O](
-        self, step: abc.Callable[[typing.Any, I], abc.Awaitable[O]], request: I  # tesser:debt TB022
-    ) -> O:
-        return await step(None, request)
-
-
-@ts.fake
-class FakeQuoting(ports.Quoting):
+class FakeOrderActionsRunner(relays.OrderActionsRunner):
 
     def __init__(self) -> None:
         self.quoted: list[str] = []
 
-    async def quote(
-        self, job_context: ts.JobContext, quote_request: ports.QuoteRequest
-    ) -> ports.QuoteResponse:
-        self.quoted.append(quote_request.sku)
-        return ports.QuoteResponse(cents=250)
+    async def run_prepare_quote(
+        self, prepare_quote_request: relays.PrepareQuoteRequest
+    ) -> relays.PrepareQuoteResponse:
+        self.quoted.append(prepare_quote_request.sku)
+        return relays.PrepareQuoteResponse(cents=250)
+
+
+@ts.fake
+class FakeRefusingOrderActionsRunner(relays.OrderActionsRunner):
+
+    async def run_prepare_quote(
+        self, prepare_quote_request: relays.PrepareQuoteRequest
+    ) -> relays.PrepareQuoteResponse:
+        raise errors.not_found("unknown_sku", f"no price for sku {prepare_quote_request.sku!r}")
 
 
 @ts.helper
-def start_request(order_id: str = "o1", sku: str = "widget", quantity: int = 3) -> ports.StartRequest:
-    return ports.StartRequest(order_id=order_id, sku=sku, quantity=quantity)
+def order_orchestrator_request(
+    order_id: str = "o1", sku: str = "widget", quantity: int = 3
+) -> relays.OrderOrchestratorRequest:
+    return relays.OrderOrchestratorRequest(
+        order=domain.Order(domain.OrderSpec(order_id=order_id, sku=sku, quantity=quantity))
+    )
 
 
 class TestOrderOrchestrator:
 
     def test_running_totals_the_quoted_price_over_the_quantity(self) -> None:
-        order_orchestrator = orchestrators.OrderOrchestrator(FakeJobContext(), FakeQuoting())
-        run_response = asyncio.run(order_orchestrator.run(start_request()))
-        assert run_response.order_id == "o1"
-        assert run_response.total_cents == 750
-
-    def test_running_quotes_the_ordered_sku(self) -> None:
-        fake_quoting = FakeQuoting()
-        asyncio.run(
-            orchestrators.OrderOrchestrator(FakeJobContext(), fake_quoting).run(
-                start_request(sku="gadget")
+        order_orchestrator_response = asyncio.run(
+            orchestrators.OrderOrchestrator(FakeOrderActionsRunner()).run(
+                order_orchestrator_request()
             )
         )
-        assert fake_quoting.quoted == ["gadget"]
+        assert order_orchestrator_response.order_id == "o1"
+        assert order_orchestrator_response.total_cents == 750
+
+    def test_running_prepares_a_quote_for_the_ordered_sku(self) -> None:
+        fake_order_actions_runner = FakeOrderActionsRunner()
+        asyncio.run(
+            orchestrators.OrderOrchestrator(fake_order_actions_runner).run(
+                order_orchestrator_request(sku="gadget")
+            )
+        )
+        assert fake_order_actions_runner.quoted == ["gadget"]
+
+    def test_a_refused_quote_ends_the_run_with_the_actions_error(self) -> None:
+        with pytest.raises(errors.DomainError) as excinfo:
+            asyncio.run(
+                orchestrators.OrderOrchestrator(FakeRefusingOrderActionsRunner()).run(
+                    order_orchestrator_request(sku="nothing")
+                )
+            )
+        assert excinfo.value.kind is errors.Kind.NOT_FOUND

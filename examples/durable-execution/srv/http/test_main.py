@@ -44,9 +44,12 @@ class TestHttpHost:
         durable_execution_app = app.load()
         try:
             declared = {
-                d.name: sorted(d.handlers)
-                for job in durable_execution_app.ordering.jobs
-                for d in job.definitions()
+                durable_execution_app.ordering.restate_order_runtime.order_actions_service.name: sorted(
+                    durable_execution_app.ordering.restate_order_runtime.order_actions_service.handlers
+                ),
+                durable_execution_app.ordering.restate_order_runtime.order_orchestrator_workflow.name: sorted(
+                    durable_execution_app.ordering.restate_order_runtime.order_orchestrator_workflow.handlers
+                ),
             }
         finally:
             durable_execution_app.close()

@@ -41,11 +41,12 @@ class TestDurableExecutionApp:
         durable_execution_app = app.DurableExecutionApp(app.AppConfig(spec))
         try:
             declared = [
-                d.name for job in durable_execution_app.ordering.jobs for d in job.definitions()
+                durable_execution_app.ordering.restate_order_runtime.order_actions_service.name,
+                durable_execution_app.ordering.restate_order_runtime.order_orchestrator_workflow.name,
             ]
         finally:
             durable_execution_app.close()
-        assert declared == ["OrderingActions", "Ordering"]
+        assert declared == ["OrderActions", "OrderOrchestrator"]
 
 
 class TestAppLoader:
@@ -54,10 +55,9 @@ class TestAppLoader:
         durable_execution_app = app.AppLoader(FakeConfigRepository()).load()
         try:
             declared = [
-                sorted(d.handlers)
-                for job in durable_execution_app.ordering.jobs
-                for d in job.definitions()
+                sorted(durable_execution_app.ordering.restate_order_runtime.order_actions_service.handlers),
+                sorted(durable_execution_app.ordering.restate_order_runtime.order_orchestrator_workflow.handlers),
             ]
         finally:
             durable_execution_app.close()
-        assert declared == [["quote"], ["run"]]
+        assert declared == [["prepare_quote"], ["run"]]
