@@ -151,14 +151,24 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   match what a reader expects.
 
 - [ ] **Hiding a value object costs it its direct tests.** `examples/asyncpg`
-  went 99 tests to 95: five of the eight `test_clearance.py` tests survive
-  through `Widget` and four new ones were added, but Clearance equality,
-  Clearance's `__str__` canonical exit, and Standing equality cannot be asserted
-  at all once the domain `__init__` stops exporting those classes.
-  `examples/minimal` made the same trade. Exporting them for the test's sake is
-  legal under the same ruling and hands the application two types it should not
-  name — which is the whole point of hiding them. Decide whether an equality
-  test is owed for a hidden value object, and if so how it is written.
+  went 99 tests to 95 and `examples/minimal` made the same trade: Clearance
+  equality, Clearance's `__str__` canonical exit, and Standing equality cannot be
+  asserted at all once the domain `__init__` stops exporting those classes. Five
+  of the eight old `test_clearance.py` tests survive through `Widget` and four
+  new ones were added, but what replaced the equality claims is
+  `assert str(widget.standing) == "kept"` — a literal comparison on a display
+  string, which is the shape `stringequality` exists to warn about, not a
+  value-equality claim. `Clearance.__str__` now has **zero coverage in both
+  trees**, and nothing in either tree stringifies a `Clearance` at all, so it may
+  simply be dead.
+
+  This collides head-on with CLAUDE.md convention 2, "every VO has explicit
+  equality test coverage", in the two trees that model the norm. Exporting the
+  classes for the test's sake is legal under the sibling-test ruling and hands
+  the application two types it should not name — which is the whole point of
+  hiding them. Decide whether an equality test is owed for a hidden value object,
+  and if so how it is written; the answer probably also settles the export
+  ruling above, since both are the same question about what a test may reach.
 
 - [ ] **A module merge widened an env-read exemption.** `examples/python-app`'s
   `ruff.toml` exempts exactly one file from the `TID251` ban on reading the
@@ -199,6 +209,48 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   Until it lands, `python.md` says the boundary is a convention the import rules
   enforce rather than something the interpreter refuses, because that is what is
   true.
+
+- [ ] **Two classes of one name in one module: one is invisible, and the order
+  decides which.** `Module._classes` is a dict keyed by class name, so the last
+  definition wins and `_class_defs` (which 39 rules walk) sees only that one —
+  but the block lookup at `checks.py:8561` resolves by name while iterating
+  `self._body`, which holds both. Demonstrated on a copy of `examples/minimal`
+  (2026-09-06 adversarial pass): a bare `class Standing:` with mutable public
+  state placed *before* the real `Standing(ts.ValueObject)` draws **zero
+  findings**, and so does a `class Standing(ts.ApplicationService)` sitting in a
+  domain module, which should be a TB052 "a kind lives only in its role module".
+  Reverse the order and two findings appear, one of them a false positive on the
+  genuinely conforming class. Under declare-then-verify this is a general escape:
+  name an unchecked class after a checked one in the same module and the rule set
+  goes quiet.
+
+  Pre-existing — `_classes` is a dict on `main` too — and latent: a scan of every
+  tracked `.py` found zero duplicate class names. What changed is the blast
+  radius, because this branch adds roughly forty rules that key off `block_of`.
+  Note also that `KindTable.__init__` raises `ValueError("a kind table names one
+  block per symbol")` on a duplicate `(owner, name)`, and that guard is
+  unreachable, because `blocks` is a dict before it ever gets there. The guard
+  that would have caught this is dead.
+
+- [ ] **TB085's silencing branches have no negative tests.** Roughly 180 new
+  lines carry four fixtures, and every branch that makes a name *not* checkable
+  is unexercised: the `foreign` set (a call into `tesser.*` or an unwalked top),
+  `FREE_RETURN`, the `self` receiver, a multi-hop chain through
+  `attr_rows.held(...)`, a module-level function call, the
+  `scope.package_of(...)` receiver skip, and `ast.Await` unwrapping. The eleven
+  tree gates are no substitute here and the reason is structural: **a
+  zero-findings gate catches over-firing and can never catch under-firing.** A
+  change that widens any of those branches silences findings and nothing in the
+  repo notices. Two of this wave's four Codex findings were exactly that shape,
+  which is the argument for building the negatives.
+
+  Same shape, smaller: TB053's third tier (two packages whose last segment *and*
+  context prefix both collide, so the alias becomes the whole dotted path) has
+  neither a positive nor a negative test, and its clause prose says "each takes
+  its context as a prefix", which is not what tier three demands. And
+  `DerivedName`, the shared transform behind both TB085 and the own-name rule,
+  has no direct test at all — testing it costs an export from the domain
+  `__init__`, which is more evidence for the export ruling above.
 
 ## Left open by the v0.0.89.0 adversarial pass (2026-08-29, PR #148)
 
