@@ -1,0 +1,1 @@
+from linkpolicy.application.service import LinkPolicyService as LinkPolicyService

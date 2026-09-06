@@ -1,0 +1,1 @@
+from campaign.adapters.repositories.repo_memory import InMemoryCampaignRepository as InMemoryCampaignRepository

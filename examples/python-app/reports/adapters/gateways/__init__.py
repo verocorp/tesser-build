@@ -1,0 +1,2 @@
+from reports.adapters.gateways.campaign_links import CampaignLinkGateway as CampaignLinkGateway
+from reports.adapters.gateways.policy_verdicts import PolicyVerdictGateway as PolicyVerdictGateway

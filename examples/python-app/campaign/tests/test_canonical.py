@@ -3,14 +3,12 @@ from __future__ import annotations
 import ast
 import datetime
 import decimal
+import pathlib
 
 import pytest
 
-import campaign.domain.campaign as campaign
-import campaign.domain.money as money
-import campaign.domain.short_link as short_link
+import campaign.domain as domain
 import tesser.serialization as serialization
-import pathlib
 
 
 def test_canonical_str_is_the_identity_policy() -> None:
@@ -44,7 +42,7 @@ def test_canonical_datetime_rejects_naive() -> None:
 
 
 def test_structured_types_define_no_conversion_dunders() -> None:
-    for cls in (money.Money, short_link.ShortLink, campaign.Campaign):
+    for cls in (domain.Money, domain.ShortLink, domain.Campaign):
         for name in ("__str__", "__int__", "__float__", "__bytes__"):
             assert name not in cls.__dict__, f"{cls.__name__} defines {name}"
 

@@ -4,22 +4,52 @@ import typing
 
 import tesser.application as ts
 
-import campaign.application.ports.campaign_identity as campaign_identity
-import campaign.application.ports.campaign_queries as campaign_queries
-import campaign.application.ports.campaign_repository as campaign_repository
-import campaign.application.ports.target_policy as target_policy
-import campaign.application.views as campaign_views
-import campaign.client.client as client
-import campaign.domain.campaign as campaign
-import campaign.domain.money as money
-import campaign.domain.short_link as short_link
-import campaign.domain.short_links as short_links
-import campaign.domain.values as values
-import kernel.slug as kernel_slug
+import campaign.application.ports as ports
+import campaign.client as client
+import campaign.domain as domain
 import tesser.errors as errors
 
 
-class MapToMoneySpec(ts.Mapper, money.MoneySpec):
+class MapToShortLinkSpecFromRecord(ts.Mapper, domain.ShortLinkSpec):
+
+    def __init__(self, link_record: ports.LinkRecord) -> None:
+        super().__init__(
+            slug=link_record.slug,
+            target_url=link_record.target_url,
+            active=link_record.status == domain.LinkState.ACTIVE.value,
+        )
+
+
+class MapToCampaignSpecFromSlugLookup(ts.Mapper, domain.CampaignSpec):
+
+    def __init__(
+        self,
+        find_campaign_by_slug_request: ports.FindCampaignBySlugRequest,
+        find_campaign_response: ports.FindCampaignResponse,
+    ) -> None:
+        match find_campaign_response.outcome:
+            case ports.CampaignLookup.FOUND:
+                record = find_campaign_response.campaigns[0]
+            case ports.CampaignLookup.MISSING:
+                raise errors.not_found(
+                    "link_missing",
+                    f"no active link for slug {find_campaign_by_slug_request.slug!r}",
+                )
+            case _ as unreachable:
+                typing.assert_never(unreachable)
+        super().__init__(
+            id=record.id,
+            budget=domain.MoneySpec(
+                amount=record.budget.amount, currency=record.budget.currency
+            ),
+            links=domain.ShortLinksSpec(links=tuple(
+                MapToShortLinkSpecFromRecord(link_record=link_record)
+                for link_record in record.links
+            )),
+        )
+
+
+class MapToMoneySpec(ts.Mapper, domain.MoneySpec):
 
     def __init__(self, create_campaign_request: client.CreateCampaignRequest) -> None:
         super().__init__(
@@ -28,57 +58,57 @@ class MapToMoneySpec(ts.Mapper, money.MoneySpec):
         )
 
 
-class MapToCampaignSpec(ts.Mapper, campaign.CampaignSpec):
+class MapToCampaignSpec(ts.Mapper, domain.CampaignSpec):
 
     def __init__(
         self,
         create_campaign_request: client.CreateCampaignRequest,
-        issued_campaign_identity: campaign_identity.IssueCampaignIdentityResponse,
-        links: short_links.ShortLinksSpec,
+        issue_campaign_identity_response: ports.IssueCampaignIdentityResponse,
+        short_links_spec: domain.ShortLinksSpec,
     ) -> None:
         super().__init__(
-            id=issued_campaign_identity.campaign_id,
+            id=issue_campaign_identity_response.campaign_id,
             budget=MapToMoneySpec(create_campaign_request=create_campaign_request),
-            links=links,
+            links=short_links_spec,
         )
 
 
-class MapToMoneyRecord(ts.Mapper, campaign_repository.MoneyRecord):
+class MapToMoneyRecord(ts.Mapper, ports.MoneyRecord):
 
-    def __init__(self, campaign_aggregate: campaign.Campaign) -> None:
+    def __init__(self, campaign: domain.Campaign) -> None:
         super().__init__(
-            amount=str(campaign_aggregate.budget.amount),
-            currency=str(campaign_aggregate.budget.currency),
+            amount=str(campaign.budget.amount),
+            currency=str(campaign.budget.currency),
         )
 
 
-class MapToLinkRecord(ts.Mapper, campaign_repository.LinkRecord):
+class MapToLinkRecord(ts.Mapper, ports.LinkRecord):
 
-    def __init__(self, short_link_entity: short_link.ShortLink) -> None:
+    def __init__(self, short_link: domain.ShortLink) -> None:
         super().__init__(
-            slug=str(short_link_entity.slug),
-            target_url=str(short_link_entity.target_url),
-            status=str(short_link_entity.status),
+            slug=str(short_link.slug),
+            target_url=str(short_link.target_url),
+            status=str(short_link.status),
         )
 
 
-class MapToSaveCampaignRequest(ts.Mapper, campaign_repository.SaveCampaignRequest):
+class MapToSaveCampaignRequest(ts.Mapper, ports.SaveCampaignRequest):
 
-    def __init__(self, campaign_aggregate: campaign.Campaign) -> None:
+    def __init__(self, campaign: domain.Campaign) -> None:
         super().__init__(
-            id=str(campaign_aggregate.id),
-            budget=MapToMoneyRecord(campaign_aggregate=campaign_aggregate),
-            links=tuple(
-                MapToLinkRecord(short_link_entity=link) for link in campaign_aggregate.links
-            ),
+            id=str(campaign.id),
+            budget=MapToMoneyRecord(campaign=campaign),
+            links=tuple(MapToLinkRecord(short_link=link) for link in campaign.links),
         )
 
 
 class MapToLinkView(ts.Mapper, client.LinkView):
 
-    def __init__(self, link_row: campaign_queries.LinkViewRow) -> None:
+    def __init__(self, link_view_row: ports.LinkViewRow) -> None:
         super().__init__(
-            slug=link_row.slug, target_url=link_row.target_url, status=link_row.status
+            slug=link_view_row.slug,
+            target_url=link_view_row.target_url,
+            status=link_view_row.status,
         )
 
 
@@ -86,13 +116,13 @@ class MapToCampaignView(ts.Mapper, client.CampaignView):
 
     def __init__(
         self,
-        find_campaign_view_request: campaign_queries.FindCampaignViewRequest,
-        found_campaign_view: campaign_queries.FindCampaignViewResponse,
+        find_campaign_view_request: ports.FindCampaignViewRequest,
+        find_campaign_view_response: ports.FindCampaignViewResponse,
     ) -> None:
-        match found_campaign_view.outcome:
-            case campaign_queries.CampaignViewLookup.FOUND:
-                row = found_campaign_view.campaigns[0]
-            case campaign_queries.CampaignViewLookup.MISSING:
+        match find_campaign_view_response.outcome:
+            case ports.CampaignViewLookup.FOUND:
+                row = find_campaign_view_response.campaigns[0]
+            case ports.CampaignViewLookup.MISSING:
                 raise errors.not_found(
                     "campaign_missing",
                     f"no campaign with id {find_campaign_view_request.campaign_id!r}",
@@ -103,43 +133,44 @@ class MapToCampaignView(ts.Mapper, client.CampaignView):
             campaign_id=row.campaign_id,
             budget_amount=row.budget_amount,
             budget_currency=row.budget_currency,
-            links=tuple(MapToLinkView(link_row=link) for link in row.links),
+            links=tuple(MapToLinkView(link_view_row=link) for link in row.links),
         )
 
 
-class MapToCheckTargetRequest(ts.Mapper, target_policy.CheckTargetRequest):
+class MapToCheckTargetRequest(ts.Mapper, ports.CheckTargetRequest):
 
-    def __init__(self, target_url: values.TargetURL) -> None:
+    def __init__(self, target_url: domain.TargetURL) -> None:
         super().__init__(target_url=str(target_url))
 
 
-class MapToSlugTakenRequest(ts.Mapper, campaign_repository.SlugTakenRequest):
+class MapToSlugTakenRequest(ts.Mapper, ports.SlugTakenRequest):
 
-    def __init__(self, slug: kernel_slug.Slug) -> None:
+    def __init__(self, slug: domain.Slug) -> None:
         super().__init__(slug=str(slug))
 
 
-class MapToShortLinkSpec(ts.Mapper, short_link.ShortLinkSpec):
+class MapToShortLinkSpec(ts.Mapper, domain.ShortLinkSpec):
 
     def __init__(
         self,
         add_link_request: client.AddLinkRequest,
-        checked_target: target_policy.CheckTargetResponse,
-        slug_taken: campaign_repository.SlugTakenResponse,
+        check_target_response: ports.CheckTargetResponse,
+        slug_taken_response: ports.SlugTakenResponse,
     ) -> None:
-        match checked_target.verdict:
-            case target_policy.PolicyVerdict.ALLOWED:
+        match check_target_response.verdict:
+            case ports.PolicyVerdict.ALLOWED:
                 pass
-            case target_policy.PolicyVerdict.BLOCKED:
+            case ports.PolicyVerdict.BLOCKED:
                 raise errors.conflict(
-                    "destination_blocked", f"destination not allowed: {checked_target.reason}"
+                    "destination_blocked",
+                    f"destination not allowed: {check_target_response.reason}",
                 )
             case _ as unreachable:
                 typing.assert_never(unreachable)
-        match slug_taken.availability:
-            case campaign_repository.SlugAvailability.FREE:
+        match slug_taken_response.availability:
+            case ports.SlugAvailability.FREE:
                 pass
-            case campaign_repository.SlugAvailability.TAKEN:
+            case ports.SlugAvailability.TAKEN:
                 raise errors.conflict(
                     "duplicate_slug", f"slug {add_link_request.slug!r} already exists"
                 )
@@ -150,17 +181,17 @@ class MapToShortLinkSpec(ts.Mapper, short_link.ShortLinkSpec):
         )
 
 
-class MapToCampaignSpecFromRecord(ts.Mapper, campaign.CampaignSpec):
+class MapToCampaignSpecFromRecord(ts.Mapper, domain.CampaignSpec):
 
     def __init__(
         self,
-        find_campaign_request: campaign_repository.FindCampaignRequest,
-        found_campaign: campaign_repository.FindCampaignResponse,
+        find_campaign_request: ports.FindCampaignRequest,
+        find_campaign_response: ports.FindCampaignResponse,
     ) -> None:
-        match found_campaign.outcome:
-            case campaign_repository.CampaignLookup.FOUND:
-                record = found_campaign.campaigns[0]
-            case campaign_repository.CampaignLookup.MISSING:
+        match find_campaign_response.outcome:
+            case ports.CampaignLookup.FOUND:
+                record = find_campaign_response.campaigns[0]
+            case ports.CampaignLookup.MISSING:
                 raise errors.not_found(
                     "campaign_missing",
                     f"no campaign with id {find_campaign_request.campaign_id!r}",
@@ -169,9 +200,12 @@ class MapToCampaignSpecFromRecord(ts.Mapper, campaign.CampaignSpec):
                 typing.assert_never(unreachable)
         super().__init__(
             id=record.id,
-            budget=money.MoneySpec(amount=record.budget.amount, currency=record.budget.currency),
-            links=short_links.ShortLinksSpec(links=tuple(
-                campaign_views.MapToShortLinkSpecFromRecord(link_record=link_record) for link_record in record.links
+            budget=domain.MoneySpec(
+                amount=record.budget.amount, currency=record.budget.currency
+            ),
+            links=domain.ShortLinksSpec(links=tuple(
+                MapToShortLinkSpecFromRecord(link_record=link_record)
+                for link_record in record.links
             )),
         )
 
@@ -180,124 +214,143 @@ class CampaignService(ts.ApplicationService):
 
     def __init__(
         self,
-        repo: campaign_repository.CampaignRepository,
-        policy: target_policy.TargetPolicy,
-        identity_gateway: campaign_identity.CampaignIdentity,
-        queries: campaign_queries.CampaignQueries,
+        campaign_repository: ports.CampaignRepository,
+        target_policy: ports.TargetPolicy,
+        campaign_identity: ports.CampaignIdentity,
+        campaign_queries: ports.CampaignQueries,
     ) -> None:
-        self._repo = repo
-        self._policy = policy
-        self._identity_gateway = identity_gateway
-        self._queries = queries
+        self._campaign_repository = campaign_repository
+        self._target_policy = target_policy
+        self._campaign_identity = campaign_identity
+        self._campaign_queries = campaign_queries
 
-    def create_campaign(self, req: client.CreateCampaignRequest) -> client.CampaignView:
-        issued_campaign_identity = self._identity_gateway.issue(
-            campaign_identity.IssueCampaignIdentityRequest()
+    def create_campaign(
+        self, create_campaign_request: client.CreateCampaignRequest
+    ) -> client.CampaignView:
+        issue_campaign_identity_response = self._campaign_identity.issue(
+            ports.IssueCampaignIdentityRequest()
         )
-        c = campaign.Campaign(MapToCampaignSpec(
-            create_campaign_request=req,
-            issued_campaign_identity=issued_campaign_identity,
-            links=short_links.ShortLinksSpec(links=()),
+        campaign = domain.Campaign(MapToCampaignSpec(
+            create_campaign_request=create_campaign_request,
+            issue_campaign_identity_response=issue_campaign_identity_response,
+            short_links_spec=domain.ShortLinksSpec(links=()),
         ))
-        save_request = MapToSaveCampaignRequest(campaign_aggregate=c)
-        self._repo.save(save_request)
-        find_campaign_view_request = campaign_queries.FindCampaignViewRequest(
-            campaign_id=save_request.id,
+        map_to_save_campaign_request = MapToSaveCampaignRequest(campaign=campaign)
+        self._campaign_repository.save(map_to_save_campaign_request)
+        find_campaign_view_request = ports.FindCampaignViewRequest(
+            campaign_id=map_to_save_campaign_request.id,
         )
-        found_campaign_view = self._queries.find_view(find_campaign_view_request)
+        find_campaign_view_response = self._campaign_queries.find_view(
+            find_campaign_view_request
+        )
         return MapToCampaignView(
             find_campaign_view_request=find_campaign_view_request,
-            found_campaign_view=found_campaign_view,
+            find_campaign_view_response=find_campaign_view_response,
         )
 
-    def add_link(self, req: client.AddLinkRequest) -> client.CampaignView:
-        slug = kernel_slug.Slug(req.slug)
-        target_url = values.TargetURL(req.target_url)
-        campaign_id = values.CampaignID(req.campaign_id)
+    def add_link(self, add_link_request: client.AddLinkRequest) -> client.CampaignView:
+        slug = domain.Slug(add_link_request.slug)
+        target_url = domain.TargetURL(add_link_request.target_url)
+        campaign_id = domain.CampaignID(add_link_request.campaign_id)
         campaign_id_text = str(campaign_id)
-        checked_target = self._policy.check(MapToCheckTargetRequest(target_url=target_url))
-        slug_taken = self._repo.slug_taken(MapToSlugTakenRequest(slug=slug))
-        short_link_spec = MapToShortLinkSpec(
-            add_link_request=req,
-            checked_target=checked_target,
-            slug_taken=slug_taken,
+        check_target_response = self._target_policy.check(
+            MapToCheckTargetRequest(target_url=target_url)
         )
-        find_campaign_request = campaign_repository.FindCampaignRequest(
-            campaign_id=campaign_id_text
+        slug_taken_response = self._campaign_repository.slug_taken(
+            MapToSlugTakenRequest(slug=slug)
         )
-        found_campaign = self._repo.find(find_campaign_request)
-        c = campaign.Campaign(MapToCampaignSpecFromRecord(
+        map_to_short_link_spec = MapToShortLinkSpec(
+            add_link_request=add_link_request,
+            check_target_response=check_target_response,
+            slug_taken_response=slug_taken_response,
+        )
+        find_campaign_request = ports.FindCampaignRequest(campaign_id=campaign_id_text)
+        find_campaign_response = self._campaign_repository.find(find_campaign_request)
+        campaign = domain.Campaign(MapToCampaignSpecFromRecord(
             find_campaign_request=find_campaign_request,
-            found_campaign=found_campaign,
+            find_campaign_response=find_campaign_response,
         ))
-        c.add_short_link(short_link_spec)
-        self._repo.save(MapToSaveCampaignRequest(campaign_aggregate=c))
-        find_campaign_view_request = campaign_queries.FindCampaignViewRequest(
+        campaign.add_short_link(map_to_short_link_spec)
+        self._campaign_repository.save(MapToSaveCampaignRequest(campaign=campaign))
+        find_campaign_view_request = ports.FindCampaignViewRequest(
             campaign_id=campaign_id_text,
         )
-        found_campaign_view = self._queries.find_view(find_campaign_view_request)
+        find_campaign_view_response = self._campaign_queries.find_view(
+            find_campaign_view_request
+        )
         return MapToCampaignView(
             find_campaign_view_request=find_campaign_view_request,
-            found_campaign_view=found_campaign_view,
+            find_campaign_view_response=find_campaign_view_response,
         )
 
-    def deactivate_link(self, req: client.DeactivateLinkRequest) -> client.CampaignView:
-        campaign_id = values.CampaignID(req.campaign_id)
+    def deactivate_link(
+        self, deactivate_link_request: client.DeactivateLinkRequest
+    ) -> client.CampaignView:
+        campaign_id = domain.CampaignID(deactivate_link_request.campaign_id)
         campaign_id_text = str(campaign_id)
-        find_campaign_request = campaign_repository.FindCampaignRequest(
-            campaign_id=campaign_id_text
-        )
-        found_campaign = self._repo.find(find_campaign_request)
-        c = campaign.Campaign(MapToCampaignSpecFromRecord(
+        find_campaign_request = ports.FindCampaignRequest(campaign_id=campaign_id_text)
+        find_campaign_response = self._campaign_repository.find(find_campaign_request)
+        campaign = domain.Campaign(MapToCampaignSpecFromRecord(
             find_campaign_request=find_campaign_request,
-            found_campaign=found_campaign,
+            find_campaign_response=find_campaign_response,
         ))
-        c.deactivate_short_link(kernel_slug.Slug(req.slug))
-        self._repo.save(MapToSaveCampaignRequest(campaign_aggregate=c))
-        find_campaign_view_request = campaign_queries.FindCampaignViewRequest(
+        slug = domain.Slug(deactivate_link_request.slug)
+        campaign.deactivate_short_link(slug)
+        self._campaign_repository.save(MapToSaveCampaignRequest(campaign=campaign))
+        find_campaign_view_request = ports.FindCampaignViewRequest(
             campaign_id=campaign_id_text,
         )
-        found_campaign_view = self._queries.find_view(find_campaign_view_request)
+        find_campaign_view_response = self._campaign_queries.find_view(
+            find_campaign_view_request
+        )
         return MapToCampaignView(
             find_campaign_view_request=find_campaign_view_request,
-            found_campaign_view=found_campaign_view,
+            find_campaign_view_response=find_campaign_view_response,
         )
 
-    def get_campaign(self, req: client.GetCampaignRequest) -> client.CampaignView:
-        campaign_id = values.CampaignID(req.campaign_id)
+    def get_campaign(
+        self, get_campaign_request: client.GetCampaignRequest
+    ) -> client.CampaignView:
+        campaign_id = domain.CampaignID(get_campaign_request.campaign_id)
         campaign_id_text = str(campaign_id)
-        find_campaign_view_request = campaign_queries.FindCampaignViewRequest(
+        find_campaign_view_request = ports.FindCampaignViewRequest(
             campaign_id=campaign_id_text,
         )
-        found_campaign_view = self._queries.find_view(find_campaign_view_request)
+        find_campaign_view_response = self._campaign_queries.find_view(
+            find_campaign_view_request
+        )
         return MapToCampaignView(
             find_campaign_view_request=find_campaign_view_request,
-            found_campaign_view=found_campaign_view,
+            find_campaign_view_response=find_campaign_view_response,
         )
 
-    def resolve(self, req: client.ResolveRequest) -> client.ResolveResponse:
-        slug = kernel_slug.Slug(req.slug)
+    def resolve(self, resolve_request: client.ResolveRequest) -> client.ResolveResponse:
+        slug = domain.Slug(resolve_request.slug)
         slug_text = str(slug)
-        find_campaign_by_slug_request = campaign_repository.FindCampaignBySlugRequest(
-            slug=slug_text
+        find_campaign_by_slug_request = ports.FindCampaignBySlugRequest(slug=slug_text)
+        find_campaign_response = self._campaign_repository.find_by_slug(
+            find_campaign_by_slug_request
         )
-        found = self._repo.find_by_slug(find_campaign_by_slug_request)
-        c = campaign.Campaign(campaign_views.MapToCampaignSpecFromSlugLookup(
+        campaign = domain.Campaign(MapToCampaignSpecFromSlugLookup(
             find_campaign_by_slug_request=find_campaign_by_slug_request,
-            found_campaign=found,
+            find_campaign_response=find_campaign_response,
         ))
-        target_url = c.active_target(slug)
+        target_url = campaign.active_target(slug)
         target_url_text = str(target_url)
         return client.ResolveResponse(target_url=target_url_text)
 
-    def list_links(self, req: client.ListLinksRequest) -> client.ListLinksResponse:
-        listed = self._repo.all(campaign_repository.ListCampaignsRequest())
+    def list_links(
+        self, list_links_request: client.ListLinksRequest
+    ) -> client.ListLinksResponse:
+        list_campaigns_response = self._campaign_repository.all(
+            ports.ListCampaignsRequest()
+        )
         views: list[client.LinkView] = []
-        for listed_campaign in listed.campaigns:
+        for listed_campaign in list_campaigns_response.campaigns:
             for link in listed_campaign.links:
-                view = client.LinkView(
+                link_view = client.LinkView(
                     slug=link.slug, target_url=link.target_url, status=link.status
                 )
-                views.append(view)
+                views.append(link_view)
         listed_views = tuple(views)
         return client.ListLinksResponse(links=listed_views)
