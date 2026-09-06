@@ -6584,38 +6584,38 @@ class Module(ts.Entity):
             )
         return tuple(found)
 
-    def lambda_violations(self) -> tuple[Violation, ...]:
+    def function_placement_violations(self) -> tuple[Violation, ...]:
         module_name = self._name
-        anonymous: list[int] = []
-        inner: list[tuple[int, str]] = []
+        sites: list[tuple[int, str]] = []
         pending: list[tuple[ast.AST, bool]] = [(stmt, False) for stmt in self._body]
         while pending:
             node, enclosed = pending.pop()
             if isinstance(node, ast.Lambda):
-                anonymous.append(node.lineno)
+                sites.append((node.lineno, ""))
                 pending.extend((child, True) for child in ast.iter_child_nodes(node))
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 if enclosed:
-                    inner.append((node.lineno, node.name))
+                    sites.append((node.lineno, node.name))
                 pending.extend((child, True) for child in ast.iter_child_nodes(node))
             elif isinstance(node, ast.ClassDef):
                 pending.extend((child, False) for child in ast.iter_child_nodes(node))
             else:
                 pending.extend((child, enclosed) for child in ast.iter_child_nodes(node))
         found: list[Violation] = []
-        for line in sorted(anonymous):
-            found.append(
-                Violation(ViolationSpec(
-                    self._path,
-                    line,
-                    "TB023",
-                    f"{module_name} writes a lambda; a function is declared at module "
-                    "level or as a method, because every rule about a function keys on "
-                    "its placement and a nested one has none — an ordering belongs on "
-                    "the object it orders, a deferred call behind a port",
-                ))
-            )
-        for line, nested in sorted(inner):
+        for line, nested in sorted(sites):
+            if not nested:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        line,
+                        "TB023",
+                        f"{module_name} writes a lambda; a function is declared at module "
+                        "level or as a method, because every rule about a function keys on "
+                        "its placement and a nested one has none — an ordering belongs on "
+                        "the object it orders, a deferred call behind a port",
+                    ))
+                )
+                continue
             found.append(
                 Violation(ViolationSpec(
                     self._path,
@@ -10107,7 +10107,7 @@ class Codebase(ts.AggregateRoot):
         for module in self._modules:
             found.extend(module.annotation_violations())
             found.extend(module.type_name_violations())
-            found.extend(module.lambda_violations())
+            found.extend(module.function_placement_violations())
             found.extend(module.comment_violations())
             found.extend(module.double_violations())
             found.extend(module.shadowing_violations())

@@ -76,7 +76,16 @@ are left alone.
 **A type names what the value is** (TB022, maintainer ruling 2026-09-06).
 `Any`, `Callable`, and `Awaitable` are findings wherever the module names
 them — an annotation, a base class, a `TypeVar` bound, a `typing.cast`
-argument. Each names a mechanism where a type should name a value. `Any`
+argument. The match is on the trailing segment of a name
+*load* — an `ast.Name` or `ast.Attribute` — which is what lets it reach the
+three above; the cost is that an ordinary *identifier* named `Any` reports too,
+so do not name a domain value after a typing one. A place that binds or spells
+the name without loading it is not read: `from typing import Any`, `import
+typing as Any`, `except ValueError as Any`, `global Any`, a `case Any:` capture,
+and a keyword-argument name. Nothing depends on those staying unread — `TB053`
+already bans the import forms — but the rule is name-load-blind, not
+position-blind, and the exception list in `TODOS.md` is where narrowing it is
+argued. Each names a mechanism where a type should name a value. `Any`
 turns the checker off, so nothing downstream of it is checked and the change
 you were relying on the checker to catch is silent. `Callable` says a
 function arrives without saying what it answers; the way to declare "someone
@@ -963,7 +972,7 @@ class OrderOrchestrator(ts.Orchestrator):
 # ordering/adapters/gateways/restate_quoting.py (verified impl: examples/durable-execution/)
 class RestateQuoting(ts.Gateway):                       # built once; holds the handler function only
 
-    def __init__(self, quote: abc.Callable[[typing.Any, quoting.QuoteRequest], abc.Awaitable[quoting.QuoteResponse]]) -> None:
+    def __init__(self, quote: abc.Callable[[typing.Any, quoting.QuoteRequest], abc.Awaitable[quoting.QuoteResponse]]) -> None:  # tesser:debt TB022 — see the exception list
         self._quote = quote
 
     async def quote(self, job: ts.JobContext, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
@@ -976,7 +985,7 @@ class RestateJobContext(ts.JobContext):                 # the one per-invocation
     def __init__(self, ctx: restate.Context) -> None:
         self._ctx = ctx
 
-    async def call[I, O](self, step: abc.Callable[[typing.Any, I], abc.Awaitable[O]], request: I) -> O:
+    async def call[I, O](self, step: abc.Callable[[typing.Any, I], abc.Awaitable[O]], request: I) -> O:  # tesser:debt TB022 — the ts.JobContext signature, unruled
         return await self._ctx.service_call(step, request)
 
 
@@ -987,7 +996,7 @@ class RestateActionJobs(ts.Job):
         self.service = restate.Service("OrderingActions")
 
         @self.service.handler(...)
-        async def quote(ctx: restate.Context, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
+        async def quote(ctx: restate.Context, request: quoting.QuoteRequest) -> quoting.QuoteResponse:  # tesser:debt TB023 — engine registration, unruled
             return actions.quote(request)
 
         self.quote = quote
@@ -999,7 +1008,7 @@ class RestateWorkflowJobs(ts.Job):
         self.workflow = restate.Workflow("Ordering")
 
         @self.workflow.main(...)
-        async def run(ctx: restate.WorkflowContext, request: order_workflow.StartRequest) -> order_orchestrator.RunResponse:
+        async def run(ctx: restate.WorkflowContext, request: order_workflow.StartRequest) -> order_orchestrator.RunResponse:  # tesser:debt TB023 — engine registration, unruled
             orchestrator = order_orchestrator.OrderOrchestrator(
                 restate_context.RestateJobContext(ctx), quotes
             )
@@ -1340,7 +1349,7 @@ def routes_for(app: App) -> tuple[Route, ...]:
 
 
         def _dispatch(self, method: str) -> HttpResponse:   # the host's entire request path
-            def run() -> HttpResponse:
+            def run() -> HttpResponse:                   # tesser:debt TB023 — host server loop, unruled
                 found = match(routes, method, self.path)     # router: URL knowledge lives there
                 if found is None:
                     return HttpResponse.problem(404, "not_found", "unknown route")

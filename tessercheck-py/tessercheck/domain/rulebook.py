@@ -95,7 +95,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Module.kernel_import_violations": "kernel module",
     "Module.annotation_violations": "every module",
     "Module.type_name_violations": "every module",
-    "Module.lambda_violations": "every module",
+    "Module.function_placement_violations": "every module",
     "Module.comment_violations": "every module",
     "Module.double_violations": "every module",
     "Module.shadowing_violations": "every module",

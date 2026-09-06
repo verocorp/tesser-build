@@ -520,6 +520,22 @@ migration runs.
   nested function has no placement, so it is invisible to the totality checks
   by construction. **This was ruled on a wrong number** — the session reported
   "zero sites today"; the measured count is 108.
+- [ ] **`TB022` fires in value position, not just type position.** The match is
+  position-blind by design — that is what lets it reach a `typing.cast`
+  argument, a `Callable` base class and a `TypeVar` bound, which are the
+  positions the annotation reader never walks. The cost, measured during the
+  v0.0.97.0 ship review: an *identifier* named `Any`, `Callable` or `Awaitable`
+  also reports. `Any = "any"` as an enum member, and a `Scope.Any` attribute
+  read, both draw `TB022` in code with no type in sight. Zero sites in the
+  gated trees today, so nothing is red — but the first consumer with an `Any`
+  enum member gets a finding whose message ("a type names what the value is")
+  does not describe their code. *For narrowing:* the message is wrong for that
+  site, and a rule that misreports is worse than one that under-reports.
+  *Against:* every narrowing needs a notion of "type position", which is
+  exactly the annotation-reader scope the rule was written to escape; and the
+  name collision is itself worth a finding, since a domain identifier named
+  `Any` reads as the typing one. Deliberately NOT locked by a test either way,
+  so whichever ruling lands does not have to fight a fixture.
 - [ ] **`TB023`'s two populations may want two codes.** The `key=` shape (7
   sites) is a decision written where nothing reads it — closer to `TB082` than
   to `TB022` — while the deferred-call shape (11 sites) is `TB022`'s value
@@ -553,7 +569,7 @@ measured:
   question as **Foreign types at the analyzer's door** below, one level down:
   the closure exists because the foreign type has no domain object yet. Rule
   them together.
-- [ ] **A test's local fake behavior — ~35 across the example and tesser-py
+- [ ] **A test's local fake behavior — 42 across the example and tesser-py
   test modules.** `examples/llmport/srv/voice/test_agent.py` has 11: `def
   halt`, `def drive` — a coroutine the test hands to the thing under test so
   it can assert what happened. `TB030` says a test double is a hand-written
@@ -575,6 +591,75 @@ measured:
   their own function rules (`SRV_FUNCTIONS`); the question is whether the
   answer here is "a host is a class" or "a nested function is legal in `srv`
   and nowhere else."
+- [ ] **Four markers the wave can retire by fixing code, not excusing it**
+  (found by the v0.0.97.0 ship review's simplification pass, deferred here
+  deliberately so the exception list is ruled before any migration runs).
+  `KindTable.block_of`'s `bisect.bisect_left(self._entries, (wanted_module,
+  wanted_name), key=lambda item: (item[0], item[1]))` at `checks.py:1151` — the
+  key is a **no-op**, verified empirically across prefix, exact, before-first
+  and after-last probes: a 2-tuple probe already compares strictly less than
+  any 3-tuple sharing its prefix, so bisect lands on the same index without it.
+  Deleting the key retires the marker and removes dead code. The other three
+  are sort keys that `operator` replaces —
+  `checks.py:6546` `key=lambda item: (item.lineno, item.col_offset)` →
+  `operator.attrgetter("lineno", "col_offset")`, `checks.py:2712`
+  `key=lambda node: node.lineno` → `operator.attrgetter("lineno")`, and
+  `checks.py:10062` `key=lambda entry: entry[:3]` →
+  `operator.itemgetter(0, 1, 2)` — which costs one `stdlib operator` line in
+  `tessercheck-py/.tesser-root`, exactly as `bisect` is widened today.
+- [ ] **`TB022` is unsatisfiable for `ts.JobContext.call`, and that is the
+  toolkit's own API.** Red-team finding, v0.0.97.0 ship review. `ts.JobContext`
+  declares `async def call[I, O](self, step: abc.Callable[[typing.Any, I],
+  abc.Awaitable[O]], request: I) -> O`, and every implementer must reproduce
+  the signature verbatim to type-check — `examples/minimal`'s
+  `inline_context.py` and durable-execution's `restate_context.py` both do, both
+  debt-marked. This is not backlog a conformance wave can retire: it is a
+  permanent finding forced by a shipped Protocol, and `python.md` tells the
+  reader to fix it with a `ts.Port`, which is impossible here because the
+  parameter *is* the step function the engine hands back. Rule it the way
+  `AsyncContextManager`/`AsyncIterator` were ruled: either carve the
+  `ts.JobContext.call` signature out of `TB022`, or redesign `call` to take a
+  named step object. Until then the rule asks consumers to fix an unfixable
+  line.
+- [ ] **"Wrap it in a function-local class" is not an acceptable `TB023`
+  retirement.** The `ClassDef` arm resets `enclosed` unconditionally at every
+  depth, so `def outer(): class C: def m(self): ...` produces zero findings —
+  verified. That is the cheapest mechanical way to clear any of the 108 nested
+  `def` markers, and it converts a visible marker into an invisible evasion
+  while defeating the rule's own rationale (a method of a function-local class
+  has no more placement than the nested `def` it replaced). Rule the reset
+  before the wave runs, or the wave has 108 sites pointed at the dodge.
+- [ ] **Two generated artifacts disagree about the skill rendering, and both
+  gates pass.** `ROADMAP.md` renders the Skill-doc cell as `—` ("intentionally
+  n/a" per its own legend) for `Norm: annotations` and `Norm: function
+  placement`, while `rationale/coverage.md` names
+  `python.md#building-domain-code-in-python` for the same codes and this change
+  added ~50 lines of exactly that rendering. Cause: `roadmap/generate.py`
+  returns the n/a symbol whenever a registry row has no `"skill"` key, and the
+  totality guard only runs file→row, never row→rendering, so `—` is an
+  unchecked assertion rather than a derived fact. Give both rows a skill
+  binding, or make a missing key render as unknown.
+- [ ] **The resolver-route column in `coverage.md` was never checked, and
+  `TB021`'s row is still wrong.** `coverage_test.go`'s
+  `TestSkillMaterializationAnchors` validates only the `file.md#anchor` cells,
+  never the route text — so `TB021` shipped in v0.0.96.0 naming a `SKILL.md`
+  route that did not exist, and `TB022`/`TB023` copied it. The two routes were
+  added to `SKILL.md`'s Mode 2 table in this change (covering `TB021` as well),
+  but the column is still unguarded: extend the test to assert every non-`—`
+  route cell appears verbatim in `SKILL.md`.
+- [ ] **A cited `py_example` can be a counterexample.** `norm-function-placement`
+  and `norm-annotations` cite `examples/minimal` (and `examples/python-app`),
+  and all of those trees carry debt markers for exactly the codes the rows
+  claim — so `ROADMAP.md` renders "Py example ✅" for a norm whose exemplar only
+  passes by excusing the rule. `examples/ports` is genuinely marker-free. Fix
+  the citations, or add a guard failing when a row's `py_example` tree holds a
+  marker naming one of that row's `py_checks`.
+- [ ] **The report is still not line-ordered.** `TB023` now sorts its own
+  findings, but `Codebase.violations()` extends per check, per module, and
+  nothing sorts globally — so a file with a `TB020` and a `TB022` finding still
+  reports them out of line order, and every `TB090` lands after everything
+  else. One `sorted(kept, key=(path, line, code))` before the return would
+  subsume every per-check sort.
 - [ ] **The class-in-a-function hole, which the check leaves open on
   purpose.** A `ClassDef` resets the scope, so a class defined inside a test
   function has ordinary methods, not nested functions. That is right for the
