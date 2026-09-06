@@ -372,6 +372,19 @@
       "rationale": []
     },
     {
+      "key": "norm-naming",
+      "title": "Norm: type-derived names",
+      "py_example": [
+        "examples/minimal"
+      ],
+      "go_example": [],
+      "go_analyzers": [],
+      "py_checks": [
+        "TB085"
+      ],
+      "rationale": []
+    },
+    {
       "key": "norm-serialization",
       "title": "Norm: serialization",
       "skill": "serialization.md",

@@ -246,20 +246,20 @@ def go_analyzer_names(root: Path, cmd: list[str]) -> set[str]:
 
 def py_check_codes(root: Path) -> set[str]:
     """The shipped Python check codes, from the same extraction RULES.md is
-    generated with: the rulebook domain module's Rulebook value object over
-    the Violation call sites in tessercheck/domain/checks.py. The rulebook
-    lives inside the tessercheck package (it imports tesser and its own
-    context), so it is imported as a package module with tessercheck-py and
-    tesser-py on sys.path rather than loaded by file path."""
-    rules_path = root / "tessercheck-py" / "tessercheck" / "domain" / "rulebook.py"
-    checks_path = root / "tessercheck-py" / "tessercheck" / "domain" / "checks.py"
+    generated with: the Rulebook value object over the Violation call sites in
+    tessercheck/domain/checks.py, which is where the rulebook itself now lives
+    (a module in a role package imports no module beside it). It is imported as
+    a package module with tessercheck-py and tesser-py on sys.path rather than
+    loaded by file path."""
+    rules_path = root / "tessercheck-py" / "tessercheck" / "domain" / "checks.py"
+    checks_path = rules_path
     for entry in (root / "tessercheck-py", root / "tesser-py"):
         if str(entry) not in sys.path:
             sys.path.insert(0, str(entry))
     try:
-        rulebook = importlib.import_module("tessercheck.domain.rulebook")
-        spec = rulebook.RulebookSpec(checks_path.read_text(encoding="utf-8"))
-        rendered = str(rulebook.Rulebook(spec))
+        checks = importlib.import_module("tessercheck.domain.checks")
+        rulebook_spec = checks.RulebookSpec(checks_path.read_text(encoding="utf-8"))
+        rendered = str(checks.Rulebook(rulebook_spec))
         codes = {
             line.split("|")[1].strip()
             for line in rendered.splitlines()
@@ -685,7 +685,7 @@ def generate(root: Path, registry_path: Path, analyzers_cmd: list[str]) -> str:
     # lists a check yet" must not be the reason the guard sees nothing.
     need_go = any(_str_list(r, "go_analyzers") for r in rows) or (root / "cmd" / "analyzers-json").is_dir()
     need_py = any(_str_list(r, "py_checks") for r in rows) or (
-        root / "tessercheck-py" / "tessercheck" / "domain" / "rulebook.py"
+        root / "tessercheck-py" / "tessercheck" / "domain" / "checks.py"
     ).is_file()
     go_names = go_analyzer_names(root, analyzers_cmd) if need_go else None
     py_codes = py_check_codes(root) if need_py else None
