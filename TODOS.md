@@ -53,6 +53,22 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   whether dead code is the analyzer's business at all before building any of
   them — a false positive here tells someone to delete working code.
 
+- [ ] **The rulebook is a separate service, not a domain module.** It reads the
+  *source text* of `checks.py` and renders `RULES.md` — that is IO, which
+  domain never does, and it is a second concern besides checking a tree. The
+  shape it wants: a file-reader gateway reads `checks.py`'s source, an
+  application service hands the text to a `Rulebook` aggregate that derives the
+  rows, and the service writes `RULES.md` back through a writer gateway. Today
+  `tessercheck/domain/rulebook.py` sits in `domain`, imports its sibling
+  `tessercheck.domain.checks` for `Text`/`Code`/`Line`, and does IO by
+  proxy — the text arrives through `ports.RulebookSources`, but the module that
+  parses it is a domain module reading another module's source. The sibling
+  import carries `# tesser:debt TB060` at its site, which is the whole of the
+  ledger entry for this. Merging the two modules was tried on 2026-09-05 to
+  satisfy the sibling ban and **ruled the wrong fix** (Chris): it hides two
+  concerns in one file rather than separating them. Undone; the debt marker
+  stands until the service exists.
+
 ## Left open by the v0.0.89.0 adversarial pass (2026-08-29, PR #148)
 
 Seventeen bypass probes were run against the new clauses — twelve mine, five
