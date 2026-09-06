@@ -2,6 +2,23 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Left open by the import and naming rulings (2026-09-05, Chris accepted)
+
+- [ ] **The skill docs need a revamp after the import and naming rulings.** The
+  rules landed and `examples/minimal` conforms, but the prose renderings were
+  patched rather than rebuilt, and Chris accepted that for now. Three named
+  gaps: `skills/tesser-build/python.md` has no `## Kernels` section, so the
+  kernel rulings (a root kernel is imported only by `<context>/domain/kernel/`,
+  a domain module names exactly one `kernel`, no other role or shell module
+  imports a kernel) sit in the module-kind paragraph at
+  `#building-domain-code-in-python` instead of a section of their own, and
+  `rationale/coverage.md`'s kernels row points there; `docs/faq.md` is
+  untouched, so both new `coverage.md` rows (the import form and `TB085`) carry
+  `—` in the FAQ column; and the imports paragraph was rewritten in place
+  rather than restructured, so one paragraph now carries four codes (`TB060`,
+  `TB053`, `TB042`, and the kernel clauses) where the mechanics-doc template
+  would give each its own section.
+
 ## Left open by the v0.0.89.0 adversarial pass (2026-08-29, PR #148)
 
 Seventeen bypass probes were run against the new clauses — twelve mine, five
