@@ -120,13 +120,24 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   clauses: derive a `@ts.fake` local from the class or protocol it fakes, or
   drop the `Fake` prefix from the derived name. Both are rulings.
 
-- [ ] **A mapper is public API because its sibling test names it.** Under the
-  2026-09-06 ruling a test's reads justify an export, and a mapper's unit test
-  sits beside it, so `alpha/application/__init__.py` now exports twelve `MapTo*`
-  classes of which eleven are read by nothing but that test. `examples/minimal`
-  does not show this because it has no mapper tests. Either mapper unit tests go
-  (the mappers are exercised through the service either way), or the export list
-  stops being the same list for a test and for a caller.
+- [ ] **A class is public API because its sibling test names it.** Under the
+  2026-09-06 ruling a test's reads justify an export, and a sibling test can no
+  longer reach into the module beside it, so anything a test asserts on directly
+  has to be exported. Measured on `examples/python-app`, the largest tree: of
+  **157 export lines across 24 `__init__.py` files, 33 have no non-test reader
+  at all, and 23 of those are read only by the package's own sibling test.**
+  `campaign/application/` alone exports seven `MapTo*` classes that nothing
+  outside the application layer constructs or should;
+  `examples/asyncpg/alpha/application/__init__.py` exports twelve of which
+  eleven are read by nothing but its sibling test. `examples/minimal` never
+  showed this because it has no mapper tests.
+
+  So the rule converts a private collaborator into public API whenever it has a
+  direct unit test. Three ways out, all rulings: mapper (and equivalent) unit
+  tests go, and the collaborator is exercised through the object that owns it,
+  the way a hidden value object now is; or the export list stops being one list
+  and distinguishes a test reader from a caller; or a test regains some narrower
+  way to reach the module beside it than the package `__init__`.
 
 - [ ] **Annotating the local does not clear an unreadable call.** `python.md`
   said the fix for "names X from a call it cannot read" was to annotate the
