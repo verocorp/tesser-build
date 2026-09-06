@@ -574,6 +574,48 @@ response, its `add` transitions).
   `examples/asyncpg/{alpha,beta}/application/test_*_service.py` as
   `FakeCommitted*Store` / `FakeUnavailable*Store`. Not yet in `testing.md`, and
   no checker.
+- [ ] **A value object is exported so a round-trip test can name it, and
+  nothing else reads it.** Chris, 2026-09-06, reading #172. In
+  `examples/durable-execution`, `ordering/domain/__init__.py` exports seven
+  names. `Order`, `OrderSpec`, `Sku`, `Price`, and `PriceSpec` are read by
+  real code outside the domain (`order_actions.py`, `order_orchestrator.py`).
+  `OrderId` and `Quantity` are read outside the domain by nothing but two
+  round-trip tests, which assert a snapshot returns each field by value:
+  `assert back.sku == domain.Sku("gadget")`. Adding a required field in #172
+  made `Note` the third. Measured, on that branch: rewrite those assertions to
+  compare against the object that was sent (`back.sku == order.sku`) and the
+  analyzer reports `TB042` on `OrderId` and `Quantity` in the same run —
+  the export list is held up entirely by the assertions, and the analyzer
+  says so the moment they stop naming the types. `mypy --strict` clean,
+  70 passed.
+  Three ways out, each with a cost measured or named:
+  1. **Export, as today.** One line per value object, and `TB042` keeps the
+     list honest — an export nothing reads is a finding. Cost: the export
+     list of a domain package is partly a test artifact, and #172 counts that
+     line as one of the places a required field lands.
+  2. **Compare against the object that was sent.** No export, still equality
+     by value. Cost, measured: the local holding the sent message must be
+     named for its class (`TB085`), which is `order_orchestrator_request` —
+     the same name as the module-level `@ts.helper` that builds it, so
+     `order_orchestrator_request = order_orchestrator_request(...)` raises
+     `UnboundLocalError`. Needs a convention for naming a local that holds
+     what a same-named helper returns, or a carve-out.
+  3. **Compare through the canonical exit** (`str(back.note) == "fragile"`),
+     which `ordering/domain/test_order.py` already does one file over. No
+     export, legal (`stringequality` fires only when both sides are `.String()`
+     calls, so a literal compare is left alone by design), but it compares
+     representations, which convention 3 pushes against for value comparison.
+  Not an option: asserting the aggregate whole. `Entity.__eq__` compares
+  `identity` only and `Entity.__init_subclass__` raises `TypeError` if a
+  subclass declares `__eq__` or `__hash__`, so `back == order` passes with
+  every field but the id dropped, and an aggregate cannot be opted into field
+  equality even deliberately.
+  Bears on `CLAUDE.md` convention 2, whose 2026-09-06 narrowing reads "a value
+  object the package `__init__` does not re-export is reachable only through
+  the object that owns it and is tested there" — a round-trip test over an
+  aggregate is exactly the case where a sibling wants the type name, and the
+  narrowing does not say whether that counts as a module outside the role
+  reading it. Rule that, and `TB042` follows.
 
 ## Follow-ons from the outcome ruling (2026-08-26, v0.0.84.0)
 
