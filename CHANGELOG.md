@@ -5,6 +5,49 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.101.1] - 2026-09-06
+
+A fake mirrors its port. The analyzer has enforced that since the testing-norm
+wave — `TB072`'s second clause reports a `@ts.fake` that names no application
+port, store, protocol port, client, actions client, job context, or config
+repository — but neither `testing.md` nor `rationale/coverage.md` said so. A
+rule the checker enforces and the shipped skill omits is a rule a reader meets
+only as a failure, which is the drift `docs/skill-authoring.md` exists to
+prevent. Documentation only; no analyzer change and no new code.
+
+### Changed
+- **`skills/tesser-build/testing.md` states `TB072`'s second clause.** The
+  `TB071`/`TB072`/`TB073` section described the declaration half (a class is
+  `Test`-prefixed or declares `@ts.fake`) and stopped. It now also says what
+  the declaration obliges: the base is what makes a double checkable — it is
+  how the analyzer knows which methods the fake owes, and it is what breaks the
+  test when the port's signature changes. A fake naming nothing is a second,
+  unversioned copy of a contract nobody can see.
+- **The consequence is stated where the reaching goes wrong** (maintainer
+  ruling 2026-09-06): if you want to fake a single callable behavior and there
+  is no port to mirror, **the missing thing is the port, not a new kind of
+  fake**. A bare function handed to the thing under test is a dependency
+  declared anonymously — which is what `TB022` reports in type position and
+  `TB023` in value position — so the fix is the same in a test as in
+  production: declare the `ts.Port`, then fake it. The doc says explicitly not
+  to reach for a one-method class to satisfy the letter of the rule. This is
+  the shape behind 43 of the `TB023` markers v0.0.101.0 left in the test
+  modules, and it is what the conformance wave will lean on.
+- **`skills/tesser-build/SKILL.md`** gains a Mode 2 routing row for writing a
+  test double, or wanting to hand the thing under test a function that records
+  what happened (skill-version 72 → 73), and
+  **`rationale/coverage.md`**'s `TB071`+`TB072`+`TB073` row carries the clause
+  so the matrix matches `RULES.md`.
+
+### Verified, not assumed
+- **92 of 92 `@ts.fake` classes in the analyzed directories already name a
+  contract**; the clause costs zero debt markers. An earlier count of "2" was
+  wrong: `FakeHangingPool` and `FakeClosingPool` in
+  `examples/asyncpg/pgdatabase/test_database.py` do name nothing, but
+  `pgdatabase` is a `skip` directory in that tree's `.tesser-root`, so the
+  analyzer never reads them. They stay non-conformant and unreported, which is
+  what `skip` means.
+
 ## [0.0.101.0] - 2026-09-06
 
 A type names what the value is, and a function is declared at module level or
