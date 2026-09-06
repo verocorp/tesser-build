@@ -8,13 +8,13 @@ import app.config_repository as config_repository
 
 class AppLoader(ts.Loader):
 
-    def __init__(self, app_config_repository: config_repository.ConfigRepository) -> None:
+    def __init__(self, app_config_repository: config_repository.AppConfigRepository) -> None:
         self._app_config_repository = app_config_repository
 
-    def load(self) -> app.App:
-        return app.App(self._app_config_repository.get())
+    def load(self) -> app.MinimalApp:
+        return app.MinimalApp(self._app_config_repository.get())
 
 
 @ts.load
-def load() -> app.App:
+def load() -> app.MinimalApp:
     return AppLoader(config_repository.EnvConfigRepository()).load()

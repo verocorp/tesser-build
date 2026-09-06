@@ -17,6 +17,6 @@ class CheckResponse(ts.Response):
         self.held = held
 
 
-class Client(ts.Client, typing.Protocol):
+class BetaClient(ts.Client, typing.Protocol):
 
     def check(self, check_request: CheckRequest) -> CheckResponse: ...

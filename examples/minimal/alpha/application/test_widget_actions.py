@@ -3,7 +3,7 @@ from __future__ import annotations
 import tesser.testing as ts
 
 import alpha.application.ports as ports
-import alpha.application.widget_actions as actions
+import alpha.application.widget_actions as widget_actions
 import alpha.domain as domain
 
 
@@ -21,15 +21,15 @@ class FakeWidgetRepository(ports.WidgetRepository):
 class TestWidgetActions:
 
     def test_quote_answers_the_named_widget(self) -> None:
-        quoted = actions.WidgetActions(FakeWidgetRepository()).quote(
+        quoted = widget_actions.WidgetActions(FakeWidgetRepository()).quote(
             ports.QuoteRequest(name="a")
         )
         assert quoted.name == "a"
 
     def test_quote_calls_its_port_once(self) -> None:
         fake_widget_repository = FakeWidgetRepository()
-        actions.WidgetActions(fake_widget_repository).quote(ports.QuoteRequest(name="a"))
+        widget_actions.WidgetActions(fake_widget_repository).quote(ports.QuoteRequest(name="a"))
         assert fake_widget_repository.saved == ["a"]
 
     def test_a_quoted_widget_is_saved_standing_kept(self) -> None:
-        assert actions.MapToSaveRequest(domain.Name("a")).standing == "kept"
+        assert widget_actions.MapToSaveRequest(domain.Name("a")).standing == "kept"

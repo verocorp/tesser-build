@@ -13,7 +13,7 @@ class Spec(ts.Spec):
         self.beta = beta
 
 
-class Config(ts.Config):
+class AppConfig(ts.Config):
 
     def __init__(self, spec: Spec) -> None:
         self.alpha = spec.alpha

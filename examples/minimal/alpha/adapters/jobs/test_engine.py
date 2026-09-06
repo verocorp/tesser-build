@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import tesser.testing as ts
 
 import alpha.adapters.jobs.engine as engine
@@ -8,7 +10,7 @@ import alpha.application.ports as ports
 
 
 @ts.fake
-class FakeActionsClient(client.Client):
+class FakeActionsClient(client.AlphaApplicationClient):
 
     def quote(self, quote_request: ports.QuoteRequest) -> ports.QuoteResponse:
         return ports.QuoteResponse(name=quote_request.name)
@@ -19,6 +21,15 @@ class FakeQuoting(ports.Quoting):
 
     def quote(self, job_context: ts.JobContext, quote_request: ports.QuoteRequest) -> ports.QuoteResponse:
         return ports.QuoteResponse(name=quote_request.name)
+
+
+class TestInlineJobContext:
+
+    def test_call_runs_the_step_in_place(self) -> None:
+        async def echo(ctx: object, request: str) -> str:
+            return request
+
+        assert asyncio.run(engine.InlineJobContext().call(echo, "a")) == "a"
 
 
 class TestEngineJob:

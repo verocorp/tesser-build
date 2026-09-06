@@ -11,11 +11,11 @@ import beta.component as beta_component
 
 
 @ts.fake
-class FakeConfigRepository(config_repository.ConfigRepository):
+class FakeConfigRepository(config_repository.AppConfigRepository):
 
-    def get(self) -> config.Config:
+    def get(self) -> config.AppConfig:
         spec = config.Spec(alpha_component.Config(alpha_component.Spec("memory")), beta_component.Config(beta_component.Spec("a")))
-        return config.Config(spec)
+        return config.AppConfig(spec)
 
 
 class TestAppLoader:

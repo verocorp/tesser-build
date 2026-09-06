@@ -12,7 +12,7 @@ _ADD_USAGE: typing.Final[str] = "usage: add <name> <part>"
 
 class Handler(ts.Handler):
 
-    def __init__(self, alpha_client: client.Client) -> None:
+    def __init__(self, alpha_client: client.AlphaClient) -> None:
         self._alpha_client = alpha_client
 
     def add(self, cli_request: cli.CliRequest) -> cli.CliResponse:

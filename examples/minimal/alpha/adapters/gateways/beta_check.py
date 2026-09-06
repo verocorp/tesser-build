@@ -16,7 +16,7 @@ class MapToCheckResponse(ts.Mapper, ports.CheckResponse):
 
 class BetaCheckGateway(ts.Gateway):
 
-    def __init__(self, beta_client: client.Client) -> None:
+    def __init__(self, beta_client: client.BetaClient) -> None:
         self._beta_client = beta_client
 
     def check(self, check_request: ports.CheckRequest) -> ports.CheckResponse:

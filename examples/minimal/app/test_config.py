@@ -9,5 +9,5 @@ class TestConfig:
 
     def test_a_config_carries_each_component_config(self) -> None:
         spec = config.Spec(alpha_component.Config(alpha_component.Spec("memory")), beta_component.Config(beta_component.Spec("k")))
-        app_config = config.Config(spec)
+        app_config = config.AppConfig(spec)
         assert app_config.beta is spec.beta

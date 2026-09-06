@@ -266,6 +266,8 @@ DO_NOT_USE_PREFIX: typing.Final[str] = "do_not_use_"
 
 KERNEL_PACKAGE: typing.Final[str] = "kernel"
 
+CONTEXT_KERNEL_HOME: typing.Final[tuple[str, str]] = ("domain", KERNEL_PACKAGE)
+
 TESSER: typing.Final[str] = "tesser"
 
 TESSER_NAMESPACES: typing.Final[frozenset[str]] = frozenset(
@@ -411,6 +413,12 @@ SAME_CONTEXT_IMPORTS: typing.Final[dict[str, tuple[str, ...]]] = {
 TESTS_ROLE: typing.Final[str] = "tests"
 
 EVAL_PREFIX: typing.Final[str] = "eval_"
+
+TEST_PREFIX: typing.Final[str] = "test_"
+
+CAMEL_TAIL: typing.Final[re.Pattern[str]] = re.compile(r"([a-z0-9])([A-Z])")
+
+CAMEL_RUN: typing.Final[re.Pattern[str]] = re.compile(r"([A-Z]+)([A-Z][a-z])")
 
 EVAL_HOME: typing.Final[str] = "gateways"
 
@@ -720,6 +728,19 @@ class Text(ts.ValueObject):
         if not value:
             raise ValueError("text must be non-empty")
         object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return serialization.canonical_str(self._value)
+
+
+class DerivedName(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        object.__setattr__(
+            self, "_value", CAMEL_TAIL.sub(r"\1_\2", CAMEL_RUN.sub(r"\1_\2", value)).lower()
+        )
 
     def __str__(self) -> str:
         return serialization.canonical_str(self._value)
@@ -1663,9 +1684,15 @@ class Scope(ts.ValueObject):
         if found is None:
             return None
         named = Symbol(SymbolSpec(found[0], found[1]))
-        for reexport in self._reexports:
-            if reexport.exports() == named:
-                return reexport.defines()
+        for _ in self._reexports:
+            hop: Symbol | None = None
+            for reexport in self._reexports:
+                if reexport.exports() == named:
+                    hop = reexport.defines()
+                    break
+            if hop is None:
+                break
+            named = hop
         return named
 
     def symbols(self, annotation: Annotation) -> Symbols:
@@ -1685,10 +1712,15 @@ class Scope(ts.ValueObject):
         canonical: list[Symbol] = []
         for module_name, name in found:
             named = Symbol(SymbolSpec(module_name, name))
-            for reexport in self._reexports:
-                if reexport.exports() == named:
-                    named = reexport.defines()
+            for _ in self._reexports:
+                hop: Symbol | None = None
+                for reexport in self._reexports:
+                    if reexport.exports() == named:
+                        hop = reexport.defines()
+                        break
+                if hop is None:
                     break
+                named = hop
             canonical.append(named)
         return Symbols(SymbolsSpec(tuple(
             SymbolSpec(str(item.module()), str(item.name())) for item in canonical
@@ -7329,6 +7361,19 @@ class Module(ts.Entity):
     def kernel_init_violations(self) -> tuple[Violation, ...]:
         module_name = self._name
         found: list[Violation] = []
+        for _, original, exported, lineno in self._members:
+            named = exported or original
+            if str(DerivedName(named)) == module_name.split(".")[-1]:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB042",
+                        f"{module_name} re-exports {named}; a package never exports a "
+                        "class of its own name, because the name derived from the class "
+                        "rebinds the package's alias",
+                    ))
+                )
         for stmt in self._body:
             if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
                 found.append(
@@ -7434,12 +7479,34 @@ class Module(ts.Entity):
         module_name = self._name
         facts = Registry(registry)
         modules = frozenset(facts.module_names())
+        packages = frozenset(facts.package_names())
+        export = str(facts.export()) if facts.export() is not None else None
+        kernel_tops = (
+            frozenset({KERNEL_PACKAGE})
+            | (frozenset({export}) if export is not None else frozenset())
+        ) & frozenset(facts.tops())
+        pieces = module_name.split(".")
+        context_kernel = (
+            len(pieces) == 3
+            and pieces[0] in frozenset(facts.contexts())
+            and tuple(pieces[1:]) == CONTEXT_KERNEL_HOME
+        )
         named = frozenset(
             (str(symbol.module()), str(symbol.name())) for symbol in facts.package_attrs()
         )
         found: list[Violation] = []
         for stmt in self._body:
-            if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
+            if isinstance(stmt, ast.Import):
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        stmt.lineno,
+                        "TB042",
+                        f"{module_name} __init__ binds a module; "
+                        "a role __init__ is the export list, and a module import exports nothing",
+                    ))
+                )
+            elif not isinstance(stmt, ast.ImportFrom):
                 found.append(
                     Violation(ViolationSpec(
                         self._path,
@@ -7449,20 +7516,50 @@ class Module(ts.Entity):
                         "a role __init__ only re-exports from its own role",
                     ))
                 )
+        sourced: set[str] = set()
         for edge in self._edges:
             target = str(edge._target)
             lineno = int(edge._lineno)
-            if target.rsplit(".", 1)[0] != module_name or target not in modules:
+            root_kernel = (
+                context_kernel and target.split(".")[0] in kernel_tops and target in packages
+            )
+            if root_kernel:
+                sourced.add(target)
+            elif target.rsplit(".", 1)[0] != module_name or target not in modules:
                 found.append(
                     Violation(ViolationSpec(
                         self._path,
                         lineno,
                         "TB042",
                         f"{module_name} imports {target}; "
-                        "a role __init__ only re-exports a module of its own role",
+                        "a role __init__ only re-exports a module of its own role, and a "
+                        "context kernel __init__ also re-exports from a root kernel",
                     ))
                 )
+            else:
+                sourced.add(target)
             found.extend(edge.form_violations())
+        for name in facts.modules_under(Text(module_name)):
+            base = name.rsplit(".", 1)[1] if "." in name else name
+            if (
+                name.rsplit(".", 1)[0] != module_name
+                or name in packages
+                or base.startswith(TEST_PREFIX)
+                or base.startswith(EVAL_PREFIX)
+                or base == "conftest"
+                or name in sourced
+            ):
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    1,
+                    "TB042",
+                    f"{module_name} re-exports nothing from {name}; a role __init__ "
+                    "re-exports from every module of its role, because a module the "
+                    "init never names is one nothing outside the role can reach",
+                ))
+            )
         for _, original, exported, lineno in self._members:
             if not exported:
                 found.append(
@@ -7487,6 +7584,17 @@ class Module(ts.Entity):
                     ))
                 )
             exported = exported or original
+            if str(DerivedName(exported)) == pieces[-1]:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB042",
+                        f"{module_name} re-exports {exported}; a package never exports a "
+                        "class of its own name, because the name derived from the class "
+                        "rebinds the package's alias",
+                    ))
+                )
             if (module_name, exported) not in named:
                 found.append(
                     Violation(ViolationSpec(
@@ -7548,15 +7656,35 @@ class Module(ts.Entity):
                             lineno,
                             "TB060",
                             f"{module_name} imports {target}; a module inside a role "
-                            "package imports its siblings as modules, never its own "
-                            "package, because the package imports the module back",
+                            "package never imports its own package, because the package "
+                            "imports the module back",
                         ))
                     )
                 continue
             holder = target.rsplit(".", 1)[0] if "." in target else ""
             if holder not in packages:
                 continue
-            if module_name == holder or module_name.startswith(holder + "."):
+            if module_name == holder:
+                continue
+            if module_name.startswith(holder + "."):
+                base = module_name.rsplit(".", 1)[1] if "." in module_name else module_name
+                paired = (
+                    module_name.rsplit(".", 1)[0] == holder
+                    and base == TEST_PREFIX + target.rsplit(".", 1)[1]
+                )
+                if paired:
+                    continue
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB060",
+                        f"{module_name} imports {target}, a module beside it; a module "
+                        "in a role package imports the packages around it and never a "
+                        "module of its own package, and only a sibling test imports the "
+                        "module it is named for",
+                    ))
+                )
                 continue
             found.append(
                 Violation(ViolationSpec(
@@ -7566,6 +7694,64 @@ class Module(ts.Entity):
                     f"{module_name} imports {target}, a module of {holder}; "
                     "a module outside a role package imports the package, because "
                     "the role __init__ is the list of what the outside may name",
+                ))
+            )
+        return tuple(found)
+
+    def shell_class_name_violations(self) -> tuple[Violation, ...]:
+        module_name = self._name
+        base = module_name.rsplit(".", 1)[1] if "." in module_name else module_name
+        return tuple(
+            Violation(ViolationSpec(
+                self._path,
+                stmt.lineno,
+                "TB042",
+                f"{module_name}.{stmt.name} takes the name of its module; a shell module "
+                "is imported as a module, so a class in it never takes the module's own "
+                "name, because the name derived from the class rebinds the alias",
+            ))
+            for stmt in self._class_defs
+            if str(DerivedName(stmt.name)) == base
+        )
+
+    def alias_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        tops = frozenset(Registry(registry).tops())
+        inside: list[tuple[str, str, int]] = []
+        for local, package in self._package_aliases.items():
+            head = package.split(".")[0]
+            if head == TESSER or head not in tops:
+                continue
+            for edge in self._edges:
+                if str(edge._target) == package and str(edge._form) != "member":
+                    inside.append((local, package, int(edge._lineno)))
+                    break
+        claimed: dict[str, int] = {}
+        for _, package, _ in inside:
+            claimed[package.split(".")[-1]] = claimed.get(package.split(".")[-1], 0) + 1
+        prefixed: dict[str, int] = {}
+        for _, package, _ in inside:
+            pieces = package.split(".")
+            if claimed[pieces[-1]] > 1:
+                prefixed[f"{pieces[0]}_{pieces[-1]}"] = prefixed.get(f"{pieces[0]}_{pieces[-1]}", 0) + 1
+        found: list[Violation] = []
+        for local, package, lineno in inside:
+            pieces = package.split(".")
+            wanted = pieces[-1]
+            if claimed[wanted] > 1:
+                wanted = f"{pieces[0]}_{pieces[-1]}"
+                if prefixed[wanted] > 1:
+                    wanted = "_".join(pieces)
+            if local == wanted:
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    lineno,
+                    "TB053",
+                    f"{module_name} imports {package} as {local}, not {wanted}; a package "
+                    "is imported under its last segment, and where two imported packages "
+                    "share that segment each takes its context as a prefix",
                 ))
             )
         return tuple(found)
@@ -7793,6 +7979,11 @@ class Module(ts.Entity):
         kinds = facts.kinds()
         contexts = frozenset(facts.contexts())
         tops = frozenset(facts.tops())
+        export = str(facts.export()) if facts.export() is not None else None
+        kernel_tops = (
+            frozenset({KERNEL_PACKAGE})
+            | (frozenset({export}) if export is not None else frozenset())
+        ) & tops
         package = module_name.split(".")[0]
         found: list[Violation] = []
         for edge in self._edges:
@@ -7826,6 +8017,17 @@ class Module(ts.Entity):
                 found.extend(denied)
                 if not denied:
                     found.extend(edge.form_violations())
+            elif pieces[0] in kernel_tops:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB063",
+                        f"{module_name} imports {target}; neither an app nor a host "
+                        "imports a kernel, because a kernel is domain and the shell "
+                        "composes components, clients, adapters, and handlers",
+                    ))
+                )
             elif package == "app" and pieces[0] == "srv":
                 found.append(
                     Violation(ViolationSpec(
@@ -8059,16 +8261,18 @@ class Module(ts.Entity):
             str(kinds.block_of(Symbol(SymbolSpec(module_name, cls.name))) or "")
             for cls in self._class_defs
         } & ADAPTER_BLOCKS
-        if len(present) > 1:
+        expected = ADAPTER_KIND_PACKAGES.get(kind_package or "", frozenset())
+        if len(present) > 1 and not present <= expected:
             found.append(
                 Violation(ViolationSpec(
                     self._path,
                     1,
                     "TB052",
-                    f"{module_name} mixes adapter kinds; an adapters module holds one adapter kind",
+                    f"{module_name} mixes adapter kinds; an adapters module holds the "
+                    "kinds of its own kind package, and only a jobs module holds a job "
+                    "beside the job context it builds",
                 ))
             )
-        expected = ADAPTER_KIND_PACKAGES.get(kind_package or "", frozenset())
         for cls in self._class_defs:
             named = kinds.block_of(Symbol(SymbolSpec(module_name, cls.name)))
             block = str(named) if named is not None else None
@@ -8146,7 +8350,22 @@ class Module(ts.Entity):
                     inner == entry or inner.startswith(f"{entry}.")
                     for entry in JOB_ONLY_IMPORTS
                 )
-                if pieces[0] == context and job_only and kind_package != "jobs":
+                own_kernel = ".".join((context,) + CONTEXT_KERNEL_HOME)
+                if pieces[0] == context and role != CONTEXT_KERNEL_HOME[0] and (
+                    target == own_kernel or target.startswith(own_kernel + ".")
+                ):
+                    denied.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            lineno,
+                            "TB062",
+                            f"{module_name} imports {target}; a context's domain kernel is "
+                            "imported only by that context's domain modules, because "
+                            "outside the domain a kernel type is named through the domain "
+                            "__init__",
+                        ))
+                    )
+                elif pieces[0] == context and job_only and kind_package != "jobs":
                     denied.append(
                         Violation(ViolationSpec(
                             self._path,
@@ -8209,7 +8428,16 @@ class Module(ts.Entity):
                 if not denied:
                     found.extend(edge.form_violations())
             elif pieces[0] in kernel_tops and facts.modules_under(Text(target)):
-                continue
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB062",
+                        f"{module_name} imports {target}; a kernel is domain that two or "
+                        "more domain modules share, so only a context's domain kernel "
+                        "package imports a root kernel",
+                    ))
+                )
             else:
                 if any(target == declared or target.startswith(declared + ".") for declared in declared_imports):
                     continue
@@ -9744,9 +9972,15 @@ class Module(ts.Entity):
                 found = (self._name, node.id)
         if found is None:
             return None
-        for package, exported, defining, original in self._reexports:
-            if (package, exported) == found:
-                return (defining, original)
+        for _ in self._reexports:
+            hopped: tuple[str, str] | None = None
+            for package, exported, defining, original in self._reexports:
+                if (package, exported) == found:
+                    hopped = (defining, original)
+                    break
+            if hopped is None:
+                break
+            found = hopped
         return found
 
 
@@ -9990,12 +10224,22 @@ class Codebase(ts.AggregateRoot):
         for path, name, source, is_package in parsed:
             if not is_package:
                 continue
-            if str(Placement(PlacementSpec(name, True, contexts, export))) not in ROLE_PACKAGE_PLACES:
+            place = str(Placement(PlacementSpec(name, True, contexts, export)))
+            if place not in ROLE_PACKAGE_PLACES and place != "kernel-init":
                 continue
+            if export == TESSER and name.split(".")[0] == TESSER:
+                continue
+            pieces = name.split(".")
+            context_kernel = (
+                len(pieces) == 3
+                and pieces[0] in contexts
+                and tuple(pieces[1:]) == CONTEXT_KERNEL_HOME
+            )
             for stmt in ast.parse(source).body:
                 if not isinstance(stmt, ast.ImportFrom) or stmt.level or stmt.module is None:
                     continue
-                if not stmt.module.startswith(name + "."):
+                from_root_kernel = context_kernel and stmt.module.split(".")[0] in kernel_tops
+                if not (stmt.module.startswith(name + ".") or from_root_kernel):
                     continue
                 for alias in stmt.names:
                     reexports.append((name, alias.asname or alias.name, stmt.module, alias.name))
@@ -10282,6 +10526,7 @@ class Codebase(ts.AggregateRoot):
             found.extend(module.sibling_reference_violations())
             found.extend(module.dynamic_import_violations())
             found.extend(module.role_package_import_violations(registry))
+            found.extend(module.alias_violations(registry))
             place = str(module.place())
             parts = module.name().split(".")
             tier = module.test_tier()
@@ -10310,6 +10555,7 @@ class Codebase(ts.AggregateRoot):
                 found.extend(SHELL_INIT.violations(module))
             elif place == "shell-srv":
                 found.extend(module.stray_import_violations())
+                found.extend(module.shell_class_name_violations())
                 found.extend(SRV_TESSER_IMPORTS.violations(module))
                 found.extend(module.srv_violations(registry))
                 found.extend(SRV_FUNCTIONS.violations(module))
@@ -10317,6 +10563,7 @@ class Codebase(ts.AggregateRoot):
                 found.extend(module.app_import_violations(registry))
             elif place == "shell-app":
                 found.extend(module.stray_import_violations())
+                found.extend(module.shell_class_name_violations())
                 found.extend(APP_TESSER_IMPORTS.violations(module))
                 found.extend(module.app_violations(registry))
                 found.extend(APP_STATEMENTS.violations(module))
@@ -10329,6 +10576,7 @@ class Codebase(ts.AggregateRoot):
                 found.extend(PROTOCOL_INIT.violations(module))
             elif place == "protocol":
                 found.extend(module.stray_import_violations())
+                found.extend(module.shell_class_name_violations())
                 found.extend(PROTOCOL_TESSER_IMPORTS.violations(module))
                 found.extend(module.protocol_violations(registry))
                 found.extend(PROTOCOL_FUNCTIONS.violations(module))

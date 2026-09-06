@@ -9,9 +9,9 @@ import beta.component as beta_component
 import app.config as config
 
 
-class App(ts.App):
+class MinimalApp(ts.App):
 
-    def __init__(self, app_config: config.Config) -> None:
+    def __init__(self, app_config: config.AppConfig) -> None:
         beta = beta_component.Beta(app_config.beta)
         try:
             alpha = alpha_component.Alpha(app_config.alpha, gateways.BetaCheckGateway(beta.client))
