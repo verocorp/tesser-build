@@ -50,12 +50,23 @@ carried are gone — the app-level `errors`/`serialization` root modules they
 excused moved into the tesser runtime.)
 
 **A package is the unit you import** (TB060, TB053, TB042, maintainer rulings
-2026-09-05). Outside a role package you import the package, never a module of
-it: `import alpha.domain as domain`, then `domain.Widget`. The role `__init__`
-is that package's export list, and it is what decides what the outside may
-name — a class the init does not re-export cannot be reached from outside the
-role at all, which is how `alpha/domain/` keeps `Clearance` and `Standing` off
-the application layer while handing it `Widget`.
+2026-09-05, widened 2026-09-06). Outside an exporting package you import the
+package, never a module of it: `import alpha.domain as domain`, then
+`domain.Widget`. The `__init__` is that package's export list, and it is what
+decides what the outside may name — a class the init does not re-export cannot
+be reached from outside at all, which is how `alpha/domain/` keeps `Clearance`
+and `Standing` off the application layer while handing it `Widget`.
+
+An **exporting package** is every role package (`domain`, `application`,
+`application/ports`, `application/client`, `application/orchestrators`,
+`client`, `adapters/<kind>`, `component`) **and** the app shell: `app/`,
+`srv/`, `srv/<host>/`, and `protocol/`. They all carry an export list and are
+all imported whole. The two packages that are **not** import units are a
+kernel (`kernel/`, an exported kernel, and a context's `domain/kernel/`
+re-export aside — a kernel module imports its sibling by design, which is what
+"a kernel imports only its kernel" has always meant) and the bare container
+packages whose `__init__` must stay empty: a context (`alpha/`), an adapters
+package (`alpha/adapters/`), a tests package.
 
 The rules that follow from it, each with its code:
 
@@ -70,14 +81,25 @@ The rules that follow from it, each with its code:
   because the naming rule below derives local names from types — an alias that
   is not the last segment makes both unpredictable.
 
-- **Inside a role package a module imports the packages around it, never a
-  module beside it** (TB060). `alpha/domain/widget.py` cannot import
+- **Inside an exporting package a module imports the packages around it, never
+  a module beside it** (TB060). `alpha/domain/widget.py` cannot import
   `alpha/domain/clearance.py`, and it cannot import `alpha.domain` either (the
-  package imports the module back). Two modules of one role that need each
+  package imports the module back). Two modules of one package that need each
   other are one module; merge them, and merge their sibling tests with them.
-  The one exemption is the sibling test file: `test_widget.py` imports
-  `alpha.domain.widget` — the module TB074 already pairs it with — and nothing
-  else of the package.
+  In `examples/minimal` that made `app/` one module: `app.py`, `config.py`,
+  `config_repository.py` and `loader.py` were transitively connected, so they
+  are now `app/app.py` with one `app/test_app.py` beside it.
+
+  **A sibling test is not exempt** (2026-09-06). `test_widget.py` imports
+  `alpha.domain`, not `alpha.domain.widget`, and asserts through what the init
+  exports. A class the init hides has no test of its own: `Clearance`,
+  `Standing` and `Verdict` are exercised through `Widget.clear(...)`, which is
+  the only way the application can reach them either. A test *may* import its
+  own package — the init never imports a test back, so there is no cycle — and
+  a test's reads count as an outside reader, so an export a test alone needs is
+  still a legitimate export. If a sibling test wants a name the init does not
+  export, that is the signal: either the init should export it, or the test
+  belongs on the object that owns it.
 
 - **The init re-exports, and only re-exports** (TB042). `from
   alpha.domain.widget import Widget as Widget` — the repeated name is what
@@ -105,7 +127,10 @@ so the reach is drawn where domain is:
 - A root kernel (`kernel/`, and a tree's one exported kernel) is imported by
   exactly one kind of module: a context's own kernel package. Its `__init__`
   re-exports its classes the way any export list does (`from kernel.identity
-  import Identity as Identity`).
+  import Identity as Identity`), and a kernel module still imports its own
+  siblings as modules — a kernel is the one package that is not an import
+  unit, because "a kernel imports only its kernel" has always meant exactly
+  that.
 - A context that uses a kernel type gets `<context>/domain/kernel/`, a package
   nested under its domain and named `kernel`, whose `__init__` re-exports what
   the context takes from the root kernels plus any value object its own domain
@@ -133,21 +158,39 @@ reads without a suffix. Three shapes:
 - A parameter annotated with a class takes that class's name in snake_case:
   `add_request: client.AddRequest`, `widget_repository: ports.WidgetRepository`,
   `job_context: ts.JobContext`.
-- A local assigned from a constructor call takes the class's name:
-  `widget = domain.Widget(...)`, `config = component.Config(spec)`.
+- A local assigned from a **call** takes the name of the class the call
+  declares it returns — a constructor (`widget = domain.Widget(spec)`), a
+  method (`add_response = self._alpha_client.add(...)`,
+  `taken = widget.take(spec)`), or a module-level function
+  (`minimal_app = app.load()`). `await` unwraps first, and a chain headed by a
+  constructor resolves through that constructor's class
+  (`cli_response = handlers.Handler(fake).add(...)`).
 - An `__init__` keeps its parameter's name in the field it sets:
   `self._widget_repository = widget_repository`, never `self._repo`.
 
-Exempt, each for a reason worth knowing: `self` and `cls`; a `ts.Spec` or DTO
-`__init__` parameter, which is a **field** name — renaming
-`WidgetSpec.__init__(part=)` renames the field and breaks every keyword call
-site; two values of one class in one function, where the rule cannot tell them
-apart and `first`/`second` is the honest answer; a derived name already bound in
-the module, because Python has one namespace per module and the module alias
-took the name first; and anything whose annotation is not a bare class
-reference. A local assigned from a **method** call is out of scope in v1 — the
-analyzer has no return-type table for a call on a field, so checking it would
-fire only where the callee happened to resolve.
+**How a call is read.** The analyzer resolves the receiver through its
+annotation — a field (`self._beta_check`), a parameter, a local built by a
+constructor, or a package alias for a module function — then reads the
+declared return of the method it names. An attribute chain resolves link by
+link (`minimal_app.alpha.client.add(...)` reads `MinimalApp.alpha` to `Alpha`,
+`Alpha.client` to `AlphaClient`, and `AlphaClient.add` to `AddResponse`). A
+return that is a primitive, a container, a union, or a type from outside the
+tree leaves the name free. **A call whose receiver is one of those four and
+whose method declares no return the analyzer can read is a finding**, because
+a name the analyzer cannot check is a name it is not checking — annotate the
+method, or annotate the local.
+
+Exempt, each for a reason worth knowing: `self` and `cls`; **a constructor's
+one spec, which is named `spec`** (TB080 names it, so TB085 does not derive
+it — `Widget.__init__(self, spec: WidgetSpec)`, never `widget_spec`; a
+*method*'s spec parameter is derived normally, and so is a service method's one
+request, `add_request`); a `ts.Spec` or DTO `__init__` parameter, which is a
+**field** name — renaming `WidgetSpec.__init__(part=)` renames the field and
+breaks every keyword call site; two values of one class in one function, where
+the rule cannot tell them apart and `first`/`second` is the honest answer; a
+receiver with no annotation at all — a loop variable, a comprehension target, an
+unpacked element — which is none of the four receivers the rule reads; and
+anything whose annotation is not a bare class reference.
 
 **An annotation is written unquoted** (TB021, maintainer ruling 2026-08-30). A
 string in type position is a finding, wherever an annotation is read — a
