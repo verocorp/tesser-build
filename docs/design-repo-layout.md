@@ -152,8 +152,8 @@ The app is tested at four tiers, each reaching only what its placement
 allows: the rules have a test per failure case beside them
 (`layout/repo/domain/test_rules.py`, built specs, no filesystem); the service
 is tested in isolation through a fake of its reader port and the
-DTO-to-domain translation alone (`repo/application/test_service.py`,
-`test_mapping.py`); the real reader runs against real filesystems asserting
+DTO-to-domain translation alone (`repo/application/test_layout_service.py`);
+the real reader runs against real filesystems asserting
 on port DTOs (`repo/adapters/repositories/test_file_repository.py` — states,
 symlinks, skip dirs); and `layout/tests/` keeps a small wired suite proving
 everything is hooked up end to end. A bug that made the check always pass

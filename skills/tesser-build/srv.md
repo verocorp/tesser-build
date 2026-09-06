@@ -86,8 +86,8 @@ Yes → a host.
    app-level decision: the host declares `(method, pattern, endpoint)` for
    every exposed context in one place, so the whole URL surface is readable
    at once and a context can be mounted, prefixed, or versioned without
-   editing it. Pattern matching and parameter extraction are the router's
-   (`srv/http/router.py`) — the one component allowed to know that
+   editing it. Pattern matching and parameter extraction are the `Router`'s
+   (`protocol/http.py`) — the one component allowed to know that
    `/campaigns/{campaign_id}` has a parameter in it.
 6. **One long-running thing per process — with one carve-out.** Two delivery
    mechanisms are two processes; they share the composition root and the

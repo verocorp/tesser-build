@@ -90,13 +90,15 @@ The rules that follow from it, each with its code:
   is not the last segment makes both unpredictable.
 
 - **Inside an exporting package a module imports the packages around it, never
-  a module beside it** (TB060). `alpha/domain/widget.py` cannot import
-  `alpha/domain/clearance.py`, and it cannot import `alpha.domain` either (the
+  a module beside it** (TB060). A module of `alpha/domain/` cannot import
+  another module of `alpha/domain/`, and it cannot import `alpha.domain`
+  either (the
   package imports the module back). Two modules of one package that need each
   other are one module; merge them, and merge their sibling tests with them.
   In `examples/minimal` that made `app/` one module: `app.py`, `config.py`,
   `config_repository.py` and `loader.py` were transitively connected, so they
-  are now `app/app.py` with one `app/test_app.py` beside it.
+  are now `app/app.py` with one `app/test_app.py` beside it, and
+  `domain/clearance.py` merged into `domain/widget.py` the same way.
 
   **A sibling test is not exempt** (2026-09-06). `test_widget.py` imports
   `alpha.domain`, not `alpha.domain.widget`, and asserts through what the init
@@ -121,8 +123,8 @@ The rules that follow from it, each with its code:
   `client`, which is the package's own alias. The context client is
   `AlphaClient`, the application client `AlphaApplicationClient`. The same
   hazard in the shell, where modules are still imported as modules, is the same
-  finding: `app/app.py` declares `MinimalApp`, not `App`, and
-  `app/config.py` declares `AppConfig`, not `Config`.
+  finding: `app/app.py` declares `MinimalApp`, not `App`, and the config it
+  holds is `AppConfig`, not `Config`.
 
 The one `from` form with no module spelling, `from __future__ import
 annotations`, stays exempt. Everything else that is not a package export list
@@ -715,44 +717,52 @@ class CampaignService(ts.ApplicationService):
 
     def __init__(
         self,
-        repo: campaign_repository.CampaignRepository,
-        identity_gateway: campaign_identity.CampaignIdentity,
-        queries: campaign_queries.CampaignQueries,
+        campaign_repository: ports.CampaignRepository,
+        campaign_identity: ports.CampaignIdentity,
+        campaign_queries: ports.CampaignQueries,
     ) -> None:
-        self._repo = repo
-        self._identity_gateway = identity_gateway
-        self._queries = queries
+        self._campaign_repository = campaign_repository
+        self._campaign_identity = campaign_identity
+        self._campaign_queries = campaign_queries
 
-    def create_campaign(self, req: client.CreateCampaignRequest) -> client.CampaignView:
-        issued_campaign_identity = self._identity_gateway.issue(
-            campaign_identity.IssueCampaignIdentityRequest()
+    def create_campaign(
+        self, create_campaign_request: client.CreateCampaignRequest
+    ) -> client.CampaignView:
+        issue_campaign_identity_response = self._campaign_identity.issue(
+            ports.IssueCampaignIdentityRequest()
         )
-        c = campaign.Campaign(MapToCampaignSpec(
-            create_campaign_request=req,
-            issued_campaign_identity=issued_campaign_identity,
-            links=short_links.ShortLinksSpec(links=()),
+        campaign = domain.Campaign(MapToCampaignSpec(
+            create_campaign_request=create_campaign_request,
+            issue_campaign_identity_response=issue_campaign_identity_response,
+            short_links_spec=domain.ShortLinksSpec(links=()),
         ))
-        save_request = MapToSaveCampaignRequest(campaign_aggregate=c)
-        self._repo.save(save_request)
-        find_campaign_view_request = campaign_queries.FindCampaignViewRequest(
-            campaign_id=save_request.id,
+        map_to_save_campaign_request = MapToSaveCampaignRequest(campaign=campaign)
+        self._campaign_repository.save(map_to_save_campaign_request)
+        find_campaign_view_request = ports.FindCampaignViewRequest(
+            campaign_id=map_to_save_campaign_request.id,
         )
-        found_campaign_view = self._queries.find_view(find_campaign_view_request)
+        find_campaign_view_response = self._campaign_queries.find_view(
+            find_campaign_view_request
+        )
         return MapToCampaignView(
             find_campaign_view_request=find_campaign_view_request,
-            found_campaign_view=found_campaign_view,
+            find_campaign_view_response=find_campaign_view_response,
         )
 
-    def get_campaign(self, req: client.GetCampaignRequest) -> client.CampaignView:
-        campaign_id = values.CampaignID(req.campaign_id)
+    def get_campaign(
+        self, get_campaign_request: client.GetCampaignRequest
+    ) -> client.CampaignView:
+        campaign_id = domain.CampaignID(get_campaign_request.campaign_id)
         campaign_id_text = str(campaign_id)
-        find_campaign_view_request = campaign_queries.FindCampaignViewRequest(
+        find_campaign_view_request = ports.FindCampaignViewRequest(
             campaign_id=campaign_id_text,
         )
-        found_campaign_view = self._queries.find_view(find_campaign_view_request)
+        find_campaign_view_response = self._campaign_queries.find_view(
+            find_campaign_view_request
+        )
         return MapToCampaignView(
             find_campaign_view_request=find_campaign_view_request,
-            found_campaign_view=found_campaign_view,
+            find_campaign_view_response=find_campaign_view_response,
         )
 ```
 
@@ -919,10 +929,11 @@ one), matches exhaustively where the port answer has outcomes, and calls
 no other method, and it is named `MapTo` plus its target. A nested target
 is a nested mapper when it needs its own translation
 (`budget=MapToMoneySpec(request)`) or a plain spec constructor when it does
-not (`window=values.DateWindowSpec(start=…, end=…)`); a collection is
-`tuple(MapToLinkRecord(link) for link in c.links)`. The service then reads
-`campaign.Campaign(MapToCampaignSpec(request, found))` and
-`self._repo.save(MapToSaveCampaignRequest(c))`: the mapping is hidden in one
+not (`window=domain.DateWindowSpec(start=…, end=…)`); a collection is
+`tuple(MapToLinkRecord(link) for link in campaign.links)`. The service then reads
+`domain.Campaign(MapToCampaignSpec(find_campaign_request, find_campaign_response))`
+and
+`self._campaign_repository.save(MapToSaveCampaignRequest(campaign))`: the mapping is hidden in one
 place, and the service reads as the use case (maintainer ruling 2026-08-25,
 superseding the 2026-08-17 accessor mapper, whose every field the service
 had to re-name at the construction site). A spec built by a mapper is still
@@ -941,27 +952,28 @@ The application side is unchanged — a mapper there takes whole objects,
 never a field already pulled off one (TB080).
 
 ```python
-# campaign/application/views.py (verified impl: examples/errorspy/)
-class MapToCampaignSpec(ts.Mapper, campaign.CampaignSpec):
+# campaign/application/service.py (verified impl: examples/errorspy/)
+class MapToCampaignSpec(ts.Mapper, domain.CampaignSpec):
 
     def __init__(
         self,
-        find_campaign_request: campaign_repository.FindCampaignRequest,
-        found_campaign: campaign_repository.FindCampaignResponse,
+        find_campaign_request: ports.FindCampaignRequest,
+        find_campaign_response: ports.FindCampaignResponse,
     ) -> None:
-        match found_campaign.outcome:
-            case campaign_repository.CampaignLookup.FOUND:
-                record = found_campaign.campaigns[0]
-            case campaign_repository.CampaignLookup.MISSING:
+        match find_campaign_response.outcome:
+            case ports.CampaignLookup.FOUND:
+                record = find_campaign_response.campaigns[0]
+            case ports.CampaignLookup.MISSING:
                 raise errors.not_found(
-                    "campaign_missing", f"no campaign {find_campaign_request.campaign_id!r}"
+                    "campaign_missing",
+                    f"no campaign {find_campaign_request.campaign_id!r}",
                 )
             case _ as unreachable:
                 typing.assert_never(unreachable)
         super().__init__(
             id=record.id,
-            window=values.DateWindowSpec(start=record.window.start, end=record.window.end),
-            links=tuple(MapToShortLinkSpec(link_record=link) for link in record.links),
+            window=domain.DateWindowSpec(start=record.window.start, end=record.window.end),
+            links=tuple(MapToShortLinkSpec(link) for link in record.links),
         )
 ```
 
@@ -1072,7 +1084,7 @@ class RestateQuoting(ts.Gateway):                       # built once; holds the 
         return await job.call(self._quote, request)
 
 
-# ordering/adapters/jobs/restate_context.py (verified impl: examples/durable-execution/)
+# ordering/adapters/jobs/restate.py (verified impl: examples/durable-execution/)
 class RestateJobContext(ts.JobContext):                 # the one per-invocation object
 
     def __init__(self, ctx: restate.Context) -> None:
@@ -1168,42 +1180,51 @@ in — as a request DTO — reconstructed aggregate out, no business logic
 # campaign/adapters/repositories/repo_storage.py (verified impl: examples/errorspy/)
 import tesser.adapters as ts
 
-import campaign.application.ports.campaign_repository as campaign_repository
+import campaign.application.ports as ports
+import tesser.errors as errors
+import storage
 
 
 class StorageCampaignRepository(ts.Repository):
 
-    def __init__(self, storage: FakeStorage) -> None:
-        self._storage = storage
+    def __init__(self, backend: storage.FakeStorage) -> None:
+        self._backend = backend
 
     def save(
-        self, request: campaign_repository.SaveCampaignRequest
-    ) -> campaign_repository.SaveCampaignResponse:
-        self._storage.put(request.id, _to_record(request))
-        return campaign_repository.SaveCampaignResponse()
+        self, save_campaign_request: ports.SaveCampaignRequest
+    ) -> ports.SaveCampaignResponse:
+        record: storage.Record = {...}
+        self._backend.put(save_campaign_request.id, record)
+        return ports.SaveCampaignResponse()
 
     def find(
-        self, request: campaign_repository.FindCampaignRequest
-    ) -> campaign_repository.FindCampaignResponse:
+        self, find_campaign_request: ports.FindCampaignRequest
+    ) -> ports.FindCampaignResponse:
         try:
-            row = self._storage.load(request.campaign_id)
-        except StorageMiss:
-            return campaign_repository.FindCampaignResponse(
-                outcome=campaign_repository.CampaignLookup.MISSING, campaigns=()
+            row = self._backend.load(find_campaign_request.campaign_id)
+        except storage.StorageMiss:
+            return ports.FindCampaignResponse(
+                outcome=ports.CampaignLookup.MISSING, campaigns=()
             )
-        return campaign_repository.FindCampaignResponse(
-            outcome=campaign_repository.CampaignLookup.FOUND,
-            campaigns=(_from_record(request.campaign_id, row),),
+        except storage.StorageUnavailable as e:
+            raise errors.InfraError(
+                f"storage unavailable loading campaign {find_campaign_request.campaign_id!r}"
+            ) from e
+        campaign_record = ports.CampaignRecord(id=find_campaign_request.campaign_id, ...)
+        return ports.FindCampaignResponse(
+            outcome=ports.CampaignLookup.FOUND,
+            campaigns=(campaign_record,),
         )
 ```
 
-- **The import block is the rule made visible** (TB060): the only module this
-  adapter imports from its own context is its ports module. It cannot reach
-  the service, the mapping module, or the domain — so the gateway is decoupled
+- **The import block is the rule made visible** (TB060): the only package this
+  adapter imports from its own context is `application/ports`, and it imports
+  the package, never a module inside it. It cannot reach the service or the
+  domain — so the gateway is decoupled
   from the implementation it serves by the import matrix, not by discipline.
 - **The adapter speaks records** (TB081): port DTOs and primitives cross the
   port; the *application layer* reconstructs the aggregate through its spec
-  (`campaign.Campaign(MapToCampaignSpec(request, found))`), so invariants re-run — never build a
+  (`domain.Campaign(MapToCampaignSpec(find_campaign_request, find_campaign_response))`), so invariants re-run — never build a
   domain object by assigning attributes.
 - **No domain math.** A finder may filter/order (persistence selection);
   summing or rule-checking is a leak.
@@ -1496,7 +1517,8 @@ if __name__ == "__main__":
   multipart, or content negotiation.
 - **The route table is app-level.** URLs are the app's decision, not a
   context's: one table names every exposed endpoint. Pattern matching lives
-  in `srv/http/router.py` — the only component that knows
+  in the `Router` the host builds from that table (`protocol/http.py`) — the
+  only component that knows
   `/campaigns/{campaign_id}` has a parameter in it. A host reaches a context
   only through its handlers (TB063), and a srv module imports `tesser.srv`
   exactly once, as `ts` (TB050).
