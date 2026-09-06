@@ -192,14 +192,14 @@ belongs beside the message it serves, and the messages belong to the relay.
 module, `adapters/runtimes/` and `adapters/runners/` as kind packages, a job
 context protocol outside `adapters/`, and a component publishing something
 besides `client` and `jobs` all draw findings. Every one carries a
-`# tesser:debt TB0xx` marker at its line — 46 of them — and that marker list
+`# tesser:debt TB0xx` marker at its line — 47 of them, plus five `TB023` markers on the nested handler functions the SDK registers, the same debt `main` already carries — and that marker list
 is the registration this tree asks of the analyzer. Nothing is hidden: the
 tree is at zero findings because every finding is named, not because any is
 absent.
 
 The remaining rule cost of putting an encoding in the application is `json`:
 the application stdlib allowlist is `{__future__, typing}`, and both relays
-modules import it (two of the 46).
+modules import it (two of the 47).
 
 ## Messages are declared once, beside the protocol that speaks them
 
