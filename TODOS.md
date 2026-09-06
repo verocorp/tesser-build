@@ -2,6 +2,59 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Left open by the relay wave (2026-09-06, v0.0.102.0)
+
+- [ ] **Register the relay shape in the analyzer.** `examples/durable-execution`
+  is at zero findings because 47 sites carry `tesser:debt` markers, and the
+  marker list is the registration list: `TB052` ×12 (`ts.Relay` and `ts.Serde`
+  as declared bases in `application/relays/`, a port DTO whose home is
+  `relays/` not `ports/`, a job-context protocol declared in `application/`,
+  `runtimes/` and `runners/` holding kinds the package table does not name),
+  `TB081` ×7 (a serde with no type parameter; a service depending on a
+  `ts.Relay`; a component publishing `restate_order_runtime`; an application
+  client speaking a relays module's DTOs), `TB085` ×7 (a local built from a
+  snapshot or a fake of a relay, kinds `DerivedName` cannot read), `TB060` ×5
+  and `TB041` ×3 (`adapters/runtimes/` and `adapters/runners/` have no reach
+  row), `TB070` ×4, `TB072` ×3 (a fake of a relay; a fake of the SDK's
+  `WorkflowContext`), `TB062` ×2 (`json` in a relays module), `TB067` ×2,
+  `TB080` ×1 (a domain object on a `ts.Request` field), `TB082` ×1
+  (`order = order_orchestrator_request.order`). Rulings the list asks for: a
+  relay DTO field may be a domain object; a relays module may name an
+  encoding; a serde names one shape, not one type parameter; `runtimes/` and
+  `runners/` as adapter kinds with reach `application/relays`,
+  `application/client`, `application/orchestrators`; a job-context protocol's
+  home is `application/relays/`; what a component publishes besides `client`.
+  `docs/design-app-service-types.md` and `skills/tesser-build/python.md` still
+  present `RestateJobContext` / `RestateActionJobs` / `RestateWorkflowJobs` /
+  `RecordSerde` / `jobs` + `definitions()` as the verified implementation in
+  this tree; those files no longer exist. Chris ruled 2026-09-06 to leave the
+  skill until the rulings land rather than encode `runtimes/` and `runners/`
+  as convention first.
+- [ ] **Whether a component publishes an engine, and whether the host may know
+  it by name.** Deferred by Chris 2026-09-06. `Ordering.restate_order_runtime`
+  replaced `jobs` + `definitions()`; `srv/http/main.py` passes the runtime's
+  `Service` and `Workflow` to `restate.app()` directly and so imports
+  `restate`. The alternative is the runtime answering with the mountable ASGI
+  app, so the host imports nothing from Restate. Unsettled: with two contexts
+  each holding a Restate runtime, one endpoint with merged definitions or two.
+- [ ] **The `202` arm of `POST /orders` has no test.** `srv/http/test_main.py`
+  drives the host as a subprocess and every request lands on a failure arm
+  (400/422/503). A reachable fake ingress inside the spawned process would
+  cover it.
+- [ ] **Left standing from the v0.0.102.0 adversarial pass, all pre-existing.**
+  The caller-chosen `order_id` is both the durable key and the unauthenticated
+  result address on the ingress; the request body is read with no size cap and
+  `json.loads` runs once per field; snapshots carry no version, so a field
+  added or a rule tightened fails every in-flight journal terminally;
+  `RestateOrderOrchestratorRunner` opens a new `httpx.AsyncClient` per send
+  (stated in the README as the cost of nothing async outliving a request);
+  `MemoryProductCatalogRepository.close()` clears a dict a live handler may
+  still hold; `runtimes/restate_order_runtime.py` and
+  `runners/restate_order_actions_runner.py` import each other (the runtime
+  builds the runner per invocation, the runner names the runtime as a
+  parameter type); `.importlinter` now carries three pairwise
+  `ignore_imports` holes in the adapters→application contract.
+
 ## Left open by the import and naming rulings (2026-09-05, Chris accepted)
 
 - [ ] **The skill docs need a revamp after the import and naming rulings.** The
@@ -851,8 +904,8 @@ measured:
   `abc.Callable`), versus how many are genuinely per-test arrangement with no
   production dependency behind them. Count that before the wave runs.
 - [ ] **An engine's registration callback — `examples/durable-execution`
-  `ordering/adapters/jobs/restate.py` (`def quote`, `def run` inside
-  `__init__`).** The SDK wants a function registered against a handler name at
+  `ordering/adapters/runtimes/restate_order_runtime.py` (`def prepare_quote`,
+  `def run` inside `__init__`; `adapters/jobs/restate.py` until v0.0.102.0).** The SDK wants a function registered against a handler name at
   construction time. The closure captures `self`. This is the shape with the
   least obvious relocation, because the engine's API is the constraint, not
   the code's taste — and it is exactly where the durable-execution example's
@@ -890,8 +943,12 @@ measured:
   abc.Awaitable[O]], request: I) -> O`, and every implementer must reproduce
   the signature verbatim to type-check — `examples/minimal`'s
   `alpha/adapters/jobs/engine.py` and durable-execution's
-  `ordering/adapters/jobs/restate.py` both do (both were `*_context.py` until
-  the v0.0.98.0 naming wave folded them in), both debt-marked. This is not backlog a conformance wave can retire: it is a
+  `ordering/adapters/jobs/restate.py` both did (both were `*_context.py` until
+  the v0.0.98.0 naming wave folded them in), both debt-marked. Since
+  v0.0.102.0 `ts.JobContext` declares no `call` at all — a job context names
+  its actions as specific methods on the subclass — so durable-execution's
+  marker is gone; `examples/minimal`'s `InlineJobContext` still declares its
+  own generic `call` and keeps the marker until it is given specific methods. This is not backlog a conformance wave can retire: it is a
   permanent finding forced by a shipped Protocol, and `python.md` tells the
   reader to fix it with a `ts.Port`, which is impossible here because the
   parameter *is* the step function the engine hands back. Rule it the way

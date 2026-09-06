@@ -5,6 +5,97 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.102.0] - 2026-09-06
+
+The `Order` aggregate now crosses Restate whole. Adding a required field to
+the aggregate in `examples/durable-execution` used to touch a port DTO, two
+mappers that took the aggregate apart and put it back together, and a
+generic serde over `vars()`; measured end to end, the field list lived in
+three independently versioned contracts. That shape is gone. A **relay** is
+a port whose far side is this context's own application code, reached
+through an engine instead of a synchronous call; both ends are us and the
+engine pins an invocation to one deployment, so a relay message may carry a
+domain object and it comes back whole, rebuilt through its own validating
+constructor. Clients and ports stay primitives-only. The analyzer has no rows
+for this shape yet, so every finding it draws is named at its line with a
+`tesser:debt` marker — 47 of them, which is the registration list the
+example asks of the rulebook — and the tree is at zero findings because
+nothing is hidden, not because nothing is owed.
+
+### Added
+- **`tesser.application.Relay`**, a marker protocol beside `Port`, re-exported
+  into `tesser.adapters` and `tesser.testing` the way `JobContext` already is.
+  `examples/durable-execution/ordering/application/relays/` holds the two
+  relay protocols and their messages: `OrderOrchestratorRunner.start_order_orchestrator`
+  (an asynchronous send, held by `OrderService`, built once) and
+  `OrderActionsRunner.run_prepare_quote` (a synchronous journaled call, held
+  by `OrderOrchestrator`, built per invocation). Every wire form is a snapshot
+  declared beside its message — `OrderSnapshot` writes the aggregate's
+  canonical exits (`str`/`int`) and rebuilds it through `Order(OrderSpec(...))`,
+  so a journal that breaks an invariant is refused on replay, never hydrated.
+- **Three Restate adapters split by direction and lifetime.**
+  `RestateOrderRuntime` (`adapters/runtimes/`) registers
+  `OrderActions/prepare_quote` and `OrderOrchestrator/run` and is what the host
+  mounts; `RestateOrderOrchestratorRunner` (`adapters/runners/`) sends through
+  the ingress; `RestateOrderActionsRunner` (`adapters/runners/`) calls through
+  this invocation's `WorkflowContext`. No field name of any message appears
+  under either package. The actions runner gets the first unit test of the
+  journaled quote leg: a fake workflow context records the handler the runner
+  hands to `service_call`, and a `TerminalError` comes back as a `DomainError`.
+
+### Changed
+- **`Serde` is an application kind.** `tesser/application/serde.py` is its
+  home; `tesser.adapters` re-exports it outward, and the import-linter
+  contract gains the two ignore lines that re-export needs. A snapshot belongs
+  beside the message it serves, and the messages belong to the relay.
+- **`JobContext` is a bare marker protocol.** The generic
+  `call[I, O](step, request)` is gone; a job context names what this
+  context's actions are, as specific methods on the subclass.
+- **The component publishes its runtime and the host mounts it directly.**
+  `Ordering.restate_order_runtime` replaces the `jobs` tuple and
+  `definitions()`: `restate.app()` takes exactly the `Service` and `Workflow`
+  objects the runtime holds as attributes, so the host passes those two and
+  nothing collects or flattens anything. `_RESTATE_DEPLOYMENT_PATH` names what
+  `/restate` is: the path component of the deployment URI the Restate server
+  registers.
+- **Every class, attribute, parameter and local in the example is named as
+  its type**, a module for the class it holds, a package for the kind. The
+  port is `ProductCatalogRepository.get_product_price`, the client is
+  `OrderingClient.place_order` over `PlaceOrderRequest`/`PlaceOrderResponse`,
+  the repository is `MemoryProductCatalogRepository`.
+
+### Fixed
+- **The workflow key is percent-encoded.** The Restate SDK splices the key
+  into the ingress path unencoded and the key is the order id from the public
+  body, so an `order_id` of `../admin` reached the ingress as a different
+  route; `RestateOrderOrchestratorRunner` now quotes it, and the start
+  response still carries the raw id.
+- **A snapshot checks its shape before the constructor sees it.**
+  `OrderSnapshot.deserialize` refuses a snapshot whose `order_id` or `sku` is
+  not a string or whose `quantity` is not an `int` as a validation error; the
+  value objects guard invariants, not types, so without it a list where a
+  `sku` should be built an `Order` that raised a `TypeError` later, inside the
+  orchestrator, where Restate retries.
+- **An empty body is refused at the shim, never handed to a handler as
+  `None`.** The first attribute read raised an `AttributeError`, which is not
+  terminal, and Restate retries a non-terminal failure without bound.
+- **A status crosses each Restate leg as its kind.** Outbound, the ingress
+  answering `409` to `workflow_send` is `DomainError(CONFLICT,
+  "order_already_started")` and a `409` at `POST /orders`, where it was an
+  `InfraError` `503` clients would retry; inbound, the actions runner maps
+  `422`/`404`/`409` back to the kind that produced it instead of calling
+  everything `NOT_FOUND`, and re-raises any other terminal error as it is.
+- **A too-long integer in a request body is a bad request.** `protocol/http.py`
+  caught only `JSONDecodeError`; `json.loads` raises a plain `ValueError` for
+  an integer past 4300 digits, which escaped `POST /orders` as an unhandled
+  500. It catches `ValueError`, which subsumes both.
+
+### Removed
+- `StartRequest`, `MapToStartRequest`, the orchestrator's second `MapToOrderSpec`,
+  `RecordSerde`, `RestateJobContext`, `RestateActionJobs`, `RestateWorkflowJobs`,
+  `RestateQuoting`, `RestateOrderWorkflow`, the `Quoting` and `OrderWorkflow`
+  ports, and `adapters/gateways/` and `adapters/jobs/` in the example.
+
 ## [0.0.101.1] - 2026-09-06
 
 A fake mirrors its port. The analyzer has enforced that since the testing-norm
