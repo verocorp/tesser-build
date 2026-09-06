@@ -2,22 +2,36 @@ from __future__ import annotations
 
 import tesser.component as ts
 
-import campaign.client.client as campaign_client
-import linkpolicy.client.client as linkpolicy_client
-import reports.adapters.gateways.campaign_links as campaign_links
-import reports.adapters.gateways.policy_verdicts as policy_verdicts
-import reports.application.service as reports_service
-import reports.client.client as client
-import reports.component.config as config
+import campaign.client as campaign_client
+import linkpolicy.client as linkpolicy_client
+import reports.adapters.gateways as gateways
+import reports.application as application
+import reports.client as reports_client
+
+
+class Spec(ts.Spec):
+
+    def __init__(self) -> None:
+        return None
+
+
+class Config(ts.Config):
+
+    def __init__(self, spec: Spec) -> None:
+        return None
 
 
 class Reports(ts.Component):
 
     def __init__(
-        self, cfg: config.Config, campaigns: campaign_client.Client, policies: linkpolicy_client.Client
+        self,
+        config: Config,
+        campaign_client: campaign_client.CampaignClient,
+        link_policy_client: linkpolicy_client.LinkPolicyClient,
     ) -> None:
-        self.client: client.Client = reports_service.ReportsService(
-            campaign_links.CampaignLinkGateway(campaigns), policy_verdicts.PolicyVerdictGateway(policies)
+        self.client: reports_client.ReportsClient = application.ReportsService(
+            gateways.CampaignLinkGateway(campaign_client),
+            gateways.PolicyVerdictGateway(link_policy_client),
         )
 
     def close(self) -> None:

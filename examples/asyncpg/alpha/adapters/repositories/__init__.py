@@ -1,0 +1,1 @@
+from alpha.adapters.repositories.postgres import PostgresWidgetStore as PostgresWidgetStore

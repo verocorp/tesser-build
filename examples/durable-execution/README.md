@@ -9,9 +9,9 @@ The chain, top to bottom, with where each link lives:
 | it starts the workflow through a port | `ordering/application/ports/order_workflow.py` | `OrderWorkflow.start(StartRequest) -> StartResponse` |
 | the Restate SDK sends the workflow | `ordering/adapters/gateways/restate_workflow.py` | `RestateOrderWorkflow.start` → `client.workflow_send(self._run, key=order_id, arg=request)` — the handler function itself, not a name, and the port's own `StartRequest` as the body |
 | Restate's server calls the workflow job | `ordering/adapters/jobs/restate.py` | `RestateWorkflowJobs`'s `@workflow.main()` `run`, mounted at `/restate` by the host |
-| the orchestrator is built **inside the invocation** | `ordering/adapters/jobs/restate.py` | `run` wraps this invocation's `ctx` as `RestateJobContext(ctx)` (`jobs/restate_context.py`) and constructs `OrderOrchestrator(job, quotes)` over it |
-| the orchestrator runs the action through a port | `ordering/application/ports/quoting.py` | `OrderOrchestrator.run` (`application/orchestrators/`) builds the `Order`, then `Quoting.quote(job, QuoteRequest) -> QuoteResponse` — the job context threaded as the leading argument |
-| the Restate SDK calls the action durably | `ordering/adapters/gateways/restate_quoting.py` | `RestateQuoting.quote(job, request)` → `job.call(self._quote, request)` → `ctx.service_call`; the gateway was built once by the component and holds only the handler function |
+| the orchestrator is built **inside the invocation** | `ordering/adapters/jobs/restate.py` | `run` wraps this invocation's `ctx` as `RestateJobContext(ctx)` and constructs `OrderOrchestrator(job_context, quoting)` over it |
+| the orchestrator runs the action through a port | `ordering/application/ports/quoting.py` | `OrderOrchestrator.run` (`application/orchestrators/`) builds the `Order`, then `Quoting.quote(job_context, QuoteRequest) -> QuoteResponse` — the job context threaded as the leading argument |
+| the Restate SDK calls the action durably | `ordering/adapters/gateways/restate_quoting.py` | `RestateQuoting.quote(job_context, quote_request)` → `job_context.call(self._quote, quote_request)` → `ctx.service_call`; the gateway was built once by the component and holds only the handler function |
 | Restate's server calls the action job | `ordering/adapters/jobs/restate.py` | `RestateActionJobs`: `@service.handler()` `quote`, relaying to the application client |
 | the action, a class of actions with one repository lookup | `ordering/application/order_actions.py` | `OrderActions.quote` → `CatalogRepository.price` → `adapters/repositories/memory.py`, behind `application/client/order_actions.py` |
 | the price comes back up the same chain | | `QuoteResponse.cents` → `Order.total(PriceSpec)` → `RunResponse.total_cents` ends the workflow |
@@ -33,7 +33,7 @@ engine.
 This tree is the worked example for `docs/design-app-service-types.md`:
 
 - `OrderService(ts.ApplicationService)` — the public use case, on
-  `client.Client`, built once by the component. It does the once-only work
+  `client.OrderingClient`, built once by the component. It does the once-only work
   (validates at the door) and starts the workflow through the
   `OrderWorkflow` port.
 - `OrderOrchestrator(ts.Orchestrator)` in `application/orchestrators/` —
@@ -53,9 +53,8 @@ And the adapter kind that ties them to the engine: the two jobs in
 `adapters/jobs/restate.py` — `RestateActionJobs(ts.Job)` declaring the
 `OrderingActions` service over the application client, and
 `RestateWorkflowJobs(ts.Job)` declaring the `Ordering` workflow over the
-`Quoting` port — plus `RestateJobContext(ts.JobContext)` in
-`jobs/restate_context.py`, the one per-invocation object the workflow job
-builds. A handler calls the context client; a job calls an application
+`Quoting` port — plus `RestateJobContext(ts.JobContext)` in the same module,
+the one per-invocation object the workflow job builds. A handler calls the context client; a job calls an application
 client or constructs an orchestrator. Every gateway is built once by the
 component; none holds an invocation's context.
 
@@ -83,11 +82,11 @@ Restate handler is handed a `WorkflowContext`, and only calls made through it
 are journaled. `run` wraps *this* ctx as `RestateJobContext(ctx)` — the
 Restate implementation of `ts.JobContext`, whose one method today is
 `call(step, request)` → `ctx.service_call(step, request)` — and constructs
-its own `OrderOrchestrator(job, quotes)` over it, per invocation. The
+its own `OrderOrchestrator(job_context, quoting)` over it, per invocation. The
 orchestrator threads the job context as the leading argument of every
 action-port call, and the gateway on the other side of that call
 (`RestateQuoting`, built once by the component, holding only the `quote`
-handler function) does `job.call(self._quote, request)`. So the ctx travels
+handler function) does `job_context.call(self._quote, quote_request)`. So the ctx travels
 by parameter, the way Restate's own examples thread it and the way Go
 threads `ctx` — never stored by a gateway, never read from an ambient
 variable. (The SDK does keep the invocation in a `ContextVar`,
@@ -108,7 +107,7 @@ builds `RestateActionJobs(actions)`, then `RestateQuoting(action_jobs.quote)`,
 then `RestateWorkflowJobs(quoting)` — Restate's own Service / Workflow split,
 in dependency order. The component publishes both as `jobs` — the only thing
 a component publishes besides `client`; the host does
-`api.mount("/restate", restate.app([d for job in app.ordering.jobs for d in job.definitions()]))`
+`api.mount("/restate", restate.app([d for job in durable_execution_app.ordering.jobs for d in job.definitions()]))`
 and knows nothing else about Restate.
 
 `srv/http/test_main.py` boots the real host, reads `/restate/discover`, and
@@ -195,8 +194,8 @@ itself, and opens its own client per send:
 `restate.client.Client(http).workflow_send(...)`, which is all
 `restate.create_client` does under its context manager. **Nothing async
 outlives a request**, so nothing has to be closed on the loop that opened it —
-`Ordering.close` and `App.close` are plain sync methods, and every caller is
-`app = loader.load()` … `finally: app.close()`, with no `asyncio.run` in
+`Ordering.close` and `DurableExecutionApp.close` are plain sync methods, and every caller is
+`durable_execution_app = app.load()` … `finally: durable_execution_app.close()`, with no `asyncio.run` in
 sight. The cost is honest and stated: no connection pooling across sends.
 The sibling test builds the same real client over
 a real socket listening on `127.0.0.1:0`, hands the gateway a real handler
@@ -218,7 +217,7 @@ each test, and the real journaled call is covered by the live run below.
 ## Async everywhere the SDK is
 
 The SDK is async on both sides, so the request path is `async`:
-`OrderWorkflow`, `OrderService`, `Client.place`, the HTTP handler,
+`OrderWorkflow`, `OrderService`, `OrderingClient.place`, the HTTP handler,
 `OrderActions` (the port), `OrderOrchestrator`, and both Restate jobs. The
 class of actions and its repository are sync — plain application code that
 runs inside the action job. There is no `asyncio.run` on the request path at

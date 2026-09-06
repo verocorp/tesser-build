@@ -2,6 +2,260 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Left open by the import and naming rulings (2026-09-05, Chris accepted)
+
+- [ ] **The skill docs need a revamp after the import and naming rulings.** The
+  rules landed and `examples/minimal` conforms, but the prose renderings were
+  patched rather than rebuilt, and Chris accepted that for now. Three named
+  gaps: `skills/tesser-build/python.md` has no `## Kernels` section, so the
+  kernel rulings (a root kernel is imported only by `<context>/domain/kernel/`,
+  a domain module names exactly one `kernel`, no other role or shell module
+  imports a kernel) sit in the module-kind paragraph at
+  `#building-domain-code-in-python` instead of a section of their own, and
+  `rationale/coverage.md`'s kernels row points there; `docs/faq.md` is
+  untouched, so both new `coverage.md` rows (the import form and `TB085`) carry
+  `—` in the FAQ column; and the imports paragraph was rewritten in place
+  rather than restructured, so one paragraph now carries four codes (`TB060`,
+  `TB053`, `TB042`, and the kernel clauses) where the mechanics-doc template
+  would give each its own section.
+
+- [ ] **Investigate reporting dead code in general.** The immediate case is a
+  module in a role package that nothing can reach: under the sibling ban
+  (`TB060`) no module of its own package may import it, its `__init__` does not
+  re-export from it, and no sibling test names it. It is unreachable and draws
+  no finding today. The totality clause built for it on 2026-09-05 — "a role
+  `__init__` re-exports from every module of its role" — was pulled because it
+  deadlocks against the standing clause "a role `__init__` re-exports only what
+  a module outside its role reads": for a module nothing outside reads, both
+  fire at once and no legal state exists short of deleting the file, which is
+  not what either message says. Moving the finding onto the module removes the
+  double report but leaves the author walked through two steps ("export it" →
+  "nobody reads it") to reach "delete it", and the analyzer has no clause of
+  that shape.
+
+  The narrow case is worth widening into one question — **what does the
+  analyzer owe the reader about a thing nothing uses?** Five shapes, and where
+  each stands today:
+
+  | shape | reported? | by what |
+  |---|---|---|
+  | an unreachable module in a role package | **no** | — (this item) |
+  | an exported name nothing outside the role reads | **yes** | `TB042`, "a role `__init__` re-exports only what a module outside its role reads" — role inits only; a kernel `__init__` and the tesser distribution `__init__` carry no totality clause |
+  | a class or function nothing names | **no** | — (the walk builds no whole-tree reference table; `TB074` only pairs a module with a sibling test, and `TB071`/`TB072` only say what a test module may hold) |
+  | a port no adapter implements | **no** | — (`TB081` reports an *orchestrator* depending on a port no application client speaks, which is a different question; nothing checks that a declared port has an implementation anywhere) |
+  | a declaration or marker that legalizes nothing | **yes** | `TB044` (an unused `import`/`stdlib` line in `.tesser-root`) and `TB090` (a debt marker that suppresses nothing) |
+
+  The two that already work share a shape worth copying: both are a *declaration*
+  checked against the uses the same walk can see, reported on the declaration,
+  with one obvious remedy (delete the line). The three that do not need a
+  whole-tree reference table the analyzer does not build, and a decision about
+  what the remedy line should say when the remedy is "delete this file". Decide
+  whether dead code is the analyzer's business at all before building any of
+  them — a false positive here tells someone to delete working code.
+
+- [ ] **The rulebook is a separate service, not a domain module.** It reads the
+  *source text* of `checks.py` and renders `RULES.md` — that is IO, which
+  domain never does, and it is a second concern besides checking a tree. The
+  shape it wants: a file-reader gateway reads `checks.py`'s source, an
+  application service hands the text to a `Rulebook` aggregate that derives the
+  rows, and the service writes `RULES.md` back through a writer gateway. Today
+  `tessercheck/domain/rulebook.py` sits in `domain`, imports its sibling
+  `tessercheck.domain.checks` for `Text`/`Code`/`Line`, and does IO by
+  proxy — the text arrives through `ports.RulebookSources`, but the module that
+  parses it is a domain module reading another module's source. The sibling
+  import carries `# tesser:debt TB060` at its site, which is the whole of the
+  ledger entry for this. Merging the two modules was tried on 2026-09-05 to
+  satisfy the sibling ban and **ruled the wrong fix** (Chris): it hides two
+  concerns in one file rather than separating them. Undone; the debt marker
+  stands until the service exists.
+
+- [ ] **TB085 cannot read a constructor of a class that has no `ts.*` base.**
+  The naming rule says a local is read "through the annotation of the parameter,
+  the constructor, or the field, parameter, or module function a call is made
+  on", but the constructor path only fires for a class the kind table knows —
+  a `ts.*` block. A call to a plain class the analyzer resolves in the tree
+  falls through to the declared-return table, which has no row for a class, so
+  it reports "names X from a call it cannot read" and no rename can satisfy it.
+  Four sites in `tesser-py` hit it, all of them classes that are base-less **on
+  purpose** because base-lessness is the thing under test (`_Structural`,
+  `_StructuralSaver`, `_WriteOnceAsk`); each carries `# tesser:debt TB085`, and
+  that is the ledger entry. A fifth site, `decorated = testing.helper(target)`,
+  is a different shape: the decorator returns its argument, so no class name
+  exists to derive from at all.
+
+  Two candidate fixes, neither taken because both are rulings:
+  (a) `_declared_returns` emits a row per class def — `("", ClassName, module,
+  ClassName)` — so a bare constructor call reads as its own class. Three lines,
+  and it matches the rule's own words. But `DerivedName("_Structural")` is
+  `_structural`, so a private class would force a leading-underscore *local*,
+  which no other rule asks for; stripping the underscore is a second ruling.
+  (b) A class with no `ts.*` base is outside the naming rule's reach, and the
+  call stays unread without being a finding — which quietly widens the "a name
+  the analyzer cannot check" hole the clause exists to close. Decide (a)+underscore
+  handling or (b) before the markers are cleared.
+
+- [ ] **A mapper's local restates the mapper, and every tree says so.** This is
+  the one finding all seven migrated trees reported independently. `TB085`
+  derives a local from the class the call returns, and a `ts.Mapper` class name
+  is a verb phrase, so `spec = MapToRepoSpec(read)` becomes `map_to_repo_spec =
+  application.MapToRepoSpec(read)` — the local names the transform, not the
+  value it holds, and the next line reads `map_to_repo_spec.name` where it used
+  to read `spec.name`. Sites: `layout/repo/application/test_layout_service.py`
+  (7), `examples/ports/catalog/application/test_catalog_service.py` (7),
+  `examples/llmport/.../test_booking_service.py` (5),
+  `examples/asyncpg/alpha/application/test_alpha_service.py` (6),
+  `examples/errorspy/campaign/application/service.py` (3 plus 6 in tests). The
+  mapper *is* its target (the 2026-08 is-a ruling), so the honest derived name
+  is the target's, not the mapper's: `MapToRepoSpec` holds a `RepoSpec` and
+  would read `repo_spec`. Deriving a `ts.Mapper` local from its declared target
+  instead of its own class name is one clause and would fix every site.
+
+- [ ] **A test double's local now carries `fake_`.** A `@ts.fake` class is named
+  `FakeCampaignRepository`, so the derived local is `fake_campaign_repository`
+  where it was `repo` — 21 sites in errorspy, 15 of `fake_campaign_client`, 11
+  of `fake_scheduling_client_scripted` in llmport, plus
+  `fake_committed_widget_store` and `fake_refused_beta_check` in asyncpg. The
+  prefix says where the object came from, not what it stands for, and it is now
+  in the body of every test rather than only at the declaration. Two candidate
+  clauses: derive a `@ts.fake` local from the class or protocol it fakes, or
+  drop the `Fake` prefix from the derived name. Both are rulings.
+
+- [ ] **A class is public API because its sibling test names it.** Under the
+  2026-09-06 ruling a test's reads justify an export, and a sibling test can no
+  longer reach into the module beside it, so anything a test asserts on directly
+  has to be exported. Measured on `examples/python-app`, the largest tree: of
+  **157 export lines across 24 `__init__.py` files, 33 have no non-test reader
+  at all, and 23 of those are read only by the package's own sibling test.**
+  `campaign/application/` alone exports seven `MapTo*` classes that nothing
+  outside the application layer constructs or should;
+  `examples/asyncpg/alpha/application/__init__.py` exports twelve of which
+  eleven are read by nothing but its sibling test. `examples/minimal` never
+  showed this because it has no mapper tests.
+
+  So the rule converts a private collaborator into public API whenever it has a
+  direct unit test. Three ways out, all rulings: mapper (and equivalent) unit
+  tests go, and the collaborator is exercised through the object that owns it,
+  the way a hidden value object now is; or the export list stops being one list
+  and distinguishes a test reader from a caller; or a test regains some narrower
+  way to reach the module beside it than the package `__init__`.
+
+- [ ] **Annotating the local does not clear an unreadable call.** `python.md`
+  said the fix for "names X from a call it cannot read" was to annotate the
+  method *or* the local; the analyzer only honours the first. The `AnnAssign`
+  branch records the annotation into `typed` and then still resolves the call
+  and reports it, so `route.endpoint(...)` on a callable-typed field stays a
+  finding however the local is annotated, and the only fix is to stop binding
+  the result. The doc now says what the code does. The open question is the
+  other direction: a local annotated with a class the analyzer resolves *is* a
+  checkable name, so honouring it would cost one branch and would make the rule
+  match what a reader expects.
+
+- [ ] **Hiding a value object costs it its direct tests.** `examples/asyncpg`
+  went 99 tests to 95 and `examples/minimal` made the same trade: Clearance
+  equality, Clearance's `__str__` canonical exit, and Standing equality cannot be
+  asserted at all once the domain `__init__` stops exporting those classes. Five
+  of the eight old `test_clearance.py` tests survive through `Widget` and four
+  new ones were added, but what replaced the equality claims is
+  `assert str(widget.standing) == "kept"` — a literal comparison on a display
+  string, which is the shape `stringequality` exists to warn about, not a
+  value-equality claim. `Clearance.__str__` now has **zero coverage in both
+  trees**, and nothing in either tree stringifies a `Clearance` at all, so it may
+  simply be dead.
+
+  This collides head-on with CLAUDE.md convention 2, "every VO has explicit
+  equality test coverage", in the two trees that model the norm. Exporting the
+  classes for the test's sake is legal under the sibling-test ruling and hands
+  the application two types it should not name — which is the whole point of
+  hiding them. Decide whether an equality test is owed for a hidden value object,
+  and if so how it is written; the answer probably also settles the export
+  ruling above, since both are the same question about what a test may reach.
+
+- [ ] **A module merge widened an env-read exemption.** `examples/python-app`'s
+  `ruff.toml` exempts exactly one file from the `TID251` ban on reading the
+  environment, and that file used to be `app/repository.py` — the config
+  repository, and nothing else. The sibling-module ban merged `app.py`,
+  `config.py`, `loader.py` and `repository.py` into one `app/app.py`, so the
+  exemption now names the whole app shell. Nothing reads the environment outside
+  the config repository today, and `tests/test_architecture_teeth.py` was updated
+  to assert the new exempt file, so the guard still bites — but the blast radius
+  of the exemption grew from one small module to the module that also holds the
+  loader and the app itself. This is the first case of the merge rule widening a
+  guard rather than only moving code, and it will recur wherever a narrow
+  file-scoped exemption names a module that gets merged. Either the exemption
+  learns a finer scope than a file, or the merge rule needs an escape for a
+  module a linter exemption names.
+
+- [x] **A package alias still reaches the modules the init hides.** CLOSED
+  2026-09-06 (Chris ruling). The import form exists to let a domain package hide
+  its internal entities and value objects from the application, and the import
+  rules did enforce half of it: no module outside `alpha/domain/` may write
+  `import alpha.domain.widget`. But Python binds an imported submodule as an
+  attribute of its package, so after `import alpha.domain as domain` the
+  expression `domain.widget.Clearance` resolves at runtime, and `mypy --strict`
+  accepts it. The analyzer was silent because `Scope.resolve` splits on the last
+  dot, finds no alias named `domain.widget`, and returns `None` — an unresolved
+  name is a silent pass.
+
+  **Closed by making the export list the read list.** `Module.package_read_violations`
+  flags any name read off a package alias that the package's `__init__` does not
+  re-export, which catches both `domain.widget.Standing` (`widget` is not
+  exported) and `domain.Standing` (`Standing` is not). The second was previously
+  caught only by mypy; the first by nothing.
+
+  **Ruled: no exemption for the sibling test.** It is the one module inside an
+  exporting package that legally holds an alias to its own package (TB060 exempts
+  `test_*`), and so the one place a hidden class could be reached deliberately.
+  It does not get to. A class the `__init__` does not re-export gets no direct
+  tests and is tested through the object that owns it. This is the same answer as
+  the open ruling on whether a direct unit test makes a class public API: if a
+  value object deserves its own tests, export it.
+
+  **Migration cost was zero, measured twice.** A standalone scan checked 7,408
+  alias reads against 206 export lists across all eleven trees with no
+  violations, and the shipped clause reports zero findings on all eleven.
+
+- [ ] **Two classes of one name in one module: one is invisible, and the order
+  decides which.** `Module._classes` is a dict keyed by class name, so the last
+  definition wins and `_class_defs` (which 39 rules walk) sees only that one —
+  but the block lookup at `checks.py:8561` resolves by name while iterating
+  `self._body`, which holds both. Demonstrated on a copy of `examples/minimal`
+  (2026-09-06 adversarial pass): a bare `class Standing:` with mutable public
+  state placed *before* the real `Standing(ts.ValueObject)` draws **zero
+  findings**, and so does a `class Standing(ts.ApplicationService)` sitting in a
+  domain module, which should be a TB052 "a kind lives only in its role module".
+  Reverse the order and two findings appear, one of them a false positive on the
+  genuinely conforming class. Under declare-then-verify this is a general escape:
+  name an unchecked class after a checked one in the same module and the rule set
+  goes quiet.
+
+  Pre-existing — `_classes` is a dict on `main` too — and latent: a scan of every
+  tracked `.py` found zero duplicate class names. What changed is the blast
+  radius, because this branch adds roughly forty rules that key off `block_of`.
+  Note also that `KindTable.__init__` raises `ValueError("a kind table names one
+  block per symbol")` on a duplicate `(owner, name)`, and that guard is
+  unreachable, because `blocks` is a dict before it ever gets there. The guard
+  that would have caught this is dead.
+
+- [ ] **TB085's silencing branches have no negative tests.** Roughly 180 new
+  lines carry four fixtures, and every branch that makes a name *not* checkable
+  is unexercised: the `foreign` set (a call into `tesser.*` or an unwalked top),
+  `FREE_RETURN`, the `self` receiver, a multi-hop chain through
+  `attr_rows.held(...)`, a module-level function call, the
+  `scope.package_of(...)` receiver skip, and `ast.Await` unwrapping. The eleven
+  tree gates are no substitute here and the reason is structural: **a
+  zero-findings gate catches over-firing and can never catch under-firing.** A
+  change that widens any of those branches silences findings and nothing in the
+  repo notices. Two of this wave's four Codex findings were exactly that shape,
+  which is the argument for building the negatives.
+
+  Same shape, smaller: TB053's third tier (two packages whose last segment *and*
+  context prefix both collide, so the alias becomes the whole dotted path) has
+  neither a positive nor a negative test, and its clause prose says "each takes
+  its context as a prefix", which is not what tier three demands. And
+  `DerivedName`, the shared transform behind both TB085 and the own-name rule,
+  has no direct test at all — testing it costs an export from the domain
+  `__init__`, which is more evidence for the export ruling above.
+
 ## Left open by the v0.0.89.0 adversarial pass (2026-08-29, PR #148)
 
 Seventeen bypass probes were run against the new clauses — twelve mine, five
@@ -519,7 +773,7 @@ migration runs.
   function in a test module being a test, a `@ts.helper` or a `@ts.fake`. A
   nested function has no placement, so it is invisible to the totality checks
   by construction. **This was ruled on a wrong number** — the session reported
-  "zero sites today"; the measured count is 108.
+  "zero sites today"; the measured count is 109.
 - [ ] **`TB022` fires in value position, not just type position.** The match is
   position-blind by design — that is what lets it reach a `typing.cast`
   argument, a `Callable` base class and a `TypeVar` bound, which are the
@@ -550,11 +804,11 @@ migration runs.
 
 ## What TB023 has to let through (2026-09-06, the exception list)
 
-`TB023` bans a `lambda` anywhere and a `def` inside another function. 125
-lines carry a marker — 17 lambdas, 108 nested functions — and the conformance
+`TB023` bans a `lambda` anywhere and a `def` inside another function. 126
+lines carry a marker — 17 lambdas (18 sites), 109 nested functions — and the conformance
 wave cannot run until this list is ruled, because a rule with no exceptions at
 this scale is a rule that gets suppressed rather than followed. **The question
-is not "is a nested function bad" but "which of these 125 has a relocation
+is not "is a nested function bad" but "which of these 126 has a relocation
 available, and what is the shape of the ones that do not."** The populations,
 measured:
 
@@ -569,8 +823,8 @@ measured:
   question as **Foreign types at the analyzer's door** below, one level down:
   the closure exists because the foreign type has no domain object yet. Rule
   them together.
-- [ ] **A test's local fake behavior — 42 across the example and tesser-py
-  test modules.** `examples/llmport/srv/voice/test_agent.py` has 11: `def
+- [ ] **A test's local fake behavior — 43 across the example, tesser-py and
+  tessercheck-py test modules.** `examples/llmport/srv/voice/test_agent.py` has 11: `def
   halt`, `def drive` — a coroutine the test hands to the thing under test so
   it can assert what happened. `TB030` says a test double is a hand-written
   fake and `TB071`/`TB072` say a test module holds tests, `@ts.helper`s and
@@ -595,25 +849,31 @@ measured:
   (found by the v0.0.97.0 ship review's simplification pass, deferred here
   deliberately so the exception list is ruled before any migration runs).
   `KindTable.block_of`'s `bisect.bisect_left(self._entries, (wanted_module,
-  wanted_name), key=lambda item: (item[0], item[1]))` at `checks.py:1151` — the
+  wanted_name), key=lambda item: (item[0], item[1]))` at `checks.py:1205` — the
   key is a **no-op**, verified empirically across prefix, exact, before-first
   and after-last probes: a 2-tuple probe already compares strictly less than
   any 3-tuple sharing its prefix, so bisect lands on the same index without it.
   Deleting the key retires the marker and removes dead code. The other three
   are sort keys that `operator` replaces —
-  `checks.py:6546` `key=lambda item: (item.lineno, item.col_offset)` →
-  `operator.attrgetter("lineno", "col_offset")`, `checks.py:2712`
+  `checks.py:6762` `key=lambda item: (item.lineno, item.col_offset)` →
+  `operator.attrgetter("lineno", "col_offset")`, `checks.py:2901`
   `key=lambda node: node.lineno` → `operator.attrgetter("lineno")`, and
-  `checks.py:10062` `key=lambda entry: entry[:3]` →
+  `checks.py:11006` `key=lambda entry: entry[:3]` →
   `operator.itemgetter(0, 1, 2)` — which costs one `stdlib operator` line in
-  `tessercheck-py/.tesser-root`, exactly as `bisect` is widened today.
+  `tessercheck-py/.tesser-root`, exactly as `bisect` is widened today. The
+  v0.0.98.0/v0.0.99.0 merge added two more `key=` sites that belong in the same
+  ruling: `source_reader.py:132` `key=lambda source: source.path`, which
+  `operator.attrgetter("path")` replaces, and `checks.py:10436`
+  `key=lambda v: int(v.line())`, which does not — it reads through a method and
+  needs either a named function or an ordering on `Violation` itself.
 - [ ] **`TB022` is unsatisfiable for `ts.JobContext.call`, and that is the
   toolkit's own API.** Red-team finding, v0.0.97.0 ship review. `ts.JobContext`
   declares `async def call[I, O](self, step: abc.Callable[[typing.Any, I],
   abc.Awaitable[O]], request: I) -> O`, and every implementer must reproduce
   the signature verbatim to type-check — `examples/minimal`'s
-  `inline_context.py` and durable-execution's `restate_context.py` both do, both
-  debt-marked. This is not backlog a conformance wave can retire: it is a
+  `alpha/adapters/jobs/engine.py` and durable-execution's
+  `ordering/adapters/jobs/restate.py` both do (both were `*_context.py` until
+  the v0.0.98.0 naming wave folded them in), both debt-marked. This is not backlog a conformance wave can retire: it is a
   permanent finding forced by a shipped Protocol, and `python.md` tells the
   reader to fix it with a `ts.Port`, which is impossible here because the
   parameter *is* the step function the engine hands back. Rule it the way
@@ -624,11 +884,11 @@ measured:
 - [ ] **"Wrap it in a function-local class" is not an acceptable `TB023`
   retirement.** The `ClassDef` arm resets `enclosed` unconditionally at every
   depth, so `def outer(): class C: def m(self): ...` produces zero findings —
-  verified. That is the cheapest mechanical way to clear any of the 108 nested
+  verified. That is the cheapest mechanical way to clear any of the 109 nested
   `def` markers, and it converts a visible marker into an invisible evasion
   while defeating the rule's own rationale (a method of a function-local class
   has no more placement than the nested `def` it replaced). Rule the reset
-  before the wave runs, or the wave has 108 sites pointed at the dodge.
+  before the wave runs, or the wave has 109 sites pointed at the dodge.
 - [ ] **Two generated artifacts disagree about the skill rendering, and both
   gates pass.** `ROADMAP.md` renders the Skill-doc cell as `—` ("intentionally
   n/a" per its own legend) for `Norm: annotations` and `Norm: function

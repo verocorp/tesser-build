@@ -5,8 +5,8 @@ import pathlib
 
 import tesser.testing as ts
 
-import repo.adapters.repositories.file_repository as file_repository
-import repo.application.ports.repo_reader as repo_reader
+import repo.adapters.repositories as repositories
+import repo.application.ports as ports
 
 
 @ts.helper
@@ -27,48 +27,48 @@ def _repo(root: pathlib.Path) -> pathlib.Path:  # tesser:debt TB073
 
 
 def test_a_repo_reads_whole(tmp_path: pathlib.Path) -> None:
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(_repo(tmp_path))))
-    assert read.manifest.state is repo_reader.ManifestState.READ
-    assert [(row.key, row.kind) for row in read.manifest.rows] == [("appone", "app")]
-    assert read.verify.state is repo_reader.FileState.READ
-    assert "run_appone" in read.verify.text
-    assert read.workflow.state is repo_reader.FileState.READ
-    assert read.requirements == ("appone",)
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(_repo(tmp_path))))
+    assert read_repo_response.manifest.state is ports.ManifestState.READ
+    assert [(row.key, row.kind) for row in read_repo_response.manifest.rows] == [("appone", "app")]
+    assert read_repo_response.verify.state is ports.FileState.READ
+    assert "run_appone" in read_repo_response.verify.text
+    assert read_repo_response.workflow.state is ports.FileState.READ
+    assert read_repo_response.requirements == ("appone",)
 
 
 def test_a_missing_manifest_reports_missing(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "manifest.json").unlink()
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
-    assert read.manifest.state is repo_reader.ManifestState.MISSING
-    assert read.manifest.rows == ()
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(tmp_path)))
+    assert read_repo_response.manifest.state is ports.ManifestState.MISSING
+    assert read_repo_response.manifest.rows == ()
 
 
 def test_a_malformed_manifest_reports_malformed_with_the_parse_note(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "manifest.json").write_text("{ truncated")
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
-    assert read.manifest.state is repo_reader.ManifestState.MALFORMED
-    assert read.manifest.note != ""
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(tmp_path)))
+    assert read_repo_response.manifest.state is ports.ManifestState.MALFORMED
+    assert read_repo_response.manifest.note != ""
 
 
 def test_a_misshapen_manifest_reports_misshapen(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "manifest.json").write_text('["a", "b"]')
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
-    assert read.manifest.state is repo_reader.ManifestState.MISSHAPEN
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(tmp_path)))
+    assert read_repo_response.manifest.state is ports.ManifestState.MISSHAPEN
 
 
 def test_a_missing_verify_file_reports_missing(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "scripts" / "verify").unlink()
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
-    assert read.verify.state is repo_reader.FileState.MISSING
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(tmp_path)))
+    assert read_repo_response.verify.state is ports.FileState.MISSING
 
 
 def test_entries_mark_directories_and_symlinks(tmp_path: pathlib.Path) -> None:
@@ -76,57 +76,57 @@ def test_entries_mark_directories_and_symlinks(tmp_path: pathlib.Path) -> None:
     outside = tmp_path.parent / f"{tmp_path.name}-outside"
     outside.mkdir()
     (tmp_path / "vendored").symlink_to(outside)
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
-    forms = {entry.name: entry.form for entry in read.top}
-    assert forms["appone"] is repo_reader.EntryForm.DIRECTORY
-    assert forms["vendored"] is repo_reader.EntryForm.SYMLINK
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(tmp_path)))
+    forms = {entry.name: entry.form for entry in read_repo_response.top}
+    assert forms["appone"] is ports.EntryForm.DIRECTORY
+    assert forms["vendored"] is ports.EntryForm.SYMLINK
 
 
 def test_entries_keep_github_and_drop_other_hidden_and_skip_dirs(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / ".venv").mkdir()
     (tmp_path / ".hidden").mkdir()
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
-    names = {entry.name for entry in read.top}
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(tmp_path)))
+    names = {entry.name for entry in read_repo_response.top}
     assert ".github" in names
     assert ".venv" not in names
     assert ".hidden" not in names
 
 
 def test_the_walk_reports_declarations_with_relative_paths(tmp_path: pathlib.Path) -> None:
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(_repo(tmp_path))))
-    assert [(record.path, record.state) for record in read.declarations] == [
-        ("appone/.tesser-root", repo_reader.FileState.READ)
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(_repo(tmp_path))))
+    assert [(record.path, record.state) for record in read_repo_response.declarations] == [
+        ("appone/.tesser-root", ports.FileState.READ)
     ]
-    assert read.declarations[0].text == "app\n"
+    assert read_repo_response.declarations[0].text == "app\n"
 
 
 def test_a_bom_prefixed_declaration_decodes(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "appone" / ".tesser-root").write_bytes(b"\xef\xbb\xbfapp\n")
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
-    assert read.declarations[0].text == "app\n"
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(tmp_path)))
+    assert read_repo_response.declarations[0].text == "app\n"
 
 
 def test_an_undecodable_declaration_reports_unreadable(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "appone" / ".tesser-root").write_bytes(b"\xff\xfe\x00app")
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
-    assert read.declarations[0].state is repo_reader.FileState.UNREADABLE
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(tmp_path)))
+    assert read_repo_response.declarations[0].state is ports.FileState.UNREADABLE
 
 
 def test_a_declaration_that_is_a_directory_is_not_a_declaration(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "appone" / ".tesser-root").unlink()
     (tmp_path / "appone" / ".tesser-root").mkdir()
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
-    assert read.declarations == ()
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(tmp_path)))
+    assert read_repo_response.declarations == ()
 
 
 def test_the_walk_finds_requirements_at_depth(tmp_path: pathlib.Path) -> None:
@@ -134,9 +134,9 @@ def test_the_walk_finds_requirements_at_depth(tmp_path: pathlib.Path) -> None:
     deep = tmp_path / "docs" / "buried" / "tree"
     deep.mkdir(parents=True)
     (deep / "requirements-dev.txt").write_text("pytest\n")
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
-    assert "docs/buried/tree" in read.requirements
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(tmp_path)))
+    assert "docs/buried/tree" in read_repo_response.requirements
 
 
 def test_the_walk_skips_ignored_directories(tmp_path: pathlib.Path) -> None:
@@ -145,10 +145,10 @@ def test_the_walk_skips_ignored_directories(tmp_path: pathlib.Path) -> None:
     hidden.mkdir()
     (hidden / ".tesser-root").write_text("app\n")
     (hidden / "requirements-dev.txt").write_text("x\n")
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
-    assert [record.path for record in read.declarations] == ["appone/.tesser-root"]
-    assert read.requirements == ("appone",)
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(tmp_path)))
+    assert [record.path for record in read_repo_response.declarations] == ["appone/.tesser-root"]
+    assert read_repo_response.requirements == ("appone",)
 
 
 def test_the_walk_never_follows_symlinked_directories(tmp_path: pathlib.Path) -> None:
@@ -158,18 +158,18 @@ def test_the_walk_never_follows_symlinked_directories(tmp_path: pathlib.Path) ->
     (outside / ".tesser-root").write_text("app\n")
     (outside / "requirements-dev.txt").write_text("x\n")
     (tmp_path / "appone" / "vendored").symlink_to(outside)
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
-    assert [record.path for record in read.declarations] == ["appone/.tesser-root"]
-    assert read.requirements == ("appone",)
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(tmp_path)))
+    assert [record.path for record in read_repo_response.declarations] == ["appone/.tesser-root"]
+    assert read_repo_response.requirements == ("appone",)
 
 
 def test_a_dangling_symlink_does_not_crash_the_walk(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "appone" / "vendored").symlink_to(tmp_path / "no-such-target")
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
-    assert read.manifest.state is repo_reader.ManifestState.READ
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(tmp_path)))
+    assert read_repo_response.manifest.state is ports.ManifestState.READ
 
 
 def test_an_unlistable_directory_does_not_crash_the_walk(tmp_path: pathlib.Path) -> None:
@@ -180,46 +180,46 @@ def test_an_unlistable_directory_does_not_crash_the_walk(tmp_path: pathlib.Path)
     locked.mkdir()
     os.chmod(locked, 0)
     try:
-        reader = file_repository.FilesystemRepoReader()
-        read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
+        filesystem_repo_reader = repositories.FilesystemRepoReader()
+        read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(tmp_path)))
     finally:
         os.chmod(locked, 0o755)
-    assert read.manifest.state is repo_reader.ManifestState.READ
+    assert read_repo_response.manifest.state is ports.ManifestState.READ
 
 
 def test_a_top_level_dangling_symlink_is_an_entry_with_symlink_form(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "vendored").symlink_to(tmp_path / "no-such-target")
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
-    forms = {entry.name: entry.form for entry in read.top}
-    assert forms["vendored"] is repo_reader.EntryForm.SYMLINK
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(tmp_path)))
+    forms = {entry.name: entry.form for entry in read_repo_response.top}
+    assert forms["vendored"] is ports.EntryForm.SYMLINK
 
 
 def test_an_undecodable_manifest_reports_unreadable(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "manifest.json").write_bytes(b"\xff\xfe\x00{}")
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
-    assert read.manifest.state is repo_reader.ManifestState.UNREADABLE
-    assert read.manifest.rows == ()
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(tmp_path)))
+    assert read_repo_response.manifest.state is ports.ManifestState.UNREADABLE
+    assert read_repo_response.manifest.rows == ()
 
 
 def test_the_walk_reads_the_stated_python_floors(tmp_path: pathlib.Path) -> None:
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(_repo(tmp_path))))
-    stated = {(record.path, record.key, record.state, record.value) for record in read.floors}
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(_repo(tmp_path))))
+    stated = {(record.path, record.key, record.state, record.value) for record in read_repo_response.floors}
     assert stated == {
         (
             "appone/pyproject.toml",
-            repo_reader.FloorKey.REQUIRES_PYTHON,
-            repo_reader.FloorState.READ,
+            ports.FloorKey.REQUIRES_PYTHON,
+            ports.FloorState.READ,
             ">=3.12",
         ),
         (
             "appone/ruff.toml",
-            repo_reader.FloorKey.TARGET_VERSION,
-            repo_reader.FloorState.READ,
+            ports.FloorKey.TARGET_VERSION,
+            ports.FloorState.READ,
             "py312",
         ),
     }
@@ -230,18 +230,18 @@ def test_a_pyproject_without_a_project_table_states_no_floor(tmp_path: pathlib.P
     (tmp_path / "appone" / "pyproject.toml").write_text(
         "[tool.pytest.ini_options]\ntestpaths = [\"tests\"]\n"
     )
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
-    assert [record.path for record in read.floors] == ["appone/ruff.toml"]
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(tmp_path)))
+    assert [record.path for record in read_repo_response.floors] == ["appone/ruff.toml"]
 
 
 def test_a_project_table_without_requires_python_reports_undeclared(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "appone" / "pyproject.toml").write_text('[project]\nname = "appone"\n')
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
-    states = {record.path: record.state for record in read.floors}
-    assert states["appone/pyproject.toml"] is repo_reader.FloorState.UNDECLARED
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(tmp_path)))
+    states = {record.path: record.state for record in read_repo_response.floors}
+    assert states["appone/pyproject.toml"] is ports.FloorState.UNDECLARED
 
 
 def test_a_pyproject_ruff_table_states_the_target_version(tmp_path: pathlib.Path) -> None:
@@ -251,25 +251,25 @@ def test_a_pyproject_ruff_table_states_the_target_version(tmp_path: pathlib.Path
         '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'
         '[tool.ruff]\ntarget-version = "py312"\n'
     )
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
-    keys = {record.key: record.value for record in read.floors}
-    assert keys[repo_reader.FloorKey.TARGET_VERSION] == "py312"
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(tmp_path)))
+    keys = {record.key: record.value for record in read_repo_response.floors}
+    assert keys[ports.FloorKey.TARGET_VERSION] == "py312"
 
 
 def test_a_malformed_toml_reports_malformed(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "appone" / "ruff.toml").write_text("target-version = \n")
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
-    states = {record.path: record.state for record in read.floors}
-    assert states["appone/ruff.toml"] is repo_reader.FloorState.MALFORMED
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(tmp_path)))
+    states = {record.path: record.state for record in read_repo_response.floors}
+    assert states["appone/ruff.toml"] is ports.FloorState.MALFORMED
 
 
 def test_an_undecodable_toml_reports_unreadable(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "appone" / "ruff.toml").write_bytes(b"\xff\xfe\x00x")
-    reader = file_repository.FilesystemRepoReader()
-    read = reader.read(repo_reader.ReadRepoRequest(repo_root=str(tmp_path)))
-    states = {record.path: record.state for record in read.floors}
-    assert states["appone/ruff.toml"] is repo_reader.FloorState.UNREADABLE
+    filesystem_repo_reader = repositories.FilesystemRepoReader()
+    read_repo_response = filesystem_repo_reader.read(ports.ReadRepoRequest(repo_root=str(tmp_path)))
+    states = {record.path: record.state for record in read_repo_response.floors}
+    assert states["appone/ruff.toml"] is ports.FloorState.UNREADABLE

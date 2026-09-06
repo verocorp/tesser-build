@@ -11,7 +11,7 @@ Legend: ✅ done · 🟡 partial · ❌ absent · — intentionally n/a.
 |---|---|---|---|---|---|
 | Value objects | ✅ | ✅ | ✅ | ✅ 7 Go + 5 Py | ✅ |
 | Kernels (direct-import tier) | ✅ | ❌ | ✅ | 🟡 Py only (TB041, TB042, TB044, TB050, TB051, TB052, TB062, TB070) | ❌ |
-| Entities | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Entities | ❌ | ✅ | ✅ | ❌ | ❌ |
 | Aggregates | ✅ | ✅ | ✅ | 🟡 Py only (TB011, TB012) | ❌ |
 | Domain services | ❌ | ❌ | 🟡 stub | ❌ | ❌ |
 | Application services | ✅ | ✅ | ✅ | 🟡 Py only (TB081, TB082) | 🟡 D3 (no outward representation) won; D1 (app-SRP) pending |
@@ -30,6 +30,7 @@ Legend: ✅ done · 🟡 partial · ❌ absent · — intentionally n/a.
 | Norm: comments | ✅ | ✅ | ✅ | ✅ 1 Go + 1 Py | ❌ |
 | Norm: annotations | ✅ | ❌ | — | 🟡 Py only (TB021, TB022) | ❌ |
 | Norm: function placement | ✅ | ❌ | — | 🟡 Py only (TB023) | ❌ |
+| Norm: type-derived names | ✅ | ❌ | — | 🟡 Py only (TB085) | ❌ |
 | Norm: serialization | ✅ | ❌ | ✅ | 🟡 Py only (TB015, TB016, TB017, TB018) | ❌ |
 | Norm: domain return | ✅ | ❌ | ✅ | 🟡 Py only (TB019, TB084) | ❌ |
 | Norm: logging | ❌ | ❌ | 🟡 stub | ❌ | ❌ |

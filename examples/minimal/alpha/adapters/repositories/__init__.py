@@ -1,0 +1,1 @@
+from alpha.adapters.repositories.memory import MemoryWidgetRepository as MemoryWidgetRepository

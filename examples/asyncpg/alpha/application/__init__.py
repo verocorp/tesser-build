@@ -1,0 +1,13 @@
+from alpha.application.alpha_service import AlphaService as AlphaService
+from alpha.application.alpha_service import MapToAddResponse as MapToAddResponse
+from alpha.application.alpha_service import MapToAddWidgetRequest as MapToAddWidgetRequest
+from alpha.application.alpha_service import MapToCheckRequest as MapToCheckRequest
+from alpha.application.alpha_service import MapToClearanceSpec as MapToClearanceSpec
+from alpha.application.alpha_service import MapToFindWidgetRequest as MapToFindWidgetRequest
+from alpha.application.alpha_service import MapToLoadWidgetRequest as MapToLoadWidgetRequest
+from alpha.application.alpha_service import MapToLoadedWidgetSpec as MapToLoadedWidgetSpec
+from alpha.application.alpha_service import MapToPartSpec as MapToPartSpec
+from alpha.application.alpha_service import MapToSaveWidgetRequest as MapToSaveWidgetRequest
+from alpha.application.alpha_service import MapToTakeResponse as MapToTakeResponse
+from alpha.application.alpha_service import MapToTakenPartSpec as MapToTakenPartSpec
+from alpha.application.alpha_service import MapToWidgetSpec as MapToWidgetSpec

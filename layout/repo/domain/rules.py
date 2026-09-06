@@ -421,11 +421,11 @@ class Repo(ts.AggregateRoot):
     def health(self) -> Health:
         return Health.PROBLEMS if self._problems else Health.CLEAN
 
-    def presence(self, spec: ProblemSpec) -> Presence:
-        sought = Problem(spec)
-        if sought not in self._problems:
+    def presence(self, problem_spec: ProblemSpec) -> Presence:
+        problem = Problem(problem_spec)
+        if problem not in self._problems:
             return Presence.ABSENT
-        if all(problem == sought for problem in self._problems):
+        if all(held == problem for held in self._problems):
             return Presence.ONLY
         return Presence.AMONG
 

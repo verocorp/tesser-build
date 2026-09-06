@@ -2,119 +2,105 @@ from __future__ import annotations
 
 import pytest
 
-import linkpolicy.adapters.repositories.repo_memory as repo_memory
-import linkpolicy.application.ports.verdict_repository as verdict_repository
+import linkpolicy.adapters.repositories as repositories
+import linkpolicy.application.ports as ports
 import tesser.errors as errors
 
 
 def test_all_answers_nothing_before_anything_is_recorded() -> None:
-    subject = repo_memory.InMemoryVerdictRepository()
+    in_memory_verdict_repository = repositories.InMemoryVerdictRepository()
 
-    listed = subject.all(verdict_repository.ListVerdictsRequest())
+    list_verdicts_response = in_memory_verdict_repository.all(ports.ListVerdictsRequest())
 
-    assert listed.verdicts == ()
+    assert list_verdicts_response.verdicts == ()
 
 
 def test_a_recorded_verdict_comes_back_from_all() -> None:
-    subject = repo_memory.InMemoryVerdictRepository()
+    in_memory_verdict_repository = repositories.InMemoryVerdictRepository()
 
-    subject.record(
-        verdict_repository.RecordVerdictRequest(
-            "https://ok.example/x", verdict_repository.VerdictDecision.ALLOWED, "ok"
-        )
+    in_memory_verdict_repository.record(
+        ports.RecordVerdictRequest("https://ok.example/x", ports.VerdictDecision.ALLOWED, "ok")
     )
-    listed = subject.all(verdict_repository.ListVerdictsRequest())
+    list_verdicts_response = in_memory_verdict_repository.all(ports.ListVerdictsRequest())
 
-    assert [(v.target_url, v.decision, v.reason) for v in listed.verdicts] == [
-        ("https://ok.example/x", verdict_repository.VerdictDecision.ALLOWED, "ok")
-    ]
+    assert [
+        (v.target_url, v.decision, v.reason) for v in list_verdicts_response.verdicts
+    ] == [("https://ok.example/x", ports.VerdictDecision.ALLOWED, "ok")]
 
 
 def test_all_keeps_the_order_the_urls_were_first_recorded_in() -> None:
-    subject = repo_memory.InMemoryVerdictRepository()
+    in_memory_verdict_repository = repositories.InMemoryVerdictRepository()
 
-    subject.record(
-        verdict_repository.RecordVerdictRequest(
-            "https://a.example/x", verdict_repository.VerdictDecision.ALLOWED, "ok"
-        )
+    in_memory_verdict_repository.record(
+        ports.RecordVerdictRequest("https://a.example/x", ports.VerdictDecision.ALLOWED, "ok")
     )
-    subject.record(
-        verdict_repository.RecordVerdictRequest(
-            "https://b.example/y", verdict_repository.VerdictDecision.DENIED, "blocked"
-        )
+    in_memory_verdict_repository.record(
+        ports.RecordVerdictRequest("https://b.example/y", ports.VerdictDecision.DENIED, "blocked")
     )
-    listed = subject.all(verdict_repository.ListVerdictsRequest())
+    list_verdicts_response = in_memory_verdict_repository.all(ports.ListVerdictsRequest())
 
-    assert [v.target_url for v in listed.verdicts] == [
+    assert [v.target_url for v in list_verdicts_response.verdicts] == [
         "https://a.example/x",
         "https://b.example/y",
     ]
 
 
 def test_recording_the_same_url_twice_keeps_only_the_latest_verdict() -> None:
-    subject = repo_memory.InMemoryVerdictRepository()
+    in_memory_verdict_repository = repositories.InMemoryVerdictRepository()
 
-    subject.record(
-        verdict_repository.RecordVerdictRequest(
-            "https://ok.example/x", verdict_repository.VerdictDecision.ALLOWED, "ok"
-        )
+    in_memory_verdict_repository.record(
+        ports.RecordVerdictRequest("https://ok.example/x", ports.VerdictDecision.ALLOWED, "ok")
     )
-    subject.record(
-        verdict_repository.RecordVerdictRequest(
-            "https://ok.example/x", verdict_repository.VerdictDecision.DENIED, "blocked"
-        )
+    in_memory_verdict_repository.record(
+        ports.RecordVerdictRequest("https://ok.example/x", ports.VerdictDecision.DENIED, "blocked")
     )
-    listed = subject.all(verdict_repository.ListVerdictsRequest())
+    list_verdicts_response = in_memory_verdict_repository.all(ports.ListVerdictsRequest())
 
-    assert [(v.decision, v.reason) for v in listed.verdicts] == [
-        (verdict_repository.VerdictDecision.DENIED, "blocked")
+    assert [(v.decision, v.reason) for v in list_verdicts_response.verdicts] == [
+        (ports.VerdictDecision.DENIED, "blocked")
     ]
 
 
 def test_record_fails_when_the_store_is_down() -> None:
-    subject = repo_memory.InMemoryVerdictRepository(down=True)
+    in_memory_verdict_repository = repositories.InMemoryVerdictRepository(down=True)
 
     with pytest.raises(errors.InfraError) as excinfo:
-        subject.record(
-            verdict_repository.RecordVerdictRequest(
-                "https://ok.example/x", verdict_repository.VerdictDecision.ALLOWED, "ok"
-            )
+        in_memory_verdict_repository.record(
+            ports.RecordVerdictRequest("https://ok.example/x", ports.VerdictDecision.ALLOWED, "ok")
         )
 
     assert str(excinfo.value) == "linkpolicy store unavailable"
 
 
 def test_all_fails_when_the_store_is_down() -> None:
-    subject = repo_memory.InMemoryVerdictRepository(down=True)
+    in_memory_verdict_repository = repositories.InMemoryVerdictRepository(down=True)
 
     with pytest.raises(errors.InfraError) as excinfo:
-        subject.all(verdict_repository.ListVerdictsRequest())
+        in_memory_verdict_repository.all(ports.ListVerdictsRequest())
 
     assert str(excinfo.value) == "linkpolicy store unavailable"
 
 
 def test_closing_a_repository_does_not_discard_what_it_recorded() -> None:
-    subject = repo_memory.InMemoryVerdictRepository()
+    in_memory_verdict_repository = repositories.InMemoryVerdictRepository()
 
-    subject.record(
-        verdict_repository.RecordVerdictRequest(
-            "https://ok.example/x", verdict_repository.VerdictDecision.ALLOWED, "ok"
-        )
+    in_memory_verdict_repository.record(
+        ports.RecordVerdictRequest("https://ok.example/x", ports.VerdictDecision.ALLOWED, "ok")
     )
-    subject.close()
-    listed = subject.all(verdict_repository.ListVerdictsRequest())
+    in_memory_verdict_repository.close()
+    list_verdicts_response = in_memory_verdict_repository.all(ports.ListVerdictsRequest())
 
-    assert [v.target_url for v in listed.verdicts] == ["https://ok.example/x"]
+    assert [v.target_url for v in list_verdicts_response.verdicts] == ["https://ok.example/x"]
 
 
 def test_close_counts_every_call() -> None:
-    subject = repo_memory.InMemoryVerdictRepository()
+    in_memory_verdict_repository = repositories.InMemoryVerdictRepository()
 
-    subject.close()
-    subject.close()
+    in_memory_verdict_repository.close()
+    in_memory_verdict_repository.close()
 
-    assert subject.close_count == 2
+    assert in_memory_verdict_repository.close_count == 2
 
 
 def test_a_repository_starts_closed_zero_times() -> None:
-    assert repo_memory.InMemoryVerdictRepository().close_count == 0
+    assert repositories.InMemoryVerdictRepository().close_count == 0

@@ -6,9 +6,8 @@ import typing
 
 import tesser.testing as ts
 
-import ordering.application.orchestrators.order_orchestrator as order_orchestrator
-import ordering.application.ports.order_workflow as order_workflow
-import ordering.application.ports.quoting as quoting
+import ordering.application.orchestrators as orchestrators
+import ordering.application.ports as ports
 
 
 @ts.fake
@@ -21,34 +20,36 @@ class FakeJobContext(ts.JobContext):
 
 
 @ts.fake
-class FakeQuoting(quoting.Quoting):
+class FakeQuoting(ports.Quoting):
 
     def __init__(self) -> None:
         self.quoted: list[str] = []
 
-    async def quote(self, job: ts.JobContext, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
-        self.quoted.append(request.sku)
-        return quoting.QuoteResponse(cents=250)
+    async def quote(
+        self, job_context: ts.JobContext, quote_request: ports.QuoteRequest
+    ) -> ports.QuoteResponse:
+        self.quoted.append(quote_request.sku)
+        return ports.QuoteResponse(cents=250)
 
 
 @ts.helper
-def start_request(
-    order_id: str = "o1", sku: str = "widget", quantity: int = 3
-) -> order_workflow.StartRequest:
-    return order_workflow.StartRequest(order_id=order_id, sku=sku, quantity=quantity)
+def start_request(order_id: str = "o1", sku: str = "widget", quantity: int = 3) -> ports.StartRequest:
+    return ports.StartRequest(order_id=order_id, sku=sku, quantity=quantity)
 
 
 class TestOrderOrchestrator:
 
     def test_running_totals_the_quoted_price_over_the_quantity(self) -> None:
-        orchestrator = order_orchestrator.OrderOrchestrator(FakeJobContext(), FakeQuoting())
-        ran = asyncio.run(orchestrator.run(start_request()))
-        assert ran.order_id == "o1"
-        assert ran.total_cents == 750
+        order_orchestrator = orchestrators.OrderOrchestrator(FakeJobContext(), FakeQuoting())
+        run_response = asyncio.run(order_orchestrator.run(start_request()))
+        assert run_response.order_id == "o1"
+        assert run_response.total_cents == 750
 
     def test_running_quotes_the_ordered_sku(self) -> None:
-        quotes = FakeQuoting()
+        fake_quoting = FakeQuoting()
         asyncio.run(
-            order_orchestrator.OrderOrchestrator(FakeJobContext(), quotes).run(start_request(sku="gadget"))
+            orchestrators.OrderOrchestrator(FakeJobContext(), fake_quoting).run(
+                start_request(sku="gadget")
+            )
         )
-        assert quotes.quoted == ["gadget"]
+        assert fake_quoting.quoted == ["gadget"]

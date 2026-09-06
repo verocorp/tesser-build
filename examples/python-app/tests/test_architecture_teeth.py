@@ -57,7 +57,7 @@ def test_ruff_config_lifts_the_bans_only_at_the_host_edge(tmp_path: pathlib.Path
     assert result.stdout.count("srv/http/host.py") == 2, result.stdout
 
 
-def test_ruff_config_lifts_the_env_ban_only_at_the_config_repository(tmp_path: pathlib.Path) -> None:
+def test_ruff_config_lifts_the_env_ban_only_at_the_app_module(tmp_path: pathlib.Path) -> None:
     shutil.copy(support.ROOT / "ruff.toml", tmp_path / "ruff.toml")
     read = "import os\n\n\ndef get() -> None:\n    os.environ['X']\n"
     (tmp_path / "app").mkdir(parents=True)
@@ -73,7 +73,7 @@ def test_ruff_config_lifts_the_env_ban_only_at_the_config_repository(tmp_path: p
     )
     assert result.returncode == 1, result.stdout
     flagged = [line.split(":")[0] for line in result.stdout.splitlines() if line.startswith("app/")]
-    assert sorted(flagged) == ["app/app.py", "app/loader.py"], result.stdout
+    assert sorted(flagged) == ["app/loader.py", "app/repository.py"], result.stdout
 
 
 def test_ruff_config_never_lifts_the_bare_exit_ban(tmp_path: pathlib.Path) -> None:
@@ -119,8 +119,8 @@ def test_import_contracts_break_on_a_host_reaching_past_handlers(tmp_path: pathl
     (tmp_path / "app" / "__init__.py").write_text("import linkpolicy\n", encoding="utf-8")
     (tmp_path / "srv" / "http" / "main.py").write_text("import app\n", encoding="utf-8")
     (tmp_path / "srv" / "http" / "host.py").write_text(
-        "from campaign.adapters.handlers.http import Handler as CampaignHandler\n"
-        "from reports.adapters.handlers.http import Handler as ReportsHandler\n"
+        "import campaign.adapters.handlers\n"
+        "import reports.adapters.handlers\n"
         "from campaign.application.service import CampaignService\n",
         encoding="utf-8",
     )
@@ -178,8 +178,8 @@ def test_import_contracts_allow_a_host_reaching_a_context_through_the_app(
     (tmp_path / "app" / "__init__.py").write_text("import linkpolicy\n", encoding="utf-8")
     (tmp_path / "srv" / "http" / "main.py").write_text("import app\n", encoding="utf-8")
     (tmp_path / "srv" / "http" / "host.py").write_text(
-        "from campaign.adapters.handlers.http import Handler as CampaignHandler\n"
-        "from reports.adapters.handlers.http import Handler as ReportsHandler\n",
+        "import campaign.adapters.handlers\n"
+        "import reports.adapters.handlers\n",
         encoding="utf-8",
     )
     executable = pathlib.Path(sys.executable).parent / "lint-imports"

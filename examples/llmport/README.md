@@ -26,13 +26,14 @@ scheduling/
                              ReservationOutcome (RESERVED / SLOT_TAKEN)
       booking_repository.py BookingRepository port + its Request/Response
                              DTOs, BookingPresence (PRESENT / ABSENT)
-    views.py      the MapTo* mappers the service bodies are written in, each
-                  one its target spec or port DTO — MapToBookingSpec,
+    booking_service.py  BookingService, depending on the two ports above, and
+                  the MapTo* mappers its bodies are written in, each one its
+                  target spec or port DTO — MapToBookingSpec,
                   MapToBegunBookingSpec, MapToResumptionSpec, MapToNamingSpec,
-                  MapToSaveBookingRequest, MapToReoffersSpec
-    service.py    BookingService, depending on the two ports above
-    test_views.py / test_service.py  sibling tests; the service test declares
-                  its own @ts.fake port doubles
+                  MapToSaveBookingRequest, MapToReoffersSpec; the service read
+                  the mappers, so the two are one module
+    test_booking_service.py  the sibling test; it declares its own @ts.fake
+                  port doubles
   adapters/
     handlers.py   LlmToolHandler — one endpoint method per tool, plus the schema
                   declarations the model sees

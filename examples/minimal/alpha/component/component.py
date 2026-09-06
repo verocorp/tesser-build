@@ -2,27 +2,37 @@ from __future__ import annotations
 
 import tesser.component as ts
 
-import alpha.adapters.gateways.widget_quotes as widget_quotes
-import alpha.adapters.jobs.engine as engine
-import alpha.adapters.repositories.memory as memory
-import alpha.application.alpha_service as alpha_service
-import alpha.application.ports.beta_check as beta_check
-import alpha.application.widget_actions as widget_actions
-import alpha.client.client as client
-import alpha.component.config as config
+import alpha.adapters.gateways as gateways
+import alpha.adapters.jobs as jobs
+import alpha.adapters.repositories as repositories
+import alpha.application as application
+import alpha.application.ports as ports
+import alpha.client as client
 import tesser.errors as errors
+
+
+class Spec(ts.Spec):
+
+    def __init__(self, storage: str) -> None:
+        self.storage = storage
+
+
+class Config(ts.Config):
+
+    def __init__(self, spec: Spec) -> None:
+        self.storage = spec.storage
 
 
 class Alpha(ts.Component):
 
-    def __init__(self, cfg: config.Config, checks: beta_check.BetaCheck) -> None:
-        if cfg.storage != "memory":
-            raise errors.invalid("unknown_backend", f"alpha storage {cfg.storage!r} not supported")
-        self._widgets = memory.MemoryWidgetRepository()
-        self._quotes = widget_quotes.WidgetQuoteGateway()
-        self._actions = widget_actions.WidgetActions(self._widgets)
-        self.client: client.Client = alpha_service.AlphaService(self._widgets, checks)
-        self.jobs: engine.EngineJob = engine.EngineJob(self._actions, self._quotes)
+    def __init__(self, config: Config, beta_check: ports.BetaCheck) -> None:
+        if config.storage != "memory":
+            raise errors.invalid("unknown_backend", f"alpha storage {config.storage!r} not supported")
+        self._widgets = repositories.MemoryWidgetRepository()
+        self._quotes = gateways.WidgetQuoteGateway()
+        self._actions = application.WidgetActions(self._widgets)
+        self.client: client.AlphaClient = application.AlphaService(self._widgets, beta_check)
+        self.jobs: jobs.EngineJob = jobs.EngineJob(self._actions, self._quotes)
 
     def close(self) -> None:
         self._widgets.close()

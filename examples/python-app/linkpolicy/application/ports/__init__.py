@@ -1,0 +1,7 @@
+from linkpolicy.application.ports.verdict_repository import ListVerdictsRequest as ListVerdictsRequest
+from linkpolicy.application.ports.verdict_repository import ListVerdictsResponse as ListVerdictsResponse
+from linkpolicy.application.ports.verdict_repository import RecordVerdictRequest as RecordVerdictRequest
+from linkpolicy.application.ports.verdict_repository import RecordVerdictResponse as RecordVerdictResponse
+from linkpolicy.application.ports.verdict_repository import VerdictDecision as VerdictDecision
+from linkpolicy.application.ports.verdict_repository import VerdictRecord as VerdictRecord
+from linkpolicy.application.ports.verdict_repository import VerdictRepository as VerdictRepository

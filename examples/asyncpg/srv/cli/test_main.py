@@ -4,7 +4,7 @@ import asyncio
 import os
 
 import pgdatabase.database as pgdatabase
-import srv.cli.main as main
+import srv.cli as cli
 import tesser.errors as errors
 
 
@@ -19,7 +19,7 @@ class TestCliHost:
             await database.close()
 
         asyncio.run(drop())
-        exit_code = main.CliHost().run(["srv-cli", "p"])
+        exit_code = cli.CliHost().run(["srv-cli", "p"])
         assert exit_code == 0
 
     def test_the_host_reports_the_conflict_of_a_second_add(self) -> None:
@@ -31,7 +31,7 @@ class TestCliHost:
             await database.close()
 
         asyncio.run(drop())
-        assert main.CliHost().run(["srv-cli-twice", "p"]) == 0
-        assert main.CliHost().run(["srv-cli-twice", "p"]) == errors.exit_code_for(
+        assert cli.CliHost().run(["srv-cli-twice", "p"]) == 0
+        assert cli.CliHost().run(["srv-cli-twice", "p"]) == errors.exit_code_for(
             errors.Kind.CONFLICT
         )

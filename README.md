@@ -85,19 +85,24 @@ The Python analog ([`tessercheck-py/`](tessercheck-py/)): a zero-dependency,
 stdlib-`ast` conformance analyzer for the `ts.*`-shell conventions in
 [`skills/tesser-build/python.md`](skills/tesser-build/python.md).
 Classification is declared, never inferred — a class is judged by the
-`tesser` base it names. The 47 shipped codes cover value-object shape and
+`tesser` base it names. The 48 shipped codes cover value-object shape and
 serialization (`TB002`–`TB019` — value equality only, no representation
 leak, one construction path, one canonical exit per backing type, domain
 objects out of public behavior and one primitive, spec, or domain object
 into it),
 module/class structure (`TB040`–`TB045`), import form and the tier matrices
-(`TB050`–`TB069` — every module carries an import row keyed on where it sits,
-with no exempt modules), test placement and module totality (`TB070`–`TB074`),
-construction paths and boundary signatures (`TB080`–`TB084` — an entity or
+(`TB050`–`TB069` — a package is the unit you import and its `__init__` is the
+export list, the alias is the package's last segment, no package exports a
+class of its own name, a kernel is domain, and every module carries an import
+row keyed on where it sits, with no exempt modules), test placement and module
+totality (`TB070`–`TB074`),
+construction paths, naming, and boundary signatures (`TB080`–`TB085` — an
+entity or
 aggregate is built from one spec and a value object from one primitive or one
 spec, a spec initializes only its own object, a mapper *is* the spec or
-DTO it maps to, and control flow comes back as a `ts.Outcome` a service
-matches exhaustively, exactly once per method), and the
+DTO it maps to, control flow comes back as a `ts.Outcome` a service
+matches exhaustively, exactly once per method, and a name is derived from the
+class it carries), and the
 tree-wide **norm checks** with no test exemption: zero comments (`TB020`),
 annotations written unquoted (`TB021`), a type that names what the value is
 (`TB022` — `Any`, `Callable`, and `Awaitable` are findings wherever a module

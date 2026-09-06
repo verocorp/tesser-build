@@ -2,37 +2,39 @@ from __future__ import annotations
 
 import tesser.application as ts
 
-import ordering.application.ports.order_workflow as order_workflow
-import ordering.client.client as client
-import ordering.domain.order as order
+import ordering.application.ports as ports
+import ordering.client as client
+import ordering.domain as domain
 
 
-class MapToOrderSpec(ts.Mapper, order.OrderSpec):
+class MapToOrderSpec(ts.Mapper, domain.OrderSpec):
 
-    def __init__(self, request: client.PlaceRequest) -> None:
-        super().__init__(order_id=request.order_id, sku=request.sku, quantity=request.quantity)
-
-
-class MapToStartRequest(ts.Mapper, order_workflow.StartRequest):
-
-    def __init__(self, placed: order.Order) -> None:
+    def __init__(self, place_request: client.PlaceRequest) -> None:
         super().__init__(
-            order_id=str(placed.identity), sku=str(placed.sku), quantity=int(placed.quantity)
+            order_id=place_request.order_id, sku=place_request.sku, quantity=place_request.quantity
+        )
+
+
+class MapToStartRequest(ts.Mapper, ports.StartRequest):
+
+    def __init__(self, order: domain.Order) -> None:
+        super().__init__(
+            order_id=str(order.identity), sku=str(order.sku), quantity=int(order.quantity)
         )
 
 
 class MapToPlaceResponse(ts.Mapper, client.PlaceResponse):
 
-    def __init__(self, started: order_workflow.StartResponse) -> None:
-        super().__init__(order_id=started.order_id)
+    def __init__(self, start_response: ports.StartResponse) -> None:
+        super().__init__(order_id=start_response.order_id)
 
 
 class OrderService(ts.ApplicationService):
 
-    def __init__(self, workflows: order_workflow.OrderWorkflow) -> None:
-        self._workflows = workflows
+    def __init__(self, order_workflow: ports.OrderWorkflow) -> None:
+        self._order_workflow = order_workflow
 
-    async def place(self, request: client.PlaceRequest) -> client.PlaceResponse:
-        placed = order.Order(MapToOrderSpec(request))
-        started = await self._workflows.start(MapToStartRequest(placed))
-        return MapToPlaceResponse(started)
+    async def place(self, place_request: client.PlaceRequest) -> client.PlaceResponse:
+        order = domain.Order(MapToOrderSpec(place_request))
+        start_response = await self._order_workflow.start(MapToStartRequest(order))
+        return MapToPlaceResponse(start_response)

@@ -19,6 +19,6 @@ class PlaceResponse(ts.Response):
         self.order_id = order_id
 
 
-class Client(ts.Client, typing.Protocol):
+class OrderingClient(ts.Client, typing.Protocol):
 
-    async def place(self, request: PlaceRequest) -> PlaceResponse: ...
+    async def place(self, place_request: PlaceRequest) -> PlaceResponse: ...

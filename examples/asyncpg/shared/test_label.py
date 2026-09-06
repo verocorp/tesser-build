@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import shared.label as label
+import shared
 
 
 class TestLabel:
 
     def test_a_label_equals_by_value(self) -> None:
-        first = label.Label("x")
-        second = label.Label("x")
+        first = shared.Label("x")
+        second = shared.Label("x")
         assert first == second

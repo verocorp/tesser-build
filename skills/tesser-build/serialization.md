@@ -285,7 +285,7 @@ belongs to the edge, recorded where its golden test lives.
 - Python mechanics: `python.md#value-objects` (canonical exits, child VOs),
   `python.md#the-spec-pattern` (inbound construction), `python.md#ports` (the ports
   package and its DTO rules). Compound shape verified in
-  `examples/python-app/campaign/domain/money.py`; the walk-plus-DTO pair
+  `examples/python-app/campaign/domain/campaign.py`; the walk-plus-DTO pair
   verified in `examples/serdepy/parcel/tests/test_record_construction.py`
   and `examples/serdepy/parcel/application/ports/parcel_wire.py`.
 - The all-cases worked example: `examples/serdepy/` — every backing type's

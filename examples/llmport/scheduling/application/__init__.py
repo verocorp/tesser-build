@@ -1,0 +1,7 @@
+from scheduling.application.booking_service import BookingService as BookingService
+from scheduling.application.booking_service import MapToBegunBookingSpec as MapToBegunBookingSpec
+from scheduling.application.booking_service import MapToBookingSpec as MapToBookingSpec
+from scheduling.application.booking_service import MapToNamingSpec as MapToNamingSpec
+from scheduling.application.booking_service import MapToReoffersSpec as MapToReoffersSpec
+from scheduling.application.booking_service import MapToResumptionSpec as MapToResumptionSpec
+from scheduling.application.booking_service import MapToSaveBookingRequest as MapToSaveBookingRequest

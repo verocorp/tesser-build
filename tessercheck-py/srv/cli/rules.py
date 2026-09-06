@@ -6,9 +6,10 @@ import typing
 
 import tesser.srv as ts
 
-import tessercheck.adapters.handlers.cli as cli
-import app.loader as loader
-import protocol.cli as protocol_cli
+import app
+import protocol
+import tesser.errors as errors
+import tessercheck.adapters.handlers as handlers
 
 _USAGE: typing.Final[str] = "usage: python -m srv.cli.rules [tree] [--check]"
 
@@ -22,15 +23,21 @@ class RulesHost(ts.Host):
     def run(self, argv: list[str]) -> int:
         check = "--check" in argv
         args = [arg for arg in argv if arg != "--check"]
-        app = loader.load()
+        tessercheck_app = app.load()
         try:
-            handler = cli.Handler(app.tessercheck.client)
+            handler = handlers.Handler(tessercheck_app.tessercheck.client)
             try:
-                resp = handler.rulebook(protocol_cli.CliRequest(args=tuple(args)))
-            except protocol_cli.UsageError as e:
-                resp = protocol_cli.CliResponse(2, stdout="", stderr=f"{e}\n{_USAGE}")
+                resp = handler.rulebook(protocol.CliRequest(args=tuple(args)))
+            except protocol.UsageError as e:
+                resp = protocol.CliResponse(2, stdout="", stderr=f"{e}\n{_USAGE}")
+            except errors.DomainError as e:
+                resp = protocol.CliResponse(
+                    errors.exit_code_for(e.kind), stdout="", stderr=e.message
+                )
+            except errors.InfraError:
+                resp = protocol.CliResponse(1, stdout="", stderr="unavailable")
             except Exception:
-                resp = protocol_cli.CliResponse(1, stdout="", stderr="unexpected error")
+                resp = protocol.CliResponse(1, stdout="", stderr="unexpected error")
             if resp.exit_code != 0:
                 if resp.stderr:
                     print(resp.stderr, file=sys.stderr)
@@ -50,7 +57,7 @@ class RulesHost(ts.Host):
             print(f"wrote {output.resolve()}")
             return 0
         finally:
-            app.close()
+            tessercheck_app.close()
 
 
 if __name__ == "__main__":

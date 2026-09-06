@@ -39,7 +39,7 @@ def test_port_subclass_stays_a_protocol() -> None:
 
 
 def test_structural_implementation_needs_no_marker() -> None:
-    saver: _SaveThings = _StructuralSaver()
+    saver: _SaveThings = _StructuralSaver()  # tesser:debt TB085
     saver.save("x")
     assert tesser.application.Port not in type(saver).__mro__
 

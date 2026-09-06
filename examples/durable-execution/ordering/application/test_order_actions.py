@@ -2,31 +2,30 @@ from __future__ import annotations
 
 import tesser.testing as ts
 
-import ordering.application.order_actions as actions
-import ordering.application.ports.catalog_repository as catalog_repository
-import ordering.application.ports.quoting as quoting
+import ordering.application as application
+import ordering.application.ports as ports
 
 
 @ts.fake
-class FakeCatalogRepository(catalog_repository.CatalogRepository):
+class FakeCatalogRepository(ports.CatalogRepository):
 
     def __init__(self) -> None:
         self.priced: list[str] = []
 
-    def price(self, request: catalog_repository.PriceRequest) -> catalog_repository.PriceResponse:
-        self.priced.append(request.sku)
-        return catalog_repository.PriceResponse(cents=250)
+    def price(self, price_request: ports.PriceRequest) -> ports.PriceResponse:
+        self.priced.append(price_request.sku)
+        return ports.PriceResponse(cents=250)
 
 
 class TestOrderActions:
 
     def test_quoting_answers_the_catalog_price(self) -> None:
-        quoted = actions.OrderActions(FakeCatalogRepository()).quote(
-            quoting.QuoteRequest(sku="widget")
+        quote_response = application.OrderActions(FakeCatalogRepository()).quote(
+            ports.QuoteRequest(sku="widget")
         )
-        assert quoted.cents == 250
+        assert quote_response.cents == 250
 
     def test_quoting_looks_the_sku_up_once(self) -> None:
-        catalog = FakeCatalogRepository()
-        actions.OrderActions(catalog).quote(quoting.QuoteRequest(sku="gadget"))
-        assert catalog.priced == ["gadget"]
+        fake_catalog_repository = FakeCatalogRepository()
+        application.OrderActions(fake_catalog_repository).quote(ports.QuoteRequest(sku="gadget"))
+        assert fake_catalog_repository.priced == ["gadget"]

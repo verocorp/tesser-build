@@ -1,6 +1,6 @@
 import pytest
 
-import scheduling.domain.scheduling as domain
+import scheduling.domain as domain
 
 
 def test_customer_name_equality() -> None:
@@ -73,10 +73,10 @@ def test_the_booking_walks_its_steps() -> None:
 
 
 def test_the_booking_reconstructs_from_its_parts() -> None:
-    spec = domain.BookingSpec(
+    booking_spec = domain.BookingSpec(
         step="confirm", name="Ada", chosen="mon-9am", offered=("mon-9am", "tue-2pm")
     )
-    booking = domain.Booking(spec)
+    booking = domain.Booking(booking_spec)
 
     assert str(booking.step()) == "confirm"
     assert str(booking.name()) == "Ada"

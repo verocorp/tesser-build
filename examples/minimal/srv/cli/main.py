@@ -4,32 +4,32 @@ import sys
 
 import tesser.srv as ts
 
-import alpha.adapters.handlers.cli as cli
-import app.loader as loader
-import protocol.cli as protocol_cli
+import alpha.adapters.handlers as handlers
+import app as app
+import protocol as protocol
 import tesser.errors as errors
 
 
 class CliHost(ts.Host):
 
     def run(self, argv: list[str]) -> int:
-        built = loader.load()
+        minimal_app = app.load()
         try:
-            handler = cli.Handler(built.alpha.client)
+            handler = handlers.Handler(minimal_app.alpha.client)
             try:
-                response = handler.add(protocol_cli.CliRequest(args=tuple(argv)))
-            except protocol_cli.UsageError as e:
-                response = protocol_cli.CliResponse(exit_code=2, line=protocol_cli.Line(text=str(e)))
+                cli_response = handler.add(protocol.CliRequest(args=tuple(argv)))
+            except protocol.UsageError as e:
+                cli_response = protocol.CliResponse(exit_code=2, line=protocol.Line(text=str(e)))
             except errors.DomainError as e:
-                response = protocol_cli.CliResponse(
-                    exit_code=errors.exit_code_for(e.kind), line=protocol_cli.Line(text=e.message)
+                cli_response = protocol.CliResponse(
+                    exit_code=errors.exit_code_for(e.kind), line=protocol.Line(text=e.message)
                 )
             except errors.InfraError:
-                response = protocol_cli.CliResponse(exit_code=1, line=protocol_cli.Line(text="unavailable"))
-            sys.stdout.write(response.line.text + "\n")
-            return response.exit_code
+                cli_response = protocol.CliResponse(exit_code=1, line=protocol.Line(text="unavailable"))
+            sys.stdout.write(cli_response.line.text + "\n")
+            return cli_response.exit_code
         finally:
-            built.close()
+            minimal_app.close()
 
 
 if __name__ == "__main__":

@@ -94,5 +94,5 @@ class Order(ts.AggregateRoot):
     def quantity(self) -> Quantity:
         return self._quantity
 
-    def total(self, spec: PriceSpec) -> Price:
-        return Price(spec).times(self._quantity)
+    def total(self, price_spec: PriceSpec) -> Price:
+        return Price(price_spec).times(self._quantity)

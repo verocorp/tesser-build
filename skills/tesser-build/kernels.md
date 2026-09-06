@@ -37,10 +37,14 @@ that isn't a copy.
    declared with `import <package>` lines, and the domain's pure stdlib —
    the shipped default plus any `stdlib <module>` lines the tree's
    `.tesser-root` declares. Never a context, never the app shell, never IO.
-3. **Nothing imports leftward.** A kernel never knows a context exists.
-   Contexts' pure roles (domain, client, application) may import the app's
-   kernels directly — as modules, like everything else (`import kernel.slug
-   as kernel_slug`, TB053) — and adapters, wiring, and tests may too.
+3. **Nothing imports leftward, and a kernel enters a context in one place.**
+   A kernel never knows a context exists. A root kernel is imported only by a
+   context's own `<context>/domain/kernel/` package, whose `__init__`
+   re-exports what that context takes (`from kernel import Slug as Slug`); a
+   domain module then names exactly one `kernel` (`import
+   campaign.domain.kernel as kernel`, TB053). No other role, no adapter, no
+   shell or protocol module imports a kernel at all — outside the domain a
+   kernel type is named through the domain `__init__` (TB062, TB063).
 4. **No client, no service, no adapters.** Consumption *is* the import. If
    the tree also wants runtime behavior (a CLI over the kernel), that is
    ordinary app anatomy grown beside it — contexts, `srv/` — not part of
@@ -53,10 +57,14 @@ that isn't a copy.
 <app>/
   .tesser-root        app            (+ `export <dir>` for an exported kernel)
   kernel/             ← app-scoped: fixed name, discovered, one per app
+    __init__.py       ← the export list
     money.py
     test_money.py     ← companion test: reaches only the kernel + tesser.testing
-  <context>/ ...      ← may import kernel.money directly from its pure roles
-  srv/  bootstrap/  protocol/  tests/
+  <context>/
+    domain/
+      kernel/         ← the one package that imports the root kernel
+        __init__.py   ← re-exports what this context takes
+  srv/  app/  protocol/  tests/
 ```
 
 ## Decisions you must make

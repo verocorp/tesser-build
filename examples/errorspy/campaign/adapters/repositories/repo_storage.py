@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tesser.adapters as ts
 
-import campaign.application.ports.campaign_repository as campaign_repository
+import campaign.application.ports as ports
 import tesser.errors as errors
 import storage
 
@@ -10,46 +10,48 @@ import storage
 class StorageCampaignRepository(ts.Repository):
 
     def __init__(self, backend: storage.FakeStorage) -> None:
-        self._storage = backend
+        self._backend = backend
 
     def save(
-        self, request: campaign_repository.SaveCampaignRequest
-    ) -> campaign_repository.SaveCampaignResponse:
+        self, save_campaign_request: ports.SaveCampaignRequest
+    ) -> ports.SaveCampaignResponse:
         record: storage.Record = {
-            "window": {"start": request.window.start, "end": request.window.end},
+            "window": {
+                "start": save_campaign_request.window.start,
+                "end": save_campaign_request.window.end,
+            },
             "links": [
                 {"slug": link.slug, "target_url": link.target_url}
-                for link in request.links
+                for link in save_campaign_request.links
             ],
         }
-        self._storage.put(request.id, record)
-        return campaign_repository.SaveCampaignResponse()
+        self._backend.put(save_campaign_request.id, record)
+        return ports.SaveCampaignResponse()
 
     def find(
-        self, request: campaign_repository.FindCampaignRequest
-    ) -> campaign_repository.FindCampaignResponse:
+        self, find_campaign_request: ports.FindCampaignRequest
+    ) -> ports.FindCampaignResponse:
         try:
-            row = self._storage.load(request.campaign_id)
+            row = self._backend.load(find_campaign_request.campaign_id)
         except storage.StorageMiss:
-            return campaign_repository.FindCampaignResponse(
-                outcome=campaign_repository.CampaignLookup.MISSING, campaigns=()
+            return ports.FindCampaignResponse(
+                outcome=ports.CampaignLookup.MISSING, campaigns=()
             )
         except storage.StorageUnavailable as e:
             raise errors.InfraError(
-                f"storage unavailable loading campaign {request.campaign_id!r}"
+                f"storage unavailable loading campaign {find_campaign_request.campaign_id!r}"
             ) from e
-        record = campaign_repository.CampaignRecord(
-            id=request.campaign_id,
-            window=campaign_repository.WindowRecord(
+        campaign_record = ports.CampaignRecord(
+            id=find_campaign_request.campaign_id,
+            window=ports.WindowRecord(
                 start=row["window"]["start"], end=row["window"]["end"]
             ),
             links=tuple(
-                campaign_repository.LinkRecord(slug=link["slug"], target_url=link["target_url"])
+                ports.LinkRecord(slug=link["slug"], target_url=link["target_url"])
                 for link in row["links"]
             ),
         )
-        return campaign_repository.FindCampaignResponse(
-            outcome=campaign_repository.CampaignLookup.FOUND,
-            campaigns=(record,),
+        return ports.FindCampaignResponse(
+            outcome=ports.CampaignLookup.FOUND,
+            campaigns=(campaign_record,),
         )
-

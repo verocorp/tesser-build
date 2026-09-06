@@ -3,75 +3,95 @@ from __future__ import annotations
 import pytest
 import tesser.testing as ts
 
-import campaign.adapters.gateways.target_policy as target_policy
-import campaign.application.ports.target_policy as port
-import linkpolicy.client.client as linkpolicy_client
+import campaign.adapters.gateways as gateways
+import campaign.application.ports as ports
+import linkpolicy.client as client
 import tesser.errors as errors
 
 
 @ts.fake
-class RecordingPolicyClient(linkpolicy_client.Client):
+class RecordingPolicyClient(client.LinkPolicyClient):
 
     def __init__(self, decision: str, reason: str) -> None:
         self._decision = decision
         self._reason = reason
         self.asked: list[str] = []
 
-    def check(self, req: linkpolicy_client.CheckRequest) -> linkpolicy_client.CheckResponse:
-        self.asked.append(req.target_url)
-        return linkpolicy_client.CheckResponse(decision=self._decision, reason=self._reason)
+    def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
+        self.asked.append(check_request.target_url)
+        return client.CheckResponse(decision=self._decision, reason=self._reason)
 
     def list_verdicts(
-        self, req: linkpolicy_client.ListVerdictsRequest
-    ) -> linkpolicy_client.ListVerdictsResponse:
-        return linkpolicy_client.ListVerdictsResponse(verdicts=())
+        self, list_verdicts_request: client.ListVerdictsRequest
+    ) -> client.ListVerdictsResponse:
+        return client.ListVerdictsResponse(verdicts=())
 
 
 def test_an_allowed_neighbour_verdict_becomes_the_allowed_verdict() -> None:
-    gateway = target_policy.LinkPolicyTargetPolicy(RecordingPolicyClient("allowed", "clean"))
+    link_policy_target_policy = gateways.LinkPolicyTargetPolicy(
+        RecordingPolicyClient("allowed", "clean")
+    )
 
-    response = gateway.check(port.CheckTargetRequest(target_url="https://ok.example/x"))
+    check_target_response = link_policy_target_policy.check(
+        ports.CheckTargetRequest(target_url="https://ok.example/x")
+    )
 
-    assert response.verdict is port.PolicyVerdict.ALLOWED
-    assert response.reason == "clean"
+    assert check_target_response.verdict is ports.PolicyVerdict.ALLOWED
+    assert check_target_response.reason == "clean"
 
 
 def test_a_blocked_neighbour_verdict_becomes_the_blocked_verdict() -> None:
-    gateway = target_policy.LinkPolicyTargetPolicy(RecordingPolicyClient("denied", "on the list"))
+    link_policy_target_policy = gateways.LinkPolicyTargetPolicy(
+        RecordingPolicyClient("denied", "on the list")
+    )
 
-    response = gateway.check(port.CheckTargetRequest(target_url="https://bad.example/x"))
+    check_target_response = link_policy_target_policy.check(
+        ports.CheckTargetRequest(target_url="https://bad.example/x")
+    )
 
-    assert response.verdict is port.PolicyVerdict.BLOCKED
-    assert response.reason == "on the list"
+    assert check_target_response.verdict is ports.PolicyVerdict.BLOCKED
+    assert check_target_response.reason == "on the list"
 
 
 def test_the_target_url_reaches_the_neighbour_unchanged() -> None:
-    client = RecordingPolicyClient("allowed", "clean")
-    gateway = target_policy.LinkPolicyTargetPolicy(client)
+    recording_policy_client = RecordingPolicyClient("allowed", "clean")
+    link_policy_target_policy = gateways.LinkPolicyTargetPolicy(recording_policy_client)
 
-    gateway.check(port.CheckTargetRequest(target_url="https://ok.example/a?b=1#c"))
+    link_policy_target_policy.check(
+        ports.CheckTargetRequest(target_url="https://ok.example/a?b=1#c")
+    )
 
-    assert client.asked == ["https://ok.example/a?b=1#c"]
+    assert recording_policy_client.asked == ["https://ok.example/a?b=1#c"]
 
 
 def test_an_empty_neighbour_reason_is_carried_through_rather_than_invented() -> None:
-    gateway = target_policy.LinkPolicyTargetPolicy(RecordingPolicyClient("allowed", ""))
+    link_policy_target_policy = gateways.LinkPolicyTargetPolicy(
+        RecordingPolicyClient("allowed", "")
+    )
 
-    assert gateway.check(port.CheckTargetRequest(target_url="https://ok.example/x")).reason == ""
+    check_target_response = link_policy_target_policy.check(
+        ports.CheckTargetRequest(target_url="https://ok.example/x")
+    )
+
+    assert check_target_response.reason == ""
 
 
 def test_the_gateway_asks_the_neighbour_once_per_check() -> None:
-    client = RecordingPolicyClient("allowed", "clean")
-    gateway = target_policy.LinkPolicyTargetPolicy(client)
+    recording_policy_client = RecordingPolicyClient("allowed", "clean")
+    link_policy_target_policy = gateways.LinkPolicyTargetPolicy(recording_policy_client)
 
-    gateway.check(port.CheckTargetRequest(target_url="https://ok.example/a"))
-    gateway.check(port.CheckTargetRequest(target_url="https://ok.example/b"))
+    link_policy_target_policy.check(ports.CheckTargetRequest(target_url="https://ok.example/a"))
+    link_policy_target_policy.check(ports.CheckTargetRequest(target_url="https://ok.example/b"))
 
-    assert client.asked == ["https://ok.example/a", "https://ok.example/b"]
+    assert recording_policy_client.asked == ["https://ok.example/a", "https://ok.example/b"]
 
 
 def test_a_neighbour_decision_the_gateway_knows_no_verdict_for_is_refused() -> None:
-    gateway = target_policy.LinkPolicyTargetPolicy(RecordingPolicyClient("maybe", "unsure"))
+    link_policy_target_policy = gateways.LinkPolicyTargetPolicy(
+        RecordingPolicyClient("maybe", "unsure")
+    )
 
     with pytest.raises(errors.InfraError):
-        gateway.check(port.CheckTargetRequest(target_url="https://ok.example/x"))
+        link_policy_target_policy.check(
+            ports.CheckTargetRequest(target_url="https://ok.example/x")
+        )

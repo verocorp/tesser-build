@@ -4,52 +4,52 @@ import json
 
 import tesser.adapters as ts
 
-import campaign.client.client as client
-import protocol.http as http
+import campaign.client as client
+import protocol
 import tesser.errors as errors
 
 
 class Handler(ts.Handler):
 
-    def __init__(self, client: client.Client) -> None:
-        self._client = client
+    def __init__(self, campaign_client: client.CampaignClient) -> None:
+        self._campaign_client = campaign_client
 
-    def create_campaign(self, campaign_id: str, raw: str) -> http.Response:
+    def create_campaign(self, campaign_id: str, raw: str) -> protocol.Response:
         try:
             try:
                 data = json.loads(raw)
             except json.JSONDecodeError as e:
-                raise http.BadRequest(f"malformed JSON: {e}") from e
+                raise protocol.BadRequest(f"malformed JSON: {e}") from e
             if not isinstance(data, dict):
-                raise http.BadRequest("expected a JSON object")
+                raise protocol.BadRequest("expected a JSON object")
             body: dict[str, object] = data
             window_value = body.get("window")
             if not isinstance(window_value, dict):
-                raise http.BadRequest("'window' must be an object")
+                raise protocol.BadRequest("'window' must be an object")
             window: dict[str, object] = window_value
             links_value = body.get("links")
             if not isinstance(links_value, list):
-                raise http.BadRequest("'links' must be an array")
+                raise protocol.BadRequest("'links' must be an array")
             links: list[object] = links_value
             window_start = window.get("start")
             if not isinstance(window_start, str):
-                raise http.BadRequest("expected a string field")
+                raise protocol.BadRequest("expected a string field")
             window_end = window.get("end")
             if not isinstance(window_end, str):
-                raise http.BadRequest("expected a string field")
+                raise protocol.BadRequest("expected a string field")
             link_bodies: list[client.LinkBody] = []
             for link in links:
                 if not isinstance(link, dict):
-                    raise http.BadRequest("'link' must be an object")
+                    raise protocol.BadRequest("'link' must be an object")
                 entry: dict[str, object] = link
                 slug = entry.get("slug")
                 if not isinstance(slug, str):
-                    raise http.BadRequest("expected a string field")
+                    raise protocol.BadRequest("expected a string field")
                 target_url = entry.get("target_url")
                 if not isinstance(target_url, str):
-                    raise http.BadRequest("expected a string field")
+                    raise protocol.BadRequest("expected a string field")
                 link_bodies.append(client.LinkBody(slug=slug, target_url=target_url))
-            self._client.create_campaign(
+            self._campaign_client.create_campaign(
                 client.CreateCampaignRequest(
                     campaign_id=campaign_id,
                     window_start=window_start,
@@ -57,9 +57,9 @@ class Handler(ts.Handler):
                     links=tuple(link_bodies),
                 )
             )
-            return http.Response(201, {"id": campaign_id})
-        except http.BadRequest as e:
-            return http.Response(
+            return protocol.Response(201, {"id": campaign_id})
+        except protocol.BadRequest as e:
+            return protocol.Response(
                 400,
                 {
                     "type": "/problems/malformed_request",
@@ -83,9 +83,9 @@ class Handler(ts.Handler):
                     {"name": p.field, "code": p.code, "reason": p.message}
                     for p in e.problems
                 ]
-            return http.Response(status, problem)
+            return protocol.Response(status, problem)
         except errors.InfraError:
-            return http.Response(
+            return protocol.Response(
                 503,
                 {
                     "type": "/problems/unavailable",
@@ -95,7 +95,7 @@ class Handler(ts.Handler):
                 },
             )
         except Exception:
-            return http.Response(
+            return protocol.Response(
                 500,
                 {
                     "type": "/problems/internal",
@@ -105,14 +105,17 @@ class Handler(ts.Handler):
                 },
             )
 
-    def get_campaign(self, campaign_id: str) -> http.Response:
+    def get_campaign(self, campaign_id: str) -> protocol.Response:
         try:
-            view = self._client.get_campaign(
+            campaign_view = self._campaign_client.get_campaign(
                 client.GetCampaignRequest(campaign_id=campaign_id)
             )
-            return http.Response(200, {"id": view.campaign_id, "links": list(view.links)})
-        except http.BadRequest as e:
-            return http.Response(
+            return protocol.Response(
+                200,
+                {"id": campaign_view.campaign_id, "links": list(campaign_view.links)},
+            )
+        except protocol.BadRequest as e:
+            return protocol.Response(
                 400,
                 {
                     "type": "/problems/malformed_request",
@@ -136,9 +139,9 @@ class Handler(ts.Handler):
                     {"name": p.field, "code": p.code, "reason": p.message}
                     for p in e.problems
                 ]
-            return http.Response(status, problem)
+            return protocol.Response(status, problem)
         except errors.InfraError:
-            return http.Response(
+            return protocol.Response(
                 503,
                 {
                     "type": "/problems/unavailable",
@@ -148,7 +151,7 @@ class Handler(ts.Handler):
                 },
             )
         except Exception:
-            return http.Response(
+            return protocol.Response(
                 500,
                 {
                     "type": "/problems/internal",
@@ -158,31 +161,31 @@ class Handler(ts.Handler):
                 },
             )
 
-    def add_link(self, campaign_id: str, raw: str) -> http.Response:
+    def add_link(self, campaign_id: str, raw: str) -> protocol.Response:
         try:
             try:
                 data = json.loads(raw)
             except json.JSONDecodeError as e:
-                raise http.BadRequest(f"malformed JSON: {e}") from e
+                raise protocol.BadRequest(f"malformed JSON: {e}") from e
             if not isinstance(data, dict):
-                raise http.BadRequest("expected a JSON object")
+                raise protocol.BadRequest("expected a JSON object")
             body: dict[str, object] = data
             slug = body.get("slug")
             if not isinstance(slug, str):
-                raise http.BadRequest("expected a string field")
+                raise protocol.BadRequest("expected a string field")
             target_url = body.get("target_url")
             if not isinstance(target_url, str):
-                raise http.BadRequest("expected a string field")
-            self._client.add_link(
+                raise protocol.BadRequest("expected a string field")
+            self._campaign_client.add_link(
                 client.AddLinkRequest(
                     campaign_id=campaign_id,
                     slug=slug,
                     target_url=target_url,
                 )
             )
-            return http.Response(200, {"status": "added"})
-        except http.BadRequest as e:
-            return http.Response(
+            return protocol.Response(200, {"status": "added"})
+        except protocol.BadRequest as e:
+            return protocol.Response(
                 400,
                 {
                     "type": "/problems/malformed_request",
@@ -206,9 +209,9 @@ class Handler(ts.Handler):
                     {"name": p.field, "code": p.code, "reason": p.message}
                     for p in e.problems
                 ]
-            return http.Response(status, problem)
+            return protocol.Response(status, problem)
         except errors.InfraError:
-            return http.Response(
+            return protocol.Response(
                 503,
                 {
                     "type": "/problems/unavailable",
@@ -218,7 +221,7 @@ class Handler(ts.Handler):
                 },
             )
         except Exception:
-            return http.Response(
+            return protocol.Response(
                 500,
                 {
                     "type": "/problems/internal",
@@ -228,14 +231,14 @@ class Handler(ts.Handler):
                 },
             )
 
-    def deactivate_link(self, campaign_id: str, slug: str) -> http.Response:
+    def deactivate_link(self, campaign_id: str, slug: str) -> protocol.Response:
         try:
-            self._client.deactivate_link(
+            self._campaign_client.deactivate_link(
                 client.DeactivateLinkRequest(campaign_id=campaign_id, slug=slug)
             )
-            return http.Response(200, {"status": "deactivated"})
-        except http.BadRequest as e:
-            return http.Response(
+            return protocol.Response(200, {"status": "deactivated"})
+        except protocol.BadRequest as e:
+            return protocol.Response(
                 400,
                 {
                     "type": "/problems/malformed_request",
@@ -259,9 +262,9 @@ class Handler(ts.Handler):
                     {"name": p.field, "code": p.code, "reason": p.message}
                     for p in e.problems
                 ]
-            return http.Response(status, problem)
+            return protocol.Response(status, problem)
         except errors.InfraError:
-            return http.Response(
+            return protocol.Response(
                 503,
                 {
                     "type": "/problems/unavailable",
@@ -271,7 +274,7 @@ class Handler(ts.Handler):
                 },
             )
         except Exception:
-            return http.Response(
+            return protocol.Response(
                 500,
                 {
                     "type": "/problems/internal",

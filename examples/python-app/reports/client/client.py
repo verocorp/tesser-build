@@ -26,6 +26,8 @@ class LinksByVerdictResponse(ts.Response):
         self.links = links
 
 
-class Client(ts.Client, typing.Protocol):
+class ReportsClient(ts.Client, typing.Protocol):
 
-    def links_by_verdict(self, req: LinksByVerdictRequest) -> LinksByVerdictResponse: ...
+    def links_by_verdict(
+        self, links_by_verdict_request: LinksByVerdictRequest
+    ) -> LinksByVerdictResponse: ...

@@ -2,23 +2,22 @@ from __future__ import annotations
 
 import tesser.testing as ts
 
-import alpha.adapters.handlers.cli as cli
-import alpha.application.ports.beta_check as beta_check
-import alpha.component.component as component
-import alpha.component.config as config
-import protocol.cli as protocol_cli
+import alpha.adapters.handlers as handlers
+import alpha.application.ports as ports
+import alpha.component as component
+import protocol
 
 
 @ts.fake
-class FakeBetaCheck(beta_check.BetaCheck):
+class FakeBetaCheck(ports.BetaCheck):
 
-    def check(self, request: beta_check.CheckRequest) -> beta_check.CheckResponse:
-        return beta_check.CheckResponse(verdict=beta_check.Verdict.OK)
+    def check(self, check_request: ports.CheckRequest) -> ports.CheckResponse:
+        return ports.CheckResponse(verdict=ports.Verdict.OK)
 
 
 class TestAlphaContext:
 
     def test_a_cli_add_reaches_the_wired_service(self) -> None:
-        wired = component.Alpha(config.Config(config.Spec(storage="memory")), FakeBetaCheck())
-        response = cli.Handler(wired.client).add(protocol_cli.CliRequest(args=("a", "p")))
-        assert response.line.text == "a"
+        alpha = component.Alpha(component.Config(component.Spec(storage="memory")), FakeBetaCheck())
+        cli_response = handlers.Handler(alpha.client).add(protocol.CliRequest(args=("a", "p")))
+        assert cli_response.line.text == "a"

@@ -1,6 +1,6 @@
 import pathlib
 
-import tessercheck.domain.checks as checks
+import tessercheck.domain as domain
 import tessercheck.tests.conftest as conftest
 
 
@@ -82,11 +82,11 @@ def test_no_module_shape_is_silent(tmp_path: pathlib.Path) -> None:
         f"import — a location the walk does not govern: {silent}"
     )
     covered = frozenset(
-        str(checks.Placement(checks.PlacementSpec(rel[:-3].replace("/", "."), False, ("shop",))))
+        str(domain.Placement(domain.PlacementSpec(rel[:-3].replace("/", "."), False, ("shop",))))
         for rel, _ in corpus
         if not rel.endswith("__init__.py")
     )
-    returned = conftest.returned_tokens(conftest.function_tree(checks.Placement.__init__))
+    returned = conftest.returned_tokens(conftest.function_tree(domain.Placement.__init__))
     assert returned, "no placement tokens extracted from Placement.__init__; the totality below would pass on an empty set"
     package_only = frozenset(
         {

@@ -5,8 +5,8 @@ import os
 import asyncpg
 import pytest
 
-import beta.adapters.repositories.postgres as postgres
-import beta.application.ports.key_repository as key_repository
+import beta.adapters.repositories as repositories
+import beta.application.ports as ports
 import pgdatabase.database as pgdatabase
 
 
@@ -19,16 +19,16 @@ class TestPostgresKeyStore:
         await connection.close()
         database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
         await database.open()
-        key_store = postgres.PostgresKeyStore(database)
-        async with key_store.transaction() as keys_repo:
-            put = await keys_repo.put_key(key_repository.PutKeyRequest(key="k"))
-        async with key_store.transaction() as keys_repo:
-            held = await keys_repo.has_key(key_repository.HasKeyRequest(key="k"))
-            missing = await keys_repo.has_key(key_repository.HasKeyRequest(key="x"))
+        postgres_key_store = repositories.PostgresKeyStore(database)
+        async with postgres_key_store.transaction() as key_repository:
+            put = await key_repository.put_key(ports.PutKeyRequest(key="k"))
+        async with postgres_key_store.transaction() as key_repository:
+            held = await key_repository.has_key(ports.HasKeyRequest(key="k"))
+            missing = await key_repository.has_key(ports.HasKeyRequest(key="x"))
         await database.close()
         assert put.key == "k"
-        assert held.held is key_repository.Held.YES
-        assert missing.held is key_repository.Held.NO
+        assert held.held is ports.Held.YES
+        assert missing.held is ports.Held.NO
 
     async def test_a_transaction_that_raises_is_rolled_back(self) -> None:
         dsn = os.environ["BETA_STORAGE"]
@@ -37,15 +37,15 @@ class TestPostgresKeyStore:
         await connection.close()
         database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
         await database.open()
-        key_store = postgres.PostgresKeyStore(database)
+        postgres_key_store = repositories.PostgresKeyStore(database)
         with pytest.raises(RuntimeError):
-            async with key_store.transaction() as keys_repo:
-                await keys_repo.put_key(key_repository.PutKeyRequest(key="k"))
+            async with postgres_key_store.transaction() as key_repository:
+                await key_repository.put_key(ports.PutKeyRequest(key="k"))
                 raise RuntimeError("abort")
-        async with key_store.transaction() as keys_repo:
-            missing = await keys_repo.has_key(key_repository.HasKeyRequest(key="k"))
+        async with postgres_key_store.transaction() as key_repository:
+            missing = await key_repository.has_key(ports.HasKeyRequest(key="k"))
         await database.close()
-        assert missing.held is key_repository.Held.NO
+        assert missing.held is ports.Held.NO
 
     async def test_the_schema_outlives_a_first_transaction_that_rolls_back(self) -> None:
         dsn = os.environ["BETA_STORAGE"]
@@ -54,10 +54,10 @@ class TestPostgresKeyStore:
         await connection.close()
         database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
         await database.open()
-        key_store = postgres.PostgresKeyStore(database)
+        postgres_key_store = repositories.PostgresKeyStore(database)
         with pytest.raises(RuntimeError):
-            async with key_store.transaction() as keys_repo:
-                await keys_repo.put_key(key_repository.PutKeyRequest(key="k"))
+            async with postgres_key_store.transaction() as key_repository:
+                await key_repository.put_key(ports.PutKeyRequest(key="k"))
                 raise RuntimeError("abort")
         await database.close()
         connection = await asyncpg.connect(dsn)

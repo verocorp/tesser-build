@@ -66,7 +66,7 @@ def test_construction_is_one_shot_even_through_init_itself() -> None:
 
 
 def test_write_once_lost_because_it_leaves_the_smuggling_channel_open() -> None:
-    ask = _WriteOnceAsk("/campaigns")
+    ask = _WriteOnceAsk("/campaigns")  # tesser:debt TB085
     with pytest.raises(AttributeError):
         ask.path = "/admin"
     setattr(ask, "verdict", "allowed")

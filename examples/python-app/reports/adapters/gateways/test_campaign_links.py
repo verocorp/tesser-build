@@ -3,95 +3,95 @@ from __future__ import annotations
 import pytest
 import tesser.testing as ts
 
-import campaign.client.client as campaign_client
-import reports.adapters.gateways.campaign_links as campaign_links
-import reports.application.ports.link_source as link_source
+import campaign.client as client
+import reports.adapters.gateways as gateways
+import reports.application.ports as ports
 import tesser.errors as errors
 
 
 @ts.fake
-class FakeCampaignClient(campaign_client.Client):
+class FakeCampaignClient(client.CampaignClient):
     def __init__(
-        self, *links: campaign_client.LinkView, error: Exception | None = None
+        self, *links: client.LinkView, error: Exception | None = None
     ) -> None:
         self.links = links
         self.error = error
-        self.requests: list[campaign_client.ListLinksRequest] = []
+        self.requests: list[client.ListLinksRequest] = []
 
     def create_campaign(
-        self, req: campaign_client.CreateCampaignRequest
-    ) -> campaign_client.CampaignView:
+        self, create_campaign_request: client.CreateCampaignRequest
+    ) -> client.CampaignView:
         raise AssertionError("create_campaign is not part of the reports surface")
 
-    def add_link(self, req: campaign_client.AddLinkRequest) -> campaign_client.CampaignView:
+    def add_link(self, add_link_request: client.AddLinkRequest) -> client.CampaignView:
         raise AssertionError("add_link is not part of the reports surface")
 
     def deactivate_link(
-        self, req: campaign_client.DeactivateLinkRequest
-    ) -> campaign_client.CampaignView:
+        self, deactivate_link_request: client.DeactivateLinkRequest
+    ) -> client.CampaignView:
         raise AssertionError("deactivate_link is not part of the reports surface")
 
     def get_campaign(
-        self, req: campaign_client.GetCampaignRequest
-    ) -> campaign_client.CampaignView:
+        self, get_campaign_request: client.GetCampaignRequest
+    ) -> client.CampaignView:
         raise AssertionError("get_campaign is not part of the reports surface")
 
-    def resolve(self, req: campaign_client.ResolveRequest) -> campaign_client.ResolveResponse:
+    def resolve(self, resolve_request: client.ResolveRequest) -> client.ResolveResponse:
         raise AssertionError("resolve is not part of the reports surface")
 
     def list_links(
-        self, req: campaign_client.ListLinksRequest
-    ) -> campaign_client.ListLinksResponse:
-        self.requests.append(req)
+        self, list_links_request: client.ListLinksRequest
+    ) -> client.ListLinksResponse:
+        self.requests.append(list_links_request)
         if self.error is not None:
             raise self.error
-        return campaign_client.ListLinksResponse(links=self.links)
+        return client.ListLinksResponse(links=self.links)
 
 
 def test_every_link_the_campaign_context_serves_becomes_a_link_record() -> None:
-    links = FakeCampaignClient(
-        campaign_client.LinkView("spring-sale", "https://a.example/s", "active"),
-        campaign_client.LinkView("winter-sale", "https://a.example/w", "inactive"),
+    fake_campaign_client = FakeCampaignClient(
+        client.LinkView("spring-sale", "https://a.example/s", "active"),
+        client.LinkView("winter-sale", "https://a.example/w", "inactive"),
     )
 
-    resp = campaign_links.CampaignLinkGateway(links).links(link_source.ListLinksRequest())
+    list_links_response = gateways.CampaignLinkGateway(fake_campaign_client).links(ports.ListLinksRequest())
 
-    assert [(record.slug, record.target_url) for record in resp.links] == [
+    assert [(record.slug, record.target_url) for record in list_links_response.links] == [
         ("spring-sale", "https://a.example/s"),
         ("winter-sale", "https://a.example/w"),
     ]
 
 
 def test_the_gateway_hands_back_records_and_never_the_foreign_view() -> None:
-    links = FakeCampaignClient(
-        campaign_client.LinkView("spring-sale", "https://a.example/s", "active")
+    fake_campaign_client = FakeCampaignClient(
+        client.LinkView("spring-sale", "https://a.example/s", "active")
     )
 
-    resp = campaign_links.CampaignLinkGateway(links).links(link_source.ListLinksRequest())
+    list_links_response = gateways.CampaignLinkGateway(fake_campaign_client).links(ports.ListLinksRequest())
 
-    assert isinstance(resp, link_source.ListLinksResponse)
-    assert isinstance(resp.links[0], link_source.LinkRecord)
+    assert isinstance(list_links_response, ports.ListLinksResponse)
+    assert isinstance(list_links_response.links[0], ports.LinkRecord)
 
 
 def test_the_gateway_asks_the_campaign_context_for_its_whole_link_list() -> None:
-    links = FakeCampaignClient()
+    fake_campaign_client = FakeCampaignClient()
 
-    campaign_links.CampaignLinkGateway(links).links(link_source.ListLinksRequest())
+    gateways.CampaignLinkGateway(fake_campaign_client).links(ports.ListLinksRequest())
 
-    assert len(links.requests) == 1
-    assert isinstance(links.requests[0], campaign_client.ListLinksRequest)
+    assert len(fake_campaign_client.requests) == 1
+    assert isinstance(fake_campaign_client.requests[0], client.ListLinksRequest)
 
 
 def test_a_campaign_context_with_no_links_yields_no_records() -> None:
-    links = FakeCampaignClient()
+    fake_campaign_client = FakeCampaignClient()
 
-    resp = campaign_links.CampaignLinkGateway(links).links(link_source.ListLinksRequest())
+    list_links_response = gateways.CampaignLinkGateway(fake_campaign_client).links(ports.ListLinksRequest())
 
-    assert resp.links == ()
+    assert list_links_response.links == ()
 
 
 def test_a_failure_inside_the_campaign_context_reaches_the_caller() -> None:
-    links = FakeCampaignClient(error=errors.InfraError("campaign store unreachable"))
+    fake_campaign_client = FakeCampaignClient(error=errors.InfraError("campaign store unreachable"))
 
     with pytest.raises(errors.InfraError):
-        campaign_links.CampaignLinkGateway(links).links(link_source.ListLinksRequest())
+        gateways.CampaignLinkGateway(fake_campaign_client).links(ports.ListLinksRequest())

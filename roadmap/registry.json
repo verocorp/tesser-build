@@ -26,8 +26,7 @@
       "title": "Value objects",
       "skill": "value-objects.md",
       "py_example": [
-        "examples/python-app/campaign/domain/values.py",
-        "examples/python-app/campaign/domain/money.py",
+        "examples/python-app/campaign/domain/campaign.py",
         "examples/python-app/campaign/domain/labels.py"
       ],
       "go_example": [
@@ -254,9 +253,7 @@
         "examples/python-app/tests/test_enforcement.py",
         "examples/python-app/tests/test_architecture_teeth.py",
         "examples/python-app/tests/test_bootstrap_once.py",
-        "examples/python-app/app/test_app.py",
-        "examples/python-app/app/test_loader.py",
-        "examples/python-app/app/test_repository.py"
+        "examples/python-app/app/test_app.py"
       ],
       "rationale": []
     },
@@ -383,6 +380,19 @@
       "go_analyzers": [],
       "py_checks": [
         "TB023"
+      ],
+      "rationale": []
+    },
+    {
+      "key": "norm-naming",
+      "title": "Norm: type-derived names",
+      "py_example": [
+        "examples/minimal"
+      ],
+      "go_example": [],
+      "go_analyzers": [],
+      "py_checks": [
+        "TB085"
       ],
       "rationale": []
     },

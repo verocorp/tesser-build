@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import tesser.application as ts
 
-import alpha.application.ports.quoting as quoting
-import alpha.domain.widget as widget
+import alpha.application.ports as ports
+import alpha.domain as domain
 
 
 class FlowResponse(ts.Response):
@@ -12,25 +12,25 @@ class FlowResponse(ts.Response):
         self.name = name
 
 
-class MapToQuoteRequest(ts.Mapper, quoting.QuoteRequest):
+class MapToQuoteRequest(ts.Mapper, ports.QuoteRequest):
 
-    def __init__(self, named: widget.Name) -> None:
-        super().__init__(name=str(named))
+    def __init__(self, name: domain.Name) -> None:
+        super().__init__(name=str(name))
 
 
 class MapToFlowResponse(ts.Mapper, FlowResponse):
 
-    def __init__(self, quoted: quoting.QuoteResponse) -> None:
-        super().__init__(name=quoted.name)
+    def __init__(self, quote_response: ports.QuoteResponse) -> None:
+        super().__init__(name=quote_response.name)
 
 
 class WidgetFlow(ts.Orchestrator):
 
-    def __init__(self, job: ts.JobContext, quotes: quoting.Quoting) -> None:
-        self._job = job
-        self._quotes = quotes
+    def __init__(self, job_context: ts.JobContext, quoting: ports.Quoting) -> None:
+        self._job_context = job_context
+        self._quoting = quoting
 
-    def run(self, request: quoting.QuoteRequest) -> FlowResponse:
-        named = widget.Name(request.name)
-        quoted = self._quotes.quote(self._job, MapToQuoteRequest(named))
-        return MapToFlowResponse(quoted)
+    def run(self, quote_request: ports.QuoteRequest) -> FlowResponse:
+        name = domain.Name(quote_request.name)
+        quote_response = self._quoting.quote(self._job_context, MapToQuoteRequest(name))
+        return MapToFlowResponse(quote_response)

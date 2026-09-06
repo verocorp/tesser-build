@@ -34,8 +34,12 @@ bump `skill-version` in `skills/tesser-build/SKILL.md`.
    constructor has a paired `MustNewX(...) X` that panics on error; tests use
    `MustNewX` for inline construction. (`mustnew` analyzer.) Aggregates and
    entities are *not* VOs — they carry real construction risk and get no `Must*`.
-2. **Every VO has explicit equality test coverage** — a `Test*_Equality` that
-   locks equality semantics, so a later field/comparability change is caught.
+2. **Every exported VO has explicit equality test coverage** — a
+   `Test*_Equality` that locks equality semantics, so a later
+   field/comparability change is caught. *Exported* is the 2026-09-06
+   narrowing: a sibling test imports the packages around it, never the module
+   beside it, so a value object the package `__init__` does not re-export is
+   reachable only through the object that owns it and is tested there.
    This convention stands, but is *not* machine-enforced: the `Test*_Equality`
    existence check (`equalitytest`) was parked. What ships instead is
    `comparability`, which flags a VO that needs `Equal` because `==` is

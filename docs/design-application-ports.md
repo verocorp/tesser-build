@@ -168,8 +168,10 @@ staying green.
   `FindItemResponse(outcome: ItemLookup, items=...)`, read with `match` +
   `typing.assert_never`. Growing the outcome set is a compile error at every
   reader.
-- **Mapping stays in application.** `application/mapping.py` holds the
-  domain ↔ port-DTO transforms; ports hold no logic and no bodies.
+- **Mapping stays in application.** The mappers hold the domain ↔ port-DTO
+  transforms; ports hold no logic and no bodies. (They lived in
+  `application/mapping.py` until v0.0.98.0, when the sibling-module ban put
+  them in `application/catalog_service.py` beside the service that calls them.)
 - **The empty request and the empty response are the established shape**, not
   new ceremony: `client.py` already ships `ListLinksRequest.__init__(self) ->
   None: return None`.
@@ -178,7 +180,7 @@ staying green.
 
 ```python
 import tesser.adapters as ts
-import catalog.application.ports.item_repository as item_repository
+import catalog.application.ports as ports
 ```
 
 That is the whole import block. Across `examples/ports/`, every adapter import is a
@@ -196,7 +198,7 @@ reached the service it exists to be decoupled from.
 | Code | Rule |
 |---|---|
 | TB041 | ports is a package, never a module |
-| TB042 | a ports `__init__` is empty |
+| TB042 | a ports `__init__` is the package's export list, and re-exports only what a module outside the package reads |
 | TB050 | a ports module imports only `tesser.application`, exactly once, as `ts` |
 | TB051 | a ports module holds only imports and classes |
 | TB051 | a port method declares a shape and never a body |

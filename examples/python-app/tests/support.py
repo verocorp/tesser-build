@@ -3,24 +3,24 @@ from __future__ import annotations  # tesser:debt-file TB041
 import ast
 import pathlib
 
-import app.config as config
-import campaign.component.config as campaign_config
-import linkpolicy.component.config as linkpolicy_config
-import protocol.http as http
-import reports.component.config as reports_config
+import app as app
+import campaign.component as campaign_component
+import linkpolicy.component as linkpolicy_component
+import protocol as protocol
+import reports.component as reports_component
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 CONFIG_OWNERS = frozenset({"cfg", "config"})
 
 
-def app_config() -> config.Config:
-    return config.Config(
-        config.Spec(
-            campaign=campaign_config.Config(campaign_config.Spec("memory")),
-            linkpolicy=linkpolicy_config.Config(linkpolicy_config.Spec("memory")),
-            reports=reports_config.Config(reports_config.Spec()),
-            http=config.HttpConfig(config.HttpSpec("", 8080)),
+def app_config() -> app.AppConfig:
+    return app.AppConfig(
+        app.Spec(
+            campaign=campaign_component.Config(campaign_component.Spec("memory")),
+            linkpolicy=linkpolicy_component.Config(linkpolicy_component.Spec("memory")),
+            reports=reports_component.Config(reports_component.Spec()),
+            http=app.HttpConfig(app.HttpSpec("", 8080)),
         )
     )
 
@@ -78,17 +78,17 @@ class SpyApp:
         self.closed += 1
 
 
-def route_ok(req: http.HttpRequest) -> http.HttpResponse:
-    return http.HttpResponse.json(200, {"seen": dict(req.path_params)})
+def route_ok(http_request: protocol.HttpRequest) -> protocol.HttpResponse:
+    return protocol.HttpResponse.json(200, {"seen": dict(http_request.path_params)})
 
 
-def route_other(req: http.HttpRequest) -> http.HttpResponse:
-    return http.HttpResponse.json(200, {})
+def route_other(http_request: protocol.HttpRequest) -> protocol.HttpResponse:
+    return protocol.HttpResponse.json(200, {})
 
 
 ROUTES = (
-    http.Route("POST", "/campaigns", route_other),
-    http.Route("GET", "/campaigns/{campaign_id}", route_ok),
-    http.Route("GET", "/r/{slug}", route_ok),
-    http.Route("GET", "/reports/links-by-verdict", route_other),
+    protocol.Route("POST", "/campaigns", route_other),
+    protocol.Route("GET", "/campaigns/{campaign_id}", route_ok),
+    protocol.Route("GET", "/r/{slug}", route_ok),
+    protocol.Route("GET", "/reports/links-by-verdict", route_other),
 )

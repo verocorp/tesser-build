@@ -2,53 +2,85 @@ from __future__ import annotations
 
 import pytest
 
-import alpha.domain.clearance as clearance
-import alpha.domain.widget as widget
+import alpha.domain as domain
 import tesser.errors as errors
 
 
 class TestWidget:
 
     def test_a_widget_constructs_from_its_spec(self) -> None:
-        spec = widget.WidgetSpec(name="a", part=widget.PartSpec(id="p"), standing="kept")
-        built = widget.Widget(spec)
-        assert str(built.identity) == spec.name
+        widget_spec = domain.WidgetSpec(name="a", part=domain.PartSpec(id="p"), standing="kept")
+        widget = domain.Widget(widget_spec)
+        assert str(widget.identity) == widget_spec.name
 
     def test_taking_a_new_part_replaces_the_held_one(self) -> None:
-        built = widget.Widget(widget.WidgetSpec(name="a", part=widget.PartSpec(id="p"), standing="kept"))
-        assert built.take(widget.PartSpec(id="q")) is widget.Taken.TAKEN
-        assert built.part == widget.Part(widget.PartSpec(id="q"))
+        widget = domain.Widget(
+            domain.WidgetSpec(name="a", part=domain.PartSpec(id="p"), standing="kept")
+        )
+        assert widget.take(domain.PartSpec(id="q")) is domain.Taken.TAKEN
+        assert str(widget.part.identity) == "q"
 
     def test_taking_the_held_part_changes_nothing(self) -> None:
-        built = widget.Widget(widget.WidgetSpec(name="a", part=widget.PartSpec(id="p"), standing="kept"))
-        assert built.take(widget.PartSpec(id="p")) is widget.Taken.HELD
-        assert built.part == widget.Part(widget.PartSpec(id="p"))
+        widget = domain.Widget(
+            domain.WidgetSpec(name="a", part=domain.PartSpec(id="p"), standing="kept")
+        )
+        assert widget.take(domain.PartSpec(id="p")) is domain.Taken.HELD
+        assert str(widget.part.identity) == "p"
 
     def test_a_widget_beta_cleared_stands_as_kept(self) -> None:
-        built = widget.Widget(widget.WidgetSpec(name="a", part=widget.PartSpec(id="a"), standing="kept"))
-        built.clear(clearance.ClearanceSpec(verdict="ok"))
-        assert built.standing == clearance.Standing("kept")
+        widget = domain.Widget(
+            domain.WidgetSpec(name="a", part=domain.PartSpec(id="a"), standing="kept")
+        )
+        widget.clear(domain.ClearanceSpec(verdict="ok"))
+        assert str(widget.standing) == "kept"
 
     def test_a_widget_beta_refused_stands_as_released(self) -> None:
-        built = widget.Widget(widget.WidgetSpec(name="a", part=widget.PartSpec(id="a"), standing="kept"))
-        built.clear(clearance.ClearanceSpec(verdict="refused"))
-        assert built.standing == clearance.Standing("released")
+        widget = domain.Widget(
+            domain.WidgetSpec(name="a", part=domain.PartSpec(id="a"), standing="kept")
+        )
+        widget.clear(domain.ClearanceSpec(verdict="refused"))
+        assert str(widget.standing) == "released"
 
     def test_a_released_widget_beta_later_clears_stands_as_kept_again(self) -> None:
-        built = widget.Widget(
-            widget.WidgetSpec(name="a", part=widget.PartSpec(id="a"), standing="released")
+        widget = domain.Widget(
+            domain.WidgetSpec(name="a", part=domain.PartSpec(id="a"), standing="released")
         )
-        built.clear(clearance.ClearanceSpec(verdict="ok"))
-        assert built.standing == clearance.Standing("kept")
+        widget.clear(domain.ClearanceSpec(verdict="ok"))
+        assert str(widget.standing) == "kept"
+
+    def test_a_verdict_outside_the_set_refuses_the_clearance(self) -> None:
+        widget = domain.Widget(
+            domain.WidgetSpec(name="a", part=domain.PartSpec(id="a"), standing="kept")
+        )
+        with pytest.raises(errors.DomainError):
+            widget.clear(domain.ClearanceSpec(verdict="maybe"))
 
     def test_a_widget_rebuilds_the_standing_its_spec_carries(self) -> None:
-        built = widget.Widget(
-            widget.WidgetSpec(name="a", part=widget.PartSpec(id="p"), standing="released")
+        widget = domain.Widget(
+            domain.WidgetSpec(name="a", part=domain.PartSpec(id="p"), standing="released")
         )
-        assert built.standing == clearance.Standing("released")
+        assert str(widget.standing) == "released"
 
     def test_a_standing_outside_the_set_refuses_the_widget(self) -> None:
         with pytest.raises(errors.DomainError):
-            widget.Widget(
-                widget.WidgetSpec(name="a", part=widget.PartSpec(id="p"), standing="maybe")
+            domain.Widget(
+                domain.WidgetSpec(name="a", part=domain.PartSpec(id="p"), standing="maybe")
             )
+
+    def test_an_empty_name_refuses_the_widget(self) -> None:
+        with pytest.raises(errors.DomainError):
+            domain.Widget(
+                domain.WidgetSpec(name="", part=domain.PartSpec(id="p"), standing="kept")
+            )
+
+
+class TestName:
+
+    def test_a_name_equals_by_value(self) -> None:
+        first = domain.Name("a")
+        second = domain.Name("a")
+        assert first == second
+        assert first != domain.Name("b")
+
+    def test_string_is_the_canonical_exit(self) -> None:
+        assert str(domain.Name("a")) == "a"

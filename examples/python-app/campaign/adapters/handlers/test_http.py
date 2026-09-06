@@ -3,18 +3,18 @@ from __future__ import annotations
 import pytest
 import tesser.testing as ts
 
-import campaign.adapters.handlers.http as http
-import campaign.client.client as campaign_client
+import campaign.adapters.handlers as handlers
+import campaign.client as client
 import tesser.errors as errors
-import protocol.http as protocol_http
+import protocol as protocol
 
 
 @ts.fake
-class FakeCampaignClientScripted(campaign_client.Client):
+class FakeCampaignClientScripted(client.CampaignClient):
 
     def __init__(
         self,
-        *views: campaign_client.CampaignView,
+        *views: client.CampaignView,
         resolved: str = "",
         error: Exception | None = None,
     ) -> None:
@@ -24,61 +24,61 @@ class FakeCampaignClientScripted(campaign_client.Client):
         self.requests: list[object] = []
 
     def create_campaign(
-        self, req: campaign_client.CreateCampaignRequest
-    ) -> campaign_client.CampaignView:
-        self.requests.append(req)
+        self, create_campaign_request: client.CreateCampaignRequest
+    ) -> client.CampaignView:
+        self.requests.append(create_campaign_request)
         if self.error is not None:
             raise self.error
         return self.pending.pop(0)
 
-    def add_link(self, req: campaign_client.AddLinkRequest) -> campaign_client.CampaignView:
-        self.requests.append(req)
+    def add_link(self, add_link_request: client.AddLinkRequest) -> client.CampaignView:
+        self.requests.append(add_link_request)
         if self.error is not None:
             raise self.error
         return self.pending.pop(0)
 
     def deactivate_link(
-        self, req: campaign_client.DeactivateLinkRequest
-    ) -> campaign_client.CampaignView:
-        self.requests.append(req)
+        self, deactivate_link_request: client.DeactivateLinkRequest
+    ) -> client.CampaignView:
+        self.requests.append(deactivate_link_request)
         if self.error is not None:
             raise self.error
         return self.pending.pop(0)
 
     def get_campaign(
-        self, req: campaign_client.GetCampaignRequest
-    ) -> campaign_client.CampaignView:
-        self.requests.append(req)
+        self, get_campaign_request: client.GetCampaignRequest
+    ) -> client.CampaignView:
+        self.requests.append(get_campaign_request)
         if self.error is not None:
             raise self.error
         return self.pending.pop(0)
 
-    def resolve(self, req: campaign_client.ResolveRequest) -> campaign_client.ResolveResponse:
-        self.requests.append(req)
+    def resolve(self, resolve_request: client.ResolveRequest) -> client.ResolveResponse:
+        self.requests.append(resolve_request)
         if self.error is not None:
             raise self.error
-        return campaign_client.ResolveResponse(target_url=self.resolved)
+        return client.ResolveResponse(target_url=self.resolved)
 
     def list_links(
-        self, req: campaign_client.ListLinksRequest
-    ) -> campaign_client.ListLinksResponse:
+        self, list_links_request: client.ListLinksRequest
+    ) -> client.ListLinksResponse:
         raise AssertionError("list_links is not part of the HTTP surface")
 
 
 def test_create_campaign_answers_201_with_the_campaign_payload() -> None:
-    client = FakeCampaignClientScripted(
-        campaign_client.CampaignView("0123456789abcdef", "100.00", "USD", ())
+    fake_campaign_client_scripted = FakeCampaignClientScripted(
+        client.CampaignView("0123456789abcdef", "100.00", "USD", ())
     )
-    handler = http.Handler(client)
+    http_handler = handlers.HttpHandler(fake_campaign_client_scripted)
 
-    resp = handler.create_campaign(
-        protocol_http.HttpRequest(
+    http_response = http_handler.create_campaign(
+        protocol.HttpRequest(
             "POST", "/", {}, {}, {}, b'{"budget": {"amount": "100.00", "currency": "USD"}}'
         )
     )
 
-    assert resp.status_code == 201
-    assert resp.json_body() == {
+    assert http_response.status_code == 201
+    assert http_response.json_body() == {
         "campaign_id": "0123456789abcdef",
         "budget": {"amount": "100.00", "currency": "USD"},
         "links": [],
@@ -86,81 +86,81 @@ def test_create_campaign_answers_201_with_the_campaign_payload() -> None:
 
 
 def test_create_campaign_answers_json() -> None:
-    client = FakeCampaignClientScripted(
-        campaign_client.CampaignView("0123456789abcdef", "100.00", "USD", ())
+    fake_campaign_client_scripted = FakeCampaignClientScripted(
+        client.CampaignView("0123456789abcdef", "100.00", "USD", ())
     )
-    handler = http.Handler(client)
+    http_handler = handlers.HttpHandler(fake_campaign_client_scripted)
 
-    resp = handler.create_campaign(
-        protocol_http.HttpRequest(
+    http_response = http_handler.create_campaign(
+        protocol.HttpRequest(
             "POST", "/", {}, {}, {}, b'{"budget": {"amount": "100.00", "currency": "USD"}}'
         )
     )
 
-    assert resp.headers["Content-Type"] == "application/json"
+    assert http_response.headers["Content-Type"] == "application/json"
 
 
 def test_create_campaign_forwards_the_budget_fields_it_read() -> None:
-    client = FakeCampaignClientScripted(
-        campaign_client.CampaignView("0123456789abcdef", "250.00", "EUR", ())
+    fake_campaign_client_scripted = FakeCampaignClientScripted(
+        client.CampaignView("0123456789abcdef", "250.00", "EUR", ())
     )
-    handler = http.Handler(client)
+    http_handler = handlers.HttpHandler(fake_campaign_client_scripted)
 
-    handler.create_campaign(
-        protocol_http.HttpRequest(
+    http_handler.create_campaign(
+        protocol.HttpRequest(
             "POST", "/", {}, {}, {}, b'{"budget": {"amount": "250.00", "currency": "EUR"}}'
         )
     )
 
-    request = client.requests[0]
-    assert isinstance(request, campaign_client.CreateCampaignRequest)
+    request = fake_campaign_client_scripted.requests[0]
+    assert isinstance(request, client.CreateCampaignRequest)
     assert request.budget_amount == "250.00"
     assert request.budget_currency == "EUR"
 
 
 def test_create_campaign_refuses_a_budget_that_is_not_an_object() -> None:
-    client = FakeCampaignClientScripted()
-    handler = http.Handler(client)
+    fake_campaign_client_scripted = FakeCampaignClientScripted()
+    http_handler = handlers.HttpHandler(fake_campaign_client_scripted)
 
-    with pytest.raises(protocol_http.BadRequest):
-        handler.create_campaign(protocol_http.HttpRequest("POST", "/", {}, {}, {}, b'{"budget": "100.00"}'))
+    with pytest.raises(protocol.BadRequest):
+        http_handler.create_campaign(protocol.HttpRequest("POST", "/", {}, {}, {}, b'{"budget": "100.00"}'))
 
-    assert client.requests == []
+    assert fake_campaign_client_scripted.requests == []
 
 
 def test_create_campaign_refuses_a_budget_amount_that_is_not_a_string() -> None:
-    client = FakeCampaignClientScripted()
-    handler = http.Handler(client)
+    fake_campaign_client_scripted = FakeCampaignClientScripted()
+    http_handler = handlers.HttpHandler(fake_campaign_client_scripted)
 
-    with pytest.raises(protocol_http.BadRequest):
-        handler.create_campaign(
-            protocol_http.HttpRequest("POST", "/", {}, {}, {}, b'{"budget": {"amount": 100, "currency": "USD"}}')
+    with pytest.raises(protocol.BadRequest):
+        http_handler.create_campaign(
+            protocol.HttpRequest("POST", "/", {}, {}, {}, b'{"budget": {"amount": 100, "currency": "USD"}}')
         )
 
-    assert client.requests == []
+    assert fake_campaign_client_scripted.requests == []
 
 
 def test_create_campaign_refuses_a_body_that_is_not_json() -> None:
-    client = FakeCampaignClientScripted()
-    handler = http.Handler(client)
+    fake_campaign_client_scripted = FakeCampaignClientScripted()
+    http_handler = handlers.HttpHandler(fake_campaign_client_scripted)
 
-    with pytest.raises(protocol_http.BadRequest):
-        handler.create_campaign(protocol_http.HttpRequest("POST", "/", {}, {}, {}, b"not json"))
+    with pytest.raises(protocol.BadRequest):
+        http_handler.create_campaign(protocol.HttpRequest("POST", "/", {}, {}, {}, b"not json"))
 
-    assert client.requests == []
+    assert fake_campaign_client_scripted.requests == []
 
 
 def test_add_link_answers_200_with_the_links_of_the_campaign() -> None:
-    view = campaign_client.CampaignView(
+    campaign_view = client.CampaignView(
         "0123456789abcdef",
         "100.00",
         "USD",
-        (campaign_client.LinkView("promo", "https://ok.example/x", "active"),),
+        (client.LinkView("promo", "https://ok.example/x", "active"),),
     )
-    handler = http.Handler(FakeCampaignClientScripted(view))
+    http_handler = handlers.HttpHandler(FakeCampaignClientScripted(campaign_view))
 
-    resp = handler.add_link(
-        protocol_http.HttpRequest(
+    http_response = http_handler.add_link(
+        protocol.HttpRequest(
             "POST",
             "/",
             {},
@@ -171,20 +171,20 @@ def test_add_link_answers_200_with_the_links_of_the_campaign() -> None:
         )
     )
 
-    assert resp.status_code == 200
-    assert resp.json_body()["links"] == [
+    assert http_response.status_code == 200
+    assert http_response.json_body()["links"] == [
         {"slug": "promo", "target_url": "https://ok.example/x", "status": "active"}
     ]
 
 
 def test_add_link_forwards_the_three_fields_it_read() -> None:
-    client = FakeCampaignClientScripted(
-        campaign_client.CampaignView("0123456789abcdef", "100.00", "USD", ())
+    fake_campaign_client_scripted = FakeCampaignClientScripted(
+        client.CampaignView("0123456789abcdef", "100.00", "USD", ())
     )
-    handler = http.Handler(client)
+    http_handler = handlers.HttpHandler(fake_campaign_client_scripted)
 
-    handler.add_link(
-        protocol_http.HttpRequest(
+    http_handler.add_link(
+        protocol.HttpRequest(
             "POST",
             "/",
             {},
@@ -195,126 +195,126 @@ def test_add_link_forwards_the_three_fields_it_read() -> None:
         )
     )
 
-    request = client.requests[0]
-    assert isinstance(request, campaign_client.AddLinkRequest)
+    request = fake_campaign_client_scripted.requests[0]
+    assert isinstance(request, client.AddLinkRequest)
     assert request.campaign_id == "0123456789abcdef"
     assert request.slug == "promo"
     assert request.target_url == "https://ok.example/x"
 
 
 def test_add_link_refuses_a_body_with_a_missing_field() -> None:
-    client = FakeCampaignClientScripted()
-    handler = http.Handler(client)
+    fake_campaign_client_scripted = FakeCampaignClientScripted()
+    http_handler = handlers.HttpHandler(fake_campaign_client_scripted)
 
-    with pytest.raises(protocol_http.BadRequest):
-        handler.add_link(
-            protocol_http.HttpRequest("POST", "/", {}, {}, {}, b'{"campaign_id": "0123456789abcdef"}')
+    with pytest.raises(protocol.BadRequest):
+        http_handler.add_link(
+            protocol.HttpRequest("POST", "/", {}, {}, {}, b'{"campaign_id": "0123456789abcdef"}')
         )
 
-    assert client.requests == []
+    assert fake_campaign_client_scripted.requests == []
 
 
 def test_deactivate_link_answers_200_with_the_link_reported_inactive() -> None:
-    view = campaign_client.CampaignView(
+    campaign_view = client.CampaignView(
         "0123456789abcdef",
         "100.00",
         "USD",
-        (campaign_client.LinkView("promo", "https://ok.example/x", "inactive"),),
+        (client.LinkView("promo", "https://ok.example/x", "inactive"),),
     )
-    handler = http.Handler(FakeCampaignClientScripted(view))
+    http_handler = handlers.HttpHandler(FakeCampaignClientScripted(campaign_view))
 
-    resp = handler.deactivate_link(
-        protocol_http.HttpRequest(
+    http_response = http_handler.deactivate_link(
+        protocol.HttpRequest(
             "POST", "/", {}, {}, {}, b'{"campaign_id": "0123456789abcdef", "slug": "promo"}'
         )
     )
 
-    assert resp.status_code == 200
-    assert resp.json_body()["links"] == [
+    assert http_response.status_code == 200
+    assert http_response.json_body()["links"] == [
         {"slug": "promo", "target_url": "https://ok.example/x", "status": "inactive"}
     ]
 
 
 def test_deactivate_link_forwards_the_campaign_and_slug_it_read() -> None:
-    client = FakeCampaignClientScripted(
-        campaign_client.CampaignView("0123456789abcdef", "100.00", "USD", ())
+    fake_campaign_client_scripted = FakeCampaignClientScripted(
+        client.CampaignView("0123456789abcdef", "100.00", "USD", ())
     )
-    handler = http.Handler(client)
+    http_handler = handlers.HttpHandler(fake_campaign_client_scripted)
 
-    handler.deactivate_link(
-        protocol_http.HttpRequest(
+    http_handler.deactivate_link(
+        protocol.HttpRequest(
             "POST", "/", {}, {}, {}, b'{"campaign_id": "0123456789abcdef", "slug": "promo"}'
         )
     )
 
-    request = client.requests[0]
-    assert isinstance(request, campaign_client.DeactivateLinkRequest)
+    request = fake_campaign_client_scripted.requests[0]
+    assert isinstance(request, client.DeactivateLinkRequest)
     assert request.campaign_id == "0123456789abcdef"
     assert request.slug == "promo"
 
 
 def test_get_campaign_reads_the_id_off_the_path() -> None:
-    client = FakeCampaignClientScripted(
-        campaign_client.CampaignView("0123456789abcdef", "100.00", "USD", ())
+    fake_campaign_client_scripted = FakeCampaignClientScripted(
+        client.CampaignView("0123456789abcdef", "100.00", "USD", ())
     )
-    handler = http.Handler(client)
+    http_handler = handlers.HttpHandler(fake_campaign_client_scripted)
 
-    resp = handler.get_campaign(
-        protocol_http.HttpRequest("GET", "/", {"campaign_id": "0123456789abcdef"}, {}, {}, b"")
+    http_response = http_handler.get_campaign(
+        protocol.HttpRequest("GET", "/", {"campaign_id": "0123456789abcdef"}, {}, {}, b"")
     )
 
-    assert resp.status_code == 200
-    request = client.requests[0]
-    assert isinstance(request, campaign_client.GetCampaignRequest)
+    assert http_response.status_code == 200
+    request = fake_campaign_client_scripted.requests[0]
+    assert isinstance(request, client.GetCampaignRequest)
     assert request.campaign_id == "0123456789abcdef"
 
 
 def test_get_campaign_refuses_a_request_with_no_campaign_id_on_the_path() -> None:
-    client = FakeCampaignClientScripted()
-    handler = http.Handler(client)
+    fake_campaign_client_scripted = FakeCampaignClientScripted()
+    http_handler = handlers.HttpHandler(fake_campaign_client_scripted)
 
-    with pytest.raises(protocol_http.BadRequest):
-        handler.get_campaign(protocol_http.HttpRequest("GET", "/", {}, {}, {}, b""))
+    with pytest.raises(protocol.BadRequest):
+        http_handler.get_campaign(protocol.HttpRequest("GET", "/", {}, {}, {}, b""))
 
-    assert client.requests == []
+    assert fake_campaign_client_scripted.requests == []
 
 
 def test_resolve_answers_a_redirect_to_the_target() -> None:
-    handler = http.Handler(FakeCampaignClientScripted(resolved="https://ok.example/x"))
+    http_handler = handlers.HttpHandler(FakeCampaignClientScripted(resolved="https://ok.example/x"))
 
-    resp = handler.resolve(protocol_http.HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
+    http_response = http_handler.resolve(protocol.HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
 
-    assert resp.status_code == 302
-    assert resp.headers["Location"] == "https://ok.example/x"
-    assert resp.body == b""
+    assert http_response.status_code == 302
+    assert http_response.headers["Location"] == "https://ok.example/x"
+    assert http_response.body == b""
 
 
 def test_resolve_refuses_a_target_carrying_a_control_character() -> None:
-    handler = http.Handler(
+    http_handler = handlers.HttpHandler(
         FakeCampaignClientScripted(resolved="https://ok.example/\r\nX-Injected: yes")
     )
 
-    with pytest.raises(protocol_http.BadRequest):
-        handler.resolve(protocol_http.HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
+    with pytest.raises(protocol.BadRequest):
+        http_handler.resolve(protocol.HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
 
 
 def test_resolve_refuses_a_request_with_no_slug_on_the_path() -> None:
-    client = FakeCampaignClientScripted(resolved="https://ok.example/x")
-    handler = http.Handler(client)
+    fake_campaign_client_scripted = FakeCampaignClientScripted(resolved="https://ok.example/x")
+    http_handler = handlers.HttpHandler(fake_campaign_client_scripted)
 
-    with pytest.raises(protocol_http.BadRequest):
-        handler.resolve(protocol_http.HttpRequest("GET", "/", {}, {}, {}, b""))
+    with pytest.raises(protocol.BadRequest):
+        http_handler.resolve(protocol.HttpRequest("GET", "/", {}, {}, {}, b""))
 
-    assert client.requests == []
+    assert fake_campaign_client_scripted.requests == []
 
 
 def test_a_client_rejection_travels_out_of_the_handler_unconverted() -> None:
-    client = FakeCampaignClientScripted(error=errors.invalid("invalid_slug", "slug is malformed"))
-    handler = http.Handler(client)
+    fake_campaign_client_scripted = FakeCampaignClientScripted(error=errors.invalid("invalid_slug", "slug is malformed"))
+    http_handler = handlers.HttpHandler(fake_campaign_client_scripted)
 
     with pytest.raises(errors.DomainError) as caught:
-        handler.add_link(
-            protocol_http.HttpRequest(
+        http_handler.add_link(
+            protocol.HttpRequest(
                 "POST",
                 "/",
                 {},

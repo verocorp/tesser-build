@@ -3,55 +3,55 @@ from __future__ import annotations
 import pytest
 import tesser.testing as ts
 
-import tessercheck.adapters.handlers.cli as cli
-import tessercheck.client.client as client
-import protocol.cli as protocol_cli
+import protocol
+import tessercheck.adapters.handlers as handlers
+import tessercheck.client as client
 
 
 @ts.fake
-class FakeCheckClient(client.Client):
+class FakeCheckClient(client.TessercheckClient):
     def __init__(self, *findings: str) -> None:
         self.findings = findings
         self.roots: list[str] = []
 
-    def check(self, request: client.CheckRequest) -> client.CheckResponse:
-        self.roots.append(request.tree)
+    def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
+        self.roots.append(check_request.tree)
         return client.CheckResponse(findings=self.findings)
 
-    def rulebook(self, request: client.RulebookRequest) -> client.RulebookResponse:
-        self.roots.append(request.tree)
+    def rulebook(self, rulebook_request: client.RulebookRequest) -> client.RulebookResponse:
+        self.roots.append(rulebook_request.tree)
         return client.RulebookResponse(rendered="| rendered |")
 
 
 def test_the_tree_argument_reaches_the_client() -> None:
-    fake = FakeCheckClient()
-    resp = cli.Handler(fake).check(protocol_cli.CliRequest(("some/tree",)))
-    assert fake.roots == ["some/tree"]
-    assert resp.exit_code == 0
+    fake_check_client = FakeCheckClient()
+    cli_response = handlers.Handler(fake_check_client).check(protocol.CliRequest(("some/tree",)))
+    assert fake_check_client.roots == ["some/tree"]
+    assert cli_response.exit_code == 0
 
 
 def test_no_argument_checks_the_working_directory() -> None:
-    fake = FakeCheckClient()
-    cli.Handler(fake).check(protocol_cli.CliRequest(()))
-    assert fake.roots == ["."]
+    fake_check_client = FakeCheckClient()
+    handlers.Handler(fake_check_client).check(protocol.CliRequest(()))
+    assert fake_check_client.roots == ["."]
 
 
 def test_findings_become_lines_and_a_failing_exit_code() -> None:
-    fake = FakeCheckClient("a.py:1: TB040 one", "b.py:2: TB041 two")
-    resp = cli.Handler(fake).check(protocol_cli.CliRequest(("tree",)))
-    assert resp.exit_code == 1
-    assert resp.stdout == "a.py:1: TB040 one\nb.py:2: TB041 two"
-    assert resp.stderr == ""
+    fake_check_client = FakeCheckClient("a.py:1: TB040 one", "b.py:2: TB041 two")
+    cli_response = handlers.Handler(fake_check_client).check(protocol.CliRequest(("tree",)))
+    assert cli_response.exit_code == 1
+    assert cli_response.stdout == "a.py:1: TB040 one\nb.py:2: TB041 two"
+    assert cli_response.stderr == ""
 
 
 def test_a_clean_tree_prints_nothing_and_exits_zero() -> None:
-    resp = cli.Handler(FakeCheckClient()).check(protocol_cli.CliRequest(("tree",)))
-    assert resp.exit_code == 0
-    assert resp.stdout == ""
+    cli_response = handlers.Handler(FakeCheckClient()).check(protocol.CliRequest(("tree",)))
+    assert cli_response.exit_code == 0
+    assert cli_response.stdout == ""
 
 
 def test_an_extra_argument_is_a_usage_error() -> None:
-    fake = FakeCheckClient()
-    with pytest.raises(protocol_cli.UsageError):
-        cli.Handler(fake).check(protocol_cli.CliRequest(("tree", "surplus")))
-    assert fake.roots == []
+    fake_check_client = FakeCheckClient()
+    with pytest.raises(protocol.UsageError):
+        handlers.Handler(fake_check_client).check(protocol.CliRequest(("tree", "surplus")))
+    assert fake_check_client.roots == []

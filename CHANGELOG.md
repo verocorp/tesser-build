@@ -5,14 +5,14 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
-## [0.0.97.0] - 2026-09-06
+## [0.0.100.0] - 2026-09-06
 
 A type names what the value is, and a function is declared at module level or
 as a method. `TB022` reports `Any`, `Callable` and `Awaitable` wherever a
 module names them; `TB023` reports a `lambda` anywhere and a `def` inside
 another function. `Callable` and `lambda` are one defect seen from the type
 side and the value side, which is why they ship together. This is the
-checker half only: the 146 lines in this repo that carry one draw a site-level
+checker half only: the 147 lines in this repo that carry one draw a site-level
 `# tesser:debt`, and making them conformant is the follow-up — gated, for
 `TB023`, on the exception list in `TODOS.md`.
 
@@ -63,23 +63,23 @@ checker half only: the 146 lines in this repo that carry one draw a site-level
   leaves the same behavior passed the same way with the annotation rewritten.
   The pair is what closes `tesser.errors.collect` — the signature drew `TB022`
   while its three call sites in `examples/errorspy` drew nothing.
-- **125 lines marked `# tesser:debt TB023`** — 17 carrying 18 lambdas, 108
+- **126 lines marked `# tesser:debt TB023`** — 17 carrying 18 lambdas, 109
   carrying a nested function. Three populations. The `key=` lambdas (7) *are*
   an ordering rule and belong on the object ordered; the specimen is
-  `examples/python-app/reports/domain/report.py:144`, which ranks `LinkVerdict`
+  `examples/python-app/reports/domain/report.py:187`, which ranks `LinkVerdict`
   rows by `(row.decision == _ALLOWED, str(row.slug))` — a comparison and a
   representation read, the shapes `TB082` reports in a service body, inside a
   domain object where `TB082` does not look. The deferred calls (11) belong
-  behind a port or a named function. The nested functions (108) split again by
+  behind a port or a named function. The nested functions (109) split again by
   why they are nested, and that list is the gate on the conformance wave
   (`TODOS.md`, "What TB023 has to let through"): 61 are the analyzer's own
-  `ast`-parsing closures, 42 are a test's local fake behavior, and the
+  `ast`-parsing closures, 43 are a test's local fake behavior, and the
   remaining 5 are an engine registration callback and a host's server loop, where
   the API is the constraint rather than taste.
 - **From the ship review.** `TB023` now emits in line order like every sibling
   check (it reported all lambdas before all nested functions). The rule is
   `Module.function_placement_violations`, renamed from `lambda_violations` once
-  nested functions became 108 of its 125 findings — the name is load-bearing,
+  nested functions became 109 of its 127 findings — the name is load-bearing,
   because `rulebook.py`'s `APPLIES_TO` keys on it and `RULES.md` is generated
   from it. Five fixture tests were added for the paths a refactor could have
   changed silently: the `ClassDef` scope reset (nothing locked it, and
@@ -123,7 +123,7 @@ checker half only: the 146 lines in this repo that carry one draw a site-level
 - **Renderings** (`docs/skill-authoring.md` P5): `skills/tesser-build/python.md`
   gains "A type names what the value is" and "A function is declared at module
   level or as a method" beside the unquoted-annotation rule
-  (skill-version 66 → 71, the last bump carrying the universal-checks list in
+  (skill-version 69 → 71, the last bump carrying the universal-checks list in
   `testing.md`, which named `TB004`/`TB020`/`TB030`/`TB033` and not the three
   every-module codes — this branch proved it incomplete by marking
   `conftest.py:77`);
@@ -131,6 +131,119 @@ checker half only: the 146 lines in this repo that carry one draw a site-level
   skill-materializations rows; `roadmap/registry.json` adds `TB022` to
   `norm-annotations` and a new `norm-function-placement` row for `TB023`, which
   regenerates `ROADMAP.md`.
+## [0.0.99.0] - 2026-09-06
+
+The export list is also the read list. `TB060` said which package you may
+import; nothing said what you may read off it, and Python binds an imported
+submodule as an attribute of its package, so `domain.widget.Clearance` reached
+straight past a class `alpha/domain/__init__.py` deliberately hides. The
+analyzer was silent and `mypy --strict` was clean.
+
+### Added
+- **A read names only what the package exports** (`TB042`). Every name read off
+  a package alias is checked against that package's `__init__` re-export list.
+  This catches `domain.widget.Standing`, where `widget` is not an exported name,
+  and `domain.Standing`, where `Standing` is not — the second was previously
+  caught by `mypy` alone, the first by nothing.
+
+### Changed
+- **No exemption for the sibling test** (maintainer ruling 2026-09-06). A test
+  module is the one module inside an exporting package that legally holds an
+  alias to its own package, and therefore the one place a hidden class could be
+  reached on purpose. It does not get to. A class the `__init__` does not
+  re-export gets no direct tests and is tested through the object that owns it.
+- `skills/tesser-build/python.md` no longer describes the boundary as a
+  convention the interpreter does not enforce, because the analyzer now checks
+  it at every read site.
+
+### Fixed
+- **The rulebook's diagnostics reach the maintainer.** `srv/cli/rules.py`
+  collapsed every non-usage exception into the string `unexpected error`, so an
+  authored diagnostic like `checks.py:7781: no reader name for message hole
+  {node.value.id}; extend HOLE_NAMES` was discarded and the only way to read it
+  was to construct `Rulebook` by hand. Those twelve `RuntimeError`s are now
+  `errors.invalid(...)`, and the host grows the `DomainError` and `InfraError`
+  arms that `examples/minimal/srv/cli/main.py` already teaches. The bare
+  `except Exception` arm stays, so an incidental crash still reports
+  `unexpected error` and leaks no internals.
+
+### Known
+- The clause has nothing to check against a package whose `__init__` is empty,
+  since an empty export list produces no rows. `TB042`'s existing clauses govern
+  that case.
+
+## [0.0.98.0] - 2026-09-06
+
+A package is the unit you import, and a variable is named for the type it
+carries. The two rulings are one change: the naming rule needs `widget` to be
+free, and it only is once `alpha.domain` rather than `alpha.domain.widget` is
+what a module imports. Every gated tree in the repo now reads that way — eleven
+of them, from 2,227 findings to zero.
+
+### Added
+- **A package is the unit you import** (`TB060`). Outside an exporting package
+  you import the package; inside one, a module imports the packages around it
+  and never a module beside it, its sibling test included. Two modules of one
+  package that need each other become one module. An exporting package is every
+  role package plus `app/`, `srv/`, `srv/<host>/` and `protocol/`; a kernel and
+  a bare container are not, and the reasons are recorded.
+- **The alias is the package's last segment** (`TB053`), and where two imported
+  packages share that segment each takes its context as a prefix.
+- **A package never exports a class of its own name** (`TB042`), because the
+  local derived from that class would rebind the package's alias. `Client`
+  becomes `AlphaClient`, `App` becomes `LayoutApp`, `Config` becomes `AppConfig`.
+- **A role `__init__` is the export list**, and only the export list: a module
+  import in one exports nothing, and an export nobody outside reads is a finding.
+- **A kernel is domain, and only domain reaches it** (`TB062`, `TB063`). A root
+  kernel is imported by exactly one kind of module, a context's own
+  `domain/kernel/` package, so a domain module names exactly one `kernel` and
+  never knows which scope a type came from.
+- **`TB085` — a name is derived from the type it carries.** A parameter takes
+  its annotation's class name in snake_case; a local assigned from a call takes
+  the class the call declares it returns, with the receiver read through a
+  field, a parameter, a constructor-built local, or a package alias; an
+  `__init__` keeps its parameter's name in the field it sets. A call the
+  analyzer cannot read is itself a finding, because a name it cannot check is a
+  name it is not checking.
+- **`TB080` — a constructor's one spec is named `spec`**, since the annotation
+  already says which spec it is.
+
+### Changed
+- **All eleven gated trees migrated**: the eight `examples/*` app trees, plus
+  `layout`, `tesser-py` and `tessercheck-py`. Where the sibling ban forced two
+  modules together their tests merged with them, and no test was lost in any
+  merge. `examples/minimal` and `examples/python-app` are the worked examples.
+- **A sibling test is no longer exempt.** A test imports the packages around it
+  like any module, a class the `__init__` hides is asserted through the object
+  that owns it, and a test's reads justify an export.
+- `layout`'s `testpaths` omitted `app` and `protocol`, so eighteen tests never
+  ran under its own gate. 171 tests, now 189.
+- The skill docs, `rationale/coverage.md` and the roadmap registry follow every
+  file the merges moved.
+
+### Fixed
+- **A local from a module function was typed as the function, not its return**,
+  so `minimal_app = app.load()` made every later call on that local report "from
+  a call it cannot read" — a false positive on the pattern the docs teach.
+- **The alias-collision clause could not see a collision**: it counted over a
+  dict keyed by the alias, so two packages bound to one name left one entry and
+  drew nothing.
+- **The keeps-its-name clause was dead on every frozen value object**, which
+  writes `object.__setattr__` rather than an assignment. It now matches both
+  forms, and every tree stays at zero because the convention was already being
+  followed.
+- `tessercheck-cli`'s console script imported a module the merges removed, which
+  would have shipped a wheel that could not start.
+- `examples/minimal` regains the one test of `InlineJobContext.call`, lost when
+  its module merged.
+
+### Known
+`python.md` no longer claims a class the `__init__` hides "cannot be reached
+from outside at all". Python binds an imported submodule as an attribute of its
+package, so `domain.widget.Clearance` still resolves and neither the analyzer
+nor `mypy --strict` reports it. The boundary is a convention the import rules
+enforce, not something the interpreter refuses; the clause that would close it,
+and the measurement showing it would cost no migration, are recorded.
 
 ## [0.0.96.0] - 2026-08-30
 

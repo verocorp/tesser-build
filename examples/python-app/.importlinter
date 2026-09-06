@@ -37,8 +37,8 @@ forbidden_modules =
     linkpolicy
     reports
 ignore_imports =
-    srv.** -> campaign.adapters.handlers.**
-    srv.** -> reports.adapters.handlers.**
+    srv.** -> campaign.adapters.handlers
+    srv.** -> reports.adapters.handlers
 
 # linkpolicy is the context campaign calls, so the dependency is one-way: campaign
 # owns the port, linkpolicy knows nothing of its caller.
