@@ -16,7 +16,7 @@ import protocol as protocol
 import tesser.errors as errors
 
 _BIND: typing.Final[str] = "0.0.0.0:8000"
-_MOUNT: typing.Final[str] = "/restate"
+_RESTATE_DEPLOYMENT_PATH: typing.Final[str] = "/restate"
 _JSON: typing.Final[str] = "application/json"
 
 
@@ -31,7 +31,7 @@ class HttpHost(ts.Host):
             @router.post("/orders")
             async def place_order(request: fastapi.Request) -> fastapi.Response:  # tesser:debt TB023
                 try:
-                    http_response = await handler.place(
+                    http_response = await handler.place_order(
                         protocol.HttpRequest(body=await request.body())
                     )
                 except protocol.BadRequest as e:
@@ -49,9 +49,12 @@ class HttpHost(ts.Host):
             api = fastapi.FastAPI()
             api.include_router(router)
             api.mount(
-                _MOUNT,
+                _RESTATE_DEPLOYMENT_PATH,
                 restate.app(
-                    [d for job in durable_execution_app.ordering.jobs for d in job.definitions()]
+                    [
+                        durable_execution_app.ordering.restate_order_runtime.order_actions_service,
+                        durable_execution_app.ordering.restate_order_runtime.order_orchestrator_workflow,
+                    ]
                 ),
             )
 

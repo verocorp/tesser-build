@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import tesser.component as ts
 
-import ordering.adapters.gateways as gateways
-import ordering.adapters.jobs as jobs
 import ordering.adapters.repositories as repositories
+import ordering.adapters.runners as runners
+import ordering.adapters.runtimes as runtimes
 import ordering.application as application
 import ordering.client as client
 
@@ -24,19 +24,12 @@ class Config(ts.Config):
 class Ordering(ts.Component):
 
     def __init__(self, config: Config) -> None:
-        self._catalog = repositories.MemoryCatalogRepository()
-        self._actions = application.OrderActions(self._catalog)
-        restate_action_jobs = jobs.RestateActionJobs(self._actions)
-        restate_workflow_jobs = jobs.RestateWorkflowJobs(
-            gateways.RestateQuoting(restate_action_jobs.quote)
-        )
-        self.jobs: tuple[jobs.RestateActionJobs, jobs.RestateWorkflowJobs] = (
-            restate_action_jobs,
-            restate_workflow_jobs,
-        )
+        self._memory_product_catalog_repository = repositories.MemoryProductCatalogRepository()
+        self._order_actions = application.OrderActions(self._memory_product_catalog_repository)
+        self.restate_order_runtime = runtimes.RestateOrderRuntime(self._order_actions)  # tesser:debt TB081
         self.client: client.OrderingClient = application.OrderService(
-            gateways.RestateOrderWorkflow(config.ingress, restate_workflow_jobs.run)
+            runners.RestateOrderOrchestratorRunner(config.ingress, self.restate_order_runtime)
         )
 
     def close(self) -> None:
-        self._catalog.close()
+        self._memory_product_catalog_repository.close()

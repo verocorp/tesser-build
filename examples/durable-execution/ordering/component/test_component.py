@@ -5,13 +5,20 @@ import ordering.component as component
 
 class TestOrdering:
 
-    def test_the_component_publishes_the_restate_definitions_it_wired(self) -> None:
+    def test_the_component_publishes_the_restate_runtime_it_wired(self) -> None:
         ordering = component.Ordering(component.Config(component.Spec(ingress="http://localhost:8080")))
         try:
-            declared = {d.name: sorted(d.handlers) for job in ordering.jobs for d in job.definitions()}
+            declared = {
+                ordering.restate_order_runtime.order_actions_service.name: sorted(
+                    ordering.restate_order_runtime.order_actions_service.handlers
+                ),
+                ordering.restate_order_runtime.order_orchestrator_workflow.name: sorted(
+                    ordering.restate_order_runtime.order_orchestrator_workflow.handlers
+                ),
+            }
         finally:
             ordering.close()
-        assert declared == {"OrderingActions": ["quote"], "Ordering": ["run"]}
+        assert declared == {"OrderActions": ["prepare_quote"], "OrderOrchestrator": ["run"]}
 
 
 class TestConfig:
